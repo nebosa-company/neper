@@ -93,6 +93,27 @@ fn all_parts(t: *const commit.Commit, state: commit.PartState) -> bool {
     ret true
 }
 
+// Run the protocol's own queue without the small-fixture `cut` bitset. This permits
+// exactly 64 participants, whose coordinator id is not itself a mask bit.
+fn drive(t: *commit.Commit, net: *commit.Pool) -> err {
+    var count = 0usize
+    while net.len > 0usize {
+        if count >= 512usize { ret commit.Invalid }
+        let m = commit.pool_pop(net)
+        try commit.commit_step(t, usize(m.to), 0u64, &m, net)
+        count += 1usize
+    }
+    ret ok
+}
+
+fn vote_yes(parts: []commit.Participant) {
+    var i = 0usize
+    while i < parts.len {
+        parts[i] = commit.Participant { state: .Init, vote_yes: true, deadline: 0u64 }
+        i += 1usize
+    }
+}
+
 fn fresh(parts: []commit.Participant, no_vote: usize, three: bool, timeout: u64) -> commit.Commit {
     var i = 0usize
     while i < parts.len {
@@ -234,6 +255,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if commit.tcc_expire(&tcc, 100u64) != 1usize { os.exit(5i32) }
     if commit.tcc_confirm(&tcc, 100u64) != commit.Expired || tcc.state != .Aborted { os.exit(5i32) }
     if reservations[0usize].state != .Cancelled || reservations[1usize].state != .Cancelled || reservations[2usize].state != .Free { os.exit(5i32) }
+
+    // 6: quorum masks permit 63 and 64 members, reject 65 before dispatch, and
+    // never shift for a malformed vote source outside the configured members.
+    var mask_items: [64]commit.Message = zero
+    var mask_net = commit.pool(mask_items[..])
+    var parts63: [63]commit.Participant = zero
+    vote_yes(parts63[..])
+    var protocol63 = commit.two_phase(parts63[..], 10u64)
+    if commit.commit_begin(&protocol63, 0u64, &mask_net) != ok || drive(&protocol63, &mask_net) != ok || protocol63.state != .Committed || !all_parts(&protocol63, .Committed) { os.exit(6i32) }
+    var parts64: [64]commit.Participant = zero
+    vote_yes(parts64[..])
+    var protocol64 = commit.two_phase(parts64[..], 10u64)
+    if commit.commit_begin(&protocol64, 0u64, &mask_net) != ok || drive(&protocol64, &mask_net) != ok || protocol64.state != .Committed || !all_parts(&protocol64, .Committed) { os.exit(6i32) }
+    var acks64: [64]commit.Participant = zero
+    vote_yes(acks64[..])
+    var protocol64_ack = commit.three_phase(acks64[..], 10u64)
+    if commit.commit_begin(&protocol64_ack, 0u64, &mask_net) != ok || drive(&protocol64_ack, &mask_net) != ok || protocol64_ack.state != .Committed || !all_parts(&protocol64_ack, .Committed) { os.exit(6i32) }
+    var parts65: [65]commit.Participant = zero
+    vote_yes(parts65[..])
+    var protocol65 = commit.two_phase(parts65[..], 10u64)
+    if commit.commit_begin(&protocol65, 0u64, &mask_net) != commit.TooSmall || protocol65.state != .Init || mask_net.len != 0usize { os.exit(6i32) }
+    var malformed = commit.two_phase(parts64[..], 10u64)
+    if commit.commit_begin(&malformed, 0u64, &mask_net) != ok { os.exit(6i32) }
+    let bad_vote = commit.Message { from: 64u32, to: 64u32, kind: .VoteYes, step: 0u32 }
+    if commit.commit_step(&malformed, 64usize, 0u64, &bad_vote, &mask_net) != commit.Invalid { os.exit(6i32) }
+
+    // 7: an empty saga is already complete and sends no work to a nonexistent step.
+    var no_steps: []u8 = zero
+    saga = commit.saga_choreography(no_steps, 4294967295u32)
+    var no_message: commit.Message = zero
+    if saga.state != .Completed || commit.saga_start(&saga, &net) != ok || net.len != 0usize || commit.saga_step(&saga, 0usize, &no_message, &net) != commit.Invalid { os.exit(7i32) }
+    saga = commit.saga_orchestrate(no_steps, 4294967295u32)
+    if saga.state != .Completed || commit.saga_start(&saga, &net) != ok || net.len != 0usize || commit.saga_step(&saga, 0usize, &no_message, &net) != commit.Invalid { os.exit(7i32) }
 
     try io.print("dist commit ok\n")
     ret ok

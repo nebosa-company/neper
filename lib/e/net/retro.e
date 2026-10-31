@@ -102,6 +102,16 @@ fn gopher_request(out: []u8, selector: str, query: str, has_query: bool) -> (usi
     var need = selector.len + 2usize
     if has_query { need += 1usize + query.len }
     if out.len < need { ret (0usize, TooLong) }
+    var i = 0usize
+    while i < selector.len {
+        if selector[i] < 32u8 || selector[i] == 127u8 { ret (0usize, BadHeader) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < query.len {
+        if query[i] < 32u8 || query[i] == 127u8 { ret (0usize, BadHeader) }
+        i += 1usize
+    }
     var at = put_text(out, 0usize, selector)
     if has_query {
         out[at] = 9u8
@@ -145,10 +155,15 @@ fn gopher_item(line: str) -> (GopherItem, err) {
     item.host = line[tabs[1usize] + 1usize..tabs[2usize]]
     var port = 0usize
     var p = tabs[2usize] + 1usize
-    while p < port_end && line[p] >= 48u8 && line[p] <= 57u8 && port < 100000usize {
-        port = port * 10usize + usize(line[p] - 48u8)
+    if p >= port_end { ret (item, BadItem) }
+    while p < port_end {
+        if line[p] < 48u8 || line[p] > 57u8 { ret (item, BadItem) }
+        let digit = usize(line[p] - 48u8)
+        if port > 6553usize || (port == 6553usize && digit > 5usize) { ret (item, BadItem) }
+        port = port * 10usize + digit
         p += 1usize
     }
+    if port == 0usize { ret (item, BadItem) }
     item.port = port
     ret (item, ok)
 }

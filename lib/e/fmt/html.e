@@ -215,16 +215,17 @@ fn utf8_valid(text: str) -> bool {
 
 
 fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document, err) {
+    if options.max_bytes == 0usize -% 1usize { ret (zero, TooLarge) }
     let (buffer, buffer_error) = mem.alloc[u8](a, options.max_bytes + 1usize)
     if buffer_error != ok { ret (zero, buffer_error) }
     var input = source
     var filled = 0usize
     while filled < buffer.len {
         let (count, read_error) = io.read(&input, buffer[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
         if count == 0usize { break }
-        filled += count
     }
     if filled > options.max_bytes { ret (zero, TooLarge) }
     let (document, parse_error) = parse(a, buffer[..filled], options)

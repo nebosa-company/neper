@@ -158,7 +158,10 @@ function woff2() {
   const head2 = [...tagBytes('wOF2'), ...be32(flavor), ...be32(0), ...be16(tables.length), ...be16(0), ...be32(0), ...be32(comp.length), ...be16(1), ...be16(0), ...be32(0), ...be32(0), ...be32(0), ...be32(0), ...be32(0)];
   let out = [...head2, ...dir, ...comp];
   if (chance(0.04)) out = out.slice(0, int(out.length));
-  if (chance(0.04)) { const at = int(Math.min(out.length, 48 + dir.length)); out[at] ^= 1 + int(255); }
+  if (chance(0.04)) { const at = 48 + int(dir.length); out[at] ^= 1 + int(255); }
+  // Header length is the complete WOFF2 byte count, including malformed
+  // variants after their intentional mutation.
+  out.splice(8, 4, ...be32(out.length));
   out.mut = mut;
   return out;
 }

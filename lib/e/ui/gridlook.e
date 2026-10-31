@@ -718,6 +718,9 @@ fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 
 fn is_sep(c: u8) -> bool { ret c == 32u8 || c == 44u8 || c == 10u8 || c == 13u8 || c == 9u8 }
 
+// SVG numbers feed geometry directly, so an infinity or NaN is not useful ink.
+fn svg_finite(v: f32) -> bool { ret v - v == 0.0 }
+
 // Skips separators, then reads one number; false when none follows.
 fn num_at(d: str, at: *usize, out: *f32) -> bool {
     var i = *at
@@ -734,6 +737,7 @@ fn num_at(d: str, at: *usize, out: *f32) -> bool {
     var any = false
     while i < d.len && is_digit(d[i]) {
         whole = whole * 10.0 + f32(d[i] - 48u8)
+        if !svg_finite(whole) { ret false }
         i += 1usize
         any = true
     }
@@ -758,7 +762,10 @@ fn num_at(d: str, at: *usize, out: *f32) -> bool {
         var e: i32 = 0
         var has_e = false
         while j < d.len && is_digit(d[j]) {
-            e = e * 10 + i32(d[j] - 48u8)
+            let exp_digit = i32(d[j] - 48u8)
+            // 400 is a fixed upper bound on subsequent f32 scaling work.
+            if e > 40i32 || (e == 40i32 && exp_digit > 0i32) { ret false }
+            e = e * 10i32 + exp_digit
             j += 1usize
             has_e = true
         }
@@ -766,6 +773,7 @@ fn num_at(d: str, at: *usize, out: *f32) -> bool {
             var k: i32 = 0
             while k < e {
                 if exp_negative { whole = whole * 0.1 } else { whole = whole * 10.0 }
+                if !svg_finite(whole) { ret false }
                 k += 1
             }
             i = j

@@ -18,6 +18,11 @@ fn fill(width: u32, height: u32, pixels: []u32) {
     pixels[usize(y * width + x)] = 4278190080u32 | (y << 8u32) | x
 }
 
+@gpu(1, 1)
+fn queued_fault(values: []u32) {
+    values[usize(gpu.gid.x) + 1usize] = 1u32
+}
+
 fn compare_vulkan(a: *mem.Arena, cpu: []const u32) -> err {
     let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
     if found_error == gpu.NoDevice || found_error == gpu.Unsupported { ret ok }
@@ -52,6 +57,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if open_error != ok { os.exit(1i32) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(2i32) }
+    // A target is all-or-nothing: constrain the device arena just below a known
+    // target's total footprint so handle allocation fails after both images exist.
+    let target_mark = mem.mark(a)
+    let (probe, probe_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    if probe_error != ok { os.exit(45i32) }
+    let target_used = mem.mark(a) - target_mark
+    if gpu.close_target(probe) != ok || target_used == 0usize { os.exit(46i32) }
+    mem.reset(a, target_mark)
+    let saved_cap = a.cap
+    a.cap = target_mark + target_used - 1usize
+    let (_, constrained_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    a.cap = saved_cap
+    if constrained_error != mem.Exhausted || mem.mark(a) != target_mark { os.exit(47i32) }
+    let (recovered, recovered_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    if recovered_error != ok || gpu.close_target(recovered) != ok { os.exit(48i32) }
+    mem.reset(a, target_mark)
     // An image: written in part from the host, read back whole.
     let (img, img_error) = gpu.image(q, 4u32, 3u32, .Rgba8)
     if img_error != ok || gpu.len(img.data) != 12usize || img.width != 4u32 { os.exit(3i32) }
@@ -65,6 +86,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A native surface is not the CPU device's to present.
     let (_, native_error) = gpu.open_target(q, gpu.Surface { kind: .Win32, handle: zero, context: zero }, 8u32, 8u32, .Bgra8)
     if native_error != gpu.Unsupported { os.exit(9i32) }
+    // Frames are target-specific even when two targets have the same serial.
+    let (first_target, first_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 2u32, 2u32, .Rgba8)
+    if first_target_error != ok { os.exit(34i32) }
+    let (second_target, second_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 2u32, 2u32, .Rgba8)
+    if second_target_error != ok { os.exit(35i32) }
+    let (first_frame, first_frame_error) = gpu.acquire(first_target)
+    if first_frame_error != ok || first_frame.serial != 0u64 { os.exit(36i32) }
+    let (second_frame, second_frame_error) = gpu.acquire(second_target)
+    if second_frame_error != ok || second_frame.serial != 0u64 { os.exit(37i32) }
+    let (_, foreign_frame_error) = gpu.present(q, second_target, first_frame)
+    if foreign_frame_error != gpu.InvalidHandle { os.exit(38i32) }
+    let (_, own_frame_error) = gpu.present(q, second_target, second_frame)
+    if own_frame_error != ok { os.exit(39i32) }
+    if gpu.close_target(first_target) != ok || gpu.close_target(second_target) != ok { os.exit(40i32) }
     // An offscreen target: nothing presented yet, a frame acquired, filled, presented.
     let (t, target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 16u32, 8u32, .Rgba8)
     if target_error != ok { os.exit(10i32) }
@@ -95,6 +130,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if next_shown_error != ok { os.exit(22i32) }
     let (second, second_error) = gpu.presented(t)
     if second_error != ok || second.data.slot != next.image.data.slot { os.exit(23i32) }
+    // An invalid replacement must leave both the target and its acquired frame live.
+    let (failed_resize_frame, failed_resize_frame_error) = gpu.acquire(t)
+    if failed_resize_frame_error != ok || failed_resize_frame.serial != 2u64 { os.exit(41i32) }
+    if gpu.resize(t, 0u32, 4u32) != gpu.TooLarge { os.exit(42i32) }
+    let (failed_resize_width, failed_resize_height) = gpu.extent(t)
+    if failed_resize_width != 16u32 || failed_resize_height != 8u32 { os.exit(43i32) }
+    let (_, failed_resize_present_error) = gpu.present(q, t, failed_resize_frame)
+    if failed_resize_present_error != ok { os.exit(44i32) }
     // Resize remakes the pair; the old images are stale.
     if gpu.resize(t, 4u32, 4u32) != ok { os.exit(24i32) }
     let (rw, rh) = gpu.extent(t)
@@ -108,11 +151,49 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if other_queue_error != ok { os.exit(28i32) }
     let (_, wrong_error) = gpu.present(other_queue, t, small)
     if wrong_error != gpu.WrongDevice { os.exit(29i32) }
+    let (wrong_queue_retry, wrong_queue_retry_error) = gpu.acquire(t)
+    if wrong_queue_retry_error != ok || wrong_queue_retry.serial != small.serial { os.exit(70i32) }
+    let (_, wrong_queue_retry_present_error) = gpu.present(q, t, wrong_queue_retry)
+    if wrong_queue_retry_present_error != ok { os.exit(71i32) }
     if gpu.close(other) != ok { os.exit(30i32) }
     // Closed: stale afterwards.
     if gpu.close_target(t) != ok || gpu.close_target(t) != gpu.InvalidHandle { os.exit(31i32) }
     let (_, closed_error) = gpu.acquire(t)
     if closed_error != gpu.InvalidHandle { os.exit(32i32) }
+    // A queued fault retires the frame without swapping or advancing its serial.
+    let (fault_target, fault_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 1u32, 1u32, .Rgba8)
+    if fault_target_error != ok { os.exit(49i32) }
+    let (initial_frame, initial_frame_error) = gpu.acquire(fault_target)
+    if initial_frame_error != ok || initial_frame.serial != 0u64 { os.exit(50i32) }
+    let initial_pixels: [1]u32 = [1]u32{ 123u32 }
+    if gpu.write_image(q, initial_frame.image, 0u32, 0u32, 1u32, 1u32, initial_pixels[0..]) != ok { os.exit(51i32) }
+    let (_, initial_present_error) = gpu.present(q, fault_target, initial_frame)
+    if initial_present_error != ok { os.exit(52i32) }
+    let (before_fault, before_fault_error) = gpu.presented(fault_target)
+    if before_fault_error != ok { os.exit(53i32) }
+    let (fault_values, fault_values_error) = gpu.alloc[u32](q, 1usize)
+    if fault_values_error != ok { os.exit(54i32) }
+    if gpu.launch[queued_fault](q, gpu.grid1(1usize), fault_values) != ok { os.exit(55i32) }
+    let (fault_frame, fault_frame_error) = gpu.acquire(fault_target)
+    if fault_frame_error != ok || fault_frame.serial != 1u64 { os.exit(56i32) }
+    let (_, fault_present_error) = gpu.present(q, fault_target, fault_frame)
+    if fault_present_error != gpu.Fault { os.exit(57i32) }
+    let (after_fault, after_fault_error) = gpu.presented(fault_target)
+    if after_fault_error != ok || after_fault.data.slot != before_fault.data.slot { os.exit(58i32) }
+    var preserved_pixel: [1]u32 = zero
+    if gpu.read_image(q, after_fault, preserved_pixel[0..]) != ok || preserved_pixel[0] != initial_pixels[0usize] { os.exit(59i32) }
+    let (retry_frame, retry_frame_error) = gpu.acquire(fault_target)
+    if retry_frame_error != ok || retry_frame.serial != fault_frame.serial { os.exit(60i32) }
+    let (_, stale_fault_frame_error) = gpu.present(q, fault_target, fault_frame)
+    if stale_fault_frame_error != gpu.InvalidHandle { os.exit(61i32) }
+    if gpu.abandon(fault_target, retry_frame) != ok { os.exit(62i32) }
+    let (after_abandon, after_abandon_error) = gpu.acquire(fault_target)
+    if after_abandon_error != ok || after_abandon.serial != retry_frame.serial { os.exit(63i32) }
+    let (_, stale_abandoned_frame_error) = gpu.present(q, fault_target, retry_frame)
+    if stale_abandoned_frame_error != gpu.InvalidHandle { os.exit(64i32) }
+    let (_, recovered_present_error) = gpu.present(q, fault_target, after_abandon)
+    if recovered_present_error != ok { os.exit(65i32) }
+    if gpu.release(q, fault_values) != ok || gpu.close_target(fault_target) != ok { os.exit(66i32) }
     if gpu.close(device) != ok { os.exit(33i32) }
     try io.print("gpu present ok\n")
     ret ok

@@ -5,7 +5,7 @@
 // `ExponentialHistogram` counts the ones among the last `width` bits to
 // within a relative error of `1 / k` (Datar, Gionis, Indyk, Motwani).
 
-type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, width: usize, pushed: u64, minimum: bool }
+type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, count: usize, width: usize, pushed: u64, minimum: bool }
 type TwoStack[T: type] = struct { front: []T, front_folds: []T, back: []T, front_count: usize, back_count: usize, identity: T }
 type ExponentialHistogram = struct { sizes: []u64, stamps: []u64, count: usize, width: u64, k: usize, now: u64 }
 error TooSmall
@@ -15,7 +15,7 @@ error Invalid
 fn monotonic_queue(values: []i64, positions: []u64, width: usize, minimum: bool) -> (MonotonicQueue, err) {
     if width == 0usize { ret (zero, Invalid) }
     if values.len < width || positions.len < width { ret (zero, TooSmall) }
-    ret (MonotonicQueue { values: values, positions: positions, head: 0usize, tail: 0usize, width: width, pushed: 0u64, minimum: minimum }, ok)
+    ret (MonotonicQueue { values: values, positions: positions, head: 0usize, tail: 0usize, count: 0usize, width: width, pushed: 0u64, minimum: minimum }, ok)
 }
 
 fn dominated(q: *const MonotonicQueue, kept: i64, incoming: i64) -> bool {
@@ -27,18 +27,26 @@ fn dominated(q: *const MonotonicQueue, kept: i64, incoming: i64) -> bool {
 fn monotonic_push(q: *MonotonicQueue, value: i64) {
     let cap = q.values.len
     // Drop kept values the newcomer makes irrelevant, from the back.
-    while q.tail != q.head && dominated(q, q.values[(q.tail + cap - 1usize) % cap], value) { q.tail = (q.tail + cap - 1usize) % cap }
+    while q.count > 0usize && dominated(q, q.values[(q.tail + cap - 1usize) % cap], value) {
+        q.tail = (q.tail + cap - 1usize) % cap
+        q.count -= 1usize
+    }
+    // Drop the item that is about to leave the window before reusing its slot.
+    // With storage exactly `width` long, the ring can otherwise be full here.
+    if q.count > 0usize && q.positions[q.head] + u64(q.width) <= q.pushed {
+        q.head = (q.head + 1usize) % cap
+        q.count -= 1usize
+    }
     q.values[q.tail] = value
     q.positions[q.tail] = q.pushed
     q.tail = (q.tail + 1usize) % cap
+    q.count += 1usize
     q.pushed += 1u64
-    // Expire the front when it has left the window.
-    if q.positions[q.head] + u64(q.width) < q.pushed { q.head = (q.head + 1usize) % cap }
 }
 
 // The extreme of the current window (`Invalid` before the first push).
 fn monotonic_extreme(q: *const MonotonicQueue) -> (i64, err) {
-    if q.head == q.tail { ret (0i64, Invalid) }
+    if q.count == 0usize { ret (0i64, Invalid) }
     ret (q.values[q.head], ok)
 }
 
@@ -99,7 +107,12 @@ fn exponential_histogram(sizes: []u64, stamps: []u64, width: u64, k: usize) -> (
         w = w >> 1u32
         levels += 1usize
     }
-    if sizes.len < (k + 1usize) * levels || stamps.len < sizes.len { ret (zero, TooSmall) }
+    let maximum = 0usize -% 1usize
+    if k == maximum { ret (zero, TooSmall) }
+    let per_level = k + 1usize
+    if per_level > maximum / levels { ret (zero, TooSmall) }
+    let buckets = per_level * levels
+    if sizes.len < buckets || stamps.len < sizes.len { ret (zero, TooSmall) }
     ret (ExponentialHistogram { sizes: sizes, stamps: stamps, count: 0usize, width: width, k: k, now: 0u64 }, ok)
 }
 

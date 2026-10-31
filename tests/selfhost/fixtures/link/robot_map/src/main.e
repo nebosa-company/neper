@@ -78,9 +78,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if learned_grid[i] < 0.0f64 { free_cells += 1usize }
         i += 1usize
     }
-    if occupied_cells != 109usize || free_cells != 1289usize { os.exit(1i32) }
-    if hash_values(learned_grid[..], 1600usize, 1000000.0f64) != 16207296481033709120u64 { os.exit(1i32) }
+    if occupied_cells != 109usize || free_cells != 1326usize { os.exit(1i32) }
+    if hash_values(learned_grid[..], 1600usize, 1000000.0f64) != 13132797722462825536u64 { os.exit(1i32) }
     if !near(map.occupancy_probability(0.85f64), 0.700567142473973f64, 0.000000000001f64) { os.exit(1i32) }
+
+    // #1099: a max-range beam has no hit, so it must clear even its endpoint.
+    var endpoint_grid: [20]f64 = zero
+    endpoint_grid[2usize] = 1.0f64
+    let (endpoint_map, endpoint_error) = map.occupancy(endpoint_grid[..], 5usize, 4usize, 1.0f64)
+    if endpoint_error != ok { os.exit(6i32) }
+    var endpoint_o = endpoint_map
+    var endpoint_ranges: [1]f64 = zero
+    var endpoint_angles: [1]f64 = zero
+    endpoint_ranges[0usize] = 2.0f64
+    if map.occupancy_update(&endpoint_o, 0.5f64, 0.5f64, 0.0f64, endpoint_ranges[..], endpoint_angles[..], 2.0f64, 0.9f64, 0.0f64 - 1.5f64) != ok || endpoint_grid[2usize] != 0.0f64 - 0.5f64 { os.exit(6i32) }
+    endpoint_grid[2usize] = 0.0f64
+    endpoint_ranges[0usize] = 1.5f64
+    if map.occupancy_update(&endpoint_o, 0.5f64, 0.5f64, 0.0f64, endpoint_ranges[..], endpoint_angles[..], 2.0f64, 0.9f64, 0.0f64 - 1.5f64) != ok || endpoint_grid[2usize] != 0.9f64 { os.exit(6i32) }
 
     // 2: ICP against the four walls of a 10 x 10 room from a pose 0.3 off.
     var lines: [4]map.Segment = zero
@@ -212,6 +226,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 5: the storage and shape errors.
     let (_, short_grid) = map.occupancy(learned_grid[..100usize], 40usize, 40usize, 0.25f64)
     if short_grid != map.TooSmall { os.exit(5i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let (_, nan_resolution) = map.occupancy(learned_grid[..], 40usize, 40usize, nan)
+    let (_, infinite_resolution) = map.occupancy(learned_grid[..], 40usize, 40usize, infinity)
+    if nan_resolution != map.Invalid || infinite_resolution != map.Invalid { os.exit(5i32) }
     if map.occupancy_update(&learned_o, 1.0f64, 1.0f64, 0.0f64, ranges18[..], angles36[..], 6.0f64, 0.85f64, 0.0f64 - 0.4f64) != map.Invalid { os.exit(5i32) }
     let (_, few) = map.particles(xs[..], ys[..], ths[..], weights[..], scratch[..10usize], 200usize)
     if few != map.TooSmall { os.exit(5i32) }

@@ -17,6 +17,7 @@
 // Memory: the package and every part live in the arena passed in.
 use e.mem
 use e.str
+use e.text.utf8
 use e.fmt.zip.write as zipw
 
 error BadText
@@ -80,11 +81,15 @@ fn default_meta() -> Meta {
 // ---- helpers -----------------------------------------------------------------------------
 
 fn clean(s: str) -> bool {
-    var i = 0usize
-    while i < s.len {
-        let c = s[i]
-        if c < 32u8 && c != 9u8 && c != 10u8 { ret false }
-        i += 1usize
+    var at = 0usize
+    while at < s.len {
+        let (decoded, decode_error) = utf8.decode(s, at)
+        if decode_error != ok { ret false }
+        let scalar = decoded.scalar
+        if scalar < 32u32 && scalar != 9u32 && scalar != 10u32 { ret false }
+        // U+FFFE and U+FFFF are outside XML 1.0's Char production.
+        if scalar == 65534u32 || scalar == 65535u32 { ret false }
+        at += usize(decoded.width)
     }
     ret true
 }
@@ -114,6 +119,10 @@ fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err {
             rep = "&lt;"
         } else if c == 62u8 {
             rep = "&gt;"
+        } else if attribute && c == 9u8 {
+            rep = "&#9;"
+        } else if attribute && c == 10u8 {
+            rep = "&#10;"
         } else if attribute && c == 34u8 {
             rep = "&quot;"
         }
@@ -137,7 +146,15 @@ fn style_id(style: Style) -> str {
 
 // The pixel size of a PNG or JPEG, and whether `data` is one: (width, height, jpeg, ok).
 fn image_info(data: []const u8) -> (u32, u32, bool, bool) {
-    if data.len >= 24usize && data[0usize] == 137u8 && data[1usize] == 80u8 && data[2usize] == 78u8 && data[3usize] == 71u8 {
+    // A PNG begins with all eight signature bytes and a complete 13-byte IHDR chunk.
+    if data.len >= 33usize && data[0usize] == 137u8 && data[1usize] == 80u8 && data[2usize] == 78u8 && data[3usize] == 71u8 && data[4usize] == 13u8 && data[5usize] == 10u8 && data[6usize] == 26u8 && data[7usize] == 10u8 && data[8usize] == 0u8 && data[9usize] == 0u8 && data[10usize] == 0u8 && data[11usize] == 13u8 && data[12usize] == 73u8 && data[13usize] == 72u8 && data[14usize] == 68u8 && data[15usize] == 82u8 {
+        let depth = data[24usize]
+        let color = data[25usize]
+        var depth_ok = false
+        if color == 0u8 { depth_ok = depth == 1u8 || depth == 2u8 || depth == 4u8 || depth == 8u8 || depth == 16u8 }
+        if color == 2u8 || color == 4u8 || color == 6u8 { depth_ok = depth == 8u8 || depth == 16u8 }
+        if color == 3u8 { depth_ok = depth == 1u8 || depth == 2u8 || depth == 4u8 || depth == 8u8 }
+        if !depth_ok || data[26usize] != 0u8 || data[27usize] != 0u8 || data[28usize] > 1u8 { ret (0u32, 0u32, false, false) }
         let w = (u32(data[16usize]) << 24u32) | (u32(data[17usize]) << 16u32) | (u32(data[18usize]) << 8u32) | u32(data[19usize])
         let h = (u32(data[20usize]) << 24u32) | (u32(data[21usize]) << 16u32) | (u32(data[22usize]) << 8u32) | u32(data[23usize])
         ret (w, h, false, w > 0u32 && h > 0u32)
@@ -154,7 +171,9 @@ fn image_info(data: []const u8) -> (u32, u32, bool, bool) {
             let length = (usize(data[at + 2usize]) << 8usize) | usize(data[at + 3usize])
             let sof = marker >= 192u8 && marker <= 207u8 && marker != 196u8 && marker != 200u8 && marker != 204u8
             if sof {
-                if at + 9usize > data.len { ret (0u32, 0u32, true, false) }
+                if length < 8usize || at + 2usize + length > data.len { ret (0u32, 0u32, true, false) }
+                let component_count = usize(data[at + 9usize])
+                if component_count == 0usize || length != 8usize + 3usize * component_count { ret (0u32, 0u32, true, false) }
                 let h = (u32(data[at + 5usize]) << 8u32) | u32(data[at + 6usize])
                 let w = (u32(data[at + 7usize]) << 8u32) | u32(data[at + 8usize])
                 ret (w, h, true, w > 0u32 && h > 0u32)
@@ -459,6 +478,7 @@ fn encode(a: *mem.Arena, blocks: []const Block, meta: Meta) -> ([]u8, err) {
         } else if block.kind == .Image {
             let (iw, ih, jpeg, good) = image_info(block.image.data)
             if !good || !clean(block.image.alt) { ret (zero, BadImage) }
+            if (block.image.width_emu == 0u32 && iw > 4294967295u32 / EMU_PER_PIXEL) || (block.image.height_emu == 0u32 && ih > 4294967295u32 / EMU_PER_PIXEL) { ret (zero, BadImage) }
             if jpeg { uses_jpeg = true } else { uses_png = true }
             images += 1usize
         }

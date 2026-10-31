@@ -25,6 +25,11 @@ use e.gfx.cssvalue as cv
 use e.mem
 use e.str
 
+// Grouping at-rules recurse through their bodies. More than MAX_GROUPING_DEPTH levels
+// returns `TooDeep` instead of growing the native or WebAssembly call stack without bound.
+error TooDeep
+const MAX_GROUPING_DEPTH: usize = 16usize
+
 // What `@media` is evaluated against.
 type MediaEnv = struct { width: f64, height: f64, dark: bool, reduced_motion: bool, high_contrast: bool, print: bool, dppx: f64, hover: bool, fine_pointer: bool, scripting: bool }
 
@@ -675,7 +680,7 @@ fn container_cond(a: *mem.Arena, text: str) -> (container.Condition, bool) {
     ret (parts_cond(a, kind, list.slice_const[container.Condition](&parts)), true)
 }
 
-// `[<name>] <condition>`; false when no condition can be read (the body then applies, so unknown syntax never hides content).
+// `[<name>] <condition>`; false when no condition can be read (an invalid group rule skips its body).
 fn container_query(a: *mem.Arena, prelude: str) -> (cascade.ContainerQuery, bool) {
     var t = cv.trim_ws(prelude)
     var has_name = false
@@ -702,45 +707,54 @@ fn first_word_end(t: str) -> usize {
 
 // --- @scope
 
-fn scope_selectors(a: *mem.Arena, text: str) -> []const selector.Selector {
+fn scope_selectors(a: *mem.Arena, text: str) -> ([]const selector.Selector, bool) {
+    if cv.trim_ws(text).len == 0usize { ret (zero, false) }
     let (tokens, e) = syntax.tokenize(a, text)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, false) }
     let (chosen, ce) = selector.parse_selector_list_for_rule(a, text, tokens)
-    if ce != ok { ret zero }
+    if ce != ok || chosen.len == 0usize { ret (zero, false) }
     let (made, me) = list.init[selector.Selector](a, chosen.len + 1usize)
-    if me != ok { ret zero }
+    if me != ok { ret (zero, false) }
     var out = made
     var i = 0usize
     while i < chosen.len {
-        if !chosen[i].has_pseudo {
-            let pushed = list.push[selector.Selector](&out, chosen[i].selector)
-        }
+        if chosen[i].has_pseudo { ret (zero, false) }
+        let pushed = list.push[selector.Selector](&out, chosen[i].selector)
+        if pushed != ok { ret (zero, false) }
         i += 1usize
     }
-    ret list.slice_const[selector.Selector](&out)
+    ret (list.slice_const[selector.Selector](&out), true)
 }
 
-fn scope_rule(a: *mem.Arena, prelude: str) -> cascade.Scope {
+fn scope_rule(a: *mem.Arena, prelude: str) -> (cascade.Scope, bool) {
     let t = cv.trim_ws(prelude)
     var starts: []const selector.Selector = zero
     var limits: []const selector.Selector = zero
     var i = 0usize
-    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
     if i < t.len && t[i] == 40u8 {
         let close = skip_group(t, i)
-        starts = scope_selectors(a, inner_of(t[i..close]))
+        if close <= i + 1usize || t[close - 1usize] != 41u8 { ret (zero, false) }
+        let (selected, good) = scope_selectors(a, inner_of(t[i..close]))
+        if !good { ret (zero, false) }
+        starts = selected
         i = close
     }
     while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
-    if i + 2usize <= t.len && str.eq(cv.lower(a, t[i..i + 2usize]), "to") {
-        i += 2usize
-        while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
-        if i < t.len && t[i] == 40u8 {
-            let close = skip_group(t, i)
-            limits = scope_selectors(a, inner_of(t[i..close]))
-        }
-    }
-    ret cascade.Scope { starts: starts, limits: limits }
+    if i == t.len { ret (cascade.Scope { starts: starts, limits: limits }, true) }
+    if i + 2usize > t.len || !str.eq(cv.lower(a, t[i..i + 2usize]), "to") { ret (zero, false) }
+    i += 2usize
+    if i < t.len && t[i] != 40u8 && t[i] != 32u8 && t[i] != 9u8 && t[i] != 10u8 { ret (zero, false) }
+    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
+    if i >= t.len || t[i] != 40u8 { ret (zero, false) }
+    let close = skip_group(t, i)
+    if close <= i + 1usize || t[close - 1usize] != 41u8 { ret (zero, false) }
+    let (selected, good) = scope_selectors(a, inner_of(t[i..close]))
+    if !good { ret (zero, false) }
+    limits = selected
+    i = close
+    while i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8) { i += 1usize }
+    if i != t.len { ret (zero, false) }
+    ret (cascade.Scope { starts: starts, limits: limits }, true)
 }
 
 // --- Fonts
@@ -818,7 +832,7 @@ fn select_font_src(a: *mem.Arena, value: str) -> str {
 
 // --- The loader
 
-type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope }
+type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope, nesting: usize }
 
 type Loader = struct {
     a: *mem.Arena, env: MediaEnv,
@@ -894,24 +908,24 @@ fn style_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
     }
 }
 
-fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> Ctx {
+fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> (Ctx, err) {
     let (copy, e) = mem.alloc[cascade.ContainerQuery](l.a, ctx.containers.len + 1usize)
-    if e != ok { ret ctx }
+    if e != ok { ret (zero, e) }
     mem.copy[cascade.ContainerQuery](copy[..ctx.containers.len], ctx.containers)
     copy[ctx.containers.len] = q
     var next = ctx
     next.containers = copy
-    ret next
+    ret (next, ok)
 }
 
-fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> Ctx {
+fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> (Ctx, err) {
     let (copy, e) = mem.alloc[cascade.Scope](l.a, ctx.scopes.len + 1usize)
-    if e != ok { ret ctx }
+    if e != ok { ret (zero, e) }
     mem.copy[cascade.Scope](copy[..ctx.scopes.len], ctx.scopes)
     copy[ctx.scopes.len] = sc
     var next = ctx
     next.scopes = copy
-    ret next
+    ret (next, ok)
 }
 
 fn add_font_face(l: *Loader, src: str, tokens: []const syntax.Token) {
@@ -1050,12 +1064,12 @@ fn layer_names(l: *Loader, ctx: Ctx, prelude: str) -> []const str {
     ret list.slice_const[str](&out)
 }
 
-fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
+fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
     let name = one.name
     let prelude = syntax.raw_text(src, one.prelude)
     if str.eq(name, "import") {
         add_import(l, src, one)
-        ret
+        ret ok
     }
     if str.eq(name, "layer") {
         let names = layer_names(l, ctx, prelude)
@@ -1064,7 +1078,7 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
             let idx = layer_index(l, names[i])
             i += 1usize
         }
-        if !one.has_block { ret }
+        if !one.has_block { ret ok }
         var path = ""
         if names.len > 0usize {
             path = names[names.len - 1usize]
@@ -1081,39 +1095,48 @@ fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
         next.has_layer = true
         next.layer = layer_index(l, path)
         next.path = path
-        walk_block(l, src, one, next)
-        ret
+        ret walk_block(l, src, one, next)
     }
-    if !one.has_block { ret }
+    if !one.has_block { ret ok }
     if str.eq(name, "media") {
-        if media_matches(&l.env, l.a, prelude) { walk_block(l, src, one, ctx) }
-        ret
+        if media_matches(&l.env, l.a, prelude) { ret walk_block(l, src, one, ctx) }
+        ret ok
     }
     if str.eq(name, "supports") {
-        if supports_true(l.a, src, prelude) { walk_block(l, src, one, ctx) }
-        ret
+        if supports_true(l.a, src, prelude) { ret walk_block(l, src, one, ctx) }
+        ret ok
     }
     if str.eq(name, "container") {
         let (q, good) = container_query(l.a, prelude)
-        if good { walk_block(l, src, one, with_container(l, ctx, q)) } else { walk_block(l, src, one, ctx) }
-        ret
+        if good {
+            let (next, e) = with_container(l, ctx, q)
+            if e != ok { ret e }
+            ret walk_block(l, src, one, next)
+        }
+        ret ok
     }
     if str.eq(name, "scope") {
-        walk_block(l, src, one, with_scope(l, ctx, scope_rule(l.a, prelude)))
-        ret
+        let (sc, good) = scope_rule(l.a, prelude)
+        if good {
+            let (next, e) = with_scope(l, ctx, sc)
+            if e != ok { ret e }
+            ret walk_block(l, src, one, next)
+        }
+        ret ok
     }
     if str.eq(name, "font-face") {
         add_font_face(l, src, one.block.inner)
-        ret
+        ret ok
     }
     if str.eq(name, "keyframes") || str.eq(name, "-webkit-keyframes") {
         add_keyframes(l, src, one)
-        ret
+        ret ok
     }
     if str.eq(name, "property") {
         add_property(l, src, one)
-        ret
+        ret ok
     }
+    ret ok
 }
 
 fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str {
@@ -1152,23 +1175,28 @@ fn text_done(t: *Text) -> str {
     ret str.done(&t.b)
 }
 
-fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) {
+fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err {
+    if ctx.nesting >= MAX_GROUPING_DEPTH { ret TooDeep }
     let (inner, e) = syntax.parse_rules(&l.scratch, one.block.inner, false)
-    if e != ok { ret }
-    walk(l, src, inner, ctx)
+    if e != ok { ret ok }
+    var next = ctx
+    next.nesting += 1usize
+    ret walk(l, src, inner, next)
 }
 
-fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx) {
+fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx) -> err {
     var i = 0usize
     while i < rules.len {
         let one = rules[i]
         i += 1usize
         if one.at {
-            at_rule(l, src, one, ctx)
+            let e = at_rule(l, src, one, ctx)
+            if e != ok { ret e }
         } else if one.has_block {
             style_rule(l, src, one, ctx)
         }
     }
+    ret ok
 }
 
 // Appends the rules of `source` (rule order continues across sheets; the sheet's `@import`s are listed, not fetched).
@@ -1193,10 +1221,10 @@ fn load(l: *Loader, source: str) -> err {
     let mark = mem.mark(sa)
     let tokens = try syntax.tokenize_with(sa, l.a, text)
     let rules = try syntax.parse_rules(sa, tokens, true)
-    let ctx = Ctx { has_layer: false, layer: 0i64, path: "", containers: zero, scopes: zero }
-    walk(l, text, rules, ctx)
+    let ctx = Ctx { has_layer: false, layer: 0i64, path: "", containers: zero, scopes: zero, nesting: 0usize }
+    let walk_error = walk(l, text, rules, ctx)
     mem.reset(sa, mark)
-    ret ok
+    ret walk_error
 }
 
 fn finish(l: *Loader) -> Loaded {

@@ -164,6 +164,13 @@ fn str_of(b: []const u8, lo: usize, hi: usize) -> str { ret b[lo..hi] }
 
 // The prescan: the encoding named by a `<meta>` in the first 1024 bytes, "" when none.
 fn prescan(b_all: []const u8) -> str {
+    // The HTML prescan recognizes an XML declaration written in either UTF-16
+    // byte order even when it has no BOM. The ASCII scan below cannot see tags
+    // through the interleaved zero bytes.
+    if b_all.len >= 6usize {
+        if b_all[0usize] == 60u8 && b_all[1usize] == 0u8 && b_all[2usize] == 63u8 && b_all[3usize] == 0u8 && b_all[4usize] == 120u8 && b_all[5usize] == 0u8 { ret "UTF-16LE" }
+        if b_all[0usize] == 0u8 && b_all[1usize] == 60u8 && b_all[2usize] == 0u8 && b_all[3usize] == 63u8 && b_all[4usize] == 0u8 && b_all[5usize] == 120u8 { ret "UTF-16BE" }
+    }
     var limit = b_all.len
     if limit > 1024usize { limit = 1024usize }
     let b = b_all[0usize..limit]

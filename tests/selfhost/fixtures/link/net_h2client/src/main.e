@@ -38,10 +38,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var blk: [256]u8 = zero
     let none_s: [1]str = zero
     frame(&server, h2.SETTINGS, 0u8, 0u32, "")
-    let interim = [1]h2.Header { h2.Header { name: ":status", value: "103" } }
+    let interim = [1]h2.Header { h2.Header { name: ":status", value: "103", staged: 0u8 } }
     let (n1, e1) = h2.encode_block(&enc, blk[0usize..256usize], interim[0usize..1usize], none_s[0usize..0usize], false)
     frame(&server, h2.HEADERS, h2.FLAG_END_HEADERS, 1u32, blk[0usize..n1])
-    let final = [2]h2.Header { h2.Header { name: ":status", value: "200" }, h2.Header { name: "content-type", value: "text/plain" } }
+    let final = [2]h2.Header { h2.Header { name: ":status", value: "200", staged: 0u8 }, h2.Header { name: "content-type", value: "text/plain", staged: 0u8 } }
     let (n2, e2) = h2.encode_block(&enc, blk[0usize..256usize], final[0usize..2usize], none_s[0usize..0usize], true)
     frame(&server, h2.HEADERS, h2.FLAG_END_HEADERS, 1u32, blk[0usize..n2])
     frame(&server, h2.DATA, 0u8, 1u32, "hel")
@@ -51,8 +51,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Ours.
     var ours: Cap = zero
     var csink = io.writer(mem.cast[*void](&ours), cap_write)
-    let hs = [3]http.Header { http.Header { name: "Accept", value: "*/*" }, http.Header { name: "Connection", value: "close" }, http.Header { name: "User-Agent", value: "t" } }
-    let (resp, e) = h2c.exchange(a, src, csink, "GET", "example.test", "/p?q=1", hs[0usize..3usize], "", 65536usize)
+    let hs = [7]http.Header { http.Header { name: ":method", value: "POST" }, http.Header { name: ":scheme", value: "http" }, http.Header { name: ":authority", value: "evil.test" }, http.Header { name: ":path", value: "/evil" }, http.Header { name: "Accept", value: "*/*" }, http.Header { name: "Connection", value: "close" }, http.Header { name: "User-Agent", value: "t" } }
+    let (resp, e) = h2c.exchange(a, src, csink, "GET", "example.test", "/p?q=1", hs[0usize..7usize], "", 65536usize)
     if e != ok { os.exit(1i32) }
     if resp.status != 200u16 { os.exit(2i32) }
     if !str.eq(resp.body, "hello") { os.exit(3i32) }
@@ -83,11 +83,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (cnt, dce) = h2.decode_block(&dec, f.payload, out[0usize..16usize], scratch[0usize..2048usize])
             if dce != ok || cnt != 6usize { os.exit(9i32) }
             if !str.eq(out[0usize].name, ":method") || !str.eq(out[0usize].value, "GET") { os.exit(10i32) }
-            if !str.eq(out[3usize].name, ":path") || !str.eq(out[3usize].value, "/p?q=1") { os.exit(11i32) }
-            if !str.eq(out[4usize].name, "accept") || !str.eq(out[5usize].name, "user-agent") { os.exit(12i32) }
+            if !str.eq(out[1usize].name, ":scheme") || !str.eq(out[1usize].value, "https") { os.exit(11i32) }
+            if !str.eq(out[2usize].name, ":authority") || !str.eq(out[2usize].value, "example.test") { os.exit(12i32) }
+            if !str.eq(out[3usize].name, ":path") || !str.eq(out[3usize].value, "/p?q=1") { os.exit(13i32) }
+            if !str.eq(out[4usize].name, "accept") || !str.eq(out[5usize].name, "user-agent") { os.exit(14i32) }
         }
         at += used
     }
-    if !saw_headers { os.exit(13i32) }
+    if !saw_headers { os.exit(15i32) }
     ret ok
 }

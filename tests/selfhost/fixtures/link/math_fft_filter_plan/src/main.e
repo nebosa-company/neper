@@ -153,6 +153,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if fft.dwt(sig[..15usize], .Haar, approx[..], detail[..]) != fft.Invalid || fft.dwt(sig[..16usize], .Haar, approx[..4usize], detail[..]) != fft.TooSmall { os.exit(3i32) }
     if fft.wavedec(sig[..16usize], .Db4, 5usize, out[..], scratch[..]) != fft.Invalid || fft.waverec(out[..], .Db4, 2usize, back[..], scratch[..8usize]) != fft.TooSmall { os.exit(3i32) }
+    out[0usize] = 123.0f64
+    if fft.wavedec(sig[..16usize], .Db4, 64usize, out[..], scratch[..]) != fft.Invalid || out[0usize] != 123.0f64 { os.exit(3i32) }
+    back[0usize] = 456.0f64
+    if fft.waverec(sig[..16usize], .Db4, 64usize, back[..], scratch[..]) != fft.Invalid || back[0usize] != 456.0f64 { os.exit(3i32) }
 
     // 4: the whole-cycle EKF over fifty range measurements against NumPy.
     var model = Model { dt: 0.1f64 }

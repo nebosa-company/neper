@@ -1,8 +1,9 @@
 // `e.algo.egraph`: the hashcons folds a repeated node, merging two leaves and
 // rebuilding unites their parents (upward congruence), the egg README rules
 // saturate (a*2)/2 to a in the replica's iteration, class and node counts and
-// extract with unit costs reads the leaf a, commutativity and associativity
-// hit a node cap yet a+(b+c) ≡ (a+b)+c, and exhausted storage is reported.
+// extract with unit costs reads the leaf a, maximal costs stay reachable and
+// saturated costs keep a cheaper equivalent selected, commutativity and
+// associativity hit a node cap yet a+(b+c) ≡ (a+b)+c, and exhausted storage is reported.
 // Each check exits with its own code. Expected values: scratch egraph_ref.py.
 
 use e.algo.egraph as eg
@@ -136,6 +137,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if te != eg.TooSmall { os.exit(5i32) }
     let (_, ve) = eg.add_leaf(&g, v0)
     if ve != eg.Invalid { os.exit(5i32) }
+
+    // 6: extraction costs saturate, and the maximum cost is still reachable.
+    let (g6, e6) = eg.egraph(op[..], ca[..], cb[..], parent[..], rank[..], table[..])
+    if e6 != ok { os.exit(6i32) }
+    g = g6
+    let (cheap, cheap_error) = eg.add_leaf(&g, 0u32)
+    let (large_child, child_error) = eg.add_leaf(&g, 1u32)
+    let (large, large_error) = eg.add(&g, 2u32, large_child, none)
+    if cheap_error != ok || child_error != ok || large_error != ok { os.exit(6i32) }
+    let _ = eg.merge(&g, cheap, large)
+    eg.rebuild(&g)
+    var high_costs: [3]u32 = zero
+    high_costs[0usize] = 7u32
+    high_costs[1usize] = 4294967294u32
+    high_costs[2usize] = 2u32
+    let (cheap_cost, cheap_extract_error) = eg.extract(&g, cheap, high_costs[..], best_cost[..], best_node[..])
+    if cheap_extract_error != ok || cheap_cost != 7u32 || best_node[usize(eg.find(&g, cheap))] != cheap { os.exit(6i32) }
+    let (cheap_written, cheap_write_error) = eg.extract_write(&g, cheap, best_node[..], out_op[..], out_a[..], out_b[..])
+    if cheap_write_error != ok || cheap_written != 1usize || out_op[0usize] != 0u32 { os.exit(6i32) }
+
+    let (g7, e7) = eg.egraph(op[..], ca[..], cb[..], parent[..], rank[..], table[..])
+    if e7 != ok { os.exit(6i32) }
+    g = g7
+    let (max_leaf, max_leaf_error) = eg.add_leaf(&g, 0u32)
+    if max_leaf_error != ok { os.exit(6i32) }
+    var max_costs: [1]u32 = zero
+    max_costs[0usize] = 4294967295u32
+    let (max_cost, max_extract_error) = eg.extract(&g, max_leaf, max_costs[..], best_cost[..], best_node[..])
+    if max_extract_error != ok || max_cost != 4294967295u32 || best_node[usize(eg.find(&g, max_leaf))] != max_leaf { os.exit(6i32) }
 
     try io.print("algo egraph ok\n")
     ret ok

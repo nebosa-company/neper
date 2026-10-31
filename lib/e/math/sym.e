@@ -264,8 +264,9 @@ fn div(p: *Pool, x: u32, y: u32) -> u32 { ret mul(p, x, pow(p, y, int(p, -1i64))
 fn isqrt(v: i64) -> i64 {
     if v <= 0i64 { ret 0i64 }
     var r = i64(math.sqrt[f64](f64(v)))
-    while r * r > v { r -= 1i64 }
-    while (r + 1i64) * (r + 1i64) <= v { r += 1i64 }
+    if r < 1i64 { r = 1i64 }
+    while r > v / r { r -= 1i64 }
+    while r < v / (r + 1i64) { r += 1i64 }
     ret r
 }
 

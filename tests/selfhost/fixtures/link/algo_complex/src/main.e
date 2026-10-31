@@ -11,6 +11,8 @@ fn near(got: f64, want: f64) -> bool {
     ret d <= 0.000000001
 }
 
+fn finite(v: f64) -> bool { ret v - v == 0.0 }
+
 fn main() {
     let a = cx.make[f64](3.0, 4.0)
     let b = cx.make[f64](1.0, -2.0)
@@ -41,8 +43,47 @@ fn main() {
     if f.re != 6.25 || f.im != 0.0 { os.exit(13) }
     let z0 = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](0.0, 0.0))
     if z0.re != 1.0 { os.exit(14) }
+    let inverse_zero = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](-1.0, 0.0))
+    if inverse_zero.re != inverse_zero.re || inverse_zero.re <= 1.0e308 || inverse_zero.im != 0.0 { os.exit(17) }
+    let inverse_zero32 = cx.pow[f32](cx.make[f32](0.0f32, 0.0f32), cx.make[f32](-1.0f32, 0.0f32))
+    if inverse_zero32.re != inverse_zero32.re || inverse_zero32.re <= 1.0e30f32 || inverse_zero32.im != 0.0f32 { os.exit(17) }
+    // Near the real axis, the hyperbolic helpers must retain the tiny
+    // imaginary terms used by sin, cos, and tan rather than cancel them away.
+    let tiny_im = 0.000000000001f64
+    let near_axis_sin = cx.sin[f64](cx.make[f64](1.0, tiny_im))
+    let near_axis_cos = cx.cos[f64](cx.make[f64](1.0, tiny_im))
+    let near_axis_tan = cx.tan[f64](cx.make[f64](1.0, tiny_im))
+    if !near(near_axis_sin.im / tiny_im, 0.5403023058681398) { os.exit(19) }
+    if !near(near_axis_cos.im / tiny_im, -0.8414709848078965) { os.exit(19) }
+    if !near(near_axis_tan.im / tiny_im, 3.425518820814759) { os.exit(19) }
+    // 0^w with a non-real exponent or zero real exponent has no finite
+    // principal value; it must not be reported as a harmless zero.
+    let imaginary_zero_power = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](0.0, 1.0))
+    if imaginary_zero_power.re == imaginary_zero_power.re || imaginary_zero_power.im == imaginary_zero_power.im { os.exit(20) }
+    let nonreal_reciprocal = cx.pow[f64](cx.make[f64](0.0, 0.0), cx.make[f64](-1.0, 1.0))
+    if nonreal_reciprocal.re == nonreal_reciprocal.re || nonreal_reciprocal.im == nonreal_reciprocal.im { os.exit(20) }
     let big = cx.abs[f64](cx.make[f64](1.0e200, 1.0e200))
     if !near(big / 1.0e200, 1.4142135623730951) { os.exit(15) }
+    // #1082: sinh/cosh at 710 remain finite, even though exp(710) does not.
+    let large_sin = cx.sin[f64](cx.make[f64](0.0, 710.0))
+    let negative_large_sin = cx.sin[f64](cx.make[f64](0.0, -710.0))
+    let large_cos = cx.cos[f64](cx.make[f64](0.0, 710.0))
+    if large_sin.re != 0.0 || !finite(large_sin.im) || large_sin.im < 1.0e307 || !finite(negative_large_sin.im) || negative_large_sin.im > -1.0e307 || !finite(large_cos.re) || large_cos.re < 1.0e307 { os.exit(18) }
+    let large_sin32 = cx.sin[f32](cx.make[f32](0.0f32, 89.0f32))
+    if large_sin32.re != 0.0f32 || large_sin32.im != large_sin32.im || large_sin32.im < 1.0e37f32 { os.exit(18) }
+    // #1574: keep finite self-division finite after normalizing the divisor, and
+    // preserve zero signs instead of evaluating exact-zero times overflowing sinh/cosh.
+    let huge = cx.make[f64](1.0e308, 1.0e308)
+    let huge_self = cx.div[f64](huge, huge)
+    if huge_self.re != 1.0 || mem.bitcast[u64](huge_self.im) != 0u64 { os.exit(21) }
+    let overflowing_sin = cx.sin[f64](cx.make[f64](0.0, 720.0))
+    let overflowing_sin_negative_zero = cx.sin[f64](cx.make[f64](-0.0, 720.0))
+    let overflowing_cos = cx.cos[f64](cx.make[f64](0.0, 720.0))
+    let overflowing_cos_negative_zero = cx.cos[f64](cx.make[f64](-0.0, 720.0))
+    if overflowing_sin.re != overflowing_sin.re || overflowing_sin.im != overflowing_sin.im || mem.bitcast[u64](overflowing_sin.re) != 0u64 { os.exit(22) }
+    if overflowing_sin_negative_zero.re != overflowing_sin_negative_zero.re || mem.bitcast[u64](overflowing_sin_negative_zero.re) != 9223372036854775808u64 { os.exit(23) }
+    if overflowing_cos.re != overflowing_cos.re || overflowing_cos.im != overflowing_cos.im || mem.bitcast[u64](overflowing_cos.im) != 9223372036854775808u64 { os.exit(24) }
+    if overflowing_cos_negative_zero.im != overflowing_cos_negative_zero.im || mem.bitcast[u64](overflowing_cos_negative_zero.im) != 0u64 { os.exit(25) }
     let n = cx.neg[f64](a)
     let d = cx.sub[f64](a, cx.neg[f64](n))
     if n.re != -3.0 || n.im != -4.0 || d.re != 0.0 || d.im != 0.0 { os.exit(16) }

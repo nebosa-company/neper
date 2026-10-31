@@ -27,6 +27,10 @@ const DEAD: u8 = 2u8
 
 const DEFAULT_CAPACITY: usize = 16usize
 
+// A requested capacity may not have a power-of-two table whose three-quarter
+// load limit can hold it.
+error TooLarge
+
 type State[K: type, V: type] = struct {
     arena: *mem.Arena,
     keys: []K,
@@ -37,11 +41,20 @@ type State[K: type, V: type] = struct {
 }
 
 // The smallest power of two that holds `entries` under the load limit, and never less than
-// the default: a table of two would grow at its second entry.
-fn table_size(entries: usize) -> usize {
+// the default: a table of two would grow at its second entry. The comparison is expressed as
+// a rounded-up division so neither side needs a potentially overflowing multiplication.
+fn table_size(entries: usize) -> (usize, err) {
+    let maximum = 0usize -% 1usize
+    if entries > (maximum - 4usize) / 4usize { ret (0usize, TooLarge) }
+    let required = entries * 4usize + 4usize
+    var minimum = required / 3usize
+    if required % 3usize != 0usize { minimum += 1usize }
     var size = DEFAULT_CAPACITY
-    while size * 3usize < entries * 4usize + 4usize { size = size * 2usize }
-    ret size
+    while size < minimum {
+        if size > maximum / 2usize { ret (0usize, TooLarge) }
+        size *= 2usize
+    }
+    ret (size, ok)
 }
 
 fn allocate_state[K: type, V: type](a: *mem.Arena, size: usize) -> (*State[K, V], err) {
@@ -127,7 +140,9 @@ fn rehash[K: type, V: type](s: *State[K, V], size: usize) -> err {
 }
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize) -> (Map[K, V], err) {
-    let (state, state_error) = allocate_state[K, V](a, table_size(capacity))
+    let (size, size_error) = table_size(capacity)
+    if size_error != ok { ret (zero, size_error) }
+    let (state, state_error) = allocate_state[K, V](a, size)
     if state_error != ok { ret (zero, state_error) }
     ret (Map[K, V] { state: mem.cast[*void](state) }, ok)
 }
@@ -142,7 +157,8 @@ fn reserve[K: type, V: type](m: *Map[K, V], capacity: usize) -> err {
     let s = mem.cast[*State[K, V]](m.state)
     var wanted = capacity
     if s.used > wanted { wanted = s.used }
-    let size = table_size(wanted)
+    let (size, size_error) = table_size(wanted)
+    if size_error != ok { ret size_error }
     if size <= s.marks.len { ret ok }
     ret rehash[K, V](s, size)
 }
@@ -162,7 +178,10 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     } else {
         // A fresh slot is taken, so the load is checked before it is: past three quarters the
         // table doubles and the key is placed in the new one.
-        if (s.used + 1usize) * 4usize > s.marks.len * 3usize {
+        let load_limit = (s.marks.len / 4usize) * 3usize
+        if s.used >= load_limit {
+            let maximum = 0usize -% 1usize
+            if s.marks.len > maximum / 2usize { ret (false, TooLarge) }
             let grow_error = rehash[K, V](s, s.marks.len * 2usize)
             if grow_error != ok { ret (false, grow_error) }
             let (again_at, again_found, again_hole, again_has_hole) = locate[K, V](s, key)

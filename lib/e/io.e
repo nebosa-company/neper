@@ -85,6 +85,7 @@ type MemoryWriter = struct {
     arena: *mem.Arena,
     start: usize,
     len: usize,
+    backing: *MemoryWriter,
 }
 
 // The buffered adapters hold their state behind a `*void` so the surface does not fix
@@ -96,6 +97,7 @@ type BufferState = struct {
     buffer: []u8,
     off: usize,
     len: usize,
+    pending_error: err,
 }
 
 type DetailBufferState = struct {
@@ -265,9 +267,8 @@ fn limited_read(ctx: *void, dst: []u8) -> (usize, err) {
     var take = dst.len
     if u64(take) > state.remaining { take = usize(state.remaining) }
     let (count, read_error) = read(&state.source, dst[0usize..take])
-    if read_error != ok { ret (count, read_error) }
     state.remaining -= u64(count)
-    ret (count, ok)
+    ret (count, read_error)
 }
 
 fn limited_reader(state: *LimitedReader, source: Reader, limit: u64) -> Reader {
@@ -308,14 +309,37 @@ fn tee_write(ctx: *void, src: []const u8) -> (usize, err) {
     ret (count, ok)
 }
 
+fn tee_flush(ctx: *void) -> err {
+    var state = mem.cast[*TeeWriter](ctx)
+    let left_error = flush(&state.left)
+    if left_error != ok { ret left_error }
+    ret flush(&state.right)
+}
+
 fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer {
     state.left = left
     state.right = right
-    ret Writer { ctx: mem.cast[*void](state), write: tee_write, flush: no_flush }
+    ret Writer { ctx: mem.cast[*void](state), write: tee_write, flush: tee_flush }
 }
 
 fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
     var state = mem.cast[*MemoryWriter](ctx)
+    if state.backing != nil { state = state.backing }
+    if src.len == 0usize { ret (0usize, ok) }
+    let arena_mark = mem.mark(state.arena)
+    if arena_mark != state.start + state.len {
+        // A different allocation occupied the arena tail. Rehome the logical
+        // output before appending so those unrelated bytes never become output.
+        if src.len > 18446744073709551615usize - state.len { ret (0usize, mem.Exhausted) }
+        let total = state.len + src.len
+        let (relocated, relocation_error) = mem.alloc[u8](state.arena, total)
+        if relocation_error != ok { ret (0usize, relocation_error) }
+        mem.copy[u8](relocated[..state.len], mem.view(state.arena, state.start, state.len))
+        mem.copy[u8](relocated[state.len..], src)
+        state.start = arena_mark
+        state.len = total
+        ret (src.len, ok)
+    }
     let (claim, claim_error) = mem.alloc[u8](state.arena, src.len)
     if claim_error != ok { ret (0usize, claim_error) }
     var at = 0usize
@@ -329,22 +353,38 @@ fn memory_write(ctx: *void, src: []const u8) -> (usize, err) {
 
 fn memory_writer(a: *mem.Arena, capacity: usize) -> (MemoryWriter, Writer, err) {
     var state: MemoryWriter = zero
-    state.arena = a
-    state.start = mem.mark(a)
-    state.len = 0usize
     var sink: Writer = zero
+    let start = mem.mark(a)
+    let (stored, state_error) = mem.alloc[MemoryWriter](a, 1usize)
+    if state_error != ok { ret (state, sink, state_error) }
+    stored[0usize].arena = a
+    stored[0usize].start = mem.mark(a)
+    stored[0usize].len = 0usize
+    stored[0usize].backing = &stored[0usize]
     if capacity > 0usize {
         // Reserve and give it straight back, so the caller learns now rather than on
         // the first write whether the arena can hold what it asked for.
         let (claim, claim_error) = mem.alloc[u8](a, capacity)
-        if claim_error != ok { ret (state, sink, claim_error) }
-        mem.reset(a, state.start)
+        if claim_error != ok {
+            mem.reset(a, start)
+            ret (state, sink, claim_error)
+        }
+        mem.reset(a, stored[0usize].start)
     }
+    state.arena = a
+    state.start = stored[0usize].start
+    state.len = 0usize
+    state.backing = &stored[0usize]
+    sink.ctx = mem.cast[*void](&stored[0usize])
+    sink.write = memory_write
+    sink.flush = no_flush
     ret (state, sink, ok)
 }
 
 fn memory_bytes(w: *const MemoryWriter) -> []const u8 {
-    ret mem.view(w.arena, w.start, w.len)
+    var state = w
+    if state.backing != nil { state = state.backing }
+    ret mem.view(state.arena, state.start, state.len)
 }
 
 fn read(r: *Reader, dst: []u8) -> (usize, err) {
@@ -376,7 +416,10 @@ fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (u
     while filled < dst.len {
         let (count, read_error) = read_detail(r, dst[filled..], detail)
         filled += count
-        if read_error != ok { ret (filled, read_error) }
+        if read_error != ok {
+            if read_error == End && filled == dst.len { ret (filled, ok) }
+            ret (filled, read_error)
+        }
     }
     ret (filled, ok)
 }
@@ -385,8 +428,11 @@ fn read_exact(r: *Reader, dst: []u8) -> err {
     var filled = 0usize
     while filled < dst.len {
         let (count, read_error) = read(r, dst[filled..])
-        if read_error != ok { ret read_error }
         filled += count
+        if read_error != ok {
+            if read_error == End && filled == dst.len { ret ok }
+            ret read_error
+        }
     }
     ret ok
 }
@@ -453,8 +499,9 @@ fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err) {
     ret (position, seek_error)
 }
 
-// `limit` is a hard maximum: crossing it is `TooSmall` and keeps no partial result,
-// which is why the claim is released before returning.
+// `limit` is a hard maximum: an input ending exactly at it succeeds, while one more
+// byte is `TooSmall` and keeps no partial result. The extra-byte probe is necessary
+// because a Reader reports End only after (or alongside) its final bytes.
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
     let start = mem.mark(a)
     var filled = 0usize
@@ -465,11 +512,29 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
             if grow == 0usize { grow = 512usize }
             if reserved + grow > limit { grow = limit - reserved }
             if grow == 0usize {
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read(r, probe[..])
+                if probe_count > 0usize {
+                    mem.reset(a, start)
+                    ret (zero, TooSmall)
+                }
+                if probe_error == End { break }
+                if probe_error != ok {
+                    mem.reset(a, start)
+                    ret (zero, probe_error)
+                }
                 mem.reset(a, start)
                 ret (zero, TooSmall)
             }
             let (extra, extra_error) = mem.alloc[u8](a, grow)
             if extra_error != ok {
+                // The current result can exactly fill the caller's arena. Before
+                // reporting that a further growth cannot fit, ask whether the
+                // source has actually ended; only an empty EOF probe keeps the
+                // completed prefix valid.
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read(r, probe[..])
+                if probe_count == 0usize && probe_error == End { break }
                 mem.reset(a, start)
                 ret (zero, extra_error)
             }
@@ -477,12 +542,12 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
         }
         let window = mem.view(a, start + filled, reserved - filled)
         let (count, read_error) = read(r, window)
+        filled += count
         if read_error == End { break }
         if read_error != ok {
             mem.reset(a, start)
             ret (zero, read_error)
         }
-        filled += count
     }
     mem.reset(a, start + filled)
     ret (mem.view(a, start, filled), ok)
@@ -498,6 +563,21 @@ fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.Er
             if grow == 0usize { grow = 512usize }
             if reserved + grow > limit { grow = limit - reserved }
             if grow == 0usize {
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read_detail(r, probe[..], detail)
+                if probe_count > 0usize {
+                    mem.reset(a, start)
+                    detail.kind = .Invalid
+                    detail.native_code = 0i32
+                    detail.operation = "read_all"
+                    detail.subject = "limit"
+                    ret (zero, TooSmall)
+                }
+                if probe_error == End { break }
+                if probe_error != ok {
+                    mem.reset(a, start)
+                    ret (zero, probe_error)
+                }
                 mem.reset(a, start)
                 detail.kind = .Invalid
                 detail.native_code = 0i32
@@ -507,6 +587,11 @@ fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.Er
             }
             let (extra, extra_error) = mem.alloc[u8](a, grow)
             if extra_error != ok {
+                // Match read_all: an exhausted caller arena is not an error when
+                // its completed prefix is the whole source.
+                var probe: [1]u8 = zero
+                let (probe_count, probe_error) = read_detail(r, probe[..], detail)
+                if probe_count == 0usize && probe_error == End { break }
                 mem.reset(a, start)
                 detail.kind = .OutOfMemory
                 detail.native_code = 0i32
@@ -536,6 +621,17 @@ fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, 
     var filled = 0usize
     while true {
         if filled == limit {
+            var probe: [1]u8 = zero
+            let (probe_count, probe_error) = read(r, probe[..])
+            if probe_count > 0usize {
+                mem.reset(a, start)
+                ret (zero, TooSmall)
+            }
+            if probe_error == End { break }
+            if probe_error != ok {
+                mem.reset(a, start)
+                ret (zero, probe_error)
+            }
             mem.reset(a, start)
             ret (zero, TooSmall)
         }
@@ -545,13 +641,13 @@ fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, 
             ret (zero, claim_error)
         }
         let (count, read_error) = read(r, claim)
-        if read_error == End { break }
-        if read_error != ok {
+        filled += count
+        if read_error != ok && read_error != End {
             mem.reset(a, start)
             ret (zero, read_error)
         }
-        filled += count
-        if claim[0usize] == delimiter { break }
+        if count > 0usize && claim[0usize] == delimiter { break }
+        if read_error == End { break }
     }
     mem.reset(a, start + filled)
     ret (mem.view(a, start, filled), ok)
@@ -562,11 +658,13 @@ fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err) {
     var moved = 0u64
     while true {
         let (count, read_error) = read(src, scratch)
+        if count > 0usize {
+            let (written, write_error) = write_all_progress(dst, scratch[0usize..count])
+            moved += u64(written)
+            if write_error != ok { ret (moved, write_error) }
+        }
         if read_error == End { ret (moved, ok) }
         if read_error != ok { ret (moved, read_error) }
-        let write_error = write_all(dst, scratch[0usize..count])
-        if write_error != ok { ret (moved, write_error) }
-        moved += u64(count)
     }
     ret (moved, ok)
 }
@@ -598,9 +696,11 @@ fn buffered_read(ctx: *void, dst: []u8) -> (usize, err) {
     if state.off == state.len {
         state.off = 0usize
         state.len = 0usize
+        state.pending_error = ok
         let (count, read_error) = read(&state.source, state.buffer)
-        if read_error != ok { ret (0usize, read_error) }
         state.len = count
+        if read_error != ok { state.pending_error = read_error }
+        if count == 0usize { ret (0usize, read_error) }
     }
     var take = state.len - state.off
     if take > dst.len { take = dst.len }
@@ -610,6 +710,7 @@ fn buffered_read(ctx: *void, dst: []u8) -> (usize, err) {
         at += 1usize
     }
     state.off += take
+    if state.off == state.len && state.pending_error != ok { ret (take, state.pending_error) }
     ret (take, ok)
 }
 
@@ -791,14 +892,22 @@ fn buffered_detail_writer(a: *mem.Arena, sink: DetailWriter, capacity: usize, de
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err) {
     var handle: BufferedReader = zero
     if capacity == 0usize { ret (handle, TooSmall) }
+    let start = mem.mark(a)
     let (state, state_error) = mem.alloc[BufferState](a, 1usize)
-    if state_error != ok { ret (handle, state_error) }
+    if state_error != ok {
+        mem.reset(a, start)
+        ret (handle, state_error)
+    }
     let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
-    if buffer_error != ok { ret (handle, buffer_error) }
+    if buffer_error != ok {
+        mem.reset(a, start)
+        ret (handle, buffer_error)
+    }
     state[0usize].source = source
     state[0usize].buffer = buffer
     state[0usize].off = 0usize
     state[0usize].len = 0usize
+    state[0usize].pending_error = ok
     handle.state = mem.cast[*void](&state[0usize])
     ret (handle, ok)
 }
@@ -806,14 +915,22 @@ fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedR
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err) {
     var handle: BufferedWriter = zero
     if capacity == 0usize { ret (handle, TooSmall) }
+    let start = mem.mark(a)
     let (state, state_error) = mem.alloc[BufferState](a, 1usize)
-    if state_error != ok { ret (handle, state_error) }
+    if state_error != ok {
+        mem.reset(a, start)
+        ret (handle, state_error)
+    }
     let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
-    if buffer_error != ok { ret (handle, buffer_error) }
+    if buffer_error != ok {
+        mem.reset(a, start)
+        ret (handle, buffer_error)
+    }
     state[0usize].sink = sink
     state[0usize].buffer = buffer
     state[0usize].off = 0usize
     state[0usize].len = 0usize
+    state[0usize].pending_error = ok
     handle.state = mem.cast[*void](&state[0usize])
     ret (handle, ok)
 }

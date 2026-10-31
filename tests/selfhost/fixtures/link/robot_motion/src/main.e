@@ -41,8 +41,39 @@ fn s_curve_hash(p: motion.SCurve) -> f64 {
     ret h
 }
 
+fn finite_number(value: f64) -> bool {
+    ret value - value == 0.0f64
+}
+
+fn profile_is_finite(p: motion.Profile) -> bool {
+    ret finite_number(p.distance) && finite_number(p.sign) && finite_number(p.v_peak) && finite_number(
+        p.a_max,
+    ) && finite_number(p.t_acc) && finite_number(p.t_flat) && finite_number(p.total)
+}
+
+fn s_curve_is_finite(p: motion.SCurve) -> bool {
+    ret finite_number(p.distance) && finite_number(p.sign) && finite_number(p.v_peak) && finite_number(
+        p.a_peak,
+    ) && finite_number(p.j_max) && finite_number(p.tj) && finite_number(p.ta) && finite_number(p.tv) && finite_number(
+        p.total,
+    )
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let pi = 3.141592653589793f64
+
+    let stopped_v = motion.trapezoid_profile(10.0f64, 0.0f64, 1.5f64)
+    let stopped_a = motion.trapezoid_profile(10.0f64, 2.0f64, 0.0f64)
+    if !profile_is_finite(stopped_v) || !profile_is_finite(stopped_a) { os.exit(11i32) }
+    let (stopped_pos, stopped_vel) = motion.trapezoid_at(stopped_v, 1.0f64)
+    if stopped_pos != 0.0f64 || stopped_vel != 0.0f64 { os.exit(11i32) }
+
+    let stopped_sv = motion.s_curve_profile(10.0f64, 0.0f64, 1.5f64, 3.0f64)
+    let stopped_sa = motion.s_curve_profile(10.0f64, 2.0f64, 0.0f64, 3.0f64)
+    let stopped_sj = motion.s_curve_profile(10.0f64, 2.0f64, 1.5f64, 0.0f64)
+    if !s_curve_is_finite(stopped_sv) || !s_curve_is_finite(stopped_sa) || !s_curve_is_finite(stopped_sj) { os.exit(12i32) }
+    let (stopped_s_pos, stopped_s_vel, stopped_s_acc) = motion.s_curve_at(stopped_sv, 1.0f64)
+    if stopped_s_pos != 0.0f64 || stopped_s_vel != 0.0f64 || stopped_s_acc != 0.0f64 { os.exit(12i32) }
 
     // 1: trapezoid profiles, full and triangular.
     let tp = motion.trapezoid_profile(10.0f64, 2.0f64, 1.5f64)
@@ -70,6 +101,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(mj_pos, 1.4703387499999998f64, 1.0e-12f64) || !near(mj_vel, 1.5526874999999998f64, 1.0e-12f64) || !near(mj_acc, 2.0475000000000008f64, 1.0e-12f64) { os.exit(3i32) }
     let (mj_end, _, _) = motion.min_jerk(1.0f64, 3.0f64, 2.0f64, 5.0f64)
     if mj_end != 3.0f64 { os.exit(3i32) }
+
+    let (mj_zero_pos, mj_zero_vel, mj_zero_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64, 0.0f64)
+    if !finite_number(mj_zero_pos) || !finite_number(mj_zero_vel) || !finite_number(mj_zero_acc) || mj_zero_pos != 1.0f64 || mj_zero_vel != 0.0f64 || mj_zero_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_zero_later_pos, mj_zero_later_vel, mj_zero_later_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64, 1.0f64)
+    if !finite_number(mj_zero_later_pos) || !finite_number(mj_zero_later_vel) || !finite_number(mj_zero_later_acc) || mj_zero_later_pos != 1.0f64 || mj_zero_later_vel != 0.0f64 || mj_zero_later_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_negative_pos, mj_negative_vel, mj_negative_acc) = motion.min_jerk(1.0f64, 3.0f64, 0.0f64 - 2.0f64, 1.0f64)
+    if !finite_number(mj_negative_pos) || !finite_number(mj_negative_vel) || !finite_number(mj_negative_acc) || mj_negative_pos != 1.0f64 || mj_negative_vel != 0.0f64 || mj_negative_acc != 0.0f64 { os.exit(13i32) }
+    let (mj_still_pos, mj_still_vel, mj_still_acc) = motion.min_jerk(2.0f64, 2.0f64, 2.0f64, 1.0f64)
+    if !finite_number(mj_still_pos) || !finite_number(mj_still_vel) || !finite_number(mj_still_acc) || mj_still_pos != 2.0f64 || mj_still_vel != 0.0f64 || mj_still_acc != 0.0f64 { os.exit(13i32) }
 
     // 4: natural cubic spline against scipy.
     let times: [5]f64 = [5]f64{ 0.0, 1.0, 2.5, 3.0, 4.5 }
@@ -158,6 +198,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(out[0usize], 0.0f64 - 0.9986858969178134f64, 1.0e-9f64) || !near(out[1usize], 0.051249188261511924f64, 1.0e-9f64) { os.exit(8i32) }
     if motion.orca(agents[..], 0usize, 2.0f64, 0.1f64, out[..], scratch[..31usize]) != motion.TooSmall { os.exit(8i32) }
     if motion.orca(agents[..], 4usize, 2.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    // Invalid horizons and integration steps are refused before their inverses.
+    if motion.orca(agents[..], 0usize, 0.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 0.0f64 - 1.0f64, 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, math.inf64(), 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, math.nan64(), 0.1f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, 0.0f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, 0.0f64 - 1.0f64, out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, math.inf64(), out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    if motion.orca(agents[..], 0usize, 2.0f64, math.nan64(), out[..], scratch[..]) != motion.Invalid { os.exit(8i32) }
+    var coincident: [2]motion.Agent = zero
+    coincident[0usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)
+    coincident[1usize] = motion.agent(0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64, 1.0f64)
+    if motion.orca(coincident[..], 0usize, 2.0f64, 0.1f64, out[..], scratch[..]) != ok || out[0usize] != out[0usize] || out[1usize] != out[1usize] || out[0usize] <= 0.0f64 { os.exit(8i32) }
+    if motion.orca(coincident[..], 1usize, 2.0f64, 0.1f64, out[..], scratch[..]) != ok || out[0usize] != out[0usize] || out[1usize] != out[1usize] || out[0usize] >= 0.0f64 { os.exit(8i32) }
 
     // 9: potential field and the elastic band.
     let (fx, fy) = motion.potential_field(0.5f64, 0.3f64, 3.0f64, 2.0f64, obstacles[..], 0.8f64, 0.2f64, 1.2f64)

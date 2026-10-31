@@ -13,8 +13,8 @@ fn gives(a: *mem.Arena, s: str, form: norm.Form, want: str) -> bool {
     ret str.eq(out, want)
 }
 
-fn holds(s: str, form: norm.Form, want: bool) -> bool {
-    let (answer, answer_error) = norm.is_normalized(s, form)
+fn holds(a: *mem.Arena, s: str, form: norm.Form, want: bool) -> bool {
+    let (answer, answer_error) = norm.is_normalized(a, s, form)
     if answer_error != ok { ret false }
     ret answer == want
 }
@@ -90,29 +90,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if twice_error != ok || !str.eq(once, twice) { os.exit(45) }
 
     // --- is_normalized agrees with normalize ----------------------------------------------
-    if !holds("\xc3\xa9", .Nfc, true) { os.exit(46) }
-    if !holds("\xc3\xa9", .Nfd, false) { os.exit(47) }
-    if !holds("e\xcc\x81", .Nfc, false) { os.exit(48) }
-    if !holds("e\xcc\x81", .Nfd, true) { os.exit(49) }
-    if !holds("\xef\xac\x81", .Nfc, true) { os.exit(50) }
-    if !holds("\xef\xac\x81", .Nfkc, false) { os.exit(51) }
-    if !holds("a\xcc\x81\xcc\xa7", .Nfd, false) { os.exit(52) }
-    if !holds("a\xcc\xa7\xcc\x81", .Nfd, true) { os.exit(53) }
-    if !holds("\xed\x95\x9c\xea\xb8\x80", .Nfc, true) { os.exit(54) }
-    if !holds("\xed\x95\x9c\xea\xb8\x80", .Nfd, false) { os.exit(55) }
+    if !holds(a, "\xc3\xa9", .Nfc, true) { os.exit(46) }
+    if !holds(a, "\xc3\xa9", .Nfd, false) { os.exit(47) }
+    if !holds(a, "e\xcc\x81", .Nfc, false) { os.exit(48) }
+    if !holds(a, "e\xcc\x81", .Nfd, true) { os.exit(49) }
+    if !holds(a, "\xef\xac\x81", .Nfc, true) { os.exit(50) }
+    if !holds(a, "\xef\xac\x81", .Nfkc, false) { os.exit(51) }
+    if !holds(a, "a\xcc\x81\xcc\xa7", .Nfd, false) { os.exit(52) }
+    if !holds(a, "a\xcc\xa7\xcc\x81", .Nfd, true) { os.exit(53) }
+    if !holds(a, "\xed\x95\x9c\xea\xb8\x80", .Nfc, true) { os.exit(54) }
+    if !holds(a, "\xed\x95\x9c\xea\xb8\x80", .Nfd, false) { os.exit(55) }
     // The cut rule must not split an L jamo from its V, or an LV syllable from its T.
-    if !holds("\xe1\x84\x80\xe1\x85\xa1\xe1\x86\xa8", .Nfc, false) { os.exit(56) }
-    if !holds("\xea\xb0\x80\xe1\x86\xa8", .Nfc, false) { os.exit(57) }
+    if !holds(a, "\xe1\x84\x80\xe1\x85\xa1\xe1\x86\xa8", .Nfc, false) { os.exit(56) }
+    if !holds(a, "\xea\xb0\x80\xe1\x86\xa8", .Nfc, false) { os.exit(57) }
     // Nor a starter from a starter second: Bengali KA + AA composes to U+09CB.
-    if !holds("\xe0\xa7\x87\xe0\xa6\xbe", .Nfc, false) { os.exit(58) }
+    if !holds(a, "\xe0\xa7\x87\xe0\xa6\xbe", .Nfc, false) { os.exit(58) }
     if !gives(a, "\xe0\xa7\x87\xe0\xa6\xbe", .Nfc, "\xe0\xa7\x8b") { os.exit(59) }
-    if !holds("plain ascii", .Nfkd, true) { os.exit(60) }
-    if !holds("", .Nfc, true) { os.exit(61) }
-    if !holds("caf\xc3\xa9 \xef\xac\x81n \xed\x95\x9c", .Nfc, true) { os.exit(62) }
-    if !holds("caf\xc3\xa9 \xef\xac\x81n \xed\x95\x9c", .Nfkc, false) { os.exit(63) }
-    if !holds("\xe0\xa5\x98", .Nfc, false) { os.exit(64) }
-    if !holds("\xe2\x84\xa6", .Nfc, false) { os.exit(65) }
-    let (malformed, malformed_error) = norm.is_normalized("ab\xffcd", .Nfc)
+    if !holds(a, "plain ascii", .Nfkd, true) { os.exit(60) }
+    if !holds(a, "", .Nfc, true) { os.exit(61) }
+    if !holds(a, "caf\xc3\xa9 \xef\xac\x81n \xed\x95\x9c", .Nfc, true) { os.exit(62) }
+    if !holds(a, "caf\xc3\xa9 \xef\xac\x81n \xed\x95\x9c", .Nfkc, false) { os.exit(63) }
+    if !holds(a, "\xe0\xa5\x98", .Nfc, false) { os.exit(64) }
+    if !holds(a, "\xe2\x84\xa6", .Nfc, false) { os.exit(65) }
+    let (malformed, malformed_error) = norm.is_normalized(a, "ab\xffcd", .Nfc)
     if malformed_error != norm.Invalid { os.exit(66) }
+    // More than the former 512-scalar stack window: equal-class non-starters are NFC.
+    var long_marks: [1026]u8 = zero
+    var long_at = 0usize
+    while long_at < long_marks.len {
+        long_marks[long_at] = 204u8
+        long_marks[long_at + 1usize] = 129u8
+        long_at += 2usize
+    }
+    var long_storage: [16384]u8 = zero
+    var long_arena = mem.arena_from(long_storage[..])
+    let (long_normalized, long_error) = norm.is_normalized(&long_arena, long_marks[..], .Nfc)
+    if long_error != ok || !long_normalized { os.exit(67) }
     ret ok
 }

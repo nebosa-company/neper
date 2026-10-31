@@ -133,6 +133,28 @@ fn main(a: *mem.Arena) -> err {
     if too_small != bytes.TooLarge { os.exit(85i32) }
     let (_, no_room) = bytes.base64_encode(tiny[..], "foobar", .Standard, true)
     if no_room != bytes.TooLarge { os.exit(86i32) }
+    // Failed streaming updates must leave their held group untouched so a retry
+    // with the same source neither duplicates nor loses bytes.
+    var chunk_encoder = bytes.base64_encoder(.Standard, true)
+    let (encoder_held, encoder_held_error) = bytes.base64_encoder_update(&chunk_encoder, out[..], "h")
+    if encoder_held_error != ok || encoder_held != 0usize { os.exit(140i32) }
+    var short_encode: [3]u8 = zero
+    let (_, encoder_retry_error) = bytes.base64_encoder_update(&chunk_encoder, short_encode[..], "abcde")
+    if encoder_retry_error != bytes.TooLarge { os.exit(141i32) }
+    let (encoded_retry, encoded_retry_error) = bytes.base64_encoder_update(&chunk_encoder, out[..], "abcde")
+    if encoded_retry_error != ok || encoded_retry != 8usize || !str.eq(out[0usize..encoded_retry], "aGFiY2Rl") { os.exit(142i32) }
+    let (encoder_tail, encoder_tail_error) = bytes.base64_encoder_finish(&chunk_encoder, out[..])
+    if encoder_tail_error != ok || encoder_tail != 0usize { os.exit(143i32) }
+    var chunk_decoder = bytes.base64_decoder(.Standard)
+    let (decoder_held, decoder_held_error) = bytes.base64_decoder_update(&chunk_decoder, back[..], "aG")
+    if decoder_held_error != ok || decoder_held != 0usize { os.exit(144i32) }
+    var short_decode: [2]u8 = zero
+    let (_, decoder_retry_error) = bytes.base64_decoder_update(&chunk_decoder, short_decode[..], "FiY2Rl")
+    if decoder_retry_error != bytes.TooLarge { os.exit(145i32) }
+    let (decoded_retry, decoded_retry_error) = bytes.base64_decoder_update(&chunk_decoder, back[..], "FiY2Rl")
+    if decoded_retry_error != ok || decoded_retry != 6usize || !str.eq(back[0usize..decoded_retry], "habcde") { os.exit(146i32) }
+    let (decoder_tail, decoder_tail_error) = bytes.base64_decoder_finish(&chunk_decoder, back[..])
+    if decoder_tail_error != ok || decoder_tail != 0usize { os.exit(147i32) }
 
     // --- Base32, the same section's vectors, and the hex alphabet.
     let (b32_len, b32_len_error) = bytes.base32_encoded_len(6usize, true)

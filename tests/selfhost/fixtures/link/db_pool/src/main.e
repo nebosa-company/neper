@@ -138,10 +138,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (t5, id5, b5, q5) = pool.stats(&p)
     if e5d != ok || o5d != .Queued || t5 != 1usize || id5 != 0usize || b5 != 1usize || q5 != 1usize { os.exit(5i32) }
 
-    // 6: the 300-event script's outcome fold and final stats equal the replica.
-    let (p6, pe6) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..], since[..], config(1usize, 4usize, 500u64, 120u64, 60u64))
-    if pe6 != ok { os.exit(6i32) }
+    // 6: pending creations count toward the target idle capacity.
+    let (p6, pe6) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..], since[..], config(2usize, 4usize, 0u64, 0u64, 60u64))
+    if pe6 != ok { os.exit(8i32) }
     p = p6
+    let (pending0, pending0_error) = pool.reserve(&p, 0u64)
+    if pending0_error != ok || pending0 != 0u32 || pool.warm(&p) != 1usize { os.exit(8i32) }
+    let (pending1, pending1_error) = pool.reserve(&p, 0u64)
+    if pending1_error != ok || pending1 != 1u32 || pool.warm(&p) != 0usize { os.exit(8i32) }
+
+    // 7: the 300-event script's outcome fold and final stats equal the replica.
+    let (p_script, pe_script) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..], since[..], config(1usize, 4usize, 500u64, 120u64, 60u64))
+    if pe_script != ok { os.exit(6i32) }
+    p = p_script
     var seed = 12345u64
     var t = 0u64
     var h = 0xcbf29ce484222325u64
@@ -213,7 +222,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (t6, id6, b6, q6) = pool.stats(&p)
     if h != 1782850722722251739u64 || t6 != 4usize || id6 != 1usize || b6 != 3usize || q6 != 0usize || t != 6019u64 { os.exit(6i32) }
 
-    // 7: Full, Invalid, TooSmall.
+    // 8: Full, Invalid, TooSmall.
     let (p7, pe7) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..2usize], since[..], config(0usize, 1usize, 0u64, 0u64, 60u64))
     if pe7 != ok { os.exit(7i32) }
     p = p7

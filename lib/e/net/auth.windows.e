@@ -89,6 +89,13 @@ extern fn raw_delete(context: *Handle) -> i32
 extern fn raw_free_credential(credential: *Handle) -> i32
 
 fn client(a: *mem.Arena, mechanism: Mechanism, service_principal: str) -> (*Context, err) {
+    // SSPI receives a NUL-terminated target. Retaining bytes after a NUL would
+    // make peer_name disagree with the target SSPI authenticated.
+    var at = 0usize
+    while at < service_principal.len {
+        if service_principal[at] == 0u8 { ret (nil, Invalid) }
+        at += 1usize
+    }
     let (wide, wide_error) = widen(a, service_principal)
     if wide_error != ok { ret (nil, wide_error) }
     let (principal, principal_error) = mem.alloc[u8](a, service_principal.len)

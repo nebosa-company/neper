@@ -204,6 +204,25 @@ fn vectors_8() -> str {
 fn vectors_9() -> str {
     ret "U 64.3.91.225/25 0 => 64.3.91.128/25\nU 154.41.186.210/15 6 4 1 5 3 1 => E:DoesNotFit\nU 50.151.215.233/12 2 0 6 5 1 => E:DoesNotFit\nU 144.182.170.189/13 4 6 4 6 6 => 144.176.0.0/17,144.176.128.0/19,144.177.0.0/17,144.177.128.0/19,144.177.160.0/19\nU 193.32.205.80/7 1 4 6 3 => 192.0.0.0/8,193.0.0.0/11,193.32.0.0/13,193.64.0.0/10\nU 241.149.96.45/21 6 0 1 5 0 4 => E:DoesNotFit\nU 181.236.182.119/19 0 0 0 1 4 1 4 3 => E:DoesNotFit\nU 155.191.246.140/10 2 1 0 6 1 0 2 0 => E:DoesNotFit\nU 86.186.134.48/23 6 3 5 1 3 5 => E:DoesNotFit\nU 191.163.131.86/10 5 3 1 2 3 3 0 => E:DoesNotFit\nU 40.187.95.27/18 0 => 40.187.64.0/18\nU 132.123.74.236/6 6 0 3 3 6 2 => E:DoesNotFit\nU 88.249.16.117/13 6 => 88.248.0.0/19\nU 227.109.95.181/8 1 => 227.0.0.0/9\nU 37.114.170.125/2 5 4 1 2 0 => E:DoesNotFit\nU 128.97.172.200/20 5 4 => 128.97.160.0/25,128.97.161.0/24\nU 99.189.235.116/11 0 => 99.160.0.0/11\nU 37.117.211.89/26 4 => 37.117.211.64/30\nU 12.205.191.164/22 6 4 0 2 6 => E:DoesNotFit\nU 29.170.74.72/17 6 1 4 => E:DoesNotFit\nU 41.76.191.150/14 4 0 3 => E:DoesNotFit\nU 18.227.215.255/12 4 6 6 4 6 0 => E:DoesNotFit\nU 143.200.54.154/13 3 1 0 6 => E:DoesNotFit\nU 61.201.234.193/21 2 => 61.201.232.0/23\nU 183.124.180.63/27 6 5 5 5 5 => E:NewbitsTooBig\nU 198.107.111.122/28 2 6 0 2 5 3 => E:NewbitsTooBig\nU 56.9.232.203/16 1 4 3 => 56.9.0.0/17,56.9.128.0/20,56.9.160.0/19\nU 180.110.52.53/11 6 4 5 => 180.96.0.0/17,180.98.0.0/15,180.100.0.0/16\nU 223.60.237.162/4 3 2 6 4 3 2 3 2 => E:DoesNotFit\nU 141.161.244.154/19 1 => 141.161.224.0/20\nU 2.136.64.32/0 3 2 2 0 2 5 4 => E:DoesNotFit\nU 127.142.87.111/21 4 4 => 127.142.80.0/25,127.142.80.128/25\nU 112.134.141.206/16 1 4 6 0 => E:DoesNotFit\n"
 }
+fn check_constructed_prefix(a: *mem.Arena) -> u8 {
+    let invalid = cidr.Ipv4Prefix { addr: 16909060u32, len: 33u32 }
+    if cidr.mask_of(invalid.len) != 0u32 || cidr.network(invalid) != 0u32 || cidr.netmask(invalid) != 0u32 { ret 11u8 }
+    let (_, format_error) = cidr.format(a, invalid)
+    if format_error != cidr.LengthTooLong { ret 12u8 }
+    let (_, subnet_error) = cidr.subnet(invalid, 0i64, 0i64)
+    if subnet_error != cidr.LengthTooLong { ret 13u8 }
+    let (_, host_error) = cidr.host(invalid, 0i64)
+    if host_error != cidr.LengthTooLong { ret 14u8 }
+    let bits = [1]i64{ 0 }
+    var out = [1]cidr.Ipv4Prefix{ zero }
+    let (_, subnets_error) = cidr.subnets(invalid, bits[..], out[..])
+    if subnets_error != cidr.LengthTooLong { ret 15u8 }
+    let widest = cidr.Ipv4Prefix { addr: 16909060u32, len: 4294967295u32 }
+    let (_, widest_error) = cidr.host(widest, 0i64)
+    if widest_error != cidr.LengthTooLong { ret 16u8 }
+    ret 0u8
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -215,6 +234,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_7()) != 0u8 { os.exit(8i32) }
     if run(a, vectors_8()) != 0u8 { os.exit(9i32) }
     if run(a, vectors_9()) != 0u8 { os.exit(10i32) }
+    let constructed_code = check_constructed_prefix(a)
+    if constructed_code != 0u8 { os.exit(i32(constructed_code)) }
     try io.print("net cidr ok")
     ret ok
 }

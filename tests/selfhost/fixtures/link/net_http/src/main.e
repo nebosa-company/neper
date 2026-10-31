@@ -103,7 +103,7 @@ fn message_limits(start: usize, headers: usize, count: usize, body: usize) -> ht
     ret http.Limits { start_line: start, header_bytes: headers, header_count: count, body_bytes: body }
 }
 
-fn main(a: *mem.Arena) -> err {
+fn main(a: *mem.Arena, args: []str) -> err {
     // Pipelined requests prove the reader preserves bytes fetched past the first body.
     var request_source: OneByte = zero
     let request_input = "POST /one HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\nX-Mode: one\r\n\r\nabcGET /two HTTP/1.0\r\n\r\n"
@@ -127,6 +127,14 @@ fn main(a: *mem.Arena) -> err {
     let (chunk_response, chunk_response_error) = http.read_response(a, &chunks)
     if chunk_response_error != ok { ret chunk_response_error }
     if chunk_response.version != .Http11 || chunk_response.status != 200u16 || !str.eq(chunk_response.reason, "OK") || !str.eq(chunk_response.body, "Wikipedia") { ret Failed }
+    // Informational heads are skipped until the final response is available.
+    var informational_source: OneByte = zero
+    let informational_input = "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+    let (informational_handle, informational_reader_error) = http.reader(a, one_reader(&informational_source, informational_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if informational_reader_error != ok { ret informational_reader_error }
+    var informational_reader = informational_handle
+    let (informational_response, informational_response_error) = http.read_response(a, &informational_reader)
+    if informational_response_error != ok || informational_response.status != 200u16 || !str.eq(informational_response.body, "ok") { ret Failed }
     // A close-delimited HTTP/1.0 response remains bounded by body_bytes.
     var close_source: OneByte = zero
     let (close_handle, close_reader_error) = http.reader(a, one_reader(&close_source, "HTTP/1.0 404 Missing\r\n\r\nnope"), message_limits(64usize, 64usize, 4usize, 4usize))
@@ -162,6 +170,23 @@ fn main(a: *mem.Arena) -> err {
     var short_body = body_handle
     let (body_request, body_error) = http.read_request(a, &short_body)
     if body_error != http.TooLarge { ret Failed }
+
+    // Parsed framing lengths must fit the target's usize before they can affect a
+    // request body or the chunk terminator. On wasm32 these values used to narrow to 0.
+    var giant_length_source: OneByte = zero
+    let (giant_length_handle, giant_length_reader_error) = http.reader(a, one_reader(&giant_length_source, "POST / HTTP/1.1\r\nContent-Length: 4294967296\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if giant_length_reader_error != ok { ret giant_length_reader_error }
+    var giant_length_reader = giant_length_handle
+    let (_, giant_length_error) = http.read_request(a, &giant_length_reader)
+    if giant_length_error != http.TooLarge { ret Failed }
+
+    var giant_chunk_source: OneByte = zero
+    let giant_chunk_input = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n100000000\r\n\r\n"
+    let (giant_chunk_handle, giant_chunk_reader_error) = http.reader(a, one_reader(&giant_chunk_source, giant_chunk_input), message_limits(64usize, 128usize, 4usize, 0usize))
+    if giant_chunk_reader_error != ok { ret giant_chunk_reader_error }
+    var giant_chunk_reader = giant_chunk_handle
+    let (_, giant_chunk_error) = http.read_response(a, &giant_chunk_reader)
+    if giant_chunk_error != http.TooLarge { ret Failed }
 
     // Conflicting length/chunk framing is rejected instead of becoming a smuggling
     // ambiguity, and methods remain case-sensitive tokens.
@@ -203,6 +228,11 @@ fn main(a: *mem.Arena) -> err {
     if response_write_error != ok || !str.eq(io.memory_bytes(&response_capture), "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") { ret Failed }
     if !str.eq(http.reason(503u16), "Service Unavailable") || http.reason(799u16).len != 0usize { ret Failed }
 
+    // The plain-client exchange needs a host loopback socket, and a failed host
+    // exchange can otherwise leave its worker blocked in accept. Keep it as an
+    // explicit integration probe; the default fixture remains finite and covers the
+    // parser and in-memory transport cases above.
+    if args.len == 1usize && str.eq(args[0usize], "--live") {
     // The plain client owns one real loopback connection per request. A HEAD response
     // retains its advertised length without trying to consume a body the server omits.
     let (loopback, loopback_error) = net.parse_ip("127.0.0.1")
@@ -211,12 +241,17 @@ fn main(a: *mem.Arena) -> err {
     let (listener, listen_error) = net.tcp_listen(endpoint, 2u32)
     if listen_error != ok { ret listen_error }
     var server = LiveServer { listener: listener, failed: false }
-    defer let _ = net.close(server.listener)
     let (bound, bound_error) = os.socket_local_address(server.listener)
-    if bound_error != ok || bound.port == 0u16 { ret Failed }
+    if bound_error != ok || bound.port == 0u16 {
+        let _ = net.close(server.listener)
+        ret Failed
+    }
     endpoint.port = bound.port
     let (worker, spawn_error) = thread.spawn[LiveServer](serve_live, &server, 0usize)
-    if spawn_error != ok { ret spawn_error }
+    if spawn_error != ok {
+        let _ = net.close(server.listener)
+        ret spawn_error
+    }
 
     var live_headers: [1]http.Header = zero
     live_headers[0usize] = http.Header { name: "Host", value: "local" }
@@ -274,8 +309,9 @@ fn main(a: *mem.Arena) -> err {
 
     live_request.method = .Connect
     let (tunnel_response, tunnel_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+    let listener_close_error = net.close(server.listener)
     let joined = thread.join(worker)
-    if joined != ok || server.failed || stream_failed || cancel_failed { ret Failed }
+    if listener_close_error != ok || joined != ok || server.failed || stream_failed || cancel_failed { ret Failed }
     if live_error != ok || live_response.status != 201u16 || !str.eq(live_response.body, "hello") { ret Failed }
     let (live_value, live_found) = http.header(live_response.headers, "x-live")
     if !live_found || !str.eq(live_value, "yes") { ret Failed }
@@ -283,6 +319,7 @@ fn main(a: *mem.Arena) -> err {
     let (head_length, head_length_found) = http.header(head_response.headers, "content-length")
     if !head_length_found || !str.eq(head_length, "5") { ret Failed }
     if tunnel_error != http.Unsupported { ret Failed }
+    }
 
     // BOM, comment, all three line endings, repeated data and retained id/retry state.
     var first_source: OneByte = zero

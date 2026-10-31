@@ -138,6 +138,11 @@ fn signature_ok(d: []const u8) -> bool {
     ret d[0] == 137u8 && d[1] == 80u8 && d[2] == 78u8 && d[3] == 71u8 && d[4] == 13u8 && d[5] == 10u8 && d[6] == 26u8 && d[7] == 10u8
 }
 
+fn unknown_critical(kind: u32) -> bool {
+    if kind == 1229472850u32 || kind == 1347179589u32 || kind == 1951551059u32 || kind == 1633899596u32 || kind == 1229209940u32 || kind == 1229278788u32 { ret false }
+    ret ((kind >> 24u32) & 32u32) == 0u32
+}
+
 fn info_of(h: Header, has_trns: bool) -> image.Info {
     var format: image.Format = .Rgba8
     var alpha: image.Alpha = .Straight
@@ -178,6 +183,7 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
             continue
         }
         if !seen_header { ret (zero, Invalid) }
+        if unknown_critical(kind) { ret (zero, Unsupported) }
         if kind == 1229209940u32 { break }
         if kind == 1633899596u32 && length >= 4usize {
             var body: [8]u8 = zero
@@ -404,8 +410,11 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     if !signature_ok(data) { ret (zero, Invalid) }
     var header: Header = zero
     var seen_header = false
+    var seen_iend = false
     var pal: Palette = zero
     var idat_total = 0usize
+    var seen_idat = false
+    var idat_closed = false
     var at = 8usize
     // First walk: header, palette, transparency, the compressed size.
     while at + 12usize <= data.len {
@@ -424,6 +433,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             if within_error != ok { ret (zero, within_error) }
         } else {
             if !seen_header { ret (zero, Invalid) }
+            if unknown_critical(kind) { ret (zero, Unsupported) }
             if kind == 1347179589u32 {
                 if length % 3usize != 0usize || length == 0usize || length > 768usize { ret (zero, Invalid) }
                 pal.plte = body
@@ -436,12 +446,22 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                 header.frames = be32(body, 0usize)
                 if header.frames == 0u32 { header.frames = 1u32 }
             }
-            if kind == 1229209940u32 { idat_total += length }
-            if kind == 1229278788u32 { break }
+            if kind == 1229209940u32 {
+                if idat_closed { ret (zero, Invalid) }
+                seen_idat = true
+                idat_total += length
+            } else if seen_idat {
+                idat_closed = true
+            }
+            if kind == 1229278788u32 {
+                if length != 0usize || at + 12usize != data.len { ret (zero, Invalid) }
+                seen_iend = true
+                break
+            }
         }
         at += 12usize + length
     }
-    if !seen_header || idat_total < 6usize { ret (zero, Invalid) }
+    if !seen_header || !seen_iend || idat_total < 6usize { ret (zero, Invalid) }
     if header.color == 3u32 && pal.plte.len == 0usize { ret (zero, Invalid) }
     // Second walk: the zlib stream, IDAT chunks laid end to end.
     let (zlib, zlib_error) = mem.alloc[u8](a, idat_total)
@@ -918,11 +938,14 @@ fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeO
 
 // `adaptive` selects filters per row; `colors` above zero selects indexed output over the palette in `pal`.
 fn encode_with(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, adaptive: bool, pal: []u32, colors: usize) -> err {
+    // Keep encoder and decoder constraints symmetric. In particular, a zero height makes the
+    // old hand-written final-row length expression subtract a stride from zero.
+    if value.width == 0u32 || value.height == 0u32 || value.width > 2147483647u32 || value.height > 2147483647u32 { ret Invalid }
     let (channels, color0, channels_error) = source_channels(value)
     if channels_error != ok { ret channels_error }
-    let (_, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
+    let (needed, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
     if size_error != ok { ret Invalid }
-    if value.pixels.len < value.stride * usize(value.height) - value.stride + usize(value.width) * image.bytes_per_pixel(value.format) { ret Invalid }
+    if value.pixels.len < needed { ret Invalid }
     var color = color0
     var depth = 8u8
     if colors > 0usize {

@@ -11,7 +11,7 @@ use e.meta
 
 type Class = enum u8 { Universal, Application, Context, Private }
 type Tag = struct { class: Class, number: u32, constructed: bool }
-type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
+type Value = struct { tag: Tag, content: []const u8, encoded: []const u8, depth: u16 }
 type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
 error Invalid
 error NonCanonical
@@ -28,6 +28,15 @@ fn class_of(first: u8) -> Class {
     if bits == 2u8 { ret .Context }
     if bits == 3u8 { ret .Private }
     ret .Universal
+}
+
+// Add one base-128 tag digit without letting a five-octet tag wrap the u32
+// representation used by Tag.
+fn append_tag_number(current: u32, byte: u8) -> (u32, err) {
+    let part = u32(byte & 127u8)
+    let maximum = (4294967295u32 - part) >> 7u32
+    if current > maximum { ret (0u32, TooLarge) }
+    ret ((current << 7u32) | part, ok)
 }
 
 // The next value at the reader's offset; `false` once the data is exhausted.
@@ -57,7 +66,9 @@ fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
             let byte = data[at]
             at += 1usize
             count += 1usize
-            number = (number << 7u32) | u32(byte & 127u8)
+            let (next, next_error) = append_tag_number(number, byte)
+            if next_error != ok { ret (zero, false, next_error) }
+            number = next
             if byte & 128u8 == 0u8 { break }
         }
         if number < 31u32 { ret (zero, false, NonCanonical) }
@@ -74,52 +85,94 @@ fn reader_next_err(source_reader: *Reader) -> (Value, bool, err) {
         let count = usize(length_first & 127u8)
         if count == 0usize { ret (zero, false, NonCanonical) }
         if count > 8usize { ret (zero, false, TooLarge) }
-        if at + count > data.len { ret (zero, false, Invalid) }
+        if count > data.len - at { ret (zero, false, Invalid) }
         if data[at] == 0u8 { ret (zero, false, NonCanonical) }
+        // Accumulate in a fixed-width integer. On wasm32 an eight-byte DER
+        // length otherwise wraps a `usize` and can turn a huge declaration
+        // into a small valid length.
+        var length64 = 0u64
         var i = 0usize
         while i < count {
-            length = (length << 8u32) | usize(data[at + i])
+            length64 = (length64 << 8u32) | u64(data[at + i])
             i += 1usize
         }
-        if length < 128usize { ret (zero, false, NonCanonical) }
+        if length64 < 128u64 { ret (zero, false, NonCanonical) }
         at += count
+        if length64 > u64(data.len - at) { ret (zero, false, Invalid) }
+        length = usize(length64)
     }
     if length > data.len - at { ret (zero, false, Invalid) }
     var value: Value = zero
     value.tag = tag
     value.content = data[at..at + length]
     value.encoded = data[start..at + length]
+    value.depth = r.depth
     r.off = at + length
     ret (value, true, ok)
 }
 
 fn children(value: Value, max_depth: u16) -> (Reader, err) {
     if !value.tag.constructed { ret (zero, Invalid) }
-    if max_depth == 0u16 { ret (zero, TooDeep) }
-    ret (Reader { data: value.content, off: 0usize, depth: 1u16, max_depth: max_depth }, ok)
+    if value.depth >= max_depth { ret (zero, TooDeep) }
+    ret (Reader { data: value.content, off: 0usize, depth: value.depth + 1u16, max_depth: max_depth }, ok)
 }
 
 fn is_universal(value: Value, number: u32, constructed: bool) -> bool {
     ret value.tag.class == .Universal && value.tag.number == number && value.tag.constructed == constructed
 }
 
-// A DER INTEGER as a signed 64-bit value; minimal encoding required.
-fn integer_of(value: Value) -> (i64, err) {
+// A DER INTEGER as either a signed value or the leading-zero form of an unsigned u64;
+// minimal encoding is required in both cases.
+fn integer_of(value: Value) -> (i64, u64, bool, err) {
     let c = value.content
-    if c.len == 0usize { ret (0i64, NonCanonical) }
+    if c.len == 0usize { ret (0i64, 0u64, true, NonCanonical) }
     if c.len > 1usize {
-        if c[0] == 0u8 && c[1] & 128u8 == 0u8 { ret (0i64, NonCanonical) }
-        if c[0] == 255u8 && c[1] & 128u8 != 0u8 { ret (0i64, NonCanonical) }
+        if c[0] == 0u8 && c[1] & 128u8 == 0u8 { ret (0i64, 0u64, true, NonCanonical) }
+        if c[0] == 255u8 && c[1] & 128u8 != 0u8 { ret (0i64, 0u64, true, NonCanonical) }
     }
-    if c.len > 8usize { ret (0i64, TooLarge) }
+    if c.len > 9usize || (c.len == 9usize && (c[0usize] != 0u8 || c[1usize] & 128u8 == 0u8)) { ret (0i64, 0u64, true, TooLarge) }
     var acc = 0u64
-    if c[0] & 128u8 != 0u8 { acc = 18446744073709551615u64 }
+    var signed = c.len != 9usize
+    if signed && c[0] & 128u8 != 0u8 { acc = 18446744073709551615u64 }
     var i = 0usize
+    if !signed { i = 1usize }
     while i < c.len {
         acc = (acc << 8u32) | u64(c[i])
         i += 1usize
     }
-    ret (mem.bitcast[i64](acc), ok)
+    if signed { ret (mem.bitcast[i64](acc), 0u64, true, ok) }
+    ret (0i64, acc, false, ok)
+}
+
+// Decide the target range before narrowing an INTEGER: direct casts trap in debug and wrap in
+// release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
 }
 
 fn boolean_of(value: Value) -> (bool, err) {
@@ -164,10 +217,10 @@ fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err
         } else {
         if meta.kind[f.ty]() == .Int {
             if !is_universal(field, 2u32, false) { ret (out, Invalid) }
-            let (number, number_error) = integer_of(field)
+            let (signed, unsigned, is_signed, number_error) = integer_of(field)
             if number_error != ok { ret (out, number_error) }
-            var slot: f.ty = zero
-            slot = f.ty(number)
+            let (slot, slot_error) = integer_into[f.ty](signed, unsigned, is_signed)
+            if slot_error != ok { ret (out, slot_error) }
             meta.set[f, T](&out, slot)
         } else {
             ret (out, Invalid)
@@ -190,6 +243,37 @@ fn integer_len(value: i64) -> usize {
         count += 1usize
     }
     ret count
+}
+
+// The minimal positive INTEGER byte count for an unsigned value. A leading zero
+// keeps the high bit from making the DER value negative.
+fn unsigned_integer_len(value: u64) -> usize {
+    var count = 1usize
+    var remaining = value >> 8u32
+    while remaining > 0u64 {
+        remaining = remaining >> 8u32
+        count += 1usize
+    }
+    if (value >> u32((count - 1usize) * 8usize)) & 128u64 != 0u64 { count += 1usize }
+    ret count
+}
+
+fn put_unsigned_integer(dst: []u8, at: usize, value: u64) -> usize {
+    let count = unsigned_integer_len(value)
+    var out = at
+    var bytes = count
+    if count == 9usize {
+        dst[out] = 0u8
+        out += 1usize
+        bytes = 8usize
+    }
+    var i = bytes
+    while i > 0usize {
+        i -= 1usize
+        dst[out] = u8((value >> u32(i * 8usize)) & 255u64)
+        out += 1usize
+    }
+    ret out
 }
 
 fn length_len(length: usize) -> usize {
@@ -215,7 +299,11 @@ fn contents_len[T: type](value: *const T) -> usize {
         if meta.kind[f.ty]() == .Bool {
             content = 1usize
         } else {
+        if meta.signed[f.ty]() {
             content = integer_len(i64(slot))
+        } else {
+            content = unsigned_integer_len(u64(slot))
+        }
         }
         }
         total += 1usize + length_len(content) + content
@@ -282,14 +370,20 @@ fn encode[T: type](dst: []u8, value: *const T) -> ([]u8, err) {
             if slot { dst[at] = 255u8 } else { dst[at] = 0u8 }
             at += 1usize
         } else {
-            let number = i64(slot)
-            let count = integer_len(number)
-            at = put_header(dst, at, 2u8, count)
-            var i = count
-            while i > 0usize {
-                i -= 1usize
-                dst[at] = u8((number >> u32(i * 8usize)) & 255i64)
-                at += 1usize
+            if meta.signed[f.ty]() {
+                let number = i64(slot)
+                let count = integer_len(number)
+                at = put_header(dst, at, 2u8, count)
+                var i = count
+                while i > 0usize {
+                    i -= 1usize
+                    dst[at] = u8((number >> u32(i * 8usize)) & 255i64)
+                    at += 1usize
+                }
+            } else {
+                let number = u64(slot)
+                at = put_header(dst, at, 2u8, unsigned_integer_len(number))
+                at = put_unsigned_integer(dst, at, number)
             }
         }
         }
@@ -309,6 +403,16 @@ type BitString = struct { unused: u8, data: []const u8 }
 type Context = struct { number: u32, items: []const Item }
 type Item = union enum u8 { Null, Bool: bool, Integer: i64, BitString: BitString, OctetString: []const u8, Oid: []const u32, Utf8String: str, Sequence: []const Item, Set: []const Item, Context: Context }
 
+// A BIT STRING has a final payload octet exactly when it declares unused bits,
+// and those unused low bits must be zero.
+fn bit_string_valid(unused: u8, data: []const u8) -> bool {
+    if unused > 7u8 { ret false }
+    if data.len == 0usize { ret unused == 0u8 }
+    if unused == 0u8 { ret true }
+    let mask = 255u8 >> (8u8 - unused)
+    ret data[data.len - 1usize] & mask == 0u8
+}
+
 fn tag_len(number: u32) -> usize {
     if number < 31u32 { ret 1usize }
     var count = 2usize
@@ -320,10 +424,10 @@ fn tag_len(number: u32) -> usize {
     ret count
 }
 
-fn arc_len(arc: u32) -> usize {
+fn arc_len(arc: u64) -> usize {
     var count = 1usize
     var n = arc >> 7u32
-    while n > 0u32 {
+    while n > 0u64 {
         n = n >> 7u32
         count += 1usize
     }
@@ -332,10 +436,10 @@ fn arc_len(arc: u32) -> usize {
 
 fn oid_len(arcs: []const u32) -> (usize, err) {
     if arcs.len < 2usize || arcs[0] > 2u32 || (arcs[0] < 2u32 && arcs[1] > 39u32) { ret (0usize, Invalid) }
-    var total = arc_len(arcs[0] * 40u32 + arcs[1])
+    var total = arc_len(u64(arcs[0]) * 40u64 + u64(arcs[1]))
     var i = 2usize
     while i < arcs.len {
-        total += arc_len(arcs[i])
+        total += arc_len(u64(arcs[i]))
         i += 1usize
     }
     ret (total, ok)
@@ -363,7 +467,7 @@ fn item_content_len(item: *const Item) -> (usize, err) {
     case .Integer as number:
         ret (integer_len(number), ok)
     case .BitString as bits:
-        if bits.unused > 7u8 || (bits.unused > 0u8 && bits.data.len == 0usize) { ret (0usize, Invalid) }
+        if !bit_string_valid(bits.unused, bits.data) { ret (0usize, Invalid) }
         ret (1usize + bits.data.len, ok)
     case .OctetString as data:
         ret (data.len, ok)
@@ -436,14 +540,14 @@ fn put_tag(dst: []u8, at: usize, first: u8, number: u32) -> usize {
         ret at + 1usize
     }
     dst[at] = first | 31u8
-    ret put_base128(dst, at + 1usize, number)
+    ret put_base128(dst, at + 1usize, u64(number))
 }
 
-fn put_base128(dst: []u8, at: usize, value: u32) -> usize {
+fn put_base128(dst: []u8, at: usize, value: u64) -> usize {
     var out = at
     var shift = (arc_len(value) - 1usize) * 7usize
     while true {
-        var byte = u8((value >> u32(shift)) & 127u32)
+        var byte = u8((value >> u32(shift)) & 127u64)
         if shift > 0usize { byte = byte | 128u8 }
         dst[out] = byte
         out += 1usize
@@ -476,8 +580,8 @@ fn bytes_less(x: []const u8, y: []const u8) -> bool {
 
 // The encodings in `dst[start..end]` sorted as octet strings (X.690 11.6), which is the DER
 // order of a SET OF and, for single-byte tags, the tag order of a SET as well.
-// ponytail: a bubble sort that re-walks the members with the reader after every swap, so it is
-// O(n^2) walks; a SET is a few members long and this keeps the caller's storage the only storage.
+// Bubble-sort passes keep the reader moving after each adjacent swap, so each pass walks each
+// member once. This is O(n^2) walks rather than restarting the walk for every inversion.
 fn sort_set(dst: []u8, start: usize, end: usize) {
     var swapped = true
     while swapped {
@@ -492,15 +596,20 @@ fn sort_set(dst: []u8, start: usize, end: usize) {
             let member_end = start + r.off
             let member_start = member_end - member.encoded.len
             if has_previous && bytes_less(dst[member_start..member_end], dst[previous_start..previous_end]) {
+                let member_len = member_end - member_start
                 reverse_bytes(dst, previous_start, previous_end)
                 reverse_bytes(dst, member_start, member_end)
                 reverse_bytes(dst, previous_start, member_end)
+                // The larger prior member has moved right. Keep it as the comparison
+                // predecessor so this pass bubbles it forward instead of restarting.
+                previous_start += member_len
+                previous_end = member_end
                 swapped = true
-                break
+            } else {
+                previous_start = member_start
+                previous_end = member_end
             }
             has_previous = true
-            previous_start = member_start
-            previous_end = member_end
         }
     }
 }
@@ -547,10 +656,10 @@ fn put_item(dst: []u8, at: usize, item: *const Item) -> (usize, err) {
         mem.copy[u8](dst[out..out + data.len], data)
         ret (out + data.len, ok)
     case .Oid as arcs:
-        out = put_base128(dst, out, arcs[0] * 40u32 + arcs[1])
+        out = put_base128(dst, out, u64(arcs[0]) * 40u64 + u64(arcs[1]))
         var i = 2usize
         while i < arcs.len {
-            out = put_base128(dst, out, arcs[i])
+            out = put_base128(dst, out, u64(arcs[i]))
             i += 1usize
         }
         ret (out, ok)
@@ -603,7 +712,9 @@ fn ber_header(data: []const u8, at: usize) -> (Tag, usize, bool, usize, err) {
             let byte = data[cursor]
             cursor += 1usize
             count += 1usize
-            number = (number << 7u32) | u32(byte & 127u8)
+            let (next, next_error) = append_tag_number(number, byte)
+            if next_error != ok { ret (tag, 0usize, false, cursor, next_error) }
+            number = next
             if byte & 128u8 == 0u8 { break }
         }
         tag.number = number
@@ -660,44 +771,55 @@ fn ber_oid(a: *mem.Arena, c: []const u8) -> ([]const u32, err) {
     let (arcs, arcs_error) = mem.alloc[u32](a, count)
     if arcs_error != ok { ret (zero, arcs_error) }
     var filled = 0usize
-    var arc = 0u32
+    var arc = 0u64
     i = 0usize
     while i < c.len {
-        if arc > 33554431u32 { ret (zero, TooLarge) }
-        arc = (arc << 7u32) | u32(c[i] & 127u8)
+        let part = u64(c[i] & 127u8)
+        var maximum = 4294967295u64
+        // The first encoded subidentifier combines arcs 0 and 1, so it can be
+        // eighty larger than the largest representable second arc.
+        if filled == 0usize { maximum = 4294967375u64 }
+        if arc > (maximum - part) >> 7u32 { ret (zero, TooLarge) }
+        arc = (arc << 7u32) | part
         if c[i] & 128u8 == 0u8 {
             if filled == 0usize {
-                if arc < 80u32 {
-                    arcs[0] = arc / 40u32
-                    arcs[1] = arc % 40u32
+                if arc < 80u64 {
+                    arcs[0] = u32(arc / 40u64)
+                    arcs[1] = u32(arc % 40u64)
                 } else {
                     arcs[0] = 2u32
-                    arcs[1] = arc - 80u32
+                    arcs[1] = u32(arc - 80u64)
                 }
                 filled = 2usize
             } else {
-                arcs[filled] = arc
+                arcs[filled] = u32(arc)
                 filled += 1usize
             }
-            arc = 0u32
+            arc = 0u64
         }
         i += 1usize
     }
     ret (arcs[0usize..filled], ok)
 }
 
-// The bytes of the string segments in `items`, joined: (bytes, unused bits of the last).
-fn ber_join(a: *mem.Arena, items: []const Item) -> ([]u8, u8, err) {
+// The bytes of one constructed string's homogeneous segments, joined: (bytes, unused bits of
+// the last BIT STRING segment). A non-final BIT STRING has no unused bits because its payload
+// continues in the next segment.
+fn ber_join(a: *mem.Arena, items: []const Item, number: u32) -> ([]u8, u8, err) {
     var total = 0usize
     var unused = 0u8
     var i = 0usize
     while i < items.len {
         switch items[i] {
         case .OctetString as data:
+            if number != 4u32 { ret (zero, 0u8, Invalid) }
             total += data.len
         case .Utf8String as text:
+            if number != 12u32 { ret (zero, 0u8, Invalid) }
             total += text.len
         case .BitString as bits:
+            if number != 3u32 || !bit_string_valid(bits.unused, bits.data) { ret (zero, 0u8, Invalid) }
+            if i + 1usize < items.len && bits.unused != 0u8 { ret (zero, 0u8, Invalid) }
             total += bits.data.len
             unused = bits.unused
         default:
@@ -787,7 +909,7 @@ fn ber_item(a: *mem.Arena, data: []const u8, at: usize, depth: u16) -> (Item, us
     if tag.number == 17u32 && tag.constructed { ret (Item{ Set: members }, next_at, ok) }
     if tag.constructed {
         // A constructed string: its segments joined.
-        let (joined, unused, join_error) = ber_join(a, members)
+        let (joined, unused, join_error) = ber_join(a, members, tag.number)
         if join_error != ok { ret (none, at, join_error) }
         if tag.number == 4u32 { ret (Item{ OctetString: joined }, next_at, ok) }
         if tag.number == 12u32 { ret (Item{ Utf8String: joined }, next_at, ok) }
@@ -813,7 +935,8 @@ fn ber_item(a: *mem.Arena, data: []const u8, at: usize, depth: u16) -> (Item, us
         ret (Item{ Oid: arcs }, next_at, ok)
     }
     if tag.number == 3u32 {
-        if content.len == 0usize || content[0] > 7u8 { ret (none, at, Invalid) }
+        if content.len == 0usize { ret (none, at, Invalid) }
+        if !bit_string_valid(content[0usize], content[1usize..]) { ret (none, at, Invalid) }
         ret (Item{ BitString: BitString { unused: content[0], data: content[1usize..] } }, next_at, ok)
     }
     if tag.number == 4u32 { ret (Item{ OctetString: content }, next_at, ok) }

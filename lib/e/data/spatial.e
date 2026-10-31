@@ -92,11 +92,14 @@ fn nearest_range(t: *const KdTree, lo: usize, hi: usize, depth: usize, query: []
     }
 }
 
-// The nearest point to `query` and its squared distance.
+// The nearest point to `query` and its squared distance. Finite distances
+// above 1e300 are ordinary candidates. If f64 accumulation overflows, it
+// reports +infinity; a finite candidate still replaces it.
 fn kd_nearest(t: *const KdTree, query: []const f64) -> (usize, f64, err) {
     if query.len < t.d { ret (0usize, 0.0f64, TooSmall) }
     if t.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
-    var best = Best { node: t.order[0usize], distance: 1.0e300f64 }
+    let first = t.order[0usize]
+    var best = Best { node: first, distance: distance_squared(t, first, query) }
     nearest_range(t, 0usize, t.order.len, 0usize, query, &best)
     ret (best.node, best.distance, ok)
 }
@@ -433,10 +436,11 @@ fn interval_overlap_node(t: *const IntervalTree, node: usize, lo: f64, hi: f64, 
 
 // A grid of `columns × rows` cells of side `cell` from (x0, y0); `head.len >= columns * rows`.
 fn hash_grid(x0: f64, y0: f64, cell: f64, columns: usize, rows: usize, head: []u32, next: []u32, xs: []f64, ys: []f64) -> (HashGrid, err) {
-    if head.len < columns * rows { ret (zero, TooSmall) }
     if cell <= 0.0f64 || columns == 0usize || rows == 0usize { ret (zero, Invalid) }
+    if columns > head.len / rows { ret (zero, TooSmall) }
+    let grid_cells = columns * rows
     var i = 0usize
-    while i < columns * rows {
+    while i < grid_cells {
         head[i] = NONE
         i += 1usize
     }
@@ -699,11 +703,12 @@ fn rtree_split(t: *RTree, node: usize, extra: u32) -> (usize, err) {
 
 // Insert item `item` (its rectangle in `items`).
 fn rtree_insert(t: *RTree, item: usize) -> err {
-    if (item + 1usize) * 4usize > t.items.len { ret Invalid }
+    if item >= t.items.len / 4usize { ret Invalid }
     var path: [64]usize = zero
     var depth = 0usize
     var node = t.root
-    let b = t.items[item * 4usize..item * 4usize + 4usize]
+    let item_offset = item * 4usize
+    let b = t.items[item_offset..item_offset + 4usize]
     while t.leaf[node] == 0u8 {
         if depth >= 64usize { ret TooSmall }
         path[depth] = node
@@ -1033,8 +1038,8 @@ fn bvh_build(boxes: []const f64, n: usize, leaf_size: usize, order: []usize, box
 
 // Does the ray from `origin` along `direction` meet the box (slab test)?
 fn ray_hits_box(box: []const f64, origin: []const f64, direction: []const f64) -> bool {
-    var t_near = 0.0f64 - 1.0e300f64
-    var t_far = 1.0e300f64
+    var t_near = 0.0f64 - math.inf64()
+    var t_far = math.inf64()
     var k = 0usize
     while k < 3usize {
         if direction[k] == 0.0f64 {
@@ -1258,11 +1263,14 @@ fn ball_nearest_range(b: *const BallTree, lo: usize, hi: usize, query: []const f
     ball_nearest_range(b, mid + 1usize, hi, query, best)
 }
 
-// The nearest point to `query` and its squared distance.
+// The nearest point to `query` and its squared distance. Finite distances
+// above 1e300 are ordinary candidates. If f64 accumulation overflows, it
+// reports +infinity; a finite candidate still replaces it.
 fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err) {
     if query.len < b.tree.d { ret (0usize, 0.0f64, TooSmall) }
     if b.tree.order.len == 0usize { ret (0usize, 0.0f64, Invalid) }
-    var best = Best { node: b.tree.order[0usize], distance: 1.0e300f64 }
+    let first = b.tree.order[0usize]
+    var best = Best { node: first, distance: distance_squared(&b.tree, first, query) }
     ball_nearest_range(b, 0usize, b.tree.order.len, query, &best)
     ret (best.node, best.distance, ok)
 }

@@ -83,6 +83,7 @@ fn decode_at(s: str, at: usize) -> (u32, usize) {
         code = (code << 6u32) | (c & 63u32)
         k += 1usize
     }
+    if (need == 3usize && code < 2048u32) || (need == 4usize && code < 65536u32) || (code >= 55296u32 && code <= 57343u32) || code > 1114111u32 { ret (0u32, 0usize) }
     ret (code, need)
 }
 
@@ -300,6 +301,11 @@ fn put_text(d: *Document, x: f64, y: f64, size: f64, font: Font, ink: Color, s: 
         if s[i] == 10u8 { ret Invalid }
         i += 1usize
     }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, false))
@@ -311,7 +317,9 @@ fn put_text(d: *Document, x: f64, y: f64, size: f64, font: Font, ink: Color, s: 
     try full(real(b, d.height - y))
     try full(str.push(b, "Td "))
     try full(literal(b, s, 0usize, s.len))
-    ret full(str.push(b, " Tj ET Q\n"))
+    try full(str.push(b, " Tj ET Q\n"))
+    done = true
+    ret ok
 }
 
 // The end of the next line of `s` starting at `from`, where the following line starts, and
@@ -361,6 +369,11 @@ fn put_paragraph(d: *Document, x: f64, y: f64, width: f64, size: f64, leading: f
     if !d.open { ret (0.0, 0usize, NoPage) }
     if !finite(x) || !finite(y) || !(size > 0.0 && size < 1000.0) || !(width > 0.0 && width < 100000.0) || !(leading > 0.0 && leading < 10000.0) { ret (0.0, 0usize, Invalid) }
     if !supported(s) { ret (0.0, 0usize, Unsupported) }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     var lines = 0usize
     var at = 0usize
@@ -394,12 +407,18 @@ fn put_paragraph(d: *Document, x: f64, y: f64, width: f64, size: f64, leading: f
         if next >= s.len { break }
         at = next
     }
+    done = true
     ret (baseline, lines, ok)
 }
 
 fn fill_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, ink: Color) -> err {
     if !d.open { ret NoPage }
     if !finite(x) || !finite(y) || !finite(w) || !finite(h) || w <= 0.0 || h <= 0.0 { ret Invalid }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, false))
@@ -407,12 +426,19 @@ fn fill_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, ink: Color) -> err {
     try full(real(b, d.height - y - h))
     try full(real(b, w))
     try full(real(b, h))
-    ret full(str.push(b, "re f Q\n"))
+    try full(str.push(b, "re f Q\n"))
+    done = true
+    ret ok
 }
 
 fn stroke_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, line_width: f64, ink: Color) -> err {
     if !d.open { ret NoPage }
     if !finite(x) || !finite(y) || !finite(w) || !finite(h) || w <= 0.0 || h <= 0.0 || !(line_width > 0.0 && line_width < 1000.0) { ret Invalid }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, true))
@@ -422,12 +448,19 @@ fn stroke_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, line_width: f64, in
     try full(real(b, d.height - y - h))
     try full(real(b, w))
     try full(real(b, h))
-    ret full(str.push(b, "re S Q\n"))
+    try full(str.push(b, "re S Q\n"))
+    done = true
+    ret ok
 }
 
 fn draw_line(d: *Document, x1: f64, y1: f64, x2: f64, y2: f64, line_width: f64, ink: Color) -> err {
     if !d.open { ret NoPage }
     if !finite(x1) || !finite(y1) || !finite(x2) || !finite(y2) || !(line_width > 0.0 && line_width < 1000.0) { ret Invalid }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, true))
@@ -438,7 +471,9 @@ fn draw_line(d: *Document, x1: f64, y1: f64, x2: f64, y2: f64, line_width: f64, 
     try full(str.push(b, "m "))
     try full(real(b, x2))
     try full(real(b, d.height - y2))
-    ret full(str.push(b, "l S Q\n"))
+    try full(str.push(b, "l S Q\n"))
+    done = true
+    ret ok
 }
 
 // A path through the points: filled and closed, or stroked open.
@@ -446,6 +481,16 @@ fn draw_path(d: *Document, xs: []const f64, ys: []const f64, filled: bool, line_
     if !d.open { ret NoPage }
     if xs.len != ys.len || xs.len < 2usize || (filled && xs.len < 3usize) { ret Invalid }
     if !(line_width > 0.0 && line_width < 1000.0) { ret Invalid }
+    var point = 0usize
+    while point < xs.len {
+        if !finite(xs[point]) || !finite(ys[point]) { ret Invalid }
+        point += 1usize
+    }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, !filled))
@@ -455,7 +500,6 @@ fn draw_path(d: *Document, xs: []const f64, ys: []const f64, filled: bool, line_
     }
     var i = 0usize
     while i < xs.len {
-        if !finite(xs[i]) || !finite(ys[i]) { ret Invalid }
         try full(real(b, xs[i]))
         try full(real(b, d.height - ys[i]))
         if i == 0usize {
@@ -465,8 +509,13 @@ fn draw_path(d: *Document, xs: []const f64, ys: []const f64, filled: bool, line_
         }
         i += 1usize
     }
-    if filled { ret full(str.push(b, "h f Q\n")) }
-    ret full(str.push(b, "S Q\n"))
+    if filled {
+        try full(str.push(b, "h f Q\n"))
+    } else {
+        try full(str.push(b, "S Q\n"))
+    }
+    done = true
+    ret ok
 }
 
 // A filled circle as four cubic Beziers (control distance 0.5523 r).
@@ -476,6 +525,11 @@ fn fill_circle(d: *Document, cx: f64, cy: f64, r: f64, ink: Color) -> err {
     let k = r * 0.5523
     let xs = [12]f64{ cx + r, cx + r, cx + k, cx, cx - k, cx - r, cx - r, cx - r, cx - k, cx, cx + k, cx + r }
     let ys = [12]f64{ cy, cy - k, cy - r, cy - r, cy - r, cy - k, cy, cy + k, cy + r, cy + r, cy + r, cy + k }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     let b = &d.content
     try full(str.push(b, "q "))
     try full(color_op(b, ink, false))
@@ -492,7 +546,9 @@ fn fill_circle(d: *Document, cx: f64, cy: f64, r: f64, ink: Color) -> err {
     // The last segment closes on the start point.
     try full(real(b, xs[0usize]))
     try full(real(b, d.height - ys[0usize]))
-    ret full(str.push(b, "c f Q\n"))
+    try full(str.push(b, "c f Q\n"))
+    done = true
+    ret ok
 }
 
 // A table: `widths` are the column widths, each row a slice of cell texts (fewer than
@@ -507,18 +563,32 @@ fn put_table(d: *Document, x: f64, y: f64, widths: []const f64, rows: []const []
         if !(widths[c] > 2.0 * pad && widths[c] < 100000.0) { ret (0.0, Invalid) }
         c += 1usize
     }
+    var row_at = 0usize
+    while row_at < rows.len {
+        let row = rows[row_at]
+        if row.len > widths.len { ret (0.0, Invalid) }
+        var cell_at = 0usize
+        while cell_at < row.len {
+            if !supported(row[cell_at]) { ret (0.0, Unsupported) }
+            cell_at += 1usize
+        }
+        row_at += 1usize
+    }
+    let start_at = d.content.len
+    var done = false
+    defer {
+        if !done { d.content.len = start_at }
+    }
     var top = y
     var r = 0usize
     while r < rows.len {
         let row = rows[r]
-        if row.len > widths.len { ret (0.0, Invalid) }
         let head = header && r == 0usize
         var font: Font = .Regular
         if head { font = .Bold }
         var tallest = 1usize
         c = 0usize
         while c < row.len {
-            if !supported(row[c]) { ret (0.0, Unsupported) }
             let n = count_lines(row[c], widths[c] - 2.0 * pad, size, font)
             if n > tallest { tallest = n }
             c += 1usize
@@ -543,6 +613,7 @@ fn put_table(d: *Document, x: f64, y: f64, widths: []const f64, rows: []const []
         top += height
         r += 1usize
     }
+    done = true
     ret (top, ok)
 }
 

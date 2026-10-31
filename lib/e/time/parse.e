@@ -337,6 +337,7 @@ fn parse_lenient(text: str, day_first: bool) -> (Parsed, err) {
             i += used
             continue
         }
+        if t.value != 32i64 && t.value != 44i64 && t.value != 45i64 && t.value != 46i64 && t.value != 47i64 { ret (zero, Invalid) }
         i += 1usize
     }
     if count != 3usize { ret (zero, Invalid) }

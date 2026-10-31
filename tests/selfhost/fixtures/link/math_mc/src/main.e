@@ -59,6 +59,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if control_error != ok || !near(control.mean, price, 4.0f64 * control.standard_error) || control.standard_error >= 0.5f64 * plain.standard_error { os.exit(3i32) }
     let (_, control_room) = mc.control_variate[Option](&option, payoff, terminal, 100.0f64, &r, count, samples[..10usize])
     if control_room != mc.Invalid { os.exit(3i32) }
+    var no_samples: [0]f64 = zero
+    let (_, control_wrap) = mc.control_variate[Option](&option, payoff, terminal, 100.0f64, &r, ~0usize, no_samples[..])
+    if control_wrap != mc.Invalid { os.exit(3i32) }
 
     try io.print("math mc ok\n")
     ret ok

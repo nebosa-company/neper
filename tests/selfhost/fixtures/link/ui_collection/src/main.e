@@ -174,6 +174,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     models[1usize] = Model { theme: &theme, log: &logs[0usize], total: 1000usize, base: 5000u64 }
     let source = collection.Source { ctx: mem.cast[*void](&models[0usize]), count: model_count, key: model_key, build: model_build }
     let wall_source = collection.Source { ctx: mem.cast[*void](&models[1usize]), count: model_count, key: model_key, build: model_build }
+    // Accessibility positions are u32, while a source may report a usize count.
+    // On x64, make sure direct and virtual collection entry points refuse values
+    // that would otherwise trap in debug or wrap to a zero semantic count in release.
+    when target.arch == .X64 {
+        var huge_model = Model { theme: &theme, log: &logs[0usize], total: 4294967296usize, base: 9000u64 }
+        let huge_source = collection.Source { ctx: mem.cast[*void](&huge_model), count: model_count, key: model_key, build: model_build }
+        let (_, row_error) = collection.row(a, &theme, zero, 0u64, 0usize, 4294967296usize, 0.0, 0.0, false, false)
+        if row_error != collection.TooLarge { os.exit(33i32) }
+        let (_, list_error) = collection.virtual_list(a, 40u64, &theme, "Too many", huge_source, zero, 20.0, 0.0, zero, false, 200.0, 100.0)
+        if list_error != collection.TooLarge { os.exit(34i32) }
+        huge_model.total = 0usize -% 1usize
+        let (_, grid_error) = collection.virtual_grid(a, 41u64, &theme, "Too many grid rows", huge_source, zero, geometry.Size { width: 100.0, height: 40.0 }, 0.0, 0.0, zero, 200.0, 100.0)
+        if grid_error != collection.TooLarge { os.exit(35i32) }
+    }
     let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
     if storage_error != ok { os.exit(9i32) }
     var frame = mem.arena_from(frame_storage)

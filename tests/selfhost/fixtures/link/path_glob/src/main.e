@@ -26,6 +26,29 @@ fn matches(a: *mem.Arena, pattern: str, subject: str) -> i32 {
     ret 0i32
 }
 
+// Make a relative path with `count` ignorable dot components followed by a real name. This is
+// deliberately built rather than spelled as a literal so the regression covers a stack-sized
+// sequence without bloating the fixture source.
+fn dotted_path(a: *mem.Arena, count: usize, name: str) -> (str, err) {
+    let (out, allocation_error) = mem.alloc[u8](a, count * 2usize + name.len)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var written = 0usize
+    var at = 0usize
+    while at < count {
+        out[written] = 46u8
+        out[written + 1usize] = 47u8
+        written += 2usize
+        at += 1usize
+    }
+    at = 0usize
+    while at < name.len {
+        out[written] = name[at]
+        written += 1usize
+        at += 1usize
+    }
+    ret (out[0usize..written], ok)
+}
+
 fn main(a: *mem.Arena) -> err {
     // --- A pattern with no wildcards is a comparison.
     if matches(a, "a/b/c", "a/b/c") != 1i32 { os.exit(10i32) }
@@ -37,6 +60,14 @@ fn main(a: *mem.Arena) -> err {
     if matches(a, "a/b", "./a/b") != 1i32 { os.exit(15i32) }
     if matches(a, "./a/b", "a/b") != 1i32 { os.exit(16i32) }
     if matches(a, "a/b", "a/b/") != 1i32 { os.exit(17i32) }
+    // Dot components are skipped before the matcher's budget is charged. A stack-sized run must
+    // remain an ordinary relative path both while compiling and while validating a candidate.
+    let (many_dots, many_dots_error) = dotted_path(a, 65536usize, "leaf")
+    if many_dots_error != ok { os.exit(18i32) }
+    let (dotted_glob, dotted_glob_error) = path.glob(a, many_dots, options(true, .Posix))
+    if dotted_glob_error != ok { os.exit(19i32) }
+    let (dotted_matched, dotted_match_error) = path.glob_match(&dotted_glob, many_dots)
+    if dotted_match_error != ok || !dotted_matched { os.exit(20i32) }
 
     // --- `*` matches within one component and never across a separator, which is the line
     // between it and `**`.

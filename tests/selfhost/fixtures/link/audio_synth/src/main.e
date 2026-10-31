@@ -56,18 +56,81 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while i < 40usize {
         let v = synth.adsr_next(&e)
         if i == 5usize && !near(v, 0.6f64, 1.0e-12f64) { os.exit(1i32) }
-        if i == 15usize && !near(v, 0.7499999999999998f64, 1.0e-12f64) { os.exit(1i32) }
+        if i == 15usize && !near(v, 0.85f64, 1.0e-12f64) { os.exit(1i32) }
         sum += v
         i += 1usize
     }
     if e.stage != .Sustain { os.exit(1i32) }
     synth.adsr_gate(&e, false)
     i = 0usize
-    while i < 40usize {
+    while i < 49usize {
         sum += synth.adsr_next(&e)
         i += 1usize
     }
-    if e.stage != .Idle || e.level != 0.0f64 || !near(sum, 29.25f64, 1.0e-12f64) { os.exit(1i32) }
+    if e.stage != .Release || !near(e.level, 0.01f64, 1.0e-12f64) { os.exit(1i32) }
+    sum += synth.adsr_next(&e)
+    if e.stage != .Idle || e.level != 0.0f64 || !near(sum, 37.5f64, 1.0e-12f64) { os.exit(1i32) }
+
+    // A gate-off part-way through decay uses the full configured release time,
+    // not a duration scaled down by the instantaneous level.
+    var partial = synth.adsr(0.0f64, 0.04f64, 0.5f64, 0.05f64, 1000.0f64)
+    synth.adsr_gate(&partial, true)
+    let started = synth.adsr_next(&partial)
+    if started != 1.0f64 || partial.stage != .Decay { os.exit(1i32) }
+    i = 0usize
+    while i < 20usize {
+        let value = synth.adsr_next(&partial)
+        if i == 19usize && !near(value, 0.75f64, 1.0e-12f64) { os.exit(1i32) }
+        i += 1usize
+    }
+    synth.adsr_gate(&partial, false)
+    i = 0usize
+    while i < 49usize {
+        let value = synth.adsr_next(&partial)
+        if value <= 0.0f64 { os.exit(1i32) }
+        i += 1usize
+    }
+    if partial.stage != .Release || partial.level <= 0.0f64 { os.exit(1i32) }
+    let released = synth.adsr_next(&partial)
+    if partial.stage != .Idle || released != 0.0f64 { os.exit(1i32) }
+
+    // Count stages rather than accumulating a rounded rate: every 3-sample
+    // stage completes on its third sample, even though one third is inexact.
+    var thirds = synth.adsr(0.003f64, 0.003f64, 0.5f64, 0.003f64, 1000.0f64)
+    synth.adsr_gate(&thirds, true)
+    i = 0usize
+    while i < 2usize {
+        let _ = synth.adsr_next(&thirds)
+        if thirds.stage != .Attack { os.exit(1i32) }
+        i += 1usize
+    }
+    if synth.adsr_next(&thirds) != 1.0f64 || thirds.stage != .Decay { os.exit(1i32) }
+    i = 0usize
+    while i < 2usize {
+        let _ = synth.adsr_next(&thirds)
+        if thirds.stage != .Decay { os.exit(1i32) }
+        i += 1usize
+    }
+    if synth.adsr_next(&thirds) != 0.5f64 || thirds.stage != .Sustain { os.exit(1i32) }
+    synth.adsr_gate(&thirds, false)
+    i = 0usize
+    while i < 2usize {
+        if synth.adsr_next(&thirds) <= 0.0f64 || thirds.stage != .Release { os.exit(1i32) }
+        i += 1usize
+    }
+    if synth.adsr_next(&thirds) != 0.0f64 || thirds.stage != .Idle { os.exit(1i32) }
+
+    // A decimal product can be one ULP above its mathematical whole sample
+    // count; it must not add a spurious eighth attack sample.
+    var decimal_boundary = synth.adsr(0.07f64, 0.0f64, 0.5f64, 0.0f64, 100.0f64)
+    synth.adsr_gate(&decimal_boundary, true)
+    i = 0usize
+    while i < 6usize {
+        let _ = synth.adsr_next(&decimal_boundary)
+        if decimal_boundary.stage != .Attack { os.exit(1i32) }
+        i += 1usize
+    }
+    if synth.adsr_next(&decimal_boundary) != 1.0f64 || decimal_boundary.stage != .Decay { os.exit(1i32) }
 
     // 2: PolyBLEP oscillators against the replica and against the naive saw.
     let sr = 8192.0f64
@@ -114,6 +177,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !near(sum, -178.63335558331764f64, 1.0e-12f64) { os.exit(4i32) }
     if synth.karplus_strong(220.0f64, sr, 0.996f64, &r, pluck[..10usize]) != synth.TooSmall || synth.karplus_strong(0.0f64, sr, 0.996f64, &r, pluck[..]) != synth.Invalid { os.exit(4i32) }
+    if synth.karplus_strong(math.nan64(), sr, 0.996f64, &r, pluck[..]) != synth.Invalid || synth.karplus_strong(220.0f64, math.inf64(), 0.996f64, &r, pluck[..]) != synth.Invalid { os.exit(4i32) }
+    if synth.karplus_strong(1.0e-300f64, sr, 0.996f64, &r, pluck[..]) != synth.TooSmall { os.exit(4i32) }
 
     try io.print("audio synth ok\n")
     ret ok

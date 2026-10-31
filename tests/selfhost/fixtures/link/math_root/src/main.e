@@ -30,6 +30,7 @@ fn cubic(ctx: *Calls, x: f64) -> f64 {
 }
 fn always_positive(ctx: *Calls, x: f64) -> f64 { ret x * x + 1.0f64 }
 fn zero_slope(ctx: *Calls, x: f64) -> f64 { ret 0.0f64 }
+fn identity(ctx: *Calls, x: f64) -> f64 { ret x }
 
 fn near(x: f64, want: f64, eps: f64) -> bool {
     var d = x - want
@@ -53,6 +54,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if b4.converged || b4.iterations != 3u32 { os.exit(1i32) }
     let b5 = root.bisect[Calls](&calls, cubic, 1.0f64, 4.0f64, 0.0001f64, 100u32)
     if !b5.converged || b5.x != 1.0f64 || b5.iterations != 0u32 { os.exit(1i32) }
+    // A finite bracket can span the whole f64 range without making the
+    // subtraction-based midpoint overflow to infinity.
+    let largest = mem.bitcast[f64](9218868437227405311u64)
+    let wide_bisect = root.bisect[Calls](&calls, identity, 0.0f64 - largest, largest, 0.0f64, 4u32)
+    if !wide_bisect.converged || wide_bisect.x != 0.0f64 { os.exit(1i32) }
 
     // 2: Newton, fast from a good start and refusing a flat slope.
     let n1 = root.newton[Calls](&calls, square_minus_two, two_x, 1.0f64, 0.000000000001f64, 50u32)
@@ -91,6 +97,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r4.converged { os.exit(5i32) }
     let r5 = root.brent[Calls](&calls, square_minus_two, 0.0f64, 2.0f64, 0.000000000001f64, 2u32)
     if r5.converged { os.exit(5i32) }
+    let wide_brent = root.brent[Calls](&calls, identity, 0.0f64 - largest, largest, 0.0f64, 4u32)
+    if !wide_brent.converged || wide_brent.x != 0.0f64 { os.exit(5i32) }
 
     try io.print("math root ok\n")
     ret ok

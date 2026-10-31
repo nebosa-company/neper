@@ -247,6 +247,16 @@ fn parse_ipv6(data: []const u8) -> (Ipv6, err) {
             out.more_fragments = (fo & 1u16) != 0u16
             next = data[at]
             at += 8usize
+            if out.fragment_offset != 0u16 {
+                // Non-initial fragments start in the fragmentable part, so the
+                // bytes after this header are not an extension-header prefix.
+                // Preserve the Fragment header's next-header hint and expose
+                // the bytes verbatim until reassembly can identify the upper
+                // layer.
+                out.protocol = next
+                out.payload = data[at..end]
+                ret (out, ok)
+            }
             continue
         }
         var length = (usize(data[at + 1usize]) + 1usize) * 8usize

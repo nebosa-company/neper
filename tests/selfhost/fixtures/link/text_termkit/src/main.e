@@ -274,6 +274,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if se != ok { os.exit(90i32) }
     if ze != term.BadShape { os.exit(91i32) }
     if term.display_width("caf\xc3\xa9") != 4usize { os.exit(92i32) }
+    // Meter input is a duration, not an arbitrary floating-point payload. Every invalid value
+    // returns a regular error before any float-to-integer formatting conversion can trap.
+    let (_, negative_error) = term.render_meter(a, 1u64, 2u64, -1.0f64, 0usize, "", "it", false)
+    if negative_error != term.BadElapsed { os.exit(93i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let (_, nan_error) = term.render_meter(a, 1u64, 2u64, nan, 0usize, "", "it", false)
+    if nan_error != term.BadElapsed { os.exit(94i32) }
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let (_, infinity_error) = term.render_meter(a, 1u64, 2u64, infinity, 0usize, "", "it", false)
+    if infinity_error != term.BadElapsed { os.exit(95i32) }
+    let (_, huge_error) = term.render_meter(a, 1u64, 2u64, 1.0e300f64, 0usize, "", "it", false)
+    if huge_error != term.BadElapsed { os.exit(96i32) }
+    let tiny = mem.bitcast[f64](1u64)
+    let (_, rate_error) = term.render_meter(a, 1u64, 2u64, tiny, 0usize, "", "it", false)
+    if rate_error != term.BadElapsed { os.exit(97i32) }
+    // An over-complete update shares the bar's 100% cap instead of overflowing the percentage
+    // rounding conversion.
+    let (_, overcomplete_error) = term.render_meter(a, 18446744073709551615u64, 1u64, 1.0f64, 0usize, "", "it", false)
+    if overcomplete_error != ok { os.exit(98i32) }
     try io.print("termkit ok")
     ret ok
 }

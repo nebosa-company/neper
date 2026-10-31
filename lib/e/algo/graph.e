@@ -459,6 +459,10 @@ error TooSmall
 // The distance of an unreached node.
 fn unreached() -> f64 { ret mem.bitcast[f64](9218868437227405312u64) }
 
+// A callback weight must not be NaN or either infinity. NaN differs from itself,
+// while either infinity differs from itself when subtracted.
+fn finite_weight(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 // The path `start .. goal` implied by a predecessor table; `NoPath` when `goal` was
 // not reached.
 fn path_to(a: *mem.Arena, previous: []const graph.NodeId, start: graph.NodeId, goal: graph.NodeId) -> ([]const graph.NodeId, err) {
@@ -505,7 +509,9 @@ fn bellman_ford[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], sta
         while k < g.edges.len {
             let e = g.edges[k]
             if distance[usize(e.from)] < unreached() {
-                let candidate = distance[usize(e.from)] + weight(ctx, e)
+                let w = weight(ctx, e)
+                if !finite_weight(w) { ret (zero, InvalidWeight) }
+                let candidate = distance[usize(e.from)] + w
                 if candidate < distance[usize(e.to)] {
                     distance[usize(e.to)] = candidate
                     previous[usize(e.to)] = e.from
@@ -541,6 +547,7 @@ fn floyd_warshall[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], c
     while k < g.edges.len {
         let e = g.edges[k]
         let w = weight(ctx, e)
+        if !finite_weight(w) { ret (zero, InvalidWeight) }
         if w < d[usize(e.from) * n + usize(e.to)] { d[usize(e.from) * n + usize(e.to)] = w }
         k += 1usize
     }
@@ -620,7 +627,9 @@ fn johnson[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ct
         var k = 0usize
         while k < m {
             let e = g.edges[k]
-            let candidate = h[usize(e.from)] + weight(ctx, e)
+            let edge_weight = weight(ctx, e)
+            if !finite_weight(edge_weight) { ret (zero, InvalidWeight) }
+            let candidate = h[usize(e.from)] + edge_weight
             if candidate < h[usize(e.to)] {
                 h[usize(e.to)] = candidate
                 relaxed = true
@@ -636,7 +645,9 @@ fn johnson[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ct
     var k = 0usize
     while k < m {
         let e = g.edges[k]
-        w[k] = weight(ctx, e) + h[usize(e.from)] - h[usize(e.to)]
+        let edge_weight = weight(ctx, e)
+        if !finite_weight(edge_weight) { ret (zero, InvalidWeight) }
+        w[k] = edge_weight + h[usize(e.from)] - h[usize(e.to)]
         k += 1usize
     }
     let (d, d_error) = mem.alloc[f64](a, n * n)

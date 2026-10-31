@@ -128,5 +128,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(table[usize(idm)].font_size, 30.0f64) || !near(sn.font_size, 30.0f64) || sn.color != BLACK { os.exit(32) }
     let ido = dom.get_element_by_id(&tree, tree.root, "o")
     if !near(table[usize(ido)].font_size, 24.0f64) { os.exit(33) }
+
+    // #1185: logical properties use direction and writing-mode after their
+    // custom-property values are substituted.
+    let logical_source = "<html><head></head><body><div id=dir style=\"--dir:rtl;direction:var(--dir);margin-inline-start:7px\"></div><div id=wm style=\"--wm:vertical-rl;writing-mode:var(--wm);margin-inline-start:8px\"></div></body></html>"
+    let (logical_dom, logical_parse) = dom.parse(a, logical_source, options(), 16usize)
+    if logical_parse != ok { os.exit(35) }
+    var logical_tree = logical_dom
+    let (logical_styles, logical_alloc) = mem.alloc[style.Style](a, logical_tree.used)
+    if logical_alloc != ok { os.exit(36) }
+    var logical_table = logical_styles
+    var logical_ctx = style.new_context(a, 800.0f64, 600.0f64)
+    if style.compute_tree(&logical_ctx, &logical_tree, none, none, logical_table) != ok { os.exit(37) }
+    let dir_node = dom.get_element_by_id(&logical_tree, logical_tree.root, "dir")
+    let wm_node = dom.get_element_by_id(&logical_tree, logical_tree.root, "wm")
+    let dir_style = logical_table[usize(dir_node)]
+    let wm_style = logical_table[usize(wm_node)]
+    if dir_style.direction != .Rtl || !near(dir_style.margin[1usize].px, 7.0f64) || !near(dir_style.margin[3usize].px, 0.0f64) { os.exit(38) }
+    if wm_style.writing_mode != .VerticalRl || !near(wm_style.margin[0usize].px, 8.0f64) || !near(wm_style.margin[3usize].px, 0.0f64) { os.exit(39) }
     ret ok
 }

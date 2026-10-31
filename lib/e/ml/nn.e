@@ -96,8 +96,16 @@ fn log(t: *Tape, a: usize) -> (usize, err) {
     ret (id, record_error)
 }
 fn tanh(t: *Tape, a: usize) -> (usize, err) {
-    let e2 = math.exp[f64](2.0f64 * t.value[a])
-    let (id, record_error) = record(t, .Tanh, a, 0usize, (e2 - 1.0f64) / (e2 + 1.0f64))
+    let x = t.value[a]
+    var value = x
+    if x > 0.0f64 {
+        let tail = math.exp[f64](0.0f64 - 2.0f64 * x)
+        value = (1.0f64 - tail) / (1.0f64 + tail)
+    } else if x < 0.0f64 {
+        let tail = math.exp[f64](2.0f64 * x)
+        value = (tail - 1.0f64) / (tail + 1.0f64)
+    }
+    let (id, record_error) = record(t, .Tanh, a, 0usize, value)
     ret (id, record_error)
 }
 fn relu(t: *Tape, a: usize) -> (usize, err) {

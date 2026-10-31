@@ -10,6 +10,13 @@ use e.mem
 use e.os
 use e.atomic
 
+@import("c", "fcntl")
+extern fn probe_fcntl(descriptor: i32, command: i32, argument: i32) -> i32
+
+const PROBE_F_GETFD: i32 = 1i32
+const PROBE_F_SETFD: i32 = 2i32
+const PROBE_FD_CLOEXEC: i32 = 1i32
+
 // Long enough that the parent has killed it well before, short enough that nothing is left
 // running if the parent never does.
 const CHILD_PATIENCE: i64 = 30000000000i64
@@ -50,7 +57,36 @@ fn says(a: *mem.Arena) -> bool {
     ret false
 }
 
+fn is_fd_probe(a: *mem.Arena) -> bool {
+    let (arguments, arguments_error) = os.args(a)
+    if arguments_error != ok { ret false }
+    var at = 0usize
+    while at < arguments.len {
+        if same(arguments[at], "np-fd-probe") { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn fd_probe_count() -> usize {
+    var count = 0usize
+    when target.os == .Macos {
+        var descriptor = 3i32
+        while descriptor < 1024i32 {
+            if probe_fcntl(descriptor, PROBE_F_GETFD, 0i32) >= 0i32 { count += 1usize }
+            descriptor += 1i32
+        }
+    }
+    ret count
+}
+
 fn main(a: *mem.Arena) -> err {
+    if is_fd_probe(a) {
+        when target.os == .Macos {
+            if fd_probe_count() != 1usize { os.exit(80i32) }
+        }
+        os.exit(0i32)
+    }
     // The other child: it says one word on its stdout and leaves, which is how the parent can
     // tell whether a stream it handed over arrived.
     if says(a) {
@@ -123,6 +159,50 @@ fn main(a: *mem.Arena) -> err {
     if finished != 0usize { os.exit(38i32) }
     if os.close(reading) != ok { os.exit(39i32) }
 
+    // Spawn uses an explicit descriptor allowlist on macOS. Clear CLOEXEC from unrelated
+    // descriptors so this deterministically proves the spawn flag, not just the per-fd bit.
+    // Only the read end is listed in Stdio.inherit; the other pipe end and socket must close.
+    when target.os == .Macos {
+        let (probe_read, probe_write, probe_pipe_error) = os.pipe()
+        if probe_pipe_error != ok { os.exit(81i32) }
+        let (probe_socket, probe_socket_error) = os.socket_open(.Ip4, .Datagram)
+        if probe_socket_error != ok { os.exit(82i32) }
+        let read_handle = os.file_handle(probe_read)
+        let write_handle = os.file_handle(probe_write)
+        let socket_handle = os.socket_handle(probe_socket)
+        let read_flags = probe_fcntl(i32(read_handle.raw), PROBE_F_GETFD, 0i32)
+        let write_flags = probe_fcntl(i32(write_handle.raw), PROBE_F_GETFD, 0i32)
+        let socket_flags = probe_fcntl(i32(socket_handle.raw), PROBE_F_GETFD, 0i32)
+        if read_flags < 0i32 || (read_flags & PROBE_FD_CLOEXEC) == 0i32 { os.exit(83i32) }
+        if write_flags < 0i32 || (write_flags & PROBE_FD_CLOEXEC) == 0i32 { os.exit(84i32) }
+        if socket_flags < 0i32 || (socket_flags & PROBE_FD_CLOEXEC) == 0i32 { os.exit(85i32) }
+        if probe_fcntl(i32(read_handle.raw), PROBE_F_SETFD, 0i32) < 0i32 { os.exit(86i32) }
+        if probe_fcntl(i32(write_handle.raw), PROBE_F_SETFD, 0i32) < 0i32 { os.exit(87i32) }
+        if probe_fcntl(i32(socket_handle.raw), PROBE_F_SETFD, 0i32) < 0i32 { os.exit(88i32) }
+
+        let (probe_image, probe_image_error) = os.executable_path(a)
+        if probe_image_error != ok { os.exit(89i32) }
+        var probe_argv: [2]str = zero
+        probe_argv[0usize] = probe_image
+        probe_argv[1usize] = "np-fd-probe"
+        var inherited: [1]os.Handle = zero
+        inherited[0usize] = read_handle
+        var probe_options: os.SpawnOptions = zero
+        probe_options.argv = probe_argv[..]
+        probe_options.inherit_env = true
+        probe_options.stdio.stdin = os.stdin()
+        probe_options.stdio.stdout = os.stdout()
+        probe_options.stdio.stderr = os.stderr()
+        probe_options.stdio.inherit = inherited[..]
+        let (probe, probe_spawn_error) = os.spawn_with_options(a, probe_options)
+        if probe_spawn_error != ok { os.exit(90i32) }
+        let (probe_usage, probe_wait_error) = os.wait_usage(probe)
+        if probe_wait_error != ok || probe_usage.exit_code != 0i32 { os.exit(91i32) }
+        if os.close(probe_read) != ok { os.exit(92i32) }
+        if os.close(probe_write) != ok { os.exit(93i32) }
+        if os.socket_close(probe_socket) != ok { os.exit(94i32) }
+    }
+
     // --- `kill`, on a child that is this program again.
     let (image, image_error) = os.executable_path(a)
     if image_error != ok { os.exit(40i32) }
@@ -168,6 +248,27 @@ fn main(a: *mem.Arena) -> err {
     }
     if !same(said[0usize..said_len], "said") { os.exit(54i32) }
     if os.close(said_read) != ok { os.exit(55i32) }
+    // The macOS spawn vector has room for at most 1023 names plus its null
+    // terminator. An inherited name beyond that capacity must be rejected rather
+    // than silently removed from the child environment.
+    when target.os == .Macos {
+        var inherited_additions: [1023]str = zero
+        var addition_at = 0usize
+        while addition_at < inherited_additions.len {
+            inherited_additions[addition_at] = "__NEPER_SPAWN_ENV_CAP=1"
+            addition_at += 1usize
+        }
+        var crowded: os.SpawnOptions = zero
+        crowded.argv = said_argv[..]
+        crowded.env = inherited_additions[..]
+        crowded.inherit_env = true
+        let (crowded_child, crowded_error) = os.spawn_with_options(a, crowded)
+        if crowded_error == ok {
+            let (ignored_status, ignored_wait_error) = os.wait(crowded_child)
+            os.exit(61i32)
+        }
+        if crowded_error != os.Failed { os.exit(62i32) }
+    }
     // --- `wait_usage` is `wait` with the child's peak beside the code (D311), and
     // `peak_memory` is this process's own. The child's peak is not checked: Linux counts
     // resident pages lazily and a process as small as `np-say` can read as zero. This one

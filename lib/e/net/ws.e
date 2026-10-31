@@ -5,6 +5,7 @@ use e.crypto.hash
 use e.io
 use e.mem
 use e.net.http
+use e.text.utf8
 
 type Opcode = enum u8 { Continuation, Text, Binary, Close, Ping, Pong }
 type Frame = struct { final: bool, opcode: Opcode, payload: []const u8 }
@@ -288,6 +289,10 @@ fn receive(a: *mem.Arena, connection: *Connection, limit: usize) -> (Frame, err)
             }
         }
     }
+    if opcode == .Close && !valid_close_payload(payload) {
+        mem.reset(a, mark)
+        ret (out, InvalidFrame)
+    }
     state.receiving_fragmented = next_fragmented
     if opcode == .Close { state.closed = true }
     out = Frame { final: final, opcode: opcode, payload: payload }
@@ -383,6 +388,16 @@ fn valid_close_code(code: u16) -> bool {
     if code >= 3000u16 && code <= 4999u16 { ret true }
     if code < 1000u16 || code > 1014u16 { ret false }
     ret code != 1004u16 && code != 1005u16 && code != 1006u16
+}
+
+// RFC 6455 section 5.5.1 allows an empty Close payload, or a valid status code
+// followed by a UTF-8 reason. A one-byte payload has neither complete form.
+fn valid_close_payload(payload: []const u8) -> bool {
+    if payload.len == 0usize { ret true }
+    if payload.len == 1usize { ret false }
+    let code = (u16(payload[0usize]) << 8u16) | u16(payload[1usize])
+    if !valid_close_code(code) { ret false }
+    ret utf8.validate(payload[2usize..])
 }
 
 fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err {

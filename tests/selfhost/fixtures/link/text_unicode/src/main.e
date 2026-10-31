@@ -128,8 +128,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !more_95 || !str.eq(g_95, "b") { os.exit(95) }
     let (end_96, more_end_96) = unicode.graphemes_next(&it_94)
     if more_end_96 { os.exit(96) }
-    var it_97 = unicode.graphemes("")
-    let (end_97, more_end_97) = unicode.graphemes_next(&it_97)
-    if more_end_97 { os.exit(97) }
+    var it_97 = unicode.graphemes("\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd!")
+    let (g_97, more_97) = unicode.graphemes_next(&it_97)
+    if !more_97 || !str.eq(g_97, "\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd") { os.exit(97) }
+    let (g_98, more_98) = unicode.graphemes_next(&it_97)
+    if !more_98 || !str.eq(g_98, "!") { os.exit(98) }
+    let (end_99, more_end_99) = unicode.graphemes_next(&it_97)
+    if more_end_99 { os.exit(99) }
+    var it_100 = unicode.graphemes("a\xe2\x80\x8cb")
+    let (g_100, more_100) = unicode.graphemes_next(&it_100)
+    if !more_100 || !str.eq(g_100, "a\xe2\x80\x8c") { os.exit(100) }
+    let (g_101, more_101) = unicode.graphemes_next(&it_100)
+    if !more_101 || !str.eq(g_101, "b") { os.exit(101) }
+    let (end_102, more_end_102) = unicode.graphemes_next(&it_100)
+    if more_end_102 { os.exit(102) }
+    var it_103 = unicode.graphemes("\xe3\x82\xab\xef\xbe\x9e!")
+    let (g_103, more_103) = unicode.graphemes_next(&it_103)
+    if !more_103 || !str.eq(g_103, "\xe3\x82\xab\xef\xbe\x9e") { os.exit(103) }
+    let (g_104, more_104) = unicode.graphemes_next(&it_103)
+    if !more_104 || !str.eq(g_104, "!") { os.exit(104) }
+    let (end_105, more_end_105) = unicode.graphemes_next(&it_103)
+    if more_end_105 { os.exit(105) }
+    var it_106 = unicode.graphemes("\xf0\x9f\x8f\xb4\xf3\xa0\x80\xa0\xf3\xa0\x81\xbf!")
+    let (g_106, more_106) = unicode.graphemes_next(&it_106)
+    if !more_106 || !str.eq(g_106, "\xf0\x9f\x8f\xb4\xf3\xa0\x80\xa0\xf3\xa0\x81\xbf") { os.exit(106) }
+    let (g_107, more_107) = unicode.graphemes_next(&it_106)
+    if !more_107 || !str.eq(g_107, "!") { os.exit(107) }
+    let (end_108, more_end_108) = unicode.graphemes_next(&it_106)
+    if more_end_108 { os.exit(108) }
+    var it_109 = unicode.graphemes("")
+    let (end_109, more_end_109) = unicode.graphemes_next(&it_109)
+    if more_end_109 || end_109.len != 0usize { os.exit(109) }
     ret ok
 }

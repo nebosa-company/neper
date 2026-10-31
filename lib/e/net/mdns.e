@@ -54,6 +54,7 @@ const KIND_AAAA: usize = 4usize
 const KIND_ENUM: usize = 5usize
 const KINDS: usize = 6usize
 const CACHE_LIMIT: usize = 1024usize
+const MAX_NAME: usize = 255usize
 
 // The IPv4 group 224.0.0.251 and port 5353 as an endpoint.
 fn group_v4() -> net.Endpoint {
@@ -69,7 +70,9 @@ fn group_v4() -> net.Endpoint {
 fn wire_name(dst: []u8, at: usize, label: str, rest: str, rest2: str) -> (usize, err) {
     var out = at
     if label.len > 0usize {
-        if label.len > 63usize || out + 1usize + label.len > dst.len { ret (at, TooSmall) }
+        if label.len > 63usize { ret (at, Invalid) }
+        if out - at > MAX_NAME - 2usize - label.len { ret (at, Invalid) }
+        if out + 1usize + label.len > dst.len { ret (at, TooSmall) }
         dst[out] = u8(label.len)
         mem.copy[u8](dst[out + 1usize..out + 1usize + label.len], label)
         out += 1usize + label.len
@@ -80,7 +83,9 @@ fn wire_name(dst: []u8, at: usize, label: str, rest: str, rest2: str) -> (usize,
         while start < rest.len {
             var stop = start
             while stop < rest.len && rest[stop] != 46u8 { stop += 1usize }
-            if stop == start || stop - start > 63usize || out + 1usize + (stop - start) > dst.len { ret (at, Invalid) }
+            if stop == start || stop - start > 63usize { ret (at, Invalid) }
+            if out - at > MAX_NAME - 2usize - (stop - start) { ret (at, Invalid) }
+            if out + 1usize + (stop - start) > dst.len { ret (at, Invalid) }
             dst[out] = u8(stop - start)
             mem.copy[u8](dst[out + 1usize..out + 1usize + (stop - start)], rest[start..stop])
             out += 1usize + (stop - start)
@@ -92,13 +97,16 @@ fn wire_name(dst: []u8, at: usize, label: str, rest: str, rest2: str) -> (usize,
         while start < rest2.len {
             var stop = start
             while stop < rest2.len && rest2[stop] != 46u8 { stop += 1usize }
-            if stop == start || stop - start > 63usize || out + 1usize + (stop - start) > dst.len { ret (at, Invalid) }
+            if stop == start || stop - start > 63usize { ret (at, Invalid) }
+            if out - at > MAX_NAME - 2usize - (stop - start) { ret (at, Invalid) }
+            if out + 1usize + (stop - start) > dst.len { ret (at, Invalid) }
             dst[out] = u8(stop - start)
             mem.copy[u8](dst[out + 1usize..out + 1usize + (stop - start)], rest2[start..stop])
             out += 1usize + (stop - start)
             start = stop + 1usize
         }
     }
+    if out - at >= MAX_NAME { ret (at, Invalid) }
     if out + 1usize > dst.len { ret (at, TooSmall) }
     dst[out] = 0u8
     ret (out + 1usize, ok)
@@ -160,6 +168,7 @@ fn out_u32(o: *Out, v: u32) -> err {
 
 // One resource record: name, type, class, ttl and the rdata length followed by `rdata`.
 fn out_record(o: *Out, name: []const u8, kind: u16, class: u16, ttl: u32, rdata: []const u8) -> err {
+    if rdata.len > 65535usize { ret Invalid }
     try out_bytes(o, name)
     try out_u16(o, kind)
     try out_u16(o, class)
@@ -175,6 +184,7 @@ fn txt_rdata(a: *mem.Arena, strings: []const str) -> ([]const u8, err) {
     var i = 0usize
     while i < strings.len {
         if strings[i].len > 255usize { ret ("", Invalid) }
+        if total > 65535usize - strings[i].len { ret ("", Invalid) }
         total += 1usize + strings[i].len
         i += 1usize
     }

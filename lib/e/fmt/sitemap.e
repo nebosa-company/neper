@@ -1,9 +1,10 @@
 // Sitemaps (sitemaps.org protocol 0.9): read a `urlset` or `sitemapindex` XML document, or a
 // plain-text sitemap (one URL per line), into a list of entries; write either XML form.
 //
-// Reading. Element names are matched by local name, so a prefixed or default namespace is
-// fine; elements of extension namespaces (image, video, news, xhtml) and unknown children
-// are skipped. Per entry: `loc` is required, non-empty and at most 2048 bytes;
+// Reading. Element names are matched by local name and the namespace resolved through their
+// in-scope `xmlns` declarations. A prefixed or default core namespace is fine; elements of
+// extension namespaces (image, video, news, xhtml) and unknown children are skipped. Per
+// entry: `loc` is required, non-empty and at most 2048 bytes;
 // `lastmod`, `changefreq` and `priority` are kept as the text written, with `changefreq`
 // one of always hourly daily weekly monthly yearly never and `priority` a decimal in
 // 0.0..1.0 (anything else is `Invalid`). At most 50000 entries (`TooMany`). Entity
@@ -33,6 +34,16 @@ fn local(name: str) -> str {
     ret name
 }
 
+// The namespace prefix before the first `:`; empty means the default namespace.
+fn prefix(name: str) -> str {
+    var i = 0usize
+    while i < name.len {
+        if name[i] == 58u8 { ret name[0usize..i] }
+        i += 1usize
+    }
+    ret ""
+}
+
 fn same(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
     var i = 0usize
@@ -41,6 +52,38 @@ fn same(a: str, b: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+fn declares_namespace(name: str, wanted: str) -> bool {
+    if wanted.len == 0usize { ret same(name, "xmlns") }
+    if name.len != wanted.len + 6usize { ret false }
+    if !same(name[0usize..6usize], "xmlns:") { ret false }
+    ret same(name[6usize..name.len], wanted)
+}
+
+// Resolves the namespace of `id` by walking its own declarations and then its ancestors.
+// An undeclared prefix has no namespace binding and cannot be a sitemap element.
+fn resolved_namespace(doc: *const xml.Document, id: u32) -> (str, bool) {
+    let wanted = prefix(doc.nodes[usize(id)].name)
+    var current = id
+    while current != xml.NONE {
+        let attrs = doc.nodes[usize(current)].attributes
+        var at = 0usize
+        while at < attrs.len {
+            if declares_namespace(attrs[at].name, wanted) { ret (attrs[at].value, true) }
+            at += 1usize
+        }
+        current = doc.nodes[usize(current)].parent
+    }
+    if wanted.len == 0usize { ret ("", true) }
+    ret ("", false)
+}
+
+fn has_sitemap_name(doc: *const xml.Document, id: u32, namespace: str, name: str) -> bool {
+    if doc.nodes[usize(id)].kind != .Element { ret false }
+    let (found, bound) = resolved_namespace(doc, id)
+    if !bound || !same(found, namespace) { ret false }
+    ret same(local(doc.nodes[usize(id)].name), name)
 }
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
@@ -131,6 +174,8 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err) {
     let root = doc.root
     if root == xml.NONE { ret (out, Invalid) }
     let root_name = local(doc.nodes[usize(root)].name)
+    let (root_namespace, root_bound) = resolved_namespace(&doc, root)
+    if !root_bound || !same(root_namespace, "http://www.sitemaps.org/schemas/sitemap/0.9") { ret (out, Invalid) }
     var entry_name = "url"
     if same(root_name, "sitemapindex") {
         out.index = true
@@ -141,7 +186,7 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err) {
     var count = 0usize
     var child = doc.nodes[usize(root)].first_child
     while child != xml.NONE {
-        if doc.nodes[usize(child)].kind == .Element && same(local(doc.nodes[usize(child)].name), entry_name) { count += 1usize }
+        if has_sitemap_name(&doc, child, root_namespace, entry_name) { count += 1usize }
         child = doc.nodes[usize(child)].next_sibling
     }
     if count > MAX_ENTRIES { ret (out, TooMany) }
@@ -150,22 +195,24 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err) {
     var n = 0usize
     child = doc.nodes[usize(root)].first_child
     while child != xml.NONE {
-        if doc.nodes[usize(child)].kind == .Element && same(local(doc.nodes[usize(child)].name), entry_name) {
+        if has_sitemap_name(&doc, child, root_namespace, entry_name) {
             var e: Entry = zero
             var field = doc.nodes[usize(child)].first_child
             while field != xml.NONE {
                 if doc.nodes[usize(field)].kind == .Element {
                     let name = local(doc.nodes[usize(field)].name)
-                    let (text, text_error) = element_text(a, &doc, field)
-                    if text_error != ok { ret (out, text_error) }
-                    if same(name, "loc") {
-                        e.loc = text
-                    } else if same(name, "lastmod") {
-                        e.lastmod = text
-                    } else if same(name, "changefreq") {
-                        e.changefreq = text
-                    } else if same(name, "priority") {
-                        e.priority = text
+                    if has_sitemap_name(&doc, field, root_namespace, name) {
+                        let (text, text_error) = element_text(a, &doc, field)
+                        if text_error != ok { ret (out, text_error) }
+                        if same(name, "loc") {
+                            e.loc = text
+                        } else if same(name, "lastmod") {
+                            e.lastmod = text
+                        } else if same(name, "changefreq") {
+                            e.changefreq = text
+                        } else if same(name, "priority") {
+                            e.priority = text
+                        }
                     }
                 }
                 field = doc.nodes[usize(field)].next_sibling

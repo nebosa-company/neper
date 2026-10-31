@@ -207,8 +207,8 @@ fn any_sub_matches(m: *const Matcher, subs: []const selector.Selector, el: html.
     ret false
 }
 
-// `:lang(a, b)`: the element's language (the `lang` or `xml:lang` of it or its nearest ancestor that has one) equals a range
-// or extends it after a hyphen, ignoring case. Quotes around a range are dropped; a wildcard range matches any language set.
+// `:lang(a, b)`: the element's language (the `lang` or `xml:lang` of it or its nearest ancestor that has one) matches one
+// of its extended language ranges. Quotes around a range are dropped; an empty quoted range selects an untagged language.
 fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool {
     var cur = el
     var found = false
@@ -227,20 +227,93 @@ fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool {
         }
         cur = parent_element(m, cur)
     }
-    if !found { ret false }
     let lt = lower(m.a, str.trim(tag))
     var start = 0usize
     var i = 0usize
+    var quote = 0u8
     while i <= argument.len {
-        if i == argument.len || argument[i] == 44u8 {
+        if i < argument.len {
+            if quote == 0u8 {
+                if argument[i] == 34u8 || argument[i] == 39u8 { quote = argument[i] }
+            } else if argument[i] == quote {
+                quote = 0u8
+            }
+        }
+        if i == argument.len || (quote == 0u8 && argument[i] == 44u8) {
             var range = str.trim(argument[start..i])
             start = i + 1usize
-            if range.len >= 2usize && (range[0usize] == 34u8 || range[0usize] == 39u8) { range = range[1usize..range.len - 1usize] }
+            var quoted = false
+            if range.len >= 2usize && (range[0usize] == 34u8 || range[0usize] == 39u8) && range[range.len - 1usize] == range[0usize] {
+                range = range[1usize..range.len - 1usize]
+                quoted = true
+            }
+            if range.len == 0usize {
+                if quoted && lt.len == 0usize { ret true }
+                i += 1usize
+                continue
+            }
             let lr = lower(m.a, range)
-            if lr.len > 0usize {
-                if str.eq(lr, "*") { ret lt.len > 0usize }
-                if str.eq(lt, lr) { ret true }
-                if lt.len > lr.len && str.eq(lt[0usize..lr.len], lr) && lt[lr.len] == 45u8 { ret true }
+            var range_valid = true
+            var part_at = 0usize
+            while part_at < lr.len {
+                let c = lr[part_at]
+                if c == 45u8 {
+                    if part_at == 0usize || part_at + 1usize == lr.len || lr[part_at - 1usize] == 45u8 { range_valid = false }
+                } else if c == 42u8 {
+                    if (part_at > 0usize && lr[part_at - 1usize] != 45u8) || (part_at + 1usize < lr.len && lr[part_at + 1usize] != 45u8) { range_valid = false }
+                } else if !((c >= 48u8 && c <= 57u8) || (c >= 97u8 && c <= 122u8)) {
+                    range_valid = false
+                }
+                part_at += 1usize
+            }
+            var tag_valid = lt.len > 0usize
+            part_at = 0usize
+            while part_at < lt.len {
+                let c = lt[part_at]
+                if c == 45u8 {
+                    if part_at == 0usize || part_at + 1usize == lt.len || lt[part_at - 1usize] == 45u8 { tag_valid = false }
+                } else if !((c >= 48u8 && c <= 57u8) || (c >= 97u8 && c <= 122u8)) {
+                    tag_valid = false
+                }
+                part_at += 1usize
+            }
+            if range_valid && tag_valid {
+                var range_end = 0usize
+                while range_end < lr.len && lr[range_end] != 45u8 { range_end += 1usize }
+                var tag_end = 0usize
+                while tag_end < lt.len && lt[tag_end] != 45u8 { tag_end += 1usize }
+                let first_range = lr[0usize..range_end]
+                if str.eq(first_range, "*") || str.eq(first_range, lt[0usize..tag_end]) {
+                    var range_at = range_end
+                    if range_at < lr.len { range_at += 1usize }
+                    var tag_at = tag_end
+                    if tag_at < lt.len { tag_at += 1usize }
+                    var good = true
+                    while good && range_at < lr.len {
+                        var next_range_end = range_at
+                        while next_range_end < lr.len && lr[next_range_end] != 45u8 { next_range_end += 1usize }
+                        let range_part = lr[range_at..next_range_end]
+                        if !str.eq(range_part, "*") {
+                            var part_found = false
+                            while tag_at < lt.len && !part_found {
+                                var next_tag_end = tag_at
+                                while next_tag_end < lt.len && lt[next_tag_end] != 45u8 { next_tag_end += 1usize }
+                                let tag_part = lt[tag_at..next_tag_end]
+                                if str.eq(range_part, tag_part) {
+                                    part_found = true
+                                } else if tag_part.len == 1usize {
+                                    good = false
+                                }
+                                if next_tag_end < lt.len { next_tag_end += 1usize }
+                                tag_at = next_tag_end
+                            }
+                            if !part_found { good = false }
+                        }
+                        range_at = next_range_end
+                        if range_at < lr.len { range_at += 1usize }
+                    }
+                    if good { ret true }
+                }
             }
         }
         i += 1usize
@@ -282,7 +355,7 @@ fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bo
     case .OnlyOfType:
         ret child_index_of_type(m, el) == 1i64 && is_last_of_type(m, el)
     case .Empty:
-        ret m.doc.nodes[usize(el)].first_child == html.NONE
+        ret is_empty(m, el)
     case .Root:
         ret parent_element(m, el) == html.NONE
     case .Scope:
@@ -380,6 +453,19 @@ fn is_last_of_type(m: *const Matcher, el: html.NodeId) -> bool {
     while sib != html.NONE {
         if str.eq(local_name(m, sib), local_name(m, el)) { ret false }
         sib = next_sibling_element(m, sib)
+    }
+    ret true
+}
+
+// Comments do not make an element non-empty for CSS selector purposes. Text only has
+// content when it holds bytes; an element child always counts as content.
+fn is_empty(m: *const Matcher, el: html.NodeId) -> bool {
+    var child = m.doc.nodes[usize(el)].first_child
+    while child != html.NONE {
+        let node = &m.doc.nodes[usize(child)]
+        if node.kind == .Element { ret false }
+        if node.kind == .Text && node.value.len != 0usize { ret false }
+        child = node.next_sibling
     }
     ret true
 }

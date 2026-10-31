@@ -11,6 +11,27 @@ use e.mem
 use e.os
 use e.time
 
+const MINIMUM_I64: i64 = 0i64 - 9223372036854775807i64 - 1i64
+
+type PartialWriter = struct { token: *cancel.Token, calls: usize }
+type IdleReader = struct { requested: usize }
+
+fn partial_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let writer_state = mem.cast[*PartialWriter](ctx)
+    writer_state.calls = writer_state.calls + 1usize
+    if writer_state.calls == 1usize {
+        cancel.request(writer_state.token)
+        ret (2usize, ok)
+    }
+    ret (src.len, ok)
+}
+
+fn idle_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let reader_state = mem.cast[*IdleReader](ctx)
+    reader_state.requested += dst.len
+    ret (0usize, ok)
+}
+
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
     address.family = .Ip4
@@ -78,6 +99,106 @@ fn exchange(a: *mem.Arena, loop: *async.Loop, client: os.Socket, server: os.Sock
     ret 0i32
 }
 
+fn partial_write_cancellation(a: *mem.Arena, loop: *async.Loop) -> i32 {
+    var token = cancel.token()
+    let control = cancel.Control { token: &token, deadline: time.Instant { nanos: 0i64 }, has_deadline: false }
+    var callback_state = PartialWriter { token: &token, calls: 0usize }
+    let sink = io.Writer { ctx: mem.cast[*void](&callback_state), write: partial_write, flush: socket_flush }
+    let (writing, write_error) = aio.write(a, loop, sink, "partial write", control)
+    if write_error != ok { ret 37i32 }
+    var writing_op = writing
+    let (_, wait_error) = aio.wait[usize](loop, &writing_op)
+    if wait_error != aio.Cancelled { ret 38i32 }
+    if aio.state[usize](&writing_op) != .Cancelled || aio.progress[usize](&writing_op).bytes != 2u64 || callback_state.calls != 1usize { ret 39i32 }
+    ret 0i32
+}
+
+fn zero_progress_read(a: *mem.Arena, loop: *async.Loop, control: cancel.Control) -> i32 {
+    var reader_state = IdleReader { requested: 0usize }
+    let source = io.Reader { ctx: mem.cast[*void](&reader_state), read: idle_read }
+    var buffer: [1]u8 = zero
+    let (reading, read_error) = aio.read(a, loop, source, buffer[..], control)
+    if read_error != ok { ret 62i32 }
+    var read_op = reading
+    let (_, wait_error) = aio.wait[usize](loop, &read_op)
+    if wait_error != io.NoProgress { ret 63i32 }
+    let read_progress = aio.progress[usize](&read_op)
+    if aio.state[usize](&read_op) != .Failed || read_progress.bytes != 0u64 || !read_progress.known || reader_state.requested != 1usize { ret 64i32 }
+    ret 0i32
+}
+
+fn wait_any_pending_connect(a: *mem.Arena, loop: *async.Loop, control: cancel.Control) -> i32 {
+    let (connect_record, record_error) = aio.new_record(a, loop, control, .Connect)
+    if record_error != ok { ret 40i32 }
+    var candidates: [1]aio.AnyOp = [1]aio.AnyOp{ aio.AnyOp { state: mem.cast[*void](connect_record) } }
+    let (selected, is_ready, wait_error) = aio.wait_any(loop, candidates[..], time.Duration { nanos: 0i64 })
+    if wait_error != ok { ret 41i32 }
+    if is_ready || selected != 0usize || connect_record.state != .Pending { ret 42i32 }
+    ret 0i32
+}
+
+// Operations belong to the loop that submitted them. Refuse another loop before
+// polling it, so a pending socket cannot hang `wait` or time out from `wait_any`.
+fn cross_loop_refusals(a: *mem.Arena, submitted: *async.Loop, control: cancel.Control) -> i32 {
+    let (other0, other_error) = async.init(a)
+    if other_error != ok { ret 43i32 }
+    var other = other0
+    let (first_record, first_error) = aio.new_record(a, submitted, control, .Connect)
+    if first_error != ok { ret 44i32 }
+    var first = aio.Op[bool] { state: mem.cast[*void](first_record) }
+    let (_, wait_error) = aio.wait[bool](&other, &first)
+    if wait_error != aio.WrongLoop { ret 45i32 }
+    let (second_record, second_error) = aio.new_record(a, submitted, control, .Connect)
+    if second_error != ok { ret 46i32 }
+    var candidates: [1]aio.AnyOp = [1]aio.AnyOp{ aio.AnyOp { state: mem.cast[*void](second_record) } }
+    let (selected, ready, any_error) = aio.wait_any(&other, candidates[..], time.Duration { nanos: 0i64 })
+    if any_error != aio.WrongLoop || ready || selected != 0usize { ret 47i32 }
+    if async.close(&other) != ok { ret 48i32 }
+
+    // A copied Loop wrapper names the same poller and remains valid for its
+    // operations; identity is the underlying state, not the wrapper address.
+    let (copy_record, copy_error) = aio.new_record(a, submitted, control, .Connect)
+    if copy_error != ok { ret 49i32 }
+    copy_record.connected = true
+    copy_record.state = .Succeeded
+    var alias = *submitted
+    var copied = aio.Op[bool] { state: mem.cast[*void](copy_record) }
+    let (copy_value, copy_wait_error) = aio.wait[bool](&alias, &copied)
+    if copy_wait_error != ok || !copy_value { ret 50i32 }
+    ret 0i32
+}
+
+// Submission that cannot produce an Op must release its private record. Repeat each
+// closed-loop path from the same mark: otherwise a first failed registration can hide
+// an arena leak until the next submission exhausts the caller's storage.
+fn closed_registration_rolls_back(a: *mem.Arena, listener: os.Socket, address: os.SocketAddress, control: cancel.Control) -> i32 {
+    let (closed0, closed_init_error) = async.init(a)
+    if closed_init_error != ok { ret 51i32 }
+    var closed = closed0
+    if async.close(&closed) != ok { ret 52i32 }
+
+    var storage: [1024]u8 = zero
+    var tiny = mem.arena_from(storage[..])
+    let entry = mem.mark(&tiny)
+    let (_, first_accept_error) = aio.accept(&tiny, &closed, listener, control)
+    if first_accept_error != aio.Closed || mem.mark(&tiny) != entry { ret 53i32 }
+    let (_, second_accept_error) = aio.accept(&tiny, &closed, listener, control)
+    if second_accept_error != aio.Closed || mem.mark(&tiny) != entry { ret 54i32 }
+
+    let (first_client, first_client_error) = os.socket_open(.Ip4, .Stream)
+    if first_client_error != ok { ret 55i32 }
+    let (_, first_connect_error) = aio.connect(&tiny, &closed, first_client, address, control)
+    let first_close_error = os.socket_close(first_client)
+    if first_close_error != ok || first_connect_error != aio.Closed || mem.mark(&tiny) != entry { ret 56i32 }
+
+    let (second_client, second_client_error) = os.socket_open(.Ip4, .Stream)
+    if second_client_error != ok { ret 57i32 }
+    let (_, second_connect_error) = aio.connect(&tiny, &closed, second_client, address, control)
+    let second_close_error = os.socket_close(second_client)
+    if second_close_error != ok || second_connect_error != aio.Closed || mem.mark(&tiny) != entry { ret 58i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     let (loop0, loop_error) = async.init(a)
     if loop_error == async.Unsupported { ret ok }
@@ -85,6 +206,15 @@ fn main(a: *mem.Arena) -> err {
     var loop = loop0
     var token = cancel.token()
     let free = cancel.Control { token: &token, deadline: time.Instant { nanos: 0i64 }, has_deadline: false }
+
+    let zero_progress_code = zero_progress_read(a, &loop, free)
+    if zero_progress_code != 0i32 { os.exit(zero_progress_code) }
+    let partial_write_code = partial_write_cancellation(a, &loop)
+    if partial_write_code != 0i32 { os.exit(partial_write_code) }
+    let pending_connect_code = wait_any_pending_connect(a, &loop, free)
+    if pending_connect_code != 0i32 { os.exit(pending_connect_code) }
+    let cross_loop_code = cross_loop_refusals(a, &loop, free)
+    if cross_loop_code != 0i32 { os.exit(cross_loop_code) }
 
     // A listener on an ephemeral port; an accept operation registered on the loop.
     let (listener, listener_error) = os.socket_open(.Ip4, .Stream)
@@ -108,9 +238,13 @@ fn main(a: *mem.Arena) -> err {
     var connect_op = connecting
     let (connected, connected_error) = aio.wait[bool](&loop, &connect_op)
     if connected_error != ok || !connected || aio.state[bool](&connect_op) != .Succeeded { os.exit(17i32) }
-    let (server, server_error) = aio.wait[os.Socket](&loop, &accept_op)
+    // A zero `wait_any` timeout performs one nonblocking poll, so it observes the
+    // already-ready accept rather than returning false before checking the loop.
+    var accepts: [1]aio.AnyOp = [1]aio.AnyOp{ aio.erase[os.Socket](&accept_op) }
+    let (accepted_index, accepted_ready, accepted_error) = aio.wait_any(&loop, accepts[..], time.Duration { nanos: 0i64 })
+    if accepted_error != ok || !accepted_ready || accepted_index != 0usize || aio.state[os.Socket](&accept_op) != .Succeeded { os.exit(18i32) }
+    let (server, server_error) = aio.take[os.Socket](&accept_op)
     if server_error != ok { os.exit(18i32) }
-    if aio.state[os.Socket](&accept_op) != .Succeeded { os.exit(18i32) }
     if os.socket_set_nonblocking(server, false) != ok || os.socket_set_nonblocking(client, false) != ok { os.exit(19i32) }
     let (_, taken_twice) = aio.take[os.Socket](&accept_op)
     if taken_twice != aio.Closed { os.exit(20i32) }
@@ -120,14 +254,32 @@ fn main(a: *mem.Arena) -> err {
     if exchange_code != 0i32 { os.exit(exchange_code) }
     let (now, now_error) = time.monotonic()
     if now_error != ok { os.exit(31i32) }
+
+    // A minimum-valued deadline is already expired. Poll-limit calculation must not
+    // subtract it from the current monotonic instant before reporting the timeout.
+    let earliest = cancel.Control { token: &token, deadline: time.Instant { nanos: MINIMUM_I64 }, has_deadline: true }
+    let (earliest_accept, earliest_error) = aio.accept(a, &loop, listener, earliest)
+    if earliest_error != ok { os.exit(60i32) }
+    var earliest_op = earliest_accept
+    let (_, earliest_wait_error) = aio.wait[os.Socket](&loop, &earliest_op)
+    if earliest_wait_error != aio.Timeout || aio.state[os.Socket](&earliest_op) != .TimedOut { os.exit(61i32) }
+
     let expired = cancel.Control { token: &token, deadline: now, has_deadline: true }
     let (late_accept, late_error) = aio.accept(a, &loop, listener, expired)
     if late_error != ok { os.exit(32i32) }
     var late_op = late_accept
-    let (_, timed_out) = aio.wait[os.Socket](&loop, &late_op)
-    if timed_out != aio.Timeout || aio.state[os.Socket](&late_op) != .TimedOut { os.exit(33i32) }
+    // Every negative duration is unbounded, including the i64 minimum, but still
+    // stops at an operation's own deadline.
+    var late_items: [1]aio.AnyOp = [1]aio.AnyOp{ aio.erase[os.Socket](&late_op) }
+    let (late_index, late_ready, late_wait_error) = aio.wait_any(&loop, late_items[..], time.nanos(MINIMUM_I64))
+    if late_wait_error != ok || !late_ready || late_index != 0usize || aio.state[os.Socket](&late_op) != .TimedOut { os.exit(33i32) }
+    let (_, timed_out) = aio.take[os.Socket](&late_op)
+    if timed_out != aio.Timeout { os.exit(33i32) }
     let (_, second_take) = aio.take[os.Socket](&late_op)
     if second_take != aio.Closed { os.exit(34i32) }
+
+    let closed_rollback_code = closed_registration_rolls_back(a, listener, local, free)
+    if closed_rollback_code != 0i32 { os.exit(closed_rollback_code) }
 
     if os.socket_close(server) != ok || os.socket_close(client) != ok || os.socket_close(listener) != ok { os.exit(35i32) }
     if async.close(&loop) != ok { os.exit(36i32) }

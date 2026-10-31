@@ -300,17 +300,23 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         let count = usize(contours)
         if count > tthint.MAX_ENDS { ret (out, tthint.NoRoom) }
         tthint.zone_clear(z, 0usize)
+        let ends_base = g0 + 10usize
+        let ends_bytes = 2usize * count
+        if ends_bytes > g1 - ends_base { ret (out, tthint.Trap) }
         var npts = 0usize
         var c = 0usize
         while c < count {
-            z.ends[c] = usize(tthint.rd16(d, g0 + 10usize + 2usize * c))
+            z.ends[c] = usize(tthint.rd16(d, ends_base + 2usize * c))
             npts = z.ends[c] + 1usize
             c += 1usize
         }
         z.nends = count
         if npts + 4usize > tthint.MAX_PTS + 4usize { ret (out, tthint.NoRoom) }
-        let ilen = usize(tthint.rd16(d, g0 + 10usize + 2usize * count))
-        let code_lo = g0 + 12usize + 2usize * count
+        let ilen_at = ends_base + ends_bytes
+        if g1 - ilen_at < 2usize { ret (out, tthint.Trap) }
+        let ilen = usize(tthint.rd16(d, ilen_at))
+        let code_lo = ilen_at + 2usize
+        if ilen > g1 - code_lo { ret (out, tthint.Trap) }
         var at = code_lo + ilen
         zone_prepare(z, npts + 4usize, count)
         var i = 0usize
@@ -336,6 +342,7 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         while i < npts {
             let flag = z.tags[i]
             if (flag & 2i64) != 0i64 {
+                if at >= g1 { ret (out, tthint.Trap) }
                 let delta = i64(d[at])
                 at += 1usize
                 if (flag & 16i64) != 0i64 {
@@ -344,6 +351,7 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
                     value = value - delta
                 }
             } else if (flag & 16i64) == 0i64 {
+                if g1 - at < 2usize { ret (out, tthint.Trap) }
                 value = value + tthint.rds16(d, at)
                 at += 2usize
             }
@@ -355,6 +363,7 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         while i < npts {
             let flag = z.tags[i]
             if (flag & 4i64) != 0i64 {
+                if at >= g1 { ret (out, tthint.Trap) }
                 let delta = i64(d[at])
                 at += 1usize
                 if (flag & 32i64) != 0i64 {
@@ -363,6 +372,7 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
                     value = value - delta
                 }
             } else if (flag & 32i64) == 0i64 {
+                if g1 - at < 2usize { ret (out, tthint.Trap) }
                 value = value + tthint.rds16(d, at)
                 at += 2usize
             }
@@ -404,17 +414,20 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
     var np = 0usize
     var last_flags = 0i64
     var ends_n = 0usize
-    while more && at + 4usize <= g1 {
+    while more {
+        if g1 - at < 4usize { ret (out, tthint.Trap) }
         let flags = tthint.rd16(d, at)
         let component = usize(tthint.rd16(d, at + 2usize))
         at += 4usize
         var dx = 0i64
         var dy = 0i64
         if (flags & 1i64) != 0i64 {
+            if g1 - at < 4usize { ret (out, tthint.Trap) }
             dx = tthint.rds16(d, at)
             dy = tthint.rds16(d, at + 2usize)
             at += 4usize
         } else {
+            if g1 - at < 2usize { ret (out, tthint.Trap) }
             dx = i64(d[at])
             dy = i64(d[at + 1usize])
             if dx >= 128i64 { dx = dx - 256i64 }
@@ -426,14 +439,17 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         var syx = 0.0f64
         var syy = 1.0f64
         if (flags & 8i64) != 0i64 {
+            if g1 - at < 2usize { ret (out, tthint.Trap) }
             sxx = f64(tthint.rds16(d, at)) / 16384.0
             syy = sxx
             at += 2usize
         } else if (flags & 64i64) != 0i64 {
+            if g1 - at < 4usize { ret (out, tthint.Trap) }
             sxx = f64(tthint.rds16(d, at)) / 16384.0
             syy = f64(tthint.rds16(d, at + 2usize)) / 16384.0
             at += 4usize
         } else if (flags & 128i64) != 0i64 {
+            if g1 - at < 8usize { ret (out, tthint.Trap) }
             sxx = f64(tthint.rds16(d, at)) / 16384.0
             sxy = f64(tthint.rds16(d, at + 2usize)) / 16384.0
             syx = f64(tthint.rds16(d, at + 4usize)) / 16384.0
@@ -487,9 +503,11 @@ fn gl_load(h: *tthint.Hinter, a: *mem.Arena, si: usize, gid: usize, depth: usize
         np += m
         h.level = part.lv
     }
+    if more { ret (out, tthint.Trap) }
     z.nends = ends_n
     zone_prepare(z, np + 4usize, ends_n)
-    let (g_lo, g_hi) = composite_program(h, g0, g1, at, last_flags)
+    let (g_lo, g_hi, program_error) = composite_program(h, g0, g1, at, last_flags)
+    if program_error != ok { ret (out, program_error) }
     var i = 0usize
     // Phantoms: the left at zero, the right an advance on, the vertical pair on the baseline.
     z.cur[2usize * np] = 0i64
@@ -541,11 +559,12 @@ fn zone_prepare(z: *tthint.Zone, n: usize, ends: usize) {
 }
 
 // The composite glyph's own instructions: after the last component, when it says there are any.
-fn composite_program(h: *tthint.Hinter, g0: usize, g1: usize, at: usize, last_flags: i64) -> (usize, usize) {
-    if (last_flags & 256i64) == 0i64 || at + 2usize > g1 { ret (0usize, 0usize) }
+fn composite_program(h: *tthint.Hinter, g0: usize, g1: usize, at: usize, last_flags: i64) -> (usize, usize, err) {
+    if (last_flags & 256i64) == 0i64 { ret (0usize, 0usize, ok) }
+    if g1 - at < 2usize { ret (0usize, 0usize, tthint.Trap) }
     let count = usize(tthint.rd16(h.data, at))
-    if at + 2usize + count > g1 { ret (0usize, 0usize) }
-    ret (at + 2usize, at + 2usize + count)
+    if count > g1 - (at + 2usize) { ret (0usize, 0usize, tthint.Trap) }
+    ret (at + 2usize, at + 2usize + count, ok)
 }
 
 // The scan conversion mode a size's SCANCTRL and SCANTYPE ask for, as the bits `Outline.scan` documents. Drop-out control is on when

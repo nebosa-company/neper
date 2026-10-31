@@ -37,8 +37,7 @@ fn from_int(n: i32) -> Fx {
 
 // Truncates toward zero, as a conversion does; `floor` rounds down instead.
 fn to_int(x: Fx) -> i32 {
-    if x < 0i32 { ret -((-x) >> SHIFT) }
-    ret x >> SHIFT
+    ret i32(i64(x) / i64(ONE))
 }
 
 fn from_ratio(num: i32, den: i32) -> (Fx, err) {
@@ -63,14 +62,18 @@ fn floor(x: Fx) -> i32 {
 }
 
 fn ceil(x: Fx) -> i32 {
-    ret (x + ONE - 1i32) >> SHIFT
+    ret i32((i64(x) + i64(ONE) - 1i64) >> SHIFT)
 }
 
 fn round(x: Fx) -> i32 {
-    ret (x + HALF) >> SHIFT
+    ret i32((i64(x) + i64(HALF)) >> SHIFT)
 }
 
+// The positive magnitude of i32.MIN cannot be represented as an Fx, so this
+// helper saturates that one input instead of overflowing or preserving a
+// negative result.
 fn abs(x: Fx) -> Fx {
+    if x == (-2147483647i32 - 1i32) { ret 2147483647i32 }
     if x < 0i32 { ret -x }
     ret x
 }
@@ -140,7 +143,9 @@ fn sin(angle: Fx) -> Fx {
 }
 
 fn cos(angle: Fx) -> Fx {
-    ret sin(angle + QUARTER)
+    // Reduce before the phase shift, so a valid high Fx angle cannot overflow
+    // while adding the quarter turn.
+    ret sin((angle & 65535i32) + QUARTER)
 }
 
 fn tan(angle: Fx) -> (Fx, err) {
@@ -174,8 +179,14 @@ fn atan2(y: Fx, x: Fx) -> Fx {
 }
 
 // Both squares are Q32, so their sum is too and one integer square root returns Q16.
+// A magnitude of 2^31 cannot fit in an Fx, so saturate before an i64 sum could overflow.
 fn length(x: Fx, y: Fx) -> Fx {
-    ret i32(isqrt64(i64(x) * i64(x) + i64(y) * i64(y)))
+    let x_squared = i64(x) * i64(x)
+    let y_squared = i64(y) * i64(y)
+    let magnitude_limit = 1i64 << 62u32
+    if x_squared >= magnitude_limit { ret 2147483647i32 }
+    if y_squared >= magnitude_limit - x_squared { ret 2147483647i32 }
+    ret i32(isqrt64(x_squared + y_squared))
 }
 
 fn normalize(x: Fx, y: Fx) -> (Fx, Fx) {

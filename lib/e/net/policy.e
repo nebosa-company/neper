@@ -1168,11 +1168,27 @@ fn upper(a: *mem.Arena, s: str) -> str {
     ret out[0usize..s.len]
 }
 
+fn is_cors_unsafe_request_header_byte(c: u8) -> bool {
+    if c <= 8u8 || (c >= 10u8 && c <= 31u8) || c == 127u8 { ret true }
+    if c == 34u8 || c == 40u8 || c == 41u8 || c == 58u8 || c == 60u8 || c == 62u8 || c == 63u8 || c == 64u8 || c == 91u8 || c == 92u8 || c == 93u8 || c == 123u8 || c == 125u8 { ret true }
+    ret false
+}
+
+fn cors_safelisted_value(value: str) -> bool {
+    var i = 0usize
+    while i < value.len {
+        if is_cors_unsafe_request_header_byte(value[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // Whether `name: value` is a CORS-safelisted request header.
 fn is_cors_safelisted_request_header(a: *mem.Arena, name: str, value: str) -> bool {
     let l = lower(a, trim(name))
     if !(str.eq(l, "accept") || str.eq(l, "accept-language") || str.eq(l, "content-language") || str.eq(l, "content-type")) { ret false }
     if value.len > 128usize { ret false }
+    if !cors_safelisted_value(value) { ret false }
     if str.eq(l, "content-type") {
         let semi = index_of(value, 59u8)
         var essence = value
@@ -1562,7 +1578,7 @@ fn no_cors_response_block_reason(a: *mem.Arena, document_origin: str, has_docume
 
 // --- cookie jar ------------------------------------------------------------------------------------------------
 
-type Cookie = struct { name: str, value: str, domain: str, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
+type Cookie = struct { name: str, value: str, domain: str, host_only: bool, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
 
 type CookieJar = struct { cookies: []Cookie, count: usize, block_third_party: bool }
 
@@ -1595,6 +1611,13 @@ fn domain_matches(a: *mem.Arena, host: str, domain: str) -> bool {
     let d = lower(a, domain)
     if str.eq(h, d) { ret true }
     ret str.ends_with(h, join(a, ".", d))
+}
+
+// A cookie without a Domain attribute is scoped to precisely the response host;
+// a domain cookie also covers its subdomains.
+fn cookie_domain_matches(a: *mem.Arena, host: str, c: Cookie) -> bool {
+    if !c.host_only { ret domain_matches(a, host, c.domain) }
+    ret str.eq(lower(a, host), lower(a, c.domain))
 }
 
 // Last two labels of a host (IP literals and short hosts as they are).
@@ -1749,6 +1772,18 @@ fn same_site_allowed(ss: u8, is_top_level: bool) -> bool {
     ret is_top_level
 }
 
+fn default_cookie_path(request: str) -> str {
+    if request.len == 0usize || request[0usize] != 47u8 { ret "/" }
+    var slash = 0usize
+    var i = 1usize
+    while i < request.len {
+        if request[i] == 47u8 { slash = i }
+        i += 1usize
+    }
+    if slash == 0usize { ret "/" }
+    ret request[0usize..slash]
+}
+
 // Processes one `Set-Cookie` header received for `url`; `partition_key` is the top-frame site when known.
 fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64) {
     let parts_end = index_of(header, 59u8)
@@ -1762,7 +1797,8 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
     if name.len == 0usize { ret }
     if name.len + value.len > 4096usize { ret }
     var domain = request.host
-    var path = "/"
+    var host_only = true
+    var path = default_cookie_path(request.path)
     var secure = false
     var http_only = false
     var partitioned = false
@@ -1799,7 +1835,10 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                 has_domain_attr = true
                 var d = lower(a, trim(attr[7usize..]))
                 if str.starts_with(d, ".") { d = d[1usize..] }
-                if domain_matches(a, request.host, d) { domain = d }
+                if domain_matches(a, request.host, d) {
+                    domain = d
+                    host_only = false
+                }
             } else if str.starts_with(low, "path=") {
                 let p = trim(attr[5usize..])
                 if str.starts_with(p, "/") {
@@ -1812,8 +1851,15 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                     has_expires = true
                     if secs <= 0i64 {
                         expires_ms = 0i64
+                    } else if secs > 9223372036854775807i64 / 1000i64 {
+                        expires_ms = 9223372036854775807i64
                     } else {
-                        expires_ms = now_ms + secs * 1000i64
+                        let millis = secs * 1000i64
+                        if now_ms > 9223372036854775807i64 - millis {
+                            expires_ms = 9223372036854775807i64
+                        } else {
+                            expires_ms = now_ms + millis
+                        }
                     }
                 }
             } else if str.starts_with(low, "expires=") {
@@ -1843,6 +1889,7 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
         name: name,
         value: value,
         domain: domain,
+        host_only: host_only,
         path: path,
         has_partition: partitioned,
         partition: partition_key,
@@ -1909,6 +1956,13 @@ fn jar_process_response(a: *mem.Arena, j: *CookieJar, url: str, set_cookie: str,
 
 type CookieHeader = struct { present: bool, value: str }
 
+fn cookie_path_matches(request: str, cookie: str) -> bool {
+    if !str.starts_with(request, cookie) { ret false }
+    if request.len == cookie.len || cookie.len == 0usize { ret true }
+    if cookie[cookie.len - 1usize] == 47u8 { ret true }
+    ret request[cookie.len] == 47u8
+}
+
 // The `Cookie` header for a request, or absent when no cookie applies.
 fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool, partition_key: str, has_partition_key: bool, now_ms: i64) -> CookieHeader {
     let u = parse_url(a, url)
@@ -1934,8 +1988,8 @@ fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool,
         } else if j.block_third_party && third_party {
             continue
         }
-        if !domain_matches(a, u.host, c.domain) { continue }
-        if !str.starts_with(u.path, c.path) { continue }
+        if !cookie_domain_matches(a, u.host, c) { continue }
+        if !cookie_path_matches(u.path, c.path) { continue }
         if c.secure && !str.eq(u.scheme, "https") { continue }
         if !same_site_allowed(c.same_site, is_top_level) { continue }
         if n > 0usize { out = join(a, out, "; ") }
@@ -1950,7 +2004,7 @@ fn jar_clear(j: *CookieJar) { j.count = 0usize }
 fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str) {
     var i = 0usize
     while i < j.count {
-        if domain_matches(a, origin_host, j.cookies[i].domain) {
+        if cookie_domain_matches(a, origin_host, j.cookies[i]) {
             jar_remove_at(j, i)
             continue
         }

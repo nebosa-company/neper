@@ -23,6 +23,8 @@ error NoConvergence
 
 type Window = enum u8 { Rectangular, Hann, Hamming, Blackman }
 
+fn finite_f64(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 fn ipow(t: f64, e: usize) -> f64 {
     var r = 1.0f64
     var i = 0usize
@@ -182,7 +184,7 @@ fn fir(x: []const f64, taps: []const f64, out: []f64) -> err {
 fn iir(x: []const f64, b: []const f64, a: []const f64, out: []f64, state: []f64) -> err {
     var order = b.len
     if a.len > order { order = a.len }
-    if order == 0usize || a[0usize] == 0.0f64 { ret Invalid }
+    if order == 0usize || a.len == 0usize || a[0usize] == 0.0f64 { ret Invalid }
     if out.len < x.len || state.len + 1usize < order { ret TooSmall }
     order -= 1usize
     var z = state[..order]
@@ -245,6 +247,7 @@ fn biquad(x: []const f64, c: []const f64, out: []f64, state: []f64) -> err {
 // fraction of Nyquist, `gain_db` only matters for the peaking filter.
 fn biquad_cookbook(kind: u8, frequency: f64, q: f64, gain_db: f64, out: []f64) -> err {
     if out.len < 6usize { ret TooSmall }
+    if kind > 2u8 || !finite_f64(frequency) || frequency <= 0.0f64 || frequency >= 1.0f64 || !finite_f64(q) || q <= 0.0f64 || (kind == 2u8 && !finite_f64(gain_db)) { ret Invalid }
     let w0 = 3.141592653589793f64 * frequency
     let cw = math.cos[f64](w0)
     let alpha = math.sin[f64](w0) / (2.0f64 * q)
@@ -281,6 +284,10 @@ fn biquad_peak(frequency: f64, q: f64, gain_db: f64, out: []f64) -> err { ret bi
 // A symmetric window of `n` samples (SciPy's `get_window(kind, n, fftbins=False)`).
 fn window(kind: Window, n: usize, out: []f64) -> err {
     if out.len < n { ret TooSmall }
+    if n == 1usize {
+        out[0usize] = 1.0f64
+        ret ok
+    }
     var i = 0usize
     while i < n {
         var phase = 0.0f64
@@ -298,7 +305,7 @@ fn window(kind: Window, n: usize, out: []f64) -> err {
 // A windowed-sinc low-pass of `taps` coefficients with unit DC gain
 // (SciPy's `firwin(taps, cutoff, window=kind)`).
 fn design_windowed_sinc(taps: usize, cutoff: f64, kind: Window, out: []f64) -> err {
-    if taps == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if taps == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     let window_error = window(kind, taps, out)
     if window_error != ok { ret window_error }
     let centre = f64(taps - 1usize) / 2.0f64
@@ -309,6 +316,7 @@ fn design_windowed_sinc(taps: usize, cutoff: f64, kind: Window, out: []f64) -> e
         sum += out[i]
         i += 1usize
     }
+    if sum == 0.0f64 || !finite_f64(sum) { ret Invalid }
     i = 0usize
     while i < taps {
         out[i] = out[i] / sum
@@ -615,7 +623,7 @@ fn finish_lowpass(zr: []f64, zi: []f64, pr: []f64, pi: []f64, gain: f64, cutoff:
 // A Butterworth low-pass of `order` at `cutoff` (Nyquist fraction) into `b`,
 // `a` (`order + 1` entries each); `scratch.len >= 12 * (order + 1)`.
 fn design_butterworth(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -632,7 +640,7 @@ fn design_butterworth(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []
 // A Chebyshev type I low-pass with `ripple_db` passband ripple; storage as
 // `design_butterworth`.
 fn design_chebyshev(order: usize, ripple_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 || ripple_db <= 0.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 || !finite_f64(ripple_db) || ripple_db <= 0.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -732,7 +740,7 @@ fn poly_roots(c: []const f64, rr: []f64, ri: []f64) -> err {
 
 // A Bessel low-pass (SciPy's `norm="phase"`); storage as `design_butterworth`.
 fn design_bessel(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     var pr = scratch[..order]
     var pi = scratch[order..2usize * order]
@@ -848,7 +856,7 @@ fn ellipdeg(n: usize, m1: f64) -> f64 {
 // `attenuation_db` stopband depth, as SciPy's `ellip`; storage as
 // `design_butterworth`.
 fn design_elliptic(order: usize, ripple_db: f64, attenuation_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err {
-    if order == 0usize || cutoff <= 0.0f64 || cutoff >= 1.0f64 || ripple_db <= 0.0f64 || attenuation_db <= ripple_db { ret Invalid }
+    if order == 0usize || !finite_f64(cutoff) || cutoff <= 0.0f64 || cutoff >= 1.0f64 || !finite_f64(ripple_db) || ripple_db <= 0.0f64 || !finite_f64(attenuation_db) || attenuation_db <= ripple_db { ret Invalid }
     if scratch.len < 12usize * (order + 1usize) { ret TooSmall }
     let nz = 2usize * (order / 2usize)
     var zr = scratch[..nz]
@@ -986,7 +994,10 @@ fn mel_to_hz(m: f64) -> f64 { ret 700.0f64 * (math.exp[f64](m / 2595.0f64 * 2.30
 // `log(energy + 1e-10)`, then the first `n_coeffs` of an unnormalised DCT-II;
 // `out[frame * n_coeffs + c]`, `scratch.len >= 3 * frame + 2 * n_mels`.
 fn mfcc(x: []const f64, sample_rate: f64, frame: usize, hop: usize, n_mels: usize, n_coeffs: usize, out: []f64, scratch: []f64) -> (usize, err) {
-    if hop == 0usize || frame < 2usize || x.len < frame || n_mels == 0usize || n_coeffs > n_mels { ret (0usize, Invalid) }
+    // `x - x` is zero for every finite input, but NaN for either infinity; together
+    // with the ordered positive test it rejects zero, negatives, NaN and both infinities
+    // before they can collapse mel-filter edges or produce NaN feature values.
+    if hop == 0usize || frame < 2usize || x.len < frame || n_mels == 0usize || n_coeffs > n_mels || !(sample_rate > 0.0f64) || sample_rate - sample_rate != 0.0f64 { ret (0usize, Invalid) }
     let frames = (x.len - frame) / hop + 1usize
     if out.len < frames * n_coeffs || scratch.len < 3usize * frame + 2usize * n_mels { ret (0usize, TooSmall) }
     var win = scratch[..frame]
@@ -1146,7 +1157,7 @@ fn wiener(x: []const f64, noise_variance: f64, frame: usize, out: []f64, scratch
 // prediction error. `scratch.len >= order + 1`.
 fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> (f64, err) {
     if r.len <= order || out.len <= order || scratch.len <= order { ret (0.0f64, TooSmall) }
-    if r[0usize] <= 0.0f64 { ret (0.0f64, Invalid) }
+    if !finite_f64(r[0usize]) || r[0usize] <= 0.0f64 { ret (0.0f64, Invalid) }
     var error_power = r[0usize]
     out[0usize] = 1.0f64
     var i = 1usize
@@ -1158,6 +1169,8 @@ fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> 
             j += 1usize
         }
         let k = 0.0f64 - acc / error_power
+        let next_error = error_power * (1.0f64 - k * k)
+        if !finite_f64(k) || !finite_f64(next_error) || next_error <= 0.0f64 { ret (0.0f64, Invalid) }
         j = 1usize
         while j < i {
             scratch[j] = out[j] + k * out[i - j]
@@ -1169,7 +1182,7 @@ fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> 
             j += 1usize
         }
         out[i] = k
-        error_power = error_power * (1.0f64 - k * k)
+        error_power = next_error
         i += 1usize
     }
     ret (error_power, ok)
@@ -1226,8 +1239,14 @@ fn dtw(a: []const f64, b: []const f64, cost: []f64) -> (f64, err) {
 // The warping path of a filled `dtw` matrix from `(0, 0)` to the end, as index
 // pairs into `path_a`/`path_b` (at most `na + nb - 1`); answers its length.
 fn dtw_path(cost: []const f64, na: usize, nb: usize, path_a: []usize, path_b: []usize) -> (usize, err) {
-    if na == 0usize || nb == 0usize || cost.len < na * nb { ret (0usize, Invalid) }
-    if path_a.len < na + nb - 1usize || path_b.len < na + nb - 1usize { ret (0usize, TooSmall) }
+    if na == 0usize || nb == 0usize { ret (0usize, Invalid) }
+    let maximum = 0usize -% 1usize
+    if na > maximum / nb { ret (0usize, Invalid) }
+    let cells = na * nb
+    if cost.len < cells { ret (0usize, Invalid) }
+    if na - 1usize > maximum - nb { ret (0usize, TooSmall) }
+    let needed = na - 1usize + nb
+    if path_a.len < needed || path_b.len < needed { ret (0usize, TooSmall) }
     var i = na - 1usize
     var j = nb - 1usize
     var count = 0usize
@@ -1373,7 +1392,12 @@ fn rls(x: []const f64, d: []const f64, lambda: f64, delta: f64, w: []f64, p: []f
 // output is centred); answers `ceil(x.len * up / down)` samples into `out`.
 fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64, out: []f64) -> (usize, err) {
     if up == 0usize || down == 0usize || taps.len == 0usize { ret (0usize, Invalid) }
-    let n_out = (x.len * up + down - 1usize) / down
+    // Form the ceiling from a checked product and quotient/remainder instead of
+    // adding `down - 1`, which would wrap for a representable product near usize max.
+    if x.len != 0usize && up > 18446744073709551615usize / x.len { ret (0usize, TooSmall) }
+    let produced = x.len * up
+    var n_out = produced / down
+    if produced % down != 0usize { n_out += 1usize }
     if out.len < n_out { ret (0usize, TooSmall) }
     let half = (taps.len - 1usize) / 2usize
     let pre_pad = down - half % down
@@ -1402,7 +1426,7 @@ fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64,
 // Band-limited resampling by a Hann-windowed sinc of `half_width` input
 // samples each side: `out[i]` is the signal at input time `i / ratio`.
 fn resample_sinc(x: []const f64, ratio: f64, half_width: usize, out: []f64) -> err {
-    if ratio <= 0.0f64 || half_width == 0usize { ret Invalid }
+    if ratio <= 0.0f64 || half_width == 0usize || half_width > (0usize -% 1usize) / 2usize { ret Invalid }
     var i = 0usize
     while i < out.len {
         let t = f64(i) / ratio

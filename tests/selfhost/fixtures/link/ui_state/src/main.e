@@ -1,8 +1,9 @@
 // `e.ui.state`: the diamond a -> b, a -> c, d = b + c runs d once per set
 // with no mixed state, a memo that keeps its value leaves its effect
 // asleep, a batch runs an effect once, a dynamic dependency stops
-// re-running when no longer read, dispose stops runs, per-node run counts
-// match the Python replica, and exhausted node storage answers TooSmall.
+// re-running when no longer read, a dynamic cycle answers Invalid without
+// recursing, dispose stops runs, per-node run counts match the Python
+// replica, and exhausted node storage answers TooSmall.
 // Each check exits with its own code.
 
 use e.io
@@ -11,6 +12,7 @@ use e.os
 use e.ui.state
 
 type Ctx = struct { a: u32, b: u32, c: u32, d: u32, above: u32, flag: u32, s1: u32, log_node: [128]u32, log_value: [128]i64, log_len: usize }
+type CycleCtx = struct { flag: u32, a: u32, b: u32 }
 
 fn log(c: *Ctx, node: u32, value: i64) {
     if c.log_len < 128usize {
@@ -36,6 +38,11 @@ fn watch_dyn(c: *Ctx, g: *state.Graph[Ctx]) {
         log(c, 99u32, 0i64 - 1i64)
     }
 }
+fn compute_cycle_a(c: *CycleCtx, g: *state.Graph[CycleCtx]) -> i64 {
+    if state.get[CycleCtx](g, c.flag) != 0i64 { ret state.get[CycleCtx](g, c.b) }
+    ret 10i64
+}
+fn compute_cycle_b(c: *CycleCtx, g: *state.Graph[CycleCtx]) -> i64 { ret state.get[CycleCtx](g, c.a) + 1i64 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var value: [16]i64 = zero
@@ -129,19 +136,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if state.edge_count[Ctx](&g) != 7usize { os.exit(6i32) }
 
-    // 7: node storage exhausted answers TooSmall; misuse answers Invalid.
+    // 7: a dynamic back-edge is rejected, leaves the graph acyclic, and can
+    // be retried after the condition changes.
+    var cycle_value: [4]i64 = zero
+    var cycle_kind: [4]u8 = zero
+    var cycle_height: [4]u32 = zero
+    var cycle_dirty: [4]u8 = zero
+    var cycle_runs: [4]u32 = zero
+    var cycle_compute: [4]fn(*CycleCtx, *state.Graph[CycleCtx]) -> i64 = zero
+    var cycle_run: [4]fn(*CycleCtx, *state.Graph[CycleCtx]) = zero
+    var cycle_from: [8]u32 = zero
+    var cycle_to: [8]u32 = zero
+    var cycle_ctx: CycleCtx = zero
+    let (cycle_made, cycle_graph_error) = state.graph[CycleCtx](&cycle_ctx, cycle_value[..], cycle_kind[..], cycle_height[..], cycle_dirty[..], cycle_runs[..], cycle_compute[..], cycle_run[..], cycle_from[..], cycle_to[..])
+    if cycle_graph_error != ok { os.exit(7i32) }
+    var cycle_g = cycle_made
+    let (cycle_flag, cycle_flag_error) = state.signal[CycleCtx](&cycle_g, 0i64)
+    if cycle_flag_error != ok { os.exit(7i32) }
+    cycle_ctx.flag = cycle_flag
+    let (cycle_a, cycle_a_error) = state.memo[CycleCtx](&cycle_g, compute_cycle_a)
+    if cycle_a_error != ok { os.exit(7i32) }
+    cycle_ctx.a = cycle_a
+    let (cycle_b, cycle_b_error) = state.memo[CycleCtx](&cycle_g, compute_cycle_b)
+    if cycle_b_error != ok { os.exit(7i32) }
+    cycle_ctx.b = cycle_b
+    if state.set[CycleCtx](&cycle_g, cycle_flag, 1i64) != state.Invalid { os.exit(7i32) }
+    if state.edge_count[CycleCtx](&cycle_g) != 2usize || state.height_of[CycleCtx](&cycle_g, cycle_a) != 1u32 || state.height_of[CycleCtx](&cycle_g, cycle_b) != 2u32 || state.get[CycleCtx](&cycle_g, cycle_a) != 10i64 { os.exit(7i32) }
+    if state.set[CycleCtx](&cycle_g, cycle_flag, 0i64) != ok || state.run_count[CycleCtx](&cycle_g, cycle_a) != 3u32 { os.exit(7i32) }
+
+    // 8: node storage exhausted answers TooSmall; misuse answers Invalid.
     var extra = 0usize
     while extra < 6usize {
         let (_, e) = state.signal[Ctx](&g, 0i64)
-        if e != ok { os.exit(7i32) }
+        if e != ok { os.exit(8i32) }
         extra += 1usize
     }
     let (_, full) = state.signal[Ctx](&g, 0i64)
-    if full != state.TooSmall { os.exit(7i32) }
+    if full != state.TooSmall { os.exit(8i32) }
     let (_, full_memo) = state.memo[Ctx](&g, compute_b)
-    if full_memo != state.TooSmall { os.exit(7i32) }
-    if state.set[Ctx](&g, md, 1i64) != state.Invalid || state.set[Ctx](&g, 200u32, 1i64) != state.Invalid { os.exit(7i32) }
-    if state.dispose[Ctx](&g, 200u32) != state.Invalid { os.exit(7i32) }
+    if full_memo != state.TooSmall { os.exit(8i32) }
+    if state.set[Ctx](&g, md, 1i64) != state.Invalid || state.set[Ctx](&g, 200u32, 1i64) != state.Invalid { os.exit(8i32) }
+    if state.dispose[Ctx](&g, 200u32) != state.Invalid { os.exit(8i32) }
 
     try io.print("ui state ok\n")
     ret ok

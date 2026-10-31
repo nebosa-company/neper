@@ -2335,6 +2335,25 @@ fn pool_entry(a: *mem.Arena) -> u32 {
     ret 0u32
 }
 
+fn constructor_rollback() -> bool {
+    // A listener allocation failing after a handler allocation cannot consume the
+    // caller's arena.
+    var listener_bytes: [64]u8 = zero
+    var listener_arena = mem.arena_from(listener_bytes[..])
+    let listener_start = listener_arena.off
+    let (_, listener_error) = med.mediator(&listener_arena, 0usize, 100usize, 0usize)
+    if listener_error != mem.Exhausted || listener_arena.off != listener_start { ret false }
+
+    // The same must hold for the final behavior allocation after both preceding
+    // registries succeeded.
+    var behavior_bytes: [64]u8 = zero
+    var behavior_arena = mem.arena_from(behavior_bytes[..])
+    let behavior_start = behavior_arena.off
+    let (_, behavior_error) = med.mediator(&behavior_arena, 0usize, 0usize, 100usize)
+    if behavior_error != mem.Exhausted || behavior_arena.off != behavior_start { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if !case_0(a) { os.exit(1i32) }
     if !case_1(a) { os.exit(2i32) }
@@ -2400,6 +2419,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if s != 0u32 { os.exit(i32(100u32 + s)) }
     let pl = pool_entry(a)
     if pl != 0u32 { os.exit(i32(120u32 + pl)) }
+    if !constructor_rollback() { os.exit(130i32) }
     try io.print("mediator ok")
     ret ok
 }

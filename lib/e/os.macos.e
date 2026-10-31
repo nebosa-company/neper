@@ -10,6 +10,7 @@
 // process surface (e.fs, e.proc, sockets) lands once libSystem calls back it.
 
 use e.mem
+use e.os.window_helpers
 
 // The separator this target's paths are written with.
 const NATIVE_SEPARATOR: u8 = 47u8
@@ -31,7 +32,7 @@ type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, T
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 // The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
 // compile unchanged.
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 
 
 // BSD system call numbers (xnu's syscalls.master), reached through `syscall`.
@@ -58,6 +59,8 @@ const O_CREAT: usize = 512usize
 const O_EXCL: usize = 2048usize
 const O_DIRECTORY: usize = 1048576usize
 const O_CLOEXEC: usize = 16777216usize
+const F_GETFD: usize = 1usize
+const FD_CLOEXEC: usize = 1usize
 const F_GETPATH: usize = 50usize
 const DIRECTORY_MODE: usize = 511usize
 const PERMISSION_MASK: u32 = 4095u32
@@ -111,6 +114,8 @@ fn error_of_result(result: isize) -> err {
     if result == -12isize { ret OutOfMemory }
     if result == -13isize { ret Denied }
     if result == -17isize { ret Exists }
+    // EADDRINUSE: a socket name already belongs to another endpoint.
+    if result == -48isize { ret Exists }
     if result == -20isize { ret NotFound }
     if result == -60isize { ret Timeout }
     if result == -18isize { ret Unsupported }
@@ -130,7 +135,7 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 4i32 { ret .Interrupted }
     if code == 35i32 { ret .WouldBlock }
     if code == 12i32 { ret .OutOfMemory }
-    if code == 17i32 { ret .Exists }
+    if code == 17i32 || code == 48i32 { ret .Exists }
     if code == 22i32 || code == 45i32 || code == 78i32 || code == 18i32 { ret .Unsupported }
     if code == 60i32 { ret .Timeout }
     ret .Other
@@ -169,6 +174,19 @@ fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
     ret ErrorDetail { kind: error_kind_of(code), native_code: code, operation: operation, subject: subject }
 }
 
+// The checked wrappers must not reuse an already-consumed native code. An
+// allocation or validation failure can occur before a syscall records one, so
+// its portable `err` supplies the detail in that case.
+fn detail_for_error(failure: err, operation: str, subject: str) -> ErrorDetail {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread && error_slot_fresh[slot] == 1u8 && error_kind_of(error_slot_code[slot]) == kind_of_error(failure) {
+        error_slot_fresh[slot] = 0u8
+        ret detail_from_code(error_slot_code[slot], operation, subject)
+    }
+    ret failed_detail(failure, operation, subject)
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other
@@ -176,16 +194,14 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.subject = subject
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
-    // Another thread's slot, or one nothing has written, is no detail at all.
-    if error_slot_used[slot] == 0u8 { ret detail }
-    if error_slot_thread[slot] != thread { ret detail }
+    if error_slot_used[slot] == 0u8 || error_slot_thread[slot] != thread || error_slot_fresh[slot] != 1u8 { ret detail }
     error_slot_fresh[slot] = 0u8
     ret detail_from_code(error_slot_code[slot], operation, subject)
 }
 
 // The runtime's primitives answer an `err`, not the errno, so their detail names only the kind.
-fn failed_detail(e: err, operation: str, subject: str) -> ErrorDetail {
-    ret ErrorDetail { kind: kind_of_error(e), native_code: 0i32, operation: operation, subject: subject }
+fn failed_detail(failure: err, operation: str, subject: str) -> ErrorDetail {
+    ret ErrorDetail { kind: kind_of_error(failure), native_code: 0i32, operation: operation, subject: subject }
 }
 
 // A read, write or open whose failure carries its errno: the runtime primitives answer an `err`
@@ -234,6 +250,12 @@ fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail)
 fn stdin() -> File { ret File { raw: 0usize } }
 
 fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
+    var scan = 0usize
+    while scan < text.len {
+        // Passing an interior NUL would make the kernel act on only the prefix.
+        if text[scan] == 0u8 { ret (0usize, Unsupported) }
+        scan += 1usize
+    }
     let (bytes, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
     if allocation_error != ok { ret (0usize, OutOfMemory) }
     var at = 0usize
@@ -273,6 +295,7 @@ fn stat_with(a: *mem.Arena, path: str, number: usize) -> (FileInfo, err) {
     info.created_ns = buffer.born * NANOSECONDS_PER_SECOND + buffer.born_ns
     info.mode = mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = u64(buffer.device)
     info.link_count = u64(buffer.link_count)
     ret (info, ok)
 }
@@ -289,13 +312,13 @@ fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
 
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
     let (info, stat_error) = stat(a, path)
-    if stat_error != ok { *detail = last_error_detail("stat", path) }
+    if stat_error != ok { *detail = detail_for_error(stat_error, "stat", path) }
     ret (info, stat_error)
 }
 
 fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
     let (info, stat_error) = lstat(a, path)
-    if stat_error != ok { *detail = last_error_detail("lstat", path) }
+    if stat_error != ok { *detail = detail_for_error(stat_error, "lstat", path) }
     ret (info, stat_error)
 }
 
@@ -320,19 +343,19 @@ fn set_current_dir(a: *mem.Arena, path: str) -> err { ret path_syscall(a, SYS_CH
 
 fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = mkdir(a, path)
-    if failure != ok { *detail = last_error_detail("mkdir", path) }
+    if failure != ok { *detail = detail_for_error(failure, "mkdir", path) }
     ret failure
 }
 
 fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_file(a, path)
-    if failure != ok { *detail = last_error_detail("remove_file", path) }
+    if failure != ok { *detail = detail_for_error(failure, "remove_file", path) }
     ret failure
 }
 
 fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
     let failure = remove_dir(a, path)
-    if failure != ok { *detail = last_error_detail("remove_dir", path) }
+    if failure != ok { *detail = detail_for_error(failure, "remove_dir", path) }
     ret failure
 }
 
@@ -355,18 +378,29 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
 
 fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err {
     let failure = rename(a, src, dst)
-    if failure != ok { *detail = last_error_detail("rename", src) }
+    if failure != ok { *detail = detail_for_error(failure, "rename", src) }
     ret failure
 }
 
-// rename(2) replaces an existing destination; without `overwrite` that is refused first.
+// `renameatx_np(RENAME_EXCL)` decides whether the destination is free as part of
+// the rename. Checking it first then calling rename(2) races a creator of `dst`.
 // ponytail: `durable` is not honoured (no fsync of the directory).
 fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err {
-    if !overwrite {
-        let (existing, existing_error) = lstat(a, dst)
-        if existing_error == ok { ret Exists }
+    if overwrite { ret rename(a, src, dst) }
+    let checkpoint = mem.mark(a)
+    let (source_address, source_error) = c_string(a, src)
+    if source_error != ok {
+        mem.reset(a, checkpoint)
+        ret source_error
     }
-    ret rename(a, src, dst)
+    let (destination_address, destination_error) = c_string(a, dst)
+    if destination_error != ok {
+        mem.reset(a, checkpoint)
+        ret destination_error
+    }
+    let result = syscall(SYS_RENAMEATX, AT_FDCWD, source_address, AT_FDCWD, destination_address, RENAME_EXCL, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
 }
 
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
@@ -415,7 +449,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
 
 fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
     let (link_target, link_error) = read_link(a, path)
-    if link_error != ok { *detail = last_error_detail("read_link", path) }
+    if link_error != ok { *detail = detail_for_error(link_error, "read_link", path) }
     ret (link_target, link_error)
 }
 
@@ -446,7 +480,8 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
 }
 
 // A file's path from its descriptor, which is how the kernel names a directory: F_GETPATH on
-// an open `.` is getcwd, and on any path is realpath.
+// an event-only open `.` is getcwd, and on any path is realpath. The descriptor does not need
+// permission to read the object's bytes.
 fn path_of(a: *mem.Arena, path: str) -> (str, err) {
     let checkpoint = mem.mark(a)
     let (path_address, path_error) = c_string(a, path)
@@ -454,7 +489,7 @@ fn path_of(a: *mem.Arena, path: str) -> (str, err) {
         mem.reset(a, checkpoint)
         ret ("", path_error)
     }
-    let descriptor = syscall(SYS_OPEN, path_address, O_RDONLY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    let descriptor = syscall(SYS_OPEN, path_address, O_EVTONLY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
     if descriptor < 0isize {
         let open_error = from_errno(descriptor)
         mem.reset(a, checkpoint)
@@ -490,7 +525,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err) {
 
 fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
     let (resolved, resolve_error) = canonical(a, path)
-    if resolve_error != ok { *detail = last_error_detail("canonical", path) }
+    if resolve_error != ok { *detail = detail_for_error(resolve_error, "canonical", path) }
     ret (resolved, resolve_error)
 }
 
@@ -517,7 +552,7 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err) {
 fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
     let (file, create_error) = create_new(a, path)
     if create_error != ok {
-        *detail = last_error_detail("create_new", path)
+        *detail = detail_for_error(create_error, "create_new", path)
         ret (file, create_error)
     }
     ret (file, ok)
@@ -633,11 +668,14 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 const SYS_OPENAT: usize = 463usize
 const SYS_RENAMEAT: usize = 465usize
+const SYS_FSTATAT64: usize = 470usize
 const SYS_UNLINKAT: usize = 472usize
+const SYS_MKDIRAT: usize = 475usize
 const SYS_RENAMEATX: usize = 488usize
 const SYS_FSYNC: usize = 95usize
 const AT_FDCWD: usize = 18446744073709551516usize
 const AT_REMOVEDIR: usize = 128usize
+const AT_SYMLINK_NOFOLLOW: usize = 32usize
 const O_WRONLY: usize = 1usize
 const O_TRUNC: usize = 1024usize
 const O_APPEND: usize = 8usize
@@ -695,7 +733,7 @@ fn dir_close(dir: own Dir) -> err {
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
     let (dir, open_error) = dir_open(a, path)
     if open_error != ok {
-        *detail = last_error_detail("dir_open", path)
+        *detail = detail_for_error(open_error, "dir_open", path)
         ret (dir, open_error)
     }
     ret (dir, ok)
@@ -765,6 +803,53 @@ fn release_parent(parent: own Dir, dir: Dir) {
     }
 }
 
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret (info, name_error)
+    }
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_FSTATAT64, parent.raw, name_address, mem.address_of(&buffer), AT_SYMLINK_NOFOLLOW, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    if result < 0isize { ret (info, from_errno(result)) }
+    let mode = u32(buffer.mode)
+    info.kind = kind_from_mode(mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = buffer.born * NANOSECONDS_PER_SECOND + buffer.born_ns
+    info.mode = mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.file_volume = u64(buffer.device)
+    info.link_count = u64(buffer.link_count)
+    ret (info, ok)
+}
+
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    let result = syscall(SYS_MKDIRAT, parent.raw, name_address, DIRECTORY_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
     if !relative_path_ok(relative_path) { ret Denied }
     let (parent, name, parent_error) = open_parent(a, dir, relative_path)
@@ -820,6 +905,13 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
     if answer == ok && durable {
         let flushed = syscall(SYS_FSYNC, dst_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
         if flushed < 0isize { answer = from_errno(flushed) }
+        // A cross-directory rename removes an entry from the source parent as
+        // well as adding one to the destination parent. Both changes must be
+        // persisted before reporting a durable success.
+        if answer == ok && src_parent.raw != dst_parent.raw {
+            let source_flushed = syscall(SYS_FSYNC, src_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+            if source_flushed < 0isize { answer = from_errno(source_flushed) }
+        }
     }
     mem.reset(a, checkpoint)
     release_parent(src_parent, src_dir)
@@ -1176,9 +1268,19 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
                 state.found[usize(slot)] = true
                 var entry = &state.entries[usize(slot)]
                 if entry.inode != info.file_id || entry.size != info.size || entry.modified_ns != info.modified_ns {
+                    if entry.inode != info.file_id {
+                        // A rename-over changes what this name denotes. The old descriptor
+                        // remains attached to the removed vnode, so replace its registration
+                        // before relying on later content writes to wake this watch.
+                        if entry.descriptor >= 0isize {
+                            let closed = syscall(SYS_CLOSE, usize(entry.descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+                        }
+                        entry.descriptor = watch_register(a, state, full)
+                    }
                     entry.inode = info.file_id
                     entry.size = info.size
                     entry.modified_ns = info.modified_ns
+                    entry.directory = info.kind == .Dir
                     // A directory's own time moves with its listing, which is reported as the
                     // names that came and went and not as the directory changing.
                     if !entry.directory {
@@ -1239,16 +1341,15 @@ fn watch_close(w: own Watch) -> err {
 
 const SYS_PIPE: usize = 42usize
 const SYS_DUP: usize = 41usize
-const SYS_DUP2: usize = 90usize
 const SYS_KILL: usize = 37usize
 const SYS_WAIT4: usize = 7usize
-const SYS_FCHDIR: usize = 13usize
-const SYS_POSIX_SPAWN: usize = 244usize
 const SYS_POLL: usize = 230usize
 const SIGKILL: usize = 9usize
 const SIGTERM: usize = 15usize
 const SPAWN_LIST_MAX: usize = 1024usize
 const EXEC_FAILED: usize = 127usize
+const POSIX_SPAWN_SETPGROUP: i16 = 2i16
+const POSIX_SPAWN_CLOEXEC_DEFAULT: i16 = 16384i16
 
 type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
@@ -1342,10 +1443,13 @@ fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
     if vector_error != ok { ret (0usize, OutOfMemory) }
     var count = 0usize
     var at = 0usize
-    while at < block.len && count + additions.len + 1usize < SPAWN_LIST_MAX {
+    while at < block.len {
         var end = at
         while end < block.len && block[end] != 0u8 { end = end + 1usize }
         if end > at && !overridden(block[at..end], additions) {
+            // Leave one pointer for the terminator. Refusing a too-large inherited
+            // environment is safer than silently dropping its trailing variables.
+            if count + additions.len + 1usize >= SPAWN_LIST_MAX { ret (0usize, Failed) }
             vector[count] = mem.address_of(&block[at])
             count += 1usize
         }
@@ -1363,13 +1467,46 @@ fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
     ret (mem.address_of(&vector[0usize]), ok)
 }
 
-// posix_spawn(2) is the one way to start a process here: fork without libSystem leaves the
-// child with no Mach state to exec from. It has no file actions in this call, so the child's
-// descriptors 0 to 2 are set up in the parent around it -- saved, replaced by the stdio the
-// caller named, and put back -- and likewise the working directory. That is not safe against
-// another thread spawning at the same moment.
-// ponytail: stdio and cwd are swapped in the parent around the spawn; add
-// POSIX_SPAWN file actions (psfa) when threads exist on macOS.
+// `posix_spawn_file_actions_t` and `posix_spawnattr_t` are both `void *` in spawn.h, so a
+// word is their opaque storage. The file actions run in the child between creation and exec;
+// neither the caller's cwd nor its descriptors have to be changed while another thread starts.
+@import("c", "posix_spawn")
+extern fn raw_posix_spawn(pid: *i32, program: usize, actions: *const usize, attributes: *const usize, argv: usize, envp: usize) -> i32
+
+@import("c", "posix_spawn_file_actions_init")
+extern fn raw_spawn_actions_init(actions: *usize) -> i32
+
+@import("c", "posix_spawn_file_actions_destroy")
+extern fn raw_spawn_actions_destroy(actions: *usize) -> i32
+
+@import("c", "posix_spawn_file_actions_adddup2")
+extern fn raw_spawn_actions_dup2(actions: *usize, source: i32, destination: i32) -> i32
+
+@import("c", "posix_spawn_file_actions_addinherit_np")
+extern fn raw_spawn_actions_inherit(actions: *usize, descriptor: i32) -> i32
+
+// `addchdir_np` has been in macOS since 10.15, before this target's 11.0 deployment floor.
+@import("c", "posix_spawn_file_actions_addchdir_np")
+extern fn raw_spawn_actions_chdir(actions: *usize, directory: usize) -> i32
+
+@import("c", "posix_spawnattr_init")
+extern fn raw_spawn_attributes_init(attributes: *usize) -> i32
+
+@import("c", "posix_spawnattr_destroy")
+extern fn raw_spawn_attributes_destroy(attributes: *usize) -> i32
+
+@import("c", "posix_spawnattr_setflags")
+extern fn raw_spawn_attributes_flags(attributes: *usize, flags: i16) -> i32
+
+@import("c", "posix_spawnattr_setpgroup")
+extern fn raw_spawn_attributes_pgroup(attributes: *usize, group: i32) -> i32
+
+// libSystem's posix_spawn family returns a positive errno directly, unlike the syscall shim.
+fn from_spawn_status(status: i32) -> err {
+    if status == 0i32 { ret ok }
+    ret from_errno(0isize - isize(status))
+}
+
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
     let (child, spawn_error) = spawn_inner(a, options, false)
     ret (child, spawn_error)
@@ -1393,59 +1530,99 @@ fn spawn_inner(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (Proc, er
         envp = own_vector
     }
     var directory = 0usize
-    var home = 0isize
     if options.cwd.len != 0usize {
         let (directory_address, directory_error) = c_string(a, options.cwd)
         if directory_error != ok { ret (child, directory_error) }
         directory = directory_address
-        let (dot, dot_error) = c_string(a, ".")
-        if dot_error != ok { ret (child, dot_error) }
-        home = syscall(SYS_OPEN, dot, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
-        if home < 0isize { ret (child, from_errno(home)) }
-        let moved = syscall(SYS_CHDIR, directory, 0usize, 0usize, 0usize, 0usize, 0usize)
-        if moved < 0isize {
-            let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
-            ret (child, from_errno(moved))
+    }
+
+    var actions = 0usize
+    let actions_init = raw_spawn_actions_init(&actions)
+    if actions_init != 0i32 { ret (child, from_spawn_status(actions_init)) }
+    if directory != 0usize {
+        let changed = raw_spawn_actions_chdir(&actions, directory)
+        if changed != 0i32 {
+            let failure = from_spawn_status(changed)
+            let ignored = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
         }
     }
-    var saved: [3]isize = zero
     var slot = 0usize
     while slot < 3usize {
-        saved[slot] = -1isize
-        var wanted = stdio_raw(options.stdio, slot)
-        if wanted != slot {
-            saved[slot] = syscall(SYS_DUP, slot, 0usize, 0usize, 0usize, 0usize, 0usize)
-            let bound = syscall(SYS_DUP2, wanted, slot, 0usize, 0usize, 0usize, 0usize)
+        let wanted = stdio_raw(options.stdio, slot)
+        // CLOEXEC_DEFAULT makes file actions the child's descriptor allowlist. Preserve an
+        // untouched standard descriptor only when it was inheritable before this spawn.
+        if wanted != 0usize && wanted != slot {
+            let bound = raw_spawn_actions_dup2(&actions, i32(wanted), i32(slot))
+            if bound != 0i32 {
+                let failure = from_spawn_status(bound)
+                let ignored = raw_spawn_actions_destroy(&actions)
+                ret (child, failure)
+            }
+        } else {
+            let descriptor_flags = syscall(SYS_FCNTL, slot, F_GETFD, 0usize, 0usize, 0usize, 0usize)
+            if descriptor_flags < 0isize {
+                // A closed standard descriptor stays closed, as it did before CLOEXEC_DEFAULT.
+                if descriptor_flags != -9isize {
+                    let failure = from_errno(descriptor_flags)
+                    let ignored = raw_spawn_actions_destroy(&actions)
+                    ret (child, failure)
+                }
+            } else if usize(descriptor_flags) & FD_CLOEXEC == 0usize {
+                let inherit_result = raw_spawn_actions_inherit(&actions, i32(slot))
+                if inherit_result != 0i32 {
+                    let failure = from_spawn_status(inherit_result)
+                    let ignored = raw_spawn_actions_destroy(&actions)
+                    ret (child, failure)
+                }
+            }
         }
         slot += 1usize
     }
-    var pid: i32 = 0i32
-    var description: [32]i64 = zero
-    // A group is the child's own, made by the kernel as it starts: POSIX_SPAWN_SETPGROUP (2) in
-    // the attribute block's flags, with a group of 0 meaning the child's pid. Afterwards it is too
-    // late -- setpgid on a child that has exec'd answers EACCES. The descriptor's first word is
-    // the attribute block's size and its second the block's address; the flags are the first
-    // short of the block and the group its fourth word, so a 16-byte block is enough.
-    var attributes: [4]i32 = zero
-    if grouped {
-        attributes[0usize] = 2i32
-        description[0usize] = 16i64
-        description[1usize] = i64(mem.address_of(&attributes[0usize]))
-    }
-    let result = syscall(SYS_POSIX_SPAWN, mem.address_of(&pid), program, mem.address_of(&description[0usize]), argv, envp, 0usize)
-    var restore = 0usize
-    while restore < 3usize {
-        if saved[restore] >= 0isize {
-            let back = syscall(SYS_DUP2, usize(saved[restore]), restore, 0usize, 0usize, 0usize, 0usize)
-            let closed = syscall(SYS_CLOSE, usize(saved[restore]), 0usize, 0usize, 0usize, 0usize, 0usize)
+
+    var inherit_at = 0usize
+    while inherit_at < options.stdio.inherit.len {
+        let handle = options.stdio.inherit[inherit_at]
+        let inherit_result = raw_spawn_actions_inherit(&actions, i32(handle.raw))
+        if inherit_result != 0i32 {
+            let failure = from_spawn_status(inherit_result)
+            let ignored = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
         }
-        restore += 1usize
+        inherit_at += 1usize
     }
-    if home >= 0isize && directory != 0usize {
-        let back = syscall(SYS_FCHDIR, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
-        let closed = syscall(SYS_CLOSE, usize(home), 0usize, 0usize, 0usize, 0usize, 0usize)
+
+    var attributes = 0usize
+    let attributes_init = raw_spawn_attributes_init(&attributes)
+    if attributes_init != 0i32 {
+        let failure = from_spawn_status(attributes_init)
+        let ignored = raw_spawn_actions_destroy(&actions)
+        ret (child, failure)
     }
-    if result < 0isize { ret (child, from_errno(result)) }
+    var spawn_flags = POSIX_SPAWN_CLOEXEC_DEFAULT
+    if grouped { spawn_flags = spawn_flags | POSIX_SPAWN_SETPGROUP }
+    let flags = raw_spawn_attributes_flags(&attributes, spawn_flags)
+    if flags != 0i32 {
+        let failure = from_spawn_status(flags)
+        let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+        let ignored_actions = raw_spawn_actions_destroy(&actions)
+        ret (child, failure)
+    }
+    if grouped {
+        let group = raw_spawn_attributes_pgroup(&attributes, 0i32)
+        if group != 0i32 {
+            let failure = from_spawn_status(group)
+            let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+            let ignored_actions = raw_spawn_actions_destroy(&actions)
+            ret (child, failure)
+        }
+    }
+
+    var pid: i32 = 0i32
+    let result = raw_posix_spawn(&pid, program, &actions, &attributes, argv, envp)
+    let ignored_attributes = raw_spawn_attributes_destroy(&attributes)
+    let ignored_actions = raw_spawn_actions_destroy(&actions)
+    if result != 0i32 { ret (child, from_spawn_status(result)) }
     child.raw = usize(pid)
     ret (child, ok)
 }
@@ -1488,7 +1665,8 @@ fn kill(p: Proc) -> err {
 }
 
 // pipe(2) answers with two descriptors; the runtime's syscall stores them to the slots the
-// first argument names. macOS has no pipe2, so they are not close-on-exec.
+// first argument names. macOS has no pipe2, so fcntl marks them after creation. Spawn attributes
+// use CLOEXEC_DEFAULT so a concurrent posix_spawn cannot inherit either descriptor in that window.
 fn pipe() -> (File, File, err) {
     var reading: File = zero
     var writing: File = zero
@@ -1497,12 +1675,24 @@ fn pipe() -> (File, File, err) {
     if result < 0isize { ret (reading, writing, from_errno(result)) }
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
-    // Close-on-exec as on Linux (pipe2 there): a child must not hold the other end of its own pipe, or its stdin
-    // never reaches end of file. macOS has no pipe2, so it is a second call, and a fork between them can leak.
     let marked_read = syscall(SYS_FCNTL, reading.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
-    if marked_read < 0isize { ret (reading, writing, from_errno(marked_read)) }
+    if marked_read < 0isize {
+        let failure = from_errno(marked_read)
+        let ignored_read = syscall(SYS_CLOSE, reading.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        let ignored_write = syscall(SYS_CLOSE, writing.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        reading.raw = 0usize
+        writing.raw = 0usize
+        ret (reading, writing, failure)
+    }
     let marked_write = syscall(SYS_FCNTL, writing.raw, F_SETFD, 1usize, 0usize, 0usize, 0usize)
-    if marked_write < 0isize { ret (reading, writing, from_errno(marked_write)) }
+    if marked_write < 0isize {
+        let failure = from_errno(marked_write)
+        let ignored_read = syscall(SYS_CLOSE, reading.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        let ignored_write = syscall(SYS_CLOSE, writing.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        reading.raw = 0usize
+        writing.raw = 0usize
+        ret (reading, writing, failure)
+    }
     ret (reading, writing, ok)
 }
 
@@ -1848,10 +2038,13 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
 
 // A descriptor that is close-on-exec and never raises SIGPIPE: Darwin's socket and accept take
 // no flags for either, so both are set after the fact.
-fn socket_prepare(descriptor: usize) {
+fn socket_prepare(descriptor: usize) -> err {
     let marked = syscall(SYS_FCNTL, descriptor, F_SETFD, 1usize, 0usize, 0usize, 0usize)
+    if marked < 0isize { ret from_errno(marked) }
     var on: i32 = 1i32
     let quiet = syscall(SYS_SETSOCKOPT, descriptor, SOL_SOCKET, SO_NOSIGPIPE, mem.address_of(&on), 4usize, 0usize)
+    if quiet < 0isize { ret from_errno(quiet) }
+    ret ok
 }
 
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
@@ -1860,7 +2053,11 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     if kind == .Datagram { type_bits = SOCK_DGRAM }
     let descriptor = syscall(SYS_SOCKET, family_value(family), type_bits, 0usize, 0usize, 0usize, 0usize)
     if descriptor < 0isize { ret (socket, from_errno(descriptor)) }
-    socket_prepare(usize(descriptor))
+    let prepare_error = socket_prepare(usize(descriptor))
+    if prepare_error != ok {
+        let ignored = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (socket, prepare_error)
+    }
     socket.raw = usize(descriptor)
     ret (socket, ok)
 }
@@ -1928,7 +2125,11 @@ fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
     var length = u32(RAW_IP6_SIZE)
     let descriptor = syscall(SYS_ACCEPT, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
     if descriptor < 0isize { ret (accepted, peer, from_errno(descriptor)) }
-    socket_prepare(usize(descriptor))
+    let prepare_error = socket_prepare(usize(descriptor))
+    if prepare_error != ok {
+        let ignored = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (accepted, peer, prepare_error)
+    }
     accepted.raw = usize(descriptor)
     ret (accepted, decode_address(raw), ok)
 }
@@ -2134,7 +2335,11 @@ fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollIntere
     }
     if interest.writable {
         let added = poller_change(state.queue, fd, EVFILT_WRITE, EV_ADD, 0u32, token)
-        if added < 0isize { ret from_errno(added) }
+        if added < 0isize {
+            // A failed second filter must not leave an untracked read filter behind.
+            if mark & 1u8 != 0u8 { let removed = poller_change(state.queue, fd, EVFILT_READ, EV_DELETE, 0u32, 0usize) }
+            ret from_errno(added)
+        }
         mark = mark | 2u8
     }
     let free = poller_slot_free(state)
@@ -2168,7 +2373,8 @@ fn poller_unregister(p: Poller, handle: Handle) -> err {
 }
 
 fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
-    let ignored = poller_unregister(p, handle)
+    let removed = poller_unregister(p, handle)
+    if removed != ok { ret removed }
     ret poller_register(p, handle, token, interest)
 }
 
@@ -2633,15 +2839,21 @@ fn cocoa_scale_percent(window: usize) -> u32 {
     ret u32(scale * 100.0f64 + 0.5f64)
 }
 
-// The content area in pixels.
-fn cocoa_content_pixels(slot: usize) -> (u32, u32) {
+// The content area in pixels at a particular backing scale.
+fn cocoa_content_pixels_at_scale(slot: usize, scale_percent: u32) -> (u32, u32) {
     let view = msg0(cocoa_windows[slot], cocoa_sel("contentView\x00"))
     let bounds = cocoa_rect(view, "bounds")
-    let scale = f64(cocoa_scales[slot]) / 100.0f64
+    let scale = f64(scale_percent) / 100.0f64
     var width = 0u32
     var height = 0u32
     if bounds.w > 0.0f64 { width = u32(bounds.w * scale + 0.5f64) }
     if bounds.h > 0.0f64 { height = u32(bounds.h * scale + 0.5f64) }
+    ret (width, height)
+}
+
+// The content area in pixels at the scale last observed by the state poll.
+fn cocoa_content_pixels(slot: usize) -> (u32, u32) {
+    let (width, height) = cocoa_content_pixels_at_scale(slot, cocoa_scales[slot])
     ret (width, height)
 }
 
@@ -2825,16 +3037,20 @@ fn cocoa_translate(event: usize) -> bool {
     window.raw = cocoa_windows[slot]
     let flags = msg0(event, cocoa_sel("modifierFlags\x00"))
     let modifiers = cocoa_modifiers(flags)
-    let scale = f64(cocoa_scales[slot]) / 100.0f64
     let is_down = kind == 1usize || kind == 3usize || kind == 25usize
     let is_up = kind == 2usize || kind == 4usize || kind == 26usize
     let is_move = kind == 5usize || kind == 6usize || kind == 7usize || kind == 27usize
     if is_down || is_up || is_move || kind == 22usize {
+        // A resize or display transition can already be reflected in AppKit's event queue while cocoa_poll_state still
+        // owes its Resize event. Read the event window directly, without mutating that post-drain state cache.
+        let scale_percent = cocoa_scale_percent(cocoa_windows[slot])
+        let (_, height) = cocoa_content_pixels_at_scale(slot, scale_percent)
         let at = msg_point_ret(event, cocoa_sel("locationInWindow\x00"))
+        let (pointer_x, pointer_y) = window_helpers.pointer_pixels(at.x, at.y, height, scale_percent)
         var pointer: WindowEvent = zero
         pointer.window = window
-        pointer.x = i32(at.x * scale)
-        pointer.y = i32(f64(cocoa_heights[slot]) - at.y * scale)
+        pointer.x = pointer_x
+        pointer.y = pointer_y
         pointer.modifiers = modifiers
         // The title bar is above the content: AppKit's, not the program's.
         if pointer.y < 0i32 || at.x < 0.0f64 { ret false }
@@ -2971,7 +3187,7 @@ fn cocoa_pump(timeout_ns: i64) {
 // for every host), and the candidate window is placed at the window's top left.
 type CocoaRange = struct { location: usize, length: usize }
 type CocoaTextImp = union { function: fn(usize, usize, usize, usize, usize) -> usize, bits: usize }
-type CocoaTextImp6 = union { function: fn(usize, usize, usize, usize, usize, usize), bits: usize }
+type CocoaTextImp7 = union { function: fn(usize, usize, usize, usize, usize, usize, usize), bits: usize }
 type CocoaTextImp2 = union { function: fn(usize, usize) -> usize, bits: usize }
 type CocoaRangeImp = union { function: extern fn(usize, usize) -> CocoaRange, bits: usize }
 type CocoaRectImp = union { function: extern fn(usize, usize, usize, usize, usize) -> CgRect, bits: usize }
@@ -2984,6 +3200,7 @@ extern fn cocoa_set_class(object: usize, class: usize) -> usize
 
 var cocoa_text_class: usize = zero
 var cocoa_marked: [16]bool = zero
+var cocoa_marked_ranges: [16]CocoaRange = zero
 
 fn cocoa_view_slot(view: usize) -> usize {
     var at = 0usize
@@ -3000,6 +3217,7 @@ fn view_insert_text(this: usize, command: usize, string: usize, location: usize,
     let slot = cocoa_view_slot(this)
     if slot >= COCOA_TABLE { ret 0usize }
     cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     var plain = string
     let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
     if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
@@ -3010,15 +3228,27 @@ fn view_insert_text(this: usize, command: usize, string: usize, location: usize,
 }
 
 @cc(c)
-fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize) {
+fn view_set_marked(this: usize, command: usize, string: usize, selected: usize, length: usize, replaced: usize, replaced_length: usize) {
     let slot = cocoa_view_slot(this)
-    if slot < COCOA_TABLE { cocoa_marked[slot] = true }
+    if slot < COCOA_TABLE {
+        var plain = string
+        let attributed = msg1(string, cocoa_sel("respondsToSelector:\x00"), cocoa_sel("string\x00"))
+        if attributed & 255usize != 0usize { plain = msg0(string, cocoa_sel("string\x00")) }
+        // The view has no persistent text storage. Its marked text is the transient
+        // input-method string, whose range starts at its synthetic storage origin.
+        let marked_length = msg0(plain, cocoa_sel("length\x00"))
+        cocoa_marked[slot] = marked_length != 0usize
+        cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: marked_length }
+    }
 }
 
 @cc(c)
 fn view_unmark(this: usize, command: usize) -> usize {
     let slot = cocoa_view_slot(this)
-    if slot < COCOA_TABLE { cocoa_marked[slot] = false }
+    if slot < COCOA_TABLE {
+        cocoa_marked[slot] = false
+        cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
+    }
     ret 0usize
 }
 
@@ -3031,6 +3261,8 @@ fn view_has_marked(this: usize, command: usize) -> usize {
 
 @cc(c)
 fn view_marked_range(this: usize, command: usize) -> CocoaRange {
+    let slot = cocoa_view_slot(this)
+    if slot < COCOA_TABLE && cocoa_marked[slot] { ret cocoa_marked_ranges[slot] }
     // NSNotFound when nothing is marked.
     ret CocoaRange { location: 9223372036854775807usize, length: 0usize }
 }
@@ -3071,7 +3303,7 @@ fn cocoa_make_text_class(view: usize) -> usize {
     if class == 0usize { ret 0usize }
     var insert: CocoaTextImp = zero
     insert.function = view_insert_text
-    var marked: CocoaTextImp6 = zero
+    var marked: CocoaTextImp7 = zero
     marked.function = view_set_marked
     var unmark: CocoaTextImp2 = zero
     unmark.function = view_unmark
@@ -3213,10 +3445,10 @@ fn cocoa_make_delegate() -> usize {
 
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
+    // Match the portable window contract before starting AppKit or allocating an NSWindow.
+    if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
     let started = cocoa_start()
     if started != ok { ret (none, started) }
-    // A window with no area is not one the other hosts make either: Unsupported.
-    if options.width == 0u32 || options.height == 0u32 { ret (none, Unsupported) }
     var slot = 0usize
     while slot < COCOA_TABLE && cocoa_windows[slot] != 0usize { slot += 1usize }
     if slot == COCOA_TABLE { ret (none, OutOfMemory) }
@@ -3257,6 +3489,8 @@ fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
         let opaque = msg_flag(layer, cocoa_sel("setOpaque:\x00"), 1i32)
     }
     cocoa_windows[slot] = window
+    cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     let delegate = cocoa_make_delegate()
     if delegate != 0usize { let delegated = msg1(window, cocoa_sel("setDelegate:\x00"), delegate) }
     let text_class = cocoa_make_text_class(msg0(window, cocoa_sel("contentView\x00")))
@@ -3291,12 +3525,19 @@ fn window_close(w: Window) -> err {
     if slot >= COCOA_TABLE { ret NotFound }
     let pool = objc_pool_push()
     let window = cocoa_windows[slot]
+    ax_forget(slot)
     cocoa_shown[slot] = false
     let closed = msg0(window, cocoa_sel("close\x00"))
     let released = msg0(window, cocoa_sel("release\x00"))
     cocoa_windows[slot] = 0usize
+    cocoa_marked[slot] = false
+    cocoa_marked_ranges[slot] = CocoaRange { location: 0usize, length: 0usize }
     cocoa_layers[slot] = 0usize
     cocoa_resize_handlers[slot] = 0usize
+    // `[window close]` may synchronously queue its Close request, and the pump may
+    // already have translated other input for this window. Drop all of it before
+    // the handle can be reused, preserving the ring order of other windows.
+    cocoa_count = window_helpers.purge_closed_window[WindowEvent](cocoa_events[..], cocoa_head, cocoa_count, w.raw)
     objc_pool_pop(pool)
     ret ok
 }
@@ -3393,7 +3634,16 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
     if pixels.len < count { ret Failed }
     let pool = objc_pool_push()
     let data = cf_data_create(0usize, mem.address_of(&pixels[0usize]), count * 4usize)
+    if data == 0usize {
+        objc_pool_pop(pool)
+        ret OutOfMemory
+    }
     let provider = cg_provider_with_data(data)
+    if provider == 0usize {
+        cf_release(data)
+        objc_pool_pop(pool)
+        ret OutOfMemory
+    }
     // 8194: little-endian 32-bit, alpha first and premultiplied, which is Bgra8 in a u32.
     let image = cg_image_create(usize(width), usize(height), 8usize, 32usize, usize(width) * 4usize, cocoa_space, 8194u32, provider, 0usize, 0i32, 0i32)
     var result = ok
@@ -3419,6 +3669,9 @@ fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err {
     cocoa_resize_handlers[slot] = holder.bits
     ret ok
 }
+
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
 
 fn window_native(w: Window) -> (usize, usize, err) {
     let slot = cocoa_slot(w)
@@ -3538,27 +3791,49 @@ fn set_clipboard_text(value: str) -> err {
 const AX_NODES: usize = 256usize
 const AX_QUEUE: usize = 16usize
 type AxShould = union { function: fn(usize, usize) -> usize, bits: usize }
+// An element method receives only its Objective-C object. Keep every window's published tree and request queue apart,
+// then ax_push finds the element's owner instead of routing actions to whichever window published most recently.
+type AxStore = struct { elements: [256]usize, ids: [256]u32, generations: [256]u32, count: usize, requests: [16]AccessibleRequest, head: usize, tail: usize }
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg_frame(receiver: usize, selector: usize, rect: CgRect) -> usize
 
 var ax_class: usize = zero
-var ax_view: usize = zero
-var ax_elements: [256]usize = zero
-var ax_ids: [256]u32 = zero
-var ax_generations: [256]u32 = zero
-var ax_count: usize = zero
-var ax_requests: [16]AccessibleRequest = zero
-var ax_head: usize = zero
-var ax_tail: usize = zero
+var ax_stores: [16]AxStore = zero
+
+fn ax_release(slot: usize) {
+    let store = &ax_stores[slot]
+    var at = 0usize
+    while at < store.count {
+        let dropped = msg0(store.elements[at], cocoa_sel("release\x00"))
+        store.elements[at] = 0usize
+        at += 1usize
+    }
+    store.count = 0usize
+}
+
+// Closing a window must also drop actions that belonged to its former tree before the Cocoa slot is reused.
+fn ax_forget(slot: usize) {
+    ax_release(slot)
+    let store = &ax_stores[slot]
+    store.head = 0usize
+    store.tail = 0usize
+}
 
 fn ax_push(element: usize, action: u8) {
-    var at = 0usize
-    while at < ax_count && ax_elements[at] != element { at += 1usize }
-    if at == ax_count { ret }
-    let next = (ax_tail + 1usize) % AX_QUEUE
-    if next == ax_head { ret }
-    ax_requests[ax_tail] = AccessibleRequest { id: ax_ids[at], generation: ax_generations[at], action: action, value: "" }
-    ax_tail = next
+    var slot = 0usize
+    while slot < COCOA_TABLE {
+        let store = &ax_stores[slot]
+        var at = 0usize
+        while at < store.count && store.elements[at] != element { at += 1usize }
+        if at < store.count {
+            let next = (store.tail + 1usize) % AX_QUEUE
+            if next == store.head { ret }
+            store.requests[store.tail] = AccessibleRequest { id: store.ids[at], generation: store.generations[at], action: action, value: "" }
+            store.tail = next
+            ret
+        }
+        slot += 1usize
+    }
 }
 
 @cc(c)
@@ -3651,21 +3926,17 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     let window = cocoa_windows[slot]
     let view = msg0(window, cocoa_sel("contentView\x00"))
     // The last tree is let go of; the new one is built whole.
-    var at = 0usize
-    while at < ax_count {
-        let dropped = msg0(ax_elements[at], cocoa_sel("release\x00"))
-        at += 1usize
-    }
-    ax_count = 0usize
+    ax_release(slot)
+    let store = &ax_stores[slot]
     let frame = cocoa_rect(window, "frame")
     let content = cocoa_rect(view, "frame")
     var count = 0usize
     while count < nodes.len && count < AX_NODES {
         let node = nodes[count]
         let element = msg0(msg0(class, cocoa_sel("alloc\x00")), cocoa_sel("init\x00"))
-        ax_elements[count] = element
-        ax_ids[count] = node.id
-        ax_generations[count] = node.generation
+        store.elements[count] = element
+        store.ids[count] = node.id
+        store.generations[count] = node.generation
         let role = ax_text(ax_role(node.role))
         let set_role = msg1(element, cocoa_sel("setAccessibilityRole:\x00"), role)
         cf_release(role)
@@ -3694,7 +3965,7 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
         let set_frame = msg_frame(element, cocoa_sel("setAccessibilityFrame:\x00"), area)
         count += 1usize
     }
-    ax_count = count
+    store.count = count
     // Parents and children: a node whose parent is published hangs from it, any other from the view.
     var index = 0usize
     while index < count {
@@ -3707,9 +3978,9 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
             }
         }
         if found {
-            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), ax_elements[parent_at])
+            let set_parent = msg1(store.elements[index], cocoa_sel("setAccessibilityParent:\x00"), store.elements[parent_at])
         } else {
-            let set_parent = msg1(ax_elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
+            let set_parent = msg1(store.elements[index], cocoa_sel("setAccessibilityParent:\x00"), view)
         }
         index += 1usize
     }
@@ -3721,14 +3992,14 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
         var scan = 0usize
         while scan < count {
             if nodes[scan].has_parent && nodes[scan].parent == nodes[index].id && nodes[scan].parent_generation == nodes[index].generation {
-                kids[kid_count] = ax_elements[scan]
+                kids[kid_count] = store.elements[scan]
                 kid_count += 1usize
             }
             scan += 1usize
         }
         if kid_count != 0usize {
             let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&kids[0usize]), kid_count)
-            let set_children = msg1(ax_elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
+            let set_children = msg1(store.elements[index], cocoa_sel("setAccessibilityChildren:\x00"), list)
         }
         index += 1usize
     }
@@ -3745,25 +4016,25 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
             }
         }
         if !has_parent_published {
-            tops[top_count] = ax_elements[index]
+            tops[top_count] = store.elements[index]
             top_count += 1usize
         }
         index += 1usize
     }
-    if top_count != 0usize {
-        let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
-        let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
-    }
-    ax_view = view
+    let list = msg2(cocoa_class("NSArray\x00"), cocoa_sel("arrayWithObjects:count:\x00"), mem.address_of(&tops[0usize]), top_count)
+    let set_children = msg1(view, cocoa_sel("setAccessibilityChildren:\x00"), list)
     objc_pool_pop(pool)
     ret ok
 }
 
 fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
     var request: AccessibleRequest = zero
-    if ax_count != 0usize { cocoa_pump(0i64) }
-    if ax_head == ax_tail { ret (request, false) }
-    request = ax_requests[ax_head]
-    ax_head = (ax_head + 1usize) % AX_QUEUE
+    let slot = cocoa_slot(w)
+    if slot >= COCOA_TABLE { ret (request, false) }
+    let store = &ax_stores[slot]
+    if store.count != 0usize { cocoa_pump(0i64) }
+    if store.head == store.tail { ret (request, false) }
+    request = store.requests[store.head]
+    store.head = (store.head + 1usize) % AX_QUEUE
     ret (request, true)
 }

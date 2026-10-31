@@ -16,6 +16,10 @@ type Tuning = enum u8 { P, PI, PID }
 type Feedforward = struct { gain: f64, feedback: Pid }
 error TooSmall
 error Singular
+error Invalid
+error NoConvergence
+
+fn finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
 
 // A PID with no output limit.
 fn pid(kp: f64, ki: f64, kd: f64) -> Pid {
@@ -125,6 +129,22 @@ fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize,
     let mm = m * m
     if a.len < nn || b.len < nm || q.len < nn || r.len < mm || k.len < nm { ret (0usize, TooSmall) }
     if scratch.len < 5usize * nn + 4usize * nm + 4usize * mm { ret (0usize, TooSmall) }
+    if n == 0usize || m == 0usize || iterations == 0usize || tolerance < 0.0f64 || !finite(tolerance) { ret (0usize, Invalid) }
+    var input_at = 0usize
+    while input_at < nn {
+        if !finite(a[input_at]) || !finite(q[input_at]) { ret (0usize, Invalid) }
+        input_at += 1usize
+    }
+    input_at = 0usize
+    while input_at < nm {
+        if !finite(b[input_at]) { ret (0usize, Invalid) }
+        input_at += 1usize
+    }
+    input_at = 0usize
+    while input_at < mm {
+        if !finite(r[input_at]) { ret (0usize, Invalid) }
+        input_at += 1usize
+    }
     var p = scratch[..nn]
     var a_t = scratch[nn..2usize * nn]
     var pa = scratch[2usize * nn..3usize * nn]
@@ -160,6 +180,11 @@ fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize,
         if filter.mat_inverse(s, s_inverse, m, inverse_scratch) != ok { ret (used, Singular) }
         filter.mat_mul(bt, pa, btpa, m, n, n)
         filter.mat_mul(s_inverse, btpa, k, m, m, n)
+        i = 0usize
+        while i < nm {
+            if !finite(k[i]) { ret (used, Invalid) }
+            i += 1usize
+        }
         filter.mat_mul(a_t, pa, atpa, n, n, n)
         filter.mat_mul(a_t, pb, atpb, n, n, m)
         filter.mat_mul(atpb, k, atpbk, n, m, n)
@@ -168,13 +193,14 @@ fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize,
         while i < nn {
             let value = q[i] + atpa[i] - atpbk[i]
             let move = math.abs[f64](value - p[i])
+            if !finite(value) || !finite(move) { ret (used, Invalid) }
             if move > delta { delta = move }
             p[i] = value
             i += 1usize
         }
         if delta < tolerance { ret (used, ok) }
     }
-    ret (used, ok)
+    ret (used, NoConvergence)
 }
 
 // The monic polynomial with the given roots (`re[i] + i im[i]`, conjugates
@@ -217,11 +243,11 @@ fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) 
 // Ackermann's formula for `x' = A x + B u` with one input (`B` n x 1):
 // the gain row `k` (n entries, `u = -k x`) placing the closed-loop poles a_t
 // `poles_re[i] + i poles_im[i]` (complex ones in conjugate pairs).
-// `Singular` when the pair is not controllable. `scratch.len >= 6 * n * n + 4 * n`.
+// `Singular` when the pair is not controllable. `scratch.len >= 5 * n * n + 5 * n + 2`.
 fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err {
     let nn = n * n
     if a.len < nn || b.len < n || poles_re.len < n || poles_im.len < n || k.len < n { ret TooSmall }
-    if scratch.len < 6usize * nn + 4usize * n { ret TooSmall }
+    if scratch.len < 5usize * nn + 5usize * n + 2usize { ret TooSmall }
     var ctrl = scratch[..nn]
     var ctrl_inverse = scratch[nn..2usize * nn]
     var phi = scratch[2usize * nn..3usize * nn]
@@ -279,10 +305,10 @@ fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f6
 
 // The Luenberger gain `l` (n entries) for `x' = A x + B u, y = C x` with
 // one output (`C` 1 x n): pole placement on the dual pair (A', C').
-// `scratch.len >= 8 * n * n + 4 * n`.
+// `scratch.len >= 7 * n * n + 5 * n + 2`.
 fn observer_gain(a: []const f64, c: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, l: []f64, scratch: []f64) -> err {
     let nn = n * n
-    if a.len < nn || c.len < n || scratch.len < 8usize * nn + 4usize * n { ret TooSmall }
+    if a.len < nn || c.len < n || scratch.len < 7usize * nn + 5usize * n + 2usize { ret TooSmall }
     var a_t = scratch[..nn]
     var ct = scratch[nn..2usize * nn]
     filter.mat_transpose(a, a_t, n, n)
@@ -365,8 +391,9 @@ fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f
 // the process noise of each and `r_measure` the accelerometer angle's measurement noise.
 type Kalman = struct { angle: f64, bias: f64, p00: f64, p01: f64, p10: f64, p11: f64, q_angle: f64, q_bias: f64, r_measure: f64 }
 
-fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> Kalman {
-    ret Kalman { angle: 0.0f64, bias: 0.0f64, p00: 0.0f64, p01: 0.0f64, p10: 0.0f64, p11: 0.0f64, q_angle: q_angle, q_bias: q_bias, r_measure: r_measure }
+fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> (Kalman, err) {
+    if !finite(q_angle) || !finite(q_bias) || !finite(r_measure) || q_angle < 0.0f64 || q_bias < 0.0f64 || r_measure <= 0.0f64 { ret (zero, Invalid) }
+    ret (Kalman { angle: 0.0f64, bias: 0.0f64, p00: 0.0f64, p01: 0.0f64, p10: 0.0f64, p11: 0.0f64, q_angle: q_angle, q_bias: q_bias, r_measure: r_measure }, ok)
 }
 
 // Start the filter at a measured angle (the first accelerometer reading).

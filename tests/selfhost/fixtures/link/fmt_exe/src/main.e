@@ -461,6 +461,87 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Both ELF version fields must be EV_CURRENT, not merely recorded.
+    var header: [64]u8 = zero
+    header[0usize] = 127u8
+    header[1usize] = 69u8
+    header[2usize] = 76u8
+    header[3usize] = 70u8
+    header[4usize] = 2u8
+    header[5usize] = 1u8
+    header[6usize] = 1u8
+    header[20usize] = 1u8
+    let (_, valid_header_error) = elf.parse_header(header[..])
+    if valid_header_error != ok { os.exit(18i32) }
+    header[6usize] = 0u8
+    let (_, ident_zero_error) = elf.parse_header(header[..])
+    if ident_zero_error != elf.Invalid { os.exit(19i32) }
+    header[6usize] = 2u8
+    let (_, ident_unknown_error) = elf.parse_header(header[..])
+    if ident_unknown_error != elf.Invalid { os.exit(20i32) }
+    header[6usize] = 1u8
+    header[20usize] = 0u8
+    let (_, header_zero_error) = elf.parse_header(header[..])
+    if header_zero_error != elf.Invalid { os.exit(21i32) }
+    header[20usize] = 2u8
+    let (_, header_unknown_error) = elf.parse_header(header[..])
+    if header_unknown_error != elf.Invalid { os.exit(22i32) }
+
+    // A PE32+ by-name thunk still encodes an RVA.  Values outside that range
+    // must be rejected rather than narrowed before resolving its hint/name.
+    var wide_thunk_data: [64]u8 = zero
+    wide_thunk_data[33usize] = 16u8
+    wide_thunk_data[36usize] = 1u8
+    var wide_thunk_image: pe.Image = zero
+    wide_thunk_image.plus = true
+    wide_thunk_image.size_of_headers = 64u32
+    var wide_thunk_import: pe.Import = zero
+    wide_thunk_import.first_thunk = 32u32
+    let (_, _, _, _, wide_thunk_error) = pe.import_thunk(wide_thunk_data[..], wide_thunk_image, wide_thunk_import, 0usize)
+    if wide_thunk_error != pe.Invalid { os.exit(23i32) }
+
+    // Export ordinals are externally visible u32 values; adding a file-controlled
+    // base must not wrap a non-zero ordinal back into the low range.
+    var ordinal_data: [64]u8 = zero
+    ordinal_data[0usize] = 16u8
+    ordinal_data[8usize] = 1u8
+    ordinal_data[16usize] = 120u8
+    var ordinal_image: pe.Image = zero
+    ordinal_image.size_of_headers = 64u32
+    var ordinal_exports: pe.Exports = zero
+    ordinal_exports.ordinal_base = 4294967295u32
+    ordinal_exports.name_count = 1u32
+    ordinal_exports.name_table = 0u32
+    ordinal_exports.ordinal_table = 8u32
+    let (_, _, ordinal_error) = pe.export_name(ordinal_data[..], ordinal_image, ordinal_exports, 0usize)
+    if ordinal_error != pe.Invalid { os.exit(24i32) }
+
+    // All ELF table walks must reject an offset whose selected entry would wrap
+    // before attempting to cast it to a host index.
+    var overflow_elf_header: elf.Header = zero
+    overflow_elf_header.class = 2u8
+    overflow_elf_header.phentsize = 56u16
+    overflow_elf_header.phnum = 2u16
+    overflow_elf_header.phoff = 18446744073709551608u64
+    let (_, segment_overflow_error) = elf.segment(header[..], overflow_elf_header, 1usize)
+    if segment_overflow_error != elf.Truncated { os.exit(25i32) }
+    overflow_elf_header.shentsize = 64u16
+    overflow_elf_header.shnum = 2u16
+    overflow_elf_header.shoff = 18446744073709551608u64
+    let (_, section_overflow_error) = elf.section(header[..], overflow_elf_header, 1usize)
+    if section_overflow_error != elf.Truncated { os.exit(26i32) }
+    var symbol_table: elf.Section = zero
+    symbol_table.entsize = 24u64
+    symbol_table.size = 48u64
+    symbol_table.offset = 18446744073709551608u64
+    let (_, symbol_overflow_error) = elf.symbol(header[..], overflow_elf_header, symbol_table, 1usize)
+    if symbol_overflow_error != elf.Truncated { os.exit(27i32) }
+    var dynamic_table: elf.Section = zero
+    dynamic_table.size = 32u64
+    dynamic_table.offset = 18446744073709551608u64
+    let (_, dynamic_overflow_error) = elf.dynamic(header[..], overflow_elf_header, dynamic_table, 1usize)
+    if dynamic_overflow_error != elf.Truncated { os.exit(28i32) }
+
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }

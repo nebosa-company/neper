@@ -95,18 +95,27 @@ fn emit(out: []u64, count: *usize, key: u64) {
 }
 
 // The keys inside `buckets` (from `merkle_sync`) that differ between `a` and
-// `b`, in bucket then key order; TooSmall when `out` is short (count exact).
+// `b`, in bucket then key order; Invalid when a bucket cannot name a u64 key
+// range, TooSmall when `out` is short (count exact).
 fn merkle_diff_keys(a: []const Entry, b: []const Entry, width: u64, buckets: []const usize, out: []u64) -> (usize, err) {
+    if width == 0u64 { ret (0usize, Invalid) }
+    var checked = 0usize
+    while checked < buckets.len {
+        if u64(buckets[checked]) > 18446744073709551615u64 / width { ret (0usize, Invalid) }
+        checked += 1usize
+    }
     var count = 0usize
     var k = 0usize
     while k < buckets.len {
         let lo = u64(buckets[k]) * width
-        let hi = lo + width
+        let reaches_end = lo > 18446744073709551615u64 - width
+        var hi = 0u64
+        if !reaches_end { hi = lo + width }
         var i = lower_bound(a, lo)
         var j = lower_bound(b, lo)
-        while (i < a.len && a[i].key < hi) || (j < b.len && b[j].key < hi) {
-            let has_a = i < a.len && a[i].key < hi
-            let has_b = j < b.len && b[j].key < hi
+        while (i < a.len && (reaches_end || a[i].key < hi)) || (j < b.len && (reaches_end || b[j].key < hi)) {
+            let has_a = i < a.len && (reaches_end || a[i].key < hi)
+            let has_b = j < b.len && (reaches_end || b[j].key < hi)
             if has_a && (!has_b || a[i].key < b[j].key) {
                 emit(out, &count, a[i].key)
                 i += 1usize

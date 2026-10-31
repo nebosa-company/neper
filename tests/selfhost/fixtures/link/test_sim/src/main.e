@@ -74,6 +74,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if n3 != 97usize || t3 != 9054711580117236124u64 || d3 != 14u64 || k3 != 18u64 { os.exit(2i32) }
     if c3.count[0usize] != 34usize || c3.count[1usize] != 32usize || c3.count[2usize] != 31usize { os.exit(2i32) }
 
+    // 3: bounds at the end of the virtual clock must fail rather than wrap.
+    let max_time = 0u64 -% 1u64
+    var edge = sim.sim(2usize, pool[..4usize], flags[..4usize], 9u64, 0u64, 0u64)
+    edge.clock = max_time - 1u64
+    if sim.timer(&edge, 0u32, 2u64, 0u32, 0i64) != sim.Invalid || sim.pending(&edge) != 0usize || edge.clock != max_time - 1u64 { os.exit(3i32) }
+    if sim.timer(&edge, 0u32, 1u64, 0u32, 0i64) != ok { os.exit(3i32) }
+    var edge_ctx = Ctx { pings: 0usize, pongs: 0usize, count: zero, timers: 0usize, failed: false }
+    if sim.run[Ctx](&edge, &edge_ctx, 1usize, gossip) != 1usize || edge.clock != max_time { os.exit(3i32) }
+    if sim.timer(&edge, 0u32, 1u64, 0u32, 0i64) != sim.Invalid || sim.send(&edge, 0u32, 1u32, 0u32, 0i64) != sim.Invalid || sim.pending(&edge) != 0usize { os.exit(3i32) }
+    var widest = sim.sim(2usize, pool[..4usize], flags[..4usize], 9u64, max_time, 0u64)
+    if sim.send(&widest, 0u32, 1u32, 0u32, 0i64) != sim.Invalid || sim.pending(&widest) != 0usize { os.exit(3i32) }
+
     try io.print("test sim ok\n")
     ret ok
 }

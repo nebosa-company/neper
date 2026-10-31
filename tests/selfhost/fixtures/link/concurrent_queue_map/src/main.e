@@ -6,8 +6,10 @@
 // and Closed; then two threads putting 400 distinct keys each into sixteen shards
 // while the main thread reads. Every check has its own exit code.
 use e.os
+use e.atomic
 use e.mem
 use e.str
+use e.sync
 use e.time
 use e.thread
 use e.concurrent.queue as queue
@@ -25,6 +27,43 @@ fn produce(p: *Producer) {
 
 type Filler = struct { m: cmap.Map[u64, u64], base: u64, count: u64, failed: bool }
 
+// The getter pauses inside its hash protocol after map.get has joined the map's
+// admission generation. This makes close's wait observable without scheduling luck.
+type CloseControl = struct { entered: sync.Event, release: sync.Event }
+type BlockingKey = struct { id: u64, control: *CloseControl, block: bool }
+type BlockingGet = struct { map: cmap.Map[BlockingKey, u64], key: BlockingKey, value: u64, found: bool, failure: err }
+type MapCloser = struct { map: cmap.Map[BlockingKey, u64], started: sync.Event, finished: Atomic[u32], failure: err }
+const CLOSE_PENDING: u32 = 2147483648u32
+const ACTIVE_OPERATIONS: u32 = 2147483647u32
+
+fn blocking_key_hash(key: BlockingKey) -> u64 {
+    if key.block {
+        sync.event_set(&key.control.entered)
+        sync.event_wait(&key.control.release)
+    }
+    ret key.id
+}
+
+fn blocking_key_eq(a: BlockingKey, b: BlockingKey) -> bool { ret a.id == b.id }
+
+fn run_blocking_get(w: *BlockingGet) {
+    let (value, found, failure) = cmap.get[BlockingKey, u64](&w.map, w.key)
+    w.value = value
+    w.found = found
+    w.failure = failure
+}
+
+fn run_map_close(w: *MapCloser) {
+    sync.event_set(&w.started)
+    w.failure = cmap.close[BlockingKey, u64](&w.map)
+    atomic.store(&w.finished, 1u32, .Release)
+}
+
+fn close_state(s: *cmap.State[BlockingKey, u64]) -> (bool, usize) {
+    let phase = atomic.load(&s.admission, .Acquire)
+    ret ((phase & CLOSE_PENDING) != 0u32, usize(phase & ACTIVE_OPERATIONS))
+}
+
 fn fill(f: *Filler) {
     var i = 0u64
     while i < f.count {
@@ -38,6 +77,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // --- The queue, single-threaded.
     let (none, e1) = queue.init[u64](a, 0usize)
     if e1 != queue.Invalid { os.exit(1) }
+    // A failure after the queue state is reserved must restore the caller's mark.
+    var queue_rollback_bytes: [256]u8 = zero
+    var queue_rollback_arena = mem.arena_from(queue_rollback_bytes[..])
+    let queue_rollback_mark = mem.mark(&queue_rollback_arena)
+    let (_, queue_rollback_error) = queue.init[u64](&queue_rollback_arena, 1000usize)
+    if queue_rollback_error != mem.Exhausted || mem.mark(&queue_rollback_arena) != queue_rollback_mark { os.exit(81i32) }
     let (q0, e2) = queue.init[u64](a, 4usize)
     if e2 != ok { os.exit(2) }
     var q = q0
@@ -102,6 +147,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e18 != cmap.Invalid { os.exit(27) }
     let (no_shards, e19) = cmap.init[u64, u64](a, 8usize, 0u16)
     if e19 != cmap.Invalid { os.exit(28) }
+    // Capacity is an aggregate bound even when it cannot divide among shards.
+    let (limited0, e38) = cmap.init[u64, u64](a, 1usize, 2u16)
+    if e38 != ok { os.exit(53) }
+    var limited = limited0
+    let (first_limited, e39) = cmap.put[u64, u64](&limited, 1u64, 10u64)
+    if e39 != ok || !first_limited { os.exit(54) }
+    let (second_limited, e40) = cmap.put[u64, u64](&limited, 2u64, 20u64)
+    if e40 != cmap.Full || second_limited { os.exit(55) }
+    let (limited_count, e41) = cmap.len[u64, u64](&limited)
+    if e41 != ok || limited_count != 1usize { os.exit(56) }
+    // Table sizing rejects an unrepresentable request before touching the arena.
+    let map_mark = mem.mark(a)
+    let max_capacity = 0usize -% 1usize
+    let (_, too_large_error) = cmap.init[u64, u64](a, max_capacity, 1u16)
+    if too_large_error != mem.Exhausted || mem.mark(a) != map_mark { os.exit(67i32) }
+    // A capacity-one shard must not retain historical occupancy after removals.
+    // These supplied u64 hashes start in the four distinct slots of its table.
+    let (churn0, churn_error) = cmap.init[u64, u64](a, 1usize, 1u16)
+    if churn_error != ok { os.exit(68i32) }
+    var churn = churn0
+    let (added_two, added_two_error) = cmap.put[u64, u64](&churn, 2u64, 20u64)
+    if added_two_error != ok || !added_two { os.exit(69i32) }
+    let (_, removed_two, removed_two_error) = cmap.remove[u64, u64](&churn, 2u64)
+    if removed_two_error != ok || !removed_two { os.exit(70i32) }
+    let (added_one, added_one_error) = cmap.put[u64, u64](&churn, 1u64, 10u64)
+    if added_one_error != ok || !added_one { os.exit(71i32) }
+    let (_, removed_one, removed_one_error) = cmap.remove[u64, u64](&churn, 1u64)
+    if removed_one_error != ok || !removed_one { os.exit(72i32) }
+    let (added_eight, added_eight_error) = cmap.put[u64, u64](&churn, 8u64, 80u64)
+    if added_eight_error != ok || !added_eight { os.exit(73i32) }
+    let (_, removed_eight, removed_eight_error) = cmap.remove[u64, u64](&churn, 8u64)
+    if removed_eight_error != ok || !removed_eight { os.exit(74i32) }
+    let (added_zero, added_zero_error) = cmap.put[u64, u64](&churn, 0u64, 0u64)
+    if added_zero_error != ok || !added_zero { os.exit(75i32) }
+    // Backshifting a collision chain must keep the entry beyond the removal visible.
+    let (collision0, collision_error) = cmap.init[u64, u64](a, 2usize, 1u16)
+    if collision_error != ok { os.exit(76i32) }
+    var collision = collision0
+    let (added_zero_collision, added_zero_collision_error) = cmap.put[u64, u64](&collision, 0u64, 100u64)
+    if added_zero_collision_error != ok || !added_zero_collision { os.exit(77i32) }
+    let (added_four_collision, added_four_collision_error) = cmap.put[u64, u64](&collision, 4u64, 400u64)
+    if added_four_collision_error != ok || !added_four_collision { os.exit(78i32) }
+    let (_, removed_zero_collision, removed_zero_collision_error) = cmap.remove[u64, u64](&collision, 0u64)
+    if removed_zero_collision_error != ok || !removed_zero_collision { os.exit(79i32) }
+    let (four_value, has_four, four_error) = cmap.get[u64, u64](&collision, 4u64)
+    if four_error != ok || !has_four || four_value != 400u64 { os.exit(80i32) }
     let (m0, e20) = cmap.init[u64, u64](a, 8usize, 1u16)
     if e20 != ok { os.exit(29) }
     var m = m0
@@ -165,5 +256,58 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if le != ok || re != ok || !lh || !rh || lv != i * 2u64 || rv != (100000u64 + i) * 2u64 { os.exit(52) }
         i += 1u64
     }
+    // --- Close waits for an admitted operation before publishing Closed.
+    var control: CloseControl = zero
+    control.entered = sync.event(true, false)
+    control.release = sync.event(true, false)
+    let (blocked0, blocked_error) = cmap.init[BlockingKey, u64](a, 1usize, 1u16)
+    if blocked_error != ok { os.exit(57i32) }
+    var blocked = blocked0
+    let stored_key = BlockingKey { id: 77u64, control: nil, block: false }
+    let (stored, store_error) = cmap.put[BlockingKey, u64](&blocked, stored_key, 900u64)
+    if store_error != ok || !stored { os.exit(58i32) }
+    var getter: BlockingGet = zero
+    getter.map = blocked
+    getter.key = BlockingKey { id: 77u64, control: &control, block: true }
+    let (getter_thread, getter_spawn_error) = thread.spawn[BlockingGet](run_blocking_get, &getter, 0usize)
+    if getter_spawn_error == os.Unsupported { ret ok }
+    if getter_spawn_error != ok { os.exit(59i32) }
+    sync.event_wait(&control.entered)
+    var closer: MapCloser = zero
+    closer.map = blocked
+    closer.started = sync.event(true, false)
+    let (closer_thread, closer_spawn_error) = thread.spawn[MapCloser](run_map_close, &closer, 0usize)
+    if closer_spawn_error != ok {
+        sync.event_set(&control.release)
+        let joined_getter = thread.join(getter_thread)
+        if closer_spawn_error == os.Unsupported { ret ok }
+        os.exit(60i32)
+    }
+    sync.event_wait(&closer.started)
+    var waiting = false
+    while !waiting {
+        let (closing, active) = close_state(mem.cast[*cmap.State[BlockingKey, u64]](blocked.state))
+        if closing {
+            if active != 1usize {
+                sync.event_set(&control.release)
+                let joined_getter = thread.join(getter_thread)
+                let joined_closer = thread.join(closer_thread)
+                os.exit(61i32)
+            }
+            waiting = true
+        }
+    }
+    if atomic.load(&closer.finished, .Acquire) != 0u32 {
+        sync.event_set(&control.release)
+        let joined_getter = thread.join(getter_thread)
+        let joined_closer = thread.join(closer_thread)
+        os.exit(62i32)
+    }
+    sync.event_set(&control.release)
+    if thread.join(getter_thread) != ok || thread.join(closer_thread) != ok { os.exit(63i32) }
+    if getter.failure != ok || !getter.found || getter.value != 900u64 { os.exit(64i32) }
+    if closer.failure != ok || atomic.load(&closer.finished, .Acquire) != 1u32 { os.exit(65i32) }
+    let (_, _, after_close_error) = cmap.get[BlockingKey, u64](&blocked, stored_key)
+    if after_close_error != cmap.Closed { os.exit(66i32) }
     ret ok
 }

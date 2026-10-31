@@ -27,6 +27,9 @@ error Invalid
 
 fn pi() -> f64 { ret 3.141592653589793f64 }
 
+// NaN differs from itself; either infinity differs from itself when subtracted.
+fn finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 fn distance(pos: []const f64, a: usize, b: usize) -> (f64, f64, f64) {
     let dx = pos[2usize * b] - pos[2usize * a]
     let dy = pos[2usize * b + 1usize] - pos[2usize * a + 1usize]
@@ -281,13 +284,17 @@ fn sweep_and_prune(boxes: []const Aabb, order: []u32, out: []Pair) -> (usize, er
 fn sph(pos: []f64, vel: []f64, density: []f64, pressure: []f64, fx: []f64, fy: []f64, params: SphParams, dt: f64) -> err {
     let n = density.len
     if pos.len < 2usize * n || vel.len < 2usize * n || pressure.len < n || fx.len < n || fy.len < n { ret TooSmall }
-    if params.h <= 0.0f64 || dt <= 0.0f64 { ret Invalid }
+    if !finite(params.h) || !finite(params.mass) || !finite(params.rest_density) || !finite(params.stiffness) || !finite(params.viscosity) || !finite(params.gravity) || !finite(dt) { ret Invalid }
+    if params.h <= 0.0f64 || params.mass <= 0.0f64 || dt <= 0.0f64 { ret Invalid }
     let h = params.h
     let h2 = h * h
     let h4 = h2 * h2
-    let poly6 = 4.0f64 / (pi() * h4 * h4)
-    let spiky = 10.0f64 / (pi() * h4 * h)
-    let laplacian = 40.0f64 / (pi() * h4 * h)
+    let density_denom = pi() * h4 * h4
+    let force_denom = pi() * h4 * h
+    if density_denom == 0.0f64 || force_denom == 0.0f64 || !finite(density_denom) || !finite(force_denom) { ret Invalid }
+    let poly6 = 4.0f64 / density_denom
+    let spiky = 10.0f64 / force_denom
+    let laplacian = 40.0f64 / force_denom
     var i = 0usize
     while i < n {
         var rho = 0.0f64
@@ -302,8 +309,11 @@ fn sph(pos: []f64, vel: []f64, density: []f64, pressure: []f64, fx: []f64, fy: [
             }
             j += 1usize
         }
+        if !finite(rho) || rho <= 0.0f64 { ret Invalid }
         density[i] = rho
-        pressure[i] = params.stiffness * (rho - params.rest_density)
+        let p = params.stiffness * (rho - params.rest_density)
+        if !finite(p) { ret Invalid }
+        pressure[i] = p
         i += 1usize
     }
     i = 0usize
@@ -328,16 +338,23 @@ fn sph(pos: []f64, vel: []f64, density: []f64, pressure: []f64, fx: []f64, fy: [
             }
             j += 1usize
         }
+        let force_y = ay + params.gravity * density[i]
+        if !finite(ax) || !finite(force_y) { ret Invalid }
         fx[i] = ax
-        fy[i] = ay + params.gravity * density[i]
+        fy[i] = force_y
         i += 1usize
     }
     i = 0usize
     while i < n {
-        vel[2usize * i] += dt * fx[i] / density[i]
-        vel[2usize * i + 1usize] += dt * fy[i] / density[i]
-        pos[2usize * i] += dt * vel[2usize * i]
-        pos[2usize * i + 1usize] += dt * vel[2usize * i + 1usize]
+        let next_vx = vel[2usize * i] + dt * fx[i] / density[i]
+        let next_vy = vel[2usize * i + 1usize] + dt * fy[i] / density[i]
+        let next_x = pos[2usize * i] + dt * next_vx
+        let next_y = pos[2usize * i + 1usize] + dt * next_vy
+        if !finite(next_vx) || !finite(next_vy) || !finite(next_x) || !finite(next_y) { ret Invalid }
+        vel[2usize * i] = next_vx
+        vel[2usize * i + 1usize] = next_vy
+        pos[2usize * i] = next_x
+        pos[2usize * i + 1usize] = next_y
         i += 1usize
     }
     ret ok

@@ -297,7 +297,9 @@ fn wrap(a: *mem.Arena, spec: Wrap, limits: Constraints, children: []const Child)
     var total = geometry.Size { width: widest, height: cross_at + line_cross }
     if !horizontal { total = geometry.Size { width: cross_at + line_cross, height: widest } }
     if n == 0usize { total = geometry.Size { width: 0.0, height: 0.0 } }
-    ret (Result { size: constrain(total, limits), children: rects }, ok)
+    let result = Result { size: constrain(total, limits), children: rects }
+    if total.width > limits.max_width || total.height > limits.max_height { ret (result, Overflow) }
+    ret (result, ok)
 }
 
 fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err) {
@@ -367,7 +369,7 @@ fn flow(a: *mem.Arena, limits: Constraints, blocks: []const Block) -> (Result, e
     var at = 0usize
     while at < blocks.len {
         let b = blocks[at]
-        if !bounded(b.desired.width) || !bounded(b.desired.height) || !bounded(b.margin_top) || !bounded(b.margin_bottom) || b.margin_top < 0.0 || b.margin_bottom < 0.0 { ret (zero, Invalid) }
+        if !bounded(b.desired.width) || !bounded(b.desired.height) || !bounded(b.margin_top) || !bounded(b.margin_bottom) || b.desired.width < 0.0 || b.desired.height < 0.0 || b.margin_top < 0.0 || b.margin_bottom < 0.0 { ret (zero, Invalid) }
         at += 1usize
     }
     let (rects, rects_error) = mem.alloc[geometry.Rect](a, blocks.len)
@@ -408,7 +410,7 @@ fn table(a: *mem.Arena, spec: Table, limits: Constraints, cells: []const Cell) -
     var at = 0usize
     while at < cells.len {
         let c = cells[at]
-        if !bounded(c.min.width) || !bounded(c.max.width) || !bounded(c.min.height) || !bounded(c.max.height) || c.max.width < c.min.width || c.max.height < c.min.height { ret (zero, Invalid) }
+        if !bounded(c.min.width) || !bounded(c.max.width) || !bounded(c.min.height) || !bounded(c.max.height) || c.min.width < 0.0 || c.min.height < 0.0 || c.max.width < 0.0 || c.max.height < 0.0 || c.max.width < c.min.width || c.max.height < c.min.height { ret (zero, Invalid) }
         at += 1usize
     }
     let columns = spec.columns

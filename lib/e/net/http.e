@@ -205,6 +205,7 @@ fn parse_decimal(value: str) -> (usize, err) {
         parsed = parsed * 10u64 + digit
         at += 1usize
     }
+    if parsed > u64(~0usize) { ret (0usize, TooLarge) }
     ret (usize(parsed), ok)
 }
 
@@ -224,6 +225,7 @@ fn parse_hex(value: str) -> (usize, err) {
         parsed = parsed * 16u64 + u64(digit)
         at += 1usize
     }
+    if parsed > u64(~0usize) { ret (0usize, TooLarge) }
     ret (usize(parsed), ok)
 }
 
@@ -467,10 +469,26 @@ fn read_response_meta(a: *mem.Arena, r: *Reader) -> (ResponseMeta, err) {
     ret (out, ok)
 }
 
+// Informational responses, except 101 Switching Protocols, precede the final
+// response and carry no body. Discard their arena allocations before reading
+// the next head so callers only observe the final response.
+fn read_final_response_meta(a: *mem.Arena, r: *Reader) -> (ResponseMeta, err) {
+    while true {
+        let mark = mem.mark(a)
+        let (meta, meta_error) = read_response_meta(a, r)
+        if meta_error != ok { ret (meta, meta_error) }
+        if meta.head.status >= 100u16 && meta.head.status < 200u16 && meta.head.status != 101u16 {
+            mem.reset(a, mark)
+            continue
+        }
+        ret (meta, ok)
+    }
+}
+
 fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Response, err) {
     var out: Response = zero
     let mark = mem.mark(a)
-    let (meta, meta_error) = read_response_meta(a, r)
+    let (meta, meta_error) = read_final_response_meta(a, r)
     if meta_error != ok { ret (out, meta_error) }
     var body: []const u8 = zero
     if !no_response_body(meta.head.status) && !suppress_body {
@@ -615,7 +633,7 @@ fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, li
         ret (out, reader_error)
     }
     state.decoder = created
-    let (meta, meta_error) = read_response_meta(a, &state.decoder)
+    let (meta, meta_error) = read_final_response_meta(a, &state.decoder)
     if meta_error != ok {
         let unused = net.close(state.network.socket)
         mem.reset(a, mark)
@@ -699,7 +717,7 @@ fn request_tls_stream(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientC
         ret (out, reader_error)
     }
     state.decoder = created
-    let (meta, meta_error) = read_response_meta(a, &state.decoder)
+    let (meta, meta_error) = read_final_response_meta(a, &state.decoder)
     if meta_error != ok {
         let unused_tls = tls.close(&state.secure)
         let unused_net = net.close(state.network.socket)
@@ -1232,7 +1250,7 @@ fn pool_exchange(p: *Pool, at: usize, a: *mem.Arena, req: *const Request) -> (Re
     let write_error = write_request(&encoder, req)
     if write_error != ok { ret (out, false, write_error) }
     let mark = mem.mark(a)
-    let (meta, meta_error) = read_response_meta(a, &slot.decoder)
+    let (meta, meta_error) = read_final_response_meta(a, &slot.decoder)
     if meta_error != ok {
         mem.reset(a, mark)
         ret (out, false, meta_error)

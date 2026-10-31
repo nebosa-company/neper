@@ -107,7 +107,12 @@ fn col(c: *Comp, name: str) -> str {
         i += 1usize
     }
     let (out, e) = mem.alloc[u8](c.a, name.len + quotes + 2usize)
-    if e != ok { ret name }
+    // Quoting is the safety boundary for schema identifiers. A failed allocation
+    // must invalidate the compilation; returning `name` would emit raw SQL.
+    if e != ok {
+        c.failed = true
+        ret ""
+    }
     var n = 0usize
     out[n] = 34u8
     n += 1usize
@@ -248,7 +253,9 @@ fn field_part(c: *Comp, name: str) -> (Part, bool) {
     let (at_index, found) = find_field(c, name)
     if !found { ret (none(), false) }
     let def = c.schema[at_index]
-    ret (typed(col(c, def.column), "full", value_type_of_field(c.a, def.field_type)), true)
+    let quoted = col(c, def.column)
+    if c.failed { ret (none(), false) }
+    ret (typed(quoted, "full", value_type_of_field(c.a, def.field_type)), true)
 }
 
 fn compile(c: *Comp, node: f.Node) -> Part {

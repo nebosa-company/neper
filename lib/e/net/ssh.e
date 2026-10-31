@@ -295,7 +295,7 @@ fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, 
     if chan_error != ok { ret (none, chan_error) }
     let (scratch, scratch_error) = mem.alloc[u8](a, 35200usize)
     if scratch_error != ok { ret (none, scratch_error) }
-    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: 2097152u32, max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false, cipher_next: CIPHER_CHACHA, cipher_out: CIPHER_CHACHA, cipher_in: CIPHER_CHACHA, gcm_out_key: zero, gcm_in_key: zero, gcm_out_iv: zero, gcm_in_iv: zero, next_in_main: zero, next_in_len: zero, next_gcm_key: zero, next_gcm_iv: zero, scratch: scratch, rekeying: false, rekeys: 0u32, deferred_window: 0u32, channel_kind: 0u32, fwd_port: 0u32 }
+    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: u32(chan_in.len), max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false, cipher_next: CIPHER_CHACHA, cipher_out: CIPHER_CHACHA, cipher_in: CIPHER_CHACHA, gcm_out_key: zero, gcm_in_key: zero, gcm_out_iv: zero, gcm_in_iv: zero, next_in_main: zero, next_in_len: zero, next_gcm_key: zero, next_gcm_iv: zero, scratch: scratch, rekeying: false, rekeys: 0u32, deferred_window: 0u32, channel_kind: 0u32, fwd_port: 0u32 }
     var i = 0usize
     while i < 64usize {
         s.rng[i] = random[i]
@@ -336,31 +336,35 @@ fn use_key(s: *Session, seed: [32]u8) {
 }
 
 // Run `command` instead of a login shell (empty: the shell).
-fn set_command(s: *Session, command: str) {
-    var n = command.len
-    if n > 128usize { n = 128usize }
+fn set_command(s: *Session, command: str) -> err {
+    if command.len > s.command.len { ret TooLong }
     var i = 0usize
-    while i < n {
+    while i < command.len {
         s.command[i] = command[i]
         i += 1usize
     }
-    s.command_len = n
+    s.command_len = command.len
+    ret ok
 }
 
 // (C155) Open the subsystem `name` (`sftp`) on the channel instead of a shell: no pty is asked for, and the session is
 // READY once the server accepts the subsystem. `read` and `write` then carry the subsystem's own protocol.
-fn set_subsystem(s: *Session, name: str) {
-    set_command(s, name)
+fn set_subsystem(s: *Session, name: str) -> err {
+    let command_error = set_command(s, name)
+    if command_error != ok { ret command_error }
     s.channel_kind = 1u32
+    ret ok
 }
 
 // (C155) Open a `direct-tcpip` channel to `host`:`port` (as reached from the server) instead of a session: the
 // session is READY once the server has connected, and `read` and `write` are the TCP stream. One forward is one
 // connection of its own.
-fn set_forward(s: *Session, host: str, port: u32) {
-    set_command(s, host)
+fn set_forward(s: *Session, host: str, port: u32) -> err {
+    let command_error = set_command(s, host)
+    if command_error != ok { ret command_error }
     s.fwd_port = port
     s.channel_kind = 2u32
+    ret ok
 }
 
 fn fail(s: *Session, code: u32) {
@@ -549,7 +553,13 @@ fn compute_exchange_hash(s: *Session) {
     hash.sha256_update(&h, s.server_public[0usize..32usize])
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    w_mpint(&w, s.kex_k[0usize..32usize])
+    var big: [32]u8 = zero
+    var big_at = 0usize
+    while big_at < 32usize {
+        big[big_at] = s.kex_k[31usize - big_at]
+        big_at += 1usize
+    }
+    w_mpint(&w, big[0usize..32usize])
     hash.sha256_update(&h, mp[0usize..w.len])
     s.exchange_hash = hash.sha256_done(&h)
 }
@@ -558,7 +568,13 @@ fn compute_exchange_hash(s: *Session) {
 fn derive_key(s: *Session, letter: u8, out: []u8) {
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    w_mpint(&w, s.kex_k[0usize..32usize])
+    var big: [32]u8 = zero
+    var big_at = 0usize
+    while big_at < 32usize {
+        big[big_at] = s.kex_k[31usize - big_at]
+        big_at += 1usize
+    }
+    w_mpint(&w, big[0usize..32usize])
     var h1 = hash.sha256_init()
     hash.sha256_update(&h1, mp[0usize..w.len])
     hash.sha256_update(&h1, s.exchange_hash[0usize..32usize])
@@ -875,6 +891,14 @@ fn start_auth(s: *Session) {
 }
 
 fn send_userauth(s: *Session) {
+    defer {
+        var password_at = 0usize
+        while password_at < s.password.len {
+            s.password[password_at] = 0u8
+            password_at += 1usize
+        }
+        s.password_len = 0usize
+    }
     var msg: [512]u8 = zero
     var w = Writer { buf: msg[0usize..512usize], len: 0usize, over: false }
     w_byte(&w, 50u8)

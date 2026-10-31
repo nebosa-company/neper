@@ -145,12 +145,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e_radius_zero != chart.Invalid { os.exit(52) }
     let (_sf, e_radius_nan) = chart.proportional_symbol_map(sites[..], w_equi, bounds, f32(nan), circles[..])
     if e_radius_nan != chart.Invalid { os.exit(53) }
+    let (_sj, e_radius_large) = chart.proportional_symbol_map(sites[..], w_equi, bounds, 2.0e38f32, circles[..])
+    if e_radius_large != chart.Invalid { os.exit(54) }
+    let edge_site = [1]chart.MapSite{ chart.MapSite { key: "E", lon: 0.0f64, lat: 0.0f64, value: 1.0f64, present: true } }
+    var edge_circle: [1]geometry.Rect = zero
+    let edge_bounds = geometry.rect(2.0e38, 0.0, 1.0e38, 100.0)
+    let (_sk, e_radius_edge) = chart.proportional_symbol_map(edge_site[..], w_equi, edge_bounds, 1.0e38f32, edge_circle[..])
+    if e_radius_edge != chart.Invalid { os.exit(55) }
     let (_sg, e_empty) = chart.proportional_symbol_map(sites[..0usize], w_equi, bounds, 12.5f32, circles[..])
-    if e_empty != chart.Invalid { os.exit(54) }
+    if e_empty != chart.Invalid { os.exit(56) }
     let (_sh, e_short) = chart.proportional_symbol_map(sites[..], w_equi, bounds, 12.5f32, circles[..5usize])
-    if e_short != chart.TooLarge { os.exit(55) }
+    if e_short != chart.TooLarge { os.exit(57) }
     let (_si, e_bounds) = chart.proportional_symbol_map(sites[..], w_equi, geometry.rect(0.0, 0.0, 0.0, 10.0), 12.5f32, circles[..])
-    if e_bounds != chart.Invalid { os.exit(56) }
+    if e_bounds != chart.Invalid { os.exit(58) }
     let regions = [5]chart.MapRegion{ chart.MapRegion { key: "A" }, chart.MapRegion { key: "B" }, chart.MapRegion { key: "C" }, chart.MapRegion { key: "D" }, chart.MapRegion { key: "E" } }
     let rings = [7]chart.MapRing{ chart.MapRing { region: 0usize, first: 0usize, count: 4usize, hole: false }, chart.MapRing { region: 0usize, first: 4usize, count: 4usize, hole: true }, chart.MapRing { region: 1usize, first: 8usize, count: 4usize, hole: false }, chart.MapRing { region: 1usize, first: 12usize, count: 4usize, hole: true }, chart.MapRing { region: 2usize, first: 16usize, count: 4usize, hole: false }, chart.MapRing { region: 3usize, first: 20usize, count: 4usize, hole: false }, chart.MapRing { region: 4usize, first: 24usize, count: 4usize, hole: false } }
     let vertices = [28]chart.MapVertex{ chart.MapVertex { lon: -100.0f64, lat: 10.0f64 }, chart.MapVertex { lon: -80.0f64, lat: 10.0f64 }, chart.MapVertex { lon: -80.0f64, lat: 30.0f64 }, chart.MapVertex { lon: -100.0f64, lat: 30.0f64 }, chart.MapVertex { lon: -90.0f64, lat: 25.0f64 }, chart.MapVertex { lon: -85.0f64, lat: 25.0f64 }, chart.MapVertex { lon: -85.0f64, lat: 20.0f64 }, chart.MapVertex { lon: -90.0f64, lat: 20.0f64 }, chart.MapVertex { lon: -50.0f64, lat: 0.0f64 }, chart.MapVertex { lon: -30.0f64, lat: 0.0f64 }, chart.MapVertex { lon: -30.0f64, lat: -20.0f64 }, chart.MapVertex { lon: -50.0f64, lat: -20.0f64 }, chart.MapVertex { lon: -45.0f64, lat: -15.0f64 }, chart.MapVertex { lon: -40.0f64, lat: -15.0f64 }, chart.MapVertex { lon: -40.0f64, lat: -10.0f64 }, chart.MapVertex { lon: -45.0f64, lat: -10.0f64 }, chart.MapVertex { lon: 10.0f64, lat: 30.0f64 }, chart.MapVertex { lon: 25.0f64, lat: 30.0f64 }, chart.MapVertex { lon: 25.0f64, lat: 45.0f64 }, chart.MapVertex { lon: 10.0f64, lat: 45.0f64 }, chart.MapVertex { lon: 60.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 70.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 70.0f64, lat: 10.0f64 }, chart.MapVertex { lon: 60.0f64, lat: 10.0f64 }, chart.MapVertex { lon: 100.0f64, lat: 50.0f64 }, chart.MapVertex { lon: 110.0f64, lat: 50.0f64 }, chart.MapVertex { lon: 110.0f64, lat: 40.0f64 }, chart.MapVertex { lon: 100.0f64, lat: 40.0f64 } }
@@ -160,11 +167,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var c_regions: [5]chart.MapRegionLayout = zero
     var work = chart.ChoroplethStorage { points: c_points[..], rings: c_rings[..], regions: c_regions[..] }
     let (map, map_error) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &work)
-    if map_error != ok || map.regions.len != 5usize || !map.has_values || map.minimum != -5.0f64 || map.maximum != 15.0f64 { os.exit(57) }
-    if !map.regions[0usize].has_value || abs64(f64(map.regions[0usize].fraction) - 0.0f64) > 1e-6f64 { os.exit(58) }
-    if !map.regions[1usize].has_value || abs64(f64(map.regions[1usize].fraction) - 1.0f64) > 1e-6f64 { os.exit(59) }
-    if !map.regions[2usize].has_value || abs64(f64(map.regions[2usize].fraction) - 0.5f64) > 1e-6f64 { os.exit(60) }
-    if map.regions[3usize].has_value || map.regions[4usize].has_value || map.regions[3usize].fraction != 0.0f32 || map.regions[4usize].fraction != 0.0f32 { os.exit(61) }
+    if map_error != ok || map.regions.len != 5usize || !map.has_values || map.minimum != -5.0f64 || map.maximum != 15.0f64 { os.exit(59) }
+    if !map.regions[0usize].has_value || abs64(f64(map.regions[0usize].fraction) - 0.0f64) > 1e-6f64 { os.exit(60) }
+    if !map.regions[1usize].has_value || abs64(f64(map.regions[1usize].fraction) - 1.0f64) > 1e-6f64 { os.exit(61) }
+    if !map.regions[2usize].has_value || abs64(f64(map.regions[2usize].fraction) - 0.5f64) > 1e-6f64 { os.exit(62) }
+    if map.regions[3usize].has_value || map.regions[4usize].has_value || map.regions[3usize].fraction != 0.0f32 || map.regions[4usize].fraction != 0.0f32 { os.exit(63) }
     let want_reverse = [7]bool{ true, true, false, false, true, true, false }
     var winding_ok = true
     var wi = 0usize
@@ -172,55 +179,55 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if work.rings[wi].reverse != want_reverse[wi] { winding_ok = false }
         wi += 1usize
     }
-    if !winding_ok { os.exit(62) }
+    if !winding_ok { os.exit(64) }
     let equal_metrics = [2]chart.MapMetric{ chart.MapMetric { key: "A", value: 7.0f64 }, chart.MapMetric { key: "B", value: 7.0f64 } }
     let (equal_map, equal_error) = chart.choropleth(regions[..], rings[..], vertices[..], equal_metrics[..], w_equi, bounds, &work)
-    if equal_error != ok || equal_map.regions[0usize].fraction != 0.5f32 || equal_map.regions[1usize].fraction != 0.5f32 { os.exit(63) }
+    if equal_error != ok || equal_map.regions[0usize].fraction != 0.5f32 || equal_map.regions[1usize].fraction != 0.5f32 { os.exit(65) }
     let (none_map, none_error) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..0usize], w_equi, bounds, &work)
-    if none_error != ok || none_map.has_values || none_map.regions[0usize].has_value { os.exit(64) }
+    if none_error != ok || none_map.has_values || none_map.regions[0usize].has_value { os.exit(66) }
     let dup_regions = [5]chart.MapRegion{ chart.MapRegion { key: "A" }, chart.MapRegion { key: "A" }, chart.MapRegion { key: "C" }, chart.MapRegion { key: "D" }, chart.MapRegion { key: "E" } }
     let (_ca, e_dup_region) = chart.choropleth(dup_regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &work)
-    if e_dup_region != chart.Invalid { os.exit(65) }
+    if e_dup_region != chart.Invalid { os.exit(67) }
     let blank_regions = [5]chart.MapRegion{ chart.MapRegion { key: "" }, chart.MapRegion { key: "B" }, chart.MapRegion { key: "C" }, chart.MapRegion { key: "D" }, chart.MapRegion { key: "E" } }
     let (_cb, e_blank_region) = chart.choropleth(blank_regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &work)
-    if e_blank_region != chart.Invalid { os.exit(66) }
+    if e_blank_region != chart.Invalid { os.exit(68) }
     let nan_metrics = [1]chart.MapMetric{ chart.MapMetric { key: "A", value: nan } }
     let (_cc, e_nan_metric) = chart.choropleth(regions[..], rings[..], vertices[..], nan_metrics[..], w_equi, bounds, &work)
-    if e_nan_metric != chart.Invalid { os.exit(67) }
+    if e_nan_metric != chart.Invalid { os.exit(69) }
     let dup_metrics = [2]chart.MapMetric{ chart.MapMetric { key: "A", value: 1.0f64 }, chart.MapMetric { key: "A", value: 2.0f64 } }
     let (_cd, e_dup_metric) = chart.choropleth(regions[..], rings[..], vertices[..], dup_metrics[..], w_equi, bounds, &work)
-    if e_dup_metric != chart.Invalid { os.exit(68) }
+    if e_dup_metric != chart.Invalid { os.exit(70) }
     let hole_first = [1]chart.MapRing{ chart.MapRing { region: 0usize, first: 0usize, count: 4usize, hole: true } }
     let (_ce, e_hole_first) = chart.choropleth(regions[..1usize], hole_first[..], vertices[..4usize], metrics[..], w_equi, bounds, &work)
-    if e_hole_first != chart.Invalid { os.exit(69) }
+    if e_hole_first != chart.Invalid { os.exit(71) }
     let tiny_ring = [1]chart.MapRing{ chart.MapRing { region: 0usize, first: 0usize, count: 2usize, hole: false } }
     let (_cf, e_tiny_ring) = chart.choropleth(regions[..1usize], tiny_ring[..], vertices[..2usize], metrics[..], w_equi, bounds, &work)
-    if e_tiny_ring != chart.Invalid { os.exit(70) }
+    if e_tiny_ring != chart.Invalid { os.exit(72) }
     let flat_vertices = [4]chart.MapVertex{ chart.MapVertex { lon: 0.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 5.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 10.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 15.0f64, lat: 0.0f64 } }
     let flat_ring = [1]chart.MapRing{ chart.MapRing { region: 0usize, first: 0usize, count: 4usize, hole: false } }
     let (_cg, e_flat_ring) = chart.choropleth(regions[..1usize], flat_ring[..], flat_vertices[..], metrics[..], w_equi, bounds, &work)
-    if e_flat_ring != chart.Invalid { os.exit(71) }
+    if e_flat_ring != chart.Invalid { os.exit(73) }
     let outside = [4]chart.MapVertex{ chart.MapVertex { lon: 0.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 5.0f64, lat: 0.0f64 }, chart.MapVertex { lon: 5.0f64, lat: 90.0f64 }, chart.MapVertex { lon: 0.0f64, lat: 5.0f64 } }
     let (_ch, e_outside_window) = chart.choropleth(regions[..1usize], flat_ring[..], outside[..], metrics[..], w_equi, bounds, &work)
-    if e_outside_window != chart.Invalid { os.exit(72) }
+    if e_outside_window != chart.Invalid { os.exit(74) }
     let (_ci, e_few_rings) = chart.choropleth(regions[..], rings[..4usize], vertices[..], metrics[..], w_equi, bounds, &work)
-    if e_few_rings != chart.Invalid { os.exit(73) }
+    if e_few_rings != chart.Invalid { os.exit(75) }
     let (_cj, e_no_regions) = chart.choropleth(regions[..0usize], rings[..], vertices[..], metrics[..], w_equi, bounds, &work)
-    if e_no_regions != chart.Invalid { os.exit(74) }
+    if e_no_regions != chart.Invalid { os.exit(76) }
     let (_ck, e_bad_bounds) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], w_equi, geometry.rect(0.0, 0.0, -1.0, 10.0), &work)
-    if e_bad_bounds != chart.Invalid { os.exit(75) }
+    if e_bad_bounds != chart.Invalid { os.exit(77) }
     var short_points = work
     short_points.points = c_points[..27usize]
     let (_cs_points, e_short_points) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &short_points)
-    if e_short_points != chart.TooLarge { os.exit(76) }
+    if e_short_points != chart.TooLarge { os.exit(78) }
     var short_rings = work
     short_rings.rings = c_rings[..6usize]
     let (_cs_rings, e_short_rings) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &short_rings)
-    if e_short_rings != chart.TooLarge { os.exit(77) }
+    if e_short_rings != chart.TooLarge { os.exit(79) }
     var short_regions = work
     short_regions.regions = c_regions[..4usize]
     let (_cs_regions, e_short_regions) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], w_equi, bounds, &short_regions)
-    if e_short_regions != chart.TooLarge { os.exit(78) }
+    if e_short_regions != chart.TooLarge { os.exit(80) }
     let (written, write_error) = os.write(os.stdout(), "gfx chart map reference ok\n")
     os.exit(0)
     ret ok

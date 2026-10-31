@@ -36,6 +36,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var scratch: [32]f64 = zero
     let e_inverse = 0.36787944117144233f64
 
+    // Scratch checks divide rather than multiply, so a target-width count can
+    // be refused without an overflowing product before any slice is made.
+    let widest = ~0usize
+    if ode.has_scratch(0usize, widest, 2usize) || ode.has_scratch(0usize, widest, 5usize) || ode.has_scratch(0usize, widest, 8usize) { os.exit(7i32) }
+    if !ode.has_scratch(8usize, 1usize, 8usize) || ode.has_scratch(7usize, 1usize, 8usize) { os.exit(7i32) }
+
     // 1: exponential decay from 1 to e^-1 over unit time.
     var y: [1]f64 = zero
     y[0usize] = 1.0f64
@@ -144,6 +150,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var noise: [1]f64 = zero
     var w: [1]f64 = zero
     w[0usize] = 3.0f64
+    noise[0usize] = 3.0f64
+    if ode.euler_maruyama[Nothing](&nothing, decay, unit_diffusion, 0.0f64, w[..], 0.0f64 - 0.25f64, noise[..], scratch[..]) != ode.Invalid || w[0usize] != 3.0f64 { os.exit(6i32) }
+    noise[0usize] = 0.0f64
     if ode.euler_maruyama[Nothing](&nothing, zero_drift, unit_diffusion, 0.0f64, w[..], 0.25f64, noise[..], scratch[..]) != ok { os.exit(6i32) }
     if w[0usize] != 3.0f64 { os.exit(6i32) }
     var r = rand.pcg64(99u64, 7u64)

@@ -135,6 +135,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if coap.options_add(opts[..], &used, &last, coap.opt_content_format(), "x") != ok { os.exit(4i32) }
     if coap.options_add(opts[..4usize], &used, &last, coap.opt_accept(), "yy") != coap.TooSmall { os.exit(4i32) }
     if used != 4usize || opts[0usize] != 0xc1u8 || opts[1usize] != 50u8 || opts[2usize] != 0x01u8 { os.exit(4i32) }
+    // Public cursors outside their supplied slices reject rather than underflowing
+    // a capacity calculation or indexing the slice before validating it.
+    used = opts.len + 1usize
+    last = 0u16
+    if coap.options_add(opts[..], &used, &last, coap.opt_uri_path(), "x") != coap.TooSmall || used != opts.len + 1usize || last != 0u16 { os.exit(4i32) }
+    let (_, _, _, empty_option_error) = coap.parse_option(bad_delta[..0usize], 0usize)
+    if empty_option_error != coap.Malformed { os.exit(4i32) }
+    let (_, _, _, end_option_error) = coap.parse_option(bad_delta[..], bad_delta.len)
+    if end_option_error != coap.Malformed { os.exit(4i32) }
 
     // 5: the exchange table.
     var xs: [2]coap.Exchange = zero

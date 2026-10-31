@@ -145,6 +145,12 @@ fn hopcroft_karp[E: type](a: *mem.Arena, g: *const graph.Graph[E], left: usize, 
 fn hungarian(costs: []const f64, n: usize, assignment: []usize, scratch: []f64, used: []usize) -> (f64, err) {
     if n == 0usize { ret (0.0f64, Invalid) }
     if costs.len < n * n || assignment.len < n || scratch.len < 4usize * (n + 1usize) || used.len < 2usize * (n + 1usize) { ret (0.0f64, TooSmall) }
+    var cost_at = 0usize
+    while cost_at < n * n {
+        let cost = costs[cost_at]
+        if cost != cost || cost - cost != 0.0f64 { ret (0.0f64, Invalid) }
+        cost_at += 1usize
+    }
     let m = n + 1usize
     var u = scratch[..m]
     var v = scratch[m..2usize * m]
@@ -161,20 +167,21 @@ fn hungarian(costs: []const f64, n: usize, assignment: []usize, scratch: []f64, 
     }
     // `visited` rides in the fourth scratch row as 0/1 floats.
     var visited = scratch[3usize * m..4usize * m]
+    let infinity = 1.0f64 / 0.0f64
     i = 1usize
     while i <= n {
         p[0usize] = i
         var j0 = 0usize
         var j = 0usize
         while j < m {
-            minv[j] = 1.0e300f64
+            minv[j] = infinity
             visited[j] = 0.0f64
             j += 1usize
         }
         while true {
             visited[j0] = 1.0f64
             let i0 = p[j0]
-            var delta = 1.0e300f64
+            var delta = infinity
             var j1 = 0usize
             j = 1usize
             while j <= n {

@@ -341,7 +341,7 @@ fn vectors_9() -> str {
 }
 
 fn vectors_10() -> str {
-    ret "Z\t485454502f312e31203230300d0a0d0a\nV\t666f6f\t0\t1\nV\t666f6f\t1\t1\nV\t666f6f2e626172\t0\t1\nV\t666f6f2e626172\t1\t1\nV\t666f6f2e2a\t0\t0\nV\t666f6f2e2a\t1\t1\nV\t666f6f2e3e\t0\t0\nV\t666f6f2e3e\t1\t1\nV\t3e\t0\t0\nV\t3e\t1\t1\nV\t2a\t0\t0\nV\t2a\t1\t1\nV\t2a2e2a\t0\t0\nV\t2a2e2a\t1\t1\nV\t666f6f2e2a2e62617a\t0\t0\nV\t666f6f2e2a2e62617a\t1\t1\nV\t666f6f2e2e626172\t0\t0\nV\t666f6f2e2e626172\t1\t0\nV\t2e666f6f\t0\t0\nV\t2e666f6f\t1\t0\nV\t666f6f2e\t0\t0\nV\t666f6f2e\t1\t0\nV\t666f6f20626172\t0\t0\nV\t666f6f20626172\t1\t0\nV\t\t0\t0\nV\t\t1\t0\nV\t666f6f2e3e2e626172\t0\t0\nV\t666f6f2e3e2e626172\t1\t0\nV\t662a6f\t0\t0\nV\t662a6f\t1\t1\nV\t612e622e632e642e65\t0\t1\nV\t612e622e632e642e65\t1\t1\nV\t3e2e78\t0\t0\nV\t3e2e78\t1\t0\nV\t666f3e\t0\t0\nV\t666f3e\t1\t1\nV\t666f6f2e622a72\t0\t0\nV\t666f6f2e622a72\t1\t1\nV\t244a532e4150492e3e\t0\t0\n"
+    ret "Z\t485454502f312e31203230300d0a0d0a\nV\t666f6f\t0\t1\nV\t666f6f\t1\t1\nV\t666f6f2e626172\t0\t1\nV\t666f6f2e626172\t1\t1\nV\t666f6f2e2a\t0\t0\nV\t666f6f2e2a\t1\t1\nV\t666f6f2e3e\t0\t0\nV\t666f6f2e3e\t1\t1\nV\t3e\t0\t0\nV\t3e\t1\t1\nV\t2a\t0\t0\nV\t2a\t1\t1\nV\t2a2e2a\t0\t0\nV\t2a2e2a\t1\t1\nV\t666f6f2e2a2e62617a\t0\t0\nV\t666f6f2e2a2e62617a\t1\t1\nV\t666f6f2e2e626172\t0\t0\nV\t666f6f2e2e626172\t1\t0\nV\t2e666f6f\t0\t0\nV\t2e666f6f\t1\t0\nV\t666f6f2e\t0\t0\nV\t666f6f2e\t1\t0\nV\t666f6f20626172\t0\t0\nV\t666f6f20626172\t1\t0\nV\t\t0\t0\nV\t\t1\t0\nV\t666f6f2e3e2e626172\t0\t0\nV\t666f6f2e3e2e626172\t1\t0\nV\t662a6f\t0\t0\nV\t662a6f\t1\t0\nV\t612e622e632e642e65\t0\t1\nV\t612e622e632e642e65\t1\t1\nV\t3e2e78\t0\t0\nV\t3e2e78\t1\t0\nV\t666f3e\t0\t0\nV\t666f3e\t1\t0\nV\t666f6f2e622a72\t0\t0\nV\t666f6f2e622a72\t1\t0\nV\t244a532e4150492e3e\t0\t0\n"
 }
 
 fn vectors_11() -> str {
@@ -439,6 +439,20 @@ fn session(a: *mem.Arena) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var invalid_options = nats.options(false)
+    var invalid_buf: [256]u8 = zero
+    invalid_options.name = "\xc0\x80"
+    let (_, overlong_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if overlong_error != nats.Invalid { os.exit(114i32) }
+    invalid_options.name = "\xed\xa0\x80"
+    let (_, surrogate_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if surrogate_error != nats.Invalid { os.exit(115i32) }
+    invalid_options.name = "\xf4\x90\x80\x80"
+    let (_, range_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if range_error != nats.Invalid { os.exit(116i32) }
+    invalid_options.name = "\xf5\x80\x80\x80"
+    let (_, lead_error) = nats.encode_connect(invalid_buf[0usize..], &invalid_options)
+    if lead_error != nats.Invalid { os.exit(117i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(102i32) }

@@ -31,6 +31,8 @@ fn symbolize(address: usize) -> Frame {
 // ponytail: no template arguments (`I...E`), substitutions (`S_`), function
 // types, arrays or operator names; those answer `Unsupported`.
 
+use e.str
+
 type Symbol = struct { module: str, function: str }
 type Out = struct { dst: []u8, used: usize }
 error Malformed
@@ -61,13 +63,14 @@ fn emit(o: *Out, text: str) -> err {
 
 // `<len><chars>` at `at`; answers the name and the position after it.
 fn source_name(s: str, at: usize) -> (str, usize, err) {
-    var n = 0usize
     var p = at
     while p < s.len && s[p] >= 48u8 && s[p] <= 57u8 {
-        n = n * 10usize + usize(s[p] - 48u8)
         p += 1usize
     }
-    if p == at || n == 0usize || p + n > s.len { ret ("", at, Malformed) }
+    if p == at { ret ("", at, Malformed) }
+    let (parsed, parse_error) = str.parse_u64(s[at..p])
+    if parse_error != ok || parsed == 0u64 || parsed > u64(s.len - p) { ret ("", at, Malformed) }
+    let n = usize(parsed)
     ret (s[p..p + n], p + n, ok)
 }
 
@@ -121,6 +124,9 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
             }
             if s[p] == 67u8 || s[p] == 68u8 {
                 if p + 1usize >= s.len || last.len == 0usize { ret (p, "", Malformed) }
+                let discriminator = s[p + 1usize]
+                if s[p] == 67u8 && discriminator != 49u8 && discriminator != 50u8 && discriminator != 51u8 { ret (p, "", Malformed) }
+                if s[p] == 68u8 && discriminator != 48u8 && discriminator != 49u8 && discriminator != 50u8 { ret (p, "", Malformed) }
                 if s[p] == 68u8 {
                     let tilde_error = emit(o, "~")
                     if tilde_error != ok { ret (p, "", tilde_error) }
@@ -139,6 +145,7 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
             p = after
         }
         if p >= s.len { ret (p, "", Malformed) }
+        if first { ret (p, "", Malformed) }
         ret (p + 1usize, last, ok)
     }
     if p + 1usize < s.len && s[p] == 83u8 && s[p + 1usize] == 116u8 {
@@ -153,12 +160,14 @@ fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err) {
     ret (after, name, ok)
 }
 
-// One type at `at`, rendered; answers the position after it.
-fn parse_type(s: str, at: usize, o: *Out) -> (usize, err) {
+// One type at `at`, rendered; answers the position after it.  Bound nested
+// qualifiers so malformed symbol text cannot consume the native call stack.
+fn parse_type(s: str, at: usize, o: *Out, depth: usize) -> (usize, err) {
+    if depth >= 64usize { ret (at, Unsupported) }
     if at >= s.len { ret (at, Malformed) }
     let c = s[at]
     if c == 80u8 || c == 82u8 || c == 79u8 || c == 75u8 || c == 86u8 {
-        let (after, inner_error) = parse_type(s, at + 1usize, o)
+        let (after, inner_error) = parse_type(s, at + 1usize, o, depth + 1usize)
         if inner_error != ok { ret (after, inner_error) }
         var suffix = "*"
         if c == 82u8 { suffix = "&" }
@@ -203,7 +212,7 @@ fn demangle(symbol: str, dst: []u8) -> (str, err) {
             let comma_error = emit(&o, ", ")
             if comma_error != ok { ret ("", comma_error) }
         }
-        let (after, type_error) = parse_type(symbol, p, &o)
+        let (after, type_error) = parse_type(symbol, p, &o, 0usize)
         if type_error != ok { ret ("", type_error) }
         p = after
         count += 1usize

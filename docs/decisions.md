@@ -42914,6 +42914,526 @@ Windows has `window_on_resize` (D5856): the window procedure's `WM_SIZE` branch,
 
 `scripts/macos-bundle.sh` takes `--entitlements FILE` (handed to `codesign` with the hardened runtime) and `--notarize PROFILE`, which needs `--sign` (refused otherwise, at argument time) and then submits a zip of the signed app with `xcrun notarytool submit --keychain-profile PROFILE --wait`, requires `status: Accepted`, staples the ticket with `xcrun stapler staple` and checks it with `spctl -a -vv -t exec`. Both options are opt-in; the default bundle path is unchanged (`BUNDLE PASS` on aarch64 and x64 in the macOS corpus, 1132/1132). They follow the tools' documented command lines and have never run against Apple's service: this repository has no Developer ID, so C191's finish line, a notarized bundle opened on a clean Mac, is still open and the header of the script says so.
 
+## D5940 — OpenGL is a library, not a language feature
+
+Neper gains OpenGL and OpenGL ES in three layers, each usable without the next: a binding (`x.khronos.gl`, `x.khronos.egl`) loaded at run time the way `e.gpu.vulkan` and `x.sqlite` are, through which a program draws with GLSL strings; an `e.ui` presentation path that hands the CPU renderer's finished frame to GL as a texture; and an `e.gpu` compute backend, `Backend.Gl`. Spec §10's "no graphics pipeline, and none is planned" stands: graphics reach a program through the binding, and `@gpu` gains no vertex or fragment stages. The work is queued as the OpenGL group, C214-C220, L172-L182 and T044-T049, each with its own model and thinking level; `docs/opengl-plan.md` holds the design and the order.
+
+## D5941 — GL compute uses Metal's heap model
+
+GLSL has no pointers, and §10 requires a device slice to be a `{ptr, len}` pair. The GL backend meets that requirement the way Metal does (D5838, D5839): one SSBO heap, `uint heap[]`, in which a device address is a byte offset and a kernel is a switch state machine over heap offsets. The emitter is `src/glsl.e`, a sibling of `src/msl.e`, and the GL code goes into its own `K$glsl` section, selected with `--gpu glsl` (C214), because Vulkan and GL share Windows and Linux targets where Metal had macOS to itself. §10's Platforms table gains a GL row and §13 gains the target.
+
+## D5879 — OpenGL floors
+
+Compute needs desktop GL 4.3 core or GLES 3.1. The binding and presentation need only GL 3.3 core, GLES 3.0 or WebGL2. macOS stops at GL 4.1, which has no compute, so the Mac gets presentation only (L176), and Metal (C193) keeps the compute. GL before 3.3 and GLES before 3.0 are not supported.
+
+## D5880 — Where a GL context comes from
+
+Windows uses WGL, bootstrapped through a dummy window's pixel format and then `wglCreateContextAttribsARB`, and reaches GLES through ANGLE's `libEGL.dll`. Linux uses EGL. Neper's X11 client is a raw protocol socket with no Xlib `Display*`, so the GL side opens a second `libX11` connection and renders into the same window XID (XIDs are server-global). Headless tests and compute devices use surfaceless EGL (`EGL_MESA_platform_surfaceless`) or a hidden WGL window. macOS uses CGL on the content view that `window_native` returns.
+
+## D5881 — One thread owns a GL device
+
+A GL context is current on one thread at a time. `e.gpu.gl` gives each device a worker thread that owns the context and receives every queue call; making the context current on each call would race as soon as two threads share a queue.
+
+## D5882 — Exactness on GL is Metal's promise
+
+Every word a kernel writes on GL equals what the CPU backend writes. GLSL allows 2.5 ULP division and a loose `sqrt`, so the emitter corrects both to correct rounding (with integer emulation of the divide as the fallback), and every float operation is `precise`. GLSL core has no 8- or 16-bit SSBO access, so narrow stores are `atomicAnd`/`atomicOr` on their word; a plain read-modify-write would race with neighbouring invocations. A kernel that needs `f64`, `i64`, 64-bit atomics or subgroups on a device without them fails at `gpu.launch` with `gpu.Unsupported`, the existing §10 mechanism.
+
+## D5883 — GL entry points are generated
+
+The constants and function tables are generated from Khronos `gl.xml` and `egl.xml`, one table per profile (gl33core, gl43core, gl46core, gles30, gles31, gles32), by `scripts/gen_khronos_gl.py` (L172). No entry point is written by hand, and regenerating must give identical bytes.
+
+## D5884 — Mobile GL means GLES, and Android comes in two forms
+
+Mobile OpenGL is the GLES 3.1 profile. It is verified first on Mesa's EGL on desktop Linux, which needs no phone, and then on Android. Neper has no Android target, so the target comes in two forms, cheaper first. The first (C219) is an executable for `adb shell`: a PIE ELF against Bionic that runs headless EGL and every `gpu_*` fixture on the x86_64 emulator using the existing x64 back end. The second (C220) is a NativeActivity app; it needs a C-facing shared library that exports `ANativeActivity_onCreate`, which the spec defers to an `@export` proposal, so it waits for that proposal. Out of scope: GLES on iOS (Apple deprecated it; Metal covers the platform), GL on NeperOS (its kernel has no GPU driver) and OpenCL (§10).
+
+## D5885 — The GL binding is generated from the registry's headers, as one table
+
+D5883 is kept, but its input changes. `scripts/gen_khronos_gl.py` reads `glcorearb.h`, `GLES3/gl32.h`, `EGL/egl.h`, `eglext.h` and `eglext_angle.h`, which Khronos generates from the XML registry and which ship with Mesa's development packages; they are vendored, unchanged and under MIT, in `scripts/khronos`, so nothing needs to be downloaded. Each `#ifndef GL_VERSION_x_y`, `GL_ES_VERSION_x_y` or `EGL_VERSION_x_y` block is one registry feature, and the generator reads profile membership from those blocks.
+
+The output is one table rather than one per profile. `gl.e` has 675 entry points (the union of GL 4.6 core and GLES 3.2), each with a six-bit mask of the profiles that require it; `gl.load(profile, resolve, context)` fills every entry the driver has and fails with `Unsupported` only on a required one, which `gl.missing()` names. Extension blocks contribute constants only, and only from an allowlist (`GL_ARB_gpu_shader_int64`, `GL_KHR_shader_subgroup`, EGL's X11, surfaceless and ANGLE platforms).
+
+How the generated code is shaped:
+- An entry point is a wrapper that puns its table slot onto an `extern fn` type through a union, as the COM code does (`os/shell.windows.e`). The 246 distinct signatures are shared.
+- The loader is straight-line code in chunks of 100 entries, because the checker accepts neither module-scope `str` nor array constants.
+- Names drop the prefix and become snake case at each lower-to-upper and letter-to-digit step: `glTexStorage2DMultisample` is `tex_storage_2d_multisample`.
+- GL constants are `u32` (GLenum) unless a value needs `u64`. EGL constants are `i32` (EGLint, an attribute list's type), except `TRUE` and `FALSE`, which are EGLBoolean `u32`, and the `NO_*` handles, which are `usize`.
+- `void *` is `*void`, other pointers are typed, and a pointer to pointers is a `usize`.
+
+Hand-written support lives in `scripts/khronos/gl.prelude.e` and `egl.prelude.e`, which the generator copies into the output: `load`, `version`, `has_extension`, `offset`, and EGL's library loading and `proc_address`. The output is regenerated byte for byte; `--check` fails a stale tree, and both suites run it. `x_khronos_gl_load` exercises the table with fake resolvers and no driver (x64 Windows and Linux).
+
+## D5886 — x.khronos.context: one EGL path, WGL without a throwaway window
+
+`x.khronos.context` has the same declarations on every host: `Options { api, major, minor }`, `headless`, `for_window`, `make_current`, `swap`, `swap_interval`, `load`, `close`, plus `resolve`, `as_pointer` and `as_bytes` for code that calls GL directly. The EGL work every host shares (config, context, headless or window surface, current, swap) is in `x.khronos.eglcontext`, written once. The Linux and Windows variants alias its `Api` and `Options`, and only open their display.
+
+- **Linux.** A headless context uses Mesa's surfaceless platform, falling back to the default display and a 1x1 pbuffer. A window's context uses a second Xlib connection on the same window id. EGL 1.4 libraries are accepted (`eglGetDisplay` instead of `eglGetPlatformDisplay`).
+- **Windows.** Desktop GL is WGL. The core context comes from a legacy context made current on the same device context, only long enough to look up `wglCreateContextAttribsARB`. That changes D5880's plan: no throwaway window is needed, because the window's single `SetPixelFormat` is the one the core context uses as well. A headless WGL context owns a hidden `os` window. GLES is ANGLE's `libEGL.dll` from the DLL search path.
+- **Resolving entry points.** `resolve` tries `wglGetProcAddress` first and then opengl32's own exports. That covers the GL 1.1 entries, for which an ICD answers 0, 1, 2, 3 or -1.
+
+Three things the drivers taught:
+- `eglChooseConfig` defaults `EGL_SURFACE_TYPE` to `EGL_WINDOW_BIT`, so a surfaceless display matches nothing unless the attribute is named, even as 0.
+- A driver asked for a GL 3.3 core context may report exactly 3.3 (Intel does), so compute needs a 4.3 context of its own.
+- The Android emulator's bundled SwiftShader `libEGL.dll` is EGL 1.4. That is why `egl.load` now requires only 1.4, fills 1.5 when present (`egl.present` with a generated `*_ENTRY` slot), and remembers a failed load instead of leaving half a table. Even so, that SwiftShader build clears but draws nothing, with no GL error and whether its entries come from `eglGetProcAddress` or from `libGLESv2.dll`'s exports. It is the emulator's internal translator, not a driver this targets, and it is left unexplained.
+
+Checked here:
+- Intel Iris Xe through WGL: GL 3.3, and GL 4.3 with compute.
+- ANGLE on D3D11 (`libEGL.dll` from PATH): GLES 3.0, and GLES 3.1 with compute.
+- Mesa 25.2.8 llvmpipe in WSL: all four contexts, plus a window through WSLg's X server.
+
+`x_khronos_gl_headless` draws a triangle into a framebuffer object. Its interior and exterior pixels are the same on any conforming driver, and on llvmpipe the whole image is checked against a golden FNV-1a hash. It then runs a compute shader that fills an SSBO. `x_khronos_gl_window` clears, scissors, reads back and swaps on an `os` window, and `examples/gl_triangle.e` draws the blended triangle (`--es` for GLES). All three are in both suites.
+
+## D5887 — e.ui presents through a hook; x.khronos.present is the GL one
+
+`e.*` never imports `x.*`, so `e.ui.app` cannot take a `present: .Gl` option as L178 first said. Instead `e.ui.window` gains `Presenter { context, present }`, `set_presenter` and `presenting`. In `request_frame`, the frame `os.window_present` would have blitted goes to the presenter, and the first error from the presenter returns that window to the software blit for good. `x.khronos.present.attach(a, window, options)` is the GL presenter. It makes a context on the host window, uploads the BGRA frame to one RGBA8 texture, and draws one full-screen triangle that `texelFetch`es pixel (x, y) from row `height - 1 - (y - origin)`. The swizzle is `.bgr`, alpha is forced to 1, and the frame hangs from the window's top edge, as the GDI and X11 blits draw it. Vsync is requested.
+
+`x_khronos_gl_present` shows BGRA patterns at 64x48, 96x72 and 128x96 (one logical frame at scales 1.0, 1.5 and 2.0) in a 160x120 window through GL 3.3 and GLES 3.0. It reads every pixel of the back buffer before the swap, including the black margin, and compares them bit for bit. It passes on Intel through WGL, ANGLE D3D11 and Mesa llvmpipe. The controls gallery (`examples/ui/main.e --gl` / `--gles`) runs through the presenter, and its sampled client pixels equal the software path's.
+
+The whole frame is uploaded on every present: `e.ui.app` does not report damage to the window yet, so a damage-only upload through two PBOs waits for that.
+
+## D5888 — `--gpu glsl`: GLSL after the SPIR-V, from src/glsl.e
+
+The self-hosted compiler now takes `--gpu LIST`: comma-separated items from `spv`, `ptx`, `glsl` and `none`; any other item is not a build. Only `glsl` changes the output. With it, each kernel's embedded module string (`[!]<identity>:<hex SPIR-V>`) gets `;` and the hex of the same kernels as GLSL 4.30 appended. A kernel the SPIR-V emitter could not write keeps an empty module before the `;`. The launcher cuts at the `;`: Vulkan and Metal take what is before it, a GL device what is after. `Graph.gpu_glsl` carries the flag. There is no `target.Arch.Glsl` and no `K$glsl`, as C214 first proposed: GLSL is never a target of its own, only text that rides beside a kernel's SPIR-V. The option is bit 55 of the compiler identity, so a cache never mixes the two kinds of artifact. To make room, `OPTIONS_MASK` now keeps 55 bits and gives up the size's bit 23.
+
+`src/glsl.e` ports `msl.e` to GLSL. GLSL has no pointers and no byte access, so every place a value lives is a `uint` word array addressed in bytes: `heap`, an SSBO for device memory; `fr`, the invocation's frame; and `tg`, the shared block.
+- **Loads.** Four-byte values are words. One- and two-byte values are `bitfieldExtract`s.
+- **Narrow stores.** In `heap` and `tg` they are `atomicAnd` and `atomicOr` on the word, so neighbouring invocations' bytes survive. In `fr` they are a `bitfieldInsert`.
+- **Floats** are `precise`, so a multiply and an add are never fused.
+- **Narrowing.** A narrow integer is masked or sign-extended back after every operation.
+- **Signed division and remainder** are taken from unsigned magnitudes, because GLSL leaves negative operands undefined.
+- **Shaders.** One shader per kernel follows a `//entry:module_kernel` line, with `local_size` from `@gpu(X, Y, Z)`.
+- **Dispatch.** The dispatch is a chain of `if (pc == N)` blocks.
+- **Unsupported.** 64-bit values, `f64`, subgroups, helper calls, atomic orders stronger than relaxed, and exact float division and square root (C217) are `Unsupported`, so the CPU runs those kernels.
+
+A builtin's field address carries the component's byte offset (4 for `.y`), not its index. `msl.e` multiplies it by four again, which looks like the same latent bug for `.y` and `.z`. It is left alone here, because no Mac is at hand to check.
+
+Intel's GL compiler (Iris Xe, 31.0.101.3962) miscompiled two integer divisions:
+- a checked signed multiply's `|a * b| / |a|`, taken as exact and folded wrongly;
+- an unsigned division by a constant 7, which answered 0.
+
+Both dividend and divisor of every integer division and remainder therefore get `uint(gl_NumWorkGroups.z == 0u)` added: a zero the compiler cannot prove. llvmpipe was right either way. The emitted GLSL compiles and links on Intel and Mesa. The self-hosted compiler rebuilds itself byte for byte, and the SPIR-V golden (`tests/conformance/spirv/saxpy.spv`) is unchanged.
+
+## D5889 — e.gpu's heap backends share one driver table; x.khronos.compute is GL's
+
+Metal's backend already worked over one host-visible heap whose ranges are the buffers (D5838). The GL backend is the same model, so `e.gpu` gains `Backend.Gl` and a `HeapDriver` table: `available`, `name`, `open`, `close`, `buffer`, `free`, `compile`, `destroy`, `dispatch_begin`, `dispatch_wait` and `capabilities`. Metal's table is `e.gpu.metal`'s own functions. GL's is set by `install_gl`, which `x.khronos.compute.install()` calls, because `e.*` cannot import `x.*`. Every place that said `.Metal` now asks `heap_backend`, and the GL backend reuses the Metal launcher, fault block, carving and pipeline cache unchanged. Metal's own behaviour is unchanged; a GL device closing waits for its pending launch.
+
+`x.khronos.compute` works as follows:
+- **Device.** A headless GL 4.3 core context, which needs `glBufferStorage`.
+- **Buffers.** The heap and each argument block are SSBOs mapped persistently and coherently.
+- **Kernels.** Each is compiled from the shader after its `//entry:` line.
+- **Launch.** Binds the block at binding 0 and the heap at binding 1, dispatches, then `glMemoryBarrier(ALL)`, a fence and a flush. The wait is `glClientWaitSync`.
+- **Capabilities.** Int8 and Int16, plus what a probe at `open` finds: the smallest f32 denormal doubled comes back as 2 (`DenormPreserve`) or 0 (`Ftz`). Intel flushes and llvmpipe keeps them, so on Intel a float kernel needs `ftz` to run.
+
+`glBufferStorage` without data leaves the bytes undefined, so the probe writes every byte it reads. The context is current on the opening thread, and every call must come from that thread (the D5881 worker thread is the recorded upgrade).
+
+`gpu_gl` (built with `--gpu glsl`) runs saxpy, u8 and i16 stores racing their neighbours, signed `/` and `%` by a negative divisor, and a 2-D grid's ids. Every word equals the CPU backend's on Intel Iris Xe (the `ftz` saxpy) and on Mesa llvmpipe (the plain one), and a checked overrun comes back as a `Bounds` fault. The CPU and Vulkan fixtures (`gpu_cpu`, `gpu_fault_bounds`, `gpu_devices`, `gpu_shared`, `gpu_ftz_ops`, `gpu_present`, `gpu_vulkan_*`) still pass, including Vulkan launches from a `--gpu glsl` build.
+
+## D5942 — The GLES compute profile is ES 3.2, from the same shaders
+
+`x.khronos.compute.install_es()` makes `.Gl` open OpenGL ES 3.2 contexts instead of GL 4.3 core ones (Mesa's EGL on Linux, ANGLE's `libEGL.dll` on Windows). The emitter is unchanged. At compile time the shader's `#version 430` line gives way to `#version 320 es` with `precision highp float; precision highp int;`, passed as a second string to `glShaderSource`, so nothing is copied.
+
+The floor is ES 3.2 rather than the 3.1 the plan named, because 3.2 is the first ES with `precise`: without it a multiply and an add may be fused, and the words would no longer be the CPU's. A device that answers below 3.2 is not opened. ANGLE on D3D11, which stops at 3.1, is therefore refused rather than run inexactly. ES has `glBufferStorage` only as `GL_EXT_buffer_storage`, which the driver calls through `glBufferStorageEXT` when the core entry is absent. `gpu_gl` runs every kernel a second time through ES and is word-equal to the CPU on Mesa llvmpipe's GLES 3.2.
+
+## D5943 — Exact f32 division and square root in GLSL are integer sequences
+
+GLSL lets division be 2.5 ULP off and `sqrt` looser still. Its `fma` is not promised to round once, so a Newton correction cannot be trusted. The GLSL emitter therefore writes `f32_div` and `f32_sqrt` into each shader that needs them, and they work on the bits:
+- **Division.** Unpack and normalise subnormals, long-divide the two 24-bit mantissas to 26 quotient bits plus a sticky bit, and round to nearest-even in one `f32_round`. That covers subnormal results (shifted, with the shifted-out bits sticky) and overflow to infinity.
+- **Square root.** A digit-by-digit integer square root of the mantissa scaled to 52 bits, to 26 bits plus a sticky bit, rounded the same way.
+- **`ftz` kernels.** `const bool FTZ` is set from the kernel's `ftz` fact. Subnormal operands then count as zero and a result tiny after rounding becomes a zero, as the CPU's FTZ and DAZ make it.
+
+The first run found the CPU returning 0x7FC00000 where the sequence followed x86's default NaN. Section 11 is the rule: every floating operation that produces a NaN returns the one canonical positive quiet NaN. The sequences now return 0x7FC00000 for every NaN case, and the emitter also canonicalises the result of every f32 `+ - *`, so a device's own NaN payload never reaches memory.
+
+`gpu_gl_exact` divides and takes square roots of 65,536 operand pairs from a fixed xorshift. The pairs include every special value in either place and divisors at the dividend's scale, so rounding is decided in the last bits. Every word equals the CPU's on Intel (the `ftz` kernel) and on Mesa llvmpipe (the plain one, with subnormal results).
+
+## D5944 — A helper the kernel calls is a GLSL function, in every kernel's shader
+
+The GLSL emitter used to refuse any kernel that calls a helper (the MSL emitter still does). Helpers now go the way the SPIR-V emitter takes them:
+- **Which helpers.** Every function the kernels reach through `Call` is found from the resolved references, as `spirv.e` finds them.
+- **Shape.** Each becomes `T hN(...)`: a scalar or device address by value, an aggregate as its `uint` words (copied into the callee's own frame slot by its `Parameter`), and a shared pointer as its byte offset into `tg`.
+- **Body.** Its frame is a local `uint fr[]` of its own, and the dispatch loop is the kernel's.
+- **Placement.** Prototypes and definitions go into every kernel's shader ahead of `main`, after the `FTZ` constant and the exact sequences, so a helper divides under its caller's `ftz`.
+- **Refused.** A helper that returns an aggregate or more than one value, a pointer into the caller's frame, and `math.fma` (GLSL's `fma` need not round once) are `Unsupported`, and the CPU runs that kernel.
+
+GLSL forbids recursion, as device code does.
+
+`gpu_gl`'s `helped` kernel uses a scalar helper, a helper that indexes a slice it was handed, a nested call, and an f32 helper. It is word-equal to the CPU on Intel (its `ftz` twin) and on llvmpipe through both GL and GLES 3.2. `gpu_cpu`, `gpu_vulkan_loop` and `gpu_device_helpers` built with `--gpu glsl` still pass, and the compiler still rebuilds itself byte for byte.
+
+## D5893 — 64-bit integers in GLSL through GL_ARB_gpu_shader_int64
+
+How the GLSL emitter handles `u64` and `i64`:
+- **Values** are held as `uint64_t` and `int64_t`. A shader holding one starts with `#extension GL_ARB_gpu_shader_int64 : require`, whether the value is in the kernel or in one of its helpers.
+- **Memory.** In heap, frame or shared memory a 64-bit value is two words, read with `packUint2x32` and written with `unpackUint2x32`. Its alignment is natural, so a neighbour's store never shares its words.
+- **Constants** are written as 16 hex digits with the `ul` suffix.
+- **Division.** Signed division and remainder take 64-bit magnitudes, and the unprovable zero is a 64-bit one.
+
+Device addresses stay 32-bit offsets, and 64-bit atomics stay `Unsupported`. `x.khronos.compute` reports `Int64` only where the desktop driver lists the extension: Mesa does, Intel's GL driver (31.0.101.3962) does not, so there a 64-bit kernel is `gpu.Unsupported` at launch and the CPU runs it. `gpu_gl`'s `wide` kernel (wrapping multiply, shifts, division by a constant, `i64` `/` and `%` by a negative) runs where `Int64` is reported and is word-equal to the CPU on llvmpipe. The pinned GLSL goldens are unchanged.
+
+## D5894 — gl.load asks for an entry's ARB, KHR and EXT spellings before calling it missing
+
+Intel's GL 4.6 core context refused `gl.load(.Gl46Core)`: its driver resolves `glGetnTexImageARB` but not the core name `glGetnTexImage`. A driver may export a core entry only under the extension it came from, so `fetch` now asks for `<name>ARB`, `<name>KHR` and `<name>EXT`, in that order, before an entry counts as absent. These are the same function under another name, and the generated table is unchanged. `x_khronos_gl_load` checks both directions: a resolver that knows only `glDispatchComputeARB` satisfies GL 4.3, and one that withholds every spelling still fails it by name.
+
+With this, GL 4.6 core draws and computes on Intel (`x_khronos_gl_headless`), and llvmpipe, which stops at 4.5, reports 4.6 as unsupported. `x_khronos_gl_window` now opens GL 3.3, GL 4.3 and GLES 3.0 contexts on windows of their own, and all three pass on Intel/ANGLE and on llvmpipe under WSLg.
+
+## D5895 — The browser host presents through WebGL2 where the page has it
+
+`lib/wasm/window.js` draws each frame through `webgl2(canvas)` when the page has WebGL2:
+- **How it draws.** One RGBA8 texture, refilled with `texSubImage2D` while the size holds. One full-screen triangle `texelFetch`es pixel (x, y) from row `height - 1 - y`: no filtering, no blending, and a context with `premultipliedAlpha: false`, so the canvas holds exactly the bytes `putImageData` would have written.
+- **Fallback.** Without WebGL2 (an old browser, or Node's canvas shim, which answers every `getContext`) it returns null, and the 2D context draws as before. A real context is told apart by `WebGL2RenderingContext` existing and the object having `createShader`.
+- **Choice.** A canvas keeps whichever context it got first.
+
+`tests/wasm/browser/webgl2_present.html` draws random frames at 64x48, 97x61 and 480x320 and reads them back with `readPixels`. It printed "webgl2 present ok" in the app's Chromium pane. `ui_counter.html` ran and repainted through it (the count went to 2), and `tests/wasm/window.mjs` still passes under Node's shim. The suites have no headless browser, so the page is run by hand.
+
+## D5896 — `x64 android`: the Linux image, typed ET_DYN for /system/bin/linker64
+
+An experiment settled the shape: a neper Linux x64 image with only its `e_type` changed to `ET_DYN` runs at a randomised base under Linux, imports included. Neper's code is position-independent: calls go through the slots the loader fills, and nothing holds an absolute address that would have to move. Static images already run on Android 15 x86_64 as they are. The dynamic ones failed only because they named glibc's loader.
+
+So `x64 android` is `x64 linux` to everything but the ELF writer:
+- **Validation and loading.** `project.e` accepts the OS name, and `graph.load` stores it as `linux`, so every module, variant, seed and runtime is Linux's.
+- **Linking.** `nir.Builder.android`, set where `main.e` links an ELF, makes `link_elf.e` type the image `ET_DYN` and name `/system/bin/linker64` as its interpreter.
+- **Library names.** Bionic names (`libc.so.6` becomes `libc.so`; a name keeps everything up to its `.so`), plus a `libdl.so` entry for `dlopen`. Neper emits no symbol versions, so the loader looks each symbol up in every library named.
+- **EGL.** `x.khronos.egl` falls back from `libEGL.so.1` to Android's `libEGL.so`.
+
+`scripts/run-android.ps1` builds fixtures for `x64 android`, pushes them with adb and runs them from `/data/local/tmp`. On the SDK's Android 15 x86_64 emulator, `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load` and `x_khronos_gl_headless` pass. In the last, GLES 3.0 draws and reads back through the emulator's GLES translator (SwiftShader).
+
+The same run explained D5886's open question. The emulator's GLES, and the SwiftShader `libEGL.dll` it ships for Windows, draw nothing when a draw has no vertex attributes. That is the `gl_VertexID`-only shaders the fixtures used. `x_khronos_gl_headless` and `x.khronos.present` now take their corners from a vertex buffer, and SwiftShader draws on Windows too. The emulator offers no GLES 3.1, so `e.gpu` compute has no device there and `gpu_gl` reports that it checked nothing.
+
+`aarch64 android` (`link_elf_a64.e`, real phones) is not done, and it is not the same change. The emulator runs arm64 executables through its ndk_translation binfmt, and a static arm64 neper image runs there as it is. Typed `ET_DYN`, the same image exits 255, so the a64 code or its image still holds absolute addresses (`A64_IMAGE_BASE`). An arm64 Android image needs those found and given relative relocations first.
+
+## D5897 — Each GL compute device runs on a thread of its own
+
+D5881 as built. `x.khronos.compute.open` gives the device a slot with a mutex, two conditions and one request record. It starts a thread (8 MiB stack, detached) that makes the device's headless context and then serves requests until the device closes or its open fails.
+- **Calls.** Every driver function (`name`, `buffer`, `free`, `compile`, `destroy`, `dispatch_begin`, `dispatch_wait`, `close`) posts its request into the slot and waits for the answer. The GL work it did before now happens on the device's thread. e.gpu already serialises calls per device, so one record per slot is enough.
+- **Routing.** The calls that get no device handle find their slot from the handles themselves: a buffer's GL name and a program carry the slot in their high 32 bits. A fence is found through the slot whose last launch made it.
+- **No join.** The safety checker refuses a write to a module array after a thread has been lent one in the same function. Starting the thread is therefore its own function that detaches it, and a device's thread is never joined: it leaves its loop on close.
+
+`gpu_gl_threads` opens the GL device on the main thread, launches and downloads from a spawned thread, then does it again from the main thread. Both results are word-equal on Intel and on llvmpipe, and `gpu_gl` and `gpu_gl_exact` pass unchanged through the device thread.
+
+## D5898 — Linked GL programs are cached as program binaries
+
+`x.khronos.compute` keeps each linked kernel's `glGetProgramBinary` output, with its format in the first four bytes, under the temporary directory's `neper-gl` folder. The file is named by the FNV-1a hash of the renderer, the GL version and the shader text with its header.
+- **Hit.** Before compiling, `compile` tries `glProgramBinary` on that file and uses the program only if it reports linked. A binary the driver refuses, after a driver update say, is skipped and compiled again.
+- **Miss.** A program linked from source is marked retrievable and saved. A driver with no binary formats, or a directory that cannot be written, simply has no cache.
+
+`compute.cache_hits()` counts the programs taken from the cache. `gpu_gl_cache` closes and reopens the GL device in one process, so its second compile must come from the file. The hit count grows and the words are the CPU's, on Intel and on llvmpipe.
+
+## D5899 — A resized X11 window's GL surface is swapped once before its next frame
+
+`x_khronos_gl_resize` resizes its window from outside twelve times: `SetWindowPos` on Windows, `XResizeWindow` through a second Xlib connection on Linux. Each time it waits for `os.window_metrics` to report the new size, clears at that size, scissors a marker into the top-right corner, and reads the back buffer before swapping.
+- **Windows.** WGL passed as it was.
+- **Mesa under WSLg** failed at the first resize. `eglQuerySurface` already gave the new size, but the far corner read `0xCDCDCD`: Mesa's software X11 surface keeps its buffers at the old size until a swap, so the first frame after a resize goes into a stale buffer. Unbinding and rebinding the surface does not change that.
+- **The fix.** `x.khronos.context`'s Linux `make_current` compares the window's size with the size it last saw for that surface (recorded when the surface is made, kept in a small table since the context is `*const` there). When the size changed, it swaps once first, which shows the last frame again rather than a torn one, and the frame that follows has buffers of the new size.
+
+Both hosts now pass all twelve steps. Windows' minimum window width (about 176 px with a caption) is why the fixture asks for 200 px or more.
+
+## D5945 — `aarch64 android`, and arm64 atomics as exclusive loops
+
+`aarch64 android` is `aarch64 linux` typed `ET_DYN` for `/system/bin/linker64`, with D5896's Bionic library names; `link_elf.e`'s `executable_type` and `builder.android` serve both writers. Android images also name `liblog.so`, Android's logger, beside `libdl.so`.
+
+D5896's last paragraph guessed wrong. The arm64 image holds no absolute address: under qemu-aarch64 the same image typed `ET_DYN` runs at a moved base. The emulator's arm64 translator (berberis, run by ndk_translation's binfmt) refused it for two other reasons:
+- **No dynamic segment.** The translator loads nothing without `PT_DYNAMIC`, so an arm64 Android image always takes the dynamic layout, with no libraries when it imports none.
+- **LSE atomics.** The translator implements ARMv8.0, and `SWPAL` (`0xb8eb8151`) stopped it with SIGILL. The LSE read-modify-writes and `CASAL` are ARMv8.1; arm64-v8a promises ARMv8.0, and so does a Cortex-A53 or A72 Linux board. Every arm64 target now emits `LDAXR`/`STLXR` loops: the operation into x3, the store's status in x2, retried while it fails. Min, max and compare-and-swap compare at the width, from values extended into x3 and x4. x0–x7 hold nothing inside an instruction, since parameters live in slots. The LSE encoders stay in `emit_a64.e`, under the encoder sweep, for a target that guarantees them.
+
+A third fault was the per-module linker. `em_link.e` chose a64's call patching only for the `aarch64-linux`, `-none`, `-neperos` and `-macos` target strings, so `aarch64-android` artifacts were patched as x64 code (`emit_a64.NotPatchable`).
+
+`scripts/run-android.ps1 -Arch aarch64` builds and runs fixtures as arm64. On the x86_64 Android 15 emulator, both architectures pass `hello`, `advanced`, `gpu_cpu`, `gpu_fault_bounds`, `x_khronos_gl_load`, `x_khronos_gl_headless` (GLES 3.0 draws), `atomic_ops`, `atomic_threads` and `channel_threads`. `atomic_ops` and `atomic_threads` built for `aarch64 linux` pass under `qemu-aarch64 -cpu cortex-a53`.
+
+## D5946 — `math.fma` in GLSL, and the float fixtures on every GL device
+
+GLSL's `fma` need not round once, so the emitter refused kernels that call `math.fma`. It is now the fourth exact sequence beside `f32_div` and `f32_sqrt`, written in the shader as `f32_fma` on the bits:
+- **Product.** `umulExtended` gives the 48-bit product exactly, and it is moved so its top bit is bit 61 of a `uvec2`.
+- **Sum.** The addend is aligned to it at the same bit, with every bit shifted out jammed into bit 0. When the two cancel heavily, their exponents are within one of each other, so nothing was shifted out; when anything was, the result keeps 34 bits below its rounding point. The jam is therefore exact for rounding.
+- **Rounding.** The sum is normalised to 26 bits and rounded by the shared `f32_round`: nearest-even, subnormals, and `ftz` flushing of inputs and results. NaNs, infinities, `inf * 0` and zero products are settled first, and an exact cancellation is `+0`.
+
+It needs only GLSL 4.30 and ES 3.10 built-ins, and no `int64` or `fp64`. The call is written in place, so `math.fma`'s own body, which is 64-bit integer code, is no longer marked reachable as a helper. Before this change, that body was why the kernel failed.
+
+`gpu_gl_exact` adds a fused multiply-add to each of its 65,536 pairs. Half take an unrelated addend; half take the product's negation, whose answer is the product's rounding error, which only a single rounding gets right. It is word-equal to the CPU on Intel Iris Xe (`ftz`) and on llvmpipe.
+
+`gpu_float_modes` and `gpu_vulkan_float` now run every `.Gl` device after the Vulkan ones; the suites build them with `--gpu glsl`. `scripts/check-fixture.sh` always passes `--gpu glsl`, which only adds GLSL to kernel modules, so a GL fixture checked by it runs its kernels instead of reporting `Unsupported`.
+
+## D5902 — Subgroups in GLSL, at the width the workgroup was cut into
+
+`glsl.e` writes NIR's subgroup operations with `GL_KHR_shader_subgroup`, ported from MSL's (D5852):
+- **Inputs.** `gpu.sid` is `gl_SubgroupInvocationID`.
+- **Collectives.** Vote is `subgroupAll` and `subgroupAny`. Ballot is `packUint2x32(subgroupBallot(p).xy)`, so it needs Int64. Broadcast and shuffle are both `subgroupShuffle`, since a broadcast's lane is a value and `subgroupBroadcast` takes only a constant. The add, min, max, and, or and xor reductions keep narrow types at their width.
+- **Lockstep.** A function that uses any of these gets MSL's round: `if (pc != subgroupMin(pc)) continue;`. Lanes that took different branches meet again at the join before a collective.
+- **Header.** Its shader requires the basic, vote, ballot, shuffle and arithmetic extensions.
+
+`gl_SubgroupSize` is not the width. Intel's driver reports 32 and runs this workgroup of 40 in subgroups of 16, so lanes 16 to 31 read `sid` 0 to 15. `gpu.subgroup_width` is therefore the width the workgroup was actually cut into: its size over `gl_NumSubgroups`, rounded up to a power of two, at most `gl_SubgroupSize`. Subgroups are packed in invocation order, so that is exact whenever the workgroup holds at least one full subgroup. A smaller workgroup reads its own size rounded up rather than the hardware's, which is a known limit.
+
+`x.khronos.compute` reports `.Subgroup` where the extension lists compute among `SUBGROUP_SUPPORTED_STAGES_KHR` and all five features among `SUBGROUP_SUPPORTED_FEATURES_KHR`. Intel's Windows GL does. Mesa's llvmpipe advertises no GL subgroups, and forced on it answers zero stages.
+
+`gpu_gl_subgroup` checks each collective lane by lane against what section 8 defines for the width the kernel reports, rather than against the CPU backend. The CPU's width comes only from `NEPER_SUBGROUP_WIDTH` at open, and a process cannot set that for itself. On Intel every collective is correct at width 16, the partial last subgroup included. The ballot kernel runs only where the device also has Int64, and no device here has both, so it is written but unrun.
+
+## D5903 — f64 as GLSL's `double`, and the GL device's limits as `TooLarge`
+
+`glsl.e` holds an f64 as a `precise double`, which is core since GLSL 4.00, so desktop GL needs no extension.
+- **Memory.** Its two words cross the heap through `packDouble2x32` and `unpackDouble2x32`, not through int64, which Intel's GL lacks.
+- **Arithmetic.** `+ - * /` and `sqrt` are GLSL's own.
+- **NaNs.** Every NaN result, including a converted one, is section 11's canonical NaN of its width (`0x7FF8000000000000`, or `0x7FC00000` after narrowing). Before this, narrowing a NaN kept its payload.
+
+`x.khronos.compute` reports `.Float64` on desktop contexts; ES has no doubles. Unlike f32 (D5943), the double operations are not written as integer sequences. GLSL promises them only single precision, so the driver's arithmetic is trusted where `gpu_gl_f64` passes. That fixture covers 65,536 pairs of random patterns and special values through every operation and narrowing, and is word-equal to the CPU on llvmpipe. Intel cannot run an f64 kernel at all: it flushes denormals, so only `ftz` kernels launch there, and an `ftz` kernel cannot hold f64. If a device ever fails that fixture, the integer sequences are the fix: 53-bit mantissas over `uvec2` words, as `f32_fma` does for 48 bits.
+
+A workgroup longer along an axis than `MAX_COMPUTE_WORK_GROUP_SIZE`, or shared memory past `MAX_COMPUTE_SHARED_MEMORY_SIZE`, used to fail in the driver's compiler and answer `Unsupported`. GL's `compile` now reads the shader's declared `local_size_*` and `tg[]` size against those limits first. Over a limit, it returns a pipeline of no threads, which `e.gpu`'s existing invocation check turns into `TooLarge`, the CPU's and Vulkan's answer. `gpu_gl_limits` checks both: a mebibyte of shared memory is `TooLarge` everywhere, and a 1×1×1024 workgroup is `TooLarge` on Intel (64 along z) and runs correctly on llvmpipe.
+
+## D5904 — OpenGL ES 3.1 devices where `gpu_shader5` gives them `precise`
+
+D5942 put the ES floor at 3.2 because 3.2 is the first ES with `precise`, and without it a driver may fuse an f32 multiply and add, breaking word equality. ES 3.1 drivers often have `GL_EXT_gpu_shader5` or `GL_OES_gpu_shader5`, which brings the same keyword. `x.khronos.compute` now asks for ES 3.1 or later:
+- **3.1 with either extension.** The device is taken, and its shaders start `#version 310 es` with that extension required and every precision high.
+- **3.1 without either.** The device is refused, as ANGLE on D3D11 still is.
+- **3.2 and later.** These keep 3.2's header.
+
+The emitted GLSL needs nothing else past 3.1. Doubles and int64 are never offered on ES.
+
+The heap needed nothing new: `buffer_here` already takes `MAX_SHADER_STORAGE_BLOCK_SIZE` up to 256 MiB, and ES 3.1 guarantees 128 MiB.
+
+Mesa answers as a 3.1 driver under `MESA_GLES_VERSION_OVERRIDE=3.1`. There it takes the OES header and `gpu_gl`'s ES pass is word-equal to the CPU. The Linux suite now runs `gpu_gl` a second time that way.
+
+## D5905 — The GL presenter uploads only the box the renderer changed
+
+D5887's presenter uploaded every frame whole. `e.gfx.scene` already knows each frame's damage (D914): up to two boxes, a scroll strip, or the whole frame. Now:
+- **Renderer.** Each render keeps the pixel box that holds all of them. `scene.changed_box` answers it, and it is empty when nothing changed.
+- **App.** `e.ui.app` passes it to its window after every render with `window.report_changed`.
+- **Window.** `request_frame` hands the box to the presenter as `window.Changed`. When nothing reported one, the box is the whole frame, so any other caller of `request_frame` stays correct.
+- **Presenter.** A new size, or the first frame, still uploads whole. Otherwise only the box goes up: its rows are copied into one of two pixel-unpack buffers in turn, so filling one never waits on the upload from the other. `glTexSubImage2D` then takes the box's columns from that buffer under `UNPACK_ROW_LENGTH` and `UNPACK_SKIP_PIXELS`. An empty box uploads nothing.
+
+One box, not two. The union costs a little extra upload when two damage boxes are far apart, and saves a second buffer copy and texture update per frame.
+
+The window's own logical `damage`/`damaged` (D904) are left as they were. They are rectangles in logical units for repaint scheduling, and the presenter needs device pixels from the renderer itself.
+
+`x_khronos_gl_present` checks it at all three scales on both GL 3.3 and GLES 3.0. A box of each frame is changed and reported. The uploaded byte count must grow by exactly that box, the back buffer must equal the whole new frame, and an empty box must upload nothing. `gfx_scene_damage` checks that `changed_box` holds every pixel that differs between two frames, is not the whole frame, and is empty when an unchanged scene is rendered again.
+
+## D5906 — The gpu fixtures on `.Gl`, and what running them fixed in GLSL
+
+`scripts/run-gl-fixtures.py` runs every `gpu_*` link fixture that launches on Vulkan devices on `.Gl` instead. It rewrites `.Vulkan` to `.Gl`, has `main` call `x.khronos.compute.install()` (or `install_es()` with `--es`), and builds with `--gpu glsl` and the flags the suite uses for that fixture. The `use` goes at the end of the file, so fault records keep their line numbers. The fixtures check themselves against the CPU backend. All 22 pass on Intel's Windows GL, on llvmpipe's GL and on llvmpipe's GLES. The run found these GLSL gaps:
+- **Barriers in rounds.** A barrier that lanes reach in different rounds of the dispatch loop is undefined in GLSL, so Intel let lanes pass before a peer's write. A kernel with barriers now runs in workgroup rounds:
+  - Each round, every invocation meets three barriers that agree, through a shared `atomicMin`, on the workgroup's lowest `pc`, and only lanes at that `pc` run.
+  - A barrier ends its round: its block's `pc` is scaled by 64, and the code after the barrier is a continuation block.
+  - A lane that returns or faults waits at `0xFFFFFFFF`, still meeting the barriers, until every lane does.
+
+  It is MSL's subgroup round (D5852) taken to the workgroup.
+- **Ordered atomics and fences.** An atomic stronger than relaxed is the relaxed GLSL atomic between two full fences (`memoryBarrier`, `memoryBarrierShared`), and a memory barrier or atomic fence of either scope is the same pair.
+- **Shared memory in helpers.** A helper may take a shared slice or pointer even though helpers are written before any kernel. A kernel without shared memory declares a one-word `tg` when some helper uses it. A shared pointer's null check always takes its non-null branch, since it is an offset into `tg`.
+- **Faults in helpers.** A fault in a helper that returns a value returns a zero of its type. A bare `return;` there failed the driver's compile.
+- **`math.fma[f64]`.** This follows Boldo and Melquiond: an exact product from Dekker's split, two exact sums, a round-to-odd add, then one rounding. It is exact while no step overflows or underflows; outside that it is the plain expression, which is a marked limit. `gpu_gl_f64` checks 65,536 triples within that range, half of them near-cancelling, and is word-equal on llvmpipe.
+
+`e.gpu.open_id` answers `NoDevice` for a `.Gl` or `.Metal` key when that backend is present, since their records carry no key, and `Unsupported` otherwise. Before, every such key was `Unsupported`. Emitted text for kernels without barriers is unchanged, and the GLSL goldens are byte-identical.
+
+## D5907 — One call presents every window through GL
+
+`e.ui.window.set_default_presenter` takes a `PresenterFactory`, and every window opened afterwards calls its `attach`. If the attach fails, the window stays on the software path. `x.khronos.present.install()` sets one that attaches GL 3.3 core, and `install_es()` one that attaches GLES 3.0. A program, or an `e.ui.app` with its own windows, opts every window into GL with a single call, without reaching for each window as `attach` needs. `e.*` still cannot import `x.*`, so the factory is a hook, like the presenter itself (D5887).
+
+`scripts/run-gl-fixtures.py --ui` runs every `ui_*` fixture that opens a host window with `install()` (or `install_es()`) called first. The other `ui_*` fixtures render offscreen and present nothing. All six pass:
+- **Windows:** Intel's GL 3.3 and ANGLE's GLES 3.0.
+- **Linux (WSLg):** llvmpipe's GL 3.3 and GLES 3.0.
+
+A copy of `ui_app` confirmed `window.presenting` stays true after its frames, so frames went through GL rather than the fallback.
+
+## D5908 — `@export("Name")` and `emit-shared-library`
+
+The user's decision (2026-10-27), resolving spec section 13's open `@export` question (spec line 1238): a neper function becomes a C symbol by `@export("Name")` written above a `@cc(c)` function, and only that way.
+- **Where it may stand.** The attribute is legal only on a `@cc` function, since the symbol must be callable by C's rules, and only on a non-generic one, since one symbol names one function. Each name may be exported once. A library exports at most 64.
+- **The output.** `emit-shared-library SOURCE ROOT ARCH OS OUTPUT` writes an ELF shared object for Linux and Android, x64 and aarch64. It is the dynamic executable's layout (D5896) with these changes:
+  - It is `ET_DYN`, and its `PT_INTERP` header becomes `PT_NULL`, which loaders skip.
+  - Every export is a defined global `STT_FUNC` in `.dynsym` after the imports. Its address is patched once the code is placed, and it is found through `DT_HASH`'s chain.
+  - It carries section headers for `.dynstr`, `.dynsym` and `.dynamic`. Android's loader refuses a library without a `SHT_DYNAMIC` section header; glibc does not need one.
+- **Roots.** The program needs no `main`: the startup's call to it is left unpatched, and dead-function elimination, with no `main` to root it, keeps everything.
+- **No startup.** Nothing runs when the library loads. Neper code receives its arena as a parameter, never from startup state, so an exported function that needs memory makes its own arena, as a thread entry does.
+- **Executables.** An executable ignores `@export`; nothing reads it there.
+
+The command is `emit-executable` with `--shared-library` appended. The rewrite happens in `run_arguments`, not in `dispatch`: calling `dispatch` from itself doubles its very large frame and overflowed the stack (D1605).
+
+`shared_library` holds two exports, one looping and one reading a module-scope `var` the other writes. The Linux suite builds it, builds `host.c` beside it with `cc`, and checks what `dlopen` and `dlsym` find. The same library also loads into C hosts as arm64 Linux under qemu, and as x64 and arm64 Android on the emulator, with hosts built by the NDK's clang. This is what Android's NativeActivity form needs (C220): `libapp.so` exporting `ANativeActivity_onCreate`.
+
+## D5909 — A neper NativeActivity app, packed into an APK
+
+An Android app with no Java is `android.app.NativeActivity` naming a native library in its manifest (`android.app.lib_name`). Android loads that library from the APK and calls its `ANativeActivity_onCreate` on the activity's main thread. With D5908's `@export`, that library is a neper program: `examples/android/native_activity` exports `ANativeActivity_onCreate` as a `@cc(c)` function and writes to the log through `liblog`'s `__android_log_write`.
+
+`scripts/build-apk.ps1` packs one:
+1. It builds the program twice with `emit-shared-library`, as x86_64 and arm64-v8a `libapp.so`.
+2. It writes the manifest: NativeActivity, `hasCode="false"`, a launcher intent, minimum SDK 26, target 35.
+3. `aapt2 link` links the manifest against the platform's `android.jar`.
+4. The two libraries go in stored, not deflated, because `extractNativeLibs="false"` makes Android map them from the APK.
+5. `zipalign -P 16` page-aligns them.
+6. `apksigner` signs with the debug keystore. It runs under WSL's OpenJDK 17, which the user allowed installing; Windows has no Java.
+
+On the x86_64 Android 15 emulator the APK installs and launches cold. The process is alive as the top resumed activity, and `logcat` shows the neper code's line. The app draws nothing yet: its window and input are L182.
+
+## D5910 — e.ui apps on Android: `x.android.activity` as `e.os`'s window host
+
+Android compiles as Linux (D5896), so its `e.os` windows were X11's. `os.linux.e` now takes a `WindowHost`, a table of open, close, poll, metrics, present and native. When one is installed, every `window_*` call goes to it, and title, visibility, cursor and capture answer ok. The other variants answer `window_hosted()` false.
+
+`x.android.activity` is that host for a NativeActivity:
+- **Start.** The program's exported `ANativeActivity_onCreate` (D5908) calls `start` with its entry. `start` sets the activity's window, input-queue and destroy callbacks, installs the host, reads the density (`AConfiguration`, scale = dpi × 100 / 160), and runs the entry on a `pthread`.
+- **Why a Bionic thread.** Bionic's own calls (`ALooper_prepare`) need a thread Bionic made. Neper code keeps no state in a thread register, so it runs there unchanged.
+- **Memory.** The entry's arena is 512 MiB from `mmap` with `MAP_NORESERVE`: address space, not committed memory.
+- **Hand-over.** The callbacks, on Android's UI thread, only hand over. A window or queue that appears is offered, and the app thread takes it at its next poll, attaching the queue to its own `ALooper`. One that goes away is withdrawn, and the callback waits until the app thread has let go of it, as Android requires.
+- **Events.** A touch is the pointer with button 1, Back (released) is Close, and a new window is a Resize then a Paint.
+- **Software frames.** A frame with no GL presenter is copied into the window through `ANativeWindow_lock`, BGRA words to RGBX bytes.
+
+With GL (`x.khronos.present.install_es()`, D5907), `x.khronos.context` makes the EGL surface on the host's native window through EGL's default display, not X11.
+- **Pause and resume.** Android destroys the window on pause and makes another on resume. Each hosted context therefore remembers the window its surface was made on and makes a new surface when the host's window is another.
+- **No window.** While there is none, the presenter shows nothing, and the first frame afterwards uploads whole.
+
+`e.gpu.open(.Cpu)` now reads an environment it may not read as unset: an app cannot read `/proc/self/environ`, and that refusal used to fail the open.
+
+`examples/android/counter`, `ui_counter`'s count and buttons, runs on the x86_64 emulator as an APK (D5909) and presents through GLES:
+- two taps on Increment make the count 2, in the log and on screen;
+- Home and back to it keep the process and its state, the new window draws, and a third tap makes it 3;
+- Back logs `bye`, and the launcher returns.
+
+The status bar overlaps the top of the window, since the window is drawn edge to edge; insets are not applied.
+
+## D5911 — `WM_DPICHANGED`: a per-monitor-aware window takes the suggested rectangle
+
+`e.os` on Windows makes the process per-monitor DPI aware (v2) and reads each window's scale live (`GetDpiForWindow`). So when a window crosses onto a monitor of another scale, or the scale changes, nothing resizes it for the program. Windows sends `WM_DPICHANGED` with the rectangle the window should now have, and the window must take it. The window procedure now does, through `SetWindowPos` (no z-order change, no activation). That arrives as `WM_SIZE` and so as a Resize, and `window_metrics` answers the new scale. A GL presenter or context follows the Resize like any other: the viewport and the presented frame take the new size (D5899).
+
+`x_khronos_gl_dpi` sends its own window `WM_DPICHANGED` at 144 dpi with the frame half as large again, as Windows does for a 150% monitor. The client area must grow by exactly that share less the frame (200×150 to 311×253 on Intel), `window_metrics` must report it, and a GL frame cleared at the new size must reach its far corner. Before this change the message went unhandled and the window kept its size. The machine has one display, so a real crossing between monitors of different scales is not exercised. The fixture sends the message Windows sends for that crossing.
+
+## D5947 — The root arena's default ceiling is 64 GiB, 4 GiB on Android
+
+A program that outgrew its root arena stopped with `E-TYPE-9999` at 1 GiB unless it was linked with `--arena`, the compiler included. The arena cannot grow by moving: it hands out pointers, and nothing moves under one (D351). It does not need to. Since D133 and D340 the arena is a reservation committed as it is touched, so its size is a ceiling on address space, not a charge on memory. Raising the default ceiling gives every program, and the compiler, the memory it needs when it needs it.
+
+The default now lives in the compiler (`nir.root_arena_bytes`), and every hosted linker patches it into the image: the PE word, the ELF x64 stub's four immediates, the ELF arm64 and Mach-O literals. It is 64 GiB on Windows, Linux and macOS (x64 and arm64) and 4 GiB for Android, where some arm64 kernels give a process only 39 bits of address space. `--arena` still sets it either way. A wasm32 module (linear memory) and a NeperOS image keep their own sizes. There is no native iOS target to give a default to. The runtimes' built-in word is now always overwritten.
+
+Considered and not done: chaining regions, so an exhausted arena reserves another and continues. That is growth without a ceiling, but it changes the 24-byte arena layout every runtime reads (D552) and makes `mark` and `reset` span regions; on a 64-bit host the bigger reservation gives the same behaviour.
+
+What it costs: a runaway program is no longer stopped at 1 GiB. It commits until the OS pushes back (pagefile, OOM killer), as a C or Go program does; `--arena` is the hard cap. The compiler's workers each reserve the root's size less a page (D339), so `-j 8` reserves about 576 GiB of address space; that is free on a 47-bit host, but a Linux arm64 host with 39-bit addresses (512 GiB) would refuse it, and a compiler for one should be linked with a smaller `--arena`. The C bootstrap keeps its own default.
+
+Checked: `link/arena_size` now also requires the default build's capacity to be at least 64 GiB. It failed on the old compiler (exit 1) and passes on Windows and Linux x64, and the `--arena 8m` build is still refused. Against the old compiler, the images for x64 Windows, x64 and arm64 Linux and both macOS targets differ only in the arena word (and the Mach-O signature over it); both Android targets carry 4 GiB. A 64 GiB compiler builds itself at a peak working set of 2.9 GB, the same as a 1 GiB one, and stage 2 equals stage 3 at `-j 8` and `-j 1`.
+
+## D5913 — f16 and bf16 on the CPU code generators: widen to f32, operate, round once, in integer instructions
+
+Section 4 already defined the arithmetic (widen to f32, perform the f32 operation, round once to nearest-even); `codegen_x64.float_width` answered 0 for both, so every operation was `Unsupported` and no `@gpu` kernel could use them on `.Cpu`. Both emitters now carry them.
+
+A narrow value lives in a general register as its sixteen bits, zero-extended, which is what loads, stores, calls, returns and `mem.bitcast` already did for a `u16`; only the operations are new. `narrow_float` (1 f16, 2 bf16) is asked beside `float_width`, which still answers 0 so no f32/f64 sequence is reached by mistake.
+
+x64 does the rounding in integer instructions, as the task chose, so x64-v1 needs nothing (no F16C): widen is shifts and one exact `subss` for an f16 denormal; narrow is the add-half-an-ulp-plus-the-odd-bit-and-shift for bf16 and Giesen's `float_to_half_rtne` for f16 (a denormal result rounds by the hardware's own `addss` of 0.5f, a normal one by add-and-shift whose carry out of the mantissa is the exponent step and the overflow to the infinity). A NaN, tested by `ucomiss` against itself, becomes 0x7E00 or 0x7FC0. aarch64 uses `FCVT` for f16 (nearest-even by default) and the same integer sequence for bf16, which has no base-ISA convert.
+
+Conversions: narrow to f32 or f64 is exact, with the canonical NaN of the target; f32 to narrow is the one rounding; f64 to narrow is one rounding too, not two: x64 converts to f32 rounded to odd (nearest-even conversion, stepped one ulp toward zero when it landed farther from zero, last bit set when inexact; 11 or fewer significant bits make the second rounding the rounding of the f64) and aarch64 uses `FCVT Hd, Dn` for f16 and `FCVTXN` for bf16. An integer converts through f64 first; the ceiling is a 64-bit integer beyond 2^53 into bf16, where the f64 rounding can land on a bf16 tie the integer was not on (f16 overflows to the infinity long before). Narrow to integer widens, then takes the f32 path with its range check and saturation. `f16` to `bf16` and back go through f32. Comparison widens both operands and compares in f32, exact. Negation flips bit 15 and a NaN becomes canonical. `ftz` needs nothing: the f32 operation inside is the one `FTZ`/`DAZ` already govern.
+
+Literals: `decimal.literal_bits` takes width 16 (f16) and 17 (bf16), rounding the exact decimal to nearest-even; before, a narrow literal was `Unsupported` in lowering. `math.fma[F]` for a two-byte F is `F(fma[f32](f32(a), f32(b), f32(c)))`, the widen-fuse-narrow of the rest.
+
+`gpu.CPU_CAPABILITIES` gains `.Float16`, so an f16 kernel is no longer refused at launch on the CPU backend; bf16 needs only `.Int16`, which it had. `link/gpu_cpu` counts nine capabilities.
+
+Checked: `link/narrow_float`, generated by `scripts/narrow_float_vectors.py` (numpy float32 for the f32 operation, exact rational rounding for the narrow format, cross-checked against numpy's float16): 19 operations on each type over 2,500 operands drawn with zero/denormal, infinity/NaN and near-1 exponents over-represented, folded into FNV-1a hashes; the decimal literals including ties and denormals; array storage; an `@gpu` kernel on `.Cpu` for each type. It fails with the operation's number if the hash differs (checked by flipping one). Passes on x64 Windows, x64 Linux and aarch64 Linux under qemu; stage 2 equals stage 3.
+
+Considered and not done: F16C for x64-v3 (the integer sequence is identical on every level, so one path to prove); native `fp16` arithmetic on aarch64 (spec section 4 forbids it unless it provably equals widen-operate-narrow, and `FADD Hd` does not in double-rounding cases).
+
+## D5914 — f16 and bf16 in GLSL, word-equal to the CPU's
+
+The CPU code generators (D5913) hold an f16 or bf16 as its sixteen bits, widen to f32, operate, and round once to nearest-even. `glsl.e` does the same, with every conversion in integer code, so no driver conversion or rounding mode is in the answer (`packHalf2x16` is left alone):
+- **Representation.** A narrow value is a `uint` of sixteen bits, loaded and stored by the narrow-integer paths that already existed (D5888).
+- **Arithmetic.** `+ - *` widen both operands, take the f32 result, and round it. `/` and `sqrt` use the exact f32 sequences of D5943, since the CPU divides in f32 exactly and rounds again. `math.fma[F]` is `f32_fma` on widened values, rounded once. Negation flips bit 15, and a NaN becomes canonical. The six comparisons widen and compare in f32.
+- **Conversions.** Each is one rounding of the value, as on the CPU. A narrow value widens exactly; any NaN becomes the target's canonical one (0x7E00, 0x7FC0, 0x7FC00000, 0x7FF8000000000000). Narrow to narrow goes through f32. f32 to narrow is the usual add-half-and-shift. f64 to narrow rounds the 53-bit significand once, with its lost bits jammed into bit 0, so it needs no int64. An integer of 32 bits or fewer is exact in f64, so it rounds once from its magnitude.
+- **Not written:** a 64-bit integer to narrow, since the CPU rounds it to f64 first; a subgroup add, min or max of narrow values; and an out-of-range narrow-to-integer conversion, which keeps whatever the f32 one does.
+- **Capability.** The GL device reports `.Float16`, since none of this needs an extension.
+
+**What `ftz` does here.** `gpu_gl_narrow` found that the CPU's `math.fma` never flushes a denormal operand under `ftz`: `fma(0x0019, 1.0, 0x0019)` in bf16 is 50, not 0, and the same holds for f32. That is the spec's own rule ("FTZ and DAZ around the CPU build's run"): `fma_bits` is software, and those flags don't govern it. `f32_fma` therefore no longer flushes under `ftz`, which changes D5943's f32 `fma` on Intel. Division, square root and the hardware operations keep flushing. A bf16 denormal widens to an f32 denormal, so under `ftz` its `+ - *` flush, as the CPU's do. An f16 denormal widens to a normal f32.
+
+`gpu_gl_narrow` (generated by `scripts/gen_gpu_gl_narrow.py`) runs 13 streams of 4,096 words per type on the CPU and the GL device: `+ - * /`, `sqrt`, negation and `fma` in one stream; the comparison mask; widening to f32; the other narrow type; f32, i32 and u32 to narrow; and, where the device has Float64 and keeps denormals, f64 to and from narrow. All are word-equal on Intel Iris Xe (`ftz` kernels) and on llvmpipe (plain kernels, f64 included).
+
+## D5915 — Presenter ownership ends at fallback, replacement and window close
+
+`e.ui.window.Presenter` carries `release(context) -> err` beside `present`. Once a
+window accepts it, the window calls `release` exactly once when a frame falls back to
+software, a new presenter replaces it, or the window closes. A default factory that
+reports an error after it has installed a presenter is defensively released; a factory
+that fails before installation releases its own partial work.
+
+`x.khronos.present` routes every post-context-open failure through the same close path:
+it marks the fixed pool slot inactive first, makes the context current, deletes live
+shaders, program, texture, vertex array and vertex/unpack buffers, then closes the
+context. Successful linking deletes shaders immediately, and `attach` closes the new
+slot if `set_presenter` rejects it. Thus the sixteen slots are reusable even when an
+open or attachment fails partway through.
+
+`ui_window` supplies a fake 16-slot presenter pool and opens/closes 17 attached windows,
+including a factory that fails after attachment. `x_khronos_gl_present` runs the same
+lifecycle against GL and presents the final frame; it skips only when the first real GL
+presenter is unavailable.
+
+## D5916 — GL dispatch follows the current context, not the process
+
+The generated GL wrappers select a fixed dispatch table owned by `gl.Dispatch`, which
+the native `x.khronos.context.Context` stores. `context.load` fills that context's
+table after its native context is current; every successful `context.make_current`
+activates the same table on the calling host thread. Closing a context clears its active
+selection and returns the table slot, so detached GL workers do not consume slots over
+time.
+
+The table is therefore isolated both between GL contexts on one presentation thread and
+between the presentation thread and the per-device compute workers. Windows resolves
+WGL or EGL from the particular `Context` passed to `load`, rather than through the old
+process-global `resolving_egl` flag. EGL's library table remains process-wide: the
+loader opens one EGL implementation for the process, while the GL entry points that
+depend on the current context are the isolated state.
+
+`x_khronos_gl_load` synchronizes two fake-resolver threads that return distinct
+`glGetError` functions. Both must retain their own result after both tables are loaded;
+the fixture runs without a graphics driver and catches a process-global table overwrite.
+
+## D5917 — Special-function limits and signed extended gcd boundaries
+
+`e.math.special` recognizes the valid extended-real arguments before evaluating its
+finite approximations: `lgamma` and `gamma` map `+infinity` to `+infinity`; `erf`
+and `erfc` take their signed limits; the regularised gamma pair handles a finite
+shape or finite argument against `+infinity`; and the normal, Student, chi-squared
+and F CDFs return their limiting probabilities. `choose(+infinity, 0)` is one and a
+finite positive lower argument gives `+infinity`; indeterminate paired limits remain
+NaN rather than being assigned an arbitrary path-dependent value.
+
+`e.math.ntheory.extended_gcd` now returns `(g, x, y, err)`. A non-negative gcd of
+`2^63` has no `i64` representation, so `(i64::MIN, 0)`, `(0, i64::MIN)` and the
+same-minimum pair report `Unrepresentable`. Other minimum operands are reduced before
+the signed Euclidean loop, including the former `i64::MIN / -1` trap, and successful
+calls retain `a*x + b*y == g`. The math-special and math-ntheory fixtures pin these
+limits, failures and ordinary signed Bezout identities.
+
+## D5919 — WASI permission paths stay inside a preopen
+
+`underPreopen` checks both the lexical path and its canonical real path. A symlink or
+junction that resolves outside the preopen is refused before `fs_mode`, `fs_chmod` or
+`sys_disk` uses it. The host passes the canonical path to the filesystem operation,
+so `chmod` cannot follow an in-tree link to a file outside the preopen.
+
+## D5920 — A failed presentation retires its acquisition, not its image serial
+
+`Frame.serial` counts successfully presented images, so abandoning a frame after a
+write or queue-sync error must leave the front image and serial unchanged. Each
+acquisition also carries its own id, which makes a retained failed frame stale after
+the next acquire even when that next frame names the same back image and serial.
+`gpu.abandon` retires a matching frame explicitly; `gpu.present` retires a matching
+frame on terminal errors without swapping it. The scene renderer commits its
+last-render comparison only after present succeeds, leaving a failed image write
+retryable. `gpu_present` and `gfx_scene` inject CPU queue faults to pin both paths.
+
+## D5921 — JMESPath function arguments require separators
+
+D2504's compatibility exception for comma-free function calls is retired. The
+parser now requires a comma between every pair of function arguments and rejects a
+trailing comma, matching the JMESPath grammar and python-jmespath. This prevents
+malformed untrusted expressions from changing their apparent arity or reaching the
+wrong function dispatch path.
+
+## D5922 — Portable store keys and atomic filesystem replacement
+
+`e.store` owns one portable key namespace: names rejected by a Windows filesystem,
+including colons, trailing dots or spaces and DOS device names, are rejected by every
+backend, and a key cannot also be another key's directory. `MemoryStore`, `FsStore`
+and `HttpStore` enforce that rule.
+
+`FsStore.put` writes a uniquely created sibling temporary file and renames it over the
+visible key only after the write succeeds. On Windows, a sibling rename uses the
+simple-name, null-root `FILE_RENAME_INFORMATION` form and passes the complete native
+record. Listing derives paths relative to the configured root and preserves lexical
+prefix results when its output buffer is short.
+
+## D5923 — D-Bus builder and reply storage
+
+`RequestName` and `AddMatch` fill caller-provided `Value` slots, and their `Message`
+bodies borrow those slots through encoding. `hello_reply` validates and retires a
+`Hello` reply, then stores `unique_name` as a borrow of that reply's decoded body;
+callers retain that storage while using the bus name. `parse_address` remains a syntax
+parser: endpoint/transport availability and multi-entry selection require a
+caller-provided policy.
 ## D5877 — System information reaches a WebAssembly module through neper_host, and the Windows rows are confirmed
 `proc_sys` stayed an expected difference (D5872, D5873) because the module could not read `/proc`, and preopening `/proc` for every module would hand each one the host's whole tree. Two `neper_host` functions replace that: `sys_text(kind)` answers the text `e.proc.sys.format` already parses (`/proc/stat`, `meminfo`, `uptime`, the runner's pid, and a process table of stat lines that leads with the runner's own process so the output cap cannot cut it off) and `sys_disk(dirfd, path)` answers `statfs` of a path under a preopen as "total free used". A Linux runner reads the real files; any other composes the same shapes from Node's `os` module, with the runner's process as the whole table. The module's `process_id` is the runner's pid, `self_memory` is the memory the module holds (as `peak_memory`), and `disk_usage` checks the path with `os.stat` first (a missing path stays `NotFound`) and measures the first preopen's volume, so an absolute path outside the working directory reports that volume. A host without the imports (the page's, ENOSYS) keeps the old answers: `Unsupported`, one CPU, the monotonic uptime. The fixture passes plain and threaded on Windows; the row is gone from `sweep-expected.tsv`.
 
@@ -43024,14 +43544,33 @@ When an argument to an `@import` is `&slice[i]`, through a writable pointer, the
 
 Earlier notes described this rule as applying to buffers of 4 MiB or more. That was D340's rule; D428 replaced it, and it covered any size.
 
-## D5940 — Multicol columns start where whole lines and unbreakable boxes do
+## D5948 — Eight decision numbers were allocated twice; the OpenGL group's moved
+
+The Mac and Android work and the OpenGL group each allocated decisions from D5877 on without seeing the other, so merging `opengl-group` into `origin/master` found eight numbers used for two decisions each. The numbers already on `origin/master` keep their meaning. The OpenGL group's, and one local duplicate of the root-arena decision, are renumbered:
+
+| Was | Now | Decision |
+|---|---|---|
+| D5877 | D5940 | OpenGL is a library, not a language feature |
+| D5878 | D5941 | GL compute uses Metal's heap model |
+| D5890 | D5942 | The GLES compute profile is ES 3.2, from the same shaders |
+| D5891 | D5943 | Exact f32 division and square root in GLSL are integer sequences |
+| D5892 | D5944 | A helper the kernel calls is a GLSL function, in every kernel's shader |
+| D5900 | D5945 | `aarch64 android`, and arm64 atomics as exclusive loops |
+| D5901 | D5946 | `math.fma` in GLSL, and the float fixtures on every GL device |
+| D5912 | D5947 | The root arena's default ceiling is 64 GiB, 4 GiB on Android (superseded by D5930) |
+
+References in files that `origin/master` did not already contain were updated with them. Text written before this merge (earlier commit messages, the memory notes, and the blog) still says the old numbers; read an old D5877, D5878, D5890, D5891, D5892, D5900, D5901 or D5912 in OpenGL context as the new one above.
+
+The merge itself kept `origin`'s Metal heaps (up to four, an address names its heap) and launches (up to four in flight, one fault block each) and put them behind the `HeapDriver` table, so OpenGL shares the launcher: GL has one heap, so a second heap is `OutOfMemory`, a launch passes the block and every heap and GL binds the first two, and the heap's size is its mapping's. It also kept `origin`'s root arena (1 TiB, halved when refused, D5930) over the 64 GiB and Android 4 GiB of D5912.
+
+## D5949 — Multicol columns start where whole lines and unbreakable boxes do
 
 A balanced multicol container was cut into columns at multiples of the column height, and a line whose top was inside a column stayed there even when its bottom crossed the cut, so later columns carried a fractional offset (13 px, 6 px) and held 7 or 8 lines by luck. `mc_prepare` now collects the tops and bottoms of lines and unbreakable boxes in the one-column layout and builds a table of column starts: a column ends before the first atom that would cross its bottom, and an atom taller than the column overflows. `column_of`, `col_start`, `col_end` and `col_dy` read the table, and balancing finds the shortest height by bisection. Not covered: spanner runs and wrapping containers (`column-wrap`), which keep the old slicing, and a nested multicol that fragments across its parent's columns. css-multicol 157 to 182 of 402; CSS2, grid, flexbox, css-sizing and css-overflow unchanged.
 
-## D5941 — The browser app: page scripts, taps and fonts
+## D5950 — The browser app: page scripts, taps and fonts
 
 Three things stopped a page from working in `examples/browser` without any error. A tab's arena was 128 MB and the page's JavaScript runtime needs more, so `start_scripts` failed silently and a page showed its static markup (now 512 MB). A pending timer never ran in an idle window (a build now asks for an animation frame while one is due). A tap reached only links, never `onclick` (the view records the tap, the app calls `page.click`, and a handler that cancels the click cancels the link). The font list is per host: Windows files, DejaVu on Linux, the two Jost files a wasm host provides, and a renderer holds 32 fonts, not 16, since the last four of twenty registered faces were silently dropped. A build needs `--arena 4g` or an https chain check runs out of memory and reports an untrusted certificate (an RSA verify that cannot allocate returns false; not fixed).
 
-## D5942 — The browser on wasm32-wasi
+## D5951 — The browser on wasm32-wasi
 
 `examples/browser` builds for `wasm32 wasi` and runs on a canvas through `tests/wasm/browser/neper_browser.html` (served by `scripts/serve-wasm.mjs --isolated`). It needs a compiler built with a larger arena (`neper-self emit-executable src/main.e . x64 windows OUT --arena 6g`); the stock one runs out of arena on a program this size. The host has no sockets, so only `data:` pages and the files the page seeds load, and a host with no trust store no longer ends the program. Verified in the Browser pane with a `data:` page (heading, reversed list, aspect-ratio box); not verified: scripts, clicks and scrolling on the web target.

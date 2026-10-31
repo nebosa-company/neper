@@ -1,7 +1,9 @@
 // Counters, gauges and histograms that any thread may touch: every field is an
 // `Atomic` and every update one atomic instruction, relaxed, since a metric is read
-// as a whole by a snapshot and never used to order other memory. A histogram's sum is
-// an `f64` kept as its bits in an `Atomic[u64]`, added under a compare-and-swap loop.
+// as a whole by a snapshot and never used to order other memory. Counter, gauge and
+// bucket additions are modular at their native widths. A histogram's sum is an `f64`
+// kept as its bits in an `Atomic[u64]`, added under a compare-and-swap loop; NaN and
+// infinite observations are dropped so one bad measurement cannot poison the sum.
 
 use e.atomic
 use e.mem
@@ -20,8 +22,7 @@ fn counter() -> Counter {
 }
 
 fn counter_add(c: *Counter, value: u64) {
-    let previous = atomic.add(&c.value, value, .Relaxed)
-    if previous > previous { ret }
+    let _ = atomic.add(&c.value, value, .Relaxed)
 }
 
 fn counter_get(c: *Counter) -> u64 { ret atomic.load(&c.value, .Relaxed) }
@@ -35,8 +36,7 @@ fn gauge() -> Gauge {
 fn gauge_set(g: *Gauge, value: i64) { atomic.store(&g.value, value, .Relaxed) }
 
 fn gauge_add(g: *Gauge, value: i64) {
-    let previous = atomic.add(&g.value, value, .Relaxed)
-    if previous > previous { ret }
+    let _ = atomic.add(&g.value, value, .Relaxed)
 }
 
 fn gauge_get(g: *Gauge) -> i64 { ret atomic.load(&g.value, .Relaxed) }
@@ -66,6 +66,7 @@ fn histogram(a: *mem.Arena, bounds: []const f64) -> (Histogram, err) {
 }
 
 fn histogram_observe(h: *Histogram, value: f64) {
+    if value - value != 0.0f64 { ret }
     // The first bucket whose bound is not below the value, by binary search.
     var low = 0usize
     var high = h.bounds.len
@@ -73,8 +74,7 @@ fn histogram_observe(h: *Histogram, value: f64) {
         let mid = (low + high) / 2usize
         if h.bounds[mid] < value { low = mid + 1usize } else { high = mid }
     }
-    let previous = atomic.add(&h.counts[low], 1u64, .Relaxed)
-    if previous > previous { ret }
+    let _ = atomic.add(&h.counts[low], 1u64, .Relaxed)
     while true {
         let current = atomic.load(&h.sum_bits, .Relaxed)
         let next = mem.bitcast[u64](mem.bitcast[f64](current) + value)
@@ -93,7 +93,7 @@ fn histogram_snapshot(a: *mem.Arena, h: *const Histogram) -> (Snapshot, err) {
     var total = 0u64
     var at = 0usize
     while at < live.counts.len {
-        total += atomic.load(&live.counts[at], .Relaxed)
+        total +%= atomic.load(&live.counts[at], .Relaxed)
         buckets[at] = total
         at += 1usize
     }

@@ -184,6 +184,32 @@ fn checks_spy_and_limits() -> i32 {
     ret 0i32
 }
 
+fn checks_argument_capacity() -> i32 {
+    var exps: [2]mock.Expectation = zero
+    var calls: [2]mock.Call = zero
+    var m = mock.mock(exps[0..], calls[0..])
+    let (_, allow_error) = mock.allow(&m, CHARGE, "charge", 7i64)
+    if allow_error != ok { ret 67i32 }
+    var five: [5]i64 = zero
+    five[0usize] = 1i64
+    five[1usize] = 2i64
+    five[2usize] = 3i64
+    five[3usize] = 4i64
+    five[4usize] = 5i64
+    let (_, overflow_error) = mock.call(&m, CHARGE, five[0..])
+    if overflow_error != mock.TooManyArgs { ret 68i32 }
+    // The rejected call must neither consume the stub nor enter the spy log.
+    if m.logged != 0usize || m.expectations[0usize].called != 0u32 || mock.call_count(&m, CHARGE) != 0usize { ret 69i32 }
+    var four: [4]i64 = zero
+    four[0usize] = 1i64
+    four[1usize] = 2i64
+    four[2usize] = 3i64
+    four[3usize] = 4i64
+    let (value, boundary_error) = mock.call(&m, CHARGE, four[0..])
+    if boundary_error != ok || value != 7i64 || m.logged != 1usize { ret 70i32 }
+    ret 0i32
+}
+
 fn checks_assert() -> i32 {
     var exps: [4]mock.Expectation = zero
     var calls: [4]mock.Call = zero
@@ -204,6 +230,7 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = checks_stub_and_missing() }
     if code == 0i32 { code = checks_order() }
     if code == 0i32 { code = checks_spy_and_limits() }
+    if code == 0i32 { code = checks_argument_capacity() }
     if code == 0i32 { code = checks_assert() }
     if code != 0i32 { os.exit(code) }
     ret ok

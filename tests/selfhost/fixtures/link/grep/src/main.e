@@ -25,8 +25,57 @@ fn main(a: *mem.Arena) -> err {
         at += 1usize
     }
     if line_sum != 5u32 || column_sum != 11u32 { os.exit(7i32) }
+    // An unmatched search retains exactly one completed walk: the count walk is
+    // scratch, while the second walk owns the paths that a nonempty result needs.
+    var scratch_storage: [32768]u8 = zero
+    var scratch_arena = mem.arena_from(scratch_storage[..])
+    let scratch_mark = mem.mark(&scratch_arena)
+    let (no_matches, no_match_error) = grep.search(&scratch_arena, directory, "not-present")
+    if no_match_error != ok || no_matches.len != 0usize { os.exit(23i32) }
+    let search_used = scratch_arena.off - scratch_mark
+    mem.reset(&scratch_arena, scratch_mark)
+    let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
+    let (walk_value, walk_error) = fs.walk(&scratch_arena, directory, options)
+    if walk_error != ok { os.exit(24i32) }
+    var scratch_walk = walk_value
+    while true {
+        let (_, present, next_error) = fs.walk_next_err(&scratch_walk)
+        if next_error != ok {
+            let ignored = fs.walk_close(&scratch_walk)
+            os.exit(25i32)
+        }
+        if !present { break }
+    }
+    if fs.walk_close(&scratch_walk) != ok { os.exit(26i32) }
+    if scratch_arena.off - scratch_mark != search_used { os.exit(27i32) }
     let (empty, empty_error) = grep.search(a, directory, "")
     if empty_error != grep.Invalid || empty.len != 0usize { os.exit(8i32) }
-    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(9i32) }
+    let (missing_search, missing_search_error) = grep.search(a, "grep-missing-d76", "needle")
+    let (missing_index, missing_index_error) = grep.build_index(a, "grep-missing-d76")
+    let missing_snapshot = grep.Index { root: "grep-missing-d76", trigrams: 0u32 }
+    let (missing_index_search, missing_index_search_error) = grep.search_index(a, missing_snapshot, "needle")
+    if missing_search.len != 0usize || missing_index.root.len != 0usize || missing_index_search.len != 0usize || missing_search_error != fs.NotFound || missing_index_error != fs.NotFound || missing_index_search_error != fs.NotFound { os.exit(28i32) }
+    // An index records the trigram snapshot of the tree it saw. Replacing a
+    // three-byte file with a six-byte one makes a stale index reject instead of
+    // searching the changed tree under the old metadata.
+    if fs.write_file(a, "grep-d603/a.txt", "needle") != ok { os.exit(9i32) }
+    let (stale, stale_error) = grep.search_index(a, index, "needle")
+    if stale_error != grep.Invalid || stale.len != 0usize { os.exit(10i32) }
+    let cr_directory = "grep-cr-d1168"
+    if fs.make_dirs(a, cr_directory) != ok { os.exit(11i32) }
+    if fs.write_file(a, "grep-cr-d1168/cr.txt", "first\rneedle one\rneedle two\r") != ok { os.exit(12i32) }
+    let (cr_matches, cr_error) = grep.search(a, cr_directory, "needle")
+    if cr_error != ok || cr_matches.len != 2usize { os.exit(13i32) }
+    if cr_matches[0usize].line != 2u32 || cr_matches[0usize].column != 1u32 || !str.eq(cr_matches[0usize].text, "needle one") { os.exit(14i32) }
+    if cr_matches[1usize].line != 3u32 || cr_matches[1usize].column != 1u32 || !str.eq(cr_matches[1usize].text, "needle two") { os.exit(15i32) }
+    let crlf_directory = "grep-crlf-d1168"
+    if fs.make_dirs(a, crlf_directory) != ok { os.exit(16i32) }
+    if fs.write_file(a, "grep-crlf-d1168/crlf.txt", "first\r\nneedle line") != ok { os.exit(17i32) }
+    let (crlf_matches, crlf_error) = grep.search(a, crlf_directory, "needle")
+    if crlf_error != ok || crlf_matches.len != 1usize { os.exit(18i32) }
+    if crlf_matches[0usize].line != 2u32 || crlf_matches[0usize].column != 1u32 || !str.eq(crlf_matches[0usize].text, "needle line") { os.exit(19i32) }
+    if fs.remove_file(a, "grep-d603/a.txt") != ok || fs.remove_file(a, "grep-d603/b.txt") != ok || fs.remove_dir(a, directory) != ok { os.exit(20i32) }
+    if fs.remove_file(a, "grep-cr-d1168/cr.txt") != ok || fs.remove_dir(a, cr_directory) != ok { os.exit(21i32) }
+    if fs.remove_file(a, "grep-crlf-d1168/crlf.txt") != ok || fs.remove_dir(a, crlf_directory) != ok { os.exit(22i32) }
     ret ok
 }

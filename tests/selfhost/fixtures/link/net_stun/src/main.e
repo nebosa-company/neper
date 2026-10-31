@@ -62,6 +62,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_bits) = stun.decode(broken[0..])
     if bad_bits != stun.Malformed { os.exit(1i32) }
 
+    // Every public attribute reader must reject a truncated header before loading it.
+    var short_header: [20]u8 = zero
+    var short_len = 0usize
+    while short_len < 20usize {
+        var short_pos = 20usize
+        let (_, _, _, short_attribute_error) = stun.attribute_next(short_header[..short_len], &short_pos)
+        let (_, _, short_found) = stun.find_attribute(short_header[..short_len], 8u16)
+        if short_attribute_error != stun.Malformed || short_found || stun.verify_message_integrity(short_header[..short_len], password) || stun.verify_fingerprint(short_header[..short_len]) { os.exit(1i32) }
+        short_len += 1usize
+    }
+
     // 2: the §2.2 IPv4 and §2.3 IPv6 responses.
     let (h4, decode4_error) = stun.decode(resp4[0..])
     if decode4_error != ok || h4.kind != 257u16 || stun.message_class(h4.kind) != 2u8 { os.exit(2i32) }
@@ -146,6 +157,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dedup_error != ok || dedup_count != 2usize { os.exit(4i32) }
     let (_, room_error) = stun.gather_candidates(locals[0..], 2u8, dedup[..3usize])
     if room_error != stun.TooSmall { os.exit(4i32) }
+    var max_components: [255]stun.Candidate = zero
+    let (max_count, max_error) = stun.gather_candidates(locals[..1usize], 255u8, max_components[..])
+    if max_error != ok || max_count != 255usize || max_components[0usize].component != 1u8 || max_components[254usize].component != 255u8 { os.exit(4i32) }
     var shuffled: [5]stun.Candidate = zero
     shuffled[0] = out[4]
     shuffled[1] = out[3]

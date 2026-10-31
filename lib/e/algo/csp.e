@@ -201,6 +201,14 @@ fn ac2001[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ct
 // keeps domain copies per level. Answers whether a solution exists.
 fn solve[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, saved: []u8, queue: []usize, queued: []u8) -> (bool, err) {
     if domains.len < n * k || assignment.len < n || saved.len < n * n * k { ret (false, TooSmall) }
+    // AC-3 detects domains it empties, but an isolated variable can arrive
+    // empty and never appear in an arc. Reject that model before MAC treats
+    // every non-branching variable as a solution.
+    var x = 0usize
+    while x < n {
+        if count(domains, k, x) == 0usize { ret (false, ok) }
+        x += 1usize
+    }
     let first = ac3[Ctx](domains, n, k, pairs, ctx, allowed, queue, queued)
     if first == Unsatisfiable { ret (false, ok) }
     if first != ok { ret (false, first) }
@@ -318,6 +326,25 @@ fn augment(domains: []const u8, k: usize, vars: []const usize, x: usize, match_v
     ret false
 }
 
+// The same augmenting search, except `fixed` is already assigned and cannot
+// be displaced. `all_different` uses this while testing whether a proposed
+// variable-value pair participates in any full matching, without temporarily
+// rewriting a domain or requiring a fixed-size restore buffer.
+fn augment_without(domains: []const u8, k: usize, vars: []const usize, x: usize, match_value: []usize, seen: []u8, fixed: usize) -> bool {
+    var v = 0usize
+    while v < k {
+        if domains[vars[x] * k + v] != 0u8 && seen[v] == 0u8 {
+            seen[v] = 1u8
+            if match_value[v] == vars.len || (match_value[v] != fixed && augment_without(domains, k, vars, match_value[v], match_value, seen, fixed)) {
+                match_value[v] = x
+                ret true
+            }
+        }
+        v += 1usize
+    }
+    ret false
+}
+
 // All-different over `vars`: `Unsatisfiable` when no matching covers them;
 // otherwise every value that belongs to no maximum matching is pruned
 // (tested by rematching with that value forced). `match_value.len >= k`,
@@ -347,46 +374,35 @@ fn all_different(domains: []u8, k: usize, vars: []const usize, match_value: []us
         while v < k {
             if domains[vars[x] * k + v] != 0u8 && match_value[v] != x {
                 // Force x = v and try to complete a matching of the others.
-                let keep = domains[vars[x] * k + v]
+                // Keep the force in the matching itself instead of mutating
+                // domains: that makes the filter work for every caller-sized
+                // value universe, not just a local 64-byte restore buffer.
                 var w = 0usize
                 while w < k {
                     seen[w] = 0u8
                     w += 1usize
                 }
-                // Temporarily restrict x's domain to v.
-                var restore: [64]u8 = zero
-                var ok_restore = k <= 64usize
-                if ok_restore {
-                    w = 0usize
-                    while w < k {
-                        restore[w] = domains[vars[x] * k + w]
-                        if w != v { domains[vars[x] * k + w] = 0u8 }
-                        w += 1usize
-                    }
-                    var complete = true
-                    var y = 0usize
-                    // Rematch everything from scratch under the restriction.
-                    w = 0usize
-                    while w < k {
-                        match_value[w] = m
-                        w += 1usize
-                    }
-                    while y < m && complete {
+                var complete = true
+                var y = 0usize
+                // Rematch everything from scratch with x fixed at v.
+                w = 0usize
+                while w < k {
+                    match_value[w] = m
+                    w += 1usize
+                }
+                match_value[v] = x
+                while y < m && complete {
+                    if y != x {
                         w = 0usize
                         while w < k {
                             seen[w] = 0u8
                             w += 1usize
                         }
-                        if !augment(domains, k, vars, y, match_value, seen) { complete = false }
-                        y += 1usize
+                        if !augment_without(domains, k, vars, y, match_value, seen, x) { complete = false }
                     }
-                    w = 0usize
-                    while w < k {
-                        domains[vars[x] * k + w] = restore[w]
-                        w += 1usize
-                    }
-                    if !complete { domains[vars[x] * k + v] = 0u8 } else { domains[vars[x] * k + v] = keep }
+                    y += 1usize
                 }
+                if !complete { domains[vars[x] * k + v] = 0u8 }
             }
             v += 1usize
         }
@@ -478,12 +494,17 @@ fn table(domains: []u8, k: usize, vars: []const usize, tuples: []const usize, ro
 fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const usize, demand: []const usize, capacity: usize, horizon: usize, profile: []usize) -> err {
     let tasks = starts.len
     if duration.len < tasks || demand.len < tasks || profile.len < horizon { ret TooSmall }
+    var i = 0usize
+    while i < tasks {
+        if duration[i] > horizon { ret Invalid }
+        i += 1usize
+    }
     var t = 0usize
     while t < horizon {
         profile[t] = 0usize
         t += 1usize
     }
-    var i = 0usize
+    i = 0usize
     while i < tasks {
         // Earliest and latest start.
         var earliest = k
@@ -498,8 +519,13 @@ fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const 
         }
         if earliest == k { ret Unsatisfiable }
         // Compulsory part: [latest, earliest + duration).
+        var compulsory_end = 0usize
+        if earliest < horizon {
+            if duration[i] <= horizon - earliest { compulsory_end = earliest + duration[i] } else { compulsory_end = horizon }
+        }
         t = latest
-        while t < earliest + duration[i] && t < horizon {
+        while t < compulsory_end {
+            if profile[t] > capacity || demand[i] > capacity - profile[t] { ret Unsatisfiable }
             profile[t] += demand[i]
             t += 1usize
         }
@@ -523,20 +549,28 @@ fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const 
             }
             v += 1usize
         }
+        var compulsory_end = 0usize
+        if earliest < horizon {
+            if duration[i] <= horizon - earliest { compulsory_end = earliest + duration[i] } else { compulsory_end = horizon }
+        }
         v = 0usize
         while v < k {
             if domains[starts[i] * k + v] != 0u8 {
                 var fits = true
                 t = v
-                while t < v + duration[i] && fits {
+                var remaining = duration[i]
+                while remaining > 0usize && fits {
                     if t >= horizon {
                         fits = false
                     } else {
                         var own = 0usize
-                        if t >= latest && t < earliest + duration[i] { own = demand[i] }
-                        if profile[t] - own + demand[i] > capacity { fits = false }
+                        if t >= latest && t < compulsory_end { own = demand[i] }
+                        if own > profile[t] { ret Invalid }
+                        let other = profile[t] - own
+                        if other > capacity { fits = false } else if demand[i] > capacity - other { fits = false }
+                        t += 1usize
+                        remaining -= 1usize
                     }
-                    t += 1usize
                 }
                 if !fits { domains[starts[i] * k + v] = 0u8 }
             }

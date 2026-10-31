@@ -143,13 +143,22 @@ fn xyz_to_face_uv(x: f64, y: f64, z: f64) -> (u32, f64, f64) {
     ret (2u32, (0.0f64 - x) / z, (0.0f64 - y) / z)
 }
 
-// The cell containing (lat, lng) degrees at `level` (0..30).
-fn s2_cell(lat_deg: f64, lng_deg: f64, level: u32) -> u64 {
+// The checked cell containing (lat, lng) degrees at `level` (0..30).
+fn s2_cell_checked(lat_deg: f64, lng_deg: f64, level: u32) -> (u64, err) {
+    if !map_finite(lat_deg) || !map_finite(lng_deg) || lat_deg < -90.0f64 || lat_deg > 90.0f64 || lng_deg < -180.0f64 || lng_deg > 180.0f64 || level > max_level() { ret (0u64, Invalid) }
     let phi = radians(lat_deg)
     let theta = radians(lng_deg)
     let cosphi = math.cos[f64](phi)
     let (face, u, v) = xyz_to_face_uv(math.cos[f64](theta) * cosphi, math.sin[f64](theta) * cosphi, math.sin[f64](phi))
-    ret s2_parent(from_face_ij(face, st_to_ij(uv_to_st(u)), st_to_ij(uv_to_st(v))), level)
+    ret (s2_parent(from_face_ij(face, st_to_ij(uv_to_st(u)), st_to_ij(uv_to_st(v))), level), ok)
+}
+
+// The unchecked-compatible wrapper: invalid coordinates or levels answer the
+// sentinel zero cell rather than entering the trigonometric/indexing path.
+fn s2_cell(lat_deg: f64, lng_deg: f64, level: u32) -> u64 {
+    let (cell, cell_error) = s2_cell_checked(lat_deg, lng_deg, level)
+    if cell_error != ok { ret 0u64 }
+    ret cell
 }
 
 fn s2_cell_leaf(lat_deg: f64, lng_deg: f64) -> u64 { ret s2_cell(lat_deg, lng_deg, max_level()) }
@@ -161,8 +170,10 @@ fn s2_level(id: u64) -> u32 {
 
 fn s2_face(id: u64) -> u32 { ret u32(id >> 61u32) }
 
-// The ancestor at `level` (which must not exceed the id's own level).
+// The ancestor at `level`; a level above the S2 maximum answers the invalid
+// zero cell instead of underflowing the shift count.
 fn s2_parent(id: u64, level: u32) -> u64 {
+    if level > max_level() { ret 0u64 }
     let new_lsb = 1u64 << (2u32 * (max_level() - level))
     ret (id & (0u64 -% new_lsb)) | new_lsb
 }
@@ -263,7 +274,11 @@ fn haversine_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     let p2 = radians(lat2)
     let sdp = math.sin[f64]((p2 - p1) / 2.0f64)
     let sdl = math.sin[f64](radians(lng2 - lng1) / 2.0f64)
-    let a = sdp * sdp + math.cos[f64](p1) * math.cos[f64](p2) * sdl * sdl
+    var a = sdp * sdp + math.cos[f64](p1) * math.cos[f64](p2) * sdl * sdl
+    // Rounding can nudge an antipodal result just outside the mathematical
+    // [0, 1] interval, which would otherwise take sqrt of a negative value.
+    if a < 0.0f64 { a = 0.0f64 }
+    if a > 1.0f64 { a = 1.0f64 }
     ret 2.0f64 * earth_radius_m() * math.atan2[f64](math.sqrt[f64](a), math.sqrt[f64](1.0f64 - a))
 }
 

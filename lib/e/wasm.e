@@ -514,6 +514,10 @@ fn decode(a: *mem.Arena, bytes: []const u8) -> (Module, err) {
             let (ix, ixe) = rd_u32(&s)
             if ixe != ok { ret (zero, ixe) }
             if usize(ix) >= funcs_l.len { ret (zero, Malformed) }
+            let type_index = funcs_l.items[usize(ix)]
+            if usize(type_index) >= types_l.len { ret (zero, Malformed) }
+            let start_type = types_l.items[usize(type_index)]
+            if start_type.params.len != 0usize || start_type.results.len != 0usize { ret (zero, Malformed) }
             m.start = ix
             m.has_start = true
         } else if id == 9u32 {

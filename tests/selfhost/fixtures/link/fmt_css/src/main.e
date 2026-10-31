@@ -21,9 +21,44 @@ fn expect(d: *const css.Dom, selector: str, mask: u32) -> bool {
     ret got == mask
 }
 
+fn packed_specificity(encoded: u32) -> css.Specificity {
+    ret css.Specificity {
+        ids: usize(encoded >> 16u32),
+        classes: usize((encoded >> 8u32) & 255u32),
+        types: usize(encoded & 255u32),
+    }
+}
+
 fn spec_is(selector: str, wanted: u32) -> bool {
     let (got, e) = css.specificity(selector)
-    ret e == ok && got == wanted
+    ret e == ok && css.specificity_compare(got, packed_specificity(wanted)) == 0i32
+}
+
+fn repeat_class(buffer: []u8, count: usize) -> str {
+    var at = 0usize
+    var i = 0usize
+    while i < count {
+        buffer[at] = 46u8
+        buffer[at + 1usize] = 120u8
+        at += 2usize
+        i += 1usize
+    }
+    ret buffer[..at]
+}
+
+fn repeat_type(buffer: []u8, count: usize) -> str {
+    var at = 0usize
+    var i = 0usize
+    while i < count {
+        if i > 0usize {
+            buffer[at] = 32u8
+            at += 1usize
+        }
+        buffer[at] = 120u8
+        at += 1usize
+        i += 1usize
+    }
+    ret buffer[..at]
 }
 
 fn refused(d: *const css.Dom, selector: str) -> bool {
@@ -157,20 +192,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !spec_is("li, #x", 65536u32) { os.exit(79i32) }
     if !spec_is("a:nth-child(2n+1)", 257u32) { os.exit(80i32) }
 
+    // Component counts must not carry into the next specificity component at 256.
+    var classes_256_text: [512]u8 = zero
+    var classes_257_text: [514]u8 = zero
+    var types_256_text: [511]u8 = zero
+    let (classes_256, classes_256_error) = css.specificity(repeat_class(classes_256_text[..], 256usize))
+    let (classes_257, classes_257_error) = css.specificity(repeat_class(classes_257_text[..], 257usize))
+    let (types_256, types_256_error) = css.specificity(repeat_type(types_256_text[..], 256usize))
+    if classes_256_error != ok || classes_256.ids != 0usize || classes_256.classes != 256usize || classes_256.types != 0usize { os.exit(90i32) }
+    if classes_257_error != ok || classes_257.ids != 0usize || classes_257.classes != 257usize || classes_257.types != 0usize { os.exit(90i32) }
+    if types_256_error != ok || types_256.ids != 0usize || types_256.classes != 0usize || types_256.types != 256usize { os.exit(90i32) }
+    let one_id = css.Specificity { ids: 1usize, classes: 0usize, types: 0usize }
+    if css.specificity_compare(classes_256, one_id) >= 0i32 { os.exit(90i32) }
+    if css.specificity_compare(classes_257, classes_256) <= 0i32 { os.exit(90i32) }
+    var boundary_decls: [2]css.Decl = zero
+    boundary_decls[0usize] = css.Decl { origin: .Author, important: false, specificity: classes_256, order: 1u32 }
+    boundary_decls[1usize] = css.Decl { origin: .Author, important: false, specificity: one_id, order: 0u32 }
+    var boundary_order: [2]u32 = zero
+    if css.cascade(boundary_decls[..], boundary_order[..]) != ok { os.exit(90i32) }
+    if boundary_order[0usize] != 0u32 || boundary_order[1usize] != 1u32 { os.exit(90i32) }
+
     // The cascade over twelve declarations, lowest precedence first.
     var decls: [12]css.Decl = zero
-    decls[0usize] = css.Decl { origin: .User, important: false, specificity: 257u32, order: 0u32 }
-    decls[1usize] = css.Decl { origin: .Author, important: true, specificity: 513u32, order: 1u32 }
-    decls[2usize] = css.Decl { origin: .Author, important: true, specificity: 65536u32, order: 2u32 }
-    decls[3usize] = css.Decl { origin: .UserAgent, important: false, specificity: 1u32, order: 3u32 }
-    decls[4usize] = css.Decl { origin: .UserAgent, important: true, specificity: 257u32, order: 4u32 }
-    decls[5usize] = css.Decl { origin: .UserAgent, important: true, specificity: 65536u32, order: 5u32 }
-    decls[6usize] = css.Decl { origin: .User, important: true, specificity: 65536u32, order: 6u32 }
-    decls[7usize] = css.Decl { origin: .UserAgent, important: false, specificity: 65537u32, order: 7u32 }
-    decls[8usize] = css.Decl { origin: .Author, important: false, specificity: 0u32, order: 8u32 }
-    decls[9usize] = css.Decl { origin: .Author, important: false, specificity: 0u32, order: 9u32 }
-    decls[10usize] = css.Decl { origin: .UserAgent, important: true, specificity: 513u32, order: 10u32 }
-    decls[11usize] = css.Decl { origin: .UserAgent, important: true, specificity: 1u32, order: 11u32 }
+    decls[0usize] = css.Decl { origin: .User, important: false, specificity: packed_specificity(257u32), order: 0u32 }
+    decls[1usize] = css.Decl { origin: .Author, important: true, specificity: packed_specificity(513u32), order: 1u32 }
+    decls[2usize] = css.Decl { origin: .Author, important: true, specificity: packed_specificity(65536u32), order: 2u32 }
+    decls[3usize] = css.Decl { origin: .UserAgent, important: false, specificity: packed_specificity(1u32), order: 3u32 }
+    decls[4usize] = css.Decl { origin: .UserAgent, important: true, specificity: packed_specificity(257u32), order: 4u32 }
+    decls[5usize] = css.Decl { origin: .UserAgent, important: true, specificity: packed_specificity(65536u32), order: 5u32 }
+    decls[6usize] = css.Decl { origin: .User, important: true, specificity: packed_specificity(65536u32), order: 6u32 }
+    decls[7usize] = css.Decl { origin: .UserAgent, important: false, specificity: packed_specificity(65537u32), order: 7u32 }
+    decls[8usize] = css.Decl { origin: .Author, important: false, specificity: packed_specificity(0u32), order: 8u32 }
+    decls[9usize] = css.Decl { origin: .Author, important: false, specificity: packed_specificity(0u32), order: 9u32 }
+    decls[10usize] = css.Decl { origin: .UserAgent, important: true, specificity: packed_specificity(513u32), order: 10u32 }
+    decls[11usize] = css.Decl { origin: .UserAgent, important: true, specificity: packed_specificity(1u32), order: 11u32 }
     var order: [12]u32 = zero
     if css.cascade(decls[..], order[..]) != ok { os.exit(81i32) }
     if order[0usize] != 3u32 { os.exit(81i32) }

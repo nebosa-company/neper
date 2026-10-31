@@ -18,12 +18,17 @@ use e.gfx.image
 
 error NotPdf
 error NoPages
+error InvalidAscii85
+error TooLarge
 
 type Object = struct { number: usize, start: usize, end: usize }
 
 const MAX_OBJECTS: usize = 4096usize
 const MAX_PAGES: usize = 512usize
-const MAX_STREAM: u64 = 8388608u64
+const MAX_TEXT_STREAM: usize = 8388608usize
+// ASCII85 can expand every input byte to four output bytes through `z`; cap it
+// at the same decoded-stream limit used by the Flate reader.
+const MAX_ASCII85: usize = 8388608usize
 
 fn is_space(c: u8) -> bool {
     ret c == 32u8 || c == 10u8 || c == 13u8 || c == 9u8 || c == 12u8 || c == 0u8
@@ -57,6 +62,229 @@ fn find(data: []const u8, word: str, from: usize, until: usize) -> usize {
     ret until
 }
 
+// Whether `word` is a PDF token at `at`: names and keywords are separated by whitespace
+// or a delimiter, rather than merely being a byte substring.
+fn at_token(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool {
+    if !at_word(data, at, word) { ret false }
+    if at > from && !is_space(data[at - 1usize]) && !is_delim(data[at - 1usize]) { ret false }
+    let after = at + word.len
+    if after < until && !is_space(data[after]) && !is_delim(data[after]) { ret false }
+    ret true
+}
+
+// A structural keyword is a token that is not a PDF Name. The name marker is a
+// delimiter, so at_token alone would otherwise accept /endobj as endobj.
+fn at_keyword(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool {
+    if !at_token(data, at, word, from, until) { ret false }
+    if at > 0usize && data[at - 1usize] == 47u8 { ret false }
+    ret true
+}
+
+// stream has a stricter grammar than the other structural keywords: it is
+// immediately followed by the required CR or LF that starts its data.
+fn at_stream_keyword(data: []const u8, at: usize, from: usize, until: usize) -> bool {
+    if !at_keyword(data, at, "stream", from, until) { ret false }
+    let after = at + 6usize
+    ret after < until && (data[after] == 13u8 || data[after] == 10u8)
+}
+
+// The first token `word` in data[from..until], or `until` when there is none.
+// The first structural keyword in data[from..until], or until when there is none.
+fn find_keyword(data: []const u8, word: str, from: usize, until: usize) -> usize {
+    var at = from
+    while at + word.len <= until {
+        if at_keyword(data, at, word, from, until) { ret at }
+        at += 1usize
+    }
+    ret until
+}
+
+// The byte after a literal string starting at `at`, including nested parentheses and
+// escaped bytes; `until` for an unterminated string.
+fn skip_literal(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    var depth = 1usize
+    while scan < until && depth > 0usize {
+        if data[scan] == 92u8 {
+            scan += 1usize
+            if scan < until { scan += 1usize }
+        } else {
+            if data[scan] == 40u8 { depth += 1usize }
+            if data[scan] == 41u8 { depth -= 1usize }
+            scan += 1usize
+        }
+    }
+    ret scan
+}
+
+// The byte after a hexadecimal string starting at `at`, or `until` when it is unterminated.
+fn skip_hex(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    while scan < until && data[scan] != 62u8 { scan += 1usize }
+    if scan < until { scan += 1usize }
+    ret scan
+}
+
+// The byte at the line break ending a comment that starts at `at`.
+fn skip_comment(data: []const u8, at: usize, until: usize) -> usize {
+    var scan = at + 1usize
+    while scan < until && data[scan] != 10u8 && data[scan] != 13u8 { scan += 1usize }
+    ret scan
+}
+
+// The first byte of a stream's data after its `stream` keyword and line ending.
+fn stream_start(data: []const u8, at: usize, until: usize) -> usize {
+    var start = at + 6usize
+    if start < until && data[start] == 13u8 { start += 1usize }
+    if start < until && data[start] == 10u8 { start += 1usize }
+    ret start
+}
+
+// A decimal stream length that is no larger than the input itself. Larger values cannot
+// describe a usable direct stream here, and refusing them avoids arithmetic overflow.
+fn length_number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool) {
+    var at = from
+    while at < until && is_space(data[at]) { at += 1usize }
+    if at >= until || !is_digit(data[at]) { ret (0usize, from, false) }
+    var value = 0usize
+    while at < until && is_digit(data[at]) {
+        let digit = usize(data[at] - 48u8)
+        if value > data.len / 10usize || (value == data.len / 10usize && digit > data.len % 10usize) { ret (0usize, from, false) }
+        value = value * 10usize + digit
+        at += 1usize
+    }
+    ret (value, at, true)
+}
+
+// A direct, top-level `/Length N` in the dictionary before `stream`; indirect lengths
+// deliberately return false because their value is in another object.
+fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool) {
+    var at = from
+    var depth = 0usize
+    while at < until {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, until)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, until)
+            continue
+        }
+        if c == 60u8 && at + 1usize < until && data[at + 1usize] == 60u8 {
+            depth += 1usize
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < until && data[at + 1usize] == 62u8 {
+            if depth > 0usize { depth -= 1usize }
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, until)
+            continue
+        }
+        if depth == 1usize && c == 47u8 && at_token(data, at + 1usize, "Length", from, until) {
+            let end = at + 7usize
+            let (length, after_length, has_length) = length_number_at(data, end, until)
+            if has_length {
+                let (_, after_generation, has_generation) = length_number_at(data, after_length, until)
+                var marker = after_generation
+                while marker < until && is_space(data[marker]) { marker += 1usize }
+                if !(has_generation && at_token(data, marker, "R", from, until)) { ret (length, true) }
+            }
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The first real `stream` keyword in an object span: strings, hex strings and comments
+// are skipped so their contents cannot be mistaken for object syntax.
+fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize {
+    var at = from
+    while at < until {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, until)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, until)
+            continue
+        }
+        if c == 60u8 && at + 1usize < until && data[at + 1usize] == 60u8 {
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < until && data[at + 1usize] == 62u8 {
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, until)
+            continue
+        }
+        if at_stream_keyword(data, at, from, until) { ret at }
+        at += 1usize
+    }
+    ret until
+}
+
+// The end of an indirect object, skipping literal values and its stream data. A direct
+// `/Length` is authoritative for the stream bytes, including any `endobj` or `endstream`
+// byte sequence they contain; otherwise the reader falls back to the next endstream token.
+fn object_end(data: []const u8, from: usize) -> usize {
+    var at = from
+    while at < data.len {
+        let c = data[at]
+        if c == 40u8 {
+            at = skip_literal(data, at, data.len)
+            continue
+        }
+        if c == 37u8 {
+            at = skip_comment(data, at, data.len)
+            continue
+        }
+        if c == 60u8 && at + 1usize < data.len && data[at + 1usize] == 60u8 {
+            at += 2usize
+            continue
+        }
+        if c == 62u8 && at + 1usize < data.len && data[at + 1usize] == 62u8 {
+            at += 2usize
+            continue
+        }
+        if c == 60u8 {
+            at = skip_hex(data, at, data.len)
+            continue
+        }
+        if at_keyword(data, at, "endobj", from, data.len) { ret at }
+        if at_stream_keyword(data, at, from, data.len) {
+            let start = stream_start(data, at, data.len)
+            let (length, has_length) = stream_length(data, from, at)
+            var after = start
+            if has_length && length <= data.len - start { after = start + length }
+            if at_keyword(data, after, "endstream", from, data.len) {
+                at = after + 9usize
+                continue
+            }
+            if after < data.len && data[after] == 13u8 { after += 1usize }
+            if after < data.len && data[after] == 10u8 { after += 1usize }
+            if at_keyword(data, after, "endstream", from, data.len) {
+                at = after + 9usize
+                continue
+            }
+            let finish = find_keyword(data, "endstream", after, data.len)
+            if finish >= data.len { ret data.len }
+            at = finish + 9usize
+            continue
+        }
+        at += 1usize
+    }
+    ret data.len
+}
+
 // The decimal number at `at` (after spaces): its value, the position after it, and whether there was one.
 fn number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool) {
     var at = from
@@ -64,6 +292,9 @@ fn number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool
     if at >= until || !is_digit(data[at]) { ret (0usize, from, false) }
     var n = 0usize
     while at < until && is_digit(data[at]) {
+        // PDF object numbers and dimensions do not need arbitrary precision here.
+        // Refuse a value before its next decimal step could wrap `usize`.
+        if n > 99999999usize { ret (0usize, from, false) }
         n = n * 10usize + usize(data[at] - 48u8)
         at += 1usize
     }
@@ -76,8 +307,8 @@ fn objects(a: *mem.Arena, data: []const u8) -> ([]Object, usize, err) {
     if table_error != ok { ret (table, 0usize, table_error) }
     var count = 0usize
     var at = 0usize
-    while at + 3usize <= data.len && count < MAX_OBJECTS {
-        if at_word(data, at, "obj") && at > 0usize && (is_space(data[at - 1usize]) || is_digit(data[at - 1usize])) {
+    while at + 3usize <= data.len {
+        if at_token(data, at, "obj", 0usize, data.len) && at > 0usize && (is_space(data[at - 1usize]) || is_digit(data[at - 1usize])) {
             // Walk back over the generation, a space and the number.
             var back = at
             while back > 0usize && is_space(data[back - 1usize]) { back -= 1usize }
@@ -89,11 +320,16 @@ fn objects(a: *mem.Arena, data: []const u8) -> ([]Object, usize, err) {
                 var num_start = num_end
                 while num_start > 0usize && is_digit(data[num_start - 1usize]) { num_start -= 1usize }
                 if num_start < num_end && (num_start == 0usize || is_space(data[num_start - 1usize])) {
-                    let (number, after, got) = number_at(data, num_start, num_end)
-                    let finish = find(data, "endobj", at + 3usize, data.len)
-                    table[count] = Object { number: number, start: at + 3usize, end: finish }
-                    count += 1usize
-                    at = finish
+                    let (number, _, got) = number_at(data, num_start, num_end)
+                    // A rejected object number must not become object zero: a later
+                    // `0 0 R` could otherwise resolve to its body.
+                    if got {
+                        if count >= MAX_OBJECTS { ret (table, count, TooLarge) }
+                        let finish = object_end(data, at + 3usize)
+                        table[count] = Object { number: number, start: at + 3usize, end: finish }
+                        count += 1usize
+                        at = finish
+                    }
                 }
             }
         }
@@ -198,6 +434,51 @@ fn refs_in_array(data: []const u8, from: usize, until: usize, key: str, out: []u
     ret 0usize
 }
 
+// Count indirect references in an array without imposing a caller-owned fixed cap.
+fn refs_in_array_count(data: []const u8, from: usize, until: usize, key: str) -> usize {
+    var at = from
+    while at < until {
+        if data[at] == 47u8 && at_word(data, at + 1usize, key) {
+            var k = at + 1usize + key.len
+            while k < until && is_space(data[k]) { k += 1usize }
+            if k < until && data[k] == 91u8 {
+                k += 1usize
+                var n = 0usize
+                while k < until && data[k] != 93u8 {
+                    let (_, after_number, got_number) = number_at(data, k, until)
+                    if !got_number {
+                        k += 1usize
+                    } else {
+                        let (_, after_gen, got_gen) = number_at(data, after_number, until)
+                        var r = after_gen
+                        while r < until && is_space(data[r]) { r += 1usize }
+                        if got_gen && r < until && data[r] == 82u8 {
+                            n += 1usize
+                            k = r + 1usize
+                        } else {
+                            k = after_number
+                        }
+                    }
+                }
+                ret n
+            }
+        }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// The whole indirect-reference array, allocated to its exact count. This avoids
+// silently omitting later /Contents streams merely because a fixed local array is full.
+fn refs_in_array_alloc(a: *mem.Arena, data: []const u8, from: usize, until: usize, key: str) -> ([]usize, err) {
+    let count = refs_in_array_count(data, from, until, key)
+    if count == 0usize { ret (zero, ok) }
+    let (out, out_error) = mem.alloc[usize](a, count)
+    if out_error != ok { ret (zero, out_error) }
+    let found = refs_in_array(data, from, until, key, out)
+    ret (out[0usize..found], ok)
+}
+
 // Add the page objects under `node` to `pages` in tree order, depth first, with an explicit stack.
 fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, root: usize, found_pages: []usize) -> (usize, err) {
     let (stack, stack_error) = mem.alloc[usize](a, 2048usize)
@@ -214,7 +495,9 @@ fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, ro
         let (s, e, found) = object_span(table, count, node)
         if found {
             if has_pair(data, s, e, "Type", "Pages") {
-                var kids: [256]usize = zero
+                // A flat page tree may legitimately contain more than 256 children;
+                // keep every page the public MAX_PAGES result can represent.
+                var kids: [MAX_PAGES]usize = zero
                 let kid_count = refs_in_array(data, s, e, "Kids", kids[0usize..])
                 // Pushed in reverse so the first kid is popped first.
                 var k = kid_count
@@ -232,10 +515,54 @@ fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, ro
     ret (n, ok)
 }
 
+fn ascii85_value(group: [5]u32) -> (u32, bool) {
+    let value = u64(group[0usize]) * 52200625u64 + u64(group[1usize]) * 614125u64 + u64(group[2usize]) * 7225u64 + u64(group[3usize]) * 85u64 + u64(group[4usize])
+    if value > 4294967295u64 { ret (0u32, false) }
+    ret (u32(value), true)
+}
+
+// The exact decoded size, so one-character zero groups cannot write past an
+// allocation sized from the shorter encoded input.
+fn ascii85_size(raw: []const u8) -> (usize, err) {
+    var i = 0usize
+    if raw.len >= 2usize && raw[0usize] == 60u8 && raw[1usize] == 126u8 { i = 2usize }
+    var count = 0usize
+    var size = 0usize
+    var done = false
+    while i < raw.len && !done {
+        let c = raw[i]
+        i += 1usize
+        if c == 126u8 {
+            if i >= raw.len || raw[i] != 62u8 { ret (0usize, InvalidAscii85) }
+            done = true
+        } else if c == 122u8 && count == 0usize {
+            if size > MAX_ASCII85 - 4usize { ret (0usize, mem.Exhausted) }
+            size += 4usize
+        } else if c >= 33u8 && c <= 117u8 {
+            count += 1usize
+            if count == 5usize {
+                if size > MAX_ASCII85 - 4usize { ret (0usize, mem.Exhausted) }
+                size += 4usize
+                count = 0usize
+            }
+        } else if !is_space(c) {
+            ret (0usize, InvalidAscii85)
+        }
+    }
+    if count == 1usize { ret (0usize, InvalidAscii85) }
+    if count > 1usize {
+        if size > MAX_ASCII85 - (count - 1usize) { ret (0usize, mem.Exhausted) }
+        size += count - 1usize
+    }
+    ret (size, ok)
+}
+
 // ASCII85 (Adobe): optional `<~`, groups of five characters `!`..`u` into four bytes, `z` for four zero bytes,
 // white space ignored, `~>` ends; a final partial group of n characters gives n - 1 bytes.
 fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
-    let (out, out_error) = mem.alloc[u8](a, raw.len + 8usize)
+    let (size, size_error) = ascii85_size(raw)
+    if size_error != ok { ret (raw[0usize..0usize], size_error) }
+    let (out, out_error) = mem.alloc[u8](a, size)
     if out_error != ok { ret (raw[0usize..0usize], out_error) }
     var at = 0usize
     var n = 0usize
@@ -259,7 +586,8 @@ fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
             group[count] = u32(c) - 33u32
             count += 1usize
             if count == 5usize {
-                let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+                let (v, valid) = ascii85_value(group)
+                if !valid { ret (raw[0usize..0usize], InvalidAscii85) }
                 out[n] = u8(v >> 24u32)
                 out[n + 1usize] = u8((v >> 16u32) & 255u32)
                 out[n + 2usize] = u8((v >> 8u32) & 255u32)
@@ -275,7 +603,8 @@ fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
             group[k] = 84u32
             k += 1usize
         }
-        let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+        let (v, valid) = ascii85_value(group)
+        if !valid { ret (raw[0usize..0usize], InvalidAscii85) }
         let bytes: [4]u8 = [4]u8{ u8(v >> 24u32), u8((v >> 16u32) & 255u32), u8((v >> 8u32) & 255u32), u8(v & 255u32) }
         var j = 0usize
         while j + 1usize < count {
@@ -290,46 +619,69 @@ fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
 // Decode the stream of object span [s, e): its bytes, `/ASCII85Decode` and `/FlateDecode` undone. (The raw span when it has no
 // filter, an empty result when the stream is missing or does not inflate.)
 fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8, err) {
-    let (decoded, decode_error) = stream_capped(a, data, s, e, 262144usize)
+    // Do not silently cut text after 256 KiB. The common reader-wide stream limit
+    // remains a defined TooLarge error when the content exceeds it.
+    let (decoded, decode_error) = stream_capped(a, data, s, e, MAX_TEXT_STREAM)
     ret (decoded, decode_error)
 }
 
 // `stream_of` with the inflated size limit a parameter (an image's samples are larger than a page's text).
 fn stream_capped(a: *mem.Arena, data: []const u8, s: usize, e: usize, cap: usize) -> ([]const u8, err) {
-    let keyword = find(data, "stream", s, e)
+    let keyword = stream_keyword(data, s, e)
     if keyword >= e { ret (data[s..s], ok) }
-    var from = keyword + 6usize
-    if from < e && data[from] == 13u8 { from += 1usize }
-    if from < e && data[from] == 10u8 { from += 1usize }
-    var until = find(data, "endstream", from, e)
-    // Trim the end-of-line before `endstream`.
-    if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
-    if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
+    let from = stream_start(data, keyword, e)
+    var until = e
+    let (length, has_length) = stream_length(data, s, keyword)
+    if has_length && length <= e - from {
+        until = from + length
+    } else {
+        until = find_keyword(data, "endstream", from, e)
+        // Trim the end-of-line before `endstream` when there is no direct length.
+        if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
+        if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
+    }
     var raw = data[from..until]
     // `/ASCII85Decode` first when the filter list has it (reportlab writes ASCII85 then Flate).
     let a85 = find(data, "ASCII85Decode", s, keyword)
     if a85 < keyword {
         let (decoded, decode_error) = ascii85(a, raw)
-        if decode_error != ok { ret (raw[0usize..0usize], ok) }
+        if decode_error != ok {
+            if decode_error == mem.Exhausted { ret (raw[0usize..0usize], TooLarge) }
+            ret (raw[0usize..0usize], decode_error)
+        }
         raw = decoded
     }
+    if raw.len > cap { ret (raw[0usize..0usize], TooLarge) }
     let flate = find(data, "FlateDecode", s, keyword)
     if flate >= keyword { ret (raw, ok) }
     let (storage, storage_error) = mem.alloc[u8](a, zlib.storage_required(.Fast))
     if storage_error != ok { ret (raw, storage_error) }
     var cell = Mem { data: raw, off: 0usize }
     let reader = io.Reader { ctx: mem.cast[*void](&cell), read: mem_read }
-    let (z, z_error) = zlib.reader(storage, reader, MAX_STREAM)
-    if z_error != ok { ret (raw[0usize..0usize], ok) }
+    // Give the inflater one extra byte of budget so the probe below can turn an
+    // over-limit stream into this module's defined TooLarge error.
+    let (z, z_error) = zlib.reader(storage, reader, u64(cap) + 1u64)
+    if z_error != ok { ret (raw[0usize..0usize], z_error) }
     var zr = z
     let (out, out_error) = mem.alloc[u8](a, cap)
     if out_error != ok { ret (raw[0usize..0usize], out_error) }
     var filled = 0usize
     var running = true
+    var terminal_error: err = ok
     while running && filled < out.len {
         let (n, read_error) = zlib.read(&zr, out[filled..])
-        if read_error != ok { running = false } else { filled += n }
+        if read_error != ok {
+            terminal_error = read_error
+            running = false
+        } else { filled += n }
         if read_error == ok && n == 0usize { running = false }
+    }
+    if terminal_error != ok && terminal_error != io.End { ret (out[0usize..filled], terminal_error) }
+    if filled == out.len {
+        var probe: [1]u8 = zero
+        let (more, more_error) = zlib.read(&zr, probe[0usize..])
+        if more > 0usize { ret (out[0usize..filled], TooLarge) }
+        if more_error != ok && more_error != io.End { ret (out[0usize..filled], more_error) }
     }
     ret (out[0usize..filled], ok)
 }
@@ -392,28 +744,39 @@ fn put_code(out: []u8, at: usize, p: *Painter, c: u8, half: *usize) -> usize {
         }
         let code = *half * 256usize + usize(c)
         *half = MAX_CMAP
-        ret put_utf8(out, at, font_unicode(f, code))
+        ret put_font_code(out, at, f, code)
     }
-    ret put_utf8(out, at, font_unicode(f, usize(c)))
+    ret put_font_code(out, at, f, usize(c))
 }
 
 // `text_of` with the fonts of the painter's resources: `Tf` selects the font the strings after it are read through.
 fn text_run(a: *mem.Arena, content: []const u8, p: *Painter) -> (str, err) {
-    let (out, out_error) = mem.alloc[u8](a, content.len * 4usize + 16usize)
+    let (out_len, out_fits) = output_capacity(content.len, painter_mapping_bound(p), 16usize)
+    if !out_fits { ret ("", mem.Exhausted) }
+    let (initial_out, out_error) = mem.alloc[u8](a, out_len)
     if out_error != ok { ret ("", out_error) }
+    var out = initial_out
     var half = MAX_CMAP
     var name_s = 0usize
     var name_e = 0usize
     var at = 0usize
     var i = 0usize
-    var last_number = 0usize
-    var last_was_zero = true
-    var prev_zero = true
+    // The final two numeric operands are tx/ty for Td, TD and Tm.
+    var previous_value = 0.0f64
+    var last_value = 0.0f64
     var in_array = false
+    // Strings are operands, not text by themselves. Keep their output pending
+    // until a text-showing operator commits it.
+    var pending_at = 0usize
+    var has_pending = false
     while i < content.len {
         let c = content[i]
         if c == 40u8 {
             // A literal string, with its escapes and nested parentheses.
+            if !has_pending {
+                pending_at = at
+                has_pending = true
+            }
             half = MAX_CMAP
             var depth = 1usize
             i += 1usize
@@ -445,8 +808,23 @@ fn text_run(a: *mem.Arena, content: []const u8, p: *Painter) -> (str, err) {
                     i += 1usize
                 }
             }
-        } else if c == 60u8 && i + 1usize < content.len && content[i + 1usize] != 60u8 {
+        } else if c == 60u8 && i + 1usize < content.len && content[i + 1usize] == 60u8 {
+            // Marked-content and other dictionaries are operands; their strings are
+            // not page text. Skip the complete dictionary so its second `<` cannot
+            // be mistaken for a hex string.
+            if has_pending {
+                at = pending_at
+                has_pending = false
+            }
+            i = dict_end(content, i, content.len)
+        } else if c == 62u8 && i + 1usize < content.len && content[i + 1usize] == 62u8 {
+            i += 2usize
+        } else if c == 60u8 {
             // A hex string.
+            if !has_pending {
+                pending_at = at
+                has_pending = true
+            }
             half = MAX_CMAP
             i += 1usize
             var high = 0usize
@@ -484,49 +862,72 @@ fn text_run(a: *mem.Arena, content: []const u8, p: *Painter) -> (str, err) {
             name_e = i
         } else if is_digit(c) || c == 45u8 || c == 43u8 || c == 46u8 {
             // A number: a big negative kern inside TJ is a word space; keep the last operand for Td/TD.
-            var neg = false
-            if c == 45u8 { neg = true }
-            var value = 0usize
             var j = i
             if c == 45u8 || c == 43u8 { j += 1usize }
-            var zero_number = true
             while j < content.len && (is_digit(content[j]) || content[j] == 46u8) {
-                if is_digit(content[j]) {
-                    value = value * 10usize + usize(content[j] - 48u8)
-                    if content[j] != 48u8 { zero_number = false }
-                }
                 j += 1usize
             }
-            if in_array && neg && value >= 200usize && at > 0usize && out[at - 1usize] != 32u8 && out[at - 1usize] != 10u8 {
-                at = put_latin1(out, at, 32u8)
+            let value = operand_number(content[i..j])
+            if in_array {
+                // Decimal kerns must be compared as their value, not as digits with
+                // the point removed: -2.31 is not a 231-unit word gap.
+                if value <= -200.0f64 && at > 0usize && out[at - 1usize] != 32u8 && out[at - 1usize] != 10u8 {
+                    at = put_latin1(out, at, 32u8)
+                }
+            } else {
+                previous_value = last_value
+                last_value = value
             }
-            prev_zero = last_was_zero
-            last_was_zero = zero_number
-            last_number = value
             i = j
         } else if (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 39u8 || c == 34u8 || c == 42u8 {
             // An operator.
             var j = i
-            while j < content.len && !is_space(content[j]) && !is_delim(content[j]) && !(is_digit(content[j]) && j > i && false) { j += 1usize }
+            while j < content.len && !is_space(content[j]) && !is_delim(content[j]) { j += 1usize }
             let op = content[i..j]
+            let shows_text = str.eq(op, "Tj") || str.eq(op, "TJ") || str.eq(op, "'") || str.eq(op, "\"")
+            if has_pending && !shows_text {
+                at = pending_at
+                has_pending = false
+            }
             if str.eq(op, "Tf") {
                 p.cur_font = MAX_FONTS
                 if name_e > name_s {
                     let (font_object, has_font) = named_ref(p.data, p.table, p.count, p.res_s, p.res_e, "Font", content[name_s..name_e])
-                    if has_font { p.cur_font = load_font(a, p, font_object) }
+                    if has_font {
+                        let (font, font_error) = load_font(a, p, font_object)
+                        if font_error != ok { ret ("", font_error) }
+                        p.cur_font = font
+                        if p.cur_font < p.font_n {
+                            let (grown, grow_error) = grow_text_output(a, out, at, content.len, font_mapping_bound(&p.fonts[p.cur_font]))
+                            if grow_error != ok { ret ("", grow_error) }
+                            out = grown
+                        }
+                    }
                 }
             }
             if str.eq(op, "T*") || str.eq(op, "ET") || str.eq(op, "'") || str.eq(op, "\"") { at = newline(out, at) }
             if str.eq(op, "Td") || str.eq(op, "TD") {
-                // The last operand is ty: a move down starts a new line.
-                if !last_was_zero { at = newline(out, at) }
+                // ty starts a line; an x-only move separates independently positioned words.
+                if last_value != 0.0f64 {
+                    at = newline(out, at)
+                } else if previous_value > 0.0f64 && at > 0usize && out[at - 1usize] != 32u8 && out[at - 1usize] != 10u8 {
+                    at = put_latin1(out, at, 32u8)
+                }
             }
-            if str.eq(op, "Tm") { at = newline(out, at) }
+            if str.eq(op, "Tm") {
+                if last_value != 0.0f64 {
+                    at = newline(out, at)
+                } else if previous_value > 0.0f64 && at > 0usize && out[at - 1usize] != 32u8 && out[at - 1usize] != 10u8 {
+                    at = put_latin1(out, at, 32u8)
+                }
+            }
+            if shows_text { has_pending = false }
             i = j
         } else {
             i += 1usize
         }
     }
+    if has_pending { at = pending_at }
     // Drop a trailing newline.
     while at > 0usize && out[at - 1usize] == 10u8 { at -= 1usize }
     ret (out[0usize..at], ok)
@@ -597,19 +998,25 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
                 ctx.res_s = page_rs
                 ctx.res_e = page_re
             }
+            // Font-object slots are per page. Reusing the prior page's full cache
+            // made the ninth distinct page font fall back to Latin-1.
+            ctx.font_n = 0usize
             ctx.cur_font = MAX_FONTS
             // /Contents N 0 R, or /Contents [N 0 R M 0 R ...].
-            var streams: [64]usize = zero
-            var stream_count = refs_in_array(data, ps, pe, "Contents", streams[0usize..])
-            if stream_count == 0usize {
+            let (array_streams, array_error) = refs_in_array_alloc(a, data, ps, pe, "Contents")
+            if array_error != ok { ret (zero, array_error) }
+            var streams = array_streams
+            if streams.len == 0usize {
                 let (single, has_single) = ref_after(data, ps, pe, "Contents")
                 if has_single {
-                    streams[0usize] = single
-                    stream_count = 1usize
+                    let (one, one_error) = mem.alloc[usize](a, 1usize)
+                    if one_error != ok { ret (zero, one_error) }
+                    one[0usize] = single
+                    streams = one
                 }
             }
             var k = 0usize
-            while k < stream_count {
+            while k < streams.len {
                 let (ss, se, has_stream) = object_span(table, count, streams[k])
                 if has_stream {
                     let (content, stream_error) = stream_of(a, data, ss, se)
@@ -655,8 +1062,9 @@ type Shape = struct { kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, 
 type Image = struct { width: u32, height: u32, pixels: []u8 }
 type Painting = struct { width: f64, height: f64, shapes: []Shape, images: []Image }
 // A font resource as the painter reads it (D4800): the advance of each code from /Widths (or /W for a Type0 font), the
-// code-to-Unicode pairs of its /ToUnicode CMap, and whether its strings are two-byte codes.
-type FontInfo = struct { object: usize, first: usize, widths: []u16, codes: []u16, unis: []u32, mapped: usize, two_byte: bool, default_width: usize }
+// code-to-Unicode pairs of its /ToUnicode CMap, and whether its strings are two-byte codes. A mapping is UTF-8 text,
+// rather than just one code point, because ToUnicode destinations may spell ligatures or other multi-unit strings.
+type FontInfo = struct { object: usize, first: usize, widths: []u16, codes: []u16, unis: []str, mapped: usize, two_byte: bool, default_width: usize }
 type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
 
 const SHAPE_FILL: u8 = 0u8
@@ -668,14 +1076,15 @@ const SHAPE_IMAGE: u8 = 3u8
 const MAX_IMAGES: usize = 6usize
 const MAX_IMAGE_PIXELS: usize = 1048576usize
 const MAX_FONTS: usize = 8usize
-const MAX_CMAP: usize = 1024usize
+// The full two-byte code space; it also serves as an out-of-range half-code sentinel.
+const MAX_CMAP: usize = 65536usize
 const MAX_WIDTHS: usize = 4096usize
 const MAX_SHAPES: usize = 4000usize
 const MAX_SEGMENTS: usize = 256usize
 const STATE_DEPTH: usize = 8usize
 
 // The painter: the shapes so far, the graphics state, the path under construction and the text state.
-type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64, data: []const u8, table: []Object, count: usize, res_s: usize, res_e: usize, images: []Image, image_n: usize, image_objs: [6]usize, fonts: [8]FontInfo, font_n: usize, cur_font: usize, form_depth: usize }
+type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, overflow_depth: usize, overflow_saved: []f64, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64, data: []const u8, table: []Object, count: usize, res_s: usize, res_e: usize, images: []Image, image_n: usize, image_objs: [6]usize, fonts: [8]FontInfo, font_n: usize, cur_font: usize, form_depth: usize }
 
 fn paint_start(out: []Shape) -> Painter {
     var p: Painter = zero
@@ -687,6 +1096,88 @@ fn paint_start(out: []Shape) -> Painter {
     p.font_size = 12.0f64
     p.cur_font = MAX_FONTS
     ret p
+}
+
+// Save the subset of graphics state this reader models. Eight saves live inline;
+// further nesting grows in the arena so a matching Q restores its own state.
+fn paint_save(a: *mem.Arena, p: *Painter) -> err {
+    if p.depth < STATE_DEPTH {
+        let at = p.depth * 11usize
+        p.saved[at] = p.fill_r
+        p.saved[at + 1usize] = p.fill_g
+        p.saved[at + 2usize] = p.fill_b
+        p.saved[at + 3usize] = p.stroke_r
+        p.saved[at + 4usize] = p.stroke_g
+        p.saved[at + 5usize] = p.stroke_b
+        p.saved[at + 6usize] = p.line_width
+        p.saved[at + 7usize] = p.scale_x
+        p.saved[at + 8usize] = p.scale_y
+        p.saved[at + 9usize] = p.shift_x
+        p.saved[at + 10usize] = p.shift_y
+        p.depth += 1usize
+        ret ok
+    }
+    let next_depth = p.overflow_depth + 1usize
+    let needed = next_depth * 11usize
+    if needed > p.overflow_saved.len {
+        var capacity = STATE_DEPTH * 11usize
+        if p.overflow_saved.len > 0usize { capacity = p.overflow_saved.len * 2usize }
+        while capacity < needed { capacity *= 2usize }
+        let (grown, grown_error) = mem.alloc[f64](a, capacity)
+        if grown_error != ok { ret grown_error }
+        var i = 0usize
+        while i < p.overflow_saved.len {
+            grown[i] = p.overflow_saved[i]
+            i += 1usize
+        }
+        p.overflow_saved = grown
+    }
+    let at = p.overflow_depth * 11usize
+    p.overflow_saved[at] = p.fill_r
+    p.overflow_saved[at + 1usize] = p.fill_g
+    p.overflow_saved[at + 2usize] = p.fill_b
+    p.overflow_saved[at + 3usize] = p.stroke_r
+    p.overflow_saved[at + 4usize] = p.stroke_g
+    p.overflow_saved[at + 5usize] = p.stroke_b
+    p.overflow_saved[at + 6usize] = p.line_width
+    p.overflow_saved[at + 7usize] = p.scale_x
+    p.overflow_saved[at + 8usize] = p.scale_y
+    p.overflow_saved[at + 9usize] = p.shift_x
+    p.overflow_saved[at + 10usize] = p.shift_y
+    p.overflow_depth = next_depth
+    ret ok
+}
+
+fn paint_restore(p: *Painter) {
+    if p.overflow_depth > 0usize {
+        p.overflow_depth -= 1usize
+        let at = p.overflow_depth * 11usize
+        p.fill_r = p.overflow_saved[at]
+        p.fill_g = p.overflow_saved[at + 1usize]
+        p.fill_b = p.overflow_saved[at + 2usize]
+        p.stroke_r = p.overflow_saved[at + 3usize]
+        p.stroke_g = p.overflow_saved[at + 4usize]
+        p.stroke_b = p.overflow_saved[at + 5usize]
+        p.line_width = p.overflow_saved[at + 6usize]
+        p.scale_x = p.overflow_saved[at + 7usize]
+        p.scale_y = p.overflow_saved[at + 8usize]
+        p.shift_x = p.overflow_saved[at + 9usize]
+        p.shift_y = p.overflow_saved[at + 10usize]
+    } else if p.depth > 0usize {
+        p.depth -= 1usize
+        let at = p.depth * 11usize
+        p.fill_r = p.saved[at]
+        p.fill_g = p.saved[at + 1usize]
+        p.fill_b = p.saved[at + 2usize]
+        p.stroke_r = p.saved[at + 3usize]
+        p.stroke_g = p.saved[at + 4usize]
+        p.stroke_b = p.saved[at + 5usize]
+        p.line_width = p.saved[at + 6usize]
+        p.scale_x = p.saved[at + 7usize]
+        p.scale_y = p.saved[at + 8usize]
+        p.shift_x = p.saved[at + 9usize]
+        p.shift_y = p.saved[at + 10usize]
+    }
 }
 
 fn paint_push(p: *Painter, kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str) {
@@ -772,14 +1263,72 @@ fn put_utf8(out: []u8, at: usize, cp: u32) -> usize {
     ret at + 4usize
 }
 
-// The code point font `f` maps `code` to (its /ToUnicode CMap), or `code` itself when the font has no entry (Latin-1).
-fn font_unicode(f: *const FontInfo, code: usize) -> u32 {
+// The byte capacity for text that can expand each input byte by `bytes_per_input`.
+// It fails before an unsigned multiplication or addition can wrap.
+fn output_capacity(input_len: usize, bytes_per_input: usize, extra: usize) -> (usize, bool) {
+    if bytes_per_input == 0usize { ret (0usize, false) }
+    if input_len != 0usize && bytes_per_input > 18446744073709551615usize / input_len { ret (0usize, false) }
+    let bytes = input_len * bytes_per_input
+    if bytes > 18446744073709551615usize - extra { ret (0usize, false) }
+    ret (bytes + extra, true)
+}
+
+// Grow `out` after Tf loads a font whose ToUnicode entries are wider than the
+// mappings known when a text stream started. The already decoded prefix survives.
+fn grow_text_output(a: *mem.Arena, out: []u8, used: usize, content_len: usize, bytes_per_input: usize) -> ([]u8, err) {
+    let (needed, fits) = output_capacity(content_len, bytes_per_input, 16usize)
+    if !fits { ret (out, mem.Exhausted) }
+    if needed <= out.len { ret (out, ok) }
+    let (grown, grow_error) = mem.alloc[u8](a, needed)
+    if grow_error != ok { ret (out, grow_error) }
+    mem.copy[u8](grown[0usize..used], out[0usize..used])
+    ret (grown, ok)
+}
+
+// The largest UTF-8 expansion a code in this font can produce, including an
+// unmapped code point. A ToUnicode entry can be longer than one code point.
+fn font_mapping_bound(f: *const FontInfo) -> usize {
+    var max_bytes = 4usize
     var i = 0usize
-    while i < f.mapped {
-        if usize(f.codes[i]) == code { ret f.unis[i] }
+    while i < f.mapped && i < f.unis.len {
+        if f.unis[i].len > max_bytes { max_bytes = f.unis[i].len }
         i += 1usize
     }
-    ret u32(code)
+    ret max_bytes
+}
+
+// The text stream can switch fonts with Tf, so size its output for the widest
+// ToUnicode mapping held by any loaded font.
+fn painter_mapping_bound(p: *const Painter) -> usize {
+    var max_bytes = 4usize
+    var font_at = 0usize
+    while font_at < p.font_n && font_at < MAX_FONTS {
+        let font_bytes = font_mapping_bound(&p.fonts[font_at])
+        if font_bytes > max_bytes { max_bytes = font_bytes }
+        font_at += 1usize
+    }
+    ret max_bytes
+}
+
+// The UTF-8 text font `f` maps `code` to in its /ToUnicode CMap, with whether
+// the map had an entry. An explicit empty destination is distinct from no map.
+fn font_unicode(f: *const FontInfo, code: usize) -> (str, bool) {
+    var i = 0usize
+    while i < f.mapped {
+        if usize(f.codes[i]) == code { ret (f.unis[i], true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+// Append one font code through its ToUnicode text, or as Latin-1 when unmapped.
+fn put_font_code(out: []u8, at: usize, f: *const FontInfo, code: usize) -> usize {
+    let (mapped, has_mapping) = font_unicode(f, code)
+    if !has_mapping { ret put_utf8(out, at, u32(code)) }
+    if mapped.len == 0usize { ret at }
+    if at > out.len || mapped.len > out.len - at { ret at }
+    mem.copy[u8](out[at..at + mapped.len], mapped)
+    ret at + mapped.len
 }
 
 // The advance of `code` in 1/1000 of the font size: /Widths (or /W), else the default (500, or the CID font's /DW).
@@ -795,7 +1344,9 @@ fn paint_run(a: *mem.Arena, p: *Painter, raw: []const u8) {
     if raw.len == 0usize { ret }
     let size = p.font_size * p.text_scale
     if p.cur_font >= p.font_n {
-        let (utf, utf_error) = mem.alloc[u8](a, raw.len * 2usize + 2usize)
+        let (plain_utf_len, plain_utf_fits) = output_capacity(raw.len, 2usize, 2usize)
+        if !plain_utf_fits { ret }
+        let (utf, utf_error) = mem.alloc[u8](a, plain_utf_len)
         if utf_error != ok { ret }
         var at = 0usize
         var i = 0usize
@@ -807,7 +1358,9 @@ fn paint_run(a: *mem.Arena, p: *Painter, raw: []const u8) {
         ret
     }
     let f = &p.fonts[p.cur_font]
-    let (utf, utf_error) = mem.alloc[u8](a, raw.len * 4usize + 4usize)
+    let (mapped_utf_len, mapped_utf_fits) = output_capacity(raw.len, font_mapping_bound(f), 4usize)
+    if !mapped_utf_fits { ret }
+    let (utf, utf_error) = mem.alloc[u8](a, mapped_utf_len)
     if utf_error != ok { ret }
     var at = 0usize
     var units = 0usize
@@ -821,7 +1374,7 @@ fn paint_run(a: *mem.Arena, p: *Painter, raw: []const u8) {
                 i += 1usize
             }
         }
-        at = put_utf8(utf, at, font_unicode(f, code))
+        at = put_font_code(utf, at, f, code)
         units += font_width(f, code)
     }
     if at == 0usize { ret }
@@ -857,6 +1410,12 @@ fn dict_end(data: []const u8, k: usize, until: usize) -> usize {
             if depth <= 1usize { ret at + 2usize }
             depth -= 1usize
             at += 2usize
+        } else if data[at] == 40u8 {
+            at = skip_literal(data, at, until)
+        } else if data[at] == 60u8 {
+            at = skip_hex(data, at, until)
+        } else if data[at] == 37u8 {
+            at = skip_comment(data, at, until)
         } else {
             at += 1usize
         }
@@ -892,17 +1451,22 @@ fn region_after(data: []const u8, table: []const Object, count: usize, from: usi
     ret (0usize, 0usize, false)
 }
 
-// The span of the page's resource dictionary: its own `/Resources`, else the first page tree node's.
+// The span of the page's resource dictionary: its own `/Resources`, else the
+// nearest ancestor's resource dictionary along the actual `/Parent` chain.
 fn resources_span(data: []const u8, table: []const Object, count: usize, ps: usize, pe: usize) -> (usize, usize, bool) {
-    let (s, e, found) = region_after(data, table, count, ps, pe, "Resources")
-    if found { ret (s, e, true) }
-    var o = 0usize
-    while o < count {
-        if has_pair(data, table[o].start, table[o].end, "Type", "Pages") {
-            let (s2, e2, found2) = region_after(data, table, count, table[o].start, table[o].end, "Resources")
-            if found2 { ret (s2, e2, true) }
-        }
-        o += 1usize
+    var s = ps
+    var e = pe
+    var steps = 0usize
+    while steps <= count {
+        let (rs, re, found) = region_after(data, table, count, s, e, "Resources")
+        if found { ret (rs, re, true) }
+        let (parent, has_parent) = ref_after(data, s, e, "Parent")
+        if !has_parent { ret (0usize, 0usize, false) }
+        let (next_s, next_e, found_parent) = object_span(table, count, parent)
+        if !found_parent { ret (0usize, 0usize, false) }
+        s = next_s
+        e = next_e
+        steps += 1usize
     }
     ret (0usize, 0usize, false)
 }
@@ -1029,7 +1593,10 @@ fn read_cid_widths(data: []const u8, s: usize, e: usize, out: []u16) -> usize {
         let (kind, first_value, after) = array_token(data, at, e)
         at = after
         if kind != 1u8 { running = false } else {
-            let c1 = usize(first_value)
+            // Codes and widths are controlled by the PDF. Keep invalid codes out of
+            // the narrowing conversion and make width handling match read_widths.
+            var c1 = out.len
+            if first_value == first_value && first_value >= 0.0f64 && first_value < f64(out.len) { c1 = usize(first_value) }
             let (kind2, value2, after2) = array_token(data, at, e)
             at = after2
             if kind2 == 2u8 {
@@ -1040,20 +1607,30 @@ fn read_cid_widths(data: []const u8, s: usize, e: usize, out: []u16) -> usize {
                     at = after3
                     if kind3 != 1u8 { inside = false } else {
                         if c < out.len {
-                            out[c] = u16(usize(value3 + 0.5f64))
+                            var w = value3 + 0.5f64
+                            if w < 0.0f64 || w != w { w = 0.0f64 }
+                            if w > 65000.0f64 { w = 65000.0f64 }
+                            out[c] = u16(usize(w))
                             if c + 1usize > top { top = c + 1usize }
                         }
                         c += 1usize
                     }
                 }
             } else if kind2 == 1u8 {
-                let c2 = usize(value2)
+                var c2 = 0usize
+                var valid_c2 = value2 == value2 && value2 >= 0.0f64
+                if valid_c2 {
+                    if value2 >= f64(out.len) { c2 = out.len } else { c2 = usize(value2) }
+                }
                 let (kind3, value3, after3) = array_token(data, at, e)
                 at = after3
-                if kind3 != 1u8 { running = false } else {
+                if kind3 != 1u8 || !valid_c2 { running = false } else {
+                    var w = value3 + 0.5f64
+                    if w < 0.0f64 || w != w { w = 0.0f64 }
+                    if w > 65000.0f64 { w = 65000.0f64 }
                     var c = c1
                     while c <= c2 && c < out.len {
-                        out[c] = u16(usize(value3 + 0.5f64))
+                        out[c] = u16(usize(w))
                         c += 1usize
                     }
                     if c > top { top = c }
@@ -1087,13 +1664,171 @@ fn hex_value(data: []const u8, at: usize, until: usize) -> (u32, usize, usize, b
         }
         i += 1usize
     }
-    if value >= 55296u32 && value < 56320u32 && digits >= 8usize { value = 65536u32 + ((value - 55296u32) << 10u32) + (low - 56320u32) }
+    if i >= until { ret (0u32, 0usize, until, false) }
+    if value >= 55296u32 && value < 56320u32 {
+        if digits >= 8usize && low >= 56320u32 && low < 57344u32 {
+            value = 65536u32 + ((value - 55296u32) << 10u32) + (low - 56320u32)
+        } else {
+            value = 65533u32
+        }
+    } else if value >= 56320u32 && value < 57344u32 {
+        value = 65533u32
+    }
     ret (value, (digits + 1usize) / 2usize, i + 1usize, true)
 }
 
+// The full UTF-16BE destination string at a CMap hex literal, converted to UTF-8.
+// `increment` advances the final code-unit sequence for a sequential bfrange.
+fn hex_text(a: *mem.Arena, data: []const u8, at: usize, until: usize, increment: u32) -> (str, usize, bool) {
+    if at >= until || data[at] != 60u8 { ret ("", at, false) }
+    var end = at + 1usize
+    var digits = 0usize
+    while end < until && data[end] != 62u8 {
+        let h = data[end]
+        if (h >= 48u8 && h <= 57u8) || (h >= 65u8 && h <= 70u8) || (h >= 97u8 && h <= 102u8) { digits += 1usize }
+        end += 1usize
+    }
+    if end >= until { ret ("", until, false) }
+    let units_count = (digits + 3usize) / 4usize
+    if units_count == 0usize { ret ("", end + 1usize, true) }
+    let (units, units_error) = mem.alloc[u16](a, units_count)
+    if units_error != ok { ret ("", end + 1usize, false) }
+    var unit = 0u32
+    var unit_digits = 0usize
+    var unit_at = 0usize
+    var i = at + 1usize
+    while i < end {
+        let h = data[i]
+        var value = 99u32
+        if h >= 48u8 && h <= 57u8 { value = u32(h - 48u8) }
+        if h >= 65u8 && h <= 70u8 { value = u32(h - 55u8) }
+        if h >= 97u8 && h <= 102u8 { value = u32(h - 87u8) }
+        if value != 99u32 {
+            unit = unit * 16u32 + value
+            unit_digits += 1usize
+            if unit_digits == 4usize {
+                units[unit_at] = u16(unit)
+                unit_at += 1usize
+                unit = 0u32
+                unit_digits = 0usize
+            }
+        }
+        i += 1usize
+    }
+    if unit_digits > 0usize {
+        while unit_digits < 4usize {
+            unit *= 16u32
+            unit_digits += 1usize
+        }
+        units[unit_at] = u16(unit)
+    }
+    var carry = increment
+    var plus_at = units_count
+    while plus_at > 0usize && carry > 0u32 {
+        plus_at -= 1usize
+        let sum = u32(units[plus_at]) + (carry & 65535u32)
+        units[plus_at] = u16(sum & 65535u32)
+        carry = (carry >> 16u32) + (sum >> 16u32)
+    }
+    let (out, out_error) = mem.alloc[u8](a, units_count * 3usize + 4usize)
+    if out_error != ok { ret ("", end + 1usize, false) }
+    var written = 0usize
+    i = 0usize
+    while i < units_count {
+        var code = u32(units[i])
+        i += 1usize
+        if code >= 55296u32 && code < 56320u32 {
+            if i < units_count {
+                let low = u32(units[i])
+                if low >= 56320u32 && low < 57344u32 {
+                    code = 65536u32 + ((code - 55296u32) << 10u32) + (low - 56320u32)
+                    i += 1usize
+                } else {
+                    code = 65533u32
+                }
+            } else {
+                code = 65533u32
+            }
+        } else if code >= 56320u32 && code < 57344u32 {
+            code = 65533u32
+        }
+        written = put_utf8(out, written, code)
+    }
+    ret (out[0usize..written], end + 1usize, true)
+}
+
+// The number of entries needed to retain a CMap without the old arbitrary 1024-entry cut-off.
+fn cmap_entry_count(data: []const u8) -> (usize, err) {
+    var n = 0usize
+    var mode = 0usize
+    var at = 0usize
+    while at < data.len {
+        if at_word(data, at, "beginbfchar") {
+            mode = 1usize
+            at += 11usize
+        } else if at_word(data, at, "beginbfrange") {
+            mode = 2usize
+            at += 12usize
+        } else if at_word(data, at, "endbf") {
+            mode = 0usize
+            at += 5usize
+        } else if data[at] == 60u8 && mode == 1usize {
+            let (_, _, after_src, got_src) = hex_value(data, at, data.len)
+            var j = after_src
+            while j < data.len && data[j] != 60u8 { j += 1usize }
+            let (_, _, after_dst, got_dst) = hex_value(data, j, data.len)
+            if got_src && got_dst {
+                if n >= MAX_CMAP { ret (n, TooLarge) }
+                n += 1usize
+            }
+            at = after_dst
+        } else if data[at] == 60u8 && mode == 2usize {
+            let (lo, _, after_lo, got_lo) = hex_value(data, at, data.len)
+            var j = after_lo
+            while j < data.len && data[j] != 60u8 { j += 1usize }
+            let (hi, _, after_hi, got_hi) = hex_value(data, j, data.len)
+            j = after_hi
+            while j < data.len && is_space(data[j]) { j += 1usize }
+            if j < data.len && data[j] == 91u8 {
+                j += 1usize
+                var code = lo
+                var inside = true
+                while inside && j < data.len {
+                    while j < data.len && is_space(data[j]) { j += 1usize }
+                    if j < data.len && data[j] == 60u8 {
+                        let (_, _, after_dst, got_dst) = hex_value(data, j, data.len)
+                        if got_lo && got_hi && got_dst && code <= hi && code < 65536u32 {
+                            if n >= MAX_CMAP { ret (n, TooLarge) }
+                            n += 1usize
+                        }
+                        if code < 65536u32 { code += 1u32 }
+                        j = after_dst
+                    } else {
+                        inside = false
+                    }
+                }
+                if j < data.len { at = j + 1usize } else { at = j }
+            } else {
+                let (_, _, after_dst, got_dst) = hex_value(data, j, data.len)
+                if got_lo && got_hi && got_dst && lo <= hi && lo < 65536u32 {
+                    var upper = hi
+                    if upper >= 65536u32 { upper = 65535u32 }
+                    let added = usize(upper - lo) + 1usize
+                    if added > MAX_CMAP - n { ret (n, TooLarge) }
+                    n += added
+                }
+                at = after_dst
+            }
+        } else {
+            at += 1usize
+        }
+    }
+    ret (n, ok)
+}
+
 // Read the `bfchar` and `bfrange` blocks of a ToUnicode CMap into the font's code and Unicode lists; marks a font
-// with two-byte source codes. The entry count (at most MAX_CMAP).
-fn read_cmap(data: []const u8, f: *FontInfo, codes: []u16, unis: []u32) -> usize {
+// with two-byte source codes. The caller preallocates the exact entry count.
+fn read_cmap(a: *mem.Arena, data: []const u8, f: *FontInfo, codes: []u16, unis: []str) -> (usize, err) {
     var n = 0usize
     var mode = 0usize
     var at = 0usize
@@ -1111,8 +1846,9 @@ fn read_cmap(data: []const u8, f: *FontInfo, codes: []u16, unis: []u32) -> usize
             let (src, src_bytes, after_src, got_src) = hex_value(data, at, data.len)
             var j = after_src
             while j < data.len && data[j] != 60u8 { j += 1usize }
-            let (dst, dst_bytes, after_dst, got_dst) = hex_value(data, j, data.len)
-            if got_src && got_dst && n < codes.len {
+            let (dst, after_dst, got_dst) = hex_text(a, data, j, data.len, 0u32)
+            if got_src && got_dst {
+                if n >= codes.len { ret (n, TooLarge) }
                 codes[n] = u16(src & 65535u32)
                 unis[n] = dst
                 n += 1usize
@@ -1134,26 +1870,30 @@ fn read_cmap(data: []const u8, f: *FontInfo, codes: []u16, unis: []u32) -> usize
                 while inside && j < data.len {
                     while j < data.len && is_space(data[j]) { j += 1usize }
                     if j < data.len && data[j] == 60u8 {
-                        let (d, d_bytes, after_d, got_d) = hex_value(data, j, data.len)
-                        if n < codes.len && c <= 65535u32 {
+                        let (d, after_d, got_d) = hex_text(a, data, j, data.len, 0u32)
+                        if got_lo && got_hi && got_d && c <= hi && c <= 65535u32 {
+                            if n >= codes.len { ret (n, TooLarge) }
                             codes[n] = u16(c)
                             unis[n] = d
                             n += 1usize
                         }
-                        c += 1u32
+                        if c <= 65535u32 { c += 1u32 } else { c = 65536u32 }
                         j = after_d
                     } else {
                         inside = false
                     }
                 }
-                at = j + 1usize
+                if j < data.len { at = j + 1usize } else { at = j }
             } else {
-                let (dst, dst_bytes, after_dst, got_dst) = hex_value(data, j, data.len)
+                let (_, after_dst, got_dst) = hex_text(a, data, j, data.len, 0u32)
                 if got_lo && got_hi && got_dst {
                     var c = lo
-                    while c <= hi && c <= 65535u32 && n < codes.len {
+                    while c <= hi && c <= 65535u32 {
+                        let (dst, _, mapped) = hex_text(a, data, j, data.len, c - lo)
+                        if !mapped { break }
+                        if n >= codes.len { ret (n, TooLarge) }
                         codes[n] = u16(c)
-                        unis[n] = dst + (c - lo)
+                        unis[n] = dst
                         n += 1usize
                         c += 1u32
                     }
@@ -1164,20 +1904,21 @@ fn read_cmap(data: []const u8, f: *FontInfo, codes: []u16, unis: []u32) -> usize
             at += 1usize
         }
     }
-    ret n
+    ret (n, ok)
 }
 
 // Load the font dictionary of object `object` into the painter's table; its index, or MAX_FONTS when it cannot be.
-fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> usize {
+// A malformed or over-limit ToUnicode map remains observable to the caller rather than turning into a partial font.
+fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> (usize, err) {
     var i = 0usize
     while i < p.font_n {
-        if p.fonts[i].object == object { ret i }
+        if p.fonts[i].object == object { ret (i, ok) }
         i += 1usize
     }
-    if p.font_n >= MAX_FONTS { ret MAX_FONTS }
+    if p.font_n >= MAX_FONTS { ret (MAX_FONTS, ok) }
     let data = p.data
     let (s, e, found) = object_span(p.table, p.count, object)
-    if !found { ret MAX_FONTS }
+    if !found { ret (MAX_FONTS, ok) }
     var f: FontInfo = zero
     f.object = object
     f.default_width = 500usize
@@ -1188,7 +1929,8 @@ fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> usize {
         if d_count > 0usize {
             let (ds, de, has_d) = object_span(p.table, p.count, d[0usize])
             if has_d {
-                f.default_width = int_after(data, ds, de, "DW", 1000usize)
+                let declared_default_width = int_after(data, ds, de, "DW", 1000usize)
+                if declared_default_width > 65000usize { f.default_width = 65000usize } else { f.default_width = declared_default_width }
                 let (ws, we, has_w) = array_after(data, p.table, p.count, ds, de, "W")
                 if has_w {
                     let (widths, widths_error) = mem.alloc[u16](a, MAX_WIDTHS)
@@ -1219,11 +1961,17 @@ fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> usize {
     if has_tu {
         let (ts, te, has_stream) = object_span(p.table, p.count, tu)
         if has_stream {
-            let (cmap, cmap_error) = stream_capped(a, data, ts, te, 65536usize)
-            let (codes, codes_error) = mem.alloc[u16](a, MAX_CMAP)
-            let (unis, unis_error) = mem.alloc[u32](a, MAX_CMAP)
-            if cmap_error == ok && codes_error == ok && unis_error == ok {
-                let n = read_cmap(cmap, &f, codes, unis)
+            let (cmap, cmap_error) = stream_capped(a, data, ts, te, MAX_TEXT_STREAM)
+            if cmap_error != ok { ret (MAX_FONTS, cmap_error) }
+            let (entry_count, count_error) = cmap_entry_count(cmap)
+            if count_error != ok { ret (MAX_FONTS, count_error) }
+            if entry_count > 0usize {
+                let (codes, codes_error) = mem.alloc[u16](a, entry_count)
+                if codes_error != ok { ret (MAX_FONTS, codes_error) }
+                let (unis, unis_error) = mem.alloc[str](a, entry_count)
+                if unis_error != ok { ret (MAX_FONTS, unis_error) }
+                let (n, read_error) = read_cmap(a, cmap, &f, codes, unis)
+                if read_error != ok { ret (MAX_FONTS, read_error) }
                 f.codes = codes[0usize..n]
                 f.unis = unis[0usize..n]
                 f.mapped = n
@@ -1232,7 +1980,7 @@ fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> usize {
     }
     p.fonts[p.font_n] = f
     p.font_n += 1usize
-    ret p.font_n - 1usize
+    ret (p.font_n - 1usize, ok)
 }
 
 // Undo the PNG row predictors (10 to 15) of `raw` in place: rows of `row_bytes` after a filter byte, `bpp` bytes a
@@ -1280,11 +2028,13 @@ fn unpredict(raw: []u8, row_bytes: usize, bpp: usize) -> usize {
 // 1-bit gray and stencil masks. False for what it does not read (Indexed, 16 bits, a size over MAX_IMAGE_PIXELS).
 fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool) {
     let data = p.data
-    let keyword = find(data, "stream", s, e)
+    let keyword = stream_keyword(data, s, e)
     let width = int_after(data, s, keyword, "Width", 0usize)
     let height = int_after(data, s, keyword, "Height", 0usize)
     let bits = int_after(data, s, keyword, "BitsPerComponent", 8usize)
-    if width == 0usize || height == 0usize || width * height > MAX_IMAGE_PIXELS { ret (zero, false) }
+    if width == 0usize || height == 0usize || width > MAX_IMAGE_PIXELS / height { ret (zero, false) }
+    let pixel_count = width * height
+    let pixel_bytes = pixel_count * 4usize
     var is_mask = false
     let mask_key = find(data, "/ImageMask", s, keyword)
     if mask_key < keyword {
@@ -1293,9 +2043,15 @@ fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool)
         is_mask = at_word(data, m, "true")
     }
     let is_dct = find(data, "DCTDecode", s, keyword) < keyword
-    let (pixels, pixels_error) = mem.alloc[u8](a, width * height * 4usize)
+    let (pixels, pixels_error) = mem.alloc[u8](a, pixel_bytes)
     if pixels_error != ok { ret (zero, false) }
-    let (raw, raw_error) = stream_capped(a, data, s, e, width * height * 4usize + height + 64usize)
+    // The DCT stream is compressed image syntax, not decoded samples: for a
+    // small image its headers can legitimately be larger than the RGBA result.
+    // Keep its input under the reader-wide stream limit while the JPEG decoder
+    // separately enforces MAX_IMAGE_PIXELS.
+    var stream_cap = pixel_bytes + height + 64usize
+    if is_dct { stream_cap = MAX_TEXT_STREAM }
+    let (raw, raw_error) = stream_capped(a, data, s, e, stream_cap)
     if raw_error != ok || raw.len == 0usize { ret (zero, false) }
     if is_dct {
         var reader_state: io.SliceReader = zero
@@ -1341,27 +2097,33 @@ fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool)
     if has_pair(data, s, keyword, "ColorSpace", "Indexed") || find(data, "Indexed", s, keyword) < keyword { ret (zero, false) }
     if components == 0usize && bits == 8usize {
         // ICCBased and the like: the sample count says how many components a pixel has.
-        let per = work.len / (width * height)
+        let per = work.len / pixel_count
         if per >= 4usize { components = 4usize } else if per >= 3usize { components = 3usize } else { components = 1usize }
     }
     if components == 0usize { components = 1usize }
     if predictor >= 10usize {
+        if bits != 1usize && bits != 8usize { ret (zero, false) }
         let (copy, copy_error) = mem.alloc[u8](a, work.len)
         if copy_error != ok { ret (zero, false) }
         mem.copy[u8](copy, work)
         let colors = int_after(data, s, keyword, "Colors", 1usize)
         let columns = int_after(data, s, keyword, "Columns", 1usize)
-        let row_bytes = (colors * bits * columns + 7usize) / 8usize
-        var bpp = (colors * bits + 7usize) / 8usize
+        let max_bits = (pixel_bytes + height + 64usize) * 8usize
+        if colors == 0usize || columns == 0usize || colors > max_bits / bits { ret (zero, false) }
+        let bits_per_pixel = colors * bits
+        if columns > max_bits / bits_per_pixel { ret (zero, false) }
+        let row_bits = bits_per_pixel * columns
+        let row_bytes = (row_bits + 7usize) / 8usize
+        var bpp = (bits_per_pixel + 7usize) / 8usize
         if bpp == 0usize { bpp = 1usize }
         let kept = unpredict(copy, row_bytes, bpp)
         samples = copy[0usize..kept]
     }
     if bits == 8usize {
-        let need = width * height * components
+        let need = pixel_count * components
         if samples.len < need { ret (zero, false) }
         var i = 0usize
-        while i < width * height {
+        while i < pixel_count {
             var r = 0u8
             var g = 0u8
             var b = 0u8
@@ -1423,27 +2185,27 @@ fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool)
 
 // `Do` for the XObject called `name`: an image becomes a SHAPE_IMAGE over the unit square under the current matrix; a
 // form's content stream is run in place (two deep).
-fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8) {
+fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8) -> err {
     let (object, found) = named_ref(p.data, p.table, p.count, p.res_s, p.res_e, "XObject", name)
-    if !found { ret }
+    if !found { ret ok }
     let (s, e, has_span) = object_span(p.table, p.count, object)
-    if !has_span { ret }
-    let keyword = find(p.data, "stream", s, e)
+    if !has_span { ret ok }
+    let keyword = stream_keyword(p.data, s, e)
     if has_pair(p.data, s, keyword, "Subtype", "Form") {
         if p.form_depth < 2usize {
             let (content, content_error) = stream_of(a, p.data, s, e)
-            if content_error == ok {
-                p.form_depth += 1usize
-                let run_error = paint_content(a, p, content)
-                p.form_depth -= 1usize
-            }
+            if content_error != ok { ret content_error }
+            p.form_depth += 1usize
+            let run_error = paint_content(a, p, content)
+            p.form_depth -= 1usize
+            if run_error != ok { ret run_error }
         }
-        ret
+        ret ok
     }
-    if !has_pair(p.data, s, keyword, "Subtype", "Image") { ret }
+    if !has_pair(p.data, s, keyword, "Subtype", "Image") { ret ok }
     if p.images.len == 0usize {
         let (list, list_error) = mem.alloc[Image](a, MAX_IMAGES)
-        if list_error != ok { ret }
+        if list_error != ok { ret list_error }
         p.images = list
     }
     var index = MAX_IMAGES
@@ -1464,6 +2226,7 @@ fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8) {
     var shown = -1.0f64
     if index < MAX_IMAGES { shown = f64(index) }
     paint_push(p, SHAPE_IMAGE, 0.0f64, 0.0f64, 1.0f64, 1.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, shown, "")
+    ret ok
 }
 
 // Run a content stream over the painter.
@@ -1681,37 +2444,10 @@ fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err {
             } else if str.eq(op, "w") {
                 p.line_width = o5
             } else if str.eq(op, "q") {
-                if p.depth < STATE_DEPTH {
-                    let at = p.depth * 11usize
-                    p.saved[at] = p.fill_r
-                    p.saved[at + 1usize] = p.fill_g
-                    p.saved[at + 2usize] = p.fill_b
-                    p.saved[at + 3usize] = p.stroke_r
-                    p.saved[at + 4usize] = p.stroke_g
-                    p.saved[at + 5usize] = p.stroke_b
-                    p.saved[at + 6usize] = p.line_width
-                    p.saved[at + 7usize] = p.scale_x
-                    p.saved[at + 8usize] = p.scale_y
-                    p.saved[at + 9usize] = p.shift_x
-                    p.saved[at + 10usize] = p.shift_y
-                    p.depth += 1usize
-                }
+                let save_error = paint_save(a, p)
+                if save_error != ok { ret save_error }
             } else if str.eq(op, "Q") {
-                if p.depth > 0usize {
-                    p.depth -= 1usize
-                    let at = p.depth * 11usize
-                    p.fill_r = p.saved[at]
-                    p.fill_g = p.saved[at + 1usize]
-                    p.fill_b = p.saved[at + 2usize]
-                    p.stroke_r = p.saved[at + 3usize]
-                    p.stroke_g = p.saved[at + 4usize]
-                    p.stroke_b = p.saved[at + 5usize]
-                    p.line_width = p.saved[at + 6usize]
-                    p.scale_x = p.saved[at + 7usize]
-                    p.scale_y = p.saved[at + 8usize]
-                    p.shift_x = p.saved[at + 9usize]
-                    p.shift_y = p.saved[at + 10usize]
-                }
+                paint_restore(p)
             } else if str.eq(op, "cm") {
                 // A scale and an offset: the new matrix applied before the one in force (b and c are not followed).
                 p.shift_x = p.shift_x + o4 * p.scale_x
@@ -1729,10 +2465,17 @@ fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err {
                 p.cur_font = MAX_FONTS
                 if name_e > name_s {
                     let (font_object, has_font) = named_ref(p.data, p.table, p.count, p.res_s, p.res_e, "Font", content[name_s..name_e])
-                    if has_font { p.cur_font = load_font(a, p, font_object) }
+                    if has_font {
+                        let (font, font_error) = load_font(a, p, font_object)
+                        if font_error != ok { ret font_error }
+                        p.cur_font = font
+                    }
                 }
             } else if str.eq(op, "Do") {
-                if name_e > name_s { paint_xobject(a, p, content[name_s..name_e]) }
+                if name_e > name_s {
+                    let xobject_error = paint_xobject(a, p, content[name_s..name_e])
+                    if xobject_error != ok { ret xobject_error }
+                }
             } else if str.eq(op, "TL") {
                 p.leading = o5
             } else if str.eq(op, "Td") {
@@ -1790,7 +2533,27 @@ fn media_box(data: []const u8, from: usize, until: usize) -> (f64, f64, bool) {
     ret (numbers[2usize] - numbers[0usize], numbers[3usize] - numbers[1usize], true)
 }
 
-// Page `page` (from 0) painted: its size (the page's, or any page tree node's, MediaBox, else 612 by 792) and its
+// A page inherits MediaBox from its nearest parent that declares one, not from an
+// unrelated page-tree node earlier in file order.
+fn inherited_media_box(data: []const u8, table: []const Object, count: usize, ps: usize, pe: usize) -> (f64, f64, bool) {
+    var s = ps
+    var e = pe
+    var steps = 0usize
+    while steps <= count {
+        let (width, height, found) = media_box(data, s, e)
+        if found { ret (width, height, true) }
+        let (parent, has_parent) = ref_after(data, s, e, "Parent")
+        if !has_parent { ret (0.0f64, 0.0f64, false) }
+        let (next_s, next_e, found_parent) = object_span(table, count, parent)
+        if !found_parent { ret (0.0f64, 0.0f64, false) }
+        s = next_s
+        e = next_e
+        steps += 1usize
+    }
+    ret (0.0f64, 0.0f64, false)
+}
+
+// Page `page` (from 0) painted: its size (the page's or a Parent-chain MediaBox, else 612 by 792) and its
 // shapes in paint order (up to MAX_SHAPES).
 fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err) {
     let (tree, tree_error) = page_tree(a, data)
@@ -1800,23 +2563,10 @@ fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err
     if !has_page { ret (zero, NoPages) }
     var width = 612.0f64
     var height = 792.0f64
-    let (own_w, own_h, has_own) = media_box(data, ps, pe)
-    if has_own {
-        width = own_w
-        height = own_h
-    } else {
-        // Inherited: the first MediaBox of any object.
-        var o = 0usize
-        var found = false
-        while o < tree.count && !found {
-            let (inherited_w, inherited_h, has_inherited) = media_box(data, tree.table[o].start, tree.table[o].end)
-            if has_inherited {
-                width = inherited_w
-                height = inherited_h
-                found = true
-            }
-            o += 1usize
-        }
+    let (inherited_w, inherited_h, has_inherited) = inherited_media_box(data, tree.table, tree.count, ps, pe)
+    if has_inherited {
+        width = inherited_w
+        height = inherited_h
     }
     let (shapes, shapes_error) = mem.alloc[Shape](a, MAX_SHAPES)
     if shapes_error != ok { ret (zero, shapes_error) }
@@ -1829,17 +2579,20 @@ fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err
         painter.res_s = res_s
         painter.res_e = res_e
     }
-    var streams: [64]usize = zero
-    var stream_count = refs_in_array(data, ps, pe, "Contents", streams[0usize..])
-    if stream_count == 0usize {
+    let (array_streams, array_error) = refs_in_array_alloc(a, data, ps, pe, "Contents")
+    if array_error != ok { ret (zero, array_error) }
+    var streams = array_streams
+    if streams.len == 0usize {
         let (single, has_single) = ref_after(data, ps, pe, "Contents")
         if has_single {
-            streams[0usize] = single
-            stream_count = 1usize
+            let (one, one_error) = mem.alloc[usize](a, 1usize)
+            if one_error != ok { ret (zero, one_error) }
+            one[0usize] = single
+            streams = one
         }
     }
     var k = 0usize
-    while k < stream_count {
+    while k < streams.len {
         let (ss, se, has_stream) = object_span(tree.table, tree.count, streams[k])
         if has_stream {
             let (content, stream_error) = stream_of(a, data, ss, se)
@@ -1940,10 +2693,20 @@ fn string_after(a: *mem.Arena, data: []const u8, s: usize, e: usize, key: str) -
                     while i + 1usize < n {
                         var unit = u32(raw[i]) * 256u32 + u32(raw[i + 1usize])
                         i += 2usize
-                        if unit >= 55296u32 && unit < 56320u32 && i + 1usize < n {
-                            let low = u32(raw[i]) * 256u32 + u32(raw[i + 1usize])
-                            i += 2usize
-                            unit = 65536u32 + ((unit - 55296u32) << 10u32) + (low - 56320u32)
+                        if unit >= 55296u32 && unit < 56320u32 {
+                            if i + 1usize < n {
+                                let low = u32(raw[i]) * 256u32 + u32(raw[i + 1usize])
+                                if low >= 56320u32 && low < 57344u32 {
+                                    i += 2usize
+                                    unit = 65536u32 + ((unit - 55296u32) << 10u32) + (low - 56320u32)
+                                } else {
+                                    unit = 65533u32
+                                }
+                            } else {
+                                unit = 65533u32
+                            }
+                        } else if unit >= 56320u32 && unit < 57344u32 {
+                            unit = 65533u32
                         }
                         o = put_utf8(out, o, unit)
                     }

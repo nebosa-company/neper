@@ -29,14 +29,17 @@ fn valid_name(s: str) -> bool {
     ret true
 }
 
-fn count_commands(c: *const cli.Command) -> usize {
+fn count_commands(c: *const cli.Command, depth: usize) -> (usize, err) {
+    if depth > 16usize { ret (0usize, Invalid) }
     var n = 1usize
     var i = 0usize
     while i < c.subcommands.len {
-        n += count_commands(&c.subcommands[i])
+        let (child_count, child_error) = count_commands(&c.subcommands[i], depth + 1usize)
+        if child_error != ok { ret (0usize, child_error) }
+        n += child_count
         i += 1usize
     }
-    ret n
+    ret (n, ok)
 }
 
 fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err) {
@@ -51,7 +54,8 @@ fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err) {
 
 // The tree breadth-first: a node's children follow every node of its own level.
 fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err) {
-    let total = count_commands(root)
+    let (total, count_error) = count_commands(root, 0usize)
+    if count_error != ok { ret (zero, count_error) }
     let (nodes, ne) = mem.alloc[Node](a, total)
     if ne != ok { ret (zero, ne) }
     if !valid_name(root.name) { ret (zero, Invalid) }
@@ -64,6 +68,16 @@ fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err) {
         while k < c.subcommands.len {
             let sub = &c.subcommands[k]
             if !valid_name(sub.name) { ret (zero, Invalid) }
+            // Fish conditions retain at most sixteen words after the root.
+            // Reject a deeper tree here so no completion script can silently
+            // omit the oldest path component and leak another branch's items.
+            var depth = 1usize
+            var ancestor = i
+            while ancestor != 0usize {
+                depth += 1usize
+                ancestor = nodes[ancestor].parent
+            }
+            if depth > 16usize { ret (zero, Invalid) }
             let (p, pe) = joined(a, nodes[i].path, sub.name)
             if pe != ok { ret (zero, pe) }
             nodes[used] = Node{ path: p, command: sub, parent: i }

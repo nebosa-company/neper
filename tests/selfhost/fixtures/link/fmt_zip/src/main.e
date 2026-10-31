@@ -2,15 +2,19 @@
 // over an in-memory seeker, its entries listed, the deflated one read through
 // `entry_reader` in 700-byte pulls and the stored one through `extract`; a hand-built
 // archive with every ZIP64 field saturated; refusals for an encrypted entry, a bzip2
-// method, a `..` name, a CRC mismatch, an entry limit of two, a byte limit below the
-// pattern, and a source that is not an archive. Every check has its own exit code.
+// method, unsafe names and metadata, a CRC mismatch, an entry limit of two, a byte
+// limit below the pattern, and a source that is not an archive. Every check has its
+// own exit code.
 use e.os
 use e.mem
 use e.io
 use e.str
 use e.fmt.zip as zip
+use e.fmt.zip.write as zipwrite
 
 type Source = struct { data: []const u8, off: usize }
+
+type EndedSource = struct { data: []const u8, off: usize, end_at: usize }
 
 fn source_read(ctx: *void, dst: []u8) -> (usize, err) {
     var s = mem.cast[*Source](ctx)
@@ -22,8 +26,30 @@ fn source_read(ctx: *void, dst: []u8) -> (usize, err) {
     ret (take, ok)
 }
 
+fn ended_source_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var s = mem.cast[*EndedSource](ctx)
+    if s.off >= s.end_at { ret (0usize, io.End) }
+    var take = dst.len
+    if s.end_at - s.off < take { take = s.end_at - s.off }
+    mem.copy[u8](dst[..take], s.data[s.off..s.off + take])
+    s.off += take
+    if s.off == s.end_at { ret (take, io.End) }
+    ret (take, ok)
+}
+
 fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
     var s = mem.cast[*Source](ctx)
+    var base = 0i64
+    if whence == .Current { base = i64(s.off) }
+    if whence == .End { base = i64(s.data.len) }
+    let target_at = base + off
+    if target_at < 0i64 || target_at > i64(s.data.len) { ret (0u64, io.End) }
+    s.off = usize(target_at)
+    ret (u64(target_at), ok)
+}
+
+fn ended_source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
+    var s = mem.cast[*EndedSource](ctx)
     var base = 0i64
     if whence == .Current { base = i64(s.off) }
     if whence == .End { base = i64(s.data.len) }
@@ -50,6 +76,62 @@ fn open_over(a: *mem.Arena, s: *Source, limits: zip.Limits) -> (zip.Archive, err
     ret (archive, open_error)
 }
 
+fn open_ended_over(a: *mem.Arena, s: *EndedSource, limits: zip.Limits) -> (zip.Archive, err) {
+    let reader = io.Reader { ctx: mem.cast[*void](s), read: ended_source_read }
+    let seeker = io.Seeker { ctx: mem.cast[*void](s), seek: ended_source_seek }
+    let (archive, open_error) = zip.open(a, reader, seeker, limits)
+    ret (archive, open_error)
+}
+
+fn local_rejected(a: *mem.Arena, data: []const u8, limits: zip.Limits, storage: []u8) -> bool {
+    var source = Source { data: data, off: 0usize }
+    let (archive0, open_error) = open_over(a, &source, limits)
+    if open_error != ok { ret false }
+    var archive = archive0
+    let (_, reader_error) = zip.entry_reader(storage, &archive, 0usize)
+    ret reader_error == zip.Invalid
+}
+
+fn write16(dst: []u8, at: usize, value: u32) {
+    dst[at] = u8(value & 255u32)
+    dst[at + 1usize] = u8((value >> 8u32) & 255u32)
+}
+
+fn write32(dst: []u8, at: usize, value: u32) {
+    write16(dst, at, value & 65535u32)
+    write16(dst, at + 2usize, value >> 16u32)
+}
+
+fn write64(dst: []u8, at: usize, value: u64) {
+    write32(dst, at, u32(value & 4294967295u64))
+    write32(dst, at + 4usize, u32(value >> 32u32))
+}
+
+fn write_zip64_entry(dst: []u8, at: usize, name: u8) {
+    write32(dst, at, 33639248u32)
+    write16(dst, at + 4usize, 45u32)
+    write16(dst, at + 6usize, 45u32)
+    write16(dst, at + 8usize, 0u32)
+    write16(dst, at + 10usize, 0u32)
+    write16(dst, at + 12usize, 0u32)
+    write16(dst, at + 14usize, 0u32)
+    write32(dst, at + 16usize, 0u32)
+    write32(dst, at + 20usize, 4294967295u32)
+    write32(dst, at + 24usize, 4294967295u32)
+    write16(dst, at + 28usize, 1u32)
+    write16(dst, at + 30usize, 20u32)
+    write16(dst, at + 32usize, 0u32)
+    write16(dst, at + 34usize, 0u32)
+    write16(dst, at + 36usize, 0u32)
+    write32(dst, at + 38usize, 0u32)
+    write32(dst, at + 42usize, 0u32)
+    dst[at + 46usize] = name
+    write16(dst, at + 47usize, 1u32)
+    write16(dst, at + 49usize, 16u32)
+    write64(dst, at + 51usize, 9223372036854775808u64)
+    write64(dst, at + 59usize, 9223372036854775808u64)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let text = "stored entry: the quick brown fox jumps over the lazy dog\x0astored entry: the quick brown fox jumps over the lazy dog\x0astored entry: the quick brown fox jumps over the lazy dog\x0a"
     let archive = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x90&\xa6\x7f\xae\x00\x00\x00\xae\x00\x00\x00\x05\x00\x00\x00a.txtstored entry: the quick brown fox jumps over the lazy dog\x0astored entry: the quick brown fox jumps over the lazy dog\x0astored entry: the quick brown fox jumps over the lazy dog\x0aPK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00dir/PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00!\x00\xc2{\xd5\xb0\xa4\x0b\x00\x00\xb8\x0b\x00\x00\x09\x00\x00\x00dir/b.bin\x15\xd5\x03C\x98\x0b\x18\x86\xe1l\xdb\xee\xe4\xe5\xe5e\xdb\xb6m\xdb\xb6]\xcb\xcbkia\xd9\xb6m\xdb8_\xbf\xe1}\xee\xeb\x05\x81F\xc2$ \xa7e\xe6\xe4\x17\x93U\xd16\xb2tp\xf7\x0b\x8dI\xce*,\xafm\xea\xe8\x1b\x9dY\xde>\xb8\xbc{\x07\x83G\xc1%\xa2\xa2g\xe7\x16\x96PT\xd37\xb1u\xf2\x0e\x88\x8cK\xcf)\xf9\xd5\xd0\xd2\xd3?\xb6\xb8\xb1}t\xfb\xf2\x0e\x81\x8c\x85KB\xc7\xc2\xce+.\xa7\xa8ale\xeb\xe2\x1f\x16\x99\x90]T\x5c\xdd\xf4\xafkxfum\xff\xe2\xf1\x09\x14\x0e\x1d\x83\xf0?F&.!i\x19U=s\x0bG\xaf\x90\xe0\xa8\xc4\x8c\xb2\x9a\xc6\xf6\xb6\x9e\xe1\xa9\xcd\x83\xf3\xbb\xdb\x17P\x18l\x22Jz:\x16.\x01y5]S#k\x07\xcf\xb0\xf8\x94\xdc\xac\xa2\xf2\xfa\xce\xc1\xb1\xf9\x99\xd5\xad\xe3\x87O\x08D8t\x1c\xd2o\x1c\xbcb\x82\x12\xcaZ\xa66\xee~\x9e\x01\xd1I\xb9\xc5\xb5M\xf5-\xbd#\xf3k\x87\x17\xc7W\xaf`\x88\x18\xc4T$4,<\x22\xb2j\xfa\x1a\x86V\xce>\xa1q\xe9\x09\x99?+\xfft\x0cL\x0eM\xaf\xec\x9e\xdd\x7f\xc0 C\x11b\xd0\x91q1q\xc8\x89\xea([\x19z\xf8\xbb\xc5\x86d'U\x14\x94u6\x8e\xf5\xaeL\x1f_\x1c\xbe\xdd\xc3\x81\xe3\xa0b1R\xf0\xb1H\x0bh\xea\xa9\xdb\x98z9G\x04\x86\xe5\xa7T\xffl\xab\x1b\x19\xef\xdb\x5c8\xdez\xbd\xb9G\x80&B\xa5&\xe7\xe6c\x93\x17\xd3T\xb062\xf5q\x8f\x0b\xccH\xae\xac*\xe9l\x1e\xea^\x99\x9d;?\xf8\xbc\x82\x05\xc3'\xc0\xfcF\xc5\xc9,%,\xa2\xabfo\xe0\xe9\x14\x13\x1d\x94\x99P[\xda\xf1\xa7a\xa4{i\xf1b\xff\xed\xf5\x06\x16\x84\x18\x8b\x81\x82\x9c\x9bYB\x5cO\xd5\xd6\xca\xd8\xc31.<'5\xa9\xb2\xa0\xb5i\xb2o}e\xf6h\xfb\xe3\x11\x01\x12\x0c\x1f\x85\xe6?~69I\x01m%[\x13\x7f7\xc7\x88\xe0\xac\xd4\xaa\xb2\xce\xd6\xba\xd1\x9e\xf5\xb9\xcb\x83\xed\xa7[8H\x02lFjRnV\x19Q=u\x05K#o\x97\xd8\xb0\xfc\x8c\xc4_E\xed\x8d\x13\x83]\xcb3\xa7{\xef\x0f(\xd8D\x90\x08\xac\xdc\xa4\xd4\x8cj\xba\x22\xd2N\x9e\x06\xe6v\xa99\xc1Q\xf5-\xffJ\xab\xe7V{\x86\xaf\x1f>\xf7\xce\xd1\xf0A`\x918x)i\x955\x04\xc5\xe4]|\x8d\xac\x132\xf3\xc2c\x1a\xff\x16\x95\xcf\xcc\xaf\x0dN\x5c?\xed\x9e\x9cc\x10C\xc12\xf1\x90Q\xd2\xab\xeb\x09J8{\xf9\x9a\xd8\xa7e\x06D7\xfc\xe9(\xad\x9dZ\xee\x19\x1d\xbb\xff8<B\xc5\x03\x87@\xfc\xceOB\xa3\xa4\xad#*\xe7\xeeah\x95\x92\x9c\x15\x18\xd1\xdcYRU9\xb3\xdc5\xf9\xf0\xbe\xb7{\x82\x8a\x03\x8d\xc4\xce\xcbCF\xa3\xa0/&\xeb\xea\xe4m`\x99\x96\x1f\x12\x1b\xd5\xd0RX\xb3\xb8\xd6\xdf3z\xf5|p\x89A\x88\x07\x0e\xc3\xfc\x83\x8a^MQCX\xca\xd5\xc7\xdc\xce2!;(\xf6\xcf\xbf\xd2\xc2\xf2\xd9\x95\xfe\xb1\xc7\x8f\xe7\xadS4B\x08d\x0e&.2:\x15]1y\x09G/c\x9b\xd4\xbc\xf0\x80\xc8\xdfm\xc5\xd5\x0b\x9bK\xdd#\xb7o\xfb\x178\xc4X\x88\x10<,4$Tz\xaa2\xc2^\x8e\x16\xf6f\xb9)\xd1A\xadu\xcd5%k\xb3#\xdd\xcf\x1f\x8fg\xfbx\xe80\xa0P\xfcl\x0cd\xda\x0a\x92r\xe2>\xaeV\xc6\x19\x89i\xf1!\x1d\xbf+\x0bV\xd6\xe7&\x07\x9e\xafNw\xf6\x09\xb0\x91@9Yi\x19(\xf4\xd5$\x05\xbc\x9d\x5cm\xcc\xf3\x12#\x82\xdb\xda\x1bk\xca\x96\xa6Gz\xfb\xde\x1f.\xb7p\xd1\xe0\x11 \x7fpP\x93j)\xab\xc8\x8a\xf9;X\x1a\xe5d'E\x06\xfck\xaa..Z\x99\x1e\x1a\xfc\xb8?;\xdd\xc1EA\x86\xe2cc\xa5%\xd5P\x97\x13\xf5\xf5r\xb60\xccK\x8f\x09\x0dj\xab\xab(\xdd\x9c\x1b\x1f\xe9}\xba\xbe8$\xc0D\x83\x07\xe1\xfa\xceH\xa1\xa7\xa9 -\xe4\xebbof\x98\x91\x1c\x15\xda\xde\x5cSQ\xb0:3\xde\xf7\xf9p}\xb4\x8b\x87\x89\x00\xcd\xcf\xc9LK\xae\xa3*'.\xe0\xe9dm\x92\x9b\x16\x1f\x11\xf8\xb7\xa1\xaadcqj\xb8\xe7\xf5\xee\xfc\x80\x84\xea\x1b;/8\x1c*\x0e\xb1\x99\xad\x8b\xb7\x90\xa4\x82\xba^IU\xc3\xdf\xc0\x88\xf8\xb4\xdc\xbd\xd3\x9b\xe7\xee\x81\xc9\xb9u2:&\xae\x1f\xd0\x08\x98x\xc6\x16\x8en\xfe\x22\xb2J\xda\x05\x155\xcd\xed\xa1Q\xc9\x19;\xfbg\x8f\x1f\xddC\xb3+\xeb\x14\x8c\xdf\xb9@\xe0\xd10\x09\xcc\xed\x1c=\x84\xa5dU\xf4K+\xea\xda\x82Cb\xd3\xf2\xb7\x8eo^\xdf\xfa'\x16\x97HiY\xd9\xf8\xa0\x90Qp\x8d\xacm\x5c\xfd\xc4%\x14\xb5\x8a\x8b~\xd5\xb7\x84\xc7\xa5\xe6d\xef\x1c_}\x0e\x8c\xcf\xcd\xae\x90Rs\xfc\x80D\x80G\xc35\xb0w\xf3\x15\x15\x92V\xd0,\xad\xfd\xd3\xf178\x221\xef\xf0\xec\xfe\xe6\xb5kxa\x93\x82\x81\x96\x95\x13\x14\x09\x9b\xc0\xcc\xd0\xc2\xd9KTF]O\xb3\xa0\xf2wGH|Zb\xc6\xee\xc9\xfd\xdb\xe0\xc4\xf0\xd4*\x19\x03\x1b?4\x08,\x1a\xbe\x89\xad\x9b\xbf\x87\xa0\x94\xb2NIMs]kPtJ\xee\xc1\xe5\xd1\xf5K\xef\xd8\xfc\x065\xe3\x7f|l\xf0`\xb8(\xd8v\xa6>\xceR\x82\x1a\xfaj\xd5\xc5m\xbf#\x03\xc2\xf3R\xcfv_\xae\x87'\x06\xd7\xe6i\xc99\x99\xbf#C\x10\xa2Y\x1bx\xfa\xb9\xcb\x88j)\x97\x17\x96\xfe\xfb\x13\x1b\x94\x9dpr\xbe\xf7\xf90\xdc\xb5:3OO\xf5\x83\x19\x06\x1c\x8f\x10\xc3\xde\xcc\xd3AZHTG\xbd\xa6\xb0\xa5!:&4/\xfdh\xfb\xe5\xf6n|`s\x8a\x86\x8c\x87\x97\x1d\x09\x1a\x07\xd5\xca\xd8\xc4\xd7M^@S\xa9\xaa\xf2gk]|XnJ\xf2\xc9\xf6\xd3\xe3D\xff\xda\xea\x0c\x0d\x09\xffwD\x08p<T\x0bs?WY)a\x0d\xc5\x9a\xb2\xf6\xc6\xdf\xd1\x01\x99i\x97{\xef/\xb7C\xdd\x1b\x8b\xf4\x94d<L\xb0P\xc4\x18v\x96\x06\xdeN\xb2\x22\xfaj\x8a\xe5E\x7f\x1bc\xc2\xf32\x13Nw\xde\xef&\x07\xba\x97fi)y9\x90a@\xf1\xd0mL\xfd\xdc\x1d$\x85\xb4U\xaaK\xff\xb5\xd4G\x05\xe7\xa4^\x1cn=\xdf\x8c\xf6\xad/0q\xfc\xa0\xa4G\xc7\x03\x85Av\xf35\xb1V\xd2\x14\x10\x97kl/\xfa\x95\x98\x91\x1f\x16{\xf7\xbas<\xbd\xb0\xd97\xce\xc2CB\xf3\x0d\x9b\x00\x12\xce\xd9\xc3\xd0\xcc^EWH\xba\xae\xb5\xb3\xac*5+8\xe2\xe6\xfe\xed\xf0bz\xa9wd\x9c\x8d\xff?\x1a\x14|0H\x04w?C\x0be-]\x11\xf9\xa6\xd6\x82\xca\xe4\x94\xdc\xb0\xf8\xab\xe7\x9d\xd3\xb3\xf9\x8d\xc1!fnr\x0a\x06,b\x10X'o\x1fS;u\x0dA\xa9?\x0d\x7f\x0b\xcb\xd3\xf3Bc\xa2o\x9e\xb7.\x17\xd6\xfbzG\x989\xa9\xbea\x12\xe0\x83\xc1:\xf8\x9b\xd9\xaa*i\x0bH6\xfd+\xae\xfe\x95\x9c\x11\x18\xf7\xf8\xb6\xbfs:\xb5<0\xc9\xc6\xc7MN\x8dJ\x04\x8d\xe0\xe6\xe8al\xa5\xaa#.'Y\xd7\xf6\xb3:%?,0\xe2\xf6e\xfflqc\xb9k\x94\x85\x8f\x82\x11\x1b\x05\x17\x0c\xde\xc5\xd7\xcc\xdeBQKX\xa6\xb1\xb3\xac\xa0\x22);$\xf6\xe1\xf3i\xfbdv\xad\x7f\x82\x93\xff;\x03\x05>\x1a,\x08\xb4\x9f\xab\x8d\xb1\x96\xa2\x84\xbcX\xc7\x9f\xca\x9f\x99\x09\xe9q\xa1o\xb7'\xdb\xcb\x1b\x8bc\xfd\xdc\xac\xd4\xa4\xff\x11c \x82y;X\xda\x99\xeb\xa8J\x09\xb7\xd47\xd5\x16\xe7&E\x07\xbc\xbc\xdf]\x1e,O\x8d\xf6\xf4\xf3r|#\xc5A\x87C\x84\xf0w\xb34\xd0VR\x95\x11\xef\xac//\xca\xceI\x8d\x0b\x7f\xba>\xd9\xdd[_\x98\xec\xe2b\xa1\xa3\xa7$\xc2\x86\x01\xf5rv\xb15\xd3W\x90\x14jo\xfb]Q\x90\x9f\x16\x1b\x12\xfcr}t\xb81?6\xda\xc3\xc5\xc4\xf8\x1f!\x06:\x1c\xa8\x87\xbb\x9d\xa9\xae\x96\xb2\x84`gsU\xc9\xcf\xec\x84\xc8\xb0\xcf\xbb\xf3\x93\xdd\xa5\xe9\x89A^v\x16:\x12\x5c,d\x08?O\x07k#]\x15y1\xc1\x96\x86_%9\xe9q\x91\x01\xaf7\xe7{\x9b\x0b\xd3C\xbd\xdc\xec\xf4T\xc48\xa8p\xe0>\xaev\xe6\x06\x9aJ\xd2\x22\x1dM\xb5\xe5\x85Y\xc91\xa1\x1f\x8fW\xc7;\xabs\xe3\x03\xc0\xbdUu\x8c\xad\x1c=\xfc\xa1\x101\xf0\xc9h\x80=\xf4\x8f\xcd\xael\x1f]>\xbc\x87D'e\x16~\xb5\xf7\xd5\xa0\x9e\xb9\x8d\xab\x178\x0c*\x161\x05\x03\x0bO\xd7\xf0\xc4\xe2\xda\xfe\xc9\xedSPhLz^ay\xc3\xdf\x0e\x11y5M\x03k'W\x1fh$T\x1crZ\xa0\xbd\x01\xa0\xc1\xdd\xbd\xf3\x87\xcf\x80\xc8\xa4\xec\x1c\xa0\xbd\x16\xa0A\x15]3{\x07O0x\x04L\x22*jfn\xe0\xde\xd3K\x87\x17\xf7o\xafA\x91\x09\xf9\xa5\xd5\xc0\x1e\x04%\xd4\xf5Lm\xac\x9d<A\x90\xb1\x08)\xbf\xec\xf92he\xf7\xe8\xfa#<&5)\xbb\xa0\xa2\xe9\x9f\x88\xac\x94\xb2\x86\xa1\x9d\xbb\x0f\x14(\x0c:\x1e%=\xc7\x0f\xae\xae\xd1\x99\xf5\xbd\xcb\x87\xeb\xa7\xe0\xa8\xd4\x9c\xb2\x1a\xc0\x1e!\xc0 s\x03K'o\x08D,b\x1c\xc0\x1e^\xc0\xa0\xa9\xe5\x9d\xd3\xbb\xf7\xb0\xf8\x88\xc4\xac\xa2\xaa\xc6N\xe0\xde\xba*\xd6F\x9e\x0e\xeeH\x90\x04\xe8\xb4\xa4\xc0\x1e\xc6\xfbVg\x8e\xb7\x0e?\xeec\x82\xb3\x12+\xbe\xda\xfbjP\xcd\xde\xc4\xd7\x09\x1e\x04\x97\x08\x9b\x9e\x92\x9bu\xa8{`s\xee|\xe7\xf5**6$?\xad\xa2\xa0\xedw\xa3\x8c\xb8\x9e\xa2\x85\xb1\x97\xaf\x0b2\x14.\x0a\x1d\x19\xd0\xde\x04\xd0\xe0\xe9\xd9\xfe\xc7cD`Vr\x0a\xd0^\x1d\xd0\xa0\x8e\xaa\x9d\xb9\x87#\x1c8\x04!\x16#\x09\x17\x0bp\xef\xe5\xa9\xcb\x83\xf7\xbb\xdb\xa8\xc0\x8c\xf4\x9a\x12`\x0f\x92\x02\xfaj\xb6&\xc6^\x8e0\xd0D\x98\x0c_\xf6|\x194s\xba\xf5\xfc\x10\x1f\x92\x9b\x95\x5c^\xd8\xd9,#*\xa4\xad`i\xe6\xef\x82\x04\x0b\x82\x8f\xc6@\xc1\xff\x9dy\xa8we\xfe\xec\xf0\xe3\xf9*:(7\xa5\xb6\x14\xb0G\x0a0\xc8\xde\xc2\xd0\xcb\x19\x01\x92\x08\x1b\x05\xb0\x87\x0d0hi\xfad\xf7\xed>.< 3\xa9\xb2\xb8\xa3\x09\xf0^T\xc6\xd9\xcb\xd0\xc2\x1e\x8b\x10\x02\x9e\x85\x0b\xf8\x07\xf3k\xbd#\xd7O\x9f\x07\xe7)\xd9A\x91\xf5_\xed}5(\xe7\xeecj\x85\x8e\x03\x0a\x85\xcc\xc6GF7\xb5\xbc18v\xff\xb2{\x94\x94\x9a\x13\x1eW\xdfR\xf4\xabZE_L\xd2\xc1\xdb\xc8\xd4\x06\x9b\x08\x14\x86\x95\x1bho\x01h\xf0\xf6\xee\xfd\xe02!3(:\x06h\xaf\x1chPD\xd6\xcd\xdf\xc0\x12\x0d\x9f\x00\x12\x89\x83\x93\x94\x16\xf0\xbe{\xe8\xf1c\xff\xec4)3 \xbe\xa9\x03\xf8\x07\x8a\x1a\xe2r\xae>\xdeF\x96(\xc4P\x88\xec_\xf6|\x194r\xfb\xb4}\x91\x9e\x13\x1a\x14]\xd7ZZ\xab\xa2\xab%,\xe1\xe8gn\x83\x85\x8a\x03\x0e\xc7\xceK\xf5\x8dfj\xb5g\xfc\xee\xf3`\xfb(9+4\xa6\xb9\x13\xb0G\x090\xc8\xdd\xc1\xd3\xc8\x1a\x83\x10\x0a\x19\x06\xb0\x87\x1e0\xa8k\xf8\xe6u\xef<-?#0\xaa\xa1\xbd\xa4\x06\xf0^V\xc4\xdb\xc9\xd2\xc0\x9c\x08\x13\x01\x9c\x9b\x19\xf8\x07\xebs\xa3=\xcfW\x8f\x17\xfb9\xc9Q\x81\xad_\xed}5(\xe6\xefbk\x84\x8f\x02\x8b\x04\xcd\xcbNK\xbe4\xbd0\xd9\xf7~s\xba\x95\x95\x9b\x12\x1f\xd6ZW\xf9\xb3DG]N\xd0\xc3\xd9\xca\xd6\x84\x18\x0b\x16\x84\x87\x05ho\x03h\xf0\xf5\xed\xfe\xe20#1*8\x04h\xaf\x00hPF\xd4\xcf\xdd\xc2\x10\x0f\x1d\x03\x11\x8a\x9f\x89\x86\x0c\xf0~\xb8\xeb\xf3\xe1|o7+1\x22\xbc\xb3\x11\xf8\x07\x9a\x0a\xf2b\xbe.\xceV\x868\xd8H\x90|_\xf6|\x19\xd4\xf3zu|\x90\x9f\x12\x1b\x15\xdcR_S\xa6\xf3?PK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x90&\xa6\x7f\xae\x00\x00\x00\xae\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00a.txtPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\xd1\x00\x00\x00dir/PK\x01\x02\x14\x00\x14\x00\x00\x00\x08\x00\x00\x00!\x00\xc2{\xd5\xb0\xa4\x0b\x00\x00\xb8\x0b\x00\x00\x09\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\xf3\x00\x00\x00dir/b.binPK\x05\x06\x00\x00\x00\x00\x03\x00\x03\x00\x9c\x00\x00\x00\xbe\x0c\x00\x00\x00\x00"
@@ -57,7 +139,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let encrypted = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00x.txthelloPK\x01\x02\x14\x00\x14\x00\x01\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00x.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x003\x00\x00\x00(\x00\x00\x00\x00\x00"
     let bzip = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00x.txthelloPK\x01\x02\x14\x00\x14\x00\x00\x00\x0c\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00x.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x003\x00\x00\x00(\x00\x00\x00\x00\x00"
     let dotdot = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00x.txthelloPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00../abPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x003\x00\x00\x00(\x00\x00\x00\x00\x00"
-    let badcrc = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x86\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00x.txthelloPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x87\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00x.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x003\x00\x00\x00(\x00\x00\x00\x00\x00"
+    let badcrc = "PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x87\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00x.txthelloPK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00!\x00\x87\xa6\x106\x05\x00\x00\x00\x05\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x01\x00\x00\x00\x00x.txtPK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x003\x00\x00\x00(\x00\x00\x00\x00\x00"
     var pattern: [3000]u8 = zero
     var i = 0usize
     while i < 3000usize {
@@ -92,9 +174,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var end = filled + 700usize
         if end > out.len { end = out.len }
         let (count, read_error) = io.read(&r, out[filled..end])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(8) }
-        filled += count
     }
     if !same(out[..filled], pattern[0..]) { os.exit(9) }
     // The stored entry and the directory through extract.
@@ -104,6 +186,71 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok || empty.len != 0usize { os.exit(11) }
     let (again, e5) = zip.extract(a, &ar, 2usize)
     if e5 != ok || !same(again, pattern[0..]) { os.exit(12) }
+    // The declared compressed range for a raw-DEFLATE member must end with its
+    // final block, rather than accept trailing bytes that do not affect the output
+    // CRC or uncompressed size. Splice eight bytes before the central directory,
+    // then make both size fields and the directory offset self-consistent.
+    let deflate_local = 243usize
+    let deflate_data = deflate_local + 30usize + 9usize
+    let deflate_size = 2980usize
+    let directory_at = deflate_data + deflate_size
+    let third_directory = directory_at + 46usize + 5usize + 46usize + 4usize
+    let deflate_tail = 8usize
+    let (trailing_deflate, trailing_deflate_error) = mem.alloc[u8](a, archive.len + deflate_tail)
+    if trailing_deflate_error != ok { os.exit(45) }
+    mem.copy[u8](trailing_deflate[..directory_at], archive[..directory_at])
+    var tail_at = 0usize
+    while tail_at < deflate_tail {
+        trailing_deflate[directory_at + tail_at] = 165u8
+        tail_at += 1usize
+    }
+    mem.copy[u8](trailing_deflate[directory_at + deflate_tail..], archive[directory_at..])
+    write32(trailing_deflate, deflate_local + 18usize, u32(deflate_size + deflate_tail))
+    write32(trailing_deflate, third_directory + deflate_tail + 20usize, u32(deflate_size + deflate_tail))
+    write32(trailing_deflate, archive.len - 22usize + deflate_tail + 16usize, u32(directory_at + deflate_tail))
+    var trailing_deflate_source = Source { data: trailing_deflate, off: 0usize }
+    let (trailing_deflate_archive0, trailing_deflate_open_error) = open_over(a, &trailing_deflate_source, limits)
+    if trailing_deflate_open_error != ok { os.exit(46) }
+    var trailing_deflate_archive = trailing_deflate_archive0
+    let (_, trailing_deflate_extract_error) = zip.extract(a, &trailing_deflate_archive, 2usize)
+    if trailing_deflate_extract_error != zip.Invalid { os.exit(47) }
+    // A DEFLATE member whose declared size is zero may not write even one byte into
+    // the caller's buffer before reporting its size mismatch.
+    let (declared_empty_deflate, declared_empty_deflate_error) = mem.alloc[u8](a, archive.len)
+    if declared_empty_deflate_error != ok { os.exit(52) }
+    mem.copy[u8](declared_empty_deflate, archive)
+    write32(declared_empty_deflate, deflate_local + 22usize, 0u32)
+    write32(declared_empty_deflate, third_directory + 24usize, 0u32)
+    var declared_empty_source = Source { data: declared_empty_deflate, off: 0usize }
+    let (declared_empty_archive0, declared_empty_open_error) = open_over(a, &declared_empty_source, limits)
+    if declared_empty_open_error != ok { os.exit(53) }
+    var declared_empty_archive = declared_empty_archive0
+    let (declared_empty_reader0, declared_empty_reader_error) = zip.entry_reader(storage, &declared_empty_archive, 2usize)
+    if declared_empty_reader_error != ok { os.exit(54) }
+    var declared_empty_reader = declared_empty_reader0
+    var declared_empty_output: [64]u8 = zero
+    var declared_empty_at = 0usize
+    while declared_empty_at < declared_empty_output.len {
+        declared_empty_output[declared_empty_at] = 165u8
+        declared_empty_at += 1usize
+    }
+    let (declared_empty_count, declared_empty_read_error) = io.read(&declared_empty_reader, declared_empty_output[..])
+    if declared_empty_count != 0usize || declared_empty_read_error != zip.Checksum || declared_empty_output[0usize] != 165u8 || declared_empty_output[declared_empty_output.len - 1usize] != 165u8 { os.exit(55) }
+    // A seekable source may report End with the final stored or deflated member bytes.
+    var ended_stored_source = EndedSource { data: archive, off: 0usize, end_at: archive.len }
+    let (ended_stored_archive0, ended_stored_open_error) = open_ended_over(a, &ended_stored_source, limits)
+    if ended_stored_open_error != ok { os.exit(48) }
+    var ended_stored_archive = ended_stored_archive0
+    ended_stored_source.end_at = 35usize + text.len
+    let (ended_stored, ended_stored_error) = zip.extract(a, &ended_stored_archive, 0usize)
+    if ended_stored_error != ok || !same(ended_stored, text) { os.exit(49) }
+    var ended_deflate_source = EndedSource { data: archive, off: 0usize, end_at: archive.len }
+    let (ended_deflate_archive0, ended_deflate_open_error) = open_ended_over(a, &ended_deflate_source, limits)
+    if ended_deflate_open_error != ok { os.exit(50) }
+    var ended_deflate_archive = ended_deflate_archive0
+    ended_deflate_source.end_at = deflate_data + deflate_size
+    let (ended_deflated, ended_deflated_error) = zip.extract(a, &ended_deflate_archive, 2usize)
+    if ended_deflated_error != ok || !same(ended_deflated, pattern[..]) { os.exit(51) }
     // ZIP64.
     var source64 = Source { data: zip64, off: 0usize }
     let (big0, e6) = open_over(a, &source64, limits)
@@ -113,6 +260,172 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if listed64.len != 1usize || !str.eq(listed64[0].name, "z.txt") || listed64[0].size != 20u64 { os.exit(14) }
     let (payload, e7) = zip.extract(a, &big, 0usize)
     if e7 != ok || !str.eq(payload, "zip64 stored payload") { os.exit(15) }
+    // A pair of ZIP64 entries can claim 2^64 bytes in aggregate without needing
+    // bodies: the central-directory limit must reject before its accumulator wraps.
+    // Keep the central directory after the two claimed local offsets: `open`
+    // checks that relation before it can evaluate the aggregate-size limit.
+    var overflow_zip: [157]u8 = zero
+    write_zip64_entry(overflow_zip[..], 1usize, 97u8)
+    write_zip64_entry(overflow_zip[..], 68usize, 98u8)
+    write32(overflow_zip[..], 135usize, 101010256u32)
+    write16(overflow_zip[..], 139usize, 0u32)
+    write16(overflow_zip[..], 141usize, 0u32)
+    write16(overflow_zip[..], 143usize, 2u32)
+    write16(overflow_zip[..], 145usize, 2u32)
+    write32(overflow_zip[..], 147usize, 134u32)
+    write32(overflow_zip[..], 151usize, 1u32)
+    write16(overflow_zip[..], 155usize, 0u32)
+    var overflow_limits: zip.Limits = zero
+    overflow_limits.entries = 2usize
+    overflow_limits.name_bytes = 1usize
+    overflow_limits.entry_bytes = 18446744073709551615u64
+    overflow_limits.total_bytes = 18446744073709551615u64
+    var overflow_source = Source { data: overflow_zip[..], off: 0usize }
+    let (_, overflow_error) = open_over(a, &overflow_source, overflow_limits)
+    if overflow_error != zip.TooLarge { os.exit(27) }
+    // A writer-generated archive corrupted with an invalid raw name is rejected both
+    // with and without bit 11.
+    var no_data: [0]u8 = zero
+    // Local-file metadata cannot quietly disagree with the central directory (issue #1365).
+    var mismatch_parts: [1]zipwrite.Part = zero
+    mismatch_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (mismatch, mismatch_error) = zipwrite.store(a, mismatch_parts[..])
+    if mismatch_error != ok { os.exit(35) }
+    let mismatch_directory = 30usize + mismatch_parts[0usize].name.len
+    // Stored entries have identical compressed and uncompressed lengths. Reject a
+    // mismatched central entry before a reader can hand out its compressed range.
+    write32(mismatch, 18usize, 1u32)
+    write32(mismatch, mismatch_directory + 20usize, 1u32)
+    var mismatch_stored_source = Source { data: mismatch, off: 0usize }
+    let (_, mismatch_stored_open_error) = open_over(a, &mismatch_stored_source, limits)
+    if mismatch_stored_open_error != zip.Invalid { os.exit(56) }
+    write32(mismatch, 18usize, 0u32)
+    write32(mismatch, mismatch_directory + 20usize, 0u32)
+    mismatch[30usize] = 121u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(36) }
+    mismatch[30usize] = 120u8
+    mismatch[8usize] = 8u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(37) }
+    mismatch[8usize] = 0u8
+    mismatch[14usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(38) }
+    mismatch[14usize] = 0u8
+    mismatch[18usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(39) }
+    mismatch[18usize] = 0u8
+    mismatch[6usize] = 8u8
+    mismatch[mismatch_directory + 8usize] = 8u8
+    mismatch[14usize] = 1u8
+    if !local_rejected(a, mismatch, limits, storage) { os.exit(40) }
+    var malformed_parts: [1]zipwrite.Part = zero
+    malformed_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (malformed, malformed_error) = zipwrite.store(a, malformed_parts[..])
+    if malformed_error != ok { os.exit(24) }
+    let malformed_directory = 30usize + malformed_parts[0usize].name.len
+    malformed[30usize] = 255u8
+    malformed[malformed_directory + 46usize] = 255u8
+    malformed[6usize] = 0u8
+    malformed[7usize] = 8u8
+    malformed[malformed_directory + 8usize] = 0u8
+    malformed[malformed_directory + 9usize] = 8u8
+    var flagged_name_source = Source { data: malformed, off: 0usize }
+    let (_, e16) = open_over(a, &flagged_name_source, limits)
+    if e16 != zip.Invalid { os.exit(25) }
+    malformed[7usize] = 0u8
+    malformed[malformed_directory + 9usize] = 0u8
+    var legacy_name_source = Source { data: malformed, off: 0usize }
+    let (_, e17) = open_over(a, &legacy_name_source, limits)
+    if e17 != zip.Invalid { os.exit(26) }
+    // Path validation must reject controls and a leading drive name, but preserve
+    // ordinary colons outside that drive-prefix form.
+    if zip.name_legal("a\x00b") || zip.name_legal("C:drive") || !zip.name_legal("1:2.txt") { os.exit(57) }
+    // A non-ASCII name is UTF-8 only when both ZIP headers carry the EFS bit.
+    var utf8_parts: [1]zipwrite.Part = zero
+    utf8_parts[0usize] = zipwrite.Part { name: "\xc3\xa9.txt", data: no_data[..] }
+    let (utf8_zip, utf8_zip_error) = zipwrite.store(a, utf8_parts[..])
+    if utf8_zip_error != ok { os.exit(58) }
+    let utf8_directory = 30usize + utf8_parts[0usize].name.len
+    if utf8_zip[6usize] != 0u8 || utf8_zip[7usize] != 8u8 || utf8_zip[utf8_directory + 8usize] != 0u8 || utf8_zip[utf8_directory + 9usize] != 8u8 { os.exit(59) }
+    var utf8_source = Source { data: utf8_zip, off: 0usize }
+    let (utf8_archive0, utf8_open_error) = open_over(a, &utf8_source, limits)
+    if utf8_open_error != ok { os.exit(60) }
+    var utf8_archive = utf8_archive0
+    let utf8_entries = zip.entries(&utf8_archive)
+    if utf8_entries.len != 1usize || !str.eq(utf8_entries[0usize].name, utf8_parts[0usize].name) { os.exit(61) }
+    utf8_zip[7usize] = 0u8
+    utf8_zip[utf8_directory + 9usize] = 0u8
+    var legacy_utf8_source = Source { data: utf8_zip, off: 0usize }
+    let (_, legacy_utf8_error) = open_over(a, &legacy_utf8_source, limits)
+    if legacy_utf8_error != zip.Invalid { os.exit(62) }
+    // A central-directory extra area is a sequence of complete 4-byte headers and
+    // payloads. A trailing byte must not be silently ignored.
+    var extra_parts: [1]zipwrite.Part = zero
+    extra_parts[0usize] = zipwrite.Part { name: "x", data: no_data[..] }
+    let (extra_zip, extra_zip_error) = zipwrite.store(a, extra_parts[..])
+    if extra_zip_error != ok { os.exit(41) }
+    let extra_eocd = extra_zip.len - 22usize
+    let extra_directory = 30usize + extra_parts[0usize].name.len
+    let (trailing_extra, trailing_extra_error) = mem.alloc[u8](a, extra_zip.len + 1usize)
+    if trailing_extra_error != ok { os.exit(42) }
+    mem.copy[u8](trailing_extra[..extra_eocd], extra_zip[..extra_eocd])
+    trailing_extra[extra_eocd] = 0u8
+    mem.copy[u8](trailing_extra[extra_eocd + 1usize..], extra_zip[extra_eocd..])
+    write16(trailing_extra, extra_directory + 30usize, 1u32)
+    write32(trailing_extra, extra_eocd + 1usize + 12usize, u32(46usize + extra_parts[0usize].name.len + 1usize))
+    var trailing_extra_source = Source { data: trailing_extra, off: 0usize }
+    let (_, trailing_open_error) = open_over(a, &trailing_extra_source, limits)
+    if trailing_open_error != zip.Invalid { os.exit(43) }
+    // The reader has one source, so a classic multi-disk end record is unsupported.
+    var disk_parts: [1]zipwrite.Part = zero
+    disk_parts[0usize] = zipwrite.Part { name: "disk.txt", data: no_data[..] }
+    let (multi_disk, multi_disk_error) = zipwrite.store(a, disk_parts[..])
+    if multi_disk_error != ok { os.exit(28) }
+    let multi_eocd = multi_disk.len - 22usize
+    multi_disk[multi_eocd + 4usize] = 1u8
+    var multi_disk_source = Source { data: multi_disk, off: 0usize }
+    let (_, multi_disk_open_error) = open_over(a, &multi_disk_source, limits)
+    if multi_disk_open_error != zip.Unsupported { os.exit(29) }
+    // ZIP64 has the same single-disk rule in both its locator and end record.
+    let (multi64, multi64_error) = mem.alloc[u8](a, zip64.len)
+    if multi64_error != ok { os.exit(30) }
+    mem.copy[u8](multi64, zip64)
+    let multi64_locator = multi64.len - 22usize - 20usize
+    let multi64_record = multi64_locator - 56usize
+    multi64[multi64_locator + 16usize] = 2u8
+    var multi64_source = Source { data: multi64, off: 0usize }
+    let (_, multi64_open_error) = open_over(a, &multi64_source, limits)
+    if multi64_open_error != zip.Unsupported { os.exit(31) }
+    multi64[multi64_locator + 16usize] = 1u8
+    multi64[multi64_record + 16usize] = 1u8
+    var multi64_record_source = Source { data: multi64, off: 0usize }
+    let (_, multi64_record_error) = open_over(a, &multi64_record_source, limits)
+    if multi64_record_error != zip.Unsupported { os.exit(34) }
+    // An empty ZIP is valid and the writer should round-trip it through the reader.
+    var empty_parts: [0]zipwrite.Part = zero
+    let (empty_zip, empty_zip_error) = zipwrite.store(a, empty_parts[..])
+    if empty_zip_error != ok || empty_zip.len != 22usize { os.exit(32) }
+    var empty_source = Source { data: empty_zip, off: 0usize }
+    let (empty_archive, empty_open_error) = open_over(a, &empty_source, limits)
+    if empty_open_error != ok || zip.entries(&empty_archive).len != 0usize { os.exit(33) }
+    // The classic writer accepts the largest representable filename without truncating its fields.
+    var max_name_bytes: [65535]u8 = zero
+    var max_name_at = 0usize
+    while max_name_at < max_name_bytes.len {
+        max_name_bytes[max_name_at] = 97u8
+        max_name_at += 1usize
+    }
+    let max_name: str = max_name_bytes[0..]
+    var max_name_parts: [1]zipwrite.Part = zero
+    max_name_parts[0usize] = zipwrite.Part { name: max_name, data: no_data[..] }
+    let (max_name_zip, max_name_error) = zipwrite.store(a, max_name_parts[..])
+    let max_name_directory = 30usize + max_name.len
+    if max_name_error != ok || max_name_zip.len != 131168usize || max_name_zip[26usize] != 255u8 || max_name_zip[27usize] != 255u8 || max_name_zip[max_name_directory + 28usize] != 255u8 || max_name_zip[max_name_directory + 29usize] != 255u8 { os.exit(44) }
+    // A classic end record reserves 65535 as the ZIP64 count sentinel, so the writer
+    // must decline that count rather than emit an archive its own reader rejects.
+    let (too_many_parts, too_many_parts_error) = mem.alloc[zipwrite.Part](a, 65535usize)
+    if too_many_parts_error != ok { os.exit(63) }
+    let (_, too_many_error) = zipwrite.store(a, too_many_parts)
+    if too_many_error != zipwrite.TooLarge { os.exit(64) }
     // Refusals.
     var enc_source = Source { data: encrypted, off: 0usize }
     let (v1, e8) = open_over(a, &enc_source, limits)

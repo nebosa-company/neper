@@ -175,8 +175,24 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// #1181: an escaped name must surface exhaustion instead of retrying its leading
+// backslash forever after the retained-name allocation fails.
+fn escaped_name_exhaustion() -> bool {
+    var full_storage: [8192]u8 = zero
+    var full = mem.arena_from(full_storage[..])
+    let (_, full_error) = syntax.tokenize(&full, "\\61")
+    if full_error != ok { ret false }
+    let used = mem.mark(&full)
+    if used == 0usize || used >= full_storage.len { ret false }
+    var tight_storage: [8192]u8 = zero
+    var tight = mem.arena_from(tight_storage[0usize..used - 1usize])
+    let (_, tight_error) = syntax.tokenize(&tight, "\\61")
+    ret tight_error == mem.Exhausted
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    if !escaped_name_exhaustion() { os.exit(99i32) }
     try io.print("css syntax ok")
     ret ok
 }

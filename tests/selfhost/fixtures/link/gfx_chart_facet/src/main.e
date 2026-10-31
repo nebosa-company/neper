@@ -41,6 +41,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     plot = chart.spec(.Scatter, placed[0], constant[..], constant[..])
     let (constant_plot, constant_error) = chart.layout_with_limits(&plot, points[..], lines[..], bars[..], common[..], common[..])
     if constant_error != ok || !near(constant_plot.coords[0].x, 50.0) || !near(constant_plot.coords[0].y, 50.0) { ret chart.Invalid }
+    let huge_bounds = geometry.rect(3.0e38, 0.0, 3.0e38, 100.0)
+    plot = chart.spec(.Scatter, huge_bounds, values[..], values[..])
+    let (_, huge_bounds_error) = chart.layout_with_limits(&plot, points[..], lines[..], bars[..], common[..], common[..])
+    if huge_bounds_error != chart.Invalid { ret chart.Invalid }
     try io.print("gfx chart facet ok\n")
     ret ok
 }

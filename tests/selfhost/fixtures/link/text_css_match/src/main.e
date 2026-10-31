@@ -171,6 +171,38 @@ fn run_one(a: *mem.Arena, root: json.Value) -> bool {
 }
 
 //__VECTOR_FUNCTIONS__
+// CSS :empty ignores comments but not element or non-empty text children. Keep this
+// outside the generated vectors so the standards edge case survives vector refreshes.
+fn empty_comment_case(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1024usize, max_nodes: 32usize, max_attributes: 4usize, max_depth: 8u16, preserve_comments: true }
+    let (doc, document_error) = html.parse(a, "<p><!-- note --></p><p>text</p><p></p>", options)
+    if document_error != ok { ret false }
+    let (made, made_error) = list.init[html.NodeId](a, 8usize)
+    if made_error != ok { ret false }
+    var elements = made
+    collect(&doc, doc.root, &elements)
+    var state = match.no_state()
+    let m = match.new_matcher(a, &doc, state)
+    let (tokens, token_error) = syntax.tokenize(a, "p:empty")
+    if token_error != ok { ret false }
+    let (rules, rule_error) = selector.parse_selector_list_for_rule(a, "p:empty", tokens)
+    if rule_error != ok || rules.len != 1usize { ret false }
+    var seen = 0usize
+    var at = 0usize
+    while at < elements.len {
+        let id = elements.items[at]
+        if str.eq(doc.nodes[usize(id)].name, "p") {
+            let selected = match.selector_matches(&m, rules[0usize].selector, id)
+            if seen == 0usize && !selected { ret false }
+            if seen == 1usize && selected { ret false }
+            if seen == 2usize && !selected { ret false }
+            seen += 1usize
+        }
+        at += 1usize
+    }
+    ret seen == 3usize
+}
+
 fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     var start = 0usize
     var i = 0usize
@@ -192,6 +224,7 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    if !empty_comment_case(a) { os.exit(250i32) }
     //__VECTOR_CALLS__
     try io.print("css match ok")
     ret ok

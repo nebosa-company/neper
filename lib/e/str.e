@@ -8,6 +8,7 @@
 // input. What is still missing is the float pushes, the float parsers, `push_err`
 // and `format`.
 use e.mem
+use e.text.utf8
 
 type Sink = struct { ctx: *void, write: fn(ctx: *void, bytes: []const u8) -> err }
 
@@ -102,7 +103,11 @@ fn push(b: *Builder, s: str) -> err {
         // A builder with no sink stops here; one with a sink drains what it holds and
         // carries on, which is why a push on a flushing builder never reports
         // `mem.Exhausted` and why a push larger than the buffer streams through.
-        if !b.flushing || b.len == 0usize { ret grow_error }
+        if !b.flushing { ret grow_error }
+        // A zero-capacity flushing builder (or an emptied builder whose arena is
+        // full) has no buffered bytes to drain. Write the remaining input directly
+        // so streaming builders never turn an arena-exhaustion retry into failure.
+        if b.len == 0usize { ret b.sink.write(b.sink.ctx, s[written..]) }
         try b.sink.write(b.sink.ctx, mem.view(b.arena, b.start, b.len))
         b.len = 0usize
     }
@@ -2887,6 +2892,8 @@ fn push_repeated(b: *Builder, fill: str, times: usize) -> err {
 // `InvalidSeparator`.
 fn pad(a: *mem.Arena, s: str, width: usize, side: Side, fill: str) -> (str, err) {
     if fill.len == 0usize { ret ("", InvalidSeparator) }
+    let (fill_points, fill_error) = utf8.count(fill)
+    if fill_error != ok || fill_points != 1usize { ret ("", InvalidSeparator) }
     let have = count_points(s)
     if have >= width { ret (s, ok) }
     let extra = width - have

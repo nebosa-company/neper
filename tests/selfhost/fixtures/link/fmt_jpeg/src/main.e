@@ -3,7 +3,8 @@
 // with every sample within a few steps of libjpeg's; an encode of RGBA, BGRA and
 // greyscale decoded back within the error libjpeg itself makes on this checkerboard
 // (18 at quality 95, 98 at 50); refusals for a bad signature, a bound
-// past the options, a progressive request and an unsupported source format.
+// past the options, a progressive request, an unsupported source format, and
+// an EOI marker placed before a scan has supplied all of its entropy bits.
 // `reference.py` regenerates the data.
 
 use e.fmt.jpeg
@@ -11,6 +12,7 @@ use e.gfx.image
 use e.io
 use e.mem
 use e.os
+use e.test.support
 
 fn baseline444_jpg() -> str { ret "\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00\x03\x02\x02\x02\x02\x02\x03\x02\x02\x02\x03\x03\x03\x03\x04\x06\x04\x04\x04\x04\x04\x08\x06\x06\x05\x06\x09\x08\x0a\x0a\x09\x08\x09\x09\x0a\x0c\x0f\x0c\x0a\x0b\x0e\x0b\x09\x09\x0d\x11\x0d\x0e\x0f\x10\x10\x11\x10\x0a\x0c\x12\x13\x12\x10\x13\x0f\x10\x10\x10\xff\xdb\x00C\x01\x03\x03\x03\x04\x03\x04\x08\x04\x04\x08\x10\x0b\x09\x0b\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\xff\xc0\x00\x11\x08\x00\x11\x00\x17\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03\x05\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06\x13Qa\x07\"q\x142\x81\x91\xa1\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\x09\x0a\x16\x17\x18\x19\x1a%&'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz\x83\x84\x85\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xff\xc4\x00\x1f\x01\x00\x03\x01\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\xff\xc4\x00\xb5\x11\x00\x02\x01\x02\x04\x04\x03\x04\x07\x05\x04\x04\x00\x01\x02w\x00\x01\x02\x03\x11\x04\x05!1\x06\x12AQ\x07aq\x13\"2\x81\x08\x14B\x91\xa1\xb1\xc1\x09#3R\xf0\x15br\xd1\x0a\x16$4\xe1%\xf1\x17\x18\x19\x1a&'()*56789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xff\xda\x00\x0c\x03\x01\x00\x02\x11\x03\x11\x00?\x00\xf9\x1b\xc3_\x09\x1fLu\x9e{p\xca\xc3f\x10d\xe7\xaf|zW\xect\xb1\xf5x\x1e\xab\xcc3\x09)BK\x91(;\xbb\xb6\xa5\xf6\x94U\xad\x17\xd6\xf7\xb6\x87\xcep\xff\x00\x15\xacJ\x8c \xfe\xf3\xd2\xb4/\x84\x8f<\xab\xa9%\xb8\x11\x02\x1f\x04|\xd8^\xbe\xdd\xab\xe5s,}\\\xd3\x19\xfe\xb4Q\x92T\x13S\xb3\xf8\xedN\xcaZ$\xe3w\xca\xed\xef[k\xb4~\xf7\xc3|V\xa1\x15E\xbd\x7f\xcc\xf4\xad#\xe1W\xf6\xaa\xaf\xd9\xed\xb6\xf9@\xe7x\xc7_Lg\xd2\xbeo=\xe2\x0f\xf5\xf5\xc7\xfb5\xf2\xfb\x1b\xf3s\xe9~{Z\xdc\xbc\xdf\xca\xef{t\xdc\xfd\xeb\x86\xf8\xa7\xea\xb1\xf7\xe5\xbfc\xb4\xf0\xd7\xc2\xb9\xa7eMJ\xd8\x88\x80\xc8\xde\x9b\x06\xef\xaf\x1d\xb3_9K\x89\xb1\x99\xa5WG\x8a\x1bT\x12\xba\xe7^\xcds\xdd%\xef%\x1b\xbeW-/\xb5\xdd\xb4\xd3\xfc{\xe1\xfe(\x8c\x14]\x19k\xf7\x9e\x95\xa0\xfc+\x99eXa\xb6?d\xc8\x04\x84\xca\xed?{\xe6\xfc\xfb\xd7\xca\xe6\\M\x8c\xa1\x8c\xfa\x8e\x05\xbf\xec\xeb\xa4\xda\\\xd0\xe4\x95\xbd\xa7\xef,\xdd\xae\xe5w\xcd\xee\xeb\xaa\xb6\x9f\xbep\xd7\x14E\xc5JR\xf7\xff\x00\xabhzV\x91\xf0\xa7\xc8U\xfe\xcc\xb6\xce\xe0w\xec\x1b\xfe\x99\xeb\x8e\xf5\xf3y\xef\x10\x7fe8\xff\x00\xaa\x8e\xfc\xd7\xf6\x9c\x9f\xbd\xda\xdc\x97\xbf?.\xf2\xb6\xd7\xd7{i\xfb\xcf\x0eqO\xb4\x8f\xef\xe5\xe9}\x0c\x1bo\xf8\xf6\x8b\xfe\xba\x0f\xe4k\xea<O\xff\x00\x91\\?\xeb\xe2\xff\x00\xd2f\x7f\x96\xbc#\xf1\xafC\xd2\xfc1\xff\x00 \x91\xff\x00\\\xdf\xfa\xd7\xcaa?\xe4\x90\x9f\xfd{\xab\xf9\xcc\xfd\xf3 \xff\x00x\x8f\xaa\xfd\x0fC\xf0O\xdd\x97\xe8\xbf\xd6\xbe\x0b\x80\x7f\xe6+\xfe\xdc\xff\x00\xdb\xcf\xdfr\xbf\x86?3\xff\xd9" }
 fn baseline444_pixels() -> str { ret "\x01\x03<\xff\x0b\x00B\xff\x1a\x00Q\xff$\x00I\xff)\x048\xff<\x00\xc7\xff>\x02\xb2\xffI\x05\xbe\xff^\x00\xbf\xffb\x04\xb2\xffp\x05;\xff\x84\x00L\xff\x87\x048\xff\x94\x05;\xff\xa0\x00H\xff\xab\x01\xb9\xff\xb8\x00\xc3\xff\xbe\x03\xb2\xff\xcf\x06\xb7\xff\xe1\x00\xc5\xff\xe4\x007\xff\xf7\x00H\xff\xff\x00M\xff\x00\x11@\xff\x09\x11B\xff\x19\x0eH\xff%\x0eD\xff-\x10J\xffB\x0e\xb9\xffH\x0b\xc0\xffS\x0e\xc3\xffa\x0d\xc7\xfff\x0f\xbe\xffq\x0eN\xff\x84\x0aC\xff\x8a\x0eJ\xff\x96\x10C\xff\xa2\x0cS\xff\xb1\x10\xc2\xff\xc3\x0d\xc1\xff\xc5\x0c\xc1\xff\xd0\x0d\xc1\xff\xe1\x0e\xb3\xff\xe5\x0dL\xff\xf7\x11B\xff\xfd\x11A\xff\x00\x1fI\xff\x0a!C\xff\x1a @\xff\"\x1f<\xff+!D\xff@\x1e\xb1\xffJ \xb4\xffS\x1f\xbf\xff]\x1f\xb2\xfff\x1f\xb9\xffs#J\xff\x85!=\xff\x90#L\xff\x97!D\xff\x9f\x1e=\xff\xad\x1e\xab\xff\xc0!\xbc\xff\xc4\"\xb6\xff\xcf\x1f\xc2\xff\xdf\x1c\xbe\xff\xe5$C\xff\xf3\"?\xff\xfc L\xff\x06,P\xff\x11/K\xff\x1c-I\xff ,D\xff&2B\xff6'\xca\xffB2\xae\xffK-\xcb\xffb2\xc2\xffi-\xc1\xffo2B\xff{*=\xff\x89.?\xff\x93+L\xff\x9d2<\xff\xb2/\xbb\xff\xb30\xb2\xff\xbd/\xc1\xff\xce1\xbc\xff\xdd+\xc1\xff\xe54>\xff\xf4/C\xff\xff1?\xff\x00=4\xff\x0b=H\xff\x18>G\xff C<\xff*HF\xff8;\xbc\xffKE\xb1\xffUB\xc0\xff`:\xcb\xffj;\xaf\xffpFG\xffyB?\xff\x8bCF\xff\x94AK\xff\x9fGF\xff\xb1:\xbc\xff\xbd@\xbe\xff\xc6B\xb9\xff\xd5A\xbd\xff\xdf8\xbb\xff\xe8DC\xff\xf1>D\xff\xfc<I\xff\x03P\xc2\xff\x0eR\xb5\xff\x1cP\xb3\xff&J\xc2\xff.H\xb6\xff2OU\xffCS9\xffJL7\xffUT8\xffeSG\xfftK\xb3\xff\x7fK\xc7\xff\x93P\xaf\xff\x99H\xc1\xff\xa0H\xb9\xff\xa7RK\xff\xb8LJ\xff\xbfLG\xff\xceR:\xff\xdaQK\xff\xecK\xb2\xff\xf9M\xc7\xff\xffR\xba\xff\x00b\xbb\xff\x06^\xc8\xff\x15_\xc0\xff%b\xb5\xff2`\xb8\xff4bH\xffJ^\\\xffU\\J\xff[_N\xfff`H\xffu^\xb9\xff{b\xbd\xff\x8c^\xc1\xff\x97`\xb1\xff\xa4e\xab\xff\xaaaN\xff\xbfaE\xff\xc6]G\xff\xd1^I\xff\xd9bD\xff\xea]\xb9\xff\xf1c\xb7\xff\xf9c\xba\xff\x03r\xb9\xff\x0cm\xbc\xff\x19l\xbc\xff&l\xc2\xff2m\xb9\xff0q9\xffHs>\xffTnI\xff^n=\xffjm@\xffxo\xc2\xff{s\xc8\xff\x8ao\xb6\xff\x99l\xc7\xff\xa6q\xc1\xff\xa9l@\xff\xb8oB\xff\xc1nD\xff\xd1r:\xff\xdaqB\xff\xebk\xbe\xff\xf3l\xc8\xff\xfeq\xc0\xff\x02}\xc1\xff\x0b|\xc0\xff\x18\x80\xb7\xff'\x81\xc0\xff1}\xc8\xff/\x82<\xffE\x82I\xffP~=\xff\\\x82I\xfff\x7f>\xffv}\xc3\xff|\x82\xc0\xff\x8b|\xb5\xff\x9a}\xc0\xff\xa8\x81\xc4\xff\xa9\x80@\xff\xbe\x80G\xff\xc7{I\xff\xd4~C\xff\xdc\x81;\xff\xeb|\xc0\xff\xef\x82\xbb\xff\xfa\x84\xb6\xff\x00\x91\xb6\xff\x0b\x90\xb9\xff\x1a\x8d\xc4\xff(\x8c\xbe\xff1\x8a\xb2\xff7\x91G\xffG\x8eH\xffR\x8a?\xff_\x8e@\xffg\x93>\xffu\x8c\xb6\xff~\x91\xc9\xff\x8c\x91\xb9\xff\x9a\x8e\xb6\xff\xa8\x88\xba\xff\xae\x8dH\xff\xba\x8fA\xff\xc1\x8e=\xff\xcf\x91>\xff\xdb\x94F\xff\xeb\x87\xb9\xff\xf7\x8c\xc4\xff\xff\x8e\xc4\xff\x00\xa29\xff\x06\x9fL\xff\x16\xa0J\xff\x1f\xa1G\xff(\xa8;\xff:\x9b\xbc\xffH\xa1\xb3\xffT\xa0\xc4\xff`\x9e\xc3\xffe\x9d\xb4\xffo\xa6A\xff}\x9dJ\xff\x86\xa0;\xff\x93\xa2G\xff\xa2\xa6E\xff\xae\x9e\xb8\xff\xbc\x9e\xc2\xff\xc2\xa1\xbe\xff\xcf\xa1\xbd\xff\xdd\x9a\xc5\xff\xe4\xa4:\xff\xf3\x9fE\xff\xfb\xa0E\xff\x04\xabO\xff\x10\xaf;\xff\x1b\xacE\xff\x1f\xad7\xff$\xae?\xff9\xad\xc4\xff>\xae\xb9\xffG\xb2\xc4\xffV\xaf\xbd\xff_\xb0\xc5\xffq\xadK\xff\x8a\xaa?\xff\x91\xadG\xff\x96\xaf:\xff\x9b\xab@\xff\xa6\xb0\xb9\xff\xba\xae\xba\xff\xbd\xb0\xba\xff\xca\xb1\xc6\xff\xde\xb0\xbd\xff\xe4\xaf?\xff\xf8\xaf<\xff\xff\xb0G\xff\x00\xbf7\xff\x0b\xbeI\xff\x1c\xbfJ\xff&\xbdI\xff-\xc4;\xffD\xc1\xbb\xffI\xbd\xba\xffR\xbf\xbc\xffa\xbd\xb8\xfff\xc1\xb8\xffp\xc1>\xff\x85\xbaH\xff\x8c\xc3D\xff\x98\xc1=\xff\xa4\xbcB\xff\xb7\xc2\xc4\xff\xc8\xbd\xc5\xff\xc7\xbe\xb9\xff\xcf\xbd\xbb\xff\xe0\xbb\xc2\xff\xe7\xc1<\xff\xf8\xc2H\xff\xfb\xc0J\xff\x01\xd2@\xff\x0c\xd2=\xff\x19\xcdO\xff\"\xccH\xff*\xcfM\xff=\xc8\xc1\xffG\xce\xb0\xffP\xcb\xc8\xff_\xca\xc0\xffg\xcd\xb5\xffq\xd1I\xff\x81\xcf=\xff\x8e\xd4@\xff\x97\xcfJ\xff\xa0\xcbU\xff\xb0\xca\xc1\xff\xb7\xcc\xb9\xff\xc0\xd0\xb6\xff\xce\xd1\xb4\xff\xde\xcd\xb3\xff\xe7\xcfK\xff\xf7\xccJ\xff\xff\xcfL\xff\x00\xdeG\xff\x08\xddO\xff\x13\xdf@\xff\x1d\xe1?\xff)\xeaA\xff5\xd7\xc0\xffI\xe8\xa5\xffS\xe2\xc4\xff`\xe3\xc4\xffi\xdb\xba\xffp\xe6D\xffw\xdc@\xff\x89\xddA\xff\x93\xddT\xff\x9f\xef8\xff\xae\xdf\xb0\xff\xb4\xe3\xb9\xff\xc2\xe4\xbf\xff\xd6\xe5\xbc\xff\xde\xd8\xc2\xff\xe5\xe7;\xff\xed\xdcD\xff\xfc\xdeB\xff\x02\xf0\xbe\xff\x0d\xf0\xbb\xff\x1b\xef\xb5\xff(\xed\xb8\xff3\xed\xbe\xff2\xf1L\xffF\xf3L\xffK\xebA\xffY\xf0A\xffh\xf0H\xfft\xed\xb8\xff{\xf2\xbc\xff\x92\xf2\xc2\xff\x9b\xec\xc3\xff\xa5\xec\xb0\xff\xad\xeeH\xff\xba\xefG\xff\xc3\xecH\xff\xd2\xeeB\xff\xda\xf0E\xff\xeb\xed\xbc\xff\xf1\xf0\xc0\xff\xfa\xf3\xbc\xff\x00\xff\xbe\xff\x0b\xff\xb9\xff\x18\xfe\xbe\xff \xff\xbd\xff.\xfe\xc0\xff7\xffB\xffG\xfdF\xffN\xffE\xff^\xfeD\xffh\xffG\xffq\xff\xbc\xff\x82\xff\xb9\xff\x89\xff\xbc\xff\x96\xff\xbd\xff\xa0\xff\xba\xff\xaf\xfeA\xff\xbc\xfeD\xff\xc0\xffA\xff\xd2\xfeE\xff\xdc\xffC\xff\xe8\xfe\xbd\xff\xf1\xff\xbb\xff\xfe\xfe\xbe\xff" }
@@ -86,6 +88,15 @@ fn round_trip(a: *mem.Arena, source: image.ConstImage, expected: str, expected_f
     ret 0i32
 }
 
+fn marker_from(data: str, wanted: u8, from: usize) -> usize {
+    var where = from
+    while where + 1usize < data.len {
+        if data[where] == 255u8 && data[where + 1usize] == wanted { ret where }
+        where += 1usize
+    }
+    ret data.len
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let c1 = check(a, baseline444_jpg(), baseline444_pixels(), 23u32, 17u32, .Rgba8, 3i32, 10i32)
     if c1 != 0i32 { os.exit(c1) }
@@ -99,6 +110,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if c5 != 0i32 { os.exit(c5) }
     let c6 = check(a, restarts_jpg(), restarts_pixels(), 23u32, 17u32, .Rgba8, 3i32, 60i32)
     if c6 != 0i32 { os.exit(c6) }
+
+    // Inspect keeps a valid final JPEG chunk delivered with End.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: baseline444_jpg(), failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(170i32) }
+    let (ended_info, ended_error) = jpeg.inspect(support.reader(&ended_script))
+    if ended_error != ok || ended_info.width != 23u32 || ended_info.height != 17u32 { os.exit(171i32) }
+
+    // APP14 and DRI may precede SOF. Their values must survive creation of the frame.
+    let original = baseline444_jpg()
+    let first_sof = marker_from(original, 192u8, 0usize)
+    if first_sof == original.len { os.exit(190i32) }
+    let (prefixed, prefixed_error) = mem.alloc[u8](a, original.len + 22usize)
+    if prefixed_error != ok { os.exit(191i32) }
+    mem.copy[u8](prefixed[..first_sof], original[..first_sof])
+    mem.copy[u8](prefixed[first_sof..first_sof + 16usize], "\xff\xee\x00\x0eAdobe\x00\x64\x00\x00\x00\x00\x00")
+    mem.copy[u8](prefixed[first_sof + 16usize..first_sof + 22usize], "\xff\xdd\x00\x04\x00\x02")
+    mem.copy[u8](prefixed[first_sof + 22usize..], original[first_sof..])
+    var prefixed_decoder: jpeg.Decoder = zero
+    prefixed_decoder.data = prefixed
+    let prefixed_header_error = jpeg.parse_headers(&prefixed_decoder)
+    if prefixed_header_error != ok || !prefixed_decoder.seen_frame || !prefixed_decoder.frame.has_adobe || prefixed_decoder.frame.adobe_transform != 0u32 || prefixed_decoder.frame.restart_interval != 2usize { os.exit(192i32) }
+
+    // A valid APP segment may be larger than the former fixed 64 KiB inspect buffer.
+    let (large_header, large_header_error) = mem.alloc[u8](a, 65560usize)
+    if large_header_error != ok { os.exit(193i32) }
+    large_header[0usize] = 255u8
+    large_header[1usize] = 216u8
+    large_header[2usize] = 255u8
+    large_header[3usize] = 225u8
+    large_header[4usize] = 255u8
+    large_header[5usize] = 255u8
+    var metadata_at = 6usize
+    while metadata_at < 65539usize {
+        large_header[metadata_at] = 0u8
+        metadata_at += 1usize
+    }
+    mem.copy[u8](large_header[65539usize..], "\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01\xff\xd9")
+    var large_state: io.SliceReader = zero
+    let (large_info, large_error) = jpeg.inspect(reader_of(&large_state, large_header))
+    if large_error != ok || large_info.width != 1u32 || large_info.height != 1u32 || large_info.format != .Rgba8 { os.exit(194i32) }
 
     // Encoding: the libjpeg-decoded baseline 4:4:4 pixels as the source.
     let (rgba, rgba_error) = image.make_const(baseline444_pixels(), 23u32, 17u32, 92usize, .Rgba8, .Opaque)
@@ -125,11 +177,69 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if grey_error != ok { os.exit(120i32) }
     let r4 = round_trip(a, grey, gray_pixels(), .R8, 95u8, 24i32, 130i32)
     if r4 != 0i32 { os.exit(r4) }
+    var zero_quant: [64]u8 = zero
+    var standard_quant: [64]u8 = zero
+    jpeg.scaled_quant(jpeg.luma_quant(), 0u8, zero_quant[..])
+    jpeg.scaled_quant(jpeg.luma_quant(), 75u8, standard_quant[..])
+    i = 0usize
+    while i < zero_quant.len {
+        if zero_quant[i] != standard_quant[i] { os.exit(195i32) }
+        i += 1usize
+    }
 
     // Refusals.
     var state: io.SliceReader = zero
     let (_, signature_error) = jpeg.decode(a, reader_of(&state, "definitely not a jpeg stream"), options())
     if signature_error != jpeg.Invalid { os.exit(140i32) }
+    // A baseline DC Huffman symbol may not name category 12 before prediction.
+    var dc_counts: [16]u8 = zero
+    dc_counts[0usize] = 1u8
+    var dc_values: [1]u8 = zero
+    dc_values[0usize] = 12u8
+    let (bad_dc, bad_dc_error) = jpeg.build_huffman(dc_counts[..], dc_values[..])
+    if bad_dc_error != ok { os.exit(156i32) }
+    var dc_tables: [1]jpeg.Huffman = zero
+    dc_tables[0usize] = bad_dc
+    var entropy = jpeg.Bits { data: "\x00\x00", at: 0usize, cache: 0u32, count: 0u32, marker_hit: false }
+    var bad_frame: jpeg.Frame = zero
+    var scan: jpeg.Scan = zero
+    var coefficients: [64]i32 = zero
+    var component: jpeg.Component = zero
+    component.coefficients = coefficients[..]
+    if jpeg.decode_block(&entropy, &bad_frame, &scan, dc_tables[..], dc_tables[..], &component, 0usize) != jpeg.Invalid { os.exit(157i32) }
+    var overflow_counts: [16]u8 = zero
+    overflow_counts[0usize] = 1u8
+    var overflow_values: [1]u8 = zero
+    overflow_values[0usize] = 1u8
+    let (overflow_dc, overflow_dc_error) = jpeg.build_huffman(overflow_counts[..], overflow_values[..])
+    if overflow_dc_error != ok { os.exit(202i32) }
+    var overflow_tables: [1]jpeg.Huffman = zero
+    overflow_tables[0usize] = overflow_dc
+    var overflow_entropy = jpeg.Bits { data: "\x40", at: 0usize, cache: 0u32, count: 0u32, marker_hit: false }
+    var overflow_frame: jpeg.Frame = zero
+    var overflow_scan: jpeg.Scan = zero
+    var overflow_coefficients: [64]i32 = zero
+    var overflow_component: jpeg.Component = zero
+    overflow_component.predictor = 2147483647i32
+    overflow_component.coefficients = overflow_coefficients[..]
+    if jpeg.decode_block(&overflow_entropy, &overflow_frame, &overflow_scan, overflow_tables[..], overflow_tables[..], &overflow_component, 0usize) != jpeg.Invalid { os.exit(203i32) }
+    var huge_coefficients: [64]i32 = zero
+    huge_coefficients[0usize] = 2147483647i32
+    var huge_quant: [64]u8 = zero
+    i = 0usize
+    while i < huge_quant.len {
+        huge_quant[i] = 255u8
+        i += 1usize
+    }
+    var huge_table: [64]f32 = zero
+    jpeg.cos_table(huge_table[..])
+    var huge_pixels: [64]u8 = zero
+    jpeg.idct_block(huge_coefficients[..], 0usize, huge_quant[..], huge_table[..], huge_pixels[..], 0usize, 8usize)
+    i = 0usize
+    while i < huge_pixels.len {
+        if huge_pixels[i] != 255u8 { os.exit(204i32) }
+        i += 1usize
+    }
     let (_, bounded_error) = jpeg.decode(a, reader_of(&state, baseline444_jpg()), jpeg.DecodeOptions { max_width: 16u32, max_height: 0u32, max_pixels: 0u64 })
     if bounded_error != jpeg.TooLarge { os.exit(141i32) }
     let (scratch, scratch_alloc) = mem.alloc[u8](a, 4096usize)
@@ -141,6 +251,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (half_view, half_view_error) = image.make_const(halves.pixels, 2u32, 2u32, 16usize, .Rgba16Float, .Straight)
     if halves_error != ok || half_view_error != ok { os.exit(144i32) }
     if jpeg.encode(&w, half_view, jpeg.EncodeOptions { quality: 80u8, progressive: false }) != jpeg.Unsupported { os.exit(145i32) }
+
+    // Moving a real restart interval before SOF preserves restart decoding.
+    let restart_data = restarts_jpg()
+    let restart_sof = marker_from(restart_data, 192u8, 0usize)
+    let restart_dri = marker_from(restart_data, 221u8, restart_sof)
+    if restart_sof == restart_data.len || restart_dri == restart_data.len || restart_dri < restart_sof || restart_dri + 6usize > restart_data.len { os.exit(196i32) }
+    let (moved_restart, moved_restart_error) = mem.alloc[u8](a, restart_data.len)
+    if moved_restart_error != ok { os.exit(197i32) }
+    mem.copy[u8](moved_restart[..restart_sof], restart_data[..restart_sof])
+    mem.copy[u8](moved_restart[restart_sof..restart_sof + 6usize], restart_data[restart_dri..restart_dri + 6usize])
+    mem.copy[u8](moved_restart[restart_sof + 6usize..restart_dri + 6usize], restart_data[restart_sof..restart_dri])
+    mem.copy[u8](moved_restart[restart_dri + 6usize..], restart_data[restart_dri + 6usize..])
+    let (moved_image, moved_error) = jpeg.decode(a, reader_of(&state, moved_restart), options())
+    if moved_error != ok || worst(moved_image, restarts_pixels()) > 3i32 { os.exit(198i32) }
 
     let (hostile, hostile_error) = mem.alloc[u8](a, baseline444_jpg().len)
     if hostile_error != ok { os.exit(146i32) }
@@ -154,6 +278,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     hostile[sof + 8usize] = 1u8
     let (_, default_error) = jpeg.decode(a, reader_of(&state, hostile), options())
     if default_error != jpeg.TooLarge { os.exit(148i32) }
+    let (fractional, fractional_error) = mem.alloc[u8](a, baseline444_jpg().len)
+    if fractional_error != ok { os.exit(199i32) }
+    mem.copy[u8](fractional, baseline444_jpg())
+    let fractional_sof = marker_from(fractional, 192u8, 0usize)
+    if fractional_sof == fractional.len { os.exit(200i32) }
+    fractional[fractional_sof + 11usize] = 49u8
+    fractional[fractional_sof + 14usize] = 33u8
+    fractional[fractional_sof + 17usize] = 33u8
+    let (_, fractional_inspect_error) = jpeg.inspect(reader_of(&state, fractional))
+    let (_, fractional_decode_error) = jpeg.decode(a, reader_of(&state, fractional), options())
+    if fractional_inspect_error != jpeg.Unsupported || fractional_decode_error != jpeg.Unsupported { os.exit(201i32) }
     var frame: jpeg.Frame = zero
     frame.width = 16385usize
     frame.height = 1usize
@@ -164,6 +299,49 @@ fn main(a: *mem.Arena, args: []str) -> err {
     frame.width = 1usize
     frame.height = 16385usize
     if jpeg.within(frame, raised) != jpeg.TooLarge { os.exit(151i32) }
+
+    // An early marker is not entropy padding. The decoder must refuse the scan
+    // instead of fabricating zero bits until it reaches the declared MCU count.
+    let (truncated, truncated_alloc) = mem.alloc[u8](a, baseline444_jpg().len)
+    if truncated_alloc != ok { os.exit(152i32) }
+    mem.copy[u8](truncated, baseline444_jpg())
+    var sos_at = 0usize
+    while sos_at + 3usize < truncated.len && !(truncated[sos_at] == 255u8 && truncated[sos_at + 1usize] == 218u8) { sos_at += 1usize }
+    if sos_at + 3usize >= truncated.len { os.exit(153i32) }
+    let sos_length = usize(truncated[sos_at + 2usize]) * 256usize + usize(truncated[sos_at + 3usize])
+    let entropy_at = sos_at + 2usize + sos_length
+    if entropy_at + 2usize >= truncated.len { os.exit(154i32) }
+    truncated[entropy_at + 1usize] = 255u8
+    truncated[entropy_at + 2usize] = 217u8
+    let (_, early_eoi_error) = jpeg.decode(a, reader_of(&state, truncated), options())
+    if early_eoi_error != jpeg.Invalid { os.exit(155i32) }
+
+    // A sequential three-component frame may use separate scans, but EOI cannot
+    // arrive after only its first component.  Expand a valid grey frame's SOF
+    // while retaining its one-component SOS and entropy data.
+    let gray_data = gray_jpg()
+    var grey_sof = 0usize
+    while grey_sof + 3usize < gray_data.len && !(gray_data[grey_sof] == 255u8 && gray_data[grey_sof + 1usize] == 192u8) { grey_sof += 1usize }
+    if grey_sof + 12usize >= gray_data.len { os.exit(202i32) }
+    let grey_sof_length = usize(gray_data[grey_sof + 2usize]) * 256usize + usize(gray_data[grey_sof + 3usize])
+    if grey_sof_length != 11usize { os.exit(203i32) }
+    let grey_sof_end = grey_sof + 2usize + grey_sof_length
+    let (missing_components, missing_components_alloc) = mem.alloc[u8](a, gray_data.len + 6usize)
+    if missing_components_alloc != ok { os.exit(204i32) }
+    mem.copy[u8](missing_components[0..grey_sof + 9usize], gray_data[0..grey_sof + 9usize])
+    missing_components[grey_sof + 2usize] = 0u8
+    missing_components[grey_sof + 3usize] = 17u8
+    missing_components[grey_sof + 9usize] = 3u8
+    mem.copy[u8](missing_components[grey_sof + 10usize..grey_sof + 13usize], gray_data[grey_sof + 10usize..grey_sof + 13usize])
+    missing_components[grey_sof + 13usize] = 2u8
+    missing_components[grey_sof + 14usize] = 17u8
+    missing_components[grey_sof + 15usize] = 0u8
+    missing_components[grey_sof + 16usize] = 3u8
+    missing_components[grey_sof + 17usize] = 17u8
+    missing_components[grey_sof + 18usize] = 0u8
+    mem.copy[u8](missing_components[grey_sof + 19usize..], gray_data[grey_sof_end..])
+    let (_, missing_components_error) = jpeg.decode(a, reader_of(&state, missing_components), options())
+    if missing_components_error != jpeg.Invalid { os.exit(205i32) }
 
     try io.print("fmt jpeg ok\n")
     ret ok

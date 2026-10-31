@@ -136,9 +136,11 @@ fn get_length(src: []const u8, at: usize, base: usize) -> (usize, usize, err) {
     ret (n, i, ok)
 }
 
-// Decode one block into `dst[start..]`; a match may reach back into `dst[..start]`
-// (dependent frame blocks). Answers the position after the last byte written.
-fn decode_into(src: []const u8, dst: []u8, start: usize) -> (usize, err) {
+// Decode one block into `dst[start..]`. `history_start` is the oldest byte this
+// block may reference: dependent frame blocks retain at most their last 64 KiB,
+// while independent blocks start with no preceding history. Answers the position
+// after the last byte written.
+fn decode_into(src: []const u8, dst: []u8, start: usize, history_start: usize) -> (usize, err) {
     var ip = 0usize
     var op = start
     while true {
@@ -165,7 +167,7 @@ fn decode_into(src: []const u8, dst: []u8, start: usize) -> (usize, err) {
         if ip + 2usize > src.len { ret (op, Invalid) }
         let offset = usize(src[ip]) | (usize(src[ip + 1usize]) << 8u32)
         ip += 2usize
-        if offset == 0usize || offset > op { ret (op, Invalid) }
+        if offset == 0usize || offset > op - history_start { ret (op, Invalid) }
         var mlen = (token & 15usize) + MIN_MATCH
         if (token & 15usize) == 15usize {
             let (n, next_ip, e) = get_length(src, ip, mlen)
@@ -187,7 +189,7 @@ fn decode_into(src: []const u8, dst: []u8, start: usize) -> (usize, err) {
 // Decode one LZ4 block into `dst`; malformed input is `Invalid`, a short `dst` is
 // `TooSmall`. Answers the decoded length.
 fn decode(src: []const u8, dst: []u8) -> (usize, err) {
-    let (n, e) = decode_into(src, dst, 0usize)
+    let (n, e) = decode_into(src, dst, 0usize, 0usize)
     ret (n, e)
 }
 
@@ -310,12 +312,17 @@ fn decode_body(src: []const u8, start: usize, dst: []u8) -> (usize, err) {
     if ip + 3usize > src.len { ret (0usize, Invalid) }
     let flg = u32(src[ip])
     if (flg & 192u32) != 64u32 || (flg & 3u32) != 0u32 { ret (0usize, Invalid) }
+    let block_independent = (flg & 32u32) != 0u32
     let block_checksum = (flg & 16u32) != 0u32
     let has_size = (flg & 8u32) != 0u32
     let content_checksum = (flg & 4u32) != 0u32
     let bd = u32(src[ip + 1usize])
     let size_code = (bd >> 4u32) & 7u32
     if size_code < 4u32 || (bd & 143u32) != 0u32 { ret (0usize, Invalid) }
+    var block_max = 65536usize
+    if size_code == 5u32 { block_max = 262144usize }
+    if size_code == 6u32 { block_max = 1048576usize }
+    if size_code == 7u32 { block_max = 4194304usize }
     var header_len = 2usize
     if has_size { header_len += 8usize }
     if ip + header_len + 1usize > src.len { ret (0usize, Invalid) }
@@ -343,8 +350,10 @@ fn decode_body(src: []const u8, start: usize, dst: []u8) -> (usize, err) {
             ret (op, ok)
         }
         let n = usize(word & 2147483647u32)
+        if n > block_max { ret (op, Invalid) }
         if ip + n > src.len { ret (op, Invalid) }
         let block = src[ip..ip + n]
+        let block_start = op
         ip += n
         if block_checksum {
             if ip + 4usize > src.len { ret (op, Invalid) }
@@ -360,7 +369,12 @@ fn decode_body(src: []const u8, start: usize, dst: []u8) -> (usize, err) {
             }
             op += n
         } else {
-            let (next_op, e) = decode_into(block, dst, op)
+            var history_start = block_start
+            if !block_independent {
+                history_start = 0usize
+                if block_start > 65536usize { history_start = block_start - 65536usize }
+            }
+            let (next_op, e) = decode_into(block, dst, block_start, history_start)
             if e != ok { ret (op, e) }
             op = next_op
         }

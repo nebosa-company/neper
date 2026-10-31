@@ -181,10 +181,14 @@ fn import_thunk(data: []const u8, img: Image, imp: Import, index: usize) -> (str
     var ordinal_flag = 2147483648u64
     if img.plus { ordinal_flag = 9223372036854775808u64 }
     if (value & ordinal_flag) != 0u64 { ret ("", u16(value & 65535u64), false, false, ok) }
-    let (hint_at, he) = rva_to_offset(data, img, u32(value))
+    // A by-name thunk is an RVA, not an arbitrary PE32+ pointer.  Keep its
+    // high flag bit clear and range-check before any narrowing conversion.
+    if value > 2147483647u64 { ret ("", 0u16, false, true, Invalid) }
+    let rva = u32.trunc(value)
+    let (hint_at, he) = rva_to_offset(data, img, rva)
     if he != ok { ret ("", 0u16, false, true, he) }
     if !fits(data, hint_at, 2usize) { ret ("", 0u16, false, true, Truncated) }
-    let (name, ne) = string_at(data, img, u32(value) + 2u32)
+    let (name, ne) = string_at(data, img, u32.trunc(value + 2u64))
     if ne != ok { ret ("", 0u16, false, true, ne) }
     ret (name, rd16(data, hint_at), true, false, ok)
 }
@@ -218,7 +222,9 @@ fn export_name(data: []const u8, img: Image, x: Exports, index: usize) -> (str, 
     let (ordinals, e2) = rva_to_offset(data, img, x.ordinal_table)
     if e2 != ok { ret ("", 0u32, e2) }
     if !fits(data, ordinals + index * 2usize, 2usize) { ret ("", 0u32, Truncated) }
-    let ordinal = u32(rd16(data, ordinals + index * 2usize)) + x.ordinal_base
+    let ordinal_wide = u64(rd16(data, ordinals + index * 2usize)) + u64(x.ordinal_base)
+    if ordinal_wide > 4294967295u64 { ret ("", 0u32, Invalid) }
+    let ordinal = u32.trunc(ordinal_wide)
     let (name, e3) = string_at(data, img, name_rva)
     if e3 != ok { ret ("", 0u32, e3) }
     ret (name, ordinal, ok)

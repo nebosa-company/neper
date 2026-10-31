@@ -114,6 +114,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if limit_error != gpu.TooLarge { os.exit(3i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(4i32) }
+    // The seventeenth open is rejected before allocating its bookkeeping block.
+    var held: [15]*gpu.Device = zero
+    var held_at = 0usize
+    while held_at < held.len {
+        let (extra, extra_error) = gpu.open(a, .Cpu, 0u32)
+        if extra_error != ok { os.exit(47i32) }
+        held[held_at] = extra
+        held_at += 1usize
+    }
+    let before_limit = a.off
+    let (_, capacity_error) = gpu.open(a, .Cpu, 0u32)
+    if capacity_error != gpu.TooLarge || a.off != before_limit { os.exit(48i32) }
+    while held_at > 0usize {
+        held_at = held_at - 1usize
+        if gpu.close(held[held_at]) != ok { os.exit(47i32) }
+    }
     let (_, index_error) = gpu.open(a, .Cpu, 1u32)
     if index_error != gpu.NoDevice { os.exit(5i32) }
     let (_, cuda_error) = gpu.open(a, .Cuda, 0u32)
@@ -128,7 +144,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, other_key_error) = gpu.open_id(a, gpu.DeviceKey { backend: .Cpu, uuid: other_uuid })
     if other_key_error != gpu.NoDevice { os.exit(7i32) }
     let (described, info_error) = gpu.info(a, device)
-    if info_error != ok || described.capabilities.len != 8usize || !gpu.has(device, .Int64) || !gpu.has(device, .Subgroup) || !gpu.has(device, .DenormPreserve) || gpu.has(device, .Float16) || !gpu.has(device, .Ftz) { os.exit(8i32) }
+    if info_error != ok || described.capabilities.len != 9usize || !gpu.has(device, .Int64) || !gpu.has(device, .Subgroup) || !gpu.has(device, .DenormPreserve) || !gpu.has(device, .Float16) || !gpu.has(device, .Ftz) { os.exit(8i32) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(9i32) }
     let (_, staging_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 0u32, block_bytes: 4096usize })
@@ -150,12 +166,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dy_error != ok { os.exit(12i32) }
     let (before, before_error) = gpu.token(q)
     if before_error != ok || before.serial != 0u64 { os.exit(13i32) }
+    let (before_done, before_done_error) = gpu.done(before)
+    if before_done_error != ok || !before_done || gpu.wait(before) != ok || gpu.wait_for(q, before) != ok { os.exit(90i32) }
     let launch_error = gpu.launch[saxpy](q, gpu.grid1(1000usize), 1000u32, 2.0, dx, dy)
     if launch_error != ok { os.exit(14i32) }
     let (after, after_error) = gpu.token(q)
     if after_error != ok || after.serial != 1u64 || after.owner != dx.owner { os.exit(15i32) }
     let (finished, done_error) = gpu.done(after)
     if done_error != ok || !finished || gpu.wait(after) != ok || gpu.wait_for(q, after) != ok { os.exit(16i32) }
+    let bad_queue = gpu.Token { owner: after.owner, queue: after.queue + 1u32, serial: after.serial }
+    let (bad_queue_done, bad_queue_error) = gpu.done(bad_queue)
+    if bad_queue_done || bad_queue_error != gpu.InvalidHandle || gpu.wait(bad_queue) != gpu.InvalidHandle || gpu.wait_for(q, bad_queue) != gpu.InvalidHandle { os.exit(91i32) }
+    let future = gpu.Token { owner: after.owner, queue: after.queue, serial: after.serial + 1u64 }
+    let (future_done, future_error) = gpu.done(future)
+    if future_done || future_error != gpu.InvalidHandle || gpu.wait(future) != gpu.InvalidHandle || gpu.wait_for(q, future) != gpu.InvalidHandle { os.exit(92i32) }
     var result: [1000]f32 = zero
     if gpu.download(q, dy, result[0..]) != ok { os.exit(17i32) }
     i = 0usize

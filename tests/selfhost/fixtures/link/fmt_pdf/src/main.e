@@ -7,7 +7,362 @@ use e.mem
 use e.str
 use e.fmt.pdf as pdf
 
+fn issue_78_core_check(a: *mem.Arena) -> u8 {
+    let (_, _, huge_number) = pdf.number_at("9999999999", 0usize, 10usize)
+    if huge_number { ret 1u8 }
+    let (bounded_number, _, bounded_ok) = pdf.number_at("999999999", 0usize, 9usize)
+    if !bounded_ok || bounded_number != 999999999usize { ret 2u8 }
+    let malformed_object = "9999999999 0 obj\n<<>>\nendobj\n1 0 obj\n<<>>\nendobj\n"
+    let (malformed_table, malformed_count, malformed_error) = pdf.objects(a, malformed_object)
+    if malformed_error != ok || malformed_count != 1usize || malformed_table[0usize].number != 1usize { ret 23u8 }
+
+    let (kid_builder0, kid_builder_error) = str.builder(a, 0usize)
+    if kid_builder_error != ok { ret 3u8 }
+    var kid_builder = kid_builder0
+    if str.push(&kid_builder, "/Kids [") != ok { ret 4u8 }
+    var page_at = 0usize
+    while page_at < 300usize {
+        if str.push(&kid_builder, "1 0 R ") != ok { ret 5u8 }
+        page_at += 1usize
+    }
+    if str.push(&kid_builder, "]") != ok { ret 6u8 }
+    let kid_data = str.done(&kid_builder)
+    var kid_refs: [512]usize = zero
+    if pdf.refs_in_array(kid_data, 0usize, kid_data.len, "Kids", kid_refs[0usize..]) != 300usize { ret 7u8 }
+
+    // Exercise `walk` itself, not just the reference scanner: a flat /Pages node
+    // with 300 children must keep all of them in page order.
+    let (tree_builder0, tree_builder_error) = str.builder(a, 0usize)
+    if tree_builder_error != ok { ret 17u8 }
+    var tree_builder = tree_builder0
+    if str.push(&tree_builder, "/Type /Pages /Kids [") != ok { ret 18u8 }
+    page_at = 0usize
+    while page_at < 300usize {
+        if str.push_usize(&tree_builder, page_at + 2usize) != ok || str.push(&tree_builder, " 0 R ") != ok { ret 19u8 }
+        page_at += 1usize
+    }
+    if str.push(&tree_builder, "]") != ok { ret 20u8 }
+    let tree_root_end = tree_builder.len
+    if str.push(&tree_builder, "/Type /Page") != ok { ret 21u8 }
+    let tree_data = str.done(&tree_builder)
+    var tree_objects: [301]pdf.Object = zero
+    tree_objects[0usize].number = 1usize
+    tree_objects[0usize].start = 0usize
+    tree_objects[0usize].end = tree_root_end
+    page_at = 0usize
+    while page_at < 300usize {
+        let object_at = page_at + 1usize
+        tree_objects[object_at].number = page_at + 2usize
+        tree_objects[object_at].start = tree_root_end
+        tree_objects[object_at].end = tree_data.len
+        page_at += 1usize
+    }
+    var walked_pages: [512]usize = zero
+    let (walked_count, walked_error) = pdf.walk(a, tree_data, tree_objects[0usize..], 301usize, 1usize, walked_pages[0usize..])
+    if walked_error != ok || walked_count != 300usize || walked_pages[0usize] != 2usize || walked_pages[299usize] != 301usize { ret 22u8 }
+
+    var cid_widths: [4]u16 = zero
+    let cid_data = "[-1 [500] 0 [70000]]"
+    let cid_count = pdf.read_cid_widths(cid_data, 0usize, cid_data.len, cid_widths[0usize..])
+    if cid_count != 1usize || cid_widths[0usize] != 65000u16 { ret 8u8 }
+    let cid_font_data = "/Type /Font /Subtype /Type0 /DescendantFonts [2 0 R] /DW 70000 /W [0 [500]]"
+    let cid_tail_at = pdf.find(cid_font_data, "/DW", 0usize, cid_font_data.len)
+    var cid_objects: [2]pdf.Object = zero
+    cid_objects[0usize].number = 1usize
+    cid_objects[0usize].start = 0usize
+    cid_objects[0usize].end = cid_tail_at
+    cid_objects[1usize].number = 2usize
+    cid_objects[1usize].start = cid_tail_at
+    cid_objects[1usize].end = cid_font_data.len
+    var cid_font_painter: pdf.Painter = zero
+    cid_font_painter.data = cid_font_data
+    cid_font_painter.table = cid_objects[0usize..]
+    cid_font_painter.count = 2usize
+    let (cid_font_index, cid_font_error) = pdf.load_font(a, &cid_font_painter, 1usize)
+    if cid_font_error != ok || cid_font_index != 0usize || cid_font_painter.fonts[0usize].default_width != 65000usize { ret 24u8 }
+
+    var cmap_font: pdf.FontInfo = zero
+    var cmap_codes: [4]u16 = zero
+    var cmap_unis: [4]str = zero
+    let cmap_data = "1 beginbfchar <0003> <00660069> endbfchar 1 beginbfrange <0001> <0002> [<00660069> <0066006C>] endbfrange"
+    let (cmap_count, cmap_error) = pdf.read_cmap(a, cmap_data, &cmap_font, cmap_codes[0usize..], cmap_unis[0usize..])
+    if cmap_error != ok || cmap_count != 3usize || !str.eq(cmap_unis[0usize], "fi") || !str.eq(cmap_unis[1usize], "fi") || !str.eq(cmap_unis[2usize], "fl") { ret 9u8 }
+    if !cmap_font.two_byte { ret 16u8 }
+    cmap_font.codes = cmap_codes[0usize..cmap_count]
+    cmap_font.unis = cmap_unis[0usize..cmap_count]
+    cmap_font.mapped = cmap_count
+    var cmap_painter: pdf.Painter = zero
+    cmap_painter.fonts[0usize] = cmap_font
+    cmap_painter.font_n = 1usize
+    cmap_painter.cur_font = 0usize
+    let (mapped, mapped_error) = pdf.text_run(a, "<000100020003> Tj", &cmap_painter)
+    if mapped_error != ok { ret 10u8 }
+    if mapped.len != 6usize { ret 14u8 }
+    if mapped[0usize] != 102u8 || mapped[1usize] != 105u8 || mapped[2usize] != 102u8 || mapped[3usize] != 108u8 || mapped[4usize] != 102u8 || mapped[5usize] != 105u8 { ret 15u8 }
+
+    // A ToUnicode destination can contain many UTF-16 units. Its UTF-8 output
+    // must not be shortened by either text extraction or the painting buffer.
+    var long_font: pdf.FontInfo = zero
+    var long_codes: [1]u16 = zero
+    var long_unis: [1]str = zero
+    let long_cmap = "1 beginbfchar <04> <D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00> endbfchar"
+    let (long_count, long_error) = pdf.read_cmap(a, long_cmap, &long_font, long_codes[0usize..], long_unis[0usize..])
+    if long_error != ok || long_count != 1usize || long_unis[0usize].len != 80usize { ret 25u8 }
+    long_font.codes = long_codes[0usize..long_count]
+    long_font.unis = long_unis[0usize..long_count]
+    long_font.mapped = long_count
+    var long_text_painter: pdf.Painter = zero
+    long_text_painter.fonts[0usize] = long_font
+    long_text_painter.font_n = 1usize
+    long_text_painter.cur_font = 0usize
+    let (long_text, long_text_error) = pdf.text_run(a, "<04> Tj", &long_text_painter)
+    if long_text_error != ok || long_text.len != 80usize { ret 26u8 }
+    var long_shapes: [1]pdf.Shape = zero
+    var long_paint_painter: pdf.Painter = zero
+    long_paint_painter.out = long_shapes[0usize..]
+    long_paint_painter.fonts[0usize] = long_font
+    long_paint_painter.font_n = 1usize
+    long_paint_painter.cur_font = 0usize
+    long_paint_painter.scale_x = 1.0f64
+    long_paint_painter.scale_y = 1.0f64
+    long_paint_painter.font_size = 1.0f64
+    long_paint_painter.text_scale = 1.0f64
+    let long_raw: [1]u8 = [1]u8{ 4u8 }
+    pdf.paint_run(a, &long_paint_painter, long_raw[0usize..])
+    if long_paint_painter.n != 1usize || long_shapes[0usize].text.len != 80usize { ret 27u8 }
+
+    // An explicit empty ToUnicode destination suppresses the glyph; it is not
+    // the same as an unmapped source code, which falls back to Latin-1.
+    var empty_font: pdf.FontInfo = zero
+    var empty_codes: [1]u16 = zero
+    var empty_unis: [1]str = zero
+    let empty_cmap = "1 beginbfchar <41> <> endbfchar"
+    let (empty_count, empty_error) = pdf.read_cmap(a, empty_cmap, &empty_font, empty_codes[0usize..], empty_unis[0usize..])
+    if empty_error != ok || empty_count != 1usize || empty_unis[0usize].len != 0usize { ret 30u8 }
+    empty_font.codes = empty_codes[0usize..empty_count]
+    empty_font.unis = empty_unis[0usize..empty_count]
+    empty_font.mapped = empty_count
+    var empty_painter: pdf.Painter = zero
+    empty_painter.fonts[0usize] = empty_font
+    empty_painter.font_n = 1usize
+    empty_painter.cur_font = 0usize
+    let (empty_text, empty_text_error) = pdf.text_run(a, "(A) Tj", &empty_painter)
+    if empty_text_error != ok || empty_text.len != 0usize { ret 31u8 }
+
+    // `Tf` loads this font after text_run has sized its initial output buffer.
+    // The loaded mapping must still grow the buffer before `(a)` is committed.
+    let dynamic_data = "/Font << /F1 1 0 R >> /Type /Font /ToUnicode 2 0 R <<>>\nstream\n1 beginbfchar <61> <D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00 D83DDE00> endbfchar\nendstream"
+    let dynamic_font_at = pdf.find(dynamic_data, "/Type /Font", 0usize, dynamic_data.len)
+    let dynamic_cmap_at = pdf.find(dynamic_data, "<<>>", dynamic_font_at, dynamic_data.len)
+    var dynamic_objects: [2]pdf.Object = zero
+    dynamic_objects[0usize].number = 1usize
+    dynamic_objects[0usize].start = dynamic_font_at
+    dynamic_objects[0usize].end = dynamic_cmap_at
+    dynamic_objects[1usize].number = 2usize
+    dynamic_objects[1usize].start = dynamic_cmap_at
+    dynamic_objects[1usize].end = dynamic_data.len
+    var dynamic_painter: pdf.Painter = zero
+    dynamic_painter.data = dynamic_data
+    dynamic_painter.table = dynamic_objects[0usize..]
+    dynamic_painter.count = 2usize
+    dynamic_painter.res_s = 0usize
+    dynamic_painter.res_e = dynamic_font_at
+    let (dynamic_text, dynamic_text_error) = pdf.text_run(a, "/F1 1 Tf(a)Tj", &dynamic_painter)
+    if dynamic_text_error != ok || dynamic_text.len != 80usize { ret 29u8 }
+
+    let (shown, shown_error) = pdf.text_of(a, "BT /P <</MCID 0>> BDC /Span <</ActualText (fi)>> BDC (shown) Tj ET")
+    if shown_error != ok || !str.eq(shown, "shown") { ret 11u8 }
+    let (literal_dict, literal_dict_error) = pdf.text_of(a, "BT /Span <</ActualText (ignored >> (junk) Tj)>> BDC (shown) Tj ET")
+    if literal_dict_error != ok || !str.eq(literal_dict, "shown") { ret 28u8 }
+
+    var image_painter: pdf.Painter = zero
+    image_painter.data = "<< /Width 999999999 /Height 999999999 >>"
+    let (_, giant_image) = pdf.decode_image(a, &image_painter, 0usize, image_painter.data.len)
+    if giant_image { ret 12u8 }
+    image_painter.data = "<< /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray /Predictor 12 /Colors 999999999 /Columns 999999999 /Length 1 >>\nstream\nx\nendstream"
+    let (_, giant_row) = pdf.decode_image(a, &image_painter, 0usize, image_painter.data.len)
+    if giant_row { ret 13u8 }
+    ret 0u8
+}
+
+// Run before the regular fixture consumes its shared arena. The exact buffer is
+// reset immediately after the count, so the 65,537-entry cap stays covered
+// without retaining a megabyte of generated test text.
+fn issue_78_cmap_limit_check(a: *mem.Arena) -> u8 {
+    let before = mem.mark(a)
+    let prefix = "1 beginbfchar "
+    let entry = "<0> <0> "
+    let suffix = "endbfchar"
+    let total = prefix.len + 65537usize * entry.len + suffix.len
+    let (data, data_error) = mem.alloc[u8](a, total)
+    if data_error != ok {
+        mem.reset(a, before)
+        ret 1u8
+    }
+    var at = 0usize
+    mem.copy[u8](data[at..at + prefix.len], prefix)
+    at += prefix.len
+    var entry_at = 0usize
+    while entry_at < 65537usize {
+        mem.copy[u8](data[at..at + entry.len], entry)
+        at += entry.len
+        entry_at += 1usize
+    }
+    mem.copy[u8](data[at..at + suffix.len], suffix)
+    let (_, limit_error) = pdf.cmap_entry_count(data)
+    mem.reset(a, before)
+    if limit_error != pdf.TooLarge { ret 2u8 }
+    ret 0u8
+}
+
+// Follow-up regressions for the remaining #78 reader findings. Keep these
+// generated inputs small enough to exercise the parser without checked-in PDFs.
+fn issue_78_remaining_check(a: *mem.Arena) -> u8 {
+    // A decimal TJ adjustment is a number, not its digits with the point removed.
+    let (fractional, fractional_error) = pdf.text_of(a, "[(Wor) -2.31 (ld)] TJ")
+    if fractional_error != ok || !str.eq(fractional, "World") { ret 1u8 }
+    let (word_gap, word_gap_error) = pdf.text_of(a, "[(A) -200.5 (B)] TJ")
+    if word_gap_error != ok || !str.eq(word_gap, "A B") { ret 2u8 }
+
+    // x-only moves start a new independently positioned word, while a nonzero
+    // y operand still starts a text line.
+    let (x_moves, x_moves_error) = pdf.text_of(a, "(one) Tj 30 0 Td (two) Tj 1 0 0 1 40 0 Tm (three) Tj")
+    if x_moves_error != ok || !str.eq(x_moves, "one two three") { ret 3u8 }
+
+    // Legacy metadata and CMap parsing must not combine a high surrogate with
+    // an arbitrary next unit.
+    let (orphan, _, _, orphan_ok) = pdf.hex_value("<D8000041>", 0usize, 10usize)
+    if !orphan_ok || orphan != 65533u32 { ret 4u8 }
+    let legacy = "/Title <FEFFD8000041>"
+    let title = pdf.string_after(a, legacy, 0usize, legacy.len, "Title")
+    if title.len != 4usize || title[0usize] != 239u8 || title[1usize] != 191u8 || title[2usize] != 189u8 || title[3usize] != 65u8 { ret 5u8 }
+    let (cmap_orphan, _, cmap_orphan_ok) = pdf.hex_text(a, "<D8000041>", 0usize, 10usize, 0u32)
+    if !cmap_orphan_ok || cmap_orphan.len != 4usize || cmap_orphan[0usize] != 239u8 || cmap_orphan[1usize] != 191u8 || cmap_orphan[2usize] != 189u8 || cmap_orphan[3usize] != 65u8 { ret 38u8 }
+    let (_, _, unterminated_at, unterminated_ok) = pdf.hex_value("<D800", 0usize, 5usize)
+    if unterminated_ok || unterminated_at != 5usize { ret 39u8 }
+
+    // A ninth q spills beyond the inline slots. Its matching Q must restore the
+    // eighth scale after an inner transformation, rather than popping it (256).
+    let (state_builder0, state_builder_error) = str.builder(a, 0usize)
+    if state_builder_error != ok { ret 6u8 }
+    var state_builder = state_builder0
+    var state_at = 0usize
+    while state_at < 8usize {
+        if str.push(&state_builder, "q 2 0 0 2 0 0 cm ") != ok { ret 7u8 }
+        state_at += 1usize
+    }
+    if str.push(&state_builder, "q 2 0 0 2 0 0 cm Q 0 0 1 1 re f") != ok { ret 8u8 }
+    var state_shapes: [1]pdf.Shape = zero
+    var state_painter = pdf.paint_start(state_shapes[0usize..])
+    let state_error = pdf.paint_content(a, &state_painter, str.done(&state_builder))
+    if state_error != ok || state_painter.n != 1usize || state_shapes[0usize].x1 != 256.0f64 { ret 9u8 }
+
+    // Resources and MediaBox inherit strictly through this page's Parent chain.
+    let inherited = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 3 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Resources << /Font << /F1 7 0 R >> >> /MediaBox [0 0 111 222] >>\nendobj\n3 0 obj\n<< /Type /Pages /Kids [4 0 R] /Resources << /Font << /F1 5 0 R >> >> /MediaBox [0 0 300 400] >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 3 0 R /Contents 6 0 R >>\nendobj\n5 0 obj\n<< /Type /Font /ToUnicode 8 0 R >>\nendobj\n6 0 obj\n<<>>\nstream\nBT /F1 12 Tf (A) Tj ET\nendstream\nendobj\n7 0 obj\n<< /Type /Font /ToUnicode 9 0 R >>\nendobj\n8 0 obj\n<<>>\nstream\n1 beginbfchar <41> <005A> endbfchar\nendstream\nendobj\n9 0 obj\n<<>>\nstream\n1 beginbfchar <41> <0058> endbfchar\nendstream\nendobj\n"
+    let (inherited_pages, inherited_error) = pdf.pages(a, inherited)
+    if inherited_error != ok || inherited_pages.len != 1usize || !str.eq(inherited_pages[0usize], "Z") { ret 10u8 }
+    let (inherited_painting, inherited_painting_error) = pdf.page_painting(a, inherited, 0usize)
+    if inherited_painting_error != ok || inherited_painting.width != 300.0f64 || inherited_painting.height != 400.0f64 { ret 11u8 }
+
+    // More than the old 64 /Contents references are all joined in source order.
+    let (contents_builder0, contents_builder_error) = str.builder(a, 0usize)
+    if contents_builder_error != ok { ret 12u8 }
+    var contents_builder = contents_builder0
+    if str.push(&contents_builder, "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents [") != ok { ret 13u8 }
+    var contents_at = 0usize
+    while contents_at < 65usize {
+        if str.push_usize(&contents_builder, contents_at + 4usize) != ok || str.push(&contents_builder, " 0 R ") != ok { ret 14u8 }
+        contents_at += 1usize
+    }
+    if str.push(&contents_builder, "] >>\nendobj\n") != ok { ret 15u8 }
+    contents_at = 0usize
+    while contents_at < 65usize {
+        if str.push_usize(&contents_builder, contents_at + 4usize) != ok || str.push(&contents_builder, " 0 obj\n<<>>\nstream\n(x) Tj\nendstream\nendobj\n") != ok { ret 16u8 }
+        contents_at += 1usize
+    }
+    let (many_contents, many_contents_error) = pdf.pages(a, str.done(&contents_builder))
+    if many_contents_error != ok || many_contents.len != 1usize || many_contents[0usize].len != 129usize { ret 17u8 }
+
+    // The former 1,024-entry ToUnicode allocation grows to the exact CMap size.
+    let loaded_cmap = "/Type /Font /ToUnicode 2 0 R <<>>\nstream\n1 beginbfrange <0000> <0400> <0041> endbfrange\nendstream"
+    let cmap_stream_at = pdf.find(loaded_cmap, "<<>>", 0usize, loaded_cmap.len)
+    var loaded_cmap_objects: [2]pdf.Object = zero
+    loaded_cmap_objects[0usize].number = 1usize
+    loaded_cmap_objects[0usize].start = 0usize
+    loaded_cmap_objects[0usize].end = cmap_stream_at
+    loaded_cmap_objects[1usize].number = 2usize
+    loaded_cmap_objects[1usize].start = cmap_stream_at
+    loaded_cmap_objects[1usize].end = loaded_cmap.len
+    var loaded_cmap_painter: pdf.Painter = zero
+    loaded_cmap_painter.data = loaded_cmap
+    loaded_cmap_painter.table = loaded_cmap_objects[0usize..]
+    loaded_cmap_painter.count = 2usize
+    let (loaded_cmap_font, loaded_cmap_error) = pdf.load_font(a, &loaded_cmap_painter, 1usize)
+    if loaded_cmap_error != ok || loaded_cmap_font != 0usize || loaded_cmap_painter.fonts[0usize].mapped != 1025usize { ret 18u8 }
+
+    // Object and stream boundaries are reported, never returned as a partial document.
+    let (object_builder0, object_builder_error) = str.builder(a, 0usize)
+    if object_builder_error != ok { ret 19u8 }
+    var object_builder = object_builder0
+    var object_at = 0usize
+    while object_at < 4097usize {
+        if str.push_usize(&object_builder, object_at + 1usize) != ok || str.push(&object_builder, " 0 obj\n<<>>\nendobj\n") != ok { ret 20u8 }
+        object_at += 1usize
+    }
+    let (_, _, object_limit_error) = pdf.objects(a, str.done(&object_builder))
+    if object_limit_error != pdf.TooLarge { ret 21u8 }
+    let cap_stream = "<<>>\nstream\nfour\nendstream"
+    let (capped, capped_error) = pdf.stream_capped(a, cap_stream, 0usize, cap_stream.len, 3usize)
+    if capped_error != pdf.TooLarge || capped.len != 0usize { ret 22u8 }
+    let flate_cap_stream = "<< /Filter /FlateDecode >>\nstream\n\x78\x9c\x4b\xcb\x2f\x2d\x02\x00\x04\x45\x01\xbd\nendstream"
+    let (_, flate_cap_error) = pdf.stream_capped(a, flate_cap_stream, 0usize, flate_cap_stream.len, 3usize)
+    if flate_cap_error != pdf.TooLarge { ret 41u8 }
+    let invalid_a85_stream = "<< /Filter /ASCII85Decode >>\nstream\nv\nendstream"
+    let (_, invalid_a85_error) = pdf.stream_capped(a, invalid_a85_stream, 0usize, invalid_a85_stream.len, 8usize)
+    if invalid_a85_error != pdf.InvalidAscii85 { ret 40u8 }
+
+    // Each page gets a fresh eight-slot font cache; the ninth distinct font must
+    // still apply its shared ToUnicode map instead of falling back to Latin-1.
+    let (font_pages_builder0, font_pages_builder_error) = str.builder(a, 0usize)
+    if font_pages_builder_error != ok { ret 28u8 }
+    var font_pages_builder = font_pages_builder0
+    if str.push(&font_pages_builder, "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [") != ok { ret 29u8 }
+    var font_page_at = 0usize
+    while font_page_at < 9usize {
+        if str.push_usize(&font_pages_builder, font_page_at + 3usize) != ok || str.push(&font_pages_builder, " 0 R ") != ok { ret 30u8 }
+        font_page_at += 1usize
+    }
+    if str.push(&font_pages_builder, "] >>\nendobj\n") != ok { ret 31u8 }
+    font_page_at = 0usize
+    while font_page_at < 9usize {
+        if str.push_usize(&font_pages_builder, font_page_at + 3usize) != ok || str.push(&font_pages_builder, " 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 ") != ok || str.push_usize(&font_pages_builder, font_page_at + 12usize) != ok || str.push(&font_pages_builder, " 0 R >> >> /Contents ") != ok || str.push_usize(&font_pages_builder, font_page_at + 22usize) != ok || str.push(&font_pages_builder, " 0 R >>\nendobj\n") != ok { ret 32u8 }
+        font_page_at += 1usize
+    }
+    font_page_at = 0usize
+    while font_page_at < 9usize {
+        if str.push_usize(&font_pages_builder, font_page_at + 12usize) != ok || str.push(&font_pages_builder, " 0 obj\n<< /Type /Font /ToUnicode 21 0 R >>\nendobj\n") != ok { ret 33u8 }
+        font_page_at += 1usize
+    }
+    if str.push(&font_pages_builder, "21 0 obj\n<<>>\nstream\n1 beginbfchar <41> <005A> endbfchar\nendstream\nendobj\n") != ok { ret 34u8 }
+    font_page_at = 0usize
+    while font_page_at < 9usize {
+        if str.push_usize(&font_pages_builder, font_page_at + 22usize) != ok || str.push(&font_pages_builder, " 0 obj\n<<>>\nstream\nBT /F1 12 Tf (A) Tj ET\nendstream\nendobj\n") != ok { ret 35u8 }
+        font_page_at += 1usize
+    }
+    let (font_pages, font_pages_error) = pdf.pages(a, str.done(&font_pages_builder))
+    if font_pages_error != ok || font_pages.len != 9usize { ret 36u8 }
+    font_page_at = 0usize
+    while font_page_at < font_pages.len {
+        if !str.eq(font_pages[font_page_at], "Z") { ret 37u8 }
+        font_page_at += 1usize
+    }
+
+    ret 0u8
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    let cmap_limit_check = issue_78_cmap_limit_check(a)
+    if cmap_limit_check != 0u8 { os.exit(96i32 + i32(cmap_limit_check)) }
     let plain: [964]u8 = [964]u8{ 37, 80, 68, 70, 45, 49, 46, 52, 10, 49, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 67, 97, 116, 97, 108, 111, 103, 32, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 50, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 115, 32, 47, 75, 105, 100, 115, 32, 91, 51, 32, 48, 32, 82, 32, 53, 32, 48, 32, 82, 93, 32, 47, 67, 111, 117, 110, 116, 32, 50, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 51, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 52, 32, 48, 32, 82, 32, 47, 82, 101, 115, 111, 117, 114, 99, 101, 115, 32, 60, 60, 32, 47, 70, 111, 110, 116, 32, 60, 60, 32, 47, 70, 49, 32, 55, 32, 48, 32, 82, 32, 62, 62, 32, 62, 62, 32, 47, 77, 101, 100, 105, 97, 66, 111, 120, 32, 91, 48, 32, 48, 32, 54, 49, 50, 32, 55, 57, 50, 93, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 52, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 49, 51, 54, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 66, 84, 32, 47, 70, 49, 32, 49, 50, 32, 84, 102, 32, 55, 50, 32, 55, 48, 48, 32, 84, 100, 32, 40, 72, 101, 108, 108, 111, 44, 32, 80, 68, 70, 32, 119, 111, 114, 108, 100, 41, 32, 84, 106, 32, 48, 32, 45, 49, 52, 32, 84, 100, 32, 91, 40, 78, 101, 112, 101, 114, 41, 32, 45, 51, 50, 48, 32, 40, 112, 104, 111, 110, 101, 41, 32, 50, 48, 32, 40, 33, 41, 93, 32, 84, 74, 32, 48, 32, 45, 49, 52, 32, 84, 100, 32, 40, 97, 32, 92, 40, 112, 97, 114, 101, 110, 92, 41, 32, 97, 110, 100, 32, 92, 49, 48, 49, 32, 97, 110, 100, 32, 99, 97, 102, 92, 51, 53, 49, 41, 32, 84, 106, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 53, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 54, 32, 48, 32, 82, 32, 47, 82, 101, 115, 111, 117, 114, 99, 101, 115, 32, 60, 60, 32, 47, 70, 111, 110, 116, 32, 60, 60, 32, 47, 70, 49, 32, 55, 32, 48, 32, 82, 32, 62, 62, 32, 62, 62, 32, 47, 77, 101, 100, 105, 97, 66, 111, 120, 32, 91, 48, 32, 48, 32, 54, 49, 50, 32, 55, 57, 50, 93, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 54, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 54, 49, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 66, 84, 32, 47, 70, 49, 32, 49, 50, 32, 84, 102, 32, 55, 50, 32, 55, 48, 48, 32, 84, 100, 32, 60, 52, 56, 54, 53, 54, 99, 54, 99, 54, 102, 62, 32, 84, 106, 32, 84, 42, 32, 40, 115, 101, 99, 111, 110, 100, 32, 108, 105, 110, 101, 41, 32, 84, 106, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 55, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 70, 111, 110, 116, 32, 47, 83, 117, 98, 116, 121, 112, 101, 32, 47, 84, 121, 112, 101, 49, 32, 47, 66, 97, 115, 101, 70, 111, 110, 116, 32, 47, 72, 101, 108, 118, 101, 116, 105, 99, 97, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 120, 114, 101, 102, 10, 48, 32, 56, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 54, 53, 53, 51, 53, 32, 102, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 57, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 53, 56, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 49, 50, 49, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 50, 52, 55, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 52, 51, 52, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 53, 54, 48, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 54, 55, 49, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 116, 114, 97, 105, 108, 101, 114, 10, 60, 60, 32, 47, 83, 105, 122, 101, 32, 56, 32, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 32, 62, 62, 10, 115, 116, 97, 114, 116, 120, 114, 101, 102, 10, 55, 52, 49, 10, 37, 37, 69, 79, 70, 10 }
     let nested: [834]u8 = [834]u8{ 37, 80, 68, 70, 45, 49, 46, 52, 10, 49, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 67, 97, 116, 97, 108, 111, 103, 32, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 50, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 115, 32, 47, 75, 105, 100, 115, 32, 91, 56, 32, 48, 32, 82, 32, 51, 32, 48, 32, 82, 93, 32, 47, 67, 111, 117, 110, 116, 32, 50, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 51, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 52, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 52, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 54, 49, 32, 47, 70, 105, 108, 116, 101, 114, 32, 47, 70, 108, 97, 116, 101, 68, 101, 99, 111, 100, 101, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 120, 156, 115, 10, 81, 208, 119, 51, 84, 48, 52, 82, 8, 73, 83, 48, 55, 82, 48, 55, 48, 80, 8, 73, 81, 208, 112, 206, 207, 45, 40, 74, 45, 46, 78, 77, 81, 40, 46, 41, 74, 77, 204, 85, 40, 73, 173, 40, 209, 84, 8, 201, 82, 112, 13, 1, 0, 122, 174, 15, 128, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 56, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 115, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 75, 105, 100, 115, 32, 91, 57, 32, 48, 32, 82, 93, 32, 47, 67, 111, 117, 110, 116, 32, 49, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 57, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 56, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 49, 48, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 49, 48, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 52, 55, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 66, 84, 32, 47, 70, 49, 32, 49, 50, 32, 84, 102, 32, 55, 50, 32, 55, 48, 48, 32, 84, 100, 32, 40, 84, 114, 101, 101, 32, 111, 114, 100, 101, 114, 32, 102, 105, 114, 115, 116, 41, 32, 84, 106, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 120, 114, 101, 102, 10, 48, 32, 49, 49, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 54, 53, 53, 51, 53, 32, 102, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 57, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 53, 56, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 49, 50, 49, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 49, 56, 52, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 51, 49, 54, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 51, 56, 55, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 52, 53, 49, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 116, 114, 97, 105, 108, 101, 114, 10, 60, 60, 32, 47, 83, 105, 122, 101, 32, 49, 49, 32, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 32, 62, 62, 10, 115, 116, 97, 114, 116, 120, 114, 101, 102, 10, 53, 52, 57, 10, 37, 37, 69, 79, 70, 10 }
     let array: [532]u8 = [532]u8{ 37, 80, 68, 70, 45, 49, 46, 52, 10, 49, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 67, 97, 116, 97, 108, 111, 103, 32, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 50, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 115, 32, 47, 75, 105, 100, 115, 32, 91, 51, 32, 48, 32, 82, 93, 32, 47, 67, 111, 117, 110, 116, 32, 49, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 51, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 91, 52, 32, 48, 32, 82, 32, 53, 32, 48, 32, 82, 93, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 52, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 51, 49, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 66, 84, 32, 55, 50, 32, 55, 48, 48, 32, 84, 100, 32, 40, 102, 105, 114, 115, 116, 32, 112, 97, 114, 116, 41, 32, 84, 106, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 53, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 51, 50, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 66, 84, 32, 55, 50, 32, 54, 48, 48, 32, 84, 100, 32, 40, 115, 101, 99, 111, 110, 100, 32, 112, 97, 114, 116, 41, 32, 84, 106, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 120, 114, 101, 102, 10, 48, 32, 54, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 54, 53, 53, 51, 53, 32, 102, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 48, 57, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 48, 53, 56, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 49, 49, 53, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 49, 56, 54, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 48, 48, 48, 48, 48, 48, 48, 50, 54, 55, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, 116, 114, 97, 105, 108, 101, 114, 10, 60, 60, 32, 47, 83, 105, 122, 101, 32, 54, 32, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 32, 62, 62, 10, 115, 116, 97, 114, 116, 120, 114, 101, 102, 10, 51, 52, 57, 10, 37, 37, 69, 79, 70, 10 }
@@ -24,6 +379,91 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, r_error) = pdf.pages(a, array[0..])
     if r_error != ok { os.exit(9) }
     if r.len != 1usize || !str.eq(r[0], "first part\nsecond part") { os.exit(10) }
+    // A stream's declared bytes may contain PDF keywords as literal text. They must not
+    // end the object or stream before the real markers after the declared length.
+    let keywords = r#"%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 41 >>
+stream
+BT (before endobj endstream after) Tj ET
+endstream
+endobj
+"#
+    let (keyword_pages, keyword_error) = pdf.pages(a, keywords)
+    if keyword_error != ok || keyword_pages.len != 1usize { os.exit(54) }
+    if !str.eq(keyword_pages[0usize], "before endobj endstream after") { os.exit(55) }
+    // Names may spell structural keywords. They must neither truncate an object nor
+    // be taken for the start or end of a stream.
+    let named_endobj = r#"%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /endobj /ignored /Type /Page /Parent 2 0 R /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 16 >>
+stream
+BT (name) Tj ET
+endstream
+endobj
+"#
+    let (endobj_pages, endobj_error) = pdf.pages(a, named_endobj)
+    if endobj_error != ok || endobj_pages.len != 1usize { os.exit(56) }
+    if !str.eq(endobj_pages[0usize], "name") { os.exit(57) }
+    let named_stream = r#"%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /stream /ignored /Type /Page /Parent 2 0 R /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 16 >>
+stream
+BT (name) Tj ET
+endstream
+endobj
+"#
+    let (stream_pages, stream_error) = pdf.pages(a, named_stream)
+    if stream_error != ok || stream_pages.len != 1usize { os.exit(58) }
+    if !str.eq(stream_pages[0usize], "name") { os.exit(59) }
+    let named_endstream = r#"%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>
+endobj
+4 0 obj
+<< >>
+stream
+/endstream noop
+BT (name) Tj ET
+endstream
+endobj
+"#
+    let (endstream_pages, endstream_error) = pdf.pages(a, named_endstream)
+    if endstream_error != ok || endstream_pages.len != 1usize { os.exit(60) }
+    if !str.eq(endstream_pages[0usize], "name") { os.exit(61) }
     let painted: [494]u8 = [494]u8{ 37, 80, 68, 70, 45, 49, 46, 52, 10, 49, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 67, 97, 116, 97, 108, 111, 103, 32, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 50, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 115, 32, 47, 75, 105, 100, 115, 32, 91, 51, 32, 48, 32, 82, 93, 32, 47, 67, 111, 117, 110, 116, 32, 49, 32, 47, 77, 101, 100, 105, 97, 66, 111, 120, 32, 91, 48, 32, 48, 32, 52, 48, 48, 32, 56, 48, 48, 93, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 51, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 84, 121, 112, 101, 32, 47, 80, 97, 103, 101, 32, 47, 80, 97, 114, 101, 110, 116, 32, 50, 32, 48, 32, 82, 32, 47, 67, 111, 110, 116, 101, 110, 116, 115, 32, 52, 32, 48, 32, 82, 32, 62, 62, 10, 101, 110, 100, 111, 98, 106, 10, 52, 32, 48, 32, 111, 98, 106, 10, 60, 60, 32, 47, 76, 101, 110, 103, 116, 104, 32, 50, 49, 48, 32, 62, 62, 10, 115, 116, 114, 101, 97, 109, 10, 113, 32, 49, 32, 48, 32, 48, 32, 114, 103, 32, 49, 48, 48, 32, 54, 48, 48, 32, 50, 48, 48, 32, 53, 48, 32, 114, 101, 32, 102, 32, 81, 10, 48, 32, 48, 32, 49, 32, 82, 71, 32, 51, 32, 119, 32, 49, 48, 48, 32, 53, 48, 48, 32, 109, 32, 51, 48, 48, 32, 53, 48, 48, 32, 108, 32, 83, 10, 66, 84, 32, 47, 70, 49, 32, 49, 56, 32, 84, 102, 32, 55, 50, 32, 55, 48, 48, 32, 84, 100, 32, 40, 72, 101, 108, 108, 111, 41, 32, 84, 106, 32, 69, 84, 10, 113, 32, 48, 46, 53, 32, 48, 32, 48, 32, 48, 46, 53, 32, 49, 48, 32, 50, 48, 32, 99, 109, 32, 48, 46, 53, 32, 103, 32, 48, 32, 48, 32, 52, 48, 32, 52, 48, 32, 114, 101, 32, 102, 32, 81, 10, 66, 84, 32, 47, 70, 49, 32, 49, 48, 32, 84, 102, 32, 48, 32, 48, 32, 48, 32, 49, 32, 107, 32, 53, 48, 32, 52, 48, 48, 32, 84, 100, 32, 91, 40, 84, 101, 97, 41, 32, 45, 51, 48, 48, 32, 40, 98, 97, 103, 115, 41, 93, 32, 84, 74, 32, 69, 84, 10, 101, 110, 100, 115, 116, 114, 101, 97, 109, 10, 101, 110, 100, 111, 98, 106, 10, 116, 114, 97, 105, 108, 101, 114, 10, 60, 60, 32, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 32, 62, 62, 10, 37, 37, 69, 79, 70, 10 }
     let junk: [20]u8 = [20]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 }
     let (j, j_error) = pdf.pages(a, junk[0..])
@@ -117,5 +557,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(marks[3].title, "Result") || marks[3].page != 2usize || marks[3].level != 0usize { os.exit(52) }
     let (none, none_error) = pdf.outline(a, painted[0..])
     if none_error != ok || none.len != 0usize { os.exit(53) }
+    let core_check = issue_78_core_check(a)
+    if core_check != 0u8 { os.exit(62i32 + i32(core_check)) }
+    let remaining_check = issue_78_remaining_check(a)
+    if remaining_check != 0u8 { os.exit(100i32 + i32(remaining_check)) }
     ret ok
 }

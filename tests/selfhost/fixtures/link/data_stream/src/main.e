@@ -126,6 +126,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_source) = stream.merge_update(&m, 3usize, 0u64, now)
     if bad_source != stream.Invalid { os.exit(3i32) }
 
+    // Idleness is elapsed time modulo u64: a source updated four ticks before
+    // the maximum timestamp is still active after its deadline wraps.
+    var wrap_marks: [1]u64 = zero
+    var wrap_last: [1]u64 = zero
+    let (wrap0, wrap_error) = stream.merge(wrap_marks[..], wrap_last[..], 10u64)
+    if wrap_error != ok { os.exit(3i32) }
+    var wrap = wrap0
+    wrap.marks[0usize] = 7u64
+    wrap.last[0usize] = 18446744073709551610u64
+    if stream.merge_at(&wrap, 18446744073709551614u64) != 7u64 { os.exit(3i32) }
+
     // 4: sliding assignment and the argument checks.
     var starts: [4]u64 = zero
     let (n, starts_error) = stream.sliding_windows(175u64, 100u64, 30u64, starts[..])
@@ -133,6 +144,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, cramped) = stream.sliding_windows(175u64, 100u64, 30u64, starts[..2usize])
     if cramped != stream.TooSmall { os.exit(4i32) }
     if stream.window_start(175u64, 100u64) != 100u64 { os.exit(4i32) }
+
+    // A window whose end rolls over still holds the maximum timestamp.
+    let (rollover_count, rollover_starts_error) = stream.sliding_windows(18446744073709551615u64, 10u64, 10u64, starts[..1usize])
+    if rollover_starts_error != ok || rollover_count != 1usize || starts[0usize] != 18446744073709551610u64 { os.exit(4i32) }
+    var rollover_slots: [1]stream.Window = zero
+    let (rollover0, rollover_buffer_error) = stream.window_buffer(10u64, 10u64, rollover_slots[..])
+    if rollover_buffer_error != ok { os.exit(4i32) }
+    var rollover = rollover0
+    if stream.window_add(&rollover, 18446744073709551615u64, 7u64, 0u64) != ok || rollover.used != 1usize || rollover.windows[0usize].start != 18446744073709551610u64 || rollover.windows[0usize].count != 1u64 || rollover.windows[0usize].sum != 7u64 { os.exit(4i32) }
+
     let (_, bad_buffer) = stream.window_buffer(50u64, 100u64, slots[..])
     if bad_buffer != stream.Invalid { os.exit(4i32) }
     var one: [1]stream.Window = zero
@@ -140,6 +161,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var t1 = tiny
     if stream.window_add(&t1, 5u64, 1u64, 0u64) != ok { os.exit(4i32) }
     if stream.window_add(&t1, 15u64, 1u64, 0u64) != stream.TooSmall { os.exit(4i32) }
+
+    // A failed sliding insert does not retain the earlier open window, so a
+    // later event that fits can still use the caller's one slot.
+    var partial_slots: [1]stream.Window = zero
+    let (partial0, partial_init_error) = stream.window_buffer(100u64, 50u64, partial_slots[..])
+    if partial_init_error != ok { os.exit(4i32) }
+    var partial = partial0
+    if stream.window_add(&partial, 75u64, 7u64, 0u64) != stream.TooSmall { os.exit(4i32) }
+    if partial.used != 0usize || partial.late != 0u64 { os.exit(4i32) }
+    if stream.window_add(&partial, 5u64, 3u64, 0u64) != ok || partial.used != 1usize || partial.windows[0usize].start != 0u64 || partial.windows[0usize].count != 1u64 || partial.windows[0usize].sum != 3u64 { os.exit(4i32) }
+
+    // Three fired sliding windows still make this one late event. Its two
+    // un-fired overlapping windows keep the value.
+    var late_slots: [5]stream.Window = zero
+    let (late0, late_init_error) = stream.window_buffer(100u64, 25u64, late_slots[..])
+    if late_init_error != ok { os.exit(4i32) }
+    var late = late0
+    if stream.window_add(&late, 100u64, 9u64, 150u64) != ok { os.exit(4i32) }
+    if late.late != 1u64 || late.used != 2usize { os.exit(4i32) }
+    var have_75 = false
+    var have_100 = false
+    var window_i = 0usize
+    while window_i < late.used {
+        if late.windows[window_i].start == 75u64 && late.windows[window_i].count == 1u64 && late.windows[window_i].sum == 9u64 { have_75 = true }
+        if late.windows[window_i].start == 100u64 && late.windows[window_i].count == 1u64 && late.windows[window_i].sum == 9u64 { have_100 = true }
+        window_i += 1usize
+    }
+    if !have_75 || !have_100 { os.exit(4i32) }
 
     try io.print("data stream ok\n")
     ret ok

@@ -783,7 +783,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width") || same(flag, "--gpu-inventory")
+    ret same(flag, "--gpu") || same(flag, "--arena") || same(flag, "--memory-budget") || same(flag, "--fault-select-inlined") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--fault-dry") || same(flag, "--overlay") || same(flag, "--cpu") || same(flag, "--subgroup-width") || same(flag, "--gpu-inventory")
 }
 
 // `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
@@ -794,6 +794,36 @@ fn cpu_level_of(spelling: str) -> usize {
     if same(spelling, "x64-v2") { ret 2usize }
     if same(spelling, "x64-v3") { ret 3usize }
     ret 0usize
+}
+
+// `--gpu LIST` (D5888): comma-separated GPU targets from `spv`, `ptx`, `glsl` and `none`.
+// Only `glsl` changes what is written today: each kernel's module carries GLSL too.
+fn gpu_list_ok(list: str) -> bool {
+    var start = 0usize
+    var at = 0usize
+    while at <= list.len {
+        if at == list.len || list[at] == 44u8 {
+            let item = list[start..at]
+            if !same(item, "spv") && !same(item, "ptx") && !same(item, "glsl") && !same(item, "none") { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+fn gpu_glsl_flag(args: []str) -> bool {
+    let list = string_flag(args, "--gpu")
+    var start = 0usize
+    var at = 0usize
+    while at <= list.len {
+        if at == list.len || list[at] == 44u8 {
+            if same(list[start..at], "glsl") { ret true }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn cpu_level_flag(args: []str) -> usize {
@@ -893,10 +923,11 @@ fn flags_known(args: []str) -> bool {
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") || same(args[at], "--gpu-inventory") {
+            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") || same(args[at], "--gpu-inventory") || same(args[at], "--gpu") {
                 if at + 1usize >= args.len { ret false }
                 // A level the build does not have is no build (D765).
                 if same(args[at], "--cpu") && cpu_level_of(args[at + 1usize]) == 0usize { ret false }
+                if same(args[at], "--gpu") && !gpu_list_ok(args[at + 1usize]) { ret false }
                 at += 1usize
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
@@ -906,7 +937,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") { ret false }
                 }
             }
         }
@@ -2355,8 +2386,10 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, t
     written = nptest_append(buffer, written, "    ret ok\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    var nptest_result = ok\n    if args.len >= 2usize {\n        var nptest_guard: NptestGuard = zero\n        let (nptest_watch, nptest_watch_error) = nptest_os.thread_create[NptestGuard](nptest_watchdog, &nptest_guard, 1048576usize)\n        nptest_result = nptest_dispatch(a, args[1usize])\n        nptest_report_message(nptest_result)\n        nptest_atomic.store(&nptest_guard.done, 1u32, .Release)\n        nptest_os.wake_one_u32(&nptest_guard.done)\n        if nptest_watch_error == ok {\n            let nptest_joined = nptest_os.thread_join(nptest_watch)\n        }\n    }\n    ret nptest_result\n}\n")
     // A failed assertion's message (T005): `e.test` keeps it in its record, and the root
     // hands it to `neper test` on stderr between two 0x1E bytes, which the parent lifts
-    // out into the record's `message`. The `use` is last so the operand stays two lines down.
-    written = nptest_append(buffer, written, "fn nptest_report_message(result: err) {\n    if result == ok || nptest_test.current.message.len == 0usize { ret }\n    let (nptest_head, nptest_head_error) = nptest_os.write(nptest_os.stderr(), \"\\x1enptest-message:\")\n    let (nptest_body, nptest_body_error) = nptest_os.write(nptest_os.stderr(), nptest_test.current.message)\n    let (nptest_tail, nptest_tail_error) = nptest_os.write(nptest_os.stderr(), \"\\x1e\\n\")\n}\nuse e.test as nptest_test\n")
+    // out into the record's `message`. A caught assertion must not annotate a later
+    // unrelated error, so only `test.Failed` emits the record. The `use` is last so the
+    // operand stays two lines down.
+    written = nptest_append(buffer, written, "fn nptest_report_message(result: err) {\n    if result != nptest_test.Failed || nptest_test.current.message.len == 0usize { ret }\n    let (nptest_head, nptest_head_error) = nptest_os.write(nptest_os.stderr(), \"\\x1enptest-message:\")\n    let (nptest_body, nptest_body_error) = nptest_os.write(nptest_os.stderr(), nptest_test.current.message)\n    let (nptest_tail, nptest_tail_error) = nptest_os.write(nptest_os.stderr(), \"\\x1e\\n\")\n}\nuse e.test as nptest_test\n")
     ret (buffer[0usize..written], ok)
 }
 
@@ -5947,6 +5980,141 @@ fn stderr_text(text: str) -> err {
     ret write_all(&sink, text)
 }
 
+// A parsed `@export("Name")` attribute: one ordinary string literal is its name.
+// The tree never mistakes raw-string contents for a declaration attribute.
+fn parsed_export_symbol(text: str, tokens: []const lex.Token, tree: *parse.Tree, node: syntax.Node) -> (str, bool, bool) {
+    if node.kind != .Attribute { ret ("", false, false) }
+    var name = ""
+    var token_at = usize(node.token_start)
+    while token_at < usize(node.token_end) && token_at < tokens.len {
+        if tokens[token_at].kind == .Identifier {
+            name = lex.token_text(text, tokens[token_at])
+            break
+        }
+        token_at += 1usize
+    }
+    if !same(name, "export") { ret ("", false, true) }
+    var symbol = ""
+    var arguments = 0usize
+    let child_end = usize(node.first_child) + usize(node.child_count)
+    var child_at = usize(node.first_child)
+    while child_at < child_end {
+        if parse.child_is_node_at(tree, child_at) {
+            arguments += 1usize
+            let expression = tree.nodes[parse.child_index_at(tree, child_at)]
+            if expression.kind != .LiteralExpr || usize(expression.token_end) != usize(expression.token_start) + 1usize || usize(expression.token_start) >= tokens.len { ret ("", true, false) }
+            let literal = tokens[usize(expression.token_start)]
+            if literal.kind != .String { ret ("", true, false) }
+            let spelling = lex.token_text(text, literal)
+            if spelling.len < 2usize || spelling[0usize] != 34u8 || spelling[spelling.len - 1usize] != 34u8 { ret ("", true, false) }
+            symbol = spelling[1usize..spelling.len - 1usize]
+        }
+        child_at += 1usize
+    }
+    ret (symbol, true, arguments == 1usize && symbol.len != 0usize)
+}
+
+// The next top-level declaration after an attribute run. Attributes are parsed as
+// their own nodes, so this establishes ownership without inspecting source bytes.
+fn declaration_after_attribute(tree: *parse.Tree, attribute_index: usize) -> (syntax.Node, bool) {
+    var node_at = attribute_index + 1usize
+    while node_at < tree.count {
+        let node = tree.nodes[node_at]
+        if node.top_level && node.kind != .Attribute { ret (node, true) }
+        node_at += 1usize
+    }
+    ret (zero, false)
+}
+
+fn parsed_function_name(text: str, tokens: []const lex.Token, node: syntax.Node) -> (str, bool) {
+    var saw_fn = false
+    var token_at = usize(node.token_start)
+    while token_at < usize(node.token_end) && token_at < tokens.len {
+        let token = tokens[token_at]
+        if token.kind == .KwFn {
+            saw_fn = true
+        } else {
+            if saw_fn && token.kind == .Identifier {
+                ret (lex.token_text(text, token), true)
+            }
+        }
+        token_at += 1usize
+    }
+    ret ("", false)
+}
+
+fn shared_export_error(symbol: str) -> err {
+    try stderr_text("error: `@export(\"")
+    try stderr_text(symbol)
+    try stderr_text("\")` must mark a `@cc fn` that is not generic\n")
+    os.exit(1i32)
+    ret ok
+}
+
+// (D5908) `emit-shared-library`: parsed `@export("Name")` attributes only, each
+// directly above a non-generic `@cc` function found in the linked image. Anything
+// else is the program's error, reported and fatal.
+fn collect_exports(loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, args: []str) -> err {
+    if !same(args[5usize], "linux") && !same(args[5usize], "android") {
+        try stderr_text("error: a shared library is written for linux and android only\n")
+        os.exit(1i32)
+    }
+    builder.exports.shared_library = true
+    builder.exports.count = 0usize
+    var module_at = 0usize
+    while module_at < loaded.count {
+        let (parsed_module, parse_error) = check.interp_module(checker, loaded, module_at)
+        if parse_error != ok { ret parse_error }
+        let text = loaded.modules[module_at].text
+        let tokens = checker.interp_tokens[parsed_module]
+        let tree = &checker.interp_trees[parsed_module]
+        var node_at = 1usize
+        while node_at < tree.count {
+            let attribute = tree.nodes[node_at]
+            if attribute.top_level && attribute.kind == .Attribute {
+                let (_, exported, valid) = parsed_export_symbol(text, tokens, tree, attribute)
+                if exported {
+                    let (declaration, has_declaration) = declaration_after_attribute(tree, node_at)
+                    let (name, has_name) = parsed_function_name(text, tokens, declaration)
+                    let (symbol, _, _) = parsed_export_symbol(text, tokens, tree, attribute)
+                    if !valid || !has_declaration || declaration.kind != .FnDecl || !has_name { try shared_export_error(symbol) }
+                    let (index, found) = check.find_function(checker, module_at, name)
+                    if !found || !checker.functions[index].callback || checker.functions[index].generic { try shared_export_error(symbol) }
+                    var placed = 0usize
+                    while placed < builder.function_count {
+                        let function = builder.functions[placed]
+                        let same_module = (function.module_name.len != 0usize && same(function.module_name, loaded.modules[module_at].name)) || (function.module_name.len == 0usize && function.module_index == module_at)
+                        if same_module && same(function.name, name) { break }
+                        placed += 1usize
+                    }
+                    var duplicate = false
+                    var earlier = 0usize
+                    while earlier < builder.exports.count {
+                        if same(builder.exports.symbols[earlier], symbol) { duplicate = true }
+                        earlier += 1usize
+                    }
+                    if placed == builder.function_count || duplicate || builder.exports.count == 64usize {
+                        try stderr_text("error: `@export(\"")
+                        try stderr_text(symbol)
+                        try stderr_text("\")` names a symbol already exported, or a function not in the image, or one past the 64 a library exports\n")
+                        os.exit(1i32)
+                    }
+                    builder.exports.functions[builder.exports.count] = placed
+                    builder.exports.symbols[builder.exports.count] = symbol
+                    builder.exports.count += 1usize
+                }
+            }
+            node_at += 1usize
+        }
+        module_at += 1usize
+    }
+    if builder.exports.count == 0usize {
+        try stderr_text("error: a shared library exports nothing: mark a `@cc fn` `@export(\"Name\")`\n")
+        os.exit(1i32)
+    }
+    ret ok
+}
+
 fn stderr_sink() -> Sink {
     var sink: Sink = zero
     sink.file = os.stderr()
@@ -8701,8 +8869,9 @@ fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: s
     ret (3u8, true)
 }
 
-// The identity below its options byte (D431): CRC-32C in the low word, size above.
-const OPTIONS_MASK: usize = 72057594037927935usize
+// The identity below its options (D431): CRC-32C in the low word, size above, up to bit 54; bit 55 is
+// `--gpu glsl` (D5888) and the top byte the other options.
+const OPTIONS_MASK: usize = 36028797018963967usize
 
 fn artifact_worker_entry(w: *ArtifactWorker) {
     var at = 0usize
@@ -9028,6 +9197,7 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
 // cannot find or read itself that way leaves zero, which compares as nothing -- the
 // behaviour before the field.
 fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, args: []str) {
+    loaded.gpu_glsl = gpu_glsl_flag(args)
     if self_path.len == 0usize { ret }
     let (self_bytes, self_error) = source.load(a, self_path)
     if self_error != ok { ret }
@@ -9046,7 +9216,10 @@ fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, 
     if options > 63usize { options = 63usize }
     options += (cpu_level_flag(args) - 1usize) * 64usize
     loaded.cpu_level = cpu_level_flag(args)
-    loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | (options << 56usize)
+    // (D5888) Bit 55, below the options byte, is `--gpu glsl`: those kernels' modules carry GLSL as well.
+    var glsl_bit = 0usize
+    if loaded.gpu_glsl { glsl_bit = 36028797018963968usize }
+    loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | glsl_bit | (options << 56usize)
 }
 
 fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {
@@ -13760,6 +13933,19 @@ fn hex16_is(text: str, value: usize) -> bool {
 fn run_arguments(a: *mem.Arena, args: []str) -> err {
     let short_result = dispatch_short_form(a, args)
     if short_result != NotShortForm { ret short_result }
+    // (D5908) `emit-shared-library` is `emit-executable` with `--shared-library` after it: the same build, another image.
+    if args.len >= 7usize && same(args[1usize], "emit-shared-library") {
+        let (rewritten, rewritten_error) = mem.alloc[str](a, args.len + 1usize)
+        if rewritten_error != ok { ret rewritten_error }
+        var copied = 0usize
+        while copied < args.len {
+            rewritten[copied] = args[copied]
+            copied += 1usize
+        }
+        rewritten[1usize] = "emit-executable"
+        rewritten[args.len] = "--shared-library"
+        ret dispatch(a, rewritten)
+    }
     ret dispatch(a, args)
 }
 
@@ -14943,6 +15129,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
+                if has_flag(args, "--shared-library") { try collect_exports(&loaded, &checker, &builder, args) }
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 } else {
@@ -14955,6 +15142,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                             if same(args[5usize], "macos") {
                                 try link_macho.write(same(args[4usize], "x64"), &builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                             } else {
+                                builder.android = same(args[5usize], "android")
                                 try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                             }
                         }
@@ -14962,6 +15150,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                         if same(args[5usize], "macos") {
                             try link_macho.write(true, &builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                         } else {
+                            builder.android = same(args[5usize], "android")
                             try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                         }
                     }

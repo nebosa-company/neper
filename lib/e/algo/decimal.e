@@ -254,18 +254,56 @@ fn sub(a: Decimal, b: Decimal) -> (Decimal, err) {
 }
 
 fn mul(a: Decimal, b: Decimal) -> (Decimal, err) {
-    if usize(a.scale) + usize(b.scale) > usize(MAX_SCALE) { ret (zero, Overflow) }
-    let (ma, na) = magnitude_of(a.coefficient)
-    let (mb, nb) = magnitude_of(b.coefficient)
-    let (product, fits) = magnitude_mul(ma, mb)
+    let (initial_a, na) = magnitude_of(a.coefficient)
+    let (initial_b, nb) = magnitude_of(b.coefficient)
+    var ma = initial_a
+    var mb = initial_b
+    var scale = usize(a.scale) + usize(b.scale)
+    // Remove only exact factors that are needed to keep the product's scale
+    // representable. This also avoids overflowing a raw product such as x * 10.
+    while scale > usize(MAX_SCALE) {
+        let (a_quotient, a_remainder) = magnitude_divmod_small(ma, 10u64)
+        if a_remainder == 0u64 {
+            ma = a_quotient
+            scale -= 1usize
+            continue
+        }
+        let (b_quotient, b_remainder) = magnitude_divmod_small(mb, 10u64)
+        if b_remainder == 0u64 {
+            mb = b_quotient
+            scale -= 1usize
+            continue
+        }
+        // A zero of the product can also be split across the operands, e.g.
+        // 2 * 5. Remove one such pair before the multiplication overflows.
+        let (a_half, a_half_remainder) = magnitude_divmod_small(ma, 2u64)
+        let (b_fifth, b_fifth_remainder) = magnitude_divmod_small(mb, 5u64)
+        if a_half_remainder == 0u64 && b_fifth_remainder == 0u64 {
+            ma = a_half
+            mb = b_fifth
+            scale -= 1usize
+            continue
+        }
+        let (a_fifth, a_fifth_remainder) = magnitude_divmod_small(ma, 5u64)
+        let (b_half, b_half_remainder) = magnitude_divmod_small(mb, 2u64)
+        if a_fifth_remainder == 0u64 && b_half_remainder == 0u64 {
+            ma = a_fifth
+            mb = b_half
+            scale -= 1usize
+            continue
+        }
+        ret (zero, Overflow)
+    }
+    let (raw_product, fits) = magnitude_mul(ma, mb)
     if !fits { ret (zero, Overflow) }
+    var product = raw_product
     var negative = na != nb
     if is_zero(product) { negative = false }
     let (coefficient, coefficient_error) = coefficient_of(product, negative)
     if coefficient_error != ok { ret (zero, coefficient_error) }
     var out: Decimal = zero
     out.coefficient = coefficient
-    out.scale = a.scale + b.scale
+    out.scale = u8(scale)
     ret (out, ok)
 }
 
@@ -510,7 +548,12 @@ fn parse(source: str) -> (Decimal, err) {
         magnitude = scaled
         scale += 1i64
     }
-    if scale > i64(MAX_SCALE) { ret (zero, Overflow) }
+    while scale > i64(MAX_SCALE) {
+        let (quotient, remainder) = magnitude_divmod_small(magnitude, 10u64)
+        if remainder != 0u64 { ret (zero, Overflow) }
+        magnitude = quotient
+        scale -= 1i64
+    }
     if is_zero(magnitude) { negative = false }
     let (coefficient, coefficient_error) = coefficient_of(magnitude, negative)
     if coefficient_error != ok { ret (zero, coefficient_error) }

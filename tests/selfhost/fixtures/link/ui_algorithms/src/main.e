@@ -113,6 +113,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let loose = ui_layout.Constraints { min_width: 0.0, max_width: 1000.0, min_height: 0.0, max_height: 1000.0 }
     let (flowed, flow_error) = ui_layout.flow(a, loose, blocks[..])
     if flow_error != ok || !near(flowed.children[0usize].y, 10.0) || !near(flowed.children[1usize].y, 90.0) || !near(flowed.children[2usize].y, 135.0) || !near(flowed.size.height, 145.0) || !near(flowed.size.width, 120.0) { os.exit(1i32) }
+    var invalid_block: [1]ui_layout.Block = zero
+    invalid_block[0usize] = ui_layout.Block { desired: geometry.Size { width: -1.0, height: 1.0 }, margin_top: 0.0, margin_bottom: 0.0 }
+    let (_, invalid_width_error) = ui_layout.flow(a, loose, invalid_block[..])
+    invalid_block[0usize] = ui_layout.Block { desired: geometry.Size { width: 1.0, height: -1.0 }, margin_top: 0.0, margin_bottom: 0.0 }
+    let (_, invalid_height_error) = ui_layout.flow(a, loose, invalid_block[..])
+    if invalid_width_error != ui_layout.Invalid || invalid_height_error != ui_layout.Invalid { os.exit(50i32) }
     // The table: two columns of minima 20/30 and maxima 60/80 under a width of 100 with a gap of 10.
     var cells: [4]ui_layout.Cell = zero
     cells[0usize] = ui_layout.Cell { min: geometry.Size { width: 20.0, height: 10.0 }, max: geometry.Size { width: 60.0, height: 20.0 } }
@@ -125,6 +131,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tight = ui_layout.Constraints { min_width: 0.0, max_width: 40.0, min_height: 0.0, max_height: 1000.0 }
     let (crushed, crushed_error) = ui_layout.table(a, ui_layout.Table { columns: 2usize, column_gap: 10.0, row_gap: 4.0 }, tight, cells[..])
     if crushed_error != ui_layout.Overflow { os.exit(3i32) }
+    var invalid_cell: [1]ui_layout.Cell = zero
+    invalid_cell[0usize] = ui_layout.Cell { min: geometry.Size { width: -1.0, height: 1.0 }, max: geometry.Size { width: 1.0, height: 1.0 } }
+    let (_, invalid_min_width_error) = ui_layout.table(a, ui_layout.Table { columns: 1usize, column_gap: 0.0, row_gap: 0.0 }, loose, invalid_cell[..])
+    invalid_cell[0usize] = ui_layout.Cell { min: geometry.Size { width: 1.0, height: -1.0 }, max: geometry.Size { width: 1.0, height: 1.0 } }
+    let (_, invalid_min_height_error) = ui_layout.table(a, ui_layout.Table { columns: 1usize, column_gap: 0.0, row_gap: 0.0 }, loose, invalid_cell[..])
+    invalid_cell[0usize] = ui_layout.Cell { min: geometry.Size { width: -2.0, height: 1.0 }, max: geometry.Size { width: -1.0, height: 1.0 } }
+    let (_, invalid_max_width_error) = ui_layout.table(a, ui_layout.Table { columns: 1usize, column_gap: 0.0, row_gap: 0.0 }, loose, invalid_cell[..])
+    invalid_cell[0usize] = ui_layout.Cell { min: geometry.Size { width: 1.0, height: -2.0 }, max: geometry.Size { width: 1.0, height: -1.0 } }
+    let (_, invalid_max_height_error) = ui_layout.table(a, ui_layout.Table { columns: 1usize, column_gap: 0.0, row_gap: 0.0 }, loose, invalid_cell[..])
+    if invalid_min_width_error != ui_layout.Invalid || invalid_min_height_error != ui_layout.Invalid || invalid_max_width_error != ui_layout.Invalid || invalid_max_height_error != ui_layout.Invalid { os.exit(51i32) }
+    // A first child cannot be wrapped before itself, so an unfit line reports
+    // Overflow rather than silently clamping only the parent result.
+    var wrap_child: [1]ui_layout.Child = zero
+    wrap_child[0usize] = ui_layout.Child { desired: geometry.Size { width: 11.0, height: 1.0 }, flex: 0.0 }
+    let wrap_narrow = ui_layout.Constraints { min_width: 0.0, max_width: 10.0, min_height: 0.0, max_height: 100.0 }
+    let (_, wrap_width_error) = ui_layout.wrap(a, ui_layout.Wrap { axis: .Horizontal, main_gap: 0.0, cross_gap: 0.0 }, wrap_narrow, wrap_child[..])
+    wrap_child[0usize] = ui_layout.Child { desired: geometry.Size { width: 1.0, height: 11.0 }, flex: 0.0 }
+    let wrap_short = ui_layout.Constraints { min_width: 0.0, max_width: 100.0, min_height: 0.0, max_height: 10.0 }
+    let (_, wrap_height_error) = ui_layout.wrap(a, ui_layout.Wrap { axis: .Vertical, main_gap: 0.0, cross_gap: 0.0 }, wrap_short, wrap_child[..])
+    if wrap_width_error != ui_layout.Overflow || wrap_height_error != ui_layout.Overflow { os.exit(52i32) }
     // Keyed reconciliation and the virtual window, pure.
     var old: [3]widget.Key = zero
     old[0usize] = 7u64

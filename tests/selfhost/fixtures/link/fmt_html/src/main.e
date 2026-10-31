@@ -9,6 +9,7 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.html as html
 
 fn options(bytes: usize, nodes: usize, depth: u16, comments: bool) -> html.Options {
@@ -108,6 +109,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if f_html == html.NONE || first_named(&fragment, f_html, "head") == html.NONE || f_body == html.NONE { os.exit(26) }
     let (f_text, e7) = html.text_content(a, &fragment, f_body)
     if e7 != ok || !str.eq(f_text, "just text") || count_named(&fragment, f_body, "b") != 1usize { os.exit(27) }
+    // A complete final chunk and End must reach the reader-based parser together.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "<p>final", failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(35) }
+    let ended_source = support.reader(&ended_script)
+    let (ended_document, ended_error) = html.parse_reader(a, ended_source, options(1024usize, 64usize, 8u16, false))
+    if ended_error != ok { os.exit(36) }
+    let ended_html = first_named(&ended_document, ended_document.root, "html")
+    if ended_html == html.NONE { os.exit(37) }
+    let ended_body = first_named(&ended_document, ended_html, "body")
+    if ended_body == html.NONE { os.exit(38) }
+    let ended_p = first_named(&ended_document, ended_body, "p")
+    if ended_p == html.NONE { os.exit(39) }
+    let (ended_text, ended_text_error) = html.text_content(a, &ended_document, ended_p)
+    if ended_text_error != ok || !str.eq(ended_text, "final") { os.exit(40) }
     // Refusals.
     let (bad_utf8, e8) = html.parse(a, "<p>\xff</p>", options(1024usize, 64usize, 8u16, false))
     if e8 != html.InvalidEncoding { os.exit(28) }
@@ -117,6 +133,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e10 != html.TooLarge { os.exit(30) }
     let (too_deep, e11) = html.parse(a, "<div><div><div><div><span>x</span></div></div></div></div>", options(1024usize, 64usize, 4u16, false))
     if e11 != html.TooDeep { os.exit(31) }
+    // The reader keeps one sentinel byte, so the largest caller limit must fail
+    // cleanly instead of overflowing the allocation count.
+    var largest_source_state = io.SliceReader { data: "", off: 0usize }
+    let largest_source = io.slice_reader(&largest_source_state)
+    let (largest_document, largest_error) = html.parse_reader(a, largest_source, options(0usize -% 1usize, 64usize, 8u16, false))
+    if largest_error != html.TooLarge { os.exit(41) }
     // (D4804) A page as Markdown: headings, paragraphs with folded white space and entities, a list, a link, an image, a
     // table with a delimiter row after its header, a pre block; script, style and head dropped.
     let page = "<html><head><title>T</title><style>p{color:red}</style></head><body><h1>Main  title</h1>\n<p>Some <b>bold</b>   text &amp; more,\n see <a href=\"https://neper.dev/x\">the docs</a> or <a href=\"#top\">top</a>.</p><script>var x = 1;</script><ul><li>one</li><li>two <i>2</i></li></ul><img src=\"a.png\" alt=\"A cat\"><table><tr><th>Name</th><th>Qty</th></tr><tr><td>tea</td><td>3</td></tr></table><h3>Sub</h3><pre>  line 1\n  line 2</pre><div><div>inner</div></div></body></html>"

@@ -138,6 +138,16 @@ fn main(a: *mem.Arena) -> err {
     let (one, one_present) = map.get[u64, u64](&counts, 1u64)
     if !one_present || one != 2u64 { os.exit(81i32) }
 
+    // An unrepresentable capacity must fail before allocating or shrinking the
+    // requested table through usize wraparound. Reserve leaves the map usable.
+    let largest = 0usize -% 1usize
+    let (_, too_large_init) = map.init[u64, u64](a, largest)
+    if too_large_init != map.TooLarge { os.exit(82i32) }
+    let too_large_reserve = map.reserve[u64, u64](&counts, largest)
+    if too_large_reserve != map.TooLarge { os.exit(83i32) }
+    let (one_after, one_after_present) = map.get[u64, u64](&counts, 1u64)
+    if !one_after_present || one_after != 2u64 { os.exit(84i32) }
+
     // --- Strings as keys: `str` is a slice, whose supplied `hash` and `eq` are over its bytes,
     // so two spellings of the same text are one key.
     let (names, names_error) = map.init[str, i64](a, 4usize)

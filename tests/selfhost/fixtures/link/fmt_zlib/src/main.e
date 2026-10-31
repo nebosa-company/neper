@@ -5,7 +5,33 @@
 use e.os
 use e.mem
 use e.io
+use e.algo.deflate as deflate
 use e.fmt.zlib as zlib
+
+error SinkFailed
+
+type FailingSink = struct { data: []u8, off: usize, writes: usize, fail_write: usize, fail_flush: bool }
+
+fn failing_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let sink = mem.cast[*FailingSink](ctx)
+    sink.writes += 1usize
+    var count = src.len
+    if sink.fail_write != 0usize && sink.writes == sink.fail_write {
+        if count > 1usize { count = 1usize }
+        if count > 0usize { mem.copy[u8](sink.data[sink.off..sink.off + count], src[..count]) }
+        sink.off += count
+        ret (count, SinkFailed)
+    }
+    mem.copy[u8](sink.data[sink.off..sink.off + count], src)
+    sink.off += count
+    ret (count, ok)
+}
+
+fn failing_flush(ctx: *void) -> err {
+    let sink = mem.cast[*FailingSink](ctx)
+    if sink.fail_flush { ret SinkFailed }
+    ret ok
+}
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -15,6 +41,46 @@ fn same(a: []const u8, b: []const u8) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// Deliberately returns its final bytes with io.End, which io.Reader permits.
+type EndingReader = struct {
+    data: []const u8,
+    off: usize,
+}
+
+fn ending_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var state = mem.cast[*EndingReader](ctx)
+    if dst.len == 0usize { ret (0usize, ok) }
+    if state.off >= state.data.len { ret (0usize, io.End) }
+    var take = state.data.len - state.off
+    if take > dst.len { take = dst.len }
+    mem.copy[u8](dst[..take], state.data[state.off..state.off + take])
+    state.off += take
+    if state.off == state.data.len { ret (take, io.End) }
+    ret (take, ok)
+}
+
+fn drain(r: *zlib.Reader, out: []u8) -> (usize, err) {
+    var total = 0usize
+    while true {
+        let (count, read_error) = zlib.read(r, out[total..])
+        total += count
+        if read_error == io.End { ret (total, ok) }
+        if read_error != ok { ret (total, read_error) }
+    }
+}
+
+fn read_all(source: *io.Reader, out: []u8) -> (usize, err) {
+    var total = 0usize
+    while true {
+        if total == out.len { ret (total, io.TooSmall) }
+        let (count, read_error) = io.read(source, out[total..])
+        total += count
+        if read_error == io.End { ret (total, ok) }
+        if read_error != ok { ret (total, read_error) }
+        if count == 0usize { ret (total, io.NoProgress) }
+    }
 }
 
 // Reads everything through a zlib reader over `framed` in 100-byte pulls.
@@ -61,6 +127,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n1, e1) = inflate(storage, framed[0..], out, 1000000u64)
     if e1 != ok { os.exit(4) }
     if !same(out[..n1], text) { os.exit(5) }
+    // A limit is checked before the caller's bytes are exposed. The probe read
+    // sees the next decoded byte privately, leaving the sentinel intact.
+    var bounded_source = io.SliceReader { data: framed[..], off: 0usize }
+    let (bounded0, bounded_error) = zlib.reader(storage, io.slice_reader(&bounded_source), 1u64)
+    if bounded_error != ok { os.exit(24) }
+    var bounded = bounded0
+    var bounded_out: [8]u8 = zero
+    var bounded_at = 0usize
+    while bounded_at < bounded_out.len {
+        bounded_out[bounded_at] = 170u8
+        bounded_at += 1usize
+    }
+    let (bounded_count, bounded_read_error) = zlib.read(&bounded, bounded_out[..])
+    if bounded_count != 1usize || bounded_read_error != ok || bounded_out[0usize] != text[0usize] || bounded_out[1usize] != 170u8 { os.exit(25) }
+    let (overflow_count, overflow_error) = zlib.read(&bounded, bounded_out[..])
+    if overflow_count != 0usize || overflow_error != deflate.TooLarge || bounded_out[1usize] != 170u8 { os.exit(26) }
+    let (repeat_overflow_count, repeat_overflow_error) = zlib.read(&bounded, bounded_out[..])
+    if repeat_overflow_count != 0usize || repeat_overflow_error != deflate.TooLarge || bounded_out[1usize] != 170u8 { os.exit(27) }
+    // A valid stream whose output exactly fills the limit still reaches its trailer.
+    var exact_source = io.SliceReader { data: framed[..], off: 0usize }
+    let (exact0, exact_open_error) = zlib.reader(storage, io.slice_reader(&exact_source), u64(text.len))
+    if exact_open_error != ok { os.exit(28) }
+    var exact = exact0
+    let (exact_count, exact_read_error) = zlib.read(&exact, out)
+    if exact_count != text.len || exact_read_error != ok || !same(out[..exact_count], text) { os.exit(29) }
+    let (exact_end_count, exact_end_error) = zlib.read(&exact, out)
+    if exact_end_count != 0usize || exact_end_error != io.End { os.exit(30) }
     // Write and read back.
     let (packed, p_error) = mem.alloc[u8](a, 4096usize)
     if p_error != ok { os.exit(6) }
@@ -91,5 +184,75 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e8 != io.TooSmall { os.exit(16) }
     let (n7, e9) = inflate(storage, framed[0..60], out, 1000000u64)
     if e9 != zlib.Invalid { os.exit(17) }
+    // The decoder can hold suffix bytes alongside the four-byte trailer. Keep
+    // those bytes available even when the source returns data and io.End together.
+    var suffixed: [73]u8 = zero
+    mem.copy[u8](suffixed[..70usize], framed[..])
+    suffixed[70usize] = 120u8
+    suffixed[71usize] = 121u8
+    suffixed[72usize] = 122u8
+    var ending = EndingReader { data: suffixed[..], off: 0usize }
+    let (r8, e10) = zlib.reader(storage, io.Reader { ctx: mem.cast[*void](&ending), read: ending_read }, 1000000u64)
+    if e10 != ok { os.exit(18) }
+    var r8_ready = r8
+    let (n8, e11) = drain(&r8_ready, out)
+    if e11 != ok || !same(out[..n8], text) { os.exit(19) }
+    if ending.off != suffixed.len { os.exit(20) }
+    var (suffix_source, suffix_error) = zlib.remaining(&r8_ready)
+    if suffix_error != ok { os.exit(21) }
+    var suffix: [4]u8 = zero
+    let (suffix_count, suffix_read_error) = read_all(&suffix_source, suffix[..])
+    if suffix_read_error != ok || suffix_count != 3usize || suffix[0usize] != 120u8 || suffix[1usize] != 121u8 || suffix[2usize] != 122u8 { os.exit(22) }
+    let (end_count, end_error) = io.read(&suffix_source, suffix[..])
+    if end_count != 0usize || end_error != io.End { os.exit(23) }
+
+    // A partial sink write after the encoder has consumed input poisons the
+    // writer: retrying either write or finish must not report success.
+    let (failure_input, failure_input_error) = mem.alloc[u8](a, 32768usize)
+    if failure_input_error != ok { os.exit(31) }
+    var failure_at = 0usize
+    while failure_at < failure_input.len {
+        failure_input[failure_at] = 65u8
+        failure_at += 1usize
+    }
+    let (failure_bytes, failure_bytes_error) = mem.alloc[u8](a, 4096usize)
+    if failure_bytes_error != ok { os.exit(32) }
+    var failed_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 2usize, fail_flush: false }
+    let (failed_storage, failed_storage_error) = aligned(a, needed)
+    if failed_storage_error != ok { os.exit(33) }
+    let (failed_writer0, failed_writer_error) = zlib.writer(failed_storage, io.Writer { ctx: mem.cast[*void](&failed_sink), write: failing_write, flush: failing_flush }, .Fast)
+    if failed_writer_error != ok { os.exit(34) }
+    var failed_writer = failed_writer0
+    let (_, failed_write_error) = zlib.write(&failed_writer, failure_input)
+    if failed_write_error != SinkFailed { os.exit(35) }
+    let failed_off = failed_sink.off
+    let (retry_count, retry_error) = zlib.write(&failed_writer, "retry")
+    if retry_count != 0usize || retry_error != zlib.Invalid || zlib.finish(&failed_writer) != zlib.Invalid || failed_sink.off != failed_off { os.exit(36) }
+
+    // A short trailer write is also terminal: a later finish cannot append it.
+    var trailer_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 3usize, fail_flush: false }
+    let (trailer_storage, trailer_storage_error) = aligned(a, needed)
+    if trailer_storage_error != ok { os.exit(37) }
+    let (trailer_writer0, trailer_writer_error) = zlib.writer(trailer_storage, io.Writer { ctx: mem.cast[*void](&trailer_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if trailer_writer_error != ok { os.exit(38) }
+    var trailer_writer = trailer_writer0
+    let (_, trailer_write_error) = zlib.write(&trailer_writer, "trailer")
+    if trailer_write_error != ok || zlib.finish(&trailer_writer) != SinkFailed || trailer_sink.writes != 3usize { os.exit(39) }
+    let trailer_off = trailer_sink.off
+    let (after_trailer_count, after_trailer_error) = zlib.write(&trailer_writer, "retry")
+    if after_trailer_count != 0usize || after_trailer_error != zlib.Invalid || zlib.finish(&trailer_writer) != zlib.Invalid || trailer_sink.off != trailer_off { os.exit(40) }
+
+    // A failed final flush is equally terminal and cannot turn into a later ok.
+    var flush_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 0usize, fail_flush: true }
+    let (flush_storage, flush_storage_error) = aligned(a, needed)
+    if flush_storage_error != ok { os.exit(41) }
+    let (flush_writer0, flush_writer_error) = zlib.writer(flush_storage, io.Writer { ctx: mem.cast[*void](&flush_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if flush_writer_error != ok { os.exit(42) }
+    var flush_writer = flush_writer0
+    let (_, flush_write_error) = zlib.write(&flush_writer, "flush")
+    if flush_write_error != ok || zlib.finish(&flush_writer) != SinkFailed { os.exit(43) }
+    let flush_off = flush_sink.off
+    let (after_flush_count, after_flush_error) = zlib.write(&flush_writer, "retry")
+    if after_flush_count != 0usize || after_flush_error != zlib.Invalid || zlib.finish(&flush_writer) != zlib.Invalid || flush_sink.off != flush_off { os.exit(44) }
     ret ok
 }

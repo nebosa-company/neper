@@ -1297,20 +1297,25 @@ fn builder_done(t: *Text) -> str {
 // `pseudo_kinds` has bit k set when some rule styles pseudo-element k.
 type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, pindex: cascade.Index, author: bool, pseudo_kinds: u32 }
 
-fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet {
+fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> (Sheet, err) {
     var kinds = 0u32
     var i = 0usize
     while i < rules.len {
         if rules[i].pseudo >= 0i64 { kinds |= 1u32 << u32(rules[i].pseudo) }
         i += 1usize
     }
-    ret Sheet { rules: rules, index: cascade.build_index(a, rules, false), pindex: cascade.build_index(a, rules, true), author: author, pseudo_kinds: kinds }
+    let (index, index_error) = cascade.build_index(a, rules, false)
+    if index_error != ok { ret (zero, index_error) }
+    let (pindex, pindex_error) = cascade.build_index(a, rules, true)
+    if pindex_error != ok { ret (zero, pindex_error) }
+    ret (Sheet { rules: rules, index: index, pindex: pindex, author: author, pseudo_kinds: kinds }, ok)
 }
 
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) {
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) -> err {
     var which = &rs.index
     if want >= 0i64 { which = &rs.pindex }
-    let visit = cascade.candidates(m, which, el)
+    let (visit, candidate_error) = cascade.candidates(m, which, el)
+    if candidate_error != ok { ret candidate_error }
     var v = 0usize
     while v < visit.len {
         let rule = rs.rules[visit[v]]
@@ -1329,9 +1334,11 @@ fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const 
         var d = 0usize
         while d < rule.declarations.len {
             let pushed = list.push[cascade.Declared](out, cascade.Declared { declaration: rule.declarations[d], author: rs.author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
+            if pushed != ok { ret pushed }
             d += 1usize
         }
     }
+    ret ok
 }
 
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared) {
@@ -1393,8 +1400,48 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
     ret list.slice_const[cascade.Declared](&best)
 }
 
+// The computed custom-property map for this element. Custom properties do not
+// undergo shorthand or logical-property expansion, so their cascade can be
+// resolved before that expansion needs direction or writing-mode.
+fn resolved_customs(a: *mem.Arena, declared: []const cascade.Declared, inherited: []const Custom) -> ([]const Custom, err) {
+    var i = 0usize
+    while i < declared.len {
+        if str.starts_with(declared[i].declaration.property, "--") { break }
+        i += 1usize
+    }
+    if i == declared.len { ret (inherited, ok) }
+    let (made, made_error) = list.init[cascade.Declared](a, declared.len + 1usize)
+    if made_error != ok { ret (inherited, made_error) }
+    var best = made
+    i = 0usize
+    while i < declared.len {
+        if str.starts_with(declared[i].declaration.property, "--") { consider(&best, declared[i]) }
+        i += 1usize
+    }
+    let (cmade, cerror) = list.init[Custom](a, inherited.len + best.len)
+    if cerror != ok { ret (inherited, cerror) }
+    var customs = cmade
+    i = 0usize
+    while i < inherited.len {
+        let pushed = list.push[Custom](&customs, inherited[i])
+        if pushed != ok { ret (inherited, pushed) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < best.len {
+        let prop = best.items[i].declaration.property
+        let (value, good) = substitute(a, cv.trim_ws(best.items[i].declaration.value), list.slice_const[Custom](&customs), 0usize)
+        if good {
+            let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
+            if pushed != ok { ret (inherited, pushed) }
+        }
+        i += 1usize
+    }
+    ret (list.slice_const[Custom](&customs), ok)
+}
+
 // The writing mode (0 horizontal, 1 vertical-rl, 2 vertical-lr) this element's logical properties resolve against.
-fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Style) -> u8 {
+fn declared_writing_mode(a: *mem.Arena, declared: []const cascade.Declared, parent: *const Style, customs: []const Custom) -> u8 {
     var wm = 0u8
     if parent.writing_mode == .VerticalRl || parent.writing_mode == .SidewaysRl { wm = 1u8 }
     if parent.writing_mode == .VerticalLr || parent.writing_mode == .SidewaysLr { wm = 2u8 }
@@ -1411,13 +1458,15 @@ fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Styl
         i += 1usize
     }
     if have {
-        let v = cv.trim_ws(winner.declaration.value)
+        let (value, good) = substitute(a, winner.declaration.value, customs, 0usize)
+        if !good { ret wm }
+        let v = cv.trim_ws(value)
         if str.eq(v, "vertical-rl") || str.eq(v, "sideways-rl") { wm = 1u8 } else if str.eq(v, "vertical-lr") || str.eq(v, "sideways-lr") { wm = 2u8 } else if str.eq(v, "horizontal-tb") { wm = 0u8 }
     }
     ret wm
 }
 
-fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool {
+fn declared_direction(a: *mem.Arena, declared: []const cascade.Declared, fallback: bool, customs: []const Custom) -> bool {
     var winner: cascade.Declared = zero
     var have = false
     var i = 0usize
@@ -1431,7 +1480,9 @@ fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> boo
         i += 1usize
     }
     if !have { ret fallback }
-    let v = cv.trim_ws(winner.declaration.value)
+    let (value, good) = substitute(a, winner.declaration.value, customs, 0usize)
+    if !good { ret fallback }
+    let v = cv.trim_ws(value)
     if str.eq(v, "rtl") { ret true }
     if str.eq(v, "ltr") { ret false }
     ret fallback
@@ -1483,60 +1534,37 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     if made_error != ok { ret (initial_style(), false, made_error) }
     var declared = made
     var hints: []const cascade.Declaration = zero
-    if want < 0i64 { hints = cascade.presentational_hints(m, el) }
+    if want < 0i64 {
+        let (made_hints, hints_error) = cascade.presentational_hints(m, el)
+        if hints_error != ok { ret (initial_style(), false, hints_error) }
+        hints = made_hints
+    }
     var h = 0usize
     while h < hints.len {
         let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
+        if pushed != ok { ret (initial_style(), false, pushed) }
         h += 1usize
     }
-    gather(m, &declared, ua, el, stack, want)
-    gather(m, &declared, author, el, stack, want)
+    try gather(m, &declared, ua, el, stack, want)
+    try gather(m, &declared, author, el, stack, want)
     let (style_text, has_style) = html.attribute(&m.doc.nodes[usize(el)], "style")
     if has_style && want < 0i64 {
-        let inline = cascade.inline_declarations(a, style_text)
+        let (inline, inline_error) = cascade.inline_declarations(a, style_text)
+        if inline_error != ok { ret (initial_style(), false, inline_error) }
         var k = 0usize
         while k < inline.len {
             let pushed = list.push[cascade.Declared](&declared, cascade.Declared { declaration: inline[k], author: true, hint: false, specificity: cascade.INLINE_SPECIFICITY, source: i64(k), has_layer: false, layer: 0i64, proximity: cascade.UNSCOPED })
+            if pushed != ok { ret (initial_style(), false, pushed) }
             k += 1usize
         }
     }
     let all = list.slice_const[cascade.Declared](&declared)
     if want >= 0i64 && all.len == 0usize { ret (initial_style(), false, ok) }
-    let rtl = declared_direction(all, parent.direction == .Rtl)
-    expand.set_logical_wm(declared_writing_mode(all, parent))
+    let (custom_all, custom_error) = resolved_customs(a, all, parent.custom)
+    if custom_error != ok { ret (initial_style(), false, custom_error) }
+    let rtl = declared_direction(a, all, parent.direction == .Rtl, custom_all)
+    expand.set_logical_wm(declared_writing_mode(a, all, parent, custom_all))
     let winners = rank_expanded(a, all, rtl)
-
-    // Custom properties: the parent's, overridden by this element's, each with its own var() resolved. An element that sets
-    // none shares its parent's list (copying it per element is what made custom-property-heavy sites cost gigabytes).
-    var sets_custom = false
-    var w = 0usize
-    while w < winners.len {
-        if str.starts_with(winners[w].declaration.property, "--") { sets_custom = true }
-        w += 1usize
-    }
-    var custom_all = parent.custom
-    if sets_custom {
-        let (cmade, cerror) = list.init[Custom](a, parent.custom.len + 8usize)
-        if cerror != ok { ret (initial_style(), false, cerror) }
-        var customs = cmade
-        var pc = 0usize
-        while pc < parent.custom.len {
-            let pushed = list.push[Custom](&customs, parent.custom[pc])
-            pc += 1usize
-        }
-        w = 0usize
-        while w < winners.len {
-            let prop = winners[w].declaration.property
-            if str.starts_with(prop, "--") {
-                let (value, good) = substitute(a, cv.trim_ws(winners[w].declaration.value), list.slice_const[Custom](&customs), 0usize)
-                if good {
-                    let pushed = list.push[Custom](&customs, Custom { name: prop, value: value })
-                }
-            }
-            w += 1usize
-        }
-        custom_all = list.slice_const[Custom](&customs)
-    }
 
     var s = inherit_from(parent)
     s.custom = custom_all
@@ -1659,8 +1687,10 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
     }
     let doc = dom.view(d)
     let m = cssm.new_matcher(c.a, &doc, cssm.no_state())
-    let ua_sheet = new_sheet(c.a, ua, false)
-    let author_sheet = new_sheet(c.a, author, true)
+    let (ua_sheet, ua_error) = new_sheet(c.a, ua, false)
+    if ua_error != ok { ret ua_error }
+    let (author_sheet, author_error) = new_sheet(c.a, author, true)
+    if author_error != ok { ret author_error }
     let root_style = initial_style()
     try compute_below(c, &m, d, &ua_sheet, &author_sheet, d.root, &root_style, out)
     // The principal writing mode of the page comes from `<body>` when the root has one.

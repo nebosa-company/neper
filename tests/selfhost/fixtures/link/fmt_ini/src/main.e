@@ -8,6 +8,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 use e.fmt.ini
 
 error Failed
@@ -16,6 +17,9 @@ error Failed
 // handles, and one that only an unsigned parser reaches.
 type Settings = struct { port: u16, retries: i64, host: str, ratio: f64, verbose: bool }
 type Wide = struct { big: u64 }
+type Narrow = struct { small: u8 }
+type Unsigned = struct { value: u32 }
+type NarrowFloat = struct { ratio: f32 }
 
 // A module-scope `const` of type `str` does not type check (D134), so the sample is a call.
 fn sample() -> str {
@@ -49,6 +53,13 @@ fn expect_get(document: *const ini.Document, section: str, key: str, value: str)
 fn write_document(file: *os.File, document: *const ini.Document) -> err {
     var file_out = io.file_writer(file)
     ret ini.write(&file_out, document)
+}
+
+fn write_is_invalid(document: *const ini.Document) -> bool {
+    var buffer: [128]u8 = zero
+    var state = io.SliceWriter { data: buffer[..], off: 0usize }
+    var writer = io.slice_writer(&state)
+    ret ini.write(&writer, document) == ini.Invalid
 }
 
 fn main(a: *mem.Arena) -> err {
@@ -85,6 +96,17 @@ fn main(a: *mem.Arena) -> err {
     if expect_entry(&stream_reader, "paths", "escaped", "a\tb\nc") != ok { os.exit(21i32) }
     if expect_entry(&stream_reader, "paths", "bare", "value with ; inside") != ok { os.exit(22i32) }
     if expect_end(&stream_reader) != ok { os.exit(23i32) }
+
+    // The last line may arrive with End and without a line ending.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "[final]\nkey=value", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_stream, final_stream_error) = ini.reader(a, final_source, strict)
+    if final_stream_error != ok { ret final_stream_error }
+    var final_reader = final_stream
+    if expect_entry(&final_reader, "final", "key", "value") != ok { os.exit(77i32) }
+    if expect_end(&final_reader) != ok { os.exit(78i32) }
 
     // --- Folding. A `zero` Options is case-insensitive, and that is done to the stored name
     // rather than to the comparison: `get` is exact either way, and the folded document is what
@@ -193,6 +215,29 @@ fn main(a: *mem.Arena) -> err {
     if expect_get(&edge_back, "e", "empty", "") != ok { os.exit(48i32) }
     if expect_get(&edge_back, "e", "spaces", "  ") != ok { os.exit(49i32) }
 
+    // Names become syntax when written, so they cannot contain a new line or
+    // delimiters that would create another section/key. Root entries also must
+    // come before named sections to retain their section on a round trip.
+    var rejected_entries: [2]ini.Entry = zero
+    var rejected: ini.Document = zero
+    rejected.entries = rejected_entries[0usize..1usize]
+    rejected_entries[0usize] = ini.Entry { section: "a]\n[evil", key: "k", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(100i32) }
+    rejected_entries[0usize] = ini.Entry { section: "safe", key: "x\ny", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(101i32) }
+    rejected_entries[0usize] = ini.Entry { section: "safe", key: "x=y", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(102i32) }
+    rejected_entries[0usize] = ini.Entry { section: "safe", key: ";x", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(103i32) }
+    rejected_entries[0usize] = ini.Entry { section: "safe", key: "#x", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(104i32) }
+    rejected_entries[0usize] = ini.Entry { section: "safe", key: "[x", value: "v" }
+    if !write_is_invalid(&rejected) { os.exit(105i32) }
+    rejected.entries = rejected_entries[..]
+    rejected_entries[0usize] = ini.Entry { section: "named", key: "a", value: "1" }
+    rejected_entries[1usize] = ini.Entry { section: "", key: "root", value: "2" }
+    if !write_is_invalid(&rejected) { os.exit(106i32) }
+
     // --- The typed codec. A struct is a flat document: one key per field, in the empty section,
     // named as the field is. The walk is unrolled and each arm is chosen by the field's kind, so
     // the arm that reads an integer never has to be valid for the field that holds a `str`.
@@ -236,6 +281,12 @@ fn main(a: *mem.Arena) -> err {
     if bad_number != ini.Invalid { os.exit(70i32) }
     let (_, bad_bool) = ini.decode[Settings](a, "verbose=yes\n", strict)
     if bad_bool != ini.Invalid { os.exit(71i32) }
+    let (_, narrow_error) = ini.decode[Narrow](a, "small=256\n", strict)
+    if narrow_error != ini.Invalid { os.exit(75i32) }
+    let (_, negative_unsigned_error) = ini.decode[Unsigned](a, "value=-1\n", strict)
+    if negative_unsigned_error != ini.Invalid { os.exit(107i32) }
+    let (_, narrow_float_error) = ini.decode[NarrowFloat](a, "ratio=1e300\n", strict)
+    if narrow_float_error != ini.Invalid { os.exit(76i32) }
 
     // A quoted value reaches the field with its quoting undone, and a value that needs quoting
     // gets it on the way out.

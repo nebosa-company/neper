@@ -40,6 +40,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if succinct.rank(&v, 200usize) != ones || succinct.select(&v, ones) != 200usize || succinct.select0(&v, zeros) != 200usize { os.exit(1i32) }
     let (_, small_error) = succinct.bit_vector(bits[..], 200usize, counts[..3usize])
     if small_error != succinct.TooSmall { os.exit(1i32) }
+    var overflow_counts: [1]u32 = zero
+    let max_usize = 0usize -% 1usize
+    let (_, overflow_error) = succinct.bit_vector(bits[0usize..0usize], max_usize, overflow_counts[..])
+    if overflow_error != succinct.TooSmall { os.exit(1i32) }
+    // Padding in the final storage word is not part of the logical vector.
+    var padded_bits: [1]u64 = zero
+    var padded_counts: [2]u32 = zero
+    padded_bits[0usize] = 18446744073709551615u64
+    let (padded, padded_error) = succinct.bit_vector(padded_bits[..], 1usize, padded_counts[..])
+    if padded_error != ok || succinct.rank(&padded, 1usize) != 1usize { os.exit(1i32) }
+    if succinct.select(&padded, 0usize) != 0usize || succinct.select(&padded, 1usize) != 1usize || succinct.select(&padded, 2usize) != 1usize { os.exit(1i32) }
+    if succinct.select0(&padded, 0usize) != 1usize { os.exit(1i32) }
 
     // 2: LOUDS of a tree: 0 -> {1, 2, 3}, 1 -> {4, 5}, 3 -> {6}, 6 -> {7}.
     var first_child: [8]u32 = zero
@@ -86,6 +98,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if succinct.bp_subtree_size(&bp, 0usize) != 8usize || succinct.bp_subtree_size(&bp, 1usize) != 3usize || succinct.bp_subtree_size(&bp, 9usize) != 3usize || succinct.bp_subtree_size(&bp, 7usize) != 1usize { os.exit(3i32) }
     if succinct.bp_enclose(&bp, 0usize) != 16usize || succinct.bp_enclose(&bp, 4usize) != 1usize || succinct.bp_enclose(&bp, 11usize) != 10usize || succinct.bp_enclose(&bp, 9usize) != 0usize { os.exit(3i32) }
     if succinct.bp_preorder(&bp, 11usize) != 7usize { os.exit(3i32) }
+
+    // Malformed adjacency IDs must be reported, not used to index caller storage.
+    var malformed_first: [3]u32 = zero
+    var malformed_next: [3]u32 = zero
+    var malformed_bits: [1]u64 = zero
+    var malformed_counts: [2]u32 = zero
+    var malformed_queue: [3]u32 = zero
+    var malformed_order: [3]usize = zero
+    i = 0usize
+    while i < 3usize {
+        malformed_first[i] = succinct.NONE
+        malformed_next[i] = succinct.NONE
+        i += 1usize
+    }
+    malformed_first[0usize] = 3u32
+    let (_, bad_louds_child) = succinct.louds_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_louds_child != succinct.Invalid { os.exit(3i32) }
+    let (_, bad_bp_child) = succinct.bp_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_bp_child != succinct.Invalid { os.exit(3i32) }
+    malformed_first[0usize] = 1u32
+    malformed_next[1usize] = 3u32
+    let (_, bad_louds_sibling) = succinct.louds_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_louds_sibling != succinct.Invalid { os.exit(3i32) }
+    let (_, bad_bp_sibling) = succinct.bp_encode(malformed_first[..], malformed_next[..], 3usize, 0usize, malformed_bits[..], malformed_counts[..], malformed_queue[..], malformed_order[..])
+    if bad_bp_sibling != succinct.Invalid { os.exit(3i32) }
 
     // 4: wavelet matrix over the text.
     let text = "mississippi_banana_mississippi\x00"

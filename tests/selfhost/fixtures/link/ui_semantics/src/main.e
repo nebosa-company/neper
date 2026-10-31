@@ -99,7 +99,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (hidden_inner, hidden_inner_error) = mem.alloc[widget.Node](a, 1usize)
     if hidden_inner_error != ok { os.exit(8i32) }
     hidden_inner[0usize] = widget.box(7u64, sized(20.0, 10.0), zero)
-    let (children, children_error) = mem.alloc[widget.Node](a, 5usize)
+    let (left_branch, left_branch_error) = mem.alloc[widget.Node](a, 1usize)
+    if left_branch_error != ok { os.exit(8i32) }
+    left_branch[0usize] = widget.box(9u64, sized(20.0, 10.0), zero)
+    let (right_branch, right_branch_error) = mem.alloc[widget.Node](a, 1usize)
+    if right_branch_error != ok { os.exit(8i32) }
+    right_branch[0usize] = widget.box(9u64, sized(20.0, 10.0), zero)
+    let (children, children_error) = mem.alloc[widget.Node](a, 7usize)
     if children_error != ok { os.exit(9i32) }
     var described: widget.Semantics = zero
     described.role = 18u8
@@ -108,6 +114,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     described.actions = accessibility.ACTION_SELECT
     described.on_action = widget.Change[u32] { ctx: ctx, invoke: on_action }
     described.labelled_by = 5u64
+    described.described_by = 9u64
     described.controls = 4u64
     described.live = 1u8
     described.row = 2u32
@@ -126,10 +133,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     flagged.hint = "bad"
     flagged.value = "v"
     children[4usize] = widget.semantics(8u64, flagged, sized(20.0, 10.0), zero)
+    children[5usize] = widget.stack(10u64, style.defaults(), left_branch[0usize..1usize])
+    children[6usize] = widget.stack(11u64, style.defaults(), right_branch[0usize..1usize])
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 100.0 }
-    let root = widget.flex(1u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, children[0usize..5usize])
+    let root = widget.flex(1u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, children[0usize..7usize])
     let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
     if storage_error != ok { os.exit(10i32) }
     var frame = mem.arena_from(frame_storage)
@@ -145,13 +154,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (flagged_id, _) = widget.find_by_key(state, 8u64)
     let (tree, tree_error) = accessibility.build(a, &runtime)
     if tree_error != ok { os.exit(12i32) }
-    // Six nodes: the hidden subtree is not among them, nor among the root's children.
-    if tree.nodes.len != 6usize { os.exit(13i32) }
+    // Ten nodes: the hidden subtree is not among them, nor among the root's children.
+    if tree.nodes.len != 10usize { os.exit(13i32) }
     let (_, hidden_present) = node_of(&tree, hidden_id)
     let (_, inner_hidden_present) = node_of(&tree, inner_hidden_id)
     if hidden_present || inner_hidden_present { os.exit(14i32) }
     let (root_node, has_root_node) = node_of(&tree, tree.root)
-    if !has_root_node || root_node.children.len != 4usize { os.exit(15i32) }
+    if !has_root_node || root_node.children.len != 6usize { os.exit(15i32) }
     // The switch says everything the semantics carried.
     let (switch_node, has_switch) = node_of(&tree, switch_id)
     if !has_switch || switch_node.role != .Switch || !same(switch_node.label, "Dark") { os.exit(16i32) }
@@ -159,7 +168,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if switch_node.live != .Polite || switch_node.level != 2u8 { os.exit(18i32) }
     if switch_node.position.row != 2u32 || switch_node.position.column != 3u32 || switch_node.position.row_count != 4u32 || switch_node.position.column_count != 5u32 { os.exit(19i32) }
     if switch_node.relations.labelled_by.slot != text_id.slot || switch_node.relations.labelled_by.generation != text_id.generation { os.exit(20i32) }
-    if switch_node.relations.controls.slot != edit_id.slot || switch_node.relations.described_by.generation != 0u32 { os.exit(21i32) }
+    if switch_node.relations.controls.slot != edit_id.slot || switch_node.relations.described_by.slot != 0u32 || switch_node.relations.described_by.generation != 0u32 { os.exit(21i32) }
     if !has_action(&switch_node, .Select) || !has_action(&switch_node, .Focus) || has_action(&switch_node, .Expand) { os.exit(22i32) }
     // The editor is a text field with its value, selection and the two operations.
     let (edit_node, has_edit) = node_of(&tree, edit_id)

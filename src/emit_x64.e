@@ -218,6 +218,19 @@ fn shift_register(buffer: *Buffer, destination: usize, left: bool, signed: bool)
     ret modrm(buffer, extension, destination)
 }
 
+// `shl r64, imm8` / `shr r64, imm8`, which the narrow-float sequences use because they
+// have no cl to spend.
+fn shift_immediate(buffer: *Buffer, destination: usize, left: bool, count: usize) -> err {
+    try check_register(destination)
+    if count >= 64usize { ret InvalidByte }
+    var extension = 5usize
+    if left { extension = 4usize }
+    try rex(buffer, extension, destination)
+    try byte(buffer, 193usize)
+    try modrm(buffer, extension, destination)
+    ret byte(buffer, count)
+}
+
 fn compare_register(buffer: *Buffer, left: usize, right: usize) -> err {
     ret binary_register(buffer, 57usize, left, right)
 }

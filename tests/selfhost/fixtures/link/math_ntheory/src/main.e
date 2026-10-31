@@ -16,10 +16,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ntheory.gcd(462u64, 1071u64) != 21u64 || ntheory.lcm(462u64, 1071u64) != 23562u64 { os.exit(1i32) }
     if ntheory.gcd(0u64, 9u64) != 9u64 || ntheory.gcd(0u64, 0u64) != 0u64 || ntheory.lcm(0u64, 5u64) != 0u64 { os.exit(1i32) }
     if ntheory.gcd(18446744073709551615u64, 18446744073709551557u64) != 1u64 { os.exit(1i32) }
-    let (g, x, y) = ntheory.extended_gcd(240i64, 46i64)
-    if g != 2i64 || 240i64 * x + 46i64 * y != 2i64 { os.exit(1i32) }
-    let (g2, x2, y2) = ntheory.extended_gcd(0i64 - 25i64, 15i64)
-    if g2 != 5i64 || 0i64 - 25i64 * x2 + 15i64 * y2 != 5i64 { os.exit(1i32) }
+    let (g, x, y, gcd_error) = ntheory.extended_gcd(240i64, 46i64)
+    if gcd_error != ok || g != 2i64 || 240i64 * x + 46i64 * y != 2i64 { os.exit(1i32) }
+    let (g2, x2, y2, gcd_error2) = ntheory.extended_gcd(0i64 - 25i64, 15i64)
+    if gcd_error2 != ok || g2 != 5i64 || 0i64 - 25i64 * x2 + 15i64 * y2 != 5i64 { os.exit(1i32) }
+    let lowest = mem.bitcast[i64](9223372036854775808u64)
+    let (_, _, _, lowest_zero_error) = ntheory.extended_gcd(lowest, 0i64)
+    let (_, _, _, zero_lowest_error) = ntheory.extended_gcd(0i64, lowest)
+    if lowest_zero_error != ntheory.Unrepresentable || zero_lowest_error != ntheory.Unrepresentable { os.exit(1i32) }
+    let (lowest_one_g, lowest_one_x, lowest_one_y, lowest_one_error) = ntheory.extended_gcd(lowest, 0i64 - 1i64)
+    if lowest_one_error != ok || lowest_one_g != 1i64 || lowest_one_x != 0i64 || lowest_one_y != 0i64 - 1i64 { os.exit(1i32) }
+    let (one_lowest_g, one_lowest_x, one_lowest_y, one_lowest_error) = ntheory.extended_gcd(0i64 - 1i64, lowest)
+    if one_lowest_error != ok || one_lowest_g != 1i64 || one_lowest_x != 0i64 - 1i64 || one_lowest_y != 0i64 { os.exit(1i32) }
 
     // 2: modular arithmetic without overflow.
     let big = 18446744073709551557u64
@@ -192,6 +200,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if terms[20usize] != 1u64 || terms[21usize] != 1u64 { os.exit(10i32) }
     let (e, f) = ntheory.farey_next(0u64, 1u64, 1u64, 5u64, 5u64)
     if e != 1u64 || f != 4u64 { os.exit(10i32) }
+    let (wide_e, wide_f) = ntheory.farey_next(0u64, 1u64, 1u64, 18446744073709551615u64, 18446744073709551615u64)
+    if wide_e != 1u64 || wide_f != 18446744073709551614u64 { os.exit(10i32) }
+    let (product_e, product_f) = ntheory.farey_next(9223372036854775807u64, 9223372036854775808u64, 9223372036854775808u64, 9223372036854775809u64, 18446744073709551615u64)
+    if product_e != 9223372036854775809u64 || product_f != 9223372036854775810u64 { os.exit(10i32) }
     let (_, farey_room) = ntheory.farey(5u64, terms[..8usize])
     if farey_room != ntheory.TooSmall { os.exit(10i32) }
 

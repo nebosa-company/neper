@@ -68,7 +68,10 @@ fn tick(t: *Timer, step: fixed.Fx) -> bool {
     if t.remaining <= 0i32 { ret false }
     t.remaining = t.remaining - step
     if t.remaining > 0i32 { ret false }
-    if t.repeating { t.remaining = t.remaining + t.period }
+    if t.repeating {
+        let overshoot = 0i32 - t.remaining
+        t.remaining = t.period - overshoot % t.period
+    }
     ret true
 }
 

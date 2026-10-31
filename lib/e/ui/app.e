@@ -28,7 +28,15 @@ use e.ui.window
 
 type App = struct { state: *void }
 type Builder[Ctx: type] = struct { ctx: *Ctx, build: fn(*Ctx, *widget.BuildContext) -> (widget.Node, err) }
-type Options = struct { window: window.Options, widget_limits: widget.Limits, frame_arena_bytes: usize, event_capacity: usize, backend: gpu.Backend }
+type Options = struct {
+    window: window.Options,
+    widget_limits: widget.Limits,
+    frame_arena_bytes: usize,
+    // Raw host records that may wait for this App while another App is polling.
+    // A full queue applies shared-stream backpressure until this App steps.
+    event_capacity: usize,
+    backend: gpu.Backend,
+}
 error Closed
 error Failed
 
@@ -90,12 +98,14 @@ fn init[Ctx: type](a: *mem.Arena, options: Options, builder: Builder[Ctx]) -> (A
     let (runtime, runtime_error) = widget.runtime(a, &states[0usize].renderer, options.widget_limits)
     if runtime_error != ok { ret (zero, Failed) }
     s.runtime = runtime
-    let (events, events_error) = input.queue(a, options.event_capacity)
-    if events_error != ok { ret (zero, Failed) }
-    s.events = events
     let (frame_storage, storage_error) = mem.alloc[u8](a, options.frame_arena_bytes)
     if storage_error != ok { ret (zero, Failed) }
     s.frame_storage = frame_storage
+    // Bind input after the remaining fallible allocation: a failed init must not
+    // leave an uncloseable owner registered in the process-wide event router.
+    let (events, events_error) = input.queue_for(a, opened.id, options.event_capacity)
+    if events_error != ok { ret (zero, Failed) }
+    s.events = events
     s.ctx = mem.cast[*void](builder.ctx)
     var pun: Pun[Ctx] = zero
     pun.typed = builder.build
@@ -120,7 +130,7 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
     var remaining = timeout
     var drained = 0usize
     while drained < 256usize {
-        let (event, any, poll_error) = input.poll(&s.events, remaining)
+        let (event, any, poll_error) = input.poll_for(&s.events, s.win.id, remaining)
         if poll_error != ok { ret (false, Failed) }
         if !any { break }
         remaining = time.Duration { nanos: 0i64 }
@@ -194,6 +204,9 @@ fn present_frame(s: *State) -> err {
     if canvas_error != ok { ret Failed }
     let render_error = scene.render_scaled(&s.renderer, compiled, canvas, metrics.logical_size, metrics.scale)
     if render_error != ok { ret render_error }
+    // (D5905) A presenter uploads only what the renderer changed.
+    let (x0, y0, x1, y1) = scene.changed_box(&s.renderer)
+    if window.report_changed(&s.win, window.Changed { x0: u32(x0), y0: u32(y0), x1: u32(x1), y1: u32(y1) }) != ok { ret Failed }
     if window.request_frame(&s.win) != ok { ret Failed }
     s.frames += 1u64
     s.frame_due = widget.animation_frame_requested(&s.runtime)
@@ -219,6 +232,7 @@ fn stop(app: *App) {
 fn close(app: *App) -> err {
     let (s, state_error) = state_of(app)
     if state_error != ok { ret state_error }
+    input.forget(s.win.id)
     let events_closed = input.close(&s.events)
     let runtime_closed = widget.close(&s.runtime)
     let renderer_closed = scene.close(&s.renderer)

@@ -91,6 +91,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, e11) = ae.merkle_sync(&tc, &tb, buckets[..])
     if e11 != ae.Invalid { os.exit(4i32) }
 
+    // 5: the final bucket includes the upper end of u64 without overflowing
+    // its exclusive bound; impossible caller-supplied bucket ranges reject.
+    var edge_a: [2]ae.Entry = zero
+    edge_a[0usize] = ae.Entry { key: 9223372036854775808u64, version: 1u64 }
+    edge_a[1usize] = ae.Entry { key: 18446744073709551615u64, version: 1u64 }
+    var edge_b: [2]ae.Entry = zero
+    edge_b[0usize] = ae.Entry { key: 9223372036854775808u64, version: 2u64 }
+    edge_b[1usize] = ae.Entry { key: 18446744073709551615u64, version: 2u64 }
+    var edge_ha: [4]u64 = zero
+    var edge_hb: [4]u64 = zero
+    let (edge_ta, edge_a_error) = ae.merkle_build(edge_a[..], 9223372036854775808u64, edge_ha[..])
+    let (edge_tb, edge_b_error) = ae.merkle_build(edge_b[..], 9223372036854775808u64, edge_hb[..])
+    if edge_a_error != ok || edge_b_error != ok { os.exit(5i32) }
+    var edge_buckets: [2]usize = zero
+    let (edge_bucket_count, _, edge_sync_error) = ae.merkle_sync(&edge_ta, &edge_tb, edge_buckets[..])
+    if edge_sync_error != ok || edge_bucket_count != 1usize || edge_buckets[0usize] != 1usize { os.exit(5i32) }
+    var edge_keys: [2]u64 = zero
+    let (edge_key_count, edge_diff_error) = ae.merkle_diff_keys(edge_a[..], edge_b[..], 9223372036854775808u64, edge_buckets[..edge_bucket_count], edge_keys[..])
+    if edge_diff_error != ok || edge_key_count != 2usize || edge_keys[0usize] != 9223372036854775808u64 || edge_keys[1usize] != 18446744073709551615u64 { os.exit(5i32) }
+    var impossible_bucket: [1]usize = zero
+    impossible_bucket[0usize] = 2usize
+    let (impossible_count, impossible_error) = ae.merkle_diff_keys(edge_a[..], edge_b[..], 9223372036854775808u64, impossible_bucket[..], edge_keys[..])
+    if impossible_error != ae.Invalid || impossible_count != 0usize { os.exit(5i32) }
+
     try io.print("dist anti_entropy ok\n")
     ret ok
 }

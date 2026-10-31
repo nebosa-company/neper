@@ -143,6 +143,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if body_error != ok || !same(body, "abcd") { os.exit(6i32) }
     let (body2, body2_error) = dns.doh_response_body("HTTP/1.1 200 OK\r\n\r\nxyz")
     if body2_error != ok || !same(body2, "xyz") { os.exit(6i32) }
+    let (_, chunked) = dns.doh_response_body("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nabcd\r\n0\r\n\r\n")
+    if chunked != dns.Unsupported { os.exit(6i32) }
     let (_, not_found) = dns.doh_response_body("HTTP/1.1 404 Not Found\r\n\r\n")
     if not_found != dns.Invalid { os.exit(6i32) }
     let (_, truncated) = dns.doh_response_body("HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nabcd")

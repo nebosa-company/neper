@@ -3,7 +3,9 @@
 use e.mem
 use e.os
 use e.str
+use e.fmt.css.style as css_style
 use e.web.csp as csp
+use e.web.cssom
 
 fn set_of(a: *mem.Arena, text: str) -> csp.PolicySet {
     let (s, e) = csp.parse_set(a, text, false)
@@ -54,6 +56,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let s8 = set_of(a, "script-src 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='")
     if !csp.inline_allowed(a, s8, "script-src-elem", "", "alert(1)") { os.exit(23i32) }
     if csp.inline_allowed(a, s8, "script-src-elem", "", "alert(2)") { os.exit(24i32) }
+    // sha384("alert(1)") in base64, and attribute hashes require unsafe-hashes.
+    let s8_384 = set_of(a, "script-src 'sha384-HT2E9NfWiuQ/w1PRai+hTyqW16NIoCGA/m8VQDUopfAtcz6YQjtsMmQd5uRbVDpW'")
+    if !csp.inline_allowed(a, s8_384, "script-src-elem", "", "alert(1)") || csp.inline_allowed(a, s8_384, "script-src-elem", "", "alert(2)") { os.exit(51i32) }
+    let s8_attr = set_of(a, "script-src-attr 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='")
+    if csp.inline_allowed(a, s8_attr, "script-src-attr", "", "alert(1)") { os.exit(52i32) }
+    let s8_hashes = set_of(a, "script-src-attr 'unsafe-hashes' 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='")
+    if !csp.inline_allowed(a, s8_hashes, "script-src-attr", "", "alert(1)") { os.exit(53i32) }
+    let s8_style_attr = set_of(a, "style-src-attr 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='")
+    if csp.inline_allowed(a, s8_style_attr, "style-src-attr", "", "alert(1)") { os.exit(54i32) }
+    let s8_style_hashes = set_of(a, "style-src-attr 'unsafe-hashes' 'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='")
+    if !csp.inline_allowed(a, s8_style_hashes, "style-src-attr", "", "alert(1)") { os.exit(55i32) }
     // 6. eval.
     if csp.eval_allowed(s5) { os.exit(25i32) }
     let s9 = set_of(a, "script-src 'self' 'unsafe-eval'")
@@ -75,5 +88,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 10. base-uri has no default-src fallback.
     let s13 = set_of(a, "default-src 'none'")
     if !allow(a, s13, "base-uri", "https://anything.test/") { os.exit(34i32) }
+    // CSSOM numeric serialization must preserve computed precision past three decimals.
+    var computed = css_style.initial_style()
+    computed.opacity = 0.12345f64
+    let (opacity, has_opacity) = cssom.value(a, &computed, "opacity")
+    if !has_opacity || !str.eq(opacity, "0.12345") { os.exit(56i32) }
+    computed.color = 16777216u32
+    let (alpha_color, has_color) = cssom.value(a, &computed, "color")
+    if !has_color || !str.eq(alpha_color, "rgba(0, 0, 0, 0.00392156862745098)") { os.exit(57i32) }
     ret ok
 }

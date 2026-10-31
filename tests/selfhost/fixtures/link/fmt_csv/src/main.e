@@ -7,12 +7,15 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 use e.fmt.csv
 
 error Failed
 
 // The codec maps a struct to a row, so the fixture needs one field of each kind it handles.
 type Person = struct { id: u16, name: str, score: f64, active: bool }
+type NarrowInt = struct { small: u8 }
+type NarrowFloat = struct { ratio: f32 }
 
 fn source_over(text: str) -> io.SliceReader {
     ret io.SliceReader { data: text, off: 0usize }
@@ -74,6 +77,38 @@ fn main(a: *mem.Arena) -> err {
     try expect_end(&plain_reader)
     // And it stays ended.
     try expect_end(&plain_reader)
+
+    // A source may return its final record and End together.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "last,record", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_handle, final_handle_error) = csv.reader(a, final_source, csv.csv(), 0usize, 0usize)
+    if final_handle_error != ok { ret final_handle_error }
+    var final_reader = final_handle
+    var final_expected: [2]str = zero
+    final_expected[0usize] = "last"
+    final_expected[1usize] = "record"
+    try expect_row(&final_reader, final_expected[..])
+    try expect_end(&final_reader)
+
+    // A leading UTF-8 BOM is stream metadata, not field data. The quote after it still opens
+    // the first field, even when the source splits the three BOM bytes into separate reads.
+    let bom_steps: [3]support.ReadStep = [3]support.ReadStep{
+        support.ReadStep { bytes: "\xEF", failure: ok },
+        support.ReadStep { bytes: "\xBB", failure: ok },
+        support.ReadStep { bytes: "\xBF\"first\",second\n", failure: io.End },
+    }
+    var (bom_script, bom_script_error) = support.scripted_reader(a, bom_steps[..])
+    if bom_script_error != ok { ret bom_script_error }
+    let (bom_handle, bom_handle_error) = csv.reader(a, support.reader(&bom_script), csv.csv(), 0usize, 0usize)
+    if bom_handle_error != ok { ret bom_handle_error }
+    var bom_reader = bom_handle
+    var bom_expected: [2]str = zero
+    bom_expected[0usize] = "first"
+    bom_expected[1usize] = "second"
+    try expect_row(&bom_reader, bom_expected[..])
+    try expect_end(&bom_reader)
 
     // --- A doubled quote is one quote of data; a quote that is not at the start of a field
     // is data as it stands. Both are what the field ends up holding, not how it was spelled.
@@ -143,6 +178,15 @@ fn main(a: *mem.Arena) -> err {
     var trailing_reader = trailing
     let (_, trailing_more, trailing_next) = csv.reader_next_err(&trailing_reader)
     if trailing_next != csv.Invalid { ret Failed }
+
+    // A bare CR is data in an unquoted field, but after a closing quote it would
+    // continue a quoted field and must not be accepted as one.
+    var quote_cr_state = source_over("\"a\"\rb\n")
+    let (quote_cr, quote_cr_error) = csv.reader(a, io.slice_reader(&quote_cr_state), csv.csv(), 0usize, 0usize)
+    if quote_cr_error != ok { ret quote_cr_error }
+    var quote_cr_reader = quote_cr
+    let (_, quote_cr_more, quote_cr_next) = csv.reader_next_err(&quote_cr_reader)
+    if quote_cr_next != csv.Invalid { ret Failed }
 
     // --- Both limits, each reported as `TooLarge` rather than as a truncated row.
     var wide_state = source_over("a,b,c\n")
@@ -265,6 +309,12 @@ fn main(a: *mem.Arena) -> err {
     var wrong_state = source_over("x,a,0,true\n")
     let (_, wrong_error) = csv.decode_rows[Person](a, io.slice_reader(&wrong_state), csv.csv())
     if wrong_error != csv.Invalid { os.exit(101i32) }
+    var too_wide_integer_state = source_over("256\n")
+    let (_, too_wide_integer_error) = csv.decode_rows[NarrowInt](a, io.slice_reader(&too_wide_integer_state), csv.csv())
+    if too_wide_integer_error != csv.Invalid { os.exit(102i32) }
+    var too_wide_float_state = source_over("1e300\n")
+    let (_, too_wide_float_error) = csv.decode_rows[NarrowFloat](a, io.slice_reader(&too_wide_float_state), csv.csv())
+    if too_wide_float_error != csv.Invalid { os.exit(103i32) }
 
     // --- Over a real file, where the source ends by taking nothing rather than by saying so,
     // and where a row spans more than one read of the reader's own input buffer.

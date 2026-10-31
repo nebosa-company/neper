@@ -21,6 +21,7 @@ type Verdict = enum u8 { Improved, Regressed, NoChange }
 type Comparison = struct { change_pct: f64, t: f64, significant: bool, verdict: Verdict }
 error TooFew
 error TooSmall
+error Invalid
 
 // 100 ms of warm-up, samples of about 1 ms, at most 2**32 iterations per sample, and
 // the usual 1.5 interquartile-range fence for rejection.
@@ -187,6 +188,23 @@ fn summarize(samples: []f64, fence_x10: u32) -> (Stats, err) {
     ret (s, ok)
 }
 
+// Welch-Satterthwaite degrees of freedom for the two standard errors. The
+// comparison can be called with hand-built Stats, so keep degenerate inputs
+// non-significant instead of allowing a sample-count underflow or a divide by
+// zero to manufacture a critical value.
+fn welch_df(base: Stats, current: Stats) -> usize {
+    if base.kept < 2usize || current.kept < 2usize { ret 0usize }
+    let base_variance = base.std_err * base.std_err
+    let current_variance = current.std_err * current.std_err
+    let variance = base_variance + current_variance
+    if variance <= 0.0f64 { ret 0usize }
+    let denominator = base_variance * base_variance / f64(base.kept - 1usize) + current_variance * current_variance / f64(current.kept - 1usize)
+    if denominator <= 0.0f64 { ret 0usize }
+    let df = variance * variance / denominator
+    if df < 1.0f64 { ret 1usize }
+    ret usize(df)
+}
+
 // Welch's t of the change from `base` to `current` over their kept samples, the change
 // in the mean as a percentage of the base mean, and a verdict: `Improved` or `Regressed`
 // when the t statistic exceeds the critical value and the change is larger than
@@ -204,7 +222,8 @@ fn compare(base: Stats, current: Stats, threshold_pct: f64) -> Comparison {
     if magnitude < 0.0f64 { magnitude = 0.0f64 - magnitude }
     var change = c.change_pct
     if change < 0.0f64 { change = 0.0f64 - change }
-    c.significant = magnitude > t_critical(base.kept + current.kept - 2usize)
+    let df = welch_df(base, current)
+    c.significant = df > 0usize && magnitude > t_critical(df)
     if c.significant && change > threshold_pct {
         if c.change_pct < 0.0f64 { c.verdict = .Improved } else { c.verdict = .Regressed }
     }
@@ -329,6 +348,7 @@ fn time_batch[Ctx: type](ctx: *Ctx, body: fn(*Ctx), iters: u64) -> (f64, err) {
 // Warm `body` up for the configured time while doubling the batch, then pick the
 // iteration count whose batch lasts about `target_sample_ns`.
 fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err) {
+    if cfg.max_iters == 0u64 { ret (0u64, Invalid) }
     var iters = 1u64
     var spent = 0.0f64
     var per_iter = 1.0f64
@@ -337,7 +357,9 @@ fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err) {
         if te != ok { ret (1u64, te) }
         spent += elapsed
         if elapsed > 0.0f64 { per_iter = elapsed / f64(iters) }
-        if iters < cfg.max_iters { iters = iters * 2u64 }
+        if iters < cfg.max_iters {
+            if iters > cfg.max_iters / 2u64 { iters = cfg.max_iters } else { iters = iters * 2u64 }
+        }
     }
     var wanted = f64(cfg.target_sample_ns) / per_iter
     if wanted < 1.0f64 { wanted = 1.0f64 }

@@ -75,10 +75,16 @@ jobs:
           pid=$!
           sleep ${{ inputs.shot_after }}
           screencapture -x /tmp/shot-${{ matrix.arch }}.png 2>&1 | head -2
-          wait $pid
-          echo "exit=$?"
+          wait "$pid"
+          code=$?
+          echo "exit=$code"
           echo '--- what it wrote'
           cat /tmp/probe-out.txt
+          if [ "$code" -eq 95 ] && grep -qx 'NEPER_SKIP_NO_METAL' /tmp/probe-out.txt; then
+            echo 'SKIP: no Metal device was available for this probe'
+            exit 0
+          fi
+          exit "$code"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -28,9 +28,14 @@ fn popcount(x: u64) -> usize {
     ret usize((v *% 0x0101010101010101u64) >> 56u32)
 }
 
-fn words_for(n: usize) -> usize { ret (n + 63usize) / 64usize }
+fn words_for(n: usize) -> usize {
+    let full_words = n / 64usize
+    if n % 64usize != 0usize { ret full_words + 1usize }
+    ret full_words
+}
 
 // A bit vector over `bits[..words_for(n)]` with `counts.len > words_for(n)`; the counts are computed here.
+// Any unused high bits in the final storage word are outside the logical vector.
 fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err) {
     let words = words_for(n)
     if bits.len < words || counts.len < words + 1usize { ret (zero, TooSmall) }
@@ -38,7 +43,11 @@ fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err) {
     var w = 0usize
     while w < words {
         counts[w] = total
-        total += u32(popcount(bits[w]))
+        var word = bits[w]
+        if w + 1usize == words && n % 64usize != 0usize {
+            word &= (1u64 << u32(n % 64usize)) - 1u64
+        }
+        total += u32(popcount(word))
         w += 1usize
     }
     counts[words] = total
@@ -136,6 +145,7 @@ fn louds_encode(first_child: []const u32, next_sibling: []const u32, n: usize, r
         head += 1usize
         var c = first_child[node]
         while c != NONE {
+            if usize(c) >= n { ret (zero, Invalid) }
             if tail >= n || at >= length { ret (zero, Invalid) }
             order[usize(c)] = tail
             queue[tail] = c
@@ -192,8 +202,10 @@ fn bp_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root
     var node = root
     var descending = true
     while top > 0usize {
-        if descending && first_child[node] != NONE {
-            node = usize(first_child[node])
+        let child = first_child[node]
+        if descending && child != NONE {
+            if usize(child) >= n { ret (zero, Invalid) }
+            node = usize(child)
             if visited >= n || at >= length { ret (zero, Invalid) }
             order[node] = at
             set_bit(bits, at, true)
@@ -208,19 +220,23 @@ fn bp_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root
             top -= 1usize
             if top == 0usize {
                 descending = false
-            } else if next_sibling[node] != NONE {
-                node = usize(next_sibling[node])
-                if visited >= n || at >= length { ret (zero, Invalid) }
-                order[node] = at
-                set_bit(bits, at, true)
-                at += 1usize
-                visited += 1usize
-                stack[top] = u32(node)
-                top += 1usize
-                descending = true
             } else {
-                node = usize(stack[top - 1usize])
-                descending = false
+                let sibling = next_sibling[node]
+                if sibling != NONE {
+                    if usize(sibling) >= n { ret (zero, Invalid) }
+                    node = usize(sibling)
+                    if visited >= n || at >= length { ret (zero, Invalid) }
+                    order[node] = at
+                    set_bit(bits, at, true)
+                    at += 1usize
+                    visited += 1usize
+                    stack[top] = u32(node)
+                    top += 1usize
+                    descending = true
+                } else {
+                    node = usize(stack[top - 1usize])
+                    descending = false
+                }
             }
         }
     }

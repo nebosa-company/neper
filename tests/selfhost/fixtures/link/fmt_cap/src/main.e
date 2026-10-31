@@ -89,5 +89,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if nce != cap.NotCap { os.exit(73) }
     let (br, bre) = cap.parse(a, "<alert><identifier>x</alert>")
     if bre == ok { os.exit(74) }
+    let (_, foreign_default_error) = cap.parse(a, "<alert xmlns=\"urn:example:unrelated\"><sender>forged</sender></alert>")
+    let (_, foreign_prefix_error) = cap.parse(a, "<evil:alert xmlns:evil=\"urn:example:unrelated\"><evil:sender>forged</evil:sender></evil:alert>")
+    if foreign_default_error != cap.NotCap || foreign_prefix_error != cap.NotCap { os.exit(75) }
+    let extensions = "<alert xmlns=\"urn:oasis:names:tc:emergency:cap:1.2\" xmlns:evil=\"urn:example:unrelated\"><identifier>real-id</identifier><evil:sender>forged</evil:sender><sender>trusted</sender><evil:info><evil:event>forged event</evil:event></evil:info><info><event>trusted event</event></info></alert>"
+    let (extended, extended_error) = cap.parse(a, extensions)
+    if extended_error != ok || !str.eq(extended.identifier, "real-id") || !str.eq(extended.sender, "trusted") || extended.infos.len != 1usize || !str.eq(extended.infos[0usize].event, "trusted event") { os.exit(76) }
     ret ok
 }

@@ -23,8 +23,10 @@
 // ponytail: no recursion `(?R)`, conditionals `(?(1)...)` or inline flags `(?i)`; they
 // would be new instructions over the same backtrack stack.
 //
-// Positions are byte offsets. Text is read scalar by scalar with `unicode.read_utf8`, a
-// malformed sequence standing as U+FFFD over one byte, so `.` never splits a character.
+// Positions are byte offsets at scalar boundaries. Text is read scalar by scalar with
+// `unicode.read_utf8`, a malformed sequence standing as U+FFFD over one byte, so `.`
+// never splits a character; `find`, `captures` and `pike_vm` reject a `from` inside a
+// scalar.
 // `\d \w \s \b` are ASCII, as they are in most engines; `case_insensitive` folds both
 // sides with `unicode.to_lower_simple`. `multiline` makes `^` and `$` match at a `\n`;
 // `dot_matches_newline` lets `.` take one.
@@ -1172,13 +1174,28 @@ fn bt_search(prog: *Program, text: str, from: usize) -> bool {
     ret false
 }
 
+// True when `at` is an offset reached by decoding `text` from its start. Walking with
+// `read_utf8` only for a continuation byte preserves its one-byte treatment of malformed
+// sequences without making each ordinary boundary scan the full prefix.
+fn scalar_boundary(text: str, at: usize) -> bool {
+    if at > text.len { ret false }
+    if at == 0usize || at == text.len { ret true }
+    if (text[at] & 192u8) != 128u8 { ret true }
+    var pos = 0usize
+    while pos < at {
+        let (_, width) = unicode.read_utf8(text, pos)
+        pos += width
+    }
+    ret pos == at
+}
+
 fn is_match(r: *const Regex, text: str) -> bool {
     let prog = mem.cast[*Program](r.state)
     ret run(prog, text, 0usize, true)
 }
 
 fn find(r: *const Regex, text: str, from: usize) -> (Match, bool) {
-    if from > text.len { ret (zero, false) }
+    if !scalar_boundary(text, from) { ret (zero, false) }
     let prog = mem.cast[*Program](r.state)
     if !run(prog, text, from, false) { ret (zero, false) }
     ret (Match { start: prog.result[0], end: prog.result[1] }, true)
@@ -1321,7 +1338,7 @@ fn nfa_size(n: Nfa) -> usize {
 // The leftmost match from `from`: `caps[0]` is the whole match and `caps[g]` group g
 // (`NONE` bounds for a group that took no part), as many as `caps` holds.
 fn pike_vm(n: Nfa, text: str, from: usize, caps: []Match) -> bool {
-    if from > text.len { ret false }
+    if !scalar_boundary(text, from) { ret false }
     let prog = mem.cast[*Program](n.state)
     if !run(prog, text, from, false) { ret false }
     var g = 0usize

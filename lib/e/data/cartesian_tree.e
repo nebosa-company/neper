@@ -12,9 +12,13 @@ error Invalid
 
 const NONE: u32 = 4294967295u32
 
+// `NONE` is reserved, so a tree may contain IDs 0 through `NONE - 1`.
+fn node_count_fits_ids(node_count: u64) -> bool { ret node_count <= u64(NONE) }
+
 // The Cartesian tree of `keys` into `left`, `right` and `parent`.
 fn build[T: type](keys: []const T, left: []u32, right: []u32, parent: []u32) -> (Tree, err) {
     let n = keys.len
+    if !node_count_fits_ids(u64(n)) { ret (zero, Invalid) }
     if left.len < n || right.len < n || parent.len < n { ret (zero, TooSmall) }
     // The stack is the right spine, so `top` and the parent links stand in for it.
     var top = NONE

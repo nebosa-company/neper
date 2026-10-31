@@ -58,6 +58,7 @@ fn send(out: *Pool, from: u32, to: u32, kind: Kind, step: u32) -> err {
 }
 
 fn send_all(t: *const Commit, kind: Kind, out: *Pool) -> err {
+    if t.parts.len > 64usize { ret TooSmall }
     var i = 0usize
     while i < t.parts.len {
         try send(out, u32(t.parts.len), u32(i), kind, 0u32)
@@ -66,7 +67,11 @@ fn send_all(t: *const Commit, kind: Kind, out: *Pool) -> err {
     ret ok
 }
 
-fn all_mask(t: *const Commit) -> u64 { ret (1u64 << u32(t.parts.len)) - 1u64 }
+fn all_mask(t: *const Commit) -> u64 {
+    // A full 64-bit quorum has every bit set; shifting a u64 by 64 is invalid.
+    if t.parts.len >= 64usize { ret 18446744073709551615u64 }
+    ret (1u64 << u32(t.parts.len)) - 1u64
+}
 
 // ---- 2PC / 3PC ----
 
@@ -81,6 +86,7 @@ fn three_phase(parts: []Participant, timeout: u64) -> Commit {
 
 // The coordinator opens the vote.
 fn commit_begin(t: *Commit, now: u64, out: *Pool) -> err {
+    if t.parts.len > 64usize { ret TooSmall }
     if t.state != .Init { ret Invalid }
     t.state = .Waiting
     t.deadline = now + t.timeout
@@ -94,6 +100,8 @@ fn decide(t: *Commit, state: CoordState, kind: Kind, out: *Pool) -> err {
 
 // Deliver `msg` (or a tick with `.None`) to `node`; `parts.len` is the coordinator.
 fn commit_step(t: *Commit, node: usize, now: u64, msg: *const Message, out: *Pool) -> err {
+    if t.parts.len > 64usize { ret TooSmall }
+    if node > t.parts.len { ret Invalid }
     if node == t.parts.len {
         if msg.kind == .None {
             if now < t.deadline { ret ok }
@@ -107,6 +115,7 @@ fn commit_step(t: *Commit, node: usize, now: u64, msg: *const Message, out: *Poo
         }
         if msg.kind == .VoteYes {
             if t.state != .Waiting { ret ok }
+            if usize(msg.from) >= t.parts.len { ret Invalid }
             t.yes |= 1u64 << msg.from
             if t.yes != all_mask(t) { ret ok }
             if !t.three { ret decide(t, .Committed, .Commit, out) }
@@ -116,6 +125,7 @@ fn commit_step(t: *Commit, node: usize, now: u64, msg: *const Message, out: *Poo
         }
         if msg.kind == .Ack {
             if t.state != .PreCommitting { ret ok }
+            if usize(msg.from) >= t.parts.len { ret Invalid }
             t.acks |= 1u64 << msg.from
             if t.acks == all_mask(t) { ret decide(t, .Committed, .Commit, out) }
             ret ok
@@ -161,6 +171,7 @@ fn commit_step(t: *Commit, node: usize, now: u64, msg: *const Message, out: *Poo
 
 // A participant that voted yes, heard nothing, and cannot decide.
 fn commit_blocked(t: *const Commit, node: usize, now: u64) -> bool {
+    if node >= t.parts.len { ret false }
     let p = &t.parts[node]
     ret !t.three && p.state == .Prepared && now >= p.deadline
 }
@@ -171,22 +182,34 @@ fn commit_blocked(t: *const Commit, node: usize, now: u64) -> bool {
 // for none). Choreography: each service's StepDone triggers the next
 // service, a failure walks Compensated back to service 0.
 fn saga_choreography(done: []u8, fail_at: u32) -> Saga {
+    if done.len == 0usize { ret Saga { orchestrated: false, state: .Completed, done: done, fail_at: fail_at } }
     ret Saga { orchestrated: false, state: .Running, done: done, fail_at: fail_at }
 }
 
 // Orchestration: node `steps` is the coordinator sequencing Execute and
 // Compensate.
 fn saga_orchestrate(done: []u8, fail_at: u32) -> Saga {
+    if done.len == 0usize { ret Saga { orchestrated: true, state: .Completed, done: done, fail_at: fail_at } }
     ret Saga { orchestrated: true, state: .Running, done: done, fail_at: fail_at }
 }
 
 fn saga_start(s: *Saga, out: *Pool) -> err {
+    if s.done.len == 0usize {
+        s.state = .Completed
+        ret ok
+    }
     var from = NONE
     if s.orchestrated { from = u32(s.done.len) }
     ret send(out, from, 0u32, .Execute, 0u32)
 }
 
 fn saga_step(s: *Saga, node: usize, msg: *const Message, out: *Pool) -> err {
+    if s.done.len == 0usize {
+        s.state = .Completed
+        ret Invalid
+    }
+    if !s.orchestrated && node >= s.done.len { ret Invalid }
+    if s.orchestrated && node > s.done.len { ret Invalid }
     let last = u32(s.done.len) - 1u32
     let coord = u32(s.done.len)
     if s.orchestrated && node == s.done.len {

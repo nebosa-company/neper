@@ -22,6 +22,8 @@ fn probe_key(ctx: *Probe, item: i64) -> i32 {
 
 fn hill(ctx: *Peak, x: i64) -> i64 { ret 0i64 - (x - ctx.top) * (x - ctx.top) }
 
+fn identity(ctx: *Peak, x: i64) -> i64 { ret x }
+
 // x -> (x * x + 1) mod 255: from 3 the orbit enters a cycle after a short tail.
 fn step(ctx: *Map, x: u64) -> u64 {
     ctx.steps += 1usize
@@ -110,6 +112,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !found490 || at490 != 49usize { os.exit(6i32) }
     let (at_first, found_first) = search.interpolation(sorted[..], 1i64)
     if !found_first || at_first != 0usize { os.exit(6i32) }
+    // Cross-zero spans and a numerator that exceeds signed i64 remain exact,
+    // while a wide product falls back to a safe midpoint probe.
+    var wide: [4]i64 = zero
+    wide[0usize] = 0i64 - 9000000000000000000i64
+    wide[1usize] = 0i64 - 1i64
+    wide[2usize] = 5000000000000000000i64
+    wide[3usize] = 9000000000000000000i64
+    let (wide_at, wide_found) = search.interpolation(wide[..], 5000000000000000000i64)
+    if !wide_found || wide_at != 2usize { os.exit(6i32) }
+    var overflow_product: [3]i64 = zero
+    overflow_product[0usize] = 0i64
+    overflow_product[1usize] = 5000000000000000000i64
+    overflow_product[2usize] = 9000000000000000000i64
+    let (after_at, after_found) = search.interpolation(overflow_product[..], 8999999999999999999i64)
+    if after_found || after_at != 2usize { os.exit(6i32) }
 
     // 7: ternary search finds the peak of a parabola.
     var peak = Peak { top: 17i64 }
@@ -118,6 +135,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if search.ternary_max[Peak](0i64 - 100i64, 100i64, &peak, hill) != 0i64 - 100i64 { os.exit(7i32) }
     peak.top = 3i64
     if search.ternary_max[Peak](3i64, 3i64, &peak, hill) != 3i64 { os.exit(7i32) }
+    let maximum = 9223372036854775807i64
+    let minimum = 0i64 - 9223372036854775807i64 - 1i64
+    if search.ternary_max[Peak](minimum, maximum, &peak, identity) != maximum { os.exit(7i32) }
+    if search.ternary_min_i64[Peak](minimum, maximum, &peak, identity) != minimum { os.exit(7i32) }
 
     // 8: saddleback search over a 3x4 matrix sorted along both axes.
     var matrix: [12]i64 = zero

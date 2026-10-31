@@ -2,7 +2,7 @@
 // vectors, a 2 KB LCG buffer with runs and repeats (FNV-pinned against reference.py
 // beside this fixture) round-tripped strictly smaller, an incompressible 64-byte
 // buffer and the empty input round-tripped, cramjam's frame (dependent blocks, block
-// and content checksums) decoded, our own frame round-tripped, and three refusals.
+// and content checksums) decoded, our own frame round-tripped, and five refusals.
 // Our block of the buffer is pinned by FNV: those bytes decode with cramjam.
 // Every check has its own exit code.
 use e.algo.hash as hash
@@ -23,6 +23,21 @@ fn bytes_equal(a: []const u8, b: []const u8) -> bool {
         i += 1usize
     }
     ret true
+}
+
+fn put32(dst: []u8, offset: usize, value: u32) {
+    dst[offset] = u8(value & 255u32)
+    dst[offset + 1usize] = u8((value >> 8u32) & 255u32)
+    dst[offset + 2usize] = u8((value >> 16u32) & 255u32)
+    dst[offset + 3usize] = u8((value >> 24u32) & 255u32)
+}
+
+fn frame_header(dst: []u8, flg: u8, bd: u8) -> usize {
+    put32(dst, 0usize, 407708164u32)
+    dst[4usize] = flg
+    dst[5usize] = bd
+    dst[6usize] = u8((lz4.xxh32(dst[4usize..6usize], 0u32) >> 8u32) & 255u32)
+    ret 7usize
 }
 
 fn lcg(state: *u64) -> u64 {
@@ -137,6 +152,55 @@ fn main(a: *mem.Arena, args: []str) -> err {
     corrupt[77] ^= 1u8
     let (_, e12) = lz4.decode_frame(corrupt[..], out[..])
     if e12 != lz4.Invalid { os.exit(12i32) }
+
+    // 13: independent blocks cannot use the preceding block as match history.
+    var independent: [28]u8 = zero
+    let independent_head = frame_header(independent[..], 96u8, 64u8)
+    put32(independent[..], independent_head, 2147483649u32)
+    independent[independent_head + 4usize] = 65u8
+    let independent_second = independent_head + 5usize
+    put32(independent[..], independent_second, 5u32)
+    independent[independent_second + 4usize] = 0u8
+    independent[independent_second + 5usize] = 1u8
+    independent[independent_second + 6usize] = 0u8
+    independent[independent_second + 7usize] = 16u8
+    independent[independent_second + 8usize] = 90u8
+    let independent_end = independent_second + 9usize
+    put32(independent[..], independent_end, 0u32)
+    let (_, independent_error) = lz4.decode_frame(independent[..independent_end + 4usize], out[..])
+    if independent_error != lz4.Invalid { os.exit(13i32) }
+
+    // 14: the same cross-block match remains valid when dependency is declared.
+    var dependent: [28]u8 = zero
+    let dependent_head = frame_header(dependent[..], 64u8, 64u8)
+    put32(dependent[..], dependent_head, 2147483649u32)
+    dependent[dependent_head + 4usize] = 65u8
+    let dependent_second = dependent_head + 5usize
+    put32(dependent[..], dependent_second, 5u32)
+    dependent[dependent_second + 4usize] = 0u8
+    dependent[dependent_second + 5usize] = 1u8
+    dependent[dependent_second + 6usize] = 0u8
+    dependent[dependent_second + 7usize] = 16u8
+    dependent[dependent_second + 8usize] = 90u8
+    let dependent_end = dependent_second + 9usize
+    put32(dependent[..], dependent_end, 0u32)
+    let (dependent_len, dependent_error) = lz4.decode_frame(dependent[..dependent_end + 4usize], out[..])
+    if dependent_error != ok || !bytes_equal(out[..dependent_len], "AAAAAZ") { os.exit(14i32) }
+
+    // 15: a block size word cannot exceed the frame descriptor's 64 KiB maximum.
+    let oversized_len = 65552usize
+    let (oversized, oversized_alloc) = mem.alloc[u8](a, oversized_len)
+    if oversized_alloc != ok { os.exit(15i32) }
+    let oversized_head = frame_header(oversized, 96u8, 64u8)
+    put32(oversized, oversized_head, 2147549185u32)
+    var fill = 0usize
+    while fill < 65537usize {
+        oversized[oversized_head + 4usize + fill] = 0u8
+        fill += 1usize
+    }
+    put32(oversized, oversized_head + 4usize + 65537usize, 0u32)
+    let (_, oversized_error) = lz4.decode_frame(oversized, out[..])
+    if oversized_error != lz4.Invalid { os.exit(15i32) }
 
     try io.print("fmt lz4 ok\n")
     ret ok

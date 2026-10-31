@@ -19,6 +19,7 @@
 // forms included), as bincode does.
 
 use e.mem
+use e.text.utf8
 
 type Config = struct { varint: bool, big: bool }
 type Writer = struct { dst: []u8, n: usize, cfg: Config, bad: bool }
@@ -345,6 +346,10 @@ fn get_str(r: *Reader) -> str {
     if r.bad { ret "" }
     let out = r.src[r.at..r.at + n]
     r.at += n
+    if !utf8.validate(out) {
+        r.bad = true
+        ret ""
+    }
     ret out
 }
 

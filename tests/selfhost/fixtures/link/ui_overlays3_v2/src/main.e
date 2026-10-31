@@ -260,6 +260,26 @@ fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (acce
     ret (zero, false)
 }
 
+// The three platform dialog cards bypass the generic dialog action row. A busy
+// dialog must therefore make every visible action inert, including its default.
+fn platform_busy_actions_inert(f: *mem.Arena, h: *testing.Harness, runtime: *widget.Runtime, t: *const control.Theme, s: *Store, nanos: i64) -> bool {
+    let cancel_before = s.counters[0usize].count
+    let delete_before = s.counters[1usize].count
+    let keep_before = s.counters[2usize].count
+    let (root, build_error) = build(f, t, s, .DialogBusy)
+    if build_error != ok || testing.pump(h, root, time.Instant { nanos: nanos }) != ok { ret false }
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret false }
+    let (dialog, has_dialog) = find(tree, .Dialog, "Delete build?")
+    let (cancel, has_cancel) = find(tree, .Button, "Cancel")
+    let (delete, has_delete) = find(tree, .Button, "Delete")
+    let (keep, has_keep) = find(tree, .Button, "Keep")
+    if !has_dialog || !dialog.state.busy || !has_cancel || !cancel.state.disabled || !has_delete || !delete.state.disabled || !has_keep || !keep.state.busy || !keep.state.disabled { ret false }
+    if !tap_key(h, runtime, 103u64) || !tap_key(h, runtime, 104u64) || !tap_key(h, runtime, 105u64) { ret false }
+    if testing.press_key(h, 13u32, zero) != ok || testing.press_key(h, 27u32, zero) != ok || testing.tap(h, 5.0, 5.0) != ok { ret false }
+    ret s.counters[0usize].count == cancel_before && s.counters[1usize].count == delete_before && s.counters[2usize].count == keep_before
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -350,6 +370,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_busy_dialog || !busy_dialog.state.busy || !has_busy_cancel || !busy_cancel.state.disabled || !has_busy_delete || !busy_delete.state.disabled || !has_busy_keep || !busy_keep.state.busy || busy_keep.state.disabled { os.exit(45i32) }
     if !tap_key(&harness, &runtime, 103u64) || !tap_key(&harness, &runtime, 104u64) || !tap_key(&harness, &runtime, 105u64) || testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 27u32, zero) != ok || testing.tap(&harness, 5.0, 5.0) != ok { os.exit(46i32) }
     if s.counters[0usize].count != cancel_before || s.counters[1usize].count != delete_before || s.counters[2usize].count != keep_before { os.exit(47i32) }
+    let windows_tokens = style.windows(.Light)
+    let cupertino_tokens = style.cupertino(.Light)
+    let linux_tokens = style.adwaita(.Light)
+    let windows_theme = control.Theme { tokens: &windows_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let cupertino_theme = control.Theme { tokens: &cupertino_tokens, fonts: fonts, language: "", runtime: &runtime }
+    let linux_theme = control.Theme { tokens: &linux_tokens, fonts: fonts, language: "", runtime: &runtime }
+    if !platform_busy_actions_inert(&f, &harness, &runtime, &windows_theme, s, 1060000000i64) { os.exit(108i32) }
+    if !platform_busy_actions_inert(&f, &harness, &runtime, &cupertino_theme, s, 1065000000i64) { os.exit(109i32) }
+    if !platform_busy_actions_inert(&f, &harness, &runtime, &linux_theme, s, 1070000000i64) { os.exit(110i32) }
     // A basic dialog without a Cancel button can carry one explicit close action
     // for both Escape and its scrim.
     let dismiss_before = s.counters[0usize].count

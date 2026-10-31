@@ -23,11 +23,19 @@ use e.ui.testing
 use e.ui.widget
 use e.ui.window
 
-type Counter = struct { presses: usize }
+type Counter = struct { presses: usize, releases: usize, release_buttons: u32 }
 
 fn on_press(ctx: *void, event: input.Event) -> err {
     let counter = mem.cast[*Counter](ctx)
-    if event.tag == .PointerDown { counter.presses += 1usize }
+    switch event {
+    case .PointerDown:
+        counter.presses += 1usize
+    case .PointerUp as pointer:
+        counter.releases += 1usize
+        counter.release_buttons = pointer.buttons
+    default:
+        ret ok
+    }
     ret ok
 }
 
@@ -90,12 +98,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (h, harness_error) = testing.harness(a, &runtime, 40u32, 30u32, 1.0)
     if harness_error != ok { os.exit(12i32) }
     var harness = h
+    let positive_infinity = mem.bitcast[f32](2139095040u32)
+    let negative_infinity = mem.bitcast[f32](4286578688u32)
+    let nan = mem.bitcast[f32](2143289344u32)
+    let (_, infinite_error) = testing.harness(a, &runtime, 40u32, 30u32, positive_infinity)
+    if infinite_error != testing.NotFound { os.exit(34i32) }
+    let (_, negative_infinite_error) = testing.harness(a, &runtime, 40u32, 30u32, negative_infinity)
+    if negative_infinite_error != testing.NotFound { os.exit(35i32) }
+    let (_, nan_error) = testing.harness(a, &runtime, 40u32, 30u32, nan)
+    if nan_error != testing.NotFound { os.exit(36i32) }
     widget.begin_frame(&runtime, start)
     if animation.frame_time(&runtime).nanos != start.nanos || !near(animation.cycle(&runtime, time.millis(100i64)), 0.0) || !widget.animation_frame_requested(&runtime) { os.exit(30i32) }
     let quarter = time.instant_add(start, time.millis(25i64))
     widget.begin_frame(&runtime, quarter)
     if widget.animation_frame_requested(&runtime) || !near(animation.cycle(&runtime, time.millis(100i64)), 0.25) || !near(animation.pulse(&runtime, time.millis(100i64), 0.4, 1.0), 0.7) { os.exit(31i32) }
-    var counter = Counter { presses: 0usize }
+    var counter = Counter { presses: 0usize, releases: 0usize, release_buttons: 0u32 }
     let (children, children_error) = mem.alloc[widget.Node](a, 2usize)
     if children_error != ok { os.exit(13i32) }
     children[0usize] = widget.box(1u64, sized(20.0, 10.0, 1.0, 0.0, 0.0), zero)
@@ -114,6 +131,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A press at the button's centre reaches its action.
     let down = input.Event { PointerDown: input.Pointer { window: window.Id { slot: 0u32, generation: 0u32 }, device: 0u32, pointer: 0u32, kind: .Mouse, position: geometry.Point { x: 10.0, y: 15.0 }, buttons: 1u32, changed: .Primary } }
     if testing.send(&harness, down) != ok || counter.presses != 1usize { os.exit(19i32) }
+    // Harness gestures match the host's release state: both a tap and drag hold
+    // the primary mask through their moves, then report no held buttons on up.
+    if testing.tap(&harness, 10.0, 15.0) != ok || counter.presses != 2usize || counter.releases != 1usize || counter.release_buttons != 0u32 { os.exit(32i32) }
+    if testing.drag(&harness, geometry.Point { x: 10.0, y: 15.0 }, geometry.Point { x: 12.0, y: 15.0 }, 2usize) != ok || counter.presses != 3usize || counter.releases != 2usize || counter.release_buttons != 0u32 { os.exit(33i32) }
     // The snapshot: red above, blue below, empty to the right; it compares against
     // itself and not against a copy with one channel moved past the tolerance.
     let (shot, shot_error) = testing.snapshot(&harness, a)

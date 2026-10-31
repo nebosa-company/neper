@@ -1,5 +1,5 @@
 // GIF (87a and 89a) decoder (L124) including animation. `decode` returns the first frame
-// composed on the logical screen; `decode_frames` returns every frame as the full-canvas
+// composed on the logical screen without validating later frames; `decode_frames` returns every frame as the full-canvas
 // Rgba8 picture a viewer shows after that frame is drawn, with its delay (hundredths of a
 // second) and the disposal method that follows it. Composition follows the format: the
 // canvas starts transparent, a frame's non-transparent pixels are drawn over it at the
@@ -10,9 +10,9 @@
 // the variable-width LZW of 2 to 8 bit roots are read; comment, application and plain text
 // extensions are skipped. Bounded: the canvas is checked against the options before any
 // pixel is taken (zero selects 16,384 per side and 16,777,216 pixels), the number of
-// frames against `max_frames` (zero selects 1,024) and the sum of all frames' bytes against
-// `max_bytes` (zero selects 256 MiB); a frame outside the canvas or an LZW stream that ends
-// short of its pixels is `Invalid`. Decode only.
+// frames from `decode_frames` against `max_frames` (zero selects 1,024) and their sum of
+// bytes against `max_bytes` (zero selects 256 MiB); a frame outside the canvas or an LZW
+// stream that ends short of its pixels is `Invalid`. Decode only.
 
 use e.io
 use e.mem
@@ -89,7 +89,8 @@ fn count_frames(d: []const u8) -> (u32, usize, err) {
     var frames = 0u32
     while at < d.len {
         let tag = d[at]
-        if tag == 59u8 { break }
+        // The trailer completes the GIF stream. Bytes after it remain tolerated.
+        if tag == 59u8 { ret (frames, start, ok) }
         if tag == 33u8 {
             if at + 2usize > d.len { ret (0u32, 0usize, Invalid) }
             let (next, _, failure) = sub_blocks(d, at + 2usize)
@@ -109,7 +110,7 @@ fn count_frames(d: []const u8) -> (u32, usize, err) {
             ret (0u32, 0usize, Invalid)
         }
     }
-    ret (frames, start, ok)
+    ret (0u32, 0usize, Invalid)
 }
 
 // The canvas size and the number of frames, from the block structure alone; the reader is
@@ -150,7 +151,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
     var first = 0u32
     while true {
         while nbits < size {
-            if pos >= src.len { ret (produced, ok) }
+            if pos >= src.len { ret (produced, Invalid) }
             acc = acc | (u32(src[pos]) << nbits)
             nbits += 8u32
             pos += 1usize
@@ -167,7 +168,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
         if code == end { break }
         if old == 4294967295u32 {
             if code >= clear { ret (produced, Invalid) }
-            if produced >= out.len { break }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = u8(code)
             produced += 1usize
             old = code
@@ -194,7 +195,7 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
         sp += 1usize
         while sp > 0usize {
             sp -= 1usize
-            if produced >= out.len { ret (produced, ok) }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = stack[sp]
             produced += 1usize
         }
@@ -209,7 +210,10 @@ fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err) {
     ret (produced, ok)
 }
 
-fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([]Frame, err) {
+// `stop_after == 0` verifies and returns the complete animation. A nonzero bound is
+// used by `decode`: it intentionally stops after the requested displayed frame, so a
+// later frame cannot consume the animation budget or invalidate an already decoded one.
+fn decode_some(a: *mem.Arena, source: io.Reader, options: DecodeOptions, stop_after: usize) -> ([]Frame, err) {
     var nothing: []Frame = zero
     var r = source
     let (d, read_error) = io.read_all(a, &r, READ_LIMIT)
@@ -221,16 +225,25 @@ fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([
     if cw == 0u32 || ch == 0u32 { ret (nothing, Invalid) }
     let within_error = within(cw, ch, options)
     if within_error != ok { ret (nothing, within_error) }
-    let (count, start, count_error) = count_frames(d)
-    if count_error != ok { ret (nothing, count_error) }
-    if count == 0u32 { ret (nothing, Invalid) }
-    var max_frames = options.max_frames
-    if max_frames == 0u32 { max_frames = 1024u32 }
-    if count > max_frames { ret (nothing, TooLarge) }
+    var count = stop_after
+    var start = 13usize
+    if stop_after == 0usize {
+        let (found_count, found_start, count_error) = count_frames(d)
+        if count_error != ok { ret (nothing, count_error) }
+        if found_count == 0u32 { ret (nothing, Invalid) }
+        var max_frames = options.max_frames
+        if max_frames == 0u32 { max_frames = 1024u32 }
+        if found_count > max_frames { ret (nothing, TooLarge) }
+        count = usize(found_count)
+        start = found_start
+    } else {
+        if (d[10usize] & 128u8) != 0u8 { start += 3usize * (1usize << (usize(d[10usize] & 7u8) + 1usize)) }
+        if start > d.len { ret (nothing, Invalid) }
+    }
     var max_bytes = options.max_bytes
     if max_bytes == 0u64 { max_bytes = 268435456u64 }
     if u64(count) * u64(cw) * u64(ch) * 4u64 > max_bytes { ret (nothing, TooLarge) }
-    let (frames, frames_error) = mem.alloc[Frame](a, usize(count))
+    let (frames, frames_error) = mem.alloc[Frame](a, count)
     if frames_error != ok { ret (nothing, frames_error) }
     let canvas_bytes = usize(cw) * usize(ch) * 4usize
     let (canvas, canvas_error) = mem.alloc[u8](a, canvas_bytes)
@@ -264,7 +277,7 @@ fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([
     var prev_y = 0u32
     var prev_w = 0u32
     var prev_h = 0u32
-    while at < d.len && done_frames < usize(count) {
+    while at < d.len && done_frames < count {
         let tag = d[at]
         if tag == 59u8 { break }
         if tag == 33u8 {
@@ -361,7 +374,7 @@ fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([
                 if pass == 2usize { step = 4usize }
                 if pass == 3usize { step = 2usize }
                 next_row += step
-                if next_row >= usize(fh) {
+                while next_row >= usize(fh) && pass < 3usize {
                     pass += 1usize
                     if pass == 1usize { next_row = 4usize }
                     if pass == 2usize { next_row = 2usize }
@@ -427,15 +440,18 @@ fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([
         transparent = 256u32
         at = after
     }
-    if done_frames != usize(count) { ret (nothing, Invalid) }
+    if done_frames != count { ret (nothing, Invalid) }
     ret (frames, ok)
+}
+
+fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([]Frame, err) {
+    let (frames, failure) = decode_some(a, source, options, 0usize)
+    ret (frames, failure)
 }
 
 // The first frame composed on the logical screen.
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err) {
-    var limited = options
-    limited.max_frames = 0u32
-    let (frames, failure) = decode_frames(a, source, limited)
+    let (frames, failure) = decode_some(a, source, options, 1usize)
     if failure != ok { ret (zero, failure) }
     ret (frames[0usize].image, ok)
 }

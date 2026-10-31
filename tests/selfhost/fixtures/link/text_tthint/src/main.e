@@ -90,7 +90,38 @@ fn image_sum(h: *tthint.Hinter, a: *mem.Arena, bytes: []const u8, sub: usize, te
     ret sum
 }
 
+fn boundary_programs(a: *mem.Arena) -> err {
+    let (hs, hs_error) = mem.alloc[tthint.Hinter](a, 1usize)
+    if hs_error != ok { ret tthint.NoRoom }
+    var stack: [8]i64 = zero
+    hs[0usize].stack = stack[..]
+    var code: [8]u8 = zero
+    // PUSHB declares three bytes but the active program ends after its count.
+    code[0usize] = 0x40u8
+    code[1usize] = 3u8
+    code[2usize] = 0xAAu8
+    code[3usize] = 0xBBu8
+    code[4usize] = 0xCCu8
+    hs[0usize].data = code[..]
+    if tthint.vm_run(&hs[0usize], 0usize, 2usize) != tthint.Trap { ret tthint.Trap }
+    // A false IF whose skipped PUSHB crosses code_hi must trap, even if bytes follow it.
+    code[0usize] = 0xB0u8
+    code[1usize] = 0u8
+    code[2usize] = 0x58u8
+    code[3usize] = 0x40u8
+    code[4usize] = 1u8
+    code[5usize] = 0xAAu8
+    hs[0usize].sp = 0usize
+    if tthint.vm_run(&hs[0usize], 0usize, 4usize) != tthint.Trap { ret tthint.Trap }
+    // A FDEF skip has the same boundary requirement.
+    code[2usize] = 0x2Cu8
+    hs[0usize].sp = 0usize
+    if tthint.vm_run(&hs[0usize], 0usize, 4usize) != tthint.Trap { ret tthint.Trap }
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    try boundary_programs(a)
     let (bytes, read_error) = fs.read_file(a, font_path(), 16777216usize)
     if read_error != ok {
         let (written, write_error) = os.write(os.stdout(), "skipped: the font is not present\n")

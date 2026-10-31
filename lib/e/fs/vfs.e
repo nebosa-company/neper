@@ -277,7 +277,7 @@ fn mem_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err) {
     if !found { ret (nothing, fs.NotFound) }
     if m.nodes[at].kind == .Directory { ret (nothing, IsDirectory) }
     let size = m.nodes[at].size
-    if size > limit { ret (nothing, TooLarge) }
+    if limit != 0usize && size > limit { ret (nothing, TooLarge) }
     if size == 0usize { ret (nothing, ok) }
     let (out, out_error) = mem.alloc[u8](a, size)
     if out_error != ok { ret (nothing, out_error) }
@@ -432,7 +432,7 @@ fn append_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8, limit: usize
     let (old, read_error) = read_file(a, v, path, limit)
     if read_error != ok && read_error != fs.NotFound { ret read_error }
     let total = old.len + data.len
-    if total > limit { ret TooLarge }
+    if limit != 0usize && total > limit { ret TooLarge }
     if total == 0usize { ret write_file(a, v, path, data) }
     let (joined, joined_error) = mem.alloc[u8](a, total)
     if joined_error != ok { ret joined_error }
@@ -553,6 +553,26 @@ fn mark_set(o: *Overlay, path: str, opaque: bool) -> err {
     ret ok
 }
 
+// Prepare storage for a new mark without changing the overlay's visible state.
+// A caller that has a destructive operation still to perform can publish the
+// returned slice and path only after that operation succeeds.
+fn mark_prepare(o: *Overlay, path: str) -> ([]Mark, str, err) {
+    var marks = o.marks
+    if o.count == marks.len {
+        let (bigger, bigger_error) = mem.alloc[Mark](o.a, marks.len * 2usize)
+        if bigger_error != ok { ret (marks, "", bigger_error) }
+        var i = 0usize
+        while i < o.count {
+            bigger[i] = marks[i]
+            i += 1usize
+        }
+        marks = bigger
+    }
+    let (kept, kept_error) = copy_text(o.a, path)
+    if kept_error != ok { ret (marks, "", kept_error) }
+    ret (marks, kept, ok)
+}
+
 fn mark_clear(o: *Overlay, path: str) {
     let (at, found) = mark_find(o, path)
     if found {
@@ -637,7 +657,14 @@ fn overlay_settle(o: *Overlay, a: *mem.Arena, p: str) -> err {
     let (at, found) = mark_find(o, p)
     if !found { ret ok }
     let (e, lower_error) = stat(a, &o.lower, p)
-    if lower_error == ok && e.kind == .Directory {
+    if lower_error != ok {
+        if lower_error == fs.NotFound {
+            mark_clear(o, p)
+            ret ok
+        }
+        ret lower_error
+    }
+    if e.kind == .Directory {
         o.marks[at].opaque = true
         ret ok
     }
@@ -756,21 +783,39 @@ fn overlay_remove(ctx: *void, a: *mem.Arena, path: str) -> err {
         if children.len > 0usize { ret NotEmpty }
     }
     let (_, upper_error) = stat(a, &o.upper, p)
-    if upper_error == ok {
-        let removed = remove(a, &o.upper, p)
-        if removed != ok { ret removed }
-    } else if upper_error != fs.NotFound {
-        ret upper_error
-    }
+    if upper_error != ok && upper_error != fs.NotFound { ret upper_error }
     let (_, lower_error) = stat(a, &o.lower, p)
+    if lower_error != ok && lower_error != fs.NotFound { ret lower_error }
     if lower_error == ok {
-        let marked = mark_set(o, p, false)
-        if marked != ok { ret marked }
+        let (mark_at, mark_found) = mark_find(o, p)
+        var marks = o.marks
+        var kept = ""
+        if !mark_found {
+            let (prepared_marks, prepared_path, prepare_error) = mark_prepare(o, p)
+            if prepare_error != ok { ret prepare_error }
+            marks = prepared_marks
+            kept = prepared_path
+        }
+        if upper_error == ok {
+            let removed = remove(a, &o.upper, p)
+            if removed != ok { ret removed }
+        }
+        if mark_found {
+            o.marks[mark_at].opaque = false
+        } else {
+            o.marks = marks
+            o.marks[o.count].path = kept
+            o.marks[o.count].opaque = false
+            o.count += 1usize
+        }
         // the whiteout covers everything below, so the marks below it are redundant
         mark_prune_below(o, p)
         ret ok
     }
-    if lower_error != fs.NotFound { ret lower_error }
+    if upper_error == ok {
+        let removed = remove(a, &o.upper, p)
+        if removed != ok { ret removed }
+    }
     mark_clear(o, p)
     ret ok
 }
@@ -975,11 +1020,18 @@ fn sub_vfs(s: *Sub) -> Vfs {
 
 // ---- Host ------------------------------------------------------------------------------
 
-// `root` is a real directory; a trailing separator is dropped.
+// A Windows drive root keeps its separator; other trailing separators are dropped.
+fn host_drive_root(root: str, n: usize) -> bool {
+    if n != 3usize || root[1usize] != 58u8 { ret false }
+    let letter = (root[0usize] >= 65u8 && root[0usize] <= 90u8) || (root[0usize] >= 97u8 && root[0usize] <= 122u8)
+    if !letter { ret false }
+    ret root[2usize] == 47u8 || root[2usize] == 92u8
+}
+
 fn host_new(root: str) -> Host {
     var h: Host = zero
     var n = root.len
-    while n > 1usize && (root[n - 1usize] == 47u8 || root[n - 1usize] == 92u8) { n -= 1usize }
+    while n > 1usize && (root[n - 1usize] == 47u8 || root[n - 1usize] == 92u8) && !host_drive_root(root, n) { n -= 1usize }
     h.root = root[..n]
     ret h
 }
@@ -995,10 +1047,12 @@ fn host_path(h: *Host, a: *mem.Arena, path: str) -> (str, str, err) {
         i += 1usize
     }
     if is_root(p) { ret (p, h.root, ok) }
-    let (full, full_error) = mem.alloc[u8](a, h.root.len + p.len)
+    var skip_separator = 0usize
+    if h.root.len > 0usize && (h.root[h.root.len - 1usize] == 47u8 || h.root[h.root.len - 1usize] == 92u8) { skip_separator = 1usize }
+    let (full, full_error) = mem.alloc[u8](a, h.root.len + p.len - skip_separator)
     if full_error != ok { ret ("", "", full_error) }
     mem.copy[u8](full[..h.root.len], h.root)
-    mem.copy[u8](full[h.root.len..], p)
+    mem.copy[u8](full[h.root.len..], p[skip_separator..])
     ret (p, full, ok)
 }
 

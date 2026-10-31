@@ -10,7 +10,7 @@
 error Truncated
 error Invalid
 
-type Reader = struct { data: []const u8, at: usize, big_endian: bool, nanos: bool, pcapng: bool, linktype: u32, snaplen: u32, if_count: usize, if_linktypes: [16]u32, if_resolution: [16]u32 }
+type Reader = struct { data: []const u8, at: usize, big_endian: bool, nanos: bool, pcapng: bool, linktype: u32, snaplen: u32, if_count: usize, if_linktypes: [16]u32, if_resolution: [16]u32, if_binary: [16]bool }
 
 // One captured packet: seconds and nanoseconds since the epoch, captured and original lengths, the interface's link type.
 type Record = struct { ts_sec: u64, ts_nsec: u32, caplen: u32, origlen: u32, linktype: u32, data: []const u8 }
@@ -127,6 +127,7 @@ fn next(r: *Reader) -> (Record, bool, err) {
             if r.if_count < 16usize {
                 r.if_linktypes[r.if_count] = u16_at(r.data, body, big)
                 var resolution = 6u32
+                var binary = false
                 // options: code u16, length u16, value padded to 4, ending with code 0
                 var o = body + 8usize
                 while o + 4usize <= end {
@@ -136,11 +137,13 @@ fn next(r: *Reader) -> (Record, bool, err) {
                     if o + 4usize + length > end { ret (rec, false, Invalid) }
                     if code == 9u32 && length >= 1usize {
                         let v = u32(r.data[o + 4usize])
-                        if (v & 128u32) == 0u32 { resolution = v }
+                        binary = (v & 128u32) != 0u32
+                        resolution = v & 127u32
                     }
                     o += 4usize + ((length + 3usize) & ~3usize)
                 }
                 r.if_resolution[r.if_count] = resolution
+                r.if_binary[r.if_count] = binary
                 r.if_count += 1usize
             }
         } else if kind == 6u32 {
@@ -152,19 +155,43 @@ fn next(r: *Reader) -> (Record, bool, err) {
             let origlen = u32_at(r.data, body + 16usize, big)
             if usize(caplen) > end - (body + 20usize) { ret (rec, false, Truncated) }
             var resolution = 6u32
+            var binary = false
             var linktype = 0u32
             if iface < r.if_count {
                 resolution = r.if_resolution[iface]
+                binary = r.if_binary[iface]
                 linktype = r.if_linktypes[iface]
             }
             let ticks = (high << 32u64) | low
-            let unit = pow10(resolution)
-            rec.ts_sec = ticks / unit
-            let rem = ticks % unit
-            if resolution <= 9u32 {
-                rec.ts_nsec = u32(rem * (1000000000u64 / unit))
+            if binary {
+                if resolution < 64u32 {
+                    let unit = 1u64 << resolution
+                    rec.ts_sec = ticks / unit
+                    let rem = ticks % unit
+                    if resolution <= 32u32 {
+                        rec.ts_nsec = u32((rem * 1000000000u64) / unit)
+                    } else {
+                        rec.ts_nsec = u32((f64(rem) * 1000000000.0f64) / f64(unit))
+                    }
+                } else {
+                    rec.ts_sec = 0u64
+                    var scale = 1.0f64
+                    var k = 0u32
+                    while k < resolution {
+                        scale *= 2.0f64
+                        k += 1u32
+                    }
+                    rec.ts_nsec = u32((f64(ticks) * 1000000000.0f64) / scale)
+                }
             } else {
-                rec.ts_nsec = u32(rem / (unit / 1000000000u64))
+                let unit = pow10(resolution)
+                rec.ts_sec = ticks / unit
+                let rem = ticks % unit
+                if resolution <= 9u32 {
+                    rec.ts_nsec = u32(rem * (1000000000u64 / unit))
+                } else {
+                    rec.ts_nsec = u32(rem / (unit / 1000000000u64))
+                }
             }
             rec.caplen = caplen
             rec.origlen = origlen

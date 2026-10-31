@@ -105,6 +105,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(k2[0usize], 0.9170745631136652f64, 1.0e-9f64) || !near(k2[1usize], 1.6355961850461285f64, 1.0e-9f64) { os.exit(6i32) }
     let (_, lqr_short) = control.lqr(a2[..], b2[..], q2[..], r1[..], 2usize, 1usize, k2[..], scratch[..30usize], 10usize, 1.0e-12f64)
     if lqr_short != control.TooSmall { os.exit(6i32) }
+    let (_, lqr_zero) = control.lqr(a2[..], b2[..], q2[..], r1[..], 2usize, 1usize, k2[..], scratch[..], 0usize, 1.0e-12f64)
+    let (_, lqr_unsettled) = control.lqr(a2[..], b2[..], q2[..], r1[..], 2usize, 1usize, k2[..], scratch[..], 1usize, 1.0e-30f64)
+    let bad_number = 0.0f64 / 0.0f64
+    a2[0usize] = bad_number
+    let (_, lqr_nonfinite) = control.lqr(a2[..], b2[..], q2[..], r1[..], 2usize, 1usize, k2[..], scratch[..], 1usize, 1.0e-12f64)
+    a2[0usize] = 1.0f64
+    if lqr_zero != control.Invalid || lqr_unsettled != control.NoConvergence || lqr_nonfinite != control.Invalid { os.exit(6i32) }
 
     // 7: LQR with three states and two inputs.
     var a3: [9]f64 = zero
@@ -145,6 +152,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var im2: [2]f64 = zero
     if control.pole_placement(ap2[..], bp2[..], 2usize, re2[..], im2[..], k2[..], scratch[..]) != ok { os.exit(8i32) }
     if !near(k2[0usize], 0.2f64, 1.0e-9f64) || !near(k2[1usize], 0.8f64, 1.0e-9f64) { os.exit(8i32) }
+    var ap1: [1]f64 = [1]f64{ 1.0f64 }
+    var bp1: [1]f64 = [1]f64{ 1.0f64 }
+    var re1: [1]f64 = [1]f64{ 0.5f64 }
+    var im1: [1]f64 = zero
+    var kp1: [1]f64 = zero
+    var scratch1: [12]f64 = zero
+    if control.pole_placement(ap1[..], bp1[..], 1usize, re1[..], im1[..], kp1[..], scratch1[..]) != ok || !near(kp1[0usize], 0.5f64, 1.0e-12f64) { os.exit(8i32) }
     var ap3: [9]f64 = zero
     ap3[0usize] = 1.0f64
     ap3[1usize] = 0.1f64
@@ -206,6 +220,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(estimate[0usize], 0.50929999997738518f64, 1.0e-8f64) || !near(estimate[1usize], 0.19199999966076114f64, 1.0e-8f64) || !near(estimate[2usize], 0.22999999873346108f64, 1.0e-8f64) { os.exit(9i32) }
     if !near(estimate[0usize], truth[0usize], 1.0e-6f64) || !near(estimate[1usize], truth[1usize], 1.0e-6f64) || !near(estimate[2usize], truth[2usize], 1.0e-6f64) { os.exit(9i32) }
     if control.observer_step(estimate[..], ap3[..], bp3[..], c3[..], l3[..], 3usize, 1usize, 1usize, input[..], output[..], scratch[..9usize]) != control.TooSmall { os.exit(9i32) }
+    var c1: [1]f64 = [1]f64{ 1.0f64 }
+    re1[0usize] = 0.4f64
+    var l1: [1]f64 = zero
+    var observer_scratch1: [14]f64 = zero
+    if control.observer_gain(ap1[..], c1[..], 1usize, re1[..], im1[..], l1[..], observer_scratch1[..]) != ok || !near(l1[0usize], 0.6f64, 1.0e-12f64) { os.exit(9i32) }
 
     // 10: sliding mode: the sign outside the boundary layer, linear inside.
     if control.sliding_mode(1.0f64, 0.5f64, 2.0f64, 3.0f64, 0.0f64) != -3.0f64 { os.exit(10i32) }

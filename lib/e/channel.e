@@ -35,10 +35,17 @@ type ChannelState[T: type] = struct {
 fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err) {
     var empty: Channel[T] = zero
     if cap == 0usize { ret (empty, sync.Invalid) }
+    let start = mem.mark(a)
     let (storage, storage_error) = mem.alloc[ChannelState[T]](a, 1usize)
-    if storage_error != ok { ret (empty, storage_error) }
+    if storage_error != ok {
+        mem.reset(a, start)
+        ret (empty, storage_error)
+    }
     let (buffer, buffer_error) = mem.alloc[T](a, cap)
-    if buffer_error != ok { ret (empty, buffer_error) }
+    if buffer_error != ok {
+        mem.reset(a, start)
+        ret (empty, buffer_error)
+    }
     storage[0usize] = ChannelState[T] { lock: sync.mutex(), not_full: sync.condition(), not_empty: sync.condition(), buffer: buffer, head: 0usize, count: 0usize, closed: false }
     ret (Channel[T] { state: mem.cast[*void](&storage[0usize]) }, ok)
 }

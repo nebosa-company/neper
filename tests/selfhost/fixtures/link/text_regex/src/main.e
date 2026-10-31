@@ -83,6 +83,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // UTF-8: a class over non-ASCII scalars, `.` taking one whole scalar, byte offsets.
     if !found(a, "[é-ë]+", "aéêëz", 1usize, 7usize) || !found(a, "a.b", "a€b", 0usize, 5usize) || !found(a, "€{2}", "x€€€", 1usize, 7usize) { os.exit(27i32) }
 
+    // `from` must be a scalar boundary: reject a continuation byte, retain valid ones.
+    let (dot, dot_error) = regex.compile(a, ".", zero)
+    let (dot_first, dot_first_found) = regex.find(&dot, "\xC3\xA9x", 0usize)
+    let (dot_next, dot_next_found) = regex.find(&dot, "\xC3\xA9x", 2usize)
+    let (_, dot_middle_found) = regex.find(&dot, "\xC3\xA9x", 1usize)
+    let (_, dot_caps_found, dot_caps_error) = regex.captures(a, &dot, "\xC3\xA9x", 1usize)
+    let (back_dot, back_dot_error) = regex.compile_backtracking(a, ".", zero)
+    let (back_next, back_next_found) = regex.find(&back_dot, "\xC3\xA9x", 2usize)
+    let (_, back_middle_found) = regex.find(&back_dot, "\xC3\xA9x", 1usize)
+    let (_, back_caps_found, back_caps_error) = regex.captures(a, &back_dot, "\xC3\xA9x", 1usize)
+    if dot_error != ok || !dot_first_found || dot_first.start != 0usize || dot_first.end != 2usize || !dot_next_found || dot_next.start != 2usize || dot_next.end != 3usize || dot_middle_found || dot_caps_found || dot_caps_error != ok { os.exit(35i32) }
+    if back_dot_error != ok || !back_next_found || back_next.start != 2usize || back_next.end != 3usize || back_middle_found || back_caps_found || back_caps_error != ok { os.exit(36i32) }
+    let (dot_nfa, dot_nfa_error) = regex.nfa_compile(a, ".", zero)
+    if dot_nfa_error != ok { os.exit(37i32) }
+    var dot_nfa_caps: [1]regex.Match = zero
+    if regex.pike_vm(dot_nfa, "\xC3\xA9x", 1usize, dot_nfa_caps[0..]) || !regex.pike_vm(dot_nfa, "\xC3\xA9x", 2usize, dot_nfa_caps[0..]) || dot_nfa_caps[0].start != 2usize || dot_nfa_caps[0].end != 3usize { os.exit(38i32) }
+
     // Refusals.
     if !refused(a, "a(b", regex.InvalidPattern) || !refused(a, "a)", regex.InvalidPattern) || !refused(a, "*a", regex.InvalidPattern) { os.exit(28i32) }
     if !refused(a, "[a-", regex.InvalidPattern) || !refused(a, "[z-a]", regex.InvalidPattern) || !refused(a, "a{3,2}", regex.InvalidPattern) || !refused(a, "\\q", regex.InvalidPattern) { os.exit(29i32) }

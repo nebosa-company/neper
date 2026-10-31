@@ -290,6 +290,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var back: [2]str = zero
     if fixedwidth.read(fields[0usize..2usize], .Exact, rec, back[0usize..2usize]) != ok { os.exit(102i32) }
     if !text_is(back[0usize], "ab") || !text_is(back[1usize], "0007") { os.exit(103i32) }
+    var wide_fields: [2]fixedwidth.Field = zero
+    wide_fields[0usize].width = 4294967295u32
+    wide_fields[1usize].width = 1u32
+    let (wide_width, wide_error) = fixedwidth.record_width(wide_fields[..])
+    if mem.size_of[usize]() == 4usize {
+        if wide_width != 0usize || wide_error != fixedwidth.TooLarge { os.exit(104i32) }
+        let (_, wide_write_error) = fixedwidth.write(wide_fields[..], values[..], out[..])
+        if wide_write_error != fixedwidth.TooLarge { os.exit(104i32) }
+        let wide_read_error = fixedwidth.read(wide_fields[..], .Exact, "", back[..])
+        if wide_read_error != fixedwidth.TooLarge { os.exit(104i32) }
+    } else if wide_width != 4294967296usize || wide_error != ok { os.exit(104i32) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
     try io.print("fmt fixedwidth ok")

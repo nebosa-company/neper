@@ -4,8 +4,10 @@
 // exposed, then entries read through a seek to their local header -- stored ones
 // straight from the source, DEFLATE ones through `e.algo.deflate` -- with the CRC-32
 // and size compared at the end. Encryption and any method but 0 and 8 are
-// `Unsupported`; an absolute name, a `..` segment, a backslash or a bad signature is
-// `Invalid`. Names are taken as UTF-8 as written.
+// `Unsupported`; an absolute name, a `..` segment, a backslash, a control byte,
+// malformed UTF-8 or a bad signature is `Invalid`. ASCII entry names may omit
+// general-purpose bit 11; non-ASCII names must declare UTF-8. Legacy code pages are
+// not decoded.
 //
 // One entry reader at a time: it seeks the shared source. `entry_reader` needs
 // `entry_storage()` bytes of 8-aligned storage; `extract` takes them from the arena.
@@ -28,7 +30,7 @@ const WINDOW: usize = 32768usize
 // The central directory is read whole; past this it is refused rather than streamed.
 const DIRECTORY_LIMIT: u64 = 67108864u64
 
-type State = struct { source: io.Reader, seeker: io.Seeker, entries: []Entry, offsets: []u64 }
+type State = struct { source: io.Reader, seeker: io.Seeker, entries: []Entry, offsets: []u64, flags: []u16, directory_offset: u64 }
 
 type EntryState = struct {
     source: io.Reader,
@@ -67,13 +69,98 @@ fn read_at(s: *State, offset: u64, dst: []u8) -> err {
     ret ok
 }
 
-fn name_legal(name: str) -> bool {
-    if name.len == 0usize { ret false }
-    if name[0] == 47u8 { ret false }
-    if name.len >= 2usize && name[1] == 58u8 { ret false }
+// The local name is not retained by `open`, so compare it in bounded source-sized
+// pieces before exposing the entry's data.
+fn local_name_matches(s: *State, offset: u64, name: str, scratch: []u8) -> err {
     var at = 0usize
     while at < name.len {
-        if name[at] == 92u8 { ret false }
+        var take = scratch.len
+        if name.len - at < take { take = name.len - at }
+        let read_error = read_at(s, offset + u64(at), scratch[..take])
+        if read_error != ok { ret read_error }
+        if !mem.eq[u8](scratch[..take], name[at..at + take]) { ret Invalid }
+        at += take
+    }
+    ret ok
+}
+
+// ZIP64 local extra fields provide only the local fields whose 32-bit values were
+// saturated, in uncompressed-size then compressed-size order.
+fn local_zip64_sizes(s: *State, offset: u64, length: u64, size: u64, compressed: u64) -> (u64, u64, err) {
+    var local_size = size
+    var local_compressed = compressed
+    var at = 0u64
+    while at < length {
+        if length - at < 4u64 { ret (0u64, 0u64, Invalid) }
+        var field: [4]u8 = zero
+        let field_error = read_at(s, offset + at, field[0..])
+        if field_error != ok { ret (0u64, 0u64, field_error) }
+        let id = le16(field[0..], 0usize)
+        let field_len = u64(le16(field[0..], 2usize))
+        at += 4u64
+        if field_len > length - at { ret (0u64, 0u64, Invalid) }
+        if id == 1u32 {
+            var value_at = 0u64
+            if local_size == 4294967295u64 {
+                if field_len - value_at < 8u64 { ret (0u64, 0u64, Invalid) }
+                var size_value: [8]u8 = zero
+                let size_value_error = read_at(s, offset + at + value_at, size_value[0..])
+                if size_value_error != ok { ret (0u64, 0u64, size_value_error) }
+                local_size = le64(size_value[0..], 0usize)
+                value_at += 8u64
+            }
+            if local_compressed == 4294967295u64 {
+                if field_len - value_at < 8u64 { ret (0u64, 0u64, Invalid) }
+                var compressed_value: [8]u8 = zero
+                let compressed_value_error = read_at(s, offset + at + value_at, compressed_value[0..])
+                if compressed_value_error != ok { ret (0u64, 0u64, compressed_value_error) }
+                local_compressed = le64(compressed_value[0..], 0usize)
+            }
+        }
+        at += field_len
+    }
+    if local_size == 4294967295u64 || local_compressed == 4294967295u64 { ret (0u64, 0u64, Invalid) }
+    ret (local_size, local_compressed, ok)
+}
+
+fn utf8_valid(name: str) -> bool {
+    var i = 0usize
+    while i < name.len {
+        let b0 = u32(name[i])
+        var need = 0usize
+        if b0 < 128u32 {
+            i += 1usize
+            continue
+        }
+        if b0 >= 194u32 && b0 < 224u32 { need = 1usize } else {
+        if b0 >= 224u32 && b0 < 240u32 { need = 2usize } else {
+        if b0 >= 240u32 && b0 < 245u32 { need = 3usize } else { ret false }
+        }
+        }
+        if i + need >= name.len { ret false }
+        var k = 1usize
+        var scalar = b0 & (127u32 >> u32(need + 1usize))
+        while k <= need {
+            let byte = u32(name[i + k])
+            if byte & 192u32 != 128u32 { ret false }
+            scalar = (scalar << 6u32) | (byte & 63u32)
+            k += 1usize
+        }
+        if need == 2usize && (scalar < 2048u32 || (scalar >= 55296u32 && scalar <= 57343u32)) { ret false }
+        if need == 3usize && (scalar < 65536u32 || scalar > 1114111u32) { ret false }
+        i += need + 1usize
+    }
+    ret true
+}
+
+fn name_legal(name: str) -> bool {
+    if !utf8_valid(name) { ret false }
+    if name.len == 0usize { ret false }
+    if name[0] == 47u8 { ret false }
+    if name.len >= 2usize && ((name[0] >= 65u8 && name[0] <= 90u8) || (name[0] >= 97u8 && name[0] <= 122u8)) && name[1] == 58u8 { ret false }
+    var at = 0usize
+    while at < name.len {
+        if name[at] < 32u8 || name[at] == 127u8 || name[at] == 92u8 { ret false }
         at += 1usize
     }
     // A `..` segment anywhere.
@@ -83,6 +170,15 @@ fn name_legal(name: str) -> bool {
         while end < name.len && name[end] != 47u8 { end += 1usize }
         if end - at == 2usize && name[at] == 46u8 && name[at + 1usize] == 46u8 { ret false }
         at = end + 1usize
+    }
+    ret true
+}
+
+fn name_ascii(name: str) -> bool {
+    var at = 0usize
+    while at < name.len {
+        if name[at] >= 128u8 { ret false }
+        at += 1usize
     }
     ret true
 }
@@ -117,16 +213,21 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
         at -= 1usize
     }
     if !found { ret (zero, Invalid) }
+    // Split archives need another volume; this reader has one seekable source only.
+    if le16(tail, at + 4usize) != 0u32 || le16(tail, at + 6usize) != 0u32 || le16(tail, at + 8usize) != le16(tail, at + 10usize) { ret (zero, Unsupported) }
     var count = u64(le16(tail, at + 10usize))
     var directory_size = u64(le32(tail, at + 12usize))
     var directory_offset = u64(le32(tail, at + 16usize))
     if count == 65535u64 || directory_size == 4294967295u64 || directory_offset == 4294967295u64 {
         if at < 20usize || le32(tail, at - 20usize) != 117853008u32 { ret (zero, Invalid) }
+        // The locator and ZIP64 end record must describe one disk too.
+        if le32(tail, at - 16usize) != 0u32 || le32(tail, at - 4usize) != 1u32 { ret (zero, Unsupported) }
         let record_offset = le64(tail, at - 12usize)
         var record: [56]u8 = zero
         let read_error_125 = read_at(s, record_offset, record[0..])
         if read_error_125 != ok { ret (zero, read_error_125) }
         if le32(record[0..], 0usize) != 101075792u32 { ret (zero, Invalid) }
+        if le32(record[0..], 16usize) != 0u32 || le32(record[0..], 20usize) != 0u32 || le64(record[0..], 24usize) != le64(record[0..], 32usize) { ret (zero, Unsupported) }
         count = le64(record[0..], 32usize)
         directory_size = le64(record[0..], 40usize)
         directory_offset = le64(record[0..], 48usize)
@@ -141,6 +242,8 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
     if table_error != ok { ret (zero, table_error) }
     let (offsets, offsets_error) = mem.alloc[u64](a, usize(count))
     if offsets_error != ok { ret (zero, offsets_error) }
+    let (flag_table, flags_error) = mem.alloc[u16](a, usize(count))
+    if flags_error != ok { ret (zero, flags_error) }
     var total = 0u64
     var index = 0usize
     at = 0usize
@@ -164,6 +267,7 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
         if name_len > limits.name_bytes { ret (zero, TooLarge) }
         entry.name = directory[at + 46usize..at + 46usize + name_len]
         if !name_legal(entry.name) { ret (zero, Invalid) }
+        if flags & 2048u32 == 0u32 && !name_ascii(entry.name) { ret (zero, Invalid) }
         entry.directory = entry.name[entry.name.len - 1usize] == 47u8
         // The ZIP64 extra field carries whichever of the three were saturated, in order.
         var extra_at = at + 46usize + name_len
@@ -192,17 +296,22 @@ fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> 
             }
             extra_at += 4usize + field_len
         }
+        if extra_at != extra_end { ret (zero, Invalid) }
         if entry.size > limits.entry_bytes { ret (zero, TooLarge) }
+        if entry.size > limits.total_bytes || total > limits.total_bytes - entry.size { ret (zero, TooLarge) }
         total += entry.size
-        if total > limits.total_bytes { ret (zero, TooLarge) }
-        if offset >= size { ret (zero, Invalid) }
+        if entry.method == 0u16 && entry.compressed_size != entry.size { ret (zero, Invalid) }
+        if offset >= directory_offset { ret (zero, Invalid) }
         table[index] = entry
         offsets[index] = offset
+        flag_table[index] = u16(flags)
         at += 46usize + name_len + extra_len + comment_len
         index += 1usize
     }
     s.entries = table
     s.offsets = offsets
+    s.flags = flag_table
+    s.directory_offset = directory_offset
     var archive: Archive = zero
     archive.state = mem.cast[*void](s)
     ret (archive, ok)
@@ -224,14 +333,24 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
     if index >= s.entries.len { ret (zero, Invalid) }
     if storage.len < entry_storage() { ret (zero, io.TooSmall) }
     let entry = s.entries[index]
-    // The local header: its own name and extra lengths, then the data.
+    // The local header must describe the central entry and stay before the central
+    // directory. Otherwise an entry can be spliced onto a different payload.
+    let local_offset = s.offsets[index]
+    if local_offset > s.directory_offset || 30u64 > s.directory_offset - local_offset { ret (zero, Invalid) }
     var header: [30]u8 = zero
-    let header_error = read_at(s, s.offsets[index], header[0..])
+    let header_error = read_at(s, local_offset, header[0..])
     if header_error != ok { ret (zero, header_error) }
     if le32(header[0..], 0usize) != 67324752u32 { ret (zero, Invalid) }
-    let skip = u64(le16(header[0..], 26usize)) + u64(le16(header[0..], 28usize))
-    let (position, seek_error) = io.seek(&s.seeker, i64(s.offsets[index] + 30u64 + skip), .Start)
-    if seek_error != ok { ret (zero, seek_error) }
+    let local_flags = le16(header[0..], 6usize)
+    if local_flags != u32(s.flags[index]) || le16(header[0..], 8usize) != u32(entry.method) { ret (zero, Invalid) }
+    let name_len = u64(le16(header[0..], 26usize))
+    let extra_len = u64(le16(header[0..], 28usize))
+    let name_offset = local_offset + 30u64
+    if name_len > s.directory_offset - name_offset { ret (zero, Invalid) }
+    let extra_offset = name_offset + name_len
+    if extra_len > s.directory_offset - extra_offset { ret (zero, Invalid) }
+    let data_offset = extra_offset + extra_len
+    if entry.compressed_size > s.directory_offset - data_offset { ret (zero, Invalid) }
     let e = mem.cast[*EntryState](&storage[0])
     let blank: EntryState = zero
     *e = blank
@@ -239,6 +358,24 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
     var at = head / 8usize * 8usize
     e.input = storage[at..at + BUFFER]
     at += BUFFER
+    let name_error = local_name_matches(s, name_offset, entry.name, e.input)
+    if name_error != ok { ret (zero, name_error) }
+    let local_crc = le32(header[0..], 14usize)
+    var local_compressed = u64(le32(header[0..], 18usize))
+    var local_size = u64(le32(header[0..], 22usize))
+    if local_flags & 8u32 != 0u32 {
+        if local_crc != 0u32 || local_compressed != 0u64 || local_size != 0u64 { ret (zero, Invalid) }
+    } else {
+        if local_size == 4294967295u64 || local_compressed == 4294967295u64 {
+            let (zip64_size, zip64_compressed, zip64_error) = local_zip64_sizes(s, extra_offset, extra_len, local_size, local_compressed)
+            if zip64_error != ok { ret (zero, zip64_error) }
+            local_size = zip64_size
+            local_compressed = zip64_compressed
+        }
+        if local_crc != entry.crc32 || local_compressed != entry.compressed_size || local_size != entry.size { ret (zero, Invalid) }
+    }
+    let (position, seek_error) = io.seek(&s.seeker, i64(data_offset), .Start)
+    if seek_error != ok { ret (zero, seek_error) }
     let (d, d_error) = deflate.decoder(storage[at..], WINDOW)
     if d_error != ok { ret (zero, d_error) }
     e.decoder = d
@@ -265,11 +402,18 @@ fn fill(e: *EntryState) -> err {
     var want = e.input.len
     if u64(want) > e.compressed_left { want = usize(e.compressed_left) }
     let (count, read_error) = io.read(&e.source, e.input[..want])
-    if read_error == io.End || (read_error == ok && count == 0usize) { ret Invalid }
-    if read_error != ok { ret read_error }
+    if count == 0usize {
+        if read_error == io.End || read_error == ok { ret Invalid }
+        ret read_error
+    }
+    if read_error != ok && read_error != io.End { ret read_error }
     e.in_at = 0usize
     e.in_len = count
     e.compressed_left -= u64(count)
+    if read_error == io.End {
+        if e.compressed_left != 0u64 { ret Invalid }
+        e.source_ended = true
+    }
     ret ok
 }
 
@@ -284,16 +428,24 @@ fn entry_read(ctx: *void, dst: []u8) -> (usize, err) {
     let e = mem.cast[*EntryState](ctx)
     if e.finished { ret (0usize, io.End) }
     if dst.len == 0usize { ret (0usize, ok) }
+    if e.produced > e.expected_size { ret (0usize, Checksum) }
     if e.stored {
         if e.compressed_left == 0u64 { ret (0usize, entry_finish(e)) }
+        let remaining = e.expected_size - e.produced
+        if remaining == 0u64 { ret (0usize, Checksum) }
         var want = dst.len
         if u64(want) > e.compressed_left { want = usize(e.compressed_left) }
+        if u64(want) > remaining { want = usize(remaining) }
         let (count, read_error) = io.read(&e.source, dst[..want])
-        if read_error == io.End || (read_error == ok && count == 0usize) { ret (0usize, Invalid) }
-        if read_error != ok { ret (0usize, read_error) }
+        if count == 0usize {
+            if read_error == io.End || read_error == ok { ret (0usize, Invalid) }
+            ret (0usize, read_error)
+        }
+        if read_error != ok && read_error != io.End { ret (0usize, read_error) }
         e.compressed_left -= u64(count)
         e.produced += u64(count)
         hash.crc32_update(&e.crc, dst[..count])
+        if read_error == io.End && e.compressed_left != 0u64 { ret (count, Invalid) }
         ret (count, ok)
     }
     while true {
@@ -301,18 +453,27 @@ fn entry_read(ctx: *void, dst: []u8) -> (usize, err) {
             let fill_error = fill(e)
             if fill_error != ok { ret (0usize, fill_error) }
         }
-        let (consumed, written, status, decode_error) = deflate.decode(&e.decoder, e.input[e.in_at..e.in_len], dst, e.source_ended)
+        let remaining = e.expected_size - e.produced
+        var output_len = dst.len
+        if u64(output_len) > remaining { output_len = usize(remaining) }
+        let (consumed, written, status, decode_error) = deflate.decode(&e.decoder, e.input[e.in_at..e.in_len], dst[..output_len], e.source_ended)
         if decode_error != ok { ret (0usize, Invalid) }
         e.in_at += consumed
         if written > 0usize {
             e.produced += u64(written)
-            if e.produced > e.expected_size { ret (0usize, Checksum) }
             hash.crc32_update(&e.crc, dst[..written])
         }
         if status == .Finished {
+            // A ZIP member's declared compressed range holds exactly one raw DEFLATE
+            // stream. The decoder may have prefetched bytes into its bit accumulator,
+            // and a large declared range can still have bytes that were never filled.
+            // Neither is part of the uncompressed CRC or size, so require all three
+            // sources of remaining compressed data to be empty before accepting it.
+            var held: [7]u8 = zero
+            let held_count = deflate.leftover(&e.decoder, held[..])
+            if e.compressed_left != 0u64 || e.in_at != e.in_len || held_count != 0usize { ret (0usize, Invalid) }
             if written > 0usize {
                 // The trailer check waits for the next call, which answers End.
-                e.compressed_left = 0u64
                 e.source_ended = true
                 e.finished = e.produced == e.expected_size && hash.crc32_done(&e.crc) == e.expected_crc
                 if !e.finished { ret (0usize, Checksum) }
@@ -321,6 +482,7 @@ fn entry_read(ctx: *void, dst: []u8) -> (usize, err) {
             ret (0usize, entry_finish(e))
         }
         if written > 0usize { ret (written, ok) }
+        if status == .NeedOutput { ret (0usize, Checksum) }
     }
 }
 
@@ -344,15 +506,15 @@ fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err) {
             // Only the end may follow.
             var none: [1]u8 = zero
             let (extra, end_error) = io.read(&r, none[0..])
+            if extra > 0usize { ret (zero, Checksum) }
             if end_error == io.End { break }
             if end_error != ok { ret (zero, end_error) }
-            if extra > 0usize { ret (zero, Checksum) }
             continue
         }
         let (count, read_error) = io.read(&r, out[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     if filled != out.len { ret (zero, Checksum) }
     ret (out, ok)

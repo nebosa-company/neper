@@ -1,9 +1,9 @@
 // `e.algo.coding`: run-length, LEB128 and VLQ integers against known bytes,
 // ZigZag at the extremes, delta and delta-of-delta round trips, bit packing and
 // frame-of-reference, Elias gamma and Rice codes through one bit cursor,
-// move-to-front and Burrows-Wheeler of "banana", and canonical Huffman codes that
-// round-trip text, honour a length limit and refuse what they cannot read. Each
-// check exits with its own code.
+// move-to-front and Burrows-Wheeler of "banana", canonical Huffman codes that
+// round-trip text, and rANS payloads that reject invalid terminal states and
+// trailing bytes. Each check exits with its own code.
 
 use e.algo.coding
 use e.io
@@ -129,6 +129,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var no_values: [0]u64 = zero
     let (nothing, nothing_error) = coding.for_encode(no_values[..], out[..])
     if nothing_error != ok || nothing != 2usize { os.exit(5i32) }
+    // A corrupted offset must not wrap past u64::MAX on decode.
+    let (overflow_head, overflow_head_error) = coding.varint_encode(18446744073709551614u64, out[..])
+    if overflow_head_error != ok { os.exit(5i32) }
+    out[overflow_head] = 2u8
+    out[overflow_head + 1usize] = 128u8
+    var overflow_value: [1]u64 = zero
+    if coding.for_decode(out[..overflow_head + 2usize], overflow_value[..]) != coding.Invalid { os.exit(5i32) }
 
     // 6: Elias gamma and Rice through one cursor.
     var w = coding.bit_writer(out[..])
@@ -237,6 +244,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if none_error != ok || none.lengths[0usize] != 0u8 { os.exit(8i32) }
     let (_, bad_limit) = coding.huffman_build(silent[..], 0u32)
     if bad_limit != coding.Invalid { os.exit(8i32) }
+
+    // 9: rANS must restore its initial state and consume the whole payload.
+    let ans_text = "mississippi"
+    var ans_freqs: [256]u32 = zero
+    if coding.ans_frequencies(ans_text, ans_freqs[..]) != ok { os.exit(9i32) }
+    let (ans_len, ans_error) = coding.ans_encode(ans_text, ans_freqs[..], out[..])
+    if ans_error != ok { os.exit(9i32) }
+    let (ans_back, ans_back_error) = coding.ans_decode(out[..ans_len], ans_freqs[..], back[..])
+    if ans_back_error != ok || ans_back != ans_text.len || !mem.eq[u8](back[..ans_back], ans_text) { os.exit(9i32) }
+    var zero_ans: [5]u8 = zero
+    let (_, zero_ans_error) = coding.ans_decode(zero_ans[..], ans_freqs[..], back[..])
+    if zero_ans_error != coding.Invalid { os.exit(9i32) }
+    out[ans_len] = 123u8
+    let (_, trailing_ans_error) = coding.ans_decode(out[..ans_len + 1usize], ans_freqs[..], back[..])
+    if trailing_ans_error != coding.Invalid { os.exit(9i32) }
 
     try io.print("algo coding ok\n")
     ret ok

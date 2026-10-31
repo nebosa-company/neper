@@ -64,6 +64,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ge2 != ok || !str.eq(text_of(buf[0..], g2), "/search\tneper lang\r\n") { os.exit(26) }
     let (g3, ge3) = retro.gopher_request(buf[0..], "", "", false)
     if ge3 != ok || g3 != 2usize { os.exit(27) }
+    let (_, ge4) = retro.gopher_request(buf[0..], "/bad\r\nselector", "", false)
+    if ge4 != retro.BadHeader { os.exit(46) }
+    let (_, ge5) = retro.gopher_request(buf[0..], "/search", "bad\nquery", true)
+    if ge5 != retro.BadHeader { os.exit(47) }
     let (m1, me1) = retro.gopher_item("0About\t/about.txt\texample.org\t70")
     if me1 != ok || m1.kind != 48u8 || !str.eq(m1.display, "About") || !str.eq(m1.selector, "/about.txt") { os.exit(28) }
     if !str.eq(m1.host, "example.org") || m1.port != 70usize { os.exit(29) }
@@ -73,6 +77,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if me3 != ok || m3.kind != 105u8 || m3.selector.len != 0usize || m3.host.len != 0usize || m3.port != 0usize { os.exit(31) }
     let (m4, me4) = retro.gopher_item("1noTabs")
     if me4 != retro.BadItem { os.exit(32) }
+    let (_, me5) = retro.gopher_item("1bad\t/x\th.example\t70garbage")
+    if me5 != retro.BadItem { os.exit(42) }
+    let (_, me6) = retro.gopher_item("1empty\t/x\th.example\t")
+    if me6 != retro.BadItem { os.exit(43) }
+    let (_, me7) = retro.gopher_item("1too high\t/x\th.example\t65536")
+    if me7 != retro.BadItem { os.exit(44) }
+    let (m8, me8) = retro.gopher_item("1max\t/x\th.example\t65535")
+    if me8 != ok || m8.port != 65535usize { os.exit(45) }
     if !retro.gopher_is_end(".") || retro.gopher_is_end("..") || retro.gopher_is_end("") { os.exit(33) }
     // Finger.
     let (f1, fe1) = retro.finger_request(buf[0..], "alice", false)

@@ -12,6 +12,12 @@
 use e.mem
 use e.os
 
+@import("c", "fcntl")
+extern fn socket_fcntl(descriptor: i32, command: i32, argument: i32) -> i32
+
+const SOCKET_F_GETFD: i32 = 1i32
+const SOCKET_FD_CLOEXEC: i32 = 1i32
+
 
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
@@ -36,22 +42,33 @@ fn bind_ephemeral(s: os.Socket) -> (u16, err) {
     ret (local.port, ok)
 }
 
+fn descriptor_is_cloexec(handle: os.Handle) -> bool {
+    when target.os == .Macos {
+        let flags = socket_fcntl(i32(handle.raw), SOCKET_F_GETFD, 0i32)
+        ret flags >= 0i32 && (flags & SOCKET_FD_CLOEXEC) != 0i32
+    }
+    ret true
+}
+
 fn main(a: *mem.Arena) -> err {
     // --- A stream, both directions, and end of stream.
     let (listener, listener_error) = os.socket_open(.Ip4, .Stream)
     if listener_error != ok { os.exit(10i32) }
+    if !descriptor_is_cloexec(os.socket_handle(listener)) { os.exit(60i32) }
     let (port, listen_bind_error) = bind_ephemeral(listener)
     if listen_bind_error != ok { os.exit(11i32) }
     if os.socket_listen(listener, 4u32) != ok { os.exit(12i32) }
 
     let (client, client_error) = os.socket_open(.Ip4, .Stream)
     if client_error != ok { os.exit(13i32) }
+    if !descriptor_is_cloexec(os.socket_handle(client)) { os.exit(61i32) }
     var server_address = loopback()
     server_address.port = port
     if os.socket_connect(client, server_address) != ok { os.exit(14i32) }
 
     let (served, peer, accept_error) = os.socket_accept(listener)
     if accept_error != ok { os.exit(15i32) }
+    if !descriptor_is_cloexec(os.socket_handle(served)) { os.exit(62i32) }
     // The other end of a loopback connection is loopback, on some port the host chose.
     if peer.family != .Ip4 { os.exit(16i32) }
     if peer.bytes[0usize] != 127u8 { os.exit(17i32) }
@@ -108,6 +125,18 @@ fn main(a: *mem.Arena) -> err {
     if receiver_error != ok { os.exit(40i32) }
     let (receiver_port, receiver_bind_error) = bind_ephemeral(receiver)
     if receiver_bind_error != ok { os.exit(41i32) }
+
+    // A second datagram endpoint cannot take the held loopback address.  The
+    // platform error normalizes to `Exists`, including Darwin's EADDRINUSE.
+    let (contender, contender_error) = os.socket_open(.Ip4, .Datagram)
+    if contender_error != ok { os.exit(52i32) }
+    var held_address = loopback()
+    held_address.port = receiver_port
+    if os.socket_bind(contender, held_address) != os.Exists {
+        let closed = os.socket_close(contender)
+        os.exit(53i32)
+    }
+    if os.socket_close(contender) != ok { os.exit(54i32) }
 
     let (sender, sender_error) = os.socket_open(.Ip4, .Datagram)
     if sender_error != ok { os.exit(42i32) }

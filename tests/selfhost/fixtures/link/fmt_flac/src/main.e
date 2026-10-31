@@ -95,12 +95,76 @@ fn check(src: []const u8, expect: []const i32, per_channel: usize, out: []i32, s
     ret 0i32
 }
 
+// Write a most-significant-bit-first FLAC field.  The regression below needs a
+// deliberately oversized fixed-predictor residual while keeping both CRCs valid.
+fn write_bits(data: []u8, pos: *usize, value: u64, count: u32) {
+    var remaining = count
+    while remaining > 0u32 {
+        remaining -= 1u32
+        if ((value >> remaining) & 1u64) != 0u64 {
+            let byte_at = *pos >> 3usize
+            let bit_at = u32(7usize - (*pos & 7usize))
+            data[byte_at] = data[byte_at] | (1u8 << bit_at)
+        }
+        *pos += 1usize
+    }
+}
+
+// A valid mono header plus a 4096-sample fixed-order-4 subframe.  Its
+// 31-bit escape residuals overflow the 16-bit sample width and eventually i64
+// prediction arithmetic; a decoder must report Malformed rather than trap or
+// truncate an output sample.
+fn overflowing_fixed_frame(data: []u8, seed: []const u8) -> usize {
+    mem.copy[u8](data[..42usize], seed[..42usize])
+    data[4usize] = 128u8
+    data[21usize] = 240u8
+    data[22usize] = 0u8
+    data[23usize] = 0u8
+    data[24usize] = 0u8
+    data[25usize] = 0u8
+
+    let frame_at = 42usize
+    data[frame_at] = 255u8
+    data[frame_at + 1usize] = 248u8
+    data[frame_at + 2usize] = 112u8
+    data[frame_at + 3usize] = 8u8
+    data[frame_at + 4usize] = 0u8
+    data[frame_at + 5usize] = 15u8
+    data[frame_at + 6usize] = 255u8
+    data[frame_at + 7usize] = flac.crc8(data[frame_at..frame_at + 7usize])
+
+    var bit_pos = (frame_at + 8usize) * 8usize
+    write_bits(data, &bit_pos, 0u64, 1u32)
+    write_bits(data, &bit_pos, 12u64, 6u32)
+    write_bits(data, &bit_pos, 0u64, 1u32)
+    var warmup = 0usize
+    while warmup < 4usize {
+        write_bits(data, &bit_pos, 0u64, 16u32)
+        warmup += 1usize
+    }
+    write_bits(data, &bit_pos, 0u64, 2u32)
+    write_bits(data, &bit_pos, 0u64, 4u32)
+    write_bits(data, &bit_pos, 15u64, 4u32)
+    write_bits(data, &bit_pos, 31u64, 5u32)
+    var residual = 0usize
+    while residual < 4092usize {
+        write_bits(data, &bit_pos, 1073741823u64, 31u32)
+        residual += 1usize
+    }
+    let footer_at = (bit_pos + 7usize) / 8usize
+    let footer = flac.crc16(data[frame_at..footer_at])
+    data[footer_at] = u8(footer >> 8u16)
+    data[footer_at + 1usize] = u8(footer & 255u16)
+    ret footer_at + 2usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var out: [5000]i32 = zero
     var expect: [5000]i32 = zero
     var scratch: [4096]i64 = zero
     var bytes: [10000]u8 = zero
     var copy: [2400]u8 = zero
+    var crafted: [20000]u8 = zero
 
     // 1: STREAMINFO of the mono stream matches soundfile's metadata.
     let (info, ie) = flac.stream_info(mono_flac())
@@ -180,6 +244,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if se != flac.TooSmall { os.exit(82i32) }
     let (_, me) = flac.stream_info("fLaX\x00\x00\x00\x22")
     if me != flac.Malformed { os.exit(82i32) }
+
+    // 83: RFC 9639 requires STREAMINFO to be the first metadata block.
+    var nonstreaminfo_first: [46]u8 = zero
+    mem.copy[u8](nonstreaminfo_first[..4usize], mono[..4usize])
+    nonstreaminfo_first[4usize] = 1u8
+    nonstreaminfo_first[8usize] = 128u8
+    nonstreaminfo_first[11usize] = 34u8
+    mem.copy[u8](nonstreaminfo_first[12usize..], mono[8usize..42usize])
+    let (_, first_block_error) = flac.stream_info(nonstreaminfo_first[..])
+    let (_, first_block_decoder_error) = flac.decoder(nonstreaminfo_first[..])
+    if first_block_error != flac.Malformed || first_block_decoder_error != flac.Malformed { os.exit(83i32) }
+
+    // 84: STREAMINFO has a fixed 34-byte payload; a longer block is malformed too.
+    var overlong_streaminfo: [43]u8 = zero
+    mem.copy[u8](overlong_streaminfo[..4usize], mono[..4usize])
+    overlong_streaminfo[4usize] = 128u8
+    overlong_streaminfo[7usize] = 35u8
+    mem.copy[u8](overlong_streaminfo[8usize..42usize], mono[8usize..42usize])
+    let (_, overlong_error) = flac.stream_info(overlong_streaminfo[..])
+    let (_, overlong_decoder_error) = flac.decoder(overlong_streaminfo[..])
+    if overlong_error != flac.Malformed || overlong_decoder_error != flac.Malformed { os.exit(84i32) }
+
+    // 85: RFC 9639 permits 4 through 32 bits per sample, not the 1-bit value this STREAMINFO encodes.
+    var invalid_bits: [42]u8 = zero
+    mem.copy[u8](invalid_bits[..], mono[..42usize])
+    invalid_bits[21usize] = 0u8
+    let (_, invalid_bits_error) = flac.stream_info(invalid_bits[..])
+    let (_, invalid_bits_decoder_error) = flac.decoder(invalid_bits[..])
+    if invalid_bits_error != flac.Malformed || invalid_bits_decoder_error != flac.Malformed { os.exit(85i32) }
+
+    // 86-87: total samples is an exact STREAMINFO count when nonzero. Changing
+    // only its low byte leaves both valid constant frames and their CRCs intact.
+    let constant = const_flac()
+    mem.copy[u8](copy[..constant.len], constant)
+    copy[25usize] = copy[25usize] - 1u8
+    let (_, short_total_error) = flac.decode(copy[..constant.len], out[..], scratch[..])
+    if short_total_error != flac.Malformed { os.exit(86i32) }
+    mem.copy[u8](copy[..constant.len], constant)
+    copy[25usize] = copy[25usize] + 1u8
+    let (_, long_total_error) = flac.decode(copy[..constant.len], out[..], scratch[..])
+    if long_total_error != flac.Malformed { os.exit(87i32) }
+
+    // 88: a fixed predictor may not wrap/truncate an oversized residual into a sample.
+    let crafted_len = overflowing_fixed_frame(crafted[..], mono)
+    let (_, crafted_error) = flac.decode(crafted[..crafted_len], out[..], scratch[..])
+    if crafted_error != flac.Malformed { os.exit(88i32) }
 
     try io.print("fmt flac ok\n")
     ret ok

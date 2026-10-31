@@ -934,6 +934,7 @@ fn qr_decode(a: *mem.Arena, m: Matrix) -> ([]u8, err) {
                 if pos + 11usize > limit { ret (none, Invalid) }
                 let pair = take_bits(data[0usize..346usize], pos, 11usize)
                 pos += 11usize
+                if pair >= 2025usize { ret (none, Invalid) }
                 if out_len + 2usize > out.len { ret (none, Invalid) }
                 out[out_len] = alnum_char(pair / 45usize)
                 out[out_len + 1usize] = alnum_char(pair % 45usize)
@@ -942,7 +943,9 @@ fn qr_decode(a: *mem.Arena, m: Matrix) -> ([]u8, err) {
             }
             if c < count {
                 if pos + 6usize > limit { ret (none, Invalid) }
-                out[out_len] = alnum_char(take_bits(data[0usize..346usize], pos, 6usize))
+                let single = take_bits(data[0usize..346usize], pos, 6usize)
+                if single >= 45usize { ret (none, Invalid) }
+                out[out_len] = alnum_char(single)
                 out_len += 1usize
                 pos += 6usize
             }
@@ -969,13 +972,16 @@ fn qr_decode(a: *mem.Arena, m: Matrix) -> ([]u8, err) {
                 pos += width
                 if out_len + take > out.len { ret (none, Invalid) }
                 if take == 3usize {
+                    if group >= 1000usize { ret (none, Invalid) }
                     out[out_len] = u8(48usize + group / 100usize)
                     out[out_len + 1usize] = u8(48usize + group / 10usize % 10usize)
                     out[out_len + 2usize] = u8(48usize + group % 10usize)
                 } else if take == 2usize {
+                    if group >= 100usize { ret (none, Invalid) }
                     out[out_len] = u8(48usize + group / 10usize)
                     out[out_len + 1usize] = u8(48usize + group % 10usize)
                 } else {
+                    if group >= 10usize { ret (none, Invalid) }
                     out[out_len] = u8(48usize + group)
                 }
                 out_len += take
@@ -1019,6 +1025,11 @@ fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err) {
         i += 1usize
     }
     if text_in.len == 0usize { ret (none, Invalid) }
+    if digits {
+        if text_in.len / 2usize > 99usize { ret (none, TooLong) }
+    } else {
+        if text_in.len > 99usize { ret (none, TooLong) }
+    }
     var codes: [128]usize = zero
     var count = 0usize
     var checksum = 0usize
@@ -1041,7 +1052,6 @@ fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err) {
             i += 1usize
         }
     }
-    if count > 100usize { ret (none, TooLong) }
     checksum = codes[0usize]
     i = 1usize
     while i < count {
@@ -1418,6 +1428,7 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
                             let ux_y = ry / span
                             let uy_x = (list[down].x - list[corner].x) / span
                             let uy_y = (list[down].y - list[corner].y) / span
+                            let candidate_mark = mem.mark(a)
                             let (grid, grid_error) = mem.alloc[u8](a, n * n)
                             if grid_error == ok {
                                 var row = 0usize
@@ -1440,6 +1451,7 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
                                 let (found, found_error) = qr_decode(a, Matrix { size: n, modules: grid })
                                 if found_error == ok { ret (found, ok) }
                             }
+                            mem.reset(a, candidate_mark)
                         }
                         attempt += 1usize
                     }

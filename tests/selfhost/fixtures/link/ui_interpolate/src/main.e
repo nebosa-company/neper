@@ -173,6 +173,19 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// The external oracle's singular decomposition does not preserve this rank-one
+// transform, so keep this regression as a direct round-trip invariant.
+fn keeps_singular_second_axis() -> bool {
+    var singular: [6]f64 = zero
+    singular[2usize] = 1.0f64
+    singular[4usize] = 3.0f64
+    singular[5usize] = -4.0f64
+    let kept = interp.lerp_affine(singular, singular, 0.5f64)
+    if !close(kept[0usize], 0.0f64) || !close(kept[1usize], 0.0f64) { ret false }
+    if !close(kept[2usize], 1.0f64) || !close(kept[3usize], 0.0f64) { ret false }
+    ret close(kept[4usize], 3.0f64) && close(kept[5usize], -4.0f64)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -190,6 +203,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_13()) != 0u8 { os.exit(14i32) }
     if run_chunk(a, vectors_14()) != 0u8 { os.exit(15i32) }
     if run_chunk(a, vectors_15()) != 0u8 { os.exit(16i32) }
+    if !keeps_singular_second_axis() { os.exit(100i32) }
     try io.print("ui interpolate ok")
     ret ok
 }

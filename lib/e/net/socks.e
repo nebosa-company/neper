@@ -67,7 +67,7 @@ fn read_bytes(source: *io.Reader, dst: []u8) -> err {
 
 // Offers the methods and, for method 2, runs RFC 1929; `user` empty means no credentials.
 fn negotiate(source: *io.Reader, sink: *io.Writer, user: str, password: str) -> err {
-    if user.len > 255usize || password.len > 255usize { ret Invalid }
+    if user.len > 255usize || password.len > 255usize || (user.len > 0usize && password.len == 0usize) { ret Invalid }
     var greeting: [4]u8 = zero
     greeting[0] = VERSION
     var length = 3usize
@@ -150,17 +150,17 @@ fn address_atyp(address: net.Address, bytes: []u8) -> (u8, usize) {
     ret (ATYP_IPV6, n)
 }
 
-// One reply: VER REP RSV ATYP BND.ADDR BND.PORT. A non-zero REP is `Rejected` at once with
-// `code` set (the proxy closes after a refusal, so the rest is not read).
+// One reply: VER REP RSV ATYP BND.ADDR BND.PORT. The complete reply is consumed even when
+// REP is non-zero, so the next protocol read starts at a message boundary.
 fn read_reply(source: *io.Reader) -> (Reply, err) {
     var reply = empty_reply()
     var head: [4]u8 = zero
     let head_read = read_bytes(source, head[0..])
     if head_read != ok { ret (reply, head_read) }
     if head[0] != VERSION { ret (reply, Protocol) }
+    if head[2] != 0u8 { ret (reply, Protocol) }
     reply.code = head[1]
     reply.atyp = head[3]
-    if head[1] != 0u8 { ret (reply, Rejected) }
     if head[3] == ATYP_IPV4 {
         var four: [4]u8 = zero
         let got = read_bytes(source, four[0..])
@@ -185,6 +185,7 @@ fn read_reply(source: *io.Reader) -> (Reply, err) {
     let port_read = read_bytes(source, port[0..])
     if port_read != ok { ret (reply, port_read) }
     reply.port = (u16(port[0]) << 8u32) | u16(port[1])
+    if reply.code != 0u8 { ret (reply, Rejected) }
     ret (reply, ok)
 }
 

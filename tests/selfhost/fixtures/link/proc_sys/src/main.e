@@ -148,6 +148,40 @@ fn vectors_4() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // CPU ticks must retain millisecond precision for frequencies that do not divide
+    // 1000, including frequencies above 1000 Hz where the old integer scale was zero.
+    let cpu_src = "cpu 6 3 4 5 6 7 8\n"
+    let (at_300, e_300) = format.parse_cpu_times(cpu_src, 300u64)
+    if e_300 != ok || at_300.user_ms != 30u64 || at_300.system_ms != 63u64 || at_300.idle_ms != 16u64 || at_300.iowait_ms != 20u64 { os.exit(114i32) }
+    let (at_1024, e_1024) = format.parse_cpu_times(cpu_src, 1024u64)
+    if e_1024 != ok || at_1024.user_ms != 8u64 || at_1024.system_ms != 18u64 || at_1024.idle_ms != 4u64 || at_1024.iowait_ms != 5u64 { os.exit(115i32) }
+    let (_, zero_hz) = format.parse_cpu_times(cpu_src, 0u64)
+    if zero_hz == ok { os.exit(116i32) }
+    // Numeric text and unit conversions must refuse overflow instead of wrapping values.
+    let (_, _, decimal_overflow) = format.read_number("18446744073709551616", 0usize)
+    if decimal_overflow { os.exit(117i32) }
+    let (_, cpu_overflow) = format.parse_cpu_times("cpu 1 1 1 1 18446744073709551616\n", 100u64)
+    if cpu_overflow != format.Malformed { os.exit(118i32) }
+    let (_, kib_overflow) = format.parse_meminfo("MemTotal: 18014398509481984 kB\n")
+    if kib_overflow != format.Malformed { os.exit(119i32) }
+    let (_, fallback_overflow) = format.parse_meminfo("MemTotal: 1 kB\nMemFree: 18014398509481983 kB\nBuffers: 1 kB\nCached: 1 kB\n")
+    if fallback_overflow != format.Malformed { os.exit(120i32) }
+    let (_, uptime_whole_overflow) = format.parse_uptime_ms("18446744073709552")
+    if uptime_whole_overflow != format.Malformed { os.exit(121i32) }
+    let (_, uptime_fraction_overflow) = format.parse_uptime_ms("18446744073709551.999")
+    if uptime_fraction_overflow != format.Malformed { os.exit(122i32) }
+    let (_, stat_valid) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_valid != ok { os.exit(123i32) }
+    let (_, stat_overflow) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 18446744073709551616\n")
+    if stat_overflow != format.Malformed { os.exit(124i32) }
+    let (_, stat_pid_u32_overflow) = format.parse_stat("4294967296 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_pid_u32_overflow != format.Malformed { os.exit(125i32) }
+    let (_, stat_parent_u32_overflow) = format.parse_stat("1 (x) R 4294967296 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17\n")
+    if stat_parent_u32_overflow != format.Malformed { os.exit(126i32) }
+    let (_, stat_threads_u32_overflow) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 4294967296\n")
+    if stat_threads_u32_overflow != format.Malformed { os.exit(127i32) }
+    let (_, stat_negative_threads) = format.parse_stat("1 (x) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 -1\n")
+    if stat_negative_threads != format.Malformed { os.exit(128i32) }
     if run_chunk(a, vectors_0()) != 0u32 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u32 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u32 { os.exit(3i32) }
@@ -175,18 +209,78 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (list, e9) = sys.processes(a, 8192usize)
     if e9 != ok || list.len == 0usize { os.exit(109i32) }
     var found = false
+    var own_name: str = ""
     var k = 0usize
     while k < list.len {
         if list[k].pid == me {
             found = true
+            own_name = list[k].name
             if list[k].name.len == 0usize || list[k].threads == 0u32 { os.exit(110i32) }
         }
         if list[k].name.len == 0usize { os.exit(111i32) }
         k += 1usize
     }
     if !found { os.exit(112i32) }
+    let (overflow_list, overflow_error) = sys.processes(a, 18446744073709551615usize)
+    if overflow_error == ok || overflow_list.len != 0usize { os.exit(114i32) }
     let (_, e10) = sys.disk_usage(a, "no-such-volume-xyz/none")
-    if e10 == ok { os.exit(113i32) }
+    if e10 != os.NotFound { os.exit(113i32) }
+    when target.os == .Linux {
+        var rounds = 0usize
+        while rounds < 8usize {
+            let before_count = mem.mark(a)
+            let (_, count_error) = sys.cpu_count(a)
+            if count_error != ok || mem.mark(a) != before_count { os.exit(115i32) }
+            let before_times = mem.mark(a)
+            let (_, times_error) = sys.cpu_times(a)
+            if times_error != ok || mem.mark(a) != before_times { os.exit(115i32) }
+            let before_memory = mem.mark(a)
+            let (_, memory_error) = sys.memory(a)
+            if memory_error != ok || mem.mark(a) != before_memory { os.exit(115i32) }
+            let before_uptime = mem.mark(a)
+            let (_, uptime_error) = sys.uptime_ms(a)
+            if uptime_error != ok || mem.mark(a) != before_uptime { os.exit(115i32) }
+            let before_self_memory = mem.mark(a)
+            let (_, self_memory_error) = sys.self_memory(a)
+            if self_memory_error != ok || mem.mark(a) != before_self_memory { os.exit(115i32) }
+            rounds += 1usize
+        }
+        var process_rounds = 0usize
+        var saved_small_name: str = ""
+        var saved_name_address = 0usize
+        while process_rounds < 8usize {
+            let before_small_processes = mem.mark(a)
+            let (small_list, small_error) = sys.processes(a, 1usize)
+            if small_error != ok || small_list.len != 1usize || small_list[0usize].name.len == 0usize { os.exit(116i32) }
+            let small_growth = mem.mark(a) - before_small_processes
+            let small_bound = 4usize * mem.size_of[sys.ProcessInfo]() + 128usize
+            if small_growth > small_bound { os.exit(116i32) }
+            let name_address = mem.address_of(&small_list[0usize].name[0usize])
+            if process_rounds == 0usize {
+                saved_small_name = small_list[0usize].name
+                saved_name_address = name_address
+            } else if name_address == saved_name_address || !str.eq(saved_small_name, small_list[0usize].name) {
+                os.exit(116i32)
+            }
+            process_rounds += 1usize
+        }
+        let (later_list, later_error) = sys.processes(a, 8192usize)
+        if later_error != ok { os.exit(117i32) }
+        var later_found = false
+        var later_index = 0usize
+        while later_index < later_list.len {
+            if later_list[later_index].pid == me {
+                later_found = true
+                if !str.eq(own_name, later_list[later_index].name) { os.exit(117i32) }
+            }
+            later_index += 1usize
+        }
+        if !later_found { os.exit(117i32) }
+        let (_, not_dir_error) = sys.disk_usage(a, "/proc/self/stat/child")
+        if not_dir_error != os.Failed { os.exit(118i32) }
+        let (_, nul_error) = sys.disk_usage(a, "/proc\0/self")
+        if nul_error != os.Failed { os.exit(119i32) }
+    }
     try io.print("proc sys ok")
     ret ok
 }

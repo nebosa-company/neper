@@ -205,6 +205,9 @@ fn parse_field(spec: str, min: i64, max: i64, table: str, has_names: bool) -> (u
                 } else {
                     lo = endpoint(range, table, has_names, min)
                     hi = lo
+                    // `n/step` steps from n through the field maximum; only a
+                    // bare numeric value denotes one selected value.
+                    if slashes == 1usize { hi = max }
                 }
             }
             if lo < 0i64 || hi < 0i64 || lo < min || hi > max || lo > hi { ret (0u64, false) }

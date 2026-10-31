@@ -13,6 +13,12 @@ fn main() -> i64 {
     if fixed.floor(-98304i32) != -2i32 { ret 4i64 }
     if fixed.ceil(98304i32) != 2i32 { ret 5i64 }
     if fixed.round(98304i32) != 2i32 { ret 6i64 }
+// The extrema stay defined: conversion truncates toward zero, ceil/round may
+// answer 32768, and the unrepresentable positive magnitude saturates.
+let min_fx = mem.bitcast[i32](2147483648u32)
+if fixed.to_int(min_fx) != -32768i32 || fixed.to_int(min_fx + 1i32) != -32767i32 { ret 39i64 }
+if fixed.ceil(2147483647i32) != 32768i32 || fixed.round(2147483647i32) != 32768i32 { ret 40i64 }
+if fixed.abs(min_fx) != 2147483647i32 { ret 41i64 }
 
     // Multiplication and division carry a 64-bit intermediate.
     if fixed.mul(131072i32, 196608i32) != 393216i32 { ret 7i64 }
@@ -44,6 +50,8 @@ fn main() -> i64 {
     if fixed.sin(49152i32) != -65536i32 { ret 21i64 }
     if fixed.cos(0i32) != 65536i32 { ret 22i64 }
     if fixed.cos(16384i32) != 0i32 { ret 23i64 }
+    // Phase shifting a high valid angle is still modular, not an overflowing add.
+    if fixed.cos(2147483647i32) != fixed.sin(16383i32) { ret 42i64 }
     // A whole turn later is the same angle, which is what masking the turns buys.
     if fixed.sin(16384i32 + 65536i32) != fixed.sin(16384i32) { ret 24i64 }
     // One twelfth of a turn is 30 degrees, whose sine is a half.
@@ -51,6 +59,8 @@ fn main() -> i64 {
 
     // 3-4-5, so the length is exactly 5 and the unit vector is (0.6, 0.8).
     if fixed.length(196608i32, 262144i32) != 327680i32 { ret 26i64 }
+    // The unrepresentable vector magnitude saturates instead of overflowing its Q32 sum.
+    if fixed.length(min_fx, min_fx) != 2147483647i32 { ret 43i64 }
     let (unit_x, unit_y) = fixed.normalize(196608i32, 262144i32)
     if unit_x != 39321i32 || unit_y != 52428i32 { ret 27i64 }
     if fixed.length(0i32, 0i32) != 0i32 { ret 28i64 }

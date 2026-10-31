@@ -288,10 +288,15 @@ fn index_lookup_sparse(index: []const IndexEntry, keys: []const u64, page_size: 
 // One bitmap per distinct value of a column with values `< cardinality`,
 // laid out back to back in `out`; answers the words per bitmap.
 fn index_bitmap(values: []const u8, cardinality: usize, out: []u64) -> (usize, err) {
-    let words = (values.len + 63usize) / 64usize
-    if out.len < words * cardinality { ret (0usize, TooSmall) }
+    // Round up without overflowing when `values.len` reaches the machine limit.
+    var words = values.len / 64usize
+    if values.len % 64usize != 0usize { words += 1usize }
+    // The caller supplies the backing storage for every value's bitmap.  Prove
+    // the product fits before calculating it or using it as a loop bound.
+    if cardinality > 0usize && words > out.len / cardinality { ret (0usize, TooSmall) }
+    let needed = words * cardinality
     var w = 0usize
-    while w < words * cardinality {
+    while w < needed {
         out[w] = 0u64
         w += 1usize
     }
@@ -847,6 +852,7 @@ fn wal_truncate(w: *Wal, checkpoint_lsn: u64) -> usize {
 
 // Parse the record at `off`; answers (lsn, kind, key, val, ok | Corrupt).
 fn wal_record(log: []const u8, off: usize) -> (u64, u8, u64, i64, err) {
+    if off > log.len || RECORD > log.len - off { ret (0u64, 0u8, 0u64, 0i64, Corrupt) }
     let crc = hash.crc32(log[off..off + 25usize])
     var stored = 0u32
     var i = 0usize
@@ -1013,14 +1019,28 @@ fn txn_lock_2pl(lt: *LockTable, txn: u32, key: u64, exclusive: bool) -> (bool, b
         i = 0usize
         while i < lt.n {
             if lt.keys[i] == key && lt.owners[i] != txn && (exclusive || lt.exclusive[i]) {
-                if lt.wait_n >= lt.waits.len { ret (false, false, Full) }
-                lt.waits[lt.wait_n] = dl.Edge { from: txn, to: lt.owners[i] }
-                lt.wait_n += 1usize
+                var wait_seen = false
+                var wait_index = 0usize
+                while wait_index < lt.wait_n {
+                    if lt.waits[wait_index].from == txn && lt.waits[wait_index].to == lt.owners[i] { wait_seen = true }
+                    wait_index += 1usize
+                }
+                if !wait_seen {
+                    if lt.wait_n >= lt.waits.len {
+                        lt.wait_n = before
+                        ret (false, false, Full)
+                    }
+                    lt.waits[lt.wait_n] = dl.Edge { from: txn, to: lt.owners[i] }
+                    lt.wait_n += 1usize
+                }
             }
             i += 1usize
         }
         let (cycle, _, e) = dl.wait_for_graph_cycle(lt.waits[..lt.wait_n], lt.txns, lt.scratch)
-        if e != ok { ret (false, false, e) }
+        if e != ok {
+            lt.wait_n = before
+            ret (false, false, e)
+        }
         if cycle {
             lt.wait_n = before
             ret (false, true, ok)

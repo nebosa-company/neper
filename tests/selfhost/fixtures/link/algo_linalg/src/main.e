@@ -20,8 +20,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if matrix.get[f64](m, 1usize, 2usize) != 6.0 || matrix.get[f64](m, 0usize, 1usize) != 2.0 { os.exit(11) }
     let t = matrix.transpose[f64](m)
     if t.rows != 3usize || t.cols != 2usize { os.exit(12) }
+    if matrix.get[f64](t, 0usize, 0usize) != 1.0 || matrix.get[f64](t, 0usize, 1usize) != 4.0 { os.exit(41) }
+    if matrix.get[f64](t, 1usize, 0usize) != 2.0 || matrix.get[f64](t, 1usize, 1usize) != 5.0 { os.exit(41) }
+    if matrix.get[f64](t, 2usize, 0usize) != 3.0 || matrix.get[f64](t, 2usize, 1usize) != 6.0 { os.exit(41) }
+    var row_storage: [4]f64 = [4]f64{ 7.0, 8.0, 9.0, 10.0 }
+    let (row, row_error) = matrix.view[f64](row_storage[0..], 1usize, 4usize, 4usize)
+    if row_error != ok { os.exit(42) }
+    let column = matrix.transpose[f64](row)
+    if column.rows != 4usize || column.cols != 1usize { os.exit(43) }
+    if matrix.get[f64](column, 0usize, 0usize) != 7.0 || matrix.get[f64](column, 1usize, 0usize) != 8.0 { os.exit(44) }
+    if matrix.get[f64](column, 2usize, 0usize) != 9.0 || matrix.get[f64](column, 3usize, 0usize) != 10.0 { os.exit(44) }
     matrix.set[f64](m, 0usize, 0usize, 10.0)
-    if storage[0] != 10.0 { os.exit(13) }
+    if storage[0] != 10.0 || matrix.get[f64](t, 0usize, 0usize) != 10.0 { os.exit(13) }
     let (_, bad) = matrix.view[f64](storage[0..], 3usize, 3usize, 3usize)
     if bad != matrix.Shape { os.exit(14) }
     var right_storage: [6]f64 = [6]f64{ 1.0, 0.0, 0.0, 1.0, 1.0, 1.0 }

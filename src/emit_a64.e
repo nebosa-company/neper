@@ -450,6 +450,11 @@ fn size_field(width: usize) -> usize {
 fn load_acquire(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x08DFFC00usize | (rn << 5usize) | rt) }
 fn store_release(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x089FFC00usize | (rn << 5usize) | rt) }
 
+// LDAXR/STLXR: the exclusive pair every read-modify-write loops on (D5945: LSE is
+// ARMv8.1, and arm64-v8a promises ARMv8.0). `rs` gets 0 when the store took.
+fn load_exclusive(output: *emit_x64.Buffer, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x085FFC00usize | (rn << 5usize) | rt) }
+fn store_exclusive(output: *emit_x64.Buffer, rs: usize, rt: usize, rn: usize, width: usize) -> err { ret instruction_word(output, size_field(width) | 0x0800FC00usize | (rs << 16usize) | (rn << 5usize) | rt) }
+
 // The ARMv8.1 LSE read-modify-writes with acquire and release, by `kind`: 0 SWP,
 // 1 LDADD, 3 LDCLR (and-not), 4 LDSET (or), 5 LDEOR, then the signed and unsigned
 // min/max. `rs` is the operand and `rt` gets the value that was there.
@@ -519,6 +524,17 @@ fn float_fused(output: *emit_x64.Buffer, vd: usize, vn: usize, vm: usize, va: us
 // FCVT between the two widths: to double from single, or to single from double.
 fn float_widen(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x1E22C000usize | (vn << 5usize) | vd) }
 fn float_narrow(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x1E624000usize | (vn << 5usize) | vd) }
+
+// FCVT with a half-precision side (D5913): `type` names the source and the destination
+// rides in bits 16:15. Rounding is the FPCR's, nearest-even by default; a NaN keeps its
+// payload, which the caller replaces with section 11's canonical one.
+fn float_half_to_single(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x1EE24000usize | (vn << 5usize) | vd) }
+fn float_single_to_half(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x1E23C000usize | (vn << 5usize) | vd) }
+fn float_double_to_half(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x1E63C000usize | (vn << 5usize) | vd) }
+
+// FCVTXN: double to single rounded to odd, so a second rounding to a narrower format
+// is the one rounding of the double.
+fn float_narrow_odd(output: *emit_x64.Buffer, vd: usize, vn: usize) -> err { ret instruction_word(output, 0x7E616800usize | (vn << 5usize) | vd) }
 
 // SCVTF/UCVTF from a whole 64-bit register.
 fn float_from_integer(output: *emit_x64.Buffer, vd: usize, rn: usize, unsigned: bool, double: bool) -> err {

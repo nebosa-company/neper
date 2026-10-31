@@ -238,6 +238,31 @@ fn arr16(b: []const u8) -> [16]u8 {
     ret out
 }
 
+fn binary_tsresol() -> bool {
+    var bytes: [96]u8 = zero
+    pcap.put32(bytes[..], 0usize, 0x0A0D0D0Au32)
+    pcap.put32(bytes[..], 4usize, 28u32)
+    pcap.put32(bytes[..], 8usize, 0x1A2B3C4Du32)
+    pcap.put32(bytes[..], 24usize, 28u32)
+    pcap.put32(bytes[..], 28usize, 1u32)
+    pcap.put32(bytes[..], 32usize, 32u32)
+    pcap.put32(bytes[..], 40usize, 65535u32)
+    pcap.put16(bytes[..], 44usize, 9u32)
+    pcap.put16(bytes[..], 46usize, 1u32)
+    bytes[48usize] = 131u8
+    pcap.put32(bytes[..], 56usize, 32u32)
+    pcap.put32(bytes[..], 60usize, 6u32)
+    pcap.put32(bytes[..], 64usize, 32u32)
+    pcap.put32(bytes[..], 76usize, 4u32)
+    pcap.put32(bytes[..], 88usize, 32u32)
+    let (opened, open_error) = pcap.open(bytes[..])
+    if open_error != ok { ret false }
+    var reader = opened
+    let (record, has_record, next_error) = pcap.next(&reader)
+    if next_error != ok || !has_record { ret false }
+    ret record.ts_sec == 0u64 && record.ts_nsec == 500000000u32
+}
+
 fn pcap_result(a: *mem.Arena, data: []const u8) -> json.Value {
     var o = obj(a)
     var r: pcap.Reader = zero
@@ -505,7 +530,26 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+fn check_noninitial_fragment() -> bool {
+    var data: [56]u8 = zero
+    data[0usize] = 96u8
+    data[4usize] = 0u8
+    data[5usize] = 16u8
+    data[6usize] = 44u8
+    data[40usize] = 60u8
+    data[42usize] = 0u8
+    data[43usize] = 9u8
+    data[48usize] = 17u8
+    data[49usize] = 255u8
+    let (ip, parse_error) = packet.parse_ipv6(data[..])
+    if parse_error != ok || !ip.fragment || ip.fragment_offset != 1u16 || !ip.more_fragments { ret false }
+    if ip.protocol != 60u8 || ip.payload.len != 8usize || ip.payload[0usize] != 17u8 || ip.payload[1usize] != 255u8 { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if !binary_tsresol() { os.exit(31i32) }
+    if !check_noninitial_fragment() { os.exit(30i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }

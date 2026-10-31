@@ -219,7 +219,9 @@ fn rsa_public_key(der: []const u8) -> (RsaPublicKey, err) {
     if modulus_error != ok || exponent_error != ok || more_error != ok || has_more { ret (zero, InvalidCertificate) }
     let n = unsigned_integer(modulus.content)
     let e = unsigned_integer(exponent.content)
-    if n.len == 0usize || e.len == 0usize || modulus.content[0] >= 128u8 || exponent.content[0] >= 128u8 { ret (zero, InvalidCertificate) }
+    // A public exponent wider than 64 bits has no interoperable use and makes
+    // modular verification work proportional to attacker-controlled input size.
+    if n.len == 0usize || e.len == 0usize || e.len > 8usize || modulus.content[0] >= 128u8 || exponent.content[0] >= 128u8 { ret (zero, InvalidCertificate) }
     ret (RsaPublicKey { modulus: n, exponent: e }, ok)
 }
 
@@ -374,12 +376,14 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     // on the certificate so an unused supplied suffix can parse but no verified
     // chain can pass through it.
     var names: []const str = zero
+    var has_extensions = false
     while true {
         let (rest, has_rest, rest_error) = asn1.reader_next_err(&fields)
         if rest_error != ok { ret (zero, InvalidCertificate) }
         if !has_rest { break }
         if rest.tag.class == .Context && rest.tag.number == 3u32 && rest.tag.constructed {
-            if version != 2i64 { ret (zero, InvalidCertificate) }
+            if version != 2i64 || has_extensions { ret (zero, InvalidCertificate) }
+            has_extensions = true
             let (wrapper0, wrapper_error) = inside(rest)
             if wrapper_error != ok { ret (zero, wrapper_error) }
             var wrapper = wrapper0
@@ -387,6 +391,20 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
             if list_error != ok { ret (zero, list_error) }
             let (extensions0, extensions_error) = inside(list)
             if extensions_error != ok { ret (zero, extensions_error) }
+            // RFC 5280 allows each extension OID at most once.  Count the
+            // sequence first so the actual parse can retain every raw OID,
+            // including unknown extensions, without a fixed limit.
+            var extension_count = 0usize
+            var extension_counter = extensions0
+            while true {
+                let (_, has_counted_extension, counted_extension_error) = asn1.reader_next_err(&extension_counter)
+                if counted_extension_error != ok { ret (zero, InvalidCertificate) }
+                if !has_counted_extension { break }
+                extension_count += 1usize
+            }
+            let (seen_oids, seen_oids_error) = mem.alloc[[]const u8](a, extension_count)
+            if seen_oids_error != ok { ret (zero, seen_oids_error) }
+            var seen_oid_count = 0usize
             var extensions = extensions0
             while true {
                 let (extension, has_extension, extension_error) = asn1.reader_next_err(&extensions)
@@ -397,6 +415,13 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                 var parts = parts0
                 let (extension_oid, extension_oid_error) = expect(&parts, 6u32, false)
                 if extension_oid_error != ok { ret (zero, extension_oid_error) }
+                var seen_oid = 0usize
+                while seen_oid < seen_oid_count {
+                    if oid_equal(seen_oids[seen_oid], extension_oid.content) { ret (zero, InvalidCertificate) }
+                    seen_oid += 1usize
+                }
+                seen_oids[seen_oid_count] = extension_oid.content
+                seen_oid_count += 1usize
                 let (first_payload, payload_error) = next(&parts)
                 if payload_error != ok { ret (zero, payload_error) }
                 var payload = first_payload
@@ -445,8 +470,8 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                     }
                     if has_constraint {
                         if constraint.tag.class != .Universal || constraint.tag.number != 2u32 || constraint.tag.constructed { ret (zero, InvalidCertificate) }
-                        let (distance, distance_error) = asn1.integer_of(constraint)
-                        if distance_error != ok || distance < 0i64 || distance > 65535i64 || !certificate.is_ca { ret (zero, InvalidCertificate) }
+                        let (distance, _, distance_signed, distance_error) = asn1.integer_of(constraint)
+                        if distance_error != ok || !distance_signed || distance < 0i64 || distance > 65535i64 || !certificate.is_ca { ret (zero, InvalidCertificate) }
                         certificate.has_path_len = true
                         certificate.path_len = u16(distance)
                         let (_, has_constraint_tail, constraint_tail_error) = asn1.reader_next_err(&flags)
@@ -457,7 +482,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                     handled = true
                     var encoded_bits = asn1.reader(payload.content, DEPTH)
                     let (bits, bits_error) = expect(&encoded_bits, 3u32, false)
-                    if bits_error != ok || bits.content.len == 0usize || bits.content[0] > 7u8 { ret (zero, InvalidCertificate) }
+                    if bits_error != ok || bits.content.len == 0usize || !asn1.bit_string_valid(bits.content[0usize], bits.content[1usize..]) { ret (zero, InvalidCertificate) }
                     let (_, has_bits_tail, bits_tail_error) = asn1.reader_next_err(&encoded_bits)
                     if bits_tail_error != ok || has_bits_tail { ret (zero, InvalidCertificate) }
                     certificate.has_key_usage = true

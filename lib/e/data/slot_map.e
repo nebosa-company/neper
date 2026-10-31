@@ -7,10 +7,11 @@
 // takes at `init`, never 0), so a key from another map -- or from a map whose arena
 // was reset and whose storage a new map now reuses -- answers nothing either. The
 // cost of a protected access is three compares: owner, liveness, generation.
-// ponytail: owners come from a module counter that is not atomic; two maps made at
-// once on two threads may share one, and 2^32 maps wrap it.
+// Owners come from a mutex-protected nonwrapping sequence: concurrent initializations
+// get distinct nonzero numbers, and exhaustion fails rather than reissuing an owner.
 
 use e.mem
+use e.sync
 
 type Key = struct { slot: u32, generation: u32, owner: u32 }
 type SlotMap[T: type] = struct { state: *void }
@@ -24,9 +25,24 @@ type State[T: type] = struct { values: []T, generations: []u32, live: []bool, ne
 
 const NO_SLOT: u32 = 4294967295u32
 const LAST_GENERATION: u32 = 4294967295u32
+const LAST_OWNER: u32 = 4294967295u32
 
-// The last owner number handed out.
+// The last owner number handed out. A zeroed mutex is unlocked on every host; it
+// serializes the counter without making the map's separately allocated storage shared.
+var owner_lock: [1]sync.Mutex = zero
 var last_owner: u32 = 0u32
+
+fn take_owner() -> (u32, bool) {
+    sync.mutex_lock(&owner_lock[0usize])
+    if last_owner == LAST_OWNER {
+        sync.mutex_unlock(&owner_lock[0usize])
+        ret (0u32, false)
+    }
+    last_owner += 1u32
+    let owner = last_owner
+    sync.mutex_unlock(&owner_lock[0usize])
+    ret (owner, true)
+}
 
 fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (SlotMap[T], err) {
     var empty: SlotMap[T] = zero
@@ -41,9 +57,9 @@ fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (SlotMap[T], err) {
     if live_error != ok { ret (empty, live_error) }
     let (next_free, next_free_error) = mem.alloc[u32](a, initial_capacity)
     if next_free_error != ok { ret (empty, next_free_error) }
-    last_owner = last_owner +% 1u32
-    if last_owner == 0u32 { last_owner = 1u32 }
-    storage[0usize] = State[T] { values: values, generations: generations, live: live, next_free: next_free, free_head: NO_SLOT, len: 0usize, owner: last_owner }
+    let (owner, owner_available) = take_owner()
+    if !owner_available { ret (empty, TooLarge) }
+    storage[0usize] = State[T] { values: values, generations: generations, live: live, next_free: next_free, free_head: NO_SLOT, len: 0usize, owner: owner }
     thread_free[T](&storage[0usize])
     ret (SlotMap[T] { state: mem.cast[*void](&storage[0usize]) }, ok)
 }

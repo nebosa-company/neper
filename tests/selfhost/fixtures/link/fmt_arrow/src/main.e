@@ -20,6 +20,68 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var cols: [16]arrow.Column = zero
     var names: [16]str = zero
 
+    // The first record-batch node is length seven with a one-byte validity
+    // bitmap. Both impossible metadata and a mismatched bitmap are rejected.
+    var bad_count = stream
+    bad_count[984usize] = 8u8
+    let (_, count_error) = arrow.columns(bad_count[..], cols[..], names[..])
+    if count_error != arrow.Malformed { os.exit(12i32) }
+    var bad_validity = stream
+    bad_validity[984usize] = 0u8
+    bad_validity[1136usize] = 0u8
+    let (_, validity_error) = arrow.columns(bad_validity[..], cols[..], names[..])
+    if validity_error != arrow.Malformed { os.exit(12i32) }
+
+    // The List's terminal offset may not exceed its seven-row child.
+    var bad_list_offset = stream
+    bad_list_offset[1396usize] = 8u8
+    let (_, list_offset_error) = arrow.columns(bad_list_offset[..], cols[..], names[..])
+    if list_offset_error != arrow.Malformed { os.exit(12i32) }
+
+    // Offset ordering and signedness are structural even for the null List row.
+    var bad_null_offsets = stream
+    bad_null_offsets[1380usize] = 1u8
+    let (_, null_offsets_error) = arrow.columns(bad_null_offsets[..], cols[..], names[..])
+    if null_offsets_error != arrow.Malformed { os.exit(12i32) }
+    var negative_null_offset = stream
+    negative_null_offset[1380usize] = 255u8
+    negative_null_offset[1381usize] = 255u8
+    negative_null_offset[1382usize] = 255u8
+    negative_null_offset[1383usize] = 255u8
+    let (_, negative_offset_error) = arrow.columns(negative_null_offset[..], cols[..], names[..])
+    if negative_offset_error != arrow.Malformed { os.exit(12i32) }
+
+    // 2^62 + 1 makes a wrapped `(length + 1) * 4` look like an eight-byte
+    // Utf8 offsets requirement.  The zero-null second Utf8 node must reject
+    // it before the wrapped last-row offset can be read.
+    var huge_utf8 = stream
+    huge_utf8[1120usize] = 1u8
+    huge_utf8[1127usize] = 64u8
+    let (_, huge_utf8_error) = arrow.columns(huge_utf8[..], cols[..], names[..])
+    if huge_utf8_error != arrow.Malformed { os.exit(13i32) }
+
+    // A 2^62 Int64 node cannot fit the small fixed-width data buffer.  The
+    // decoder must reject it without multiplying its hostile row count by 8.
+    var huge_i64 = stream
+    huge_i64[992usize] = 0u8
+    huge_i64[999usize] = 64u8
+    let (_, huge_i64_error) = arrow.columns(huge_i64[..], cols[..], names[..])
+    if huge_i64_error != arrow.Malformed { os.exit(13i32) }
+
+    // A zero-row batch still has one offset per Utf8 column.  Each FieldNode
+    // in this known-good batch is made empty so the Utf8 last-row check must
+    // not calculate `length - 1`.
+    var empty_batch = stream
+    var node = 0usize
+    while node < 10usize {
+        let field_node = 976usize + node * 16usize
+        empty_batch[field_node] = 0u8
+        empty_batch[field_node + 8usize] = 0u8
+        node += 1usize
+    }
+    let (empty_count, empty_error) = arrow.columns(empty_batch[..], cols[..], names[..])
+    if empty_error != ok || empty_count != 10usize || cols[4usize].len != 0usize || cols[9usize].len != 0usize { os.exit(13i32) }
+
     // 1: schema count and names (pre-order, children included).
     let (count, e) = arrow.columns(stream[..], cols[..], names[..])
     if e != ok || count != 10usize { os.exit(1i32) }
@@ -93,7 +155,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (start, end, range_error) = arrow.list_range(&cols[4usize], 3usize)
     if range_error != ok || start != 2usize || end != 7usize { os.exit(6i32) }
 
-    // 7: list ranges and child values.
+    // 7: Utf8 data must be valid UTF-8, while Binary remains arbitrary bytes.
+    let short_offsets: [8]u8 = [8]u8{ 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8 }
+    let invalid_bytes: [2]u8 = [2]u8{ 195u8, 40u8 }
+    var invalid_utf8: arrow.Column = zero
+    invalid_utf8.kind = .Utf8
+    invalid_utf8.len = 1usize
+    invalid_utf8.offsets = short_offsets[..]
+    invalid_utf8.data = invalid_bytes[..]
+    let (bad_text, bad_valid, bad_error) = arrow.get_utf8(&invalid_utf8, 0usize)
+    if bad_error != arrow.Malformed || bad_valid || bad_text.len != 0usize { os.exit(11i32) }
+    invalid_utf8.kind = .Binary
+    let (binary_bytes, binary_valid, binary_error) = arrow.get_binary(&invalid_utf8, 0usize)
+    if binary_error != ok || !binary_valid || binary_bytes.len != 2usize || binary_bytes[0usize] != 195u8 || binary_bytes[1usize] != 40u8 { os.exit(11i32) }
+
+    // 8: list ranges and child values.
     let li_offsets: [8]usize = [8]usize{ 0, 2, 2, 2, 3, 6, 6, 7 }
     let li_valid: [7]bool = [7]bool{ true, true, false, true, true, true, true }
     let (item, item_error) = arrow.struct_child(cols[..count], 5usize, 0usize)
@@ -118,7 +194,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, not_a_list) = arrow.list_range(&cols[1usize], 0usize)
     if not_a_list != arrow.Invalid { os.exit(7i32) }
 
-    // 8: struct children.
+    // 9: struct children.
     let (child_a, a_error) = arrow.struct_child(cols[..count], 7usize, 0usize)
     let (child_b, b_error) = arrow.struct_child(cols[..count], 7usize, 1usize)
     if a_error != ok || b_error != ok || child_a != 8usize || child_b != 9usize { os.exit(8i32) }
@@ -137,11 +213,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
-    // 9: a dictionary-encoded column is unsupported.
+    // 10: a dictionary-encoded column is unsupported.
     let (_, dict_error) = arrow.columns(dict_stream[..], cols[..], names[..])
     if dict_error != arrow.Unsupported { os.exit(9i32) }
 
-    // 10: truncated streams are malformed (inside the body, inside the
+    // 11: truncated streams are malformed (inside the body, inside the
     // metadata, and inside the framing), and too few column slots is TooSmall.
     let (_, body_error) = arrow.columns(stream[..1400usize], cols[..], names[..])
     if body_error != arrow.Malformed { os.exit(10i32) }

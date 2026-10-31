@@ -55,6 +55,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var d3 = avro.decoder(prims[13..])
     let (i1, e11) = avro.read_int(&d3)
     if e11 != ok || i1 != 5i32 { os.exit(8i32) }
+    // Avro strings are UTF-8, unlike byte strings.
+    let valid_text: [3]u8 = [3]u8{ 4u8, 104u8, 105u8 }
+    var d_valid_text = avro.decoder(valid_text[..])
+    let (decoded_text, decoded_text_error) = avro.read_string(&d_valid_text)
+    if decoded_text_error != ok || !str.eq(decoded_text, "hi") { os.exit(33i32) }
+    let invalid_text: [3]u8 = [3]u8{ 4u8, 195u8, 40u8 }
+    var d_invalid_text = avro.decoder(invalid_text[..])
+    let (_, invalid_text_error) = avro.read_string(&d_invalid_text)
+    if invalid_text_error != avro.Malformed { os.exit(34i32) }
     // Writer schema: 0 Rec, 1..7 fields, 8 tags item, 9 meta value, 10..12 symbols.
     var wk: [13]avro.Kind = zero
     var wname: [13]str = zero
@@ -166,6 +175,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var o7 = avro.sink(buffer[..8])
     var d11 = avro.decoder(written[0..])
     if avro.decode_resolved(&w, 0u32, &r, 0u32, &d11, &o7) != avro.TooSmall { os.exit(22i32) }
+    // A writer union is compatible only when every branch can decode. The null
+    // branch cannot resolve to the string-only reader.
+    let null_written: [1]u8 = [1]u8{ 0 }
+    if avro.resolve(&u, 0u32, &v, 1u32) != avro.Mismatch { os.exit(23i32) }
+    var o8 = avro.sink(buffer[..])
+    var d12 = avro.decoder(null_written[0..])
+    if avro.decode_resolved(&u, 0u32, &v, 1u32, &d12, &o8) != avro.Mismatch { os.exit(24i32) }
+    // `skip` has to apply the same Boolean and enum-domain validation as decode.
+    wk[1usize] = .Boolean
+    let invalid_boolean: [1]u8 = [1]u8{ 2 }
+    var d13 = avro.decoder(invalid_boolean[0..])
+    if avro.skip(&w, 1u32, &d13) != avro.Malformed { os.exit(25i32) }
+    let invalid_enum: [1]u8 = [1]u8{ 6 }
+    var d14 = avro.decoder(invalid_enum[0..])
+    if avro.skip(&w, 6u32, &d14) != avro.Malformed { os.exit(26i32) }
+    // The most-negative block count has no positive counterpart and must not
+    // overflow while a negative-count array block is normalized.
+    var array_kinds: [2]avro.Kind = zero
+    var array_names: [2]str = zero
+    var array_starts: [2]usize = zero
+    var array_counts: [2]usize = zero
+    var array_sizes: [2]usize = zero
+    var array_defaults: [2]str = zero
+    var array_children: [1]u32 = [1]u32{ 1u32 }
+    var array_schema = avro.Schema { kind: array_kinds[..], name: array_names[..], child_start: array_starts[..], child_count: array_counts[..], children: array_children[..], size: array_sizes[..], fallback: array_defaults[..] }
+    node(&array_schema, 0usize, .Array, "", 0usize, 1usize)
+    node(&array_schema, 1usize, .Null, "", 0usize, 0usize)
+    let min_block: [12]u8 = [12]u8{ 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 1u8, 0u8, 0u8 }
+    var d15 = avro.decoder(min_block[..])
+    var o9 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d15, &o9) != avro.Malformed { os.exit(27i32) }
+    // Negative-count blocks state their exact byte size.  The decoder must not
+    // accept a block whose declared size excludes its encoded item.
+    array_kinds[1usize] = .Int
+    let wrong_block_size: [4]u8 = [4]u8{ 1u8, 0u8, 2u8, 0u8 }
+    var d16 = avro.decoder(wrong_block_size[..])
+    var o10 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d16, &o10) != avro.Malformed { os.exit(28i32) }
+    // A 2^32 byte length is valid Avro but must not narrow to zero on wasm32.
+    let oversized_length: [5]u8 = [5]u8{ 128u8, 128u8, 128u8, 128u8, 32u8 }
+    var d17 = avro.decoder(oversized_length[..])
+    let (_, oversized_error) = avro.read_bytes(&d17)
+    if oversized_error != avro.Malformed { os.exit(29i32) }
+    // The same check applies to negative array-block byte sizes used by skip.
+    let oversized_block: [7]u8 = [7]u8{ 1u8, 128u8, 128u8, 128u8, 128u8, 32u8, 0u8 }
+    var d18 = avro.decoder(oversized_block[..])
+    if avro.skip(&array_schema, 0u32, &d18) != avro.Malformed { os.exit(30i32) }
+    // A positive block of Null values has no bytes per item.  The 2^32 count
+    // must be preserved without using it as an iteration count in skip or decode.
+    array_kinds[1usize] = .Null
+    let huge_null_block: [6]u8 = [6]u8{ 128u8, 128u8, 128u8, 128u8, 32u8, 0u8 }
+    var d19 = avro.decoder(huge_null_block[..])
+    if avro.skip(&array_schema, 0u32, &d19) != ok || d19.pos != huge_null_block.len { os.exit(31i32) }
+    var d20 = avro.decoder(huge_null_block[..])
+    var o11 = avro.sink(buffer[..])
+    if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d20, &o11) != ok || d20.pos != huge_null_block.len || !same(buffer[..o11.used], huge_null_block[..]) { os.exit(32i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }

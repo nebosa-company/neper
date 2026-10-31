@@ -112,7 +112,7 @@ fn chi_squared_independence(table: []const f64, rows: usize, cols: usize, yates:
     while r < rows {
         var c = 0usize
         while c < cols {
-            if table[r * cols + c] < 0.0f64 { ret (zero, Invalid) }
+            if !finite(table[r * cols + c]) || table[r * cols + c] < 0.0f64 { ret (zero, Invalid) }
             total += table[r * cols + c]
             c += 1usize
         }
@@ -556,35 +556,53 @@ fn power_z(design: Design, n: usize, effect: f64, alpha: f64, two_sided: bool) -
 
 // Smallest `n` whose t-test power reaches `power`; `Invalid` when the effect is
 // zero or the answer passes ten million.
+fn finite(value: f64) -> bool {
+    if value != value { ret false }
+    // Infinity minus itself is NaN; every finite value subtracts to zero.
+    ret value - value == 0.0f64
+}
+
 fn sample_size_t(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err) {
-    if effect == 0.0f64 || !(power > 0.0f64 && power < 1.0f64) || !(alpha > 0.0f64 && alpha < 1.0f64) { ret (0usize, Invalid) }
+    if effect == 0.0f64 || !finite(effect) || !(power > 0.0f64 && power < 1.0f64) || !(alpha > 0.0f64 && alpha < 1.0f64) { ret (0usize, Invalid) }
     var lo = 2usize
     var hi = 4usize
-    while power_t(design, hi, effect, alpha, two_sided) < power {
+    var reached = power_t(design, hi, effect, alpha, two_sided)
+    if !finite(reached) { ret (0usize, Invalid) }
+    while reached < power {
         lo = hi
         hi = hi * 2usize
         if hi > 10000000usize { ret (0usize, Invalid) }
+        reached = power_t(design, hi, effect, alpha, two_sided)
+        if !finite(reached) { ret (0usize, Invalid) }
     }
     while lo < hi {
         let mid = lo + (hi - lo) / 2usize
-        if power_t(design, mid, effect, alpha, two_sided) < power { lo = mid + 1usize } else { hi = mid }
+        reached = power_t(design, mid, effect, alpha, two_sided)
+        if !finite(reached) { ret (0usize, Invalid) }
+        if reached < power { lo = mid + 1usize } else { hi = mid }
     }
     ret (lo, ok)
 }
 
 // Smallest `n` whose z-test power reaches `power`.
 fn sample_size_z(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err) {
-    if effect == 0.0f64 || !(power > 0.0f64 && power < 1.0f64) || !(alpha > 0.0f64 && alpha < 1.0f64) { ret (0usize, Invalid) }
+    if effect == 0.0f64 || !finite(effect) || !(power > 0.0f64 && power < 1.0f64) || !(alpha > 0.0f64 && alpha < 1.0f64) { ret (0usize, Invalid) }
     var lo = 1usize
     var hi = 2usize
-    while power_z(design, hi, effect, alpha, two_sided) < power {
+    var reached = power_z(design, hi, effect, alpha, two_sided)
+    if !finite(reached) { ret (0usize, Invalid) }
+    while reached < power {
         lo = hi
         hi = hi * 2usize
         if hi > 100000000usize { ret (0usize, Invalid) }
+        reached = power_z(design, hi, effect, alpha, two_sided)
+        if !finite(reached) { ret (0usize, Invalid) }
     }
     while lo < hi {
         let mid = lo + (hi - lo) / 2usize
-        if power_z(design, mid, effect, alpha, two_sided) < power { lo = mid + 1usize } else { hi = mid }
+        reached = power_z(design, mid, effect, alpha, two_sided)
+        if !finite(reached) { ret (0usize, Invalid) }
+        if reached < power { lo = mid + 1usize } else { hi = mid }
     }
     ret (lo, ok)
 }

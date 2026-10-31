@@ -454,11 +454,14 @@ fn rat_div(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err) {
 }
 
 // Cross-multiplied comparison; both denominators are positive, so the order holds.
-fn rat_cmp(a: Rat, b: Rat) -> i32 {
+// The temporary products are arena-owned, so exhaustion must remain observable rather
+// than looking like a mathematical tie.
+fn rat_cmp(a: Rat, b: Rat) -> (i32, err) {
     let (left, left_error) = int_mul(a.num.arena, a.num, b.den)
+    if left_error != ok { ret (0i32, left_error) }
     let (right, right_error) = int_mul(a.num.arena, b.num, a.den)
-    if left_error != ok || right_error != ok { ret 0i32 }
-    ret int_cmp(left, right)
+    if right_error != ok { ret (0i32, right_error) }
+    ret (int_cmp(left, right), ok)
 }
 
 fn rat_format(v: Rat, b: *str.Builder) -> err {

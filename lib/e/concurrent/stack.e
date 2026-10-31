@@ -6,13 +6,14 @@
 // would miss. The free list is a second Treiber stack over the same nodes, with the
 // same tagged word.
 //
-// `next[i]` is written by the thread that owns node `i` (won it off a list) before it
-// publishes the node with a compare-and-swap, and a reader that saw a stale `next[i]`
-// also sees a stale head and its own swap fails; that is the same benign race the
-// pointer version has.
+// A node's reusable `next[i]` storage is generic and therefore non-atomic.  A mutex
+// protects every read and write of that storage: `take` revalidates the list head while
+// holding it before it reads a link, so another operation cannot recycle the slot in
+// between.  The tagged heads still decide the list protocol and ABA protection.
 use e.atomic
+use e.sync
 
-type Stack = struct { head: Atomic[u64], free: Atomic[u64], count: Atomic[u64], next: []u32, value: []u64 }
+type Stack = struct { head: Atomic[u64], free: Atomic[u64], count: Atomic[u64], links_lock: sync.Mutex, next: []u32, value: []u64 }
 error Invalid
 error Full
 
@@ -45,7 +46,7 @@ fn stack(next: []u32, value: []u64) -> (Stack, err) {
     }
     var first = NIL
     if next.len > 0usize { first = 0u32 }
-    ret (Stack { head: atomic.init(u64(NIL)), free: atomic.init(u64(first)), count: atomic.init(0u64), next: next, value: value }, ok)
+    ret (Stack { head: atomic.init(u64(NIL)), free: atomic.init(u64(first)), count: atomic.init(0u64), links_lock: sync.mutex(), next: next, value: value }, ok)
 }
 
 // Takes the top node of the list at `list`, or `NIL` when it is empty.
@@ -54,8 +55,15 @@ fn take(s: *Stack, list: *Atomic[u64]) -> u32 {
         let h = atomic.load(list, .Acquire)
         let i = index_of(h)
         if i == NIL { ret NIL }
+        sync.mutex_lock(&s.links_lock)
+        let current = atomic.load(list, .Acquire)
+        if current != h {
+            sync.mutex_unlock(&s.links_lock)
+            continue
+        }
         let n = s.next[usize(i)]
         let (won, seen) = atomic.cas(list, h, pack(n, version_of(h)), .AcqRel, .Relaxed)
+        sync.mutex_unlock(&s.links_lock)
         if won { ret i }
     }
     ret NIL
@@ -63,9 +71,11 @@ fn take(s: *Stack, list: *Atomic[u64]) -> u32 {
 
 fn give(s: *Stack, list: *Atomic[u64], i: u32) {
     while true {
+        sync.mutex_lock(&s.links_lock)
         let h = atomic.load(list, .Acquire)
         s.next[usize(i)] = index_of(h)
         let (won, seen) = atomic.cas(list, h, pack(i, version_of(h)), .Release, .Relaxed)
+        sync.mutex_unlock(&s.links_lock)
         if won { ret }
     }
 }

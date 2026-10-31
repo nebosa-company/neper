@@ -59,6 +59,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_o: [1]cli.Option = zero
     bad_o[0] = opt("bad name", 0u8, .Bool, false, false, "", "")
     let bad = cli.Command{ name: "bad", help: "", options: bad_o[0usize..1usize], subcommands: none_c[0usize..0usize] }
+    // A seventeen-word path and another branch sharing its retained suffix
+    // must be rejected rather than producing an ambiguous fish condition.
+    var deep: [16]cli.Command = zero
+    var deep_i = 0usize
+    while deep_i < deep.len {
+        deep[deep_i].name = "step"
+        deep[deep_i].options = none_o[0usize..0usize]
+        deep[deep_i].subcommands = none_c[0usize..0usize]
+        if deep_i + 1usize < deep.len { deep[deep_i].subcommands = deep[deep_i + 1usize..deep_i + 2usize] }
+        deep_i += 1usize
+    }
+    var deep_branches: [2]cli.Command = zero
+    deep_branches[0usize] = cli.Command{ name: "left", help: "", options: none_o[0usize..0usize], subcommands: deep[0usize..1usize] }
+    deep_branches[1usize] = cli.Command{ name: "right", help: "", options: none_o[0usize..0usize], subcommands: deep[15usize..16usize] }
+    let deep_root = cli.Command{ name: "deep", help: "", options: none_o[0usize..0usize], subcommands: deep_branches[..] }
+    let deep_limit_root = cli.Command{ name: "deep", help: "", options: none_o[0usize..0usize], subcommands: deep[0usize..1usize] }
+    // A runtime self-cycle must be rejected by parsing, validation and completion.
+    var cyclic_root: [1]cli.Command = zero
+    cyclic_root[0usize] = cli.Command{ name: "cycle", help: "", options: none_o[0usize..0usize], subcommands: none_c[0usize..0usize] }
+    cyclic_root[0usize].subcommands = cyclic_root[0usize..1usize]
+    var args_empty: [1]str = zero
 
     let (solo_bash, e1) = complete.bash(a, &solo)
     let (solo_zsh, e2) = complete.zsh(a, &solo)
@@ -104,6 +125,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ie != complete.Invalid { os.exit(11i32) }
     let (_, ie2) = complete.fish(a, &bad)
     if ie2 != complete.Invalid { os.exit(12i32) }
+    let (_, ie3) = complete.fish(a, &deep_root)
+    if ie3 != complete.Invalid { os.exit(13i32) }
+    let (_, ie_limit) = complete.fish(a, &deep_limit_root)
+    if ie_limit != ok { os.exit(14i32) }
+    if cli.validate(&tool) != ok { os.exit(15i32) }
+    if cli.validate(&deep_root) != ok { os.exit(16i32) }
+    if cli.validate(&cyclic_root[0usize]) != cli.InvalidSpec { os.exit(17i32) }
+    let (_, parse_error) = cli.parse(a, &cyclic_root[0usize], args_empty[0usize..0usize])
+    if parse_error != cli.InvalidSpec { os.exit(18i32) }
+    let (_, ie4) = complete.fish(a, &cyclic_root[0usize])
+    if ie4 != complete.Invalid { os.exit(19i32) }
     try io.print("cli complete ok")
     ret ok
 }

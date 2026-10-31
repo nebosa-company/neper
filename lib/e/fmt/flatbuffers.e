@@ -14,11 +14,16 @@
 
 use e.bytes as raw
 use e.mem
+use e.text.utf8
 
 type Vector = struct { at: usize, len: usize }
 type Builder = struct { buf: []u8, head: usize, minalign: usize, slots: [64]usize, slot_count: usize, table_end: usize, vector_count: usize }
 error Invalid
 error TooSmall
+
+const MAX_U16: usize = 65535usize
+const MAX_U32: usize = 4294967295usize
+const MAX_I32: usize = 2147483647usize
 
 // Positions are read through `bytes.load` (little-endian, bounds-checked).
 fn load[T: type](buf: []const u8, at: usize) -> (T, err) {
@@ -64,16 +69,23 @@ fn field_offset(buf: []const u8, table_pos: usize, field_index: usize) -> (usize
         if usize(soffset) > table_pos { ret (0usize, Invalid) }
         vt = table_pos - usize(soffset)
     } else {
-        vt = table_pos + usize(0i32 - soffset)
+        // Widen before negating: i32::MIN has no positive i32 counterpart. Bound the
+        // forward distance before adding too, so a malformed table cannot wrap `vt`.
+        let distance = usize(0i64 - i64(soffset))
+        if distance > buf.len - table_pos { ret (0usize, Invalid) }
+        vt = table_pos + distance
     }
     let (vsize, vsize_error) = load[u16](buf, vt)
     if vsize_error != ok { ret (0usize, vsize_error) }
-    if usize(vsize) < 4usize || vt + usize(vsize) > buf.len { ret (0usize, Invalid) }
+    if usize(vsize) < 4usize || usize(vsize) > buf.len - vt { ret (0usize, Invalid) }
+    // Validate the caller-supplied index before computing its two-byte vtable slot.
+    let slots = (usize(vsize) - 4usize) / 2usize
+    if field_index >= slots { ret (0usize, ok) }
     let slot_at = 4usize + 2usize * field_index
-    if slot_at + 2usize > usize(vsize) { ret (0usize, ok) }
     let (off, off_error) = load[u16](buf, vt + slot_at)
     if off_error != ok { ret (0usize, off_error) }
     if off == 0u16 { ret (0usize, ok) }
+    if usize(off) > buf.len - table_pos { ret (0usize, Invalid) }
     let pos = table_pos + usize(off)
     if pos >= buf.len { ret (0usize, Invalid) }
     ret (pos, ok)
@@ -142,7 +154,10 @@ fn string_at(buf: []const u8, at: usize) -> (str, err) {
     if e != ok { ret ("", e) }
     let start = at + 4usize
     if usize(n) >= buf.len - start { ret ("", Invalid) }
-    ret (buf[start..start + usize(n)], ok)
+    if buf[start + usize(n)] != 0u8 { ret ("", Invalid) }
+    let text = buf[start..start + usize(n)]
+    if !utf8.validate(text) { ret ("", Invalid) }
+    ret (text, ok)
 }
 
 // A string field, empty when absent.
@@ -271,9 +286,13 @@ fn offset(b: *const Builder) -> usize {
 
 // Pad so that `additional` more bytes leave the front aligned to `size`.
 fn prep(b: *Builder, size: usize, additional: usize) -> err {
+    if size == 0usize || (size & (size - 1usize)) != 0usize { ret Invalid }
     if size > b.minalign { b.minalign = size }
+    // Reserving the scalar/vector bytes before computing padding prevents both
+    // `offset + additional` wrapping and a later head underflow in `put`.
+    if additional > b.head { ret TooSmall }
     let pad = (0usize -% (offset(b) + additional)) & (size - 1usize)
-    if pad + additional > b.head { ret TooSmall }
+    if pad > b.head - additional { ret TooSmall }
     var i = 0usize
     while i < pad {
         b.head -= 1usize
@@ -286,7 +305,7 @@ fn prep(b: *Builder, size: usize, additional: usize) -> err {
 // Prepend a scalar, aligned to its own size.
 fn put[T: type](b: *Builder, v: T) -> err {
     let size = mem.size_of[T]()
-    let e = prep(b, size, 0usize)
+    let e = prep(b, size, size)
     if e != ok { ret e }
     b.head -= size
     ret raw.store[T](b.buf, b.head, v, .Little)
@@ -301,10 +320,12 @@ fn put_bytes(b: *Builder, data: []const u8) -> err {
 
 // Prepend a `uoffset` to something already written at `off`.
 fn put_offset(b: *Builder, off: usize) -> err {
+    if off > offset(b) { ret TooSmall }
     let e = prep(b, 4usize, 0usize)
     if e != ok { ret e }
-    if off > offset(b) { ret TooSmall }
-    let rel = offset(b) - off + 4usize
+    let written = offset(b) - off
+    if written > MAX_U32 - 4usize { ret TooSmall }
+    let rel = written + 4usize
     ret put[u32](b, u32(rel))
 }
 
@@ -321,17 +342,19 @@ fn start_table(b: *Builder, field_count: usize) -> err {
 }
 
 // Record that the value just written is field `field` (for inline structs).
-fn slot(b: *Builder, field: usize) {
+fn slot(b: *Builder, field: usize) -> err {
+    if field >= b.slot_count { ret Invalid }
     b.slots[field] = offset(b)
+    ret ok
 }
 
 // A scalar field; skipped when it equals `fallback`, as the reference does.
 fn add[T: type](b: *Builder, field: usize, v: T, fallback: T) -> err {
+    if field >= b.slot_count { ret Invalid }
     if v == fallback { ret ok }
     let e = put[T](b, v)
     if e != ok { ret e }
-    slot(b, field)
-    ret ok
+    ret slot(b, field)
 }
 
 fn add_u8(b: *Builder, field: usize, v: u8, fallback: u8) -> err { ret add[u8](b, field, v, fallback) }
@@ -354,11 +377,11 @@ fn add_bool(b: *Builder, field: usize, v: bool, fallback: bool) -> err {
 
 // An offset field (string, vector or table written earlier); 0 is skipped.
 fn add_offset(b: *Builder, field: usize, off: usize) -> err {
+    if field >= b.slot_count { ret Invalid }
     if off == 0usize { ret ok }
     let e = put_offset(b, off)
     if e != ok { ret e }
-    slot(b, field)
-    ret ok
+    ret slot(b, field)
 }
 
 // Close the table: the soffset, then the vtable in front of it; answers the
@@ -367,48 +390,64 @@ fn end_table(b: *Builder) -> (usize, err) {
     let e = put[i32](b, 0i32)
     if e != ok { ret (0usize, e) }
     let table_offset = offset(b)
+    if table_offset < b.table_end { ret (0usize, Invalid) }
+    let table_size = table_offset - b.table_end
+    if table_size > MAX_U16 { ret (0usize, TooSmall) }
     var n = b.slot_count
     while n > 0usize && b.slots[n - 1usize] == 0usize { n -= 1usize }
     var i = n
     while i > 0usize {
         i -= 1usize
         var field = 0usize
-        if b.slots[i] != 0usize { field = table_offset - b.slots[i] }
-        let field_error = put[u16](b, u16(field & 65535usize))
+        if b.slots[i] != 0usize {
+            if b.slots[i] > table_offset { ret (0usize, Invalid) }
+            field = table_offset - b.slots[i]
+            if field > MAX_U16 { ret (0usize, TooSmall) }
+        }
+        let field_error = put[u16](b, u16(field))
         if field_error != ok { ret (0usize, field_error) }
     }
-    let size_error = put[u16](b, u16((table_offset - b.table_end) & 65535usize))
+    let size_error = put[u16](b, u16(table_size))
     if size_error != ok { ret (0usize, size_error) }
-    let vsize_error = put[u16](b, u16(((n + 2usize) * 2usize) & 65535usize))
+    if n > MAX_U16 / 2usize - 2usize { ret (0usize, TooSmall) }
+    let vtable_size = (n + 2usize) * 2usize
+    let vsize_error = put[u16](b, u16(vtable_size))
     if vsize_error != ok { ret (0usize, vsize_error) }
     let vt_offset = offset(b)
+    if vt_offset < table_offset || vt_offset - table_offset > MAX_I32 { ret (0usize, TooSmall) }
     let table_pos = b.buf.len - table_offset
-    let patch_error = raw.store[i32](b.buf, table_pos, i32((vt_offset - table_offset) & 2147483647usize), .Little)
-    ret (table_offset, patch_error)
+    let patch_error = raw.store[i32](b.buf, table_pos, i32(vt_offset - table_offset), .Little)
+    if patch_error != ok { ret (0usize, patch_error) }
+    b.slot_count = 0usize
+    ret (table_offset, ok)
 }
 
 fn create_string(b: *Builder, s: str) -> (usize, err) {
+    if s.len > MAX_U32 || s.len >= b.head { ret (0usize, TooSmall) }
     let e = prep(b, 4usize, s.len + 1usize)
     if e != ok { ret (0usize, e) }
     let nul_error = put_bytes(b, "\x00")
     if nul_error != ok { ret (0usize, nul_error) }
     let copy_error = put_bytes(b, s)
     if copy_error != ok { ret (0usize, copy_error) }
-    let len_error = put[u32](b, u32(s.len & 4294967295usize))
+    let len_error = put[u32](b, u32(s.len))
     ret (offset(b), len_error)
 }
 
 // Elements are prepended in reverse order between these two, with `put` or
 // `put_offset`.
 fn start_vector(b: *Builder, elem_size: usize, count: usize, alignment: usize) -> err {
-    let e = prep(b, 4usize, elem_size * count)
+    if elem_size == 0usize || count > MAX_U32 || count > b.head / elem_size { ret TooSmall }
+    let data_size = elem_size * count
+    let e = prep(b, 4usize, data_size)
     if e != ok { ret e }
     b.vector_count = count
-    ret prep(b, alignment, elem_size * count)
+    ret prep(b, alignment, data_size)
 }
 
 fn end_vector(b: *Builder) -> (usize, err) {
-    let e = put[u32](b, u32(b.vector_count & 4294967295usize))
+    if b.vector_count > MAX_U32 { ret (0usize, TooSmall) }
+    let e = put[u32](b, u32(b.vector_count))
     ret (offset(b), e)
 }
 

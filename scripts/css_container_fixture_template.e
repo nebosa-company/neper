@@ -125,6 +125,18 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    let ratio_16_9 = container.Condition { kind: .Feature, parts: zero, feature: .AspectRatio, op: .Eq, value: 16.0f64 / 9.0f64 }
+    if container.evaluate(ratio_16_9, container.Size { has_width: true, width: 1600.0f64, has_height: true, height: 1000.0f64 }) != .False { os.exit(21i32) }
+    if container.evaluate(ratio_16_9, container.Size { has_width: true, width: 1600.0f64, has_height: true, height: 900.0f64 }) != .True { os.exit(22i32) }
+    if container.evaluate(ratio_16_9, container.Size { has_width: true, width: 1599.0f64, has_height: true, height: 900.0f64 }) != .True { os.exit(27i32) }
+    if container.evaluate(ratio_16_9, container.Size { has_width: true, width: 1598.0f64, has_height: true, height: 900.0f64 }) != .False { os.exit(28i32) }
+    let unit_ratio = container.Condition { kind: .Feature, parts: zero, feature: .AspectRatio, op: .Eq, value: 1.0f64 }
+    if container.evaluate(unit_ratio, container.Size { has_width: true, width: 1000.0f64, has_height: true, height: 800.0f64 }) != .False { os.exit(23i32) }
+    let zero_ratio = container.Condition { kind: .Feature, parts: zero, feature: .AspectRatio, op: .Eq, value: 0.0f64 }
+    if container.evaluate(zero_ratio, container.Size { has_width: true, width: 0.0f64, has_height: true, height: 100.0f64 }) != .True { os.exit(24i32) }
+    let pixel_width = container.Condition { kind: .Feature, parts: zero, feature: .Width, op: .Eq, value: 800.0f64 }
+    if container.evaluate(pixel_width, container.Size { has_width: true, width: 799.6f64, has_height: false, height: 0.0f64 }) != .True { os.exit(25i32) }
+    if container.evaluate(pixel_width, container.Size { has_width: true, width: 799.5f64, has_height: false, height: 0.0f64 }) != .False { os.exit(26i32) }
     try io.print("css container ok")
     ret ok
 }

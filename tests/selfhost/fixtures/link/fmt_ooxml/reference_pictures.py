@@ -8,7 +8,9 @@ zlib (the PNG is written by hand, an 8 x 2 image).
           fill), a blue ellipse with two paragraphs "A" and "B", and a picture (rels target ../media/image2.png); slide 2
           one unfilled rectangle
 
-usage: reference_pictures.py docx|pptx   prints the byte count and the bytes as a comma separated list.
+  limitdocx -- 64 unresolved image relationships followed by one valid one, to check the picture-attempt cap
+
+usage: reference_pictures.py docx|limitdocx|pptx   prints the byte count and the bytes as a comma separated list.
 """
 import io
 import struct
@@ -16,8 +18,8 @@ import sys
 import zipfile
 import zlib
 
-W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
-P = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+P = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
 REL = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"'
 
 
@@ -39,15 +41,30 @@ def docx():
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
         z.writestr("word/document.xml", '<?xml version="1.0"?><w:document %s><w:body>'
-                   '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>'
+                   '<w:p><w:pPr><w:pStyle q:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>'
                    '<w:p><w:r><w:t>Before</w:t></w:r></w:p>'
                    '<w:p><w:r><w:drawing><wp:inline><wp:extent cx="1828800" cy="914400"/><a:graphic><a:graphicData>'
-                   '<pic:pic><pic:blipFill><a:blip r:embed="rId5"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
+                   '<pic:pic><pic:blipFill><a:blip q:embed="rId5"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>'
                    '<w:p><w:r><w:t>After</w:t></w:r></w:p></w:body></w:document>' % W)
         z.writestr("word/_rels/document.xml.rels", '<?xml version="1.0"?><Relationships %s>'
                    '<Relationship Id="rId1" Type="x" Target="styles.xml"/>'
                    '<Relationship Id="rId5" Type="image" Target="media/image1.png"/></Relationships>' % REL)
         z.writestr("word/media/image1.png", image(1))
+    return buf.getvalue()
+
+
+def limited_docx():
+    missing = ''.join('<a:blip q:embed="missing%d"/>' % n for n in range(64))
+    valid = '<a:blip q:embed="rId5"/>'
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+        z.writestr("word/document.xml", '<?xml version="1.0"?><w:document %s><w:body><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/>'
+                   '<a:graphic><a:graphicData><pic:pic><pic:blipFill>%s%s</pic:blipFill></pic:pic></a:graphicData></a:graphic>'
+                   '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>' % (W, missing, valid))
+        z.writestr("word/_rels/document.xml.rels", '<?xml version="1.0"?><Relationships %s>'
+                   '<Relationship Id="rId5" Type="image" Target="media/image1.png"/></Relationships>' % REL)
+        z.writestr("word/media/image1.png", image(3))
     return buf.getvalue()
 
 
@@ -63,7 +80,7 @@ def pptx():
     disc = ('<p:sp><p:spPr><a:xfrm><a:off x="4572000" y="1828800"/><a:ext cx="1828800" cy="1828800"/></a:xfrm>'
             '<a:prstGeom prst="ellipse"/><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></p:spPr>'
             '<p:txBody><a:p><a:r><a:t>A</a:t></a:r></a:p><a:p><a:r><a:t>B</a:t></a:r></a:p></p:txBody></p:sp>')
-    picture = ('<p:pic><p:blipFill><a:blip r:embed="rId2"/></p:blipFill><p:spPr><a:xfrm><a:off x="100" y="200"/>'
+    picture = ('<p:pic><p:blipFill><a:blip q:embed="rId2"/></p:blipFill><p:spPr><a:xfrm><a:off x="100" y="200"/>'
                '<a:ext cx="300" cy="400"/></a:xfrm></p:spPr></p:pic>')
     plain = ('<p:sp><p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:sp>')
     buf = io.BytesIO()
@@ -79,6 +96,6 @@ def pptx():
 
 
 if __name__ == "__main__":
-    data = {"docx": docx, "pptx": pptx}[sys.argv[1]]()
+    data = {"docx": docx, "limitdocx": limited_docx, "pptx": pptx}[sys.argv[1]]()
     print(len(data))
     print(", ".join(str(b) for b in data))

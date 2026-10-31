@@ -17,6 +17,7 @@
 
 use e.mem
 use e.str
+use e.text.utf8
 
 type Kind = enum u8 { String, Integer, Float, Bool, Datetime, ArrayStart, ArrayEnd, InlineTableStart, InlineTableEnd }
 type EventKind = enum u8 { End, TableStart, ArrayTableStart, Key, Value }
@@ -65,34 +66,59 @@ fn peek_at(p: *Parser, ahead: usize) -> u8 {
     ret p.source[p.at + ahead]
 }
 
+// TOML permits raw tabs, and newlines only in the multi-line string forms. Other C0
+// controls and DEL must be represented with a basic-string escape.
+fn forbidden_raw_string_control(c: u8) -> bool {
+    ret (c < SPACE && c != TAB && c != LF && c != CR) || c == 127u8
+}
+
 fn skip_space(p: *Parser) {
     while p.at < p.source.len && (p.source[p.at] == SPACE || p.source[p.at] == TAB) { p.at += 1usize }
 }
 
-fn skip_comment(p: *Parser) {
-    if peek(p) == HASH {
-        while p.at < p.source.len && p.source[p.at] != LF { p.at += 1usize }
+fn forbidden_comment_control(c: u8) -> bool {
+    ret (c < SPACE && c != TAB) || c == 127u8
+}
+
+fn skip_comment(p: *Parser) -> err {
+    if peek(p) != HASH { ret ok }
+    p.at += 1usize
+    while p.at < p.source.len {
+        let c = p.source[p.at]
+        // Leave a complete line ending for the caller to consume. A bare CR is
+        // a control character here, not a TOML newline.
+        if c == LF || (c == CR && peek_at(p, 1usize) == LF) { ret ok }
+        if forbidden_comment_control(c) { ret Invalid }
+        p.at += 1usize
     }
+    ret ok
 }
 
 // Whitespace, line endings and comments: what may lie between statements and between the
 // members of an array.
-fn skip_blank(p: *Parser) {
+fn skip_blank(p: *Parser) -> err {
     while p.at < p.source.len {
         let c = p.source[p.at]
-        if c == SPACE || c == TAB || c == LF || c == CR {
+        if c == SPACE || c == TAB || c == LF {
             p.at += 1usize
+        } else if c == CR && peek_at(p, 1usize) == LF {
+            p.at += 2usize
+        } else if c == CR {
+            ret Invalid
         } else if c == HASH {
-            skip_comment(p)
+            let comment_error = skip_comment(p)
+            if comment_error != ok { ret comment_error }
         } else {
             break
         }
     }
+    ret ok
 }
 
 fn expect_eol(p: *Parser) -> err {
     skip_space(p)
-    skip_comment(p)
+    let comment_error = skip_comment(p)
+    if comment_error != ok { ret comment_error }
     if p.at >= p.source.len { ret ok }
     if p.source[p.at] == LF {
         p.at += 1usize
@@ -169,11 +195,23 @@ fn escape(p: *Parser, multi: bool) -> err {
         // Only blanks may stand between the backslash and the line ending.
         var scan = p.at - 1usize
         while scan < p.source.len && (p.source[scan] == SPACE || p.source[scan] == TAB) { scan += 1usize }
-        if scan >= p.source.len || (p.source[scan] != LF && p.source[scan] != CR) { ret Invalid }
+        if scan >= p.source.len { ret Invalid }
+        if p.source[scan] == LF {
+            scan += 1usize
+        } else if p.source[scan] == CR && scan + 1usize < p.source.len && p.source[scan + 1usize] == LF {
+            scan += 2usize
+        } else {
+            ret Invalid
+        }
         while scan < p.source.len {
             let b = p.source[scan]
-            if b != SPACE && b != TAB && b != LF && b != CR { break }
-            scan += 1usize
+            if b == SPACE || b == TAB || b == LF {
+                scan += 1usize
+            } else if b == CR && scan + 1usize < p.source.len && p.source[scan + 1usize] == LF {
+                scan += 2usize
+            } else {
+                break
+            }
         }
         p.at = scan
         ret ok
@@ -190,6 +228,7 @@ fn basic(p: *Parser) -> (str, err) {
         p.at += 1usize
         if c == DQUOTE { break }
         if c == LF || c == CR { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         if c == BACKSLASH {
             let escape_error = escape(p, false)
             if escape_error != ok { ret ("", escape_error) }
@@ -220,6 +259,8 @@ fn multi_basic(p: *Parser) -> (str, err) {
             }
             break
         }
+        if c == CR && peek_at(p, 1usize) != LF { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
         if c == BACKSLASH {
             let escape_error = escape(p, true)
@@ -240,6 +281,7 @@ fn literal(p: *Parser) -> (str, err) {
         let c = p.source[p.at]
         if c == SQUOTE { break }
         if c == LF || c == CR { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
     }
     let stop = p.at
@@ -252,13 +294,16 @@ fn multi_literal(p: *Parser) -> (str, err) {
     let start = p.at
     while true {
         if p.at >= p.source.len { ret ("", Invalid) }
-        if p.source[p.at] == SQUOTE && peek_at(p, 1usize) == SQUOTE && peek_at(p, 2usize) == SQUOTE {
+        let c = p.source[p.at]
+        if c == SQUOTE && peek_at(p, 1usize) == SQUOTE && peek_at(p, 2usize) == SQUOTE {
             var stop = p.at + 3usize
             while stop - p.at < 5usize && stop < p.source.len && p.source[stop] == SQUOTE { stop += 1usize }
             let text = p.source[start..stop - 3usize]
             p.at = stop
             ret (text, ok)
         }
+        if c == CR && peek_at(p, 1usize) != LF { ret ("", Invalid) }
+        if forbidden_raw_string_control(c) { ret ("", Invalid) }
         p.at += 1usize
     }
     ret ("", Invalid)
@@ -303,15 +348,22 @@ fn is_digit(c: u8) -> bool {
     ret c >= 48u8 && c <= 57u8
 }
 
-// Digits with `_` only between two of them, copied to the scratch without them.
-fn strip_underscores(p: *Parser, text: str) -> (str, err) {
+fn is_radix_digit(c: u8, radix: u8) -> bool {
+    if is_digit(c) { ret c - 48u8 < radix }
+    if radix != 16u8 { ret false }
+    ret (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8)
+}
+
+// Digits with `_` only between two digits in the spelling's radix, copied to
+// the scratch without the separators.
+fn strip_underscores(p: *Parser, text: str, radix: u8) -> (str, err) {
     let start = p.used
     var i = 0usize
     while i < text.len {
         let c = text[i]
         if c == 95u8 {
             if i == 0usize || i + 1usize == text.len { ret ("", Invalid) }
-            if !str.is_ascii_alnum(text[i - 1usize]) || !str.is_ascii_alnum(text[i + 1usize]) { ret ("", Invalid) }
+            if !is_radix_digit(text[i - 1usize], radix) || !is_radix_digit(text[i + 1usize], radix) { ret ("", Invalid) }
         } else {
             let put_error = put(p, c)
             if put_error != ok { ret ("", put_error) }
@@ -329,15 +381,76 @@ fn looks_like_datetime(text: str) -> bool {
     ret false
 }
 
-fn datetime_ok(text: str) -> bool {
-    var i = 0usize
-    while i < text.len {
-        let c = text[i]
-        let allowed = is_digit(c) || c == 45u8 || c == 58u8 || c == 46u8 || c == 43u8 || c == 84u8 || c == 116u8 || c == 90u8 || c == 122u8 || c == SPACE
-        if !allowed { ret false }
-        i += 1usize
+fn decimal_pair(text: str, at: usize) -> (i64, bool) {
+    if at > text.len || text.len - at < 2usize { ret (0i64, false) }
+    if !is_digit(text[at]) || !is_digit(text[at + 1usize]) { ret (0i64, false) }
+    ret (i64(text[at] - 48u8) * 10i64 + i64(text[at + 1usize] - 48u8), true)
+}
+
+fn leap_year(year: i64) -> bool {
+    ret (year % 4i64 == 0i64 && year % 100i64 != 0i64) || year % 400i64 == 0i64
+}
+
+fn month_days(year: i64, month: i64) -> i64 {
+    if month == 2i64 {
+        if leap_year(year) { ret 29i64 }
+        ret 28i64
     }
-    ret true
+    if month == 4i64 || month == 6i64 || month == 9i64 || month == 11i64 { ret 30i64 }
+    ret 31i64
+}
+
+fn date_end(text: str, at: usize) -> (usize, bool) {
+    if at > text.len || text.len - at < 10usize { ret (0usize, false) }
+    var digit_at = 0usize
+    while digit_at < 4usize {
+        if !is_digit(text[at + digit_at]) { ret (0usize, false) }
+        digit_at += 1usize
+    }
+    if text[at + 4usize] != 45u8 || text[at + 7usize] != 45u8 { ret (0usize, false) }
+    let (month, month_ok) = decimal_pair(text, at + 5usize)
+    let (day, day_ok) = decimal_pair(text, at + 8usize)
+    if !month_ok || !day_ok || month < 1i64 || month > 12i64 { ret (0usize, false) }
+    let year = i64(text[at] - 48u8) * 1000i64 + i64(text[at + 1usize] - 48u8) * 100i64 + i64(text[at + 2usize] - 48u8) * 10i64 + i64(text[at + 3usize] - 48u8)
+    if day < 1i64 || day > month_days(year, month) { ret (0usize, false) }
+    ret (at + 10usize, true)
+}
+
+fn partial_time_end(text: str, at: usize) -> (usize, bool) {
+    if at > text.len || text.len - at < 8usize { ret (0usize, false) }
+    if text[at + 2usize] != 58u8 || text[at + 5usize] != 58u8 { ret (0usize, false) }
+    let (hour, hour_ok) = decimal_pair(text, at)
+    let (minute, minute_ok) = decimal_pair(text, at + 3usize)
+    let (second, second_ok) = decimal_pair(text, at + 6usize)
+    if !hour_ok || !minute_ok || !second_ok || hour > 23i64 || minute > 59i64 || second > 60i64 { ret (0usize, false) }
+    var end = at + 8usize
+    if end < text.len && text[end] == 46u8 {
+        end += 1usize
+        let fraction_start = end
+        while end < text.len && is_digit(text[end]) { end += 1usize }
+        if end == fraction_start { ret (0usize, false) }
+    }
+    ret (end, true)
+}
+
+fn datetime_ok(text: str) -> bool {
+    if text.len >= 10usize && is_digit(text[0usize]) && is_digit(text[1usize]) && is_digit(text[2usize]) && is_digit(text[3usize]) && text[4usize] == 45u8 {
+        let (date_at, date_ok) = date_end(text, 0usize)
+        if !date_ok { ret false }
+        if date_at == text.len { ret true }
+        if text[date_at] != 84u8 && text[date_at] != 116u8 && text[date_at] != SPACE { ret false }
+        let (time_at, time_ok) = partial_time_end(text, date_at + 1usize)
+        if !time_ok { ret false }
+        if time_at == text.len { ret true }
+        if text[time_at] == 90u8 || text[time_at] == 122u8 { ret time_at + 1usize == text.len }
+        if text[time_at] != 43u8 && text[time_at] != 45u8 { ret false }
+        let (zone_hour, zone_hour_ok) = decimal_pair(text, time_at + 1usize)
+        let (zone_minute, zone_minute_ok) = decimal_pair(text, time_at + 4usize)
+        if !zone_hour_ok || !zone_minute_ok || time_at + 3usize >= text.len || text[time_at + 3usize] != 58u8 { ret false }
+        ret zone_hour <= 23i64 && zone_minute <= 59i64 && time_at + 6usize == text.len
+    }
+    let (time_at, time_ok) = partial_time_end(text, 0usize)
+    ret time_ok && time_at == text.len
 }
 
 fn number(p: *Parser, text: str) -> (Value, err) {
@@ -368,7 +481,7 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         var radix = 16u8
         if body[1usize] == 111u8 { radix = 8u8 }
         if body[1usize] == 98u8 { radix = 2u8 }
-        let (digits, digits_error) = strip_underscores(p, body[2usize..])
+        let (digits, digits_error) = strip_underscores(p, body[2usize..], radix)
         if digits_error != ok { ret (out, digits_error) }
         let (magnitude, magnitude_error) = str.parse_u64_radix(digits, radix)
         if magnitude_error != ok || magnitude > 9223372036854775807u64 { ret (out, Invalid) }
@@ -385,8 +498,12 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         if c == 46u8 || c == 101u8 || c == 69u8 { is_float = true }
         i += 1usize
     }
-    let (digits, digits_error) = strip_underscores(p, body)
+    let (digits, digits_error) = strip_underscores(p, body, 10u8)
     if digits_error != ok { ret (out, digits_error) }
+    // This is a decimal spelling. Check after removing separators so an underscore
+    // cannot hide a prohibited leading zero (for example `0_1` or `0_1.0`).
+    // Non-decimal radices returned above keep their own digit rules.
+    if digits.len > 1usize && digits[0usize] == 48u8 && is_digit(digits[1usize]) { ret (out, Invalid) }
     if is_float {
         // `e.str` reads a lowercase exponent and no `+` before it, so the copy is folded to
         // that form: it is the scratch's own bytes already.
@@ -408,7 +525,9 @@ fn number(p: *Parser, text: str) -> (Value, err) {
         if parse_error != ok { ret (out, Invalid) }
         out.kind = .Float
         out.float = parsed
-        if negative { out.float = 0.0f64 - parsed }
+        // Subtraction loses the sign of a zero mantissa. Set the IEEE sign bit
+        // directly so TOML's `-0.0` remains distinct from `+0.0`.
+        if negative { out.float = mem.bitcast[f64](mem.bitcast[u64](parsed) | 9223372036854775808u64) }
         ret (out, ok)
     }
     let (magnitude, magnitude_error) = str.parse_u64(digits)
@@ -505,15 +624,18 @@ fn pop(p: *Parser) {
 // the next call.
 fn parse(p: *Parser) -> (Event, err) {
     var event: Event = zero
+    if p.at == 0usize && !utf8.validate(p.source) { ret (event, Invalid) }
     p.used = 0usize
     if p.depth > 0usize {
         let state = p.stack[p.depth - 1usize]
         if state == ARRAY_FIRST || state == ARRAY_MORE {
-            skip_blank(p)
+            let leading_blank_error = skip_blank(p)
+            if leading_blank_error != ok { ret (event, leading_blank_error) }
             if state == ARRAY_MORE {
                 if peek(p) == 44u8 {
                     p.at += 1usize
-                    skip_blank(p)
+                    let trailing_blank_error = skip_blank(p)
+                    if trailing_blank_error != ok { ret (event, trailing_blank_error) }
                 } else if peek(p) != 93u8 {
                     ret (event, Invalid)
                 }
@@ -569,7 +691,8 @@ fn parse(p: *Parser) -> (Event, err) {
         let eol_error = expect_eol(p)
         if eol_error != ok { ret (event, eol_error) }
     }
-    skip_blank(p)
+    let blank_error = skip_blank(p)
+    if blank_error != ok { ret (event, blank_error) }
     if p.at >= p.source.len {
         event.kind = .End
         ret (event, ok)

@@ -11,12 +11,17 @@ use e.time
 use e.db
 
 // One open row set at a time: the cursor and its columns live in the store.
-type Store = struct { ids: [8]i64, names: [8]str, count: usize, committed: usize, tx_open: bool, closed: bool, cursor: usize, cols: [2]db.Column, statements_closed: u32, rows_closed: u32 }
+type Store = struct { ids: [8]i64, names: [8]str, count: usize, committed: usize, tx_open: bool, closed: bool, cursor: usize, cols: [2]db.Column, statements_closed: u32, rows_closed: u32, fail_close: bool, fail_statement_close: bool, fail_rows_close: bool, fail_commit: bool, fail_rollback: bool }
 
 fn store_of(ctx: *void) -> *Store { ret mem.cast[*Store](ctx) }
 
 fn d_close(ctx: *void) -> err {
-    store_of(ctx).closed = true
+    let s = store_of(ctx)
+    if s.fail_close {
+        s.fail_close = false
+        ret db.Busy
+    }
+    s.closed = true
     ret ok
 }
 
@@ -76,7 +81,12 @@ fn d_begin(ctx: *void) -> (db.Transaction, err) {
 }
 
 fn d_statement_close(ctx: *void) -> err {
-    store_of(ctx).statements_closed += 1u32
+    let s = store_of(ctx)
+    if s.fail_statement_close {
+        s.fail_statement_close = false
+        ret db.Busy
+    }
+    s.statements_closed += 1u32
     ret ok
 }
 
@@ -109,7 +119,12 @@ fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
 }
 
 fn d_rows_close(ctx: *void) -> err {
-    store_of(ctx).rows_closed += 1u32
+    let s = store_of(ctx)
+    if s.fail_rows_close {
+        s.fail_rows_close = false
+        ret db.Busy
+    }
+    s.rows_closed += 1u32
     ret ok
 }
 
@@ -125,6 +140,10 @@ fn d_transaction_query(ctx: *void, sql: str, params: []const db.Parameter) -> (d
 
 fn d_transaction_commit(ctx: *void) -> err {
     let s = store_of(ctx)
+    if s.fail_commit {
+        s.fail_commit = false
+        ret db.Busy
+    }
     s.committed = s.count
     s.tx_open = false
     ret ok
@@ -132,6 +151,10 @@ fn d_transaction_commit(ctx: *void) -> err {
 
 fn d_transaction_rollback(ctx: *void) -> err {
     let s = store_of(ctx)
+    if s.fail_rollback {
+        s.fail_rollback = false
+        ret db.Busy
+    }
     s.count = s.committed
     s.tx_open = false
     ret ok
@@ -189,6 +212,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cols.len != 2usize || !str.eq(cols[1].name, "name") || cols[1].kind != .Text || !cols[1].nullable { os.exit(4) }
     let (c1, e4) = drain(&rows, ids[0..], names[0..])
     if e4 != ok || c1 != 1usize || ids[0] != 1i64 || !str.eq(names[0], "one") { os.exit(5) }
+    store.fail_rows_close = true
+    if db.close_rows(&rows) != db.Busy || rows.ctx == nil || store.rows_closed != 0u32 { os.exit(6) }
     if db.close_rows(&rows) != ok || store.rows_closed != 1u32 { os.exit(6) }
     if db.close_rows(&rows) != db.Closed { os.exit(7) }
     let (more, e5) = db.reader_next_err(&rows, zero)
@@ -207,6 +232,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var rows_b = rows1
     let (c2, e9) = drain(&rows_b, ids[0..], names[0..])
     if e9 != ok || c2 != 2usize || ids[1] != 2i64 { os.exit(12) }
+    store.fail_statement_close = true
+    if db.close_statement(&statement) != db.Busy || statement.ctx == nil || store.statements_closed != 0u32 { os.exit(13) }
     if db.close_statement(&statement) != ok || store.statements_closed != 1u32 { os.exit(13) }
     if db.close_statement(&statement) != db.Closed { os.exit(14) }
     let (n4, e10) = db.execute_statement(&statement, p2[0..])
@@ -227,6 +254,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var rows_c = rows2
     let (c3, e16) = drain(&rows_c, ids[0..], names[0..])
     if e16 != ok || c3 != 3usize { os.exit(21) }
+    store.fail_commit = true
+    if db.commit(&tx) != db.Busy || tx.ctx == nil || !store.tx_open { os.exit(22) }
+    store.fail_rollback = true
+    if db.rollback(&tx) != db.Busy || tx.ctx == nil || !store.tx_open { os.exit(22) }
     if db.rollback(&tx) != ok { os.exit(22) }
     if db.rollback(&tx) != db.Closed || db.commit(&tx) != db.Closed { os.exit(23) }
     let (n6, e17) = db.execute_transaction(&tx, "insert", p3[0..])
@@ -248,6 +279,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (c5, e23) = drain(&rows_e, ids[0..], names[0..])
     if e23 != ok || c5 != 3usize || !str.eq(names[2], "three") { os.exit(31) }
     // The connection closed.
+    store.fail_close = true
+    if db.close(&connection) != db.Busy || connection.ctx == nil || store.closed { os.exit(32) }
     if db.close(&connection) != ok || !store.closed { os.exit(32) }
     if db.close(&connection) != db.Closed { os.exit(33) }
     let (n8, e24) = db.execute(&connection, "insert", p1[0..])

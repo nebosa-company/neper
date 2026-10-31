@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Run the e.net.ssh fixture's client against a real SSH server (asyncssh) on loopback: password and public-key
-authentication, a shell that upper-cases a line and exits with status 7, a wrong password, a changed host key.
-Usage: drive.py CLIENT_EXE.  Set NEPER_PYLIB to a directory holding asyncssh.  Exit 0 when every mode passes."""
+"""Run the e.net.ssh fixture's unit checks and client against a real asyncssh server on loopback.
+Usage: drive.py CLIENT_EXE. Set NEPER_PYLIB to a directory holding asyncssh. Exit 0 when every mode passes."""
 import asyncio
 import os
 import subprocess
@@ -81,6 +80,11 @@ async def run_client(exe, mode, port, host_key_hex, *extra):
 async def main(exe):
     host_key = asyncssh.generate_private_key("ssh-ed25519")
     other_key = asyncssh.generate_private_key("ssh-ed25519")
+    failed = 0
+    code = await run_client(exe, "unit", 0, "00" * 32)
+    print("net_ssh unit: exit %s" % code)
+    if code != 0:
+        failed += 1
     server = await asyncssh.create_server(
         Server, "127.0.0.1", 0, server_host_keys=[host_key], process_factory=handle,
         encoding="utf-8", line_editor=False, kex_algs=["curve25519-sha256"],
@@ -89,7 +93,6 @@ async def main(exe):
     public_raw = host_key.public_data  # the SSH blob: string type, string key
     key_bytes = public_raw[-32:]
     wrong_bytes = other_key.public_data[-32:]
-    failed = 0
     for mode, hex_key, want in (("password", key_bytes.hex(), 0), ("early", key_bytes.hex(), 0), ("key", key_bytes.hex(), 0),
                                 ("badpass", key_bytes.hex(), 0), ("badhost", wrong_bytes.hex(), 0)):
         code = await run_client(exe, mode, port, hex_key)

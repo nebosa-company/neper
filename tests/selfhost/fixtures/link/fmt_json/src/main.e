@@ -8,11 +8,14 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.test.support
 
 // The codec maps a struct to an object, so the fixture needs one field of each kind it
 // handles, and one that only an unsigned reading reaches.
 type Record = struct { id: u16, name: str, ratio: f64, ready: bool }
 type Wide = struct { big: u64 }
+type Narrow = struct { small: u8 }
+type NarrowFloat = struct { ratio: f32 }
 
 fn roundtrip(a: *mem.Arena, source: str) -> ([]const u8, err) {
     var options: json.Options = zero
@@ -40,6 +43,18 @@ fn rejected(a: *mem.Arena, source: str) -> bool {
     var options: json.Options = zero
     let (value, failure) = json.parse(a, source, options)
     ret failure != ok
+}
+
+fn canonical_rejected(a: *mem.Arena, source: str) -> bool {
+    var options: json.Options = zero
+    options.allow_duplicate_keys = true
+    let (value, parse_error) = json.parse(a, source, options)
+    if parse_error != ok { ret false }
+    let (state, sink, writer_error) = io.memory_writer(a, 4096usize)
+    if writer_error != ok { ret false }
+    var held = state
+    var out = io.writer(mem.cast[*void](&held), io.memory_write)
+    ret json.canonicalize(&out, &value) == json.DuplicateKey
 }
 
 // The reader's events, asked about one at a time. Each answers whether the next event is the one
@@ -201,6 +216,8 @@ fn main(a: *mem.Arena) -> err {
     permissive.allow_duplicate_keys = true
     let (kept, kept_error) = json.parse(a, "{\"a\":1,\"a\":2}", permissive)
     if kept_error != ok { os.exit(51i32) }
+    if !canonical_rejected(a, "{\"a\":1,\"a\":2}") { os.exit(52i32) }
+    if !canonical_rejected(a, "{\"outer\":{\"a\":1,\"a\":2}}") { os.exit(53i32) }
 
     // --- Depth is bounded, and the bound is the caller's.
     var shallow: json.Options = zero
@@ -298,6 +315,10 @@ fn main(a: *mem.Arena) -> err {
     if wrong_shape != json.Invalid { os.exit(129i32) }
     let (_, not_object) = json.decode[Record](a, "[1,2]", codec_options)
     if not_object != json.Invalid { os.exit(130i32) }
+    let (_, narrow_error) = json.decode[Narrow](a, "{\"small\":256}", codec_options)
+    if narrow_error != json.Invalid { os.exit(200i32) }
+    let (_, narrow_float_error) = json.decode[NarrowFloat](a, "{\"ratio\":1e300}", codec_options)
+    if narrow_float_error != json.Invalid { os.exit(201i32) }
 
     // --- The streaming reader. The same grammar as `parse` over a source that arrives a piece
     // at a time, so a caller sees the shape rather than the value and the document need never be
@@ -324,6 +345,23 @@ fn main(a: *mem.Arena) -> err {
     let (_, still_more, done_error) = json.reader_next_err(&events)
     if done_error != ok { ret done_error }
     if still_more { os.exit(152i32) }
+
+    // The final complete document may be delivered with End.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "{\"a\":[1]}", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { ret final_script_error }
+    let final_source = support.reader(&final_script)
+    let (final_handle, final_handle_error) = json.reader(a, final_source, stream_options)
+    if final_handle_error != ok { ret final_handle_error }
+    var final_events = final_handle
+    if !event_is(&final_events, "{") { os.exit(202i32) }
+    if !event_key(&final_events, "a") { os.exit(203i32) }
+    if !event_is(&final_events, "[") { os.exit(204i32) }
+    if !event_number(&final_events, "1") { os.exit(205i32) }
+    if !event_is(&final_events, "]") { os.exit(206i32) }
+    if !event_is(&final_events, "}") { os.exit(207i32) }
+    let (_, final_more, final_done_error) = json.reader_next_err(&final_events)
+    if final_done_error != ok || final_more { os.exit(208i32) }
 
     // A number keeps the lexeme it arrived with here too, which is the module's one decision
     // reaching the streaming path.

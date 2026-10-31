@@ -302,6 +302,31 @@ fn main(a: *mem.Arena) -> err {
     let (u0, u_error) = ldap.connect(a, io.slice_reader(&cut.reader), io.slice_writer(&cut.writer), 512usize)
     var u = u0
     if u_error != ok || ldap.bind_anonymous(&u) != ldap.Closed { ret fail(47i32) }
+    var failed: Scene = zero
+    failed.writer = io.SliceWriter { data: failed.sent[0..0], off: 0usize }
+    failed.reader = io.SliceReader { data: "", off: 0usize }
+    let (f0, f_error) = ldap.connect(a, io.slice_reader(&failed.reader), io.slice_writer(&failed.writer), 512usize)
+    var f = f0
+    if f_error != ok { ret fail(49i32) }
+    let bind_failure = ldap.bind_simple(&f, "cn=secret", "password")
+    if bind_failure == ok { ret fail(50i32) }
+    var secret_left = false
+    var secret_at = 0usize
+    while secret_at < f.out.len {
+        if f.out[secret_at] != 0u8 { secret_left = true }
+        secret_at += 1usize
+    }
+    if secret_left { ret fail(51i32) }
+    var start_fail: Scene = zero
+    start_fail.writer = io.SliceWriter { data: start_fail.sent[0..], off: 0usize }
+    start_fail.reader = io.SliceReader { data: "\x30\x0c\x02\x01\x01\x78\x07\x0a\x01\x00\x04\x00\x04\x00", off: 0usize }
+    let (sf0, sf_error) = ldap.connect(a, io.slice_reader(&start_fail.reader), io.slice_writer(&start_fail.writer), 512usize)
+    var sf = sf0
+    var empty_config: tls.ClientConfig = zero
+    let start_failure = ldap.starttls(&sf, empty_config)
+    if sf_error != ok || start_failure == ok { ret fail(52i32) }
+    let before_bind = start_fail.writer.off
+    if ldap.bind_simple(&sf, "cn=secret", "password") != ldap.Closed || start_fail.writer.off != before_bind { ret fail(53i32) }
     var junk: Scene = zero
     junk.writer = io.SliceWriter { data: junk.sent[0..], off: 0usize }
     junk.reader = io.SliceReader { data: "\x04\x01\x00", off: 0usize }

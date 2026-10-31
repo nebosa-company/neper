@@ -421,6 +421,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, small_error) = markdown.parse_blocks("# a\n", few[..])
     if small_error != markdown.TooLarge { os.exit(100i32) }
 
+    // 101: a normal unmatched code span remains literal text.
+    try check(a, "`foo\n", "<p>`foo</p>\n", 101i32)
+
+    // 102: unequal unmatched runs once made every opener re-scan all later runs.
+    var adversarial: [20000]u8 = zero
+    var used = 0usize
+    var run = 1usize
+    while run <= 192usize {
+        var tick = 0usize
+        while tick < run {
+            adversarial[used] = 96u8
+            used += 1usize
+            tick += 1usize
+        }
+        adversarial[used] = 120u8
+        used += 1usize
+        run += 1usize
+    }
+    var attack_nodes: [1]markdown.Inline = zero
+    let (_, attack_error) = markdown.parse_inlines(adversarial[0usize..used], attack_nodes[..])
+    if attack_error != markdown.TooLarge { os.exit(102i32) }
+
+    // 103: delimiter bookkeeping saturation leaves later delimiter runs as text.
+    var many_delimiters: [260]u8 = zero
+    var delimiter = 0usize
+    while delimiter < 130usize {
+        many_delimiters[delimiter * 2usize] = 97u8
+        many_delimiters[delimiter * 2usize + 1usize] = 95u8
+        delimiter += 1usize
+    }
+    var many_nodes: [300]markdown.Inline = zero
+    let (_, many_error) = markdown.parse_inlines(many_delimiters[..], many_nodes[..])
+    if many_error != ok { os.exit(103i32) }
+
+    // 104: unresolved delimiters inside a link cannot pair outside it.
+    try check(a, "[*a](u) b*\n", "<p><a href=\"u\">*a</a> b*</p>\n", 104i32)
+
     try io.print("fmt markdown ok\n")
     ret ok
 }

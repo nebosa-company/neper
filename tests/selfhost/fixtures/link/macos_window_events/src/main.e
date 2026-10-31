@@ -18,6 +18,9 @@ extern fn objc_sel_register(name: *const u8) -> usize
 extern fn msg0(receiver: usize, selector: usize) -> usize
 
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg1(receiver: usize, selector: usize, a: usize) -> usize
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg2(receiver: usize, selector: usize, a: usize, b: usize) -> usize
 
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
@@ -85,6 +88,15 @@ fn quiet(code: i32) {
 }
 
 fn main(a: *mem.Arena) -> err {
+    // Rejection happens before AppKit starts, so an oversized request cannot allocate a window.
+    var oversized: os.WindowOptions = zero
+    oversized.width = 16385u32
+    oversized.height = 1u32
+    let (_, oversized_error) = os.window_open(a, oversized)
+    if oversized_error != os.Unsupported { os.exit(1i32) }
+    let (_, pending, pending_error) = os.window_poll(0i64)
+    if pending || pending_error != os.Unsupported { os.exit(2i32) }
+
     var options: os.WindowOptions = zero
     options.title = "Neper: events"
     options.width = 480u32
@@ -158,19 +170,35 @@ fn main(a: *mem.Arena) -> err {
     if back[0usize] != 104u8 || back[1usize] != 195u8 || back[2usize] != 169u8 || back[11usize] != 114u8 { os.exit(52i32) }
 
     let sized = msg_size(handle, sel("setContentSize:\x00"), CgSize { w: 600.0f64, h: 400.0f64 })
+    // The pump translates the native move before its final state poll produces Resize. Its y coordinate must already
+    // use the new 400-point content height, not the 320-point height cached before this resize.
+    post_mouse(app, window_id, 5usize, 100.0f64, 300.0f64)
     event = next(60i32)
-    if event.kind != .Resize || event.width != 600u32 || event.height != 400u32 { os.exit(61i32) }
+    if event.kind != .PointerMove || event.x != 100i32 || event.y != 100i32 { os.exit(61i32) }
     event = next(62i32)
-    if event.kind != .Paint { os.exit(63i32) }
+    if event.kind != .Resize || event.width != 600u32 || event.height != 400u32 { os.exit(63i32) }
+    event = next(64i32)
+    if event.kind != .Paint { os.exit(65i32) }
     let (metrics, metrics_error) = os.window_metrics(window)
-    if metrics_error != ok || metrics.width != 600u32 || metrics.height != 400u32 { os.exit(64i32) }
-    if os.window_cursor(window, .Hand) != ok || os.window_cursor(window, .Hidden) != ok || os.window_cursor(window, .Arrow) != ok { os.exit(65i32) }
+    if metrics_error != ok || metrics.width != 600u32 || metrics.height != 400u32 { os.exit(66i32) }
+    if os.window_cursor(window, .Hand) != ok || os.window_cursor(window, .Hidden) != ok || os.window_cursor(window, .Arrow) != ok { os.exit(67i32) }
+    quiet(68i32)
 
-    let closed = msg0(handle, sel("close\x00"))
+    // `performClose:` takes the same delegate path as the title-bar close button:
+    // it asks the program, which leaves the window open until `window_close` below.
+    let closed = msg1(handle, sel("performClose:\x00"), 0usize)
     event = next(70i32)
     if event.kind != .Close { os.exit(71i32) }
-    if os.window_close(window) != ok { os.exit(72i32) }
+    // The first poll drains both native moves into Cocoa's translated-event ring.
+    // Closing must discard the second one rather than return it for a dead handle.
+    post_mouse(app, window_id, 5usize, 50.0f64, 300.0f64)
+    post_mouse(app, window_id, 5usize, 60.0f64, 300.0f64)
+    event = next(72i32)
+    if event.kind != .PointerMove || event.x != 50i32 || event.y != 100i32 { os.exit(73i32) }
+    if os.window_close(window) != ok { os.exit(76i32) }
+    let (_, has_stale, stale_error) = os.window_poll(0i64)
+    if stale_error != ok || has_stale { os.exit(74i32) }
     let (gone, gone_error) = os.window_metrics(window)
-    if gone_error == ok { os.exit(73i32) }
+    if gone_error == ok { os.exit(75i32) }
     ret ok
 }

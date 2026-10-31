@@ -6,6 +6,8 @@
 // when it answers `false`. Masks are `u64`, so a ground set has at most 64
 // elements; the transforms work on a table of `1 << bits` entries in place.
 
+use e.mem
+
 error Invalid
 error TooSmall
 
@@ -183,10 +185,18 @@ fn subsets_of_mask[Ctx: type](mask: u64, ctx: *Ctx, visit: fn(*Ctx, u64) -> bool
     ret true
 }
 
+// The table length for a transform, rejecting before a target-width shift.
+fn transform_length(bits: u32) -> (usize, bool) {
+    let width = u32(mem.size_of[usize]() * 8usize)
+    if bits > 63u32 || bits >= width { ret (0usize, false) }
+    ret (1usize << usize(bits), true)
+}
+
 // The zeta transform over subsets in place: on return `values[mask]` is the sum of
 // the input over every submask of `mask`. `values.len == 1 << bits`.
 fn subset_sums(values: []i64, bits: u32) -> err {
-    if bits > 63u32 || values.len != 1usize << usize(bits) { ret Invalid }
+    let (needed, valid) = transform_length(bits)
+    if !valid || values.len != needed { ret Invalid }
     var bit = 0usize
     while bit < usize(bits) {
         var mask = 0usize
@@ -201,7 +211,8 @@ fn subset_sums(values: []i64, bits: u32) -> err {
 
 // The inverse of `subset_sums` (the Möbius transform).
 fn subset_sums_inverse(values: []i64, bits: u32) -> err {
-    if bits > 63u32 || values.len != 1usize << usize(bits) { ret Invalid }
+    let (needed, valid) = transform_length(bits)
+    if !valid || values.len != needed { ret Invalid }
     var bit = 0usize
     while bit < usize(bits) {
         var mask = 0usize
@@ -216,7 +227,8 @@ fn subset_sums_inverse(values: []i64, bits: u32) -> err {
 
 // The sum over every superset of each mask, in place.
 fn superset_sums(values: []i64, bits: u32) -> err {
-    if bits > 63u32 || values.len != 1usize << usize(bits) { ret Invalid }
+    let (needed, valid) = transform_length(bits)
+    if !valid || values.len != needed { ret Invalid }
     var bit = 0usize
     while bit < usize(bits) {
         var mask = 0usize

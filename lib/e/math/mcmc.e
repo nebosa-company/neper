@@ -18,6 +18,24 @@ type Chain = struct { accepted: usize, proposed: usize }
 error TooSmall
 error Invalid
 
+// Whether `len` holds `rows` rows of `width` entries without forming a
+// potentially overflowing product. Every sampler validates row storage before
+// using a row slice.
+fn has_rows(len: usize, rows: usize, width: usize) -> bool {
+    if rows == 0usize || width == 0usize { ret true }
+    ret rows <= len / width
+}
+
+// NUTS needs five rows for every tree depth and fourteen shared rows. Divide
+// by the state width first, then leave room for the shared rows before checking
+// the depth, so neither `5 * max_depth` nor its final product can wrap.
+fn has_nuts_scratch(len: usize, n: usize, max_depth: usize) -> bool {
+    if n == 0usize { ret true }
+    let rows = len / n
+    if rows < 14usize { ret false }
+    ret max_depth <= (rows - 14usize) / 5usize
+}
+
 fn copy(out: []f64, from: []const f64) {
     var i = 0usize
     while i < out.len {
@@ -40,7 +58,7 @@ fn dot(a: []const f64, b: []const f64) -> f64 {
 // `step`; `scratch.len >= n`.
 fn metropolis_hastings[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, x: []f64, step: f64, samples: []f64, count: usize, scratch: []f64) -> (Chain, err) {
     let n = x.len
-    if samples.len < count * n || scratch.len < n { ret (zero, TooSmall) }
+    if !has_rows(samples.len, count, n) || scratch.len < n { ret (zero, TooSmall) }
     var candidate = scratch[..n]
     var current = log_density(ctx, x)
     var accepted = 0usize
@@ -67,7 +85,7 @@ fn metropolis_hastings[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) 
 // conditional given the rest; one sweep over every coordinate is one sample.
 fn gibbs[Ctx: type](ctx: *Ctx, draw: fn(*Ctx, *rand.Pcg64, usize, []f64), r: *rand.Pcg64, x: []f64, samples: []f64, count: usize) -> err {
     let n = x.len
-    if samples.len < count * n { ret TooSmall }
+    if !has_rows(samples.len, count, n) { ret TooSmall }
     var i = 0usize
     while i < count {
         var k = 0usize
@@ -103,7 +121,7 @@ fn leapfrog[Ctx: type](ctx: *Ctx, g: fn(*Ctx, []const f64, []f64), x: []f64, p: 
 // `scratch.len >= 3 * n`.
 fn hmc[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, leaps: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err) {
     let n = x.len
-    if samples.len < count * n || scratch.len < 3usize * n { ret (zero, TooSmall) }
+    if !has_rows(samples.len, count, n) || !has_rows(scratch.len, n, 3usize) { ret (zero, TooSmall) }
     if leaps == 0usize || step <= 0.0f64 { ret (zero, Invalid) }
     var candidate = scratch[..n]
     var p = scratch[n..2usize * n]
@@ -181,7 +199,7 @@ fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g
     var acceptable = first
     var growing = first_ok
     if growing {
-        var child = regions[(depth - 1usize) * 5usize * n..depth * 5usize * n]
+        var child = regions[(depth - 1usize) * n * 5usize..depth * n * 5usize]
         var second = 0usize
         var second_ok = false
         if direction < 0.0f64 {
@@ -210,10 +228,10 @@ fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g
 // `max_depth` doublings; `scratch.len >= (5 * max_depth + 14) * n`.
 fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, max_depth: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err) {
     let n = x.len
-    if samples.len < count * n || scratch.len < (5usize * max_depth + 14usize) * n { ret (zero, TooSmall) }
+    if !has_rows(samples.len, count, n) || !has_nuts_scratch(scratch.len, n, max_depth) { ret (zero, TooSmall) }
     if step <= 0.0f64 || max_depth == 0usize { ret (zero, Invalid) }
-    var regions = scratch[..max_depth * 5usize * n]
-    var at = max_depth * 5usize * n
+    var regions = scratch[..max_depth * n * 5usize]
+    var at = max_depth * n * 5usize
     var top = scratch[at..at + 5usize * n]
     at += 5usize * n
     var trajectory = scratch[at..at + 5usize * n]
@@ -327,7 +345,7 @@ fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *ran
 fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err) {
     let n = mean.len
     if log_sd.len != n || steps == 0usize || draws == 0usize || rate <= 0.0f64 || n == 0usize { ret (zero, Invalid) }
-    if scratch.len < 11usize * n { ret (zero, TooSmall) }
+    if !has_rows(scratch.len, n, 11usize) { ret (zero, TooSmall) }
     var eps = scratch[..n]
     var z = scratch[n..2usize * n]
     var gradient = scratch[2usize * n..3usize * n]
@@ -421,7 +439,7 @@ fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*
 fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err {
     let n = mean.len
     if log_sd.len != n { ret Invalid }
-    if samples.len < count * n { ret TooSmall }
+    if !has_rows(samples.len, count, n) { ret TooSmall }
     var i = 0usize
     while i < count {
         var k = 0usize

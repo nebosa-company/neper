@@ -365,6 +365,7 @@ def main():
 
     # The zip writer on its own, against zipfile, and read back through e.fmt.zip.
     zdata = py_zip([("a.txt", b"hello"), ("dir/b.bin", b"\x00\x01\x02\xff")])
+    zempty = py_zip([])
     c.raw('    let zparts = [2]zipw.Part{ zipw.Part { name: "a.txt", data: "hello" }, zipw.Part { name: "dir/b.bin", data: "\\x00\\x01\\x02\\xff" } }\n')
     c.raw("    let (zbytes, zerror) = zipw.store(a, zparts[0..])\n")
     c.add("zerror != ok")
@@ -379,7 +380,11 @@ def main():
     c.raw("    let (zb, zb_error) = zipw.store(a, bad_part[0..])\n")
     c.add("zb_error != zipw.BadName")
     c.raw("    let (zn, zn_error) = zipw.store(a, zparts[0..0])\n")
-    c.add("zn_error != zipw.TooLarge")
+    c.raw("    if zn_error != ok { os.exit(163) }\n")
+    c.raw("    if zn.len != %dusize { os.exit(164) }\n" % len(zempty))
+    c.raw("    let want_empty = %s\n" % lit(zempty))
+    c.raw("    if want_empty.len != %dusize { os.exit(165) }\n" % len(zempty))
+    c.raw("    if !same(zn, want_empty) { os.exit(166) }\n")
 
     # Refusals.
     c.raw("    let one = [1]xlsx.Cell{ xlsx.number_cell(1.0) }\n")

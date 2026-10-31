@@ -129,7 +129,7 @@ fn parse_headers(a: *mem.Arena, text: str, out: []h2.Header) -> usize {
         let (pair, found) = item_at(text, 44u8, i)
         let (name_hex, value_hex, eq) = str.split_once(pair, "=")
         if !found || !eq { os.exit(96i32) }
-        out[i] = h2.Header { name: unhex(a, name_hex), value: unhex(a, value_hex) }
+        out[i] = h2.Header { name: unhex(a, name_hex), value: unhex(a, value_hex), staged: 0u8 }
         i += 1usize
     }
     ret n
@@ -329,8 +329,47 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// A TooSmall response must leave the decoder table unchanged: retrying the
+// same block must leave the pre-existing entry at dynamic index 63.
+fn retry_after_too_small(a: *mem.Arena, exhaust_out: bool) -> bool {
+    let initial: [9]u8 = [9]u8{ 64u8, 3u8, 111u8, 108u8, 100u8, 3u8, 111u8, 110u8, 101u8 }
+    let indexed: [10]u8 = [10]u8{ 64u8, 3u8, 110u8, 101u8, 119u8, 3u8, 116u8, 119u8, 111u8, 130u8 }
+    let dependent: [1]u8 = [1]u8{ 191u8 }
+    var table = new_table(a, 4096usize)
+    var initial_headers: [1]h2.Header = zero
+    var initial_scratch: [16]u8 = zero
+    let (initial_count, initial_error) = h2.decode_block(&table, initial[0usize..], initial_headers[0usize..], initial_scratch[0usize..])
+    if initial_error != ok || initial_count != 1usize { ret false }
+
+    if exhaust_out {
+        var short_headers: [1]h2.Header = zero
+        var roomy_scratch: [32]u8 = zero
+        let (_, short_error) = h2.decode_block(&table, indexed[0usize..], short_headers[0usize..], roomy_scratch[0usize..])
+        if short_error != h2.TooSmall { ret false }
+    } else {
+        var roomy_headers: [2]h2.Header = zero
+        var short_scratch: [6]u8 = zero
+        let (_, short_error) = h2.decode_block(&table, indexed[0usize..], roomy_headers[0usize..], short_scratch[0usize..])
+        if short_error != h2.TooSmall { ret false }
+    }
+
+    var retry_headers: [2]h2.Header = zero
+    var retry_scratch: [32]u8 = zero
+    let (retry_count, retry_error) = h2.decode_block(&table, indexed[0usize..], retry_headers[0usize..], retry_scratch[0usize..])
+    if retry_error != ok || retry_count != 2usize { ret false }
+    if !str.eq(retry_headers[0usize].name, "new") || !str.eq(retry_headers[0usize].value, "two") { ret false }
+    if retry_headers[0usize].staged != 0u8 || retry_headers[1usize].staged != 0u8 { ret false }
+
+    var dependent_headers: [1]h2.Header = zero
+    var dependent_scratch: [16]u8 = zero
+    let (dependent_count, dependent_error) = h2.decode_block(&table, dependent[0usize..], dependent_headers[0usize..], dependent_scratch[0usize..])
+    ret dependent_error == ok && dependent_count == 1usize && dependent_headers[0usize].staged == 0u8 && str.eq(dependent_headers[0usize].name, "old") && str.eq(dependent_headers[0usize].value, "one")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    if !retry_after_too_small(a, true) { os.exit(109i32) }
+    if !retry_after_too_small(a, false) { os.exit(110i32) }
     try io.print("net http2 ok")
     ret ok
 }

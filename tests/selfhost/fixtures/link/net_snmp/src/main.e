@@ -2,7 +2,8 @@
 // GetNext with a large request id and a multi-byte arc, a Set of text and of a negative integer); a response with
 // text, TimeTicks above 2^31, a negative integer, Counter32, IpAddress, an OID, NULL and an exception decodes
 // to its values; a 200-byte value (long-form length), an error status, nine bindings, a truncation and a bad
-// version are handled. Written by scripts/gen_snmp_test.py. Every check has its own exit code.
+// version, invalid OID arcs, an oversized BER length and malformed base-128 OID groups are handled. Written by
+// scripts/gen_snmp_test.py. Every check has its own exit code.
 use e.os
 use e.mem
 use e.net.snmp as snmp
@@ -68,5 +69,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bve != snmp.Malformed { os.exit(23) }
     let (tr, tre) = snmp.decode(response[0..40])
     if tre != snmp.Malformed { os.exit(24) }
+    let invalid_first = [2]u32{ 3u32, 0u32 }
+    let (first_n, first_e) = snmp.build_request(buf[0..], snmp.V1, "public", snmp.GET, 1i64, invalid_first[0..], false, "", 0i64)
+    if first_n != 0usize || first_e != snmp.Malformed { os.exit(25) }
+    let invalid_second = [2]u32{ 1u32, 40u32 }
+    let (second_n, second_e) = snmp.build_request(buf[0..], snmp.V1, "public", snmp.GET, 1i64, invalid_second[0..], false, "", 0i64)
+    if second_n != 0usize || second_e != snmp.Malformed { os.exit(26) }
+    let invalid_combined = [2]u32{ 2u32, 4294967216u32 }
+    let (combined_n, combined_e) = snmp.build_request(buf[0..], snmp.V1, "public", snmp.GET, 1i64, invalid_combined[0..], false, "", 0i64)
+    if combined_n != 0usize || combined_e != snmp.Malformed { os.exit(27) }
+    var huge_text: [65536]u8 = zero
+    let (huge_n, huge_e) = snmp.build_request(buf[0..], snmp.V1, "public", snmp.SET, 1i64, sys_descr[0..], true, huge_text[0..], 0i64)
+    if huge_n != 0usize || huge_e != snmp.Malformed { os.exit(28) }
+    var unterminated = want_get
+    unterminated[37usize] = 128u8
+    let (unterminated_m, unterminated_e) = snmp.decode(unterminated[0..])
+    if unterminated_e != snmp.Malformed { os.exit(29) }
+    var overflow_oid = want_get
+    overflow_oid[31usize] = 129u8
+    overflow_oid[32usize] = 128u8
+    overflow_oid[33usize] = 128u8
+    overflow_oid[34usize] = 128u8
+    overflow_oid[35usize] = 128u8
+    overflow_oid[36usize] = 128u8
+    overflow_oid[37usize] = 0u8
+    let (overflow_m, overflow_e) = snmp.decode(overflow_oid[0..])
+    if overflow_e != snmp.Malformed { os.exit(30) }
     ret ok
 }

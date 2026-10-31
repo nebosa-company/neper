@@ -5,8 +5,9 @@
 //
 // Each tab owns an arena carved out of the shell's (reserved, committed as it is touched). A navigation rewinds the tab's arena
 // to its start and loads the new page into it, so a tab's memory is bounded by its largest page, not by how long it has been
-// open. The shared `fetch.Client` allocates its responses in its own arena, which only grows (ceiling: a long session needs a
-// client arena sized for it, or a recycling client).
+// open. Closing a tab returns its slot and backing block to the shell's bounded pool, so opening and closing tabs cannot keep
+// growing the shell arena. The shared `fetch.Client` allocates its responses in its own arena, which only grows (ceiling: a long
+// session needs a client arena sized for it, or a recycling client).
 use e.data.list as list
 use e.fmt.url as url
 use e.fs
@@ -24,18 +25,24 @@ error BadProfile
 
 const MAX_TABS: usize = 16usize
 // A page's scripts (the DOM runtime is parsed into the tab arena) need more than 128 MB: below it they silently never run.
-const TAB_ARENA_BYTES: usize = 536870912usize
+const TAB_ARENA_BYTES: usize = 268435456usize
 const VIEW_BYTES: usize = 33554432usize
 fn search_url() -> str { ret "https://duckduckgo.com/?q=" }
 
 type Entry = struct { url: str, title: str, at: i64, count: u32 }
+fn null_page() -> *page.Page {
+    var none: *page.Page = zero
+    ret none
+}
+
 type Tab = struct {
-    id: u32, arena: mem.Arena, mark: usize, pg: *page.Page, loaded: bool,
+    id: u32, backing: []u8, arena: mem.Arena, mark: usize, pg: *page.Page, loaded: bool,
     history: list.List[Entry], index: usize, loading_url: str, error_text: str
 }
 type Shell = struct {
     a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, height: f32,
-    tabs: list.List[*Tab], active: usize, next_id: u32, bookmarks: list.List[Entry], visits: list.List[Entry]
+    tabs: list.List[*Tab], free_tabs: list.List[*Tab], active: usize, next_id: u32,
+    bookmarks: list.List[Entry], visits: list.List[Entry]
 }
 
 fn new(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, height: f32) -> (*Shell, err) {
@@ -43,11 +50,13 @@ fn new(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, he
     if ce != ok { ret (zero, ce) }
     let (tl, te) = list.init[*Tab](a, MAX_TABS)
     if te != ok { ret (zero, te) }
+    let (fl, fe) = list.init[*Tab](a, MAX_TABS)
+    if fe != ok { ret (zero, fe) }
     let (bl, be) = list.init[Entry](a, 32usize)
     if be != ok { ret (zero, be) }
     let (vl, ve) = list.init[Entry](a, 64usize)
     if ve != ok { ret (zero, ve) }
-    cell[0usize] = Shell { a: a, client: client, fonts: fonts, width: width, height: height, tabs: tl, active: 0usize, next_id: 1u32, bookmarks: bl, visits: vl }
+    cell[0usize] = Shell { a: a, client: client, fonts: fonts, width: width, height: height, tabs: tl, free_tabs: fl, active: 0usize, next_id: 1u32, bookmarks: bl, visits: vl }
     ret (&cell[0usize], ok)
 }
 
@@ -377,25 +386,44 @@ fn navigate(sh: *Shell, t: *Tab, input: str) -> err {
     ret ok
 }
 
+fn recycle_tab(sh: *Shell, t: *Tab) -> err {
+    ret list.push[*Tab](&sh.free_tabs, t)
+}
+
 fn open_tab(sh: *Shell, input: str) -> (*Tab, err) {
     if sh.tabs.len >= MAX_TABS { ret (zero, TooManyTabs) }
-    let (cell, ce) = mem.alloc[Tab](sh.a, 1usize)
-    if ce != ok { ret (zero, ce) }
-    let (backing, be) = mem.alloc[u8](sh.a, TAB_ARENA_BYTES)
-    if be != ok { ret (zero, be) }
-    let (hl, he) = list.init[Entry](sh.a, 16usize)
-    if he != ok { ret (zero, he) }
-    let t = &cell[0usize]
+    var t: *Tab = zero
+    if sh.free_tabs.len > 0usize {
+        sh.free_tabs.len -= 1usize
+        t = sh.free_tabs.items[sh.free_tabs.len]
+        mem.reset(&t.arena, t.mark)
+        t.history.len = 0usize
+    } else {
+        let (cell, ce) = mem.alloc[Tab](sh.a, 1usize)
+        if ce != ok { ret (zero, ce) }
+        let (hl, he) = list.init[Entry](sh.a, 16usize)
+        if he != ok { ret (zero, he) }
+        let (backing, be) = mem.alloc[u8](sh.a, TAB_ARENA_BYTES)
+        if be != ok { ret (zero, be) }
+        t = &cell[0usize]
+        t.backing = backing
+        t.arena = mem.arena_from(backing)
+        t.mark = mem.mark(&t.arena)
+        t.history = hl
+    }
     t.id = sh.next_id
     sh.next_id += 1u32
-    t.arena = mem.arena_from(backing)
-    t.mark = mem.mark(&t.arena)
+    t.pg = null_page()
     t.loaded = false
-    t.history = hl
     t.index = 0usize
+    t.loading_url = ""
     t.error_text = ""
     let pe = list.push[*Tab](&sh.tabs, t)
-    if pe != ok { ret (zero, pe) }
+    if pe != ok {
+        let re = recycle_tab(sh, t)
+        if re != ok { ret (zero, re) }
+        ret (zero, pe)
+    }
     sh.active = sh.tabs.len - 1usize
     let ne = navigate(sh, t, input)
     ret (t, ne)
@@ -410,7 +438,14 @@ fn select_tab(sh: *Shell, index: usize) -> err {
 fn close_tab(sh: *Shell, index: usize) -> err {
     if index >= sh.tabs.len { ret NoSuchTab }
     let t = sh.tabs.items[index]
-    if t.loaded { page.close(t.pg) }
+    if t.loaded {
+        page.close(t.pg)
+        t.loaded = false
+    }
+    t.pg = null_page()
+    mem.reset(&t.arena, t.mark)
+    t.history.len = 0usize
+    try recycle_tab(sh, t)
     var i = index
     while i + 1usize < sh.tabs.len {
         sh.tabs.items[i] = sh.tabs.items[i + 1usize]

@@ -30,6 +30,9 @@ const TAB: u8 = 9u8
 const QUOTE: u8 = 34u8
 const CR: u8 = 13u8
 const LF: u8 = 10u8
+const BOM_FIRST: u8 = 239u8
+const BOM_SECOND: u8 = 187u8
+const BOM_THIRD: u8 = 191u8
 
 // Zero means the default for both limits, the way a zero `Options` does in `e.fmt.json`: a
 // caller who has not thought about the bound is asking for a reasonable one, not for none.
@@ -42,7 +45,7 @@ const DEFAULT_ROW_LIMIT: usize = 65536usize
 // many reads as it needs.
 const INPUT_CAPACITY: usize = 4096usize
 
-type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool }
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool, source_ended: bool, bom_checked: bool, pending: [2]u8, pending_at: usize, pending_len: usize, last_pending: bool }
 
 fn csv() -> Dialect {
     ret Dialect { delimiter: COMMA, quote: QUOTE, crlf: false, header: false }
@@ -62,24 +65,84 @@ fn usable(dialect: Dialect) -> bool {
     ret true
 }
 
-// One byte, or `false` at the end of the source. Every byte a record is built from comes
-// from here and from nowhere else, which is what makes `unread` below a subtraction.
-fn take(s: *ReaderState) -> (u8, bool, err) {
+// One byte from the source, or `false` at its end. `take` below is the record reader's
+// version: it adds the leading-BOM rule and any bytes it has to put back.
+fn source_take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
+        if s.source_ended { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
-        if read_error == io.End { ret (0u8, false, ok) }
-        if read_error != ok { ret (0u8, false, read_error) }
+        if count == 0usize {
+            if read_error == io.End {
+                s.source_ended = true
+                ret (0u8, false, ok)
+            }
+            if read_error != ok { ret (0u8, false, read_error) }
+            ret (0u8, false, io.NoProgress)
+        }
+        if read_error != ok && read_error != io.End { ret (0u8, false, read_error) }
         s.input_len = count
         s.input_at = 0usize
+        if read_error == io.End { s.source_ended = true }
     }
     let byte = s.input[s.input_at]
     s.input_at += 1usize
     ret (byte, true, ok)
 }
 
+// One byte for the record reader. A UTF-8 BOM belongs to the stream, rather than to its first
+// CSV field, so only the exact three-byte prefix is skipped. The two-byte pending queue keeps
+// a near match intact even when a source splits those bytes across reads.
+fn take(s: *ReaderState) -> (u8, bool, err) {
+    if s.pending_at < s.pending_len {
+        let byte = s.pending[s.pending_at]
+        s.pending_at += 1usize
+        s.last_pending = true
+        ret (byte, true, ok)
+    }
+    s.last_pending = false
+    if s.bom_checked {
+        let (byte, more, take_error) = source_take(s)
+        ret (byte, more, take_error)
+    }
+    s.bom_checked = true
+    let (first, first_more, first_error) = source_take(s)
+    if first_error != ok { ret (0u8, false, first_error) }
+    if !first_more || first != BOM_FIRST { ret (first, first_more, ok) }
+    let (second, second_more, second_error) = source_take(s)
+    if second_error != ok { ret (0u8, false, second_error) }
+    if !second_more { ret (first, true, ok) }
+    if second != BOM_SECOND {
+        s.pending[0usize] = second
+        s.pending_at = 0usize
+        s.pending_len = 1usize
+        ret (first, true, ok)
+    }
+    let (third, third_more, third_error) = source_take(s)
+    if third_error != ok { ret (0u8, false, third_error) }
+    if !third_more {
+        s.pending[0usize] = second
+        s.pending_at = 0usize
+        s.pending_len = 1usize
+        ret (first, true, ok)
+    }
+    if third != BOM_THIRD {
+        s.pending[0usize] = second
+        s.pending[1usize] = third
+        s.pending_at = 0usize
+        s.pending_len = 2usize
+        ret (first, true, ok)
+    }
+    let (byte, more, take_error) = take(s)
+    ret (byte, more, take_error)
+}
+
 // The one byte of lookahead a CRLF needs. It is only ever called on a byte `take` just
-// returned, so the position it goes back to is still inside the buffer that byte came from.
+// returned, which can be in the source buffer or in the BOM check's pending bytes.
 fn unread(s: *ReaderState) {
+    if s.last_pending {
+        s.pending_at -= 1usize
+        ret
+    }
     s.input_at -= 1usize
 }
 
@@ -134,7 +197,6 @@ fn read_record(s: *ReaderState) -> (Row, bool, err) {
             continue
         }
         if after_quote {
-            after_quote = false
             // A doubled quote is one quote of data, and the field is open again.
             if byte == s.dialect.quote {
                 let (kept, keep_error) = keep(s, row_at, byte)
@@ -143,7 +205,17 @@ fn read_record(s: *ReaderState) -> (Row, bool, err) {
                 in_quotes = true
                 continue
             }
-            if byte != s.dialect.delimiter && byte != CR && byte != LF {
+            // A bare CR is data only in an unquoted field. After a closing quote
+            // it would continue that quoted field; only CRLF may end it.
+            if byte == CR {
+                let (next, next_more, next_error) = take(s)
+                if next_error != ok { ret (empty, false, next_error) }
+                if next_more && next == LF { break }
+                if next_more { unread(s) } else { s.ended = true }
+                ret (empty, false, Invalid)
+            }
+            after_quote = false
+            if byte != s.dialect.delimiter && byte != LF {
                 ret (empty, false, Invalid)
             }
         }
@@ -217,6 +289,11 @@ fn reader(a: *mem.Arena, source: io.Reader, dialect: Dialect, field_limit: usize
     state[0usize].row = row
     state[0usize].fields = table
     state[0usize].ended = false
+    state[0usize].source_ended = false
+    state[0usize].bom_checked = false
+    state[0usize].pending_at = 0usize
+    state[0usize].pending_len = 0usize
+    state[0usize].last_pending = false
     // A caller who said the first record is a header is asking not to be handed it. Reading
     // it here rather than on the first `reader_next_err` keeps that out of the loop, and a
     // caller who wants the header asks for a dialect that does not claim one.
@@ -320,6 +397,47 @@ fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
     ret (buffer, ok)
 }
 
+// Decide the target range before narrowing a parsed integer: direct casts trap in debug and
+// wrap in release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
+// A finite CSV number cannot become infinity merely because the destination field is narrower.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> ([]T, err) {
     var empty: []T = zero
     let (handle, reader_error) = reader(a, source, dialect, 0usize, 0usize)
@@ -367,19 +485,23 @@ fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> (
                     if text.len != 0usize && text[0usize] == MINUS {
                         let (signed, signed_error) = str.parse_i64(text)
                         if signed_error != ok { ret (empty, Invalid) }
-                        slot = f.ty(signed)
+                        let (converted, converted_error) = integer_into[f.ty](signed, 0u64, true)
+                        if converted_error != ok { ret (empty, converted_error) }
+                        slot = converted
                     } else {
                         let (unsigned, unsigned_error) = str.parse_u64(text)
                         if unsigned_error != ok { ret (empty, Invalid) }
-                        slot = f.ty(unsigned)
+                        let (converted, converted_error) = integer_into[f.ty](0i64, unsigned, false)
+                        if converted_error != ok { ret (empty, converted_error) }
+                        slot = converted
                     }
                     meta.set[f, T](&value, slot)
                 } else {
                 if meta.kind[f.ty]() == .Float {
                     let (number, number_error) = str.parse_f64(text)
                     if number_error != ok { ret (empty, Invalid) }
-                    var slot: f.ty = zero
-                    slot = f.ty(number)
+                    let (slot, slot_error) = float_into[f.ty](number)
+                    if slot_error != ok { ret (empty, slot_error) }
                     meta.set[f, T](&value, slot)
                 } else {
                     ret (empty, Invalid)

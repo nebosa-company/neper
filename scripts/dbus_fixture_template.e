@@ -431,8 +431,39 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+fn address_invalid(text: str) -> bool {
+    var out: [128]u8 = zero
+    let (addr, error_code) = dbus.parse_address(text, out[0usize..])
+    ret addr.transport.len > 0usize && error_code == dbus.Invalid
+}
+
+fn auth_invalid(line: str) -> bool {
+    var out: [64]u8 = zero
+    let (n, begun, error_code) = dbus.auth_reply(line, out[0usize..])
+    ret n == 0usize && !begun && error_code == dbus.Invalid
+}
+
+fn auth_address_regressions() -> bool {
+    if !auth_invalid("OK") || !auth_invalid("OKjunk") || !auth_invalid("OK 1234deadbeef") { ret false }
+    if !auth_invalid("OK 0123456789abcdef0123456789abcdeg") { ret false }
+    if !auth_invalid("OK 0123456789abcdef0123456789abcdef extra") { ret false }
+    var reply: [64]u8 = zero
+    let (reply_len, begun, reply_error) = dbus.auth_reply("OK 0123456789ABCDEF0123456789abcdef", reply[0usize..])
+    if reply_error != ok || !begun || !str.eq(reply[0usize..reply_len], "BEGIN\r\n") { ret false }
+    var address_out: [128]u8 = zero
+    let (decoded, address_error) = dbus.parse_address("unix:path=/tmp/a%2Cb%3Dc%25", address_out[0usize..])
+    if address_error != ok || !str.eq(decoded.path, "/tmp/a,b=c%") { ret false }
+    if !address_invalid("unix:path=/tmp/a%") || !address_invalid("unix:path=/tmp/a%2") { ret false }
+    if !address_invalid("unix:path=/tmp/a%GG") || !address_invalid("unix:path=/tmp/a%2G") { ret false }
+    if !address_invalid("unix:path=/tmp/a?b") || !address_invalid("unix:path=/tmp/a b") { ret false }
+    if !address_invalid("unix:path=/tmp/a=b") || !address_invalid("unix:path=/tmp/a,broken") { ret false }
+    if !address_invalid("unix:path=/tmp/a,=b") || !address_invalid("unix:path=/tmp/a,") { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    if !auth_address_regressions() { os.exit(190i32) }
     try io.print("dbus ok")
     ret ok
 }

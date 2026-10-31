@@ -128,12 +128,13 @@ fn is_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> bool {
     ret r.found && near(r.x, x) && near(r.y, y) && near(r.w, w) && near(r.h, h)
 }
 
-type Counter = struct { texts: usize, last: str }
+type Counter = struct { texts: usize, last: str, ellipses: usize }
 
 fn env_text(ctx: *void, s: *const style.Style, t: str) -> *const tl.Layout {
     let c = mem.cast[*Counter](ctx)
     c.texts += 1usize
     c.last = t
+    if str.eq(t, "\xe2\x80\xa6") { c.ellipses += 1usize }
     ret zero
 }
 
@@ -271,7 +272,7 @@ fn rect_is(r: geo.Rect, x: f32, y: f32, w: f32, h: f32) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    var counter = Counter { texts: 0usize, last: "" }
+    var counter = Counter { texts: 0usize, last: "", ellipses: 0usize }
     let view = geo.rect(0.0, 0.0, 800.0, 600.0)
     // 1. A background colour is one filled rectangle.
     let (p1, ok1) = build(a, "<div style=\"width:100px;height:50px;background:#f00\"></div>", "")
@@ -356,5 +357,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (c14, pc14) = paint_page(a, p14, &counter, view)
     let (c14b, pc14b) = paint_page(a, p14b, &counter, view)
     if !pc14 || !pc14b || fill_count(c14) != fill_count(c14b) + 1usize { os.exit(33) }
+    // 15. The block ellipsis follows the last text content on a clamped line,
+    // even when a trailing inline segment paints padding or a border.
+    let (p15, ok15) = build(a, "<div style=\"width:55px;line-clamp:1;font-size:10px\"><span style=\"padding-right:5px\">aaaaa</span> bbbb</div>", "")
+    if !ok15 { os.exit(34) }
+    counter.ellipses = 0usize
+    let (_c15, pc15) = paint_page(a, p15, &counter, view)
+    // env_text sees the ellipsis once to measure it and once to paint it.
+    if !pc15 || counter.ellipses != 2usize { os.exit(35) }
     ret ok
 }

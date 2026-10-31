@@ -70,6 +70,37 @@ fn host_style() -> path.Style {
     ret .Posix
 }
 
+// `e.os` checks this before every rooted operation, but `make_dirs_at` has to know it
+// before it creates its first parent. Keep the host spelling rules here so normalising
+// a later `..` cannot turn an unsafe input into a different, apparently safe path.
+fn rooted_relative_path_ok(path_text: str, style: path.Style) -> bool {
+    if path_text.len == 0usize { ret false }
+    if path.root_length(path_text, style) != 0usize { ret false }
+    if style == .Windows && path_text.len >= 2usize && path_text[1usize] == 58u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path_text.len {
+        if path_text[at] == 0u8 { ret false }
+        if path.is_separator(path_text[at], style) {
+            if at == start + 2usize && path_text[start] == 46u8 && path_text[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path_text[start] == 46u8 && path_text[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
+fn same_path(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn kind_from_os(source: os.EntryKind) -> EntryKind {
     if source == .File { ret .File }
     if source == .Dir { ret .Directory }
@@ -192,7 +223,7 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     let (normalized, normalize_error) = path.normalize(a, path_text, style)
     if normalize_error != ok {
         mem.reset(a, checkpoint)
-        ret from_os(normalize_error)
+        ret normalize_error
     }
     var at = path.root_length(normalized, style)
     while at <= normalized.len {
@@ -329,6 +360,122 @@ fn open_at(a: *mem.Arena, r: *const Root, relative_path: str, flags: os.OpenFlag
     let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, policy)
     if open_error != ok { ret (file, from_os(open_error)) }
     ret (file, ok)
+}
+
+// Metadata relative to an opened root. The host refuses links while resolving parent
+// components and describes the final name itself, so this never follows a link out.
+fn stat_at(a: *mem.Arena, r: *const Root, relative_path: str) -> (Entry, err) {
+    var entry: Entry = zero
+    let (info, stat_error) = os.stat_at(a, r.dir, relative_path)
+    if stat_error != ok { ret (entry, from_os(stat_error)) }
+    entry.path = relative_path
+    entry.kind = kind_from_os(info.kind)
+    entry.size = info.size
+    ret (entry, ok)
+}
+
+// Validate and normalise before creating any parent. An existing component is left for
+// the final rooted open to validate; no path joined to the root is checked and reused.
+fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
+    let style = host_style()
+    if !rooted_relative_path_ok(relative_path, style) { ret Denied }
+    let checkpoint = mem.mark(a)
+    let (normalized, normalize_error) = path.normalize(a, relative_path, style)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret normalize_error
+    }
+    var at = 0usize
+    while at <= normalized.len {
+        if at == normalized.len || path.is_separator(normalized[at], style) {
+            let step_error = os.mkdir_at(a, r.dir, normalized[0usize..at])
+            if step_error != ok && step_error != os.Exists {
+                mem.reset(a, checkpoint)
+                ret from_os(step_error)
+            }
+            if step_error == os.Exists {
+                let (info, stat_error) = os.stat_at(a, r.dir, normalized[0usize..at])
+                if stat_error != ok {
+                    mem.reset(a, checkpoint)
+                    ret from_os(stat_error)
+                }
+                if info.kind != .Dir {
+                    mem.reset(a, checkpoint)
+                    ret Exists
+                }
+            }
+        }
+        at += 1usize
+    }
+    mem.reset(a, checkpoint)
+    ret ok
+}
+
+// A host's byte count is u64 while an arena allocation is indexed by usize.
+// Refuse a count the target cannot represent before narrowing it or applying a cap.
+fn size_for_read(size: u64, limit: usize) -> (usize, err) {
+    if mem.size_of[usize]() == 4usize && size > 4294967295u64 { ret (0usize, Invalid) }
+    let usable = usize(size)
+    if limit != 0usize && usable > limit { ret (0usize, Invalid) }
+    ret (usable, ok)
+}
+
+// Read through the root handle. The host's stat and open both refuse symlinks, and the
+// actual read is from the opened file rather than a path that can be swapped afterward.
+fn read_file_at(a: *mem.Arena, r: *const Root, relative_path: str, limit: usize) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (info, stat_error) = os.stat_at(a, r.dir, relative_path)
+    if stat_error != ok { ret (nothing, from_os(stat_error)) }
+    if info.kind == .Dir { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
+    var flags: os.OpenFlags = zero
+    flags.read = true
+    let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
+    if open_error != ok { ret (nothing, from_os(open_error)) }
+    let (bytes, allocation_error) = mem.alloc[u8](a, size)
+    if allocation_error != ok {
+        let ignored = os.close(file)
+        ret (nothing, allocation_error)
+    }
+    var filled = 0usize
+    while filled < size {
+        let (read_count, read_error) = os.read(file, bytes[filled..size])
+        if read_error != ok {
+            let ignored = os.close(file)
+            ret (nothing, from_os(read_error))
+        }
+        if read_count == 0usize { break }
+        filled += read_count
+    }
+    let close_error = os.close(file)
+    if close_error != ok { ret (nothing, from_os(close_error)) }
+    ret (bytes[0usize..filled], ok)
+}
+
+// Write through one rooted open. Parent creation and the final create/truncate both stay
+// relative to the held directory, and the host refuses symbolic links during resolution.
+fn write_file_at(a: *mem.Arena, r: *const Root, relative_path: str, data: []const u8) -> err {
+    var flags: os.OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    flags.truncate = true
+    let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
+    if open_error != ok { ret from_os(open_error) }
+    var sent = 0usize
+    while sent < data.len {
+        let (written, write_error) = os.write(file, data[sent..data.len])
+        if write_error != ok {
+            let ignored = os.close(file)
+            ret from_os(write_error)
+        }
+        if written == 0usize {
+            let ignored = os.close(file)
+            ret Io
+        }
+        sent += written
+    }
+    ret from_os(os.close(file))
 }
 
 // The path to the final component is walked with links refused, and the final component
@@ -476,8 +623,8 @@ fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err) {
     let (info, stat_error) = os.stat(a, path_text)
     if stat_error != ok { ret (nothing, from_os(stat_error)) }
     if info.kind == .Dir { ret (nothing, Invalid) }
-    let size = usize(info.size)
-    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
     var flags: os.OpenFlags = zero
     flags.read = true
     let (file, open_error) = os.open(a, path_text, flags)
@@ -536,6 +683,15 @@ fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err {
 // looping.
 fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
     if scratch.len == 0usize { ret Invalid }
+    // `truncate` applies to the file its path resolves to. Check both parts of the
+    // host identity first so an alias (including a hard link) cannot truncate the
+    // source before its reads. A host with no identity leaves `file_id` zero.
+    let (source_info, source_info_error) = os.stat(a, src)
+    if source_info_error != ok { ret from_os(source_info_error) }
+    if source_info.kind != .File { ret Invalid }
+    if same_path(src, dst) { ret Invalid }
+    let (destination_info, destination_info_error) = os.stat(a, dst)
+    if destination_info_error == ok && source_info.file_id != 0u64 && source_info.file_id == destination_info.file_id && source_info.file_volume == destination_info.file_volume { ret Invalid }
     var read_flags: os.OpenFlags = zero
     read_flags.read = true
     let (source, source_error) = os.open(a, src, read_flags)
@@ -626,7 +782,7 @@ fn walk_next_err(it: *Walk) -> (Entry, bool, err) {
         parts[0usize] = state.levels[level].path
         parts[1usize] = name
         let (full, join_error) = path.join(state.arena, parts[..], host_style())
-        if join_error != ok { ret (entry, false, from_os(join_error)) }
+        if join_error != ok { ret (entry, false, join_error) }
         // The listing gives a kind but no size, and whether the link or its target is
         // described is the caller's choice, so each entry is looked up.
         var info: os.FileInfo = zero
@@ -720,8 +876,10 @@ fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> e
     let (normalized, normalize_error) = path.normalize(a, path_text, style)
     if normalize_error != ok {
         mem.reset(a, checkpoint)
-        ret from_os(normalize_error)
+        ret normalize_error
     }
+    // A detail error below borrows a normalized prefix, so its failure path retains
+    // this allocation until the caller has consumed `detail.subject`.
     var at = path.root_length(normalized, style)
     while at <= normalized.len {
         if at == normalized.len || path.is_separator(normalized[at], style) {
@@ -732,21 +890,18 @@ fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> e
                 let step_error = os.mkdir(a, prefix)
                 if step_error != ok && step_error != os.Exists {
                     *detail = os.last_error_detail("mkdir", prefix)
-                    mem.reset(a, checkpoint)
                     ret from_os(step_error)
                 }
                 if step_error == os.Exists {
                     let (info, stat_error) = os.stat_detail(a, prefix, detail)
                     if stat_error != ok {
-                        mem.reset(a, checkpoint)
                         ret from_os(stat_error)
                     }
                     if info.kind != .Dir {
                         detail.kind = .Exists
                         detail.native_code = 0i32
                         detail.operation = "mkdir"
-                        detail.subject = path_text
-                        mem.reset(a, checkpoint)
+                        detail.subject = prefix
                         ret Exists
                     }
                 }
@@ -790,8 +945,8 @@ fn read_file_detail(a: *mem.Arena, path_text: str, limit: usize, detail: *os.Err
     let (info, stat_error) = os.stat_detail(a, path_text, detail)
     if stat_error != ok { ret (nothing, from_os(stat_error)) }
     if info.kind == .Dir { ret (nothing, Invalid) }
-    let size = usize(info.size)
-    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    let (size, size_error) = size_for_read(info.size, limit)
+    if size_error != ok { ret (nothing, size_error) }
     var flags: os.OpenFlags = zero
     flags.read = true
     let (file, open_error) = os.open_detail(a, path_text, flags, detail)

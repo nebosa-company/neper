@@ -91,8 +91,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if again_error != ok || again != 2usize || cues[0].remaining != 2u16 || mixer.active(mixed) != 3usize { os.exit(28i32) }
 
     // A cooldown of 0 fires every tick; a full mixer answers the mixer's own error.
+    let full_state = gen.state
+    let full_stream = gen.stream
     let (_, full_error) = spatial.trigger(&mixed, &cues[1], variants[0..], &gen, origin, half_way)
-    if full_error != mixer.Full || cues[1].remaining != 0u16 { os.exit(29i32) }
+    if full_error != mixer.Full || cues[1].remaining != 0u16 || gen.state != full_state || gen.stream != full_stream { os.exit(29i32) }
     if mixer.stop(&mixed, again) != ok { os.exit(30i32) }
     let (idle_one, idle_one_error) = spatial.trigger(&mixed, &cues[1], variants[0..], &gen, origin, half_way)
     if idle_one_error != ok || idle_one != again || mixed.voices[again].source.count != 1usize { os.exit(31i32) }

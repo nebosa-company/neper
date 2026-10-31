@@ -658,7 +658,9 @@ removes the terminator and does not synthesize a final empty line. Radices are i
 ### `e.path`
 
 Paths are pure strings and always name the convention being applied; host behavior is
-never inferred inside this module.
+never inferred inside this module. In particular, normalization preserves a Windows
+drive-relative path (`C:file`) rather than making it drive-rooted, and such a later
+part starts a new `join` without being embedded under an earlier drive.
 
 ```neper
 type Style = enum u8 { Posix, Windows }
@@ -1196,10 +1198,13 @@ const NONE: u32 = 4294967295u32
 const LEAF: usize = 64usize
 
 fn rope(text: []u8, weight: []u32, left: []u32, right: []u32, start: []u32) -> Rope
+fn has_nodes(r: *const Rope, needed: usize) -> bool
 fn new_node(r: *Rope, weight: u32, left: u32, right: u32, start: u32) -> (u32, err)
 fn from_text(r: *Rope, text: []const u8) -> (u32, err)
 fn len(r: *const Rope, root: u32) -> usize
 fn byte_at(r: *const Rope, root: u32, i: usize) -> (u8, bool)
+fn split_nodes(r: *const Rope, root: u32, i: usize) -> usize
+fn build_nodes(length: usize) -> usize
 fn concat(r: *Rope, a: u32, b: u32) -> (u32, err)
 fn split(r: *Rope, root: u32, i: usize) -> (u32, u32, err)
 fn insert(r: *Rope, root: u32, i: usize, text: []const u8) -> (u32, err)
@@ -1211,7 +1216,8 @@ fn rebalance(r: *Rope, root: u32) -> (u32, err)
 
 A rope over caller pools (leaves reference a text pool, internal nodes carry the left
 weight): `from_text`, `len`, `byte_at`, `concat`, `split`, `insert`, `remove`, `report`
-(flatten) and `rebalance` (rebuilt from a flat copy).
+(flatten) and `rebalance` (rebuilt from a flat copy). A `TooSmall` result from a
+mutating operation leaves the prior root and caller-pool state unchanged.
 
 ### `e.data.cartesian_tree`
 
@@ -1589,7 +1595,7 @@ position, `reverse_range` by splitting the range out and tagging it, `collect`.
 ### `e.data.window`
 
 ```neper
-type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, width: usize, pushed: u64, minimum: bool }
+type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, count: usize, width: usize, pushed: u64, minimum: bool }
 type TwoStack[T: type] = struct { front: []T, front_folds: []T, back: []T, front_count: usize, back_count: usize, identity: T }
 type ExponentialHistogram = struct { sizes: []u64, stamps: []u64, count: usize, width: u64, k: usize, now: u64 }
 type Daba[T: type] = struct { values: []T, aggs: []T, head: usize, tail: usize, lp: usize, rp: usize, ap: usize, bp: usize, identity: T }
@@ -1681,7 +1687,7 @@ type Fifo = struct { order: []u32, head: usize, len: usize }
 type Clock = struct { referenced: []u8, filled: []u8, hand: usize }
 type Lfu = struct { hits: []u64, filled: []u8 }
 type Slru = struct { prev: []u32, next: []u32, protected: []u8, probation_head: u32, probation_tail: u32, protected_head: u32, protected_tail: u32, protected_len: usize, protected_cap: usize }
-type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
+type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, ghost_len: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
 type Arc = struct { keys: []u64, prev: []u32, next: []u32, list: []u8, t1: usize, t2: usize, b1: usize, b2: usize, p: usize, free: u32 }
 error TooSmall
 error Invalid
@@ -3865,12 +3871,14 @@ Aggregation, charts, KPIs and pivots over `e.algo.view`'s filter engine: `aggreg
 ```neper
 type Counter = struct { table: str, value: f64 }
 type KeyMinter = struct { counters: []Counter, count: usize }
+error Full
+error Invalid
 
-fn new_minter(a: *mem.Arena, capacity: usize) -> KeyMinter
+fn new_minter(a: *mem.Arena, capacity: usize) -> (KeyMinter, err)
 fn counter_of(m: *KeyMinter, table: str) -> f64
-fn set_counter(m: *KeyMinter, table: str, value: f64)
-fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> str
-fn reserve(m: *KeyMinter, table: str, through: f64)
+fn set_counter(m: *KeyMinter, table: str, value: f64) -> err
+fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> (str, err)
+fn reserve(m: *KeyMinter, table: str, through: f64) -> err
 fn prefix_for(a: *mem.Arena, name: str) -> str
 fn split_words(a: *mem.Arena, s: str) -> []const str
 fn first_units(a: *mem.Arena, s: str, n: usize) -> str
@@ -3938,7 +3946,7 @@ fn within_budget(a: *mem.Arena, name: str, measured_ms: f64) -> Budget
 fn percentile(a: *mem.Arena, values: []const f64, p: f64) -> (f64, bool)
 ```
 
-Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, keyset pagination that stays O(page) at any depth with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
+Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, up to f64's largest exactly representable integer (minting beyond it and exceeding the configured table capacity return `Full`), keyset pagination that orders the supplied rows on each call in O(n log n) time with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
 
 ### `e.algo.batch`
 
@@ -4265,8 +4273,8 @@ fn exponential_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *r
 fn report_noisy_max(scores: []const f64, sensitivity: f64, epsilon: f64) -> (usize, err)
 fn report_noisy_max_seeded(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
 fn randomized_response(bit: bool, p: f64) -> (bool, err)
-fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> bool
-fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64
+fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> (bool, err)
+fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> (f64, err)
 fn compose_basic(epsilons: []const f64) -> f64
 fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
 fn top_bit(x: u64) -> u64
@@ -4396,7 +4404,7 @@ fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T]
 
 ```neper
 type Uuid = struct { bytes: [16]u8 }
-type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, sequence: u64 }
+type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, clock_ms: u64, sequence: u64 }
 error Invalid
 
 fn v4(random: [16]u8) -> Uuid
@@ -8283,7 +8291,7 @@ fn rat_add(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_sub(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_mul(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_div(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
-fn rat_cmp(a: Rat, b: Rat) -> i32
+fn rat_cmp(a: Rat, b: Rat) -> (i32, err)
 fn rat_format(v: Rat, b: *str.Builder) -> err
 fn int_bits(v: Int) -> usize
 fn int_from_bytes_be(a: *mem.Arena, bytes: []const u8) -> (Int, err)
@@ -10268,7 +10276,7 @@ list whose rows select their node. The caller owns the graph and the state and a
 ### `e.ui.state`
 
 ```neper
-type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize }
+type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize, cycle: bool }
 error TooSmall
 error Invalid
 
@@ -10279,8 +10287,9 @@ fn kind_disposed() -> u8
 fn graph[Ctx: type](ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32) -> (Graph[Ctx], err)
 fn new_node[Ctx: type](g: *Graph[Ctx], kind: u8) -> (u32, err)
 fn signal[Ctx: type](g: *Graph[Ctx], initial: i64) -> (u32, err)
+fn reaches[Ctx: type](g: *Graph[Ctx], source: u32, goal: u32) -> bool
 fn get[Ctx: type](g: *Graph[Ctx], id: u32) -> i64
-fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32)
+fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32) -> bool
 fn drop_edges[Ctx: type](g: *Graph[Ctx], id: u32, into: bool)
 fn mark_dependents[Ctx: type](g: *Graph[Ctx], id: u32)
 fn set[Ctx: type](g: *Graph[Ctx], id: u32, value: i64) -> err
@@ -10300,7 +10309,8 @@ fn edge_count[Ctx: type](g: *const Graph[Ctx]) -> usize
 Signals over caller arrays: `signal`, `get` (recording the dependency of the running
 computation), `set`, `memo` (skipping dependents when unchanged), `effect`, batches and
 `schedule_effects` running dirty nodes once each in height order with dynamic
-dependencies; `dispose`, `run_count`.
+dependencies; a cycle-closing read is rejected and reported as `Invalid`; `dispose`,
+`run_count`.
 
 ### `e.ui.ink`
 
@@ -12230,7 +12240,7 @@ type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
 type EntryKind = enum u8 { File, Dir, Symlink, Other }
 type DirEntry = struct { name: str, kind: EntryKind }
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
@@ -12894,6 +12904,8 @@ They never close the underlying stream. writer constructs an unbuffered sink who
 flush callback is nil (flush succeeds without work); writer_with_flush supplies an
 explicit callback. buffered_sink flushes buffered bytes before forwarding flush.
 Partial writes retain only the unwritten suffix; a failed flush is not a rollback.
+If either buffered constructor cannot allocate its state or byte buffer, it restores
+the arena to its entry mark before returning the allocation error.
 Compression finish, protocol shutdown, and durable filesystem sync are distinct
 operations, never implied by generic flush. See stdlib-hardening.md SL02.
 
@@ -13009,8 +13021,9 @@ last_error_detail is a legacy M2 bridge; the `_detail` forms (D479, H07) are the
 checked API's transport: each writes the host's account of its own failing call into
 the caller's `os.ErrorDetail` at that call, before any cleanup, naming the `e.os`
 operation that failed (`stat` under `read_file`, `rename` under `move`) and its path;
-`make_dirs_detail` names the component that could not be made. Partial effects are
-the plain form's: what was made before the failing step stays made.
+`make_dirs_detail` names the component that could not be made; on that failure its
+normalized subject stays in the caller arena until the caller resets it. Partial effects
+are the plain form's: what was made before the failing step stays made.
 
 ### `e.fs.mmap`
 
@@ -13463,7 +13476,7 @@ receivable before `Closed` is returned.
 ### `e.concurrent.deque`
 
 ```neper
-type Deque[T: type] = struct { items: []T, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
+type Deque[T: type] = struct { items: []T, items_lock: sync.Mutex, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
 type Outcome = enum u8 { Stolen, Empty, Retry }
 error Invalid
 error Full
@@ -13477,8 +13490,9 @@ fn capacity[T: type](d: *const Deque[T]) -> usize
 ```
 
 A Chase-Lev work-stealing deque over a caller power-of-two buffer, generic over the item
-type with `Atomic[i64]` ends: the owner's `push` and `pop`, any thread's `steal`
-(`Stolen`, `Empty` or `Retry`), `len`, `capacity`; no growth, `Full` instead.
+type with `Atomic[i64]` ends and a short slot mutex for its non-atomic elements: the
+owner's `push` and `pop`, any thread's `steal` (`Stolen`, `Empty` or `Retry`), `len`,
+`capacity`; no growth, `Full` instead.
 
 ### `e.concurrent.stack`
 
@@ -15160,10 +15174,11 @@ requested cancellation; it does not acknowledge completion. A completed operatio
 wins a later cancellation request. Otherwise cancellation is cooperative and the
 terminal state reports Cancelled/TimedOut with observable partial effects preserved.
 No consumed bytes or transmitted bytes are silently reported as rolled back. `wait` drives
-the supplied loop; applications may instead poll it directly. `take` consumes a
-completed operation and returns its exact I/O error. `erase` is a non-owning typed
-conversion used only to build a heterogeneous `wait_any` slice; the original `Op[T]`
-must remain live.
+the supplied loop; applications may instead poll it directly. `wait_any` polls once for
+a zero timeout, and an unbounded caller timeout still wakes at the earliest pending
+operation deadline. `take` consumes a completed operation and returns its exact I/O
+error. `erase` is a non-owning typed conversion used only to build a heterogeneous
+`wait_any` slice; the original `Op[T]` must remain live.
 
 
 Progress is a monotonic observation, not completion acknowledgement. Byte operations
@@ -17633,7 +17648,7 @@ fn project(input: u32, cols: []const u32) -> Op
 fn join(a: u32, b: u32, column_a: u32, column_b: u32) -> Op
 fn limit(input: u32, count: usize) -> Op
 fn output_columns(plan: []const Op, tables: []const Table, node: u32) -> usize
-fn validate(plan: []const Op, tables: []const Table) -> err
+fn validate(plan: []const Op, tables: []const Table, scratch: []usize) -> err
 fn validate_columns(plan: []const Op, tables: []const Table, node: u32) -> err
 fn passes(cmp: u8, x: i64, v: i64) -> bool
 fn cursor(plan: []const Op, root: u32, tables: []const Table, batch: usize, state: []usize, buf: []i64) -> (Cursor, err)
@@ -17706,6 +17721,8 @@ batched `vectorized` executor over scan, filter, project, join and limit; `join_
 `join_hash`, `join_hash_parallel` (radix partitions), `join_sort_merge`, `join_semi`,
 `join_anti`; `estimate_join_size`, Selinger `join_order`, `push_predicates`,
 `push_projections`, `optimize`, `prune_partitions`, `index_only_scan`, `materialize_cte`.
+`validate` consumes caller-owned `STRIDE`-per-node scratch while it checks an acyclic plan,
+so forward references produced by predicate pushdown remain valid.
 
 ### `e.db.storage`
 
@@ -17939,7 +17956,7 @@ fn default_of(p: *const Profile, dest: str) -> (usize, bool)
 fn ignored(p: *const Profile, dest: str) -> bool
 fn compatible[F: type, G: type]() -> bool
 fn is_null[F: type](x: F, empty_is_null: bool) -> bool
-fn from_default[G: type](d: Default) -> G
+fn from_default[G: type](a: *mem.Arena, d: Default) -> (G, err)
 fn convert[G: type, F: type](a: *mem.Arena, x: F) -> (G, err)
 fn resolve[DF: meta.Field, D: type, S: type](p: *const Profile) -> Resolution
 fn put_value[DF: meta.Field, D: type, F: type](a: *mem.Arena, dst: *D, v: F, p: *const Profile, st: *Stats) -> err
@@ -19072,10 +19089,14 @@ type Lifecycle = enum u8 { Active, Inactive, Background, Suspended }
 type Orientation = enum u8 { Landscape, Portrait }
 type Screen = struct { bounds: geometry.Rect, work_area: geometry.Rect, scale: f32, primary: bool }
 type Metrics = struct { logical_size: geometry.Size, framebuffer_width: u32, framebuffer_height: u32, scale: f32, focused: bool, visible: bool }
+type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err, release: fn(usize) -> err }
+type PresenterFactory = struct { attach: fn(*mem.Arena, *Window) -> err }
 error Unsupported
 error Invalid
 error Closed
 
+fn set_default_presenter(factory: PresenterFactory)
 fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err)
 fn metrics(window: *const Window) -> (Metrics, err)
 fn draw_target(window: *const Window) -> (scene.Target, err)
@@ -19084,6 +19105,9 @@ fn title(window: *Window, value: str) -> err
 fn cursor(window: *Window, value: Cursor) -> err
 fn visible(window: *Window, value: bool) -> err
 fn request_frame(window: *Window) -> err
+fn report_changed(window: *Window, changed: Changed) -> err
+fn set_presenter(window: *Window, presenter: Presenter) -> err
+fn presenting(window: *const Window) -> bool
 fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err)
 fn clipboard_set(window: *Window, value: str) -> err
 fn capabilities(window: *const Window) -> (style.Capabilities, err)
@@ -19101,6 +19125,12 @@ Windows are logically linear handles backed only by reviewed `e.os` primitives.
 Coordinates exposed above the module are logical pixels; framebuffer dimensions are
 physical pixels. `draw_target` (named so because `target` is a reserved word, D797) is
 non-owning and becomes invalid when the window closes.
+
+A `Presenter` owns the opaque `context` it receives. Once selected, the window calls
+`release` exactly once after a failed `present`, a replacement, or `close`, before it
+falls back to software or drops its host resources. A factory that fails before
+installing its presenter releases its own partial work; if it reports failure after an
+installation, `open` defensively releases the installed presenter too.
 
 The host capability model (D811, widget plan P0-08): `capabilities` answers what a
 window's host can do as the `style.Capabilities` that `style.adapt` takes -- every
@@ -21221,6 +21251,8 @@ A pull parser: `parser` over the source with caller key slots and a decode scrat
 `parse` yielding table, array-table, key and value events (dotted, basic and literal
 keys; every string form and escape; integers with `_` and radix prefixes; floats with
 `inf`/`nan`; datetimes as text; nested arrays and inline tables as start/end events).
+The source must be well-formed UTF-8; otherwise the first `parse` returns `Invalid`
+without yielding an event.
 
 ### `e.fmt.markdown`
 
@@ -21704,7 +21736,7 @@ flat column across dictionary and data pages, uncompressed or Snappy.
 ```neper
 type Class = enum u8 { Universal, Application, Context, Private }
 type Tag = struct { class: Class, number: u32, constructed: bool }
-type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
+type Value = struct { tag: Tag, content: []const u8, encoded: []const u8, depth: u16 }
 type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
 type BitString = struct { unused: u8, data: []const u8 }
 type Context = struct { number: u32, items: []const Item }
@@ -22235,9 +22267,12 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
 fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
 ```
 
-Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It rejects
-encrypted entries, absolute paths and names containing a `..` segment. CRC and all
-per-entry/aggregate limits are checked before successful extraction.
+Version 1 reads stored and DEFLATE entries, ZIP64 sizes and raw, well-formed UTF-8
+names. It rejects encrypted entries, absolute paths, names containing a `..` segment
+and malformed UTF-8 names. Bit 11 declares UTF-8, but an unflagged name is still read
+as raw UTF-8 and is invalid when those bytes are not UTF-8; legacy code pages are not
+decoded. CRC and all per-entry/aggregate limits are checked before successful
+extraction.
 
 ### `e.fmt.zip.write`
 
@@ -22256,7 +22291,7 @@ fn put_bytes(out: []u8, at: usize, src: []const u8)
 fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err)
 ```
 
-ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a name `e.fmt.zip` would refuse is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
+ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a malformed UTF-8 or otherwise invalid `e.fmt.zip` name is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
 
 
 ### `e.fmt.sevenzip`
@@ -28147,8 +28182,10 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 ```
 
-The module supports lossy and lossless WebP. Animation is inspectable; decoding more
-than the first frame remains `Unsupported` until a frame-sequence image type exists.
+The module supports lossy and lossless WebP. A full decode rejects a source shorter
+than its declared RIFF container, while `inspect` can use a bounded header prefix of
+a larger source. Animation is inspectable; decoding more than the first frame remains
+`Unsupported` until a frame-sequence image type exists.
 
 ### `e.fmt.bson`
 
@@ -29392,7 +29429,12 @@ fn sliding_window_allow(w: *SlidingWindow, now: u64, cost: u64) -> bool
 
 Limiters over the caller's clock in exact integer arithmetic: `token_bucket`,
 `leaky_bucket`, `fixed_window`, `sliding_log` (a caller ring of timestamps) and
-`sliding_window`, each with `_allow` and a level or count query.
+`sliding_window`, each with `_allow` and a level or count query. Constructors
+return `Invalid` for a zero interval or width, an empty log ring, or an
+unrepresentable scaled capacity (`capacity * interval`) or sliding-window
+weight (`limit * width`); oversized costs are denied rather than charged. The
+sliding-window bucket retains its aligned tick phase across a wrapping `u64`
+clock.
 
 ### `e.resilience`
 
@@ -29512,6 +29554,8 @@ fn bang_bang(measured: f64, setpoint: f64, hysteresis: f64, on: bool) -> bool
 fn feedforward(f: *Feedforward, setpoint: f64, measured: f64, dt: f64) -> f64
 fn sliding_mode(error_value: f64, error_rate: f64, c: f64, k: f64, boundary: f64) -> f64
 fn identity(out: []f64, n: usize)
+error Invalid
+error NoConvergence
 fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize, m: usize, k: []f64, scratch: []f64, iterations: usize, tolerance: f64) -> (usize, err)
 fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) -> err
 fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err
@@ -29523,7 +29567,7 @@ fn roll_from_accel(ay: f64, az: f64) -> f64
 fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64
 fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64
 type Kalman = struct { angle: f64, bias: f64, p00: f64, p01: f64, p10: f64, p11: f64, q_angle: f64, q_bias: f64, r_measure: f64 }
-fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> Kalman
+fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> (Kalman, err)
 fn kalman_start(k: *Kalman, angle: f64)
 fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64
 fn noise_bias(samples: []const f64) -> (f64, f64)
@@ -29892,6 +29936,7 @@ fn pool(items: []Message) -> Pool
 fn pool_push(p: *Pool, m: Message) -> err
 fn pool_take(p: *Pool, at: usize) -> Message
 fn pool_pop(p: *Pool) -> Message
+fn mask_bit(i: u32) -> u64
 fn has_bit(mask: u64, i: u32) -> bool
 fn majority(mask: u64, cfg: u64) -> bool
 fn has_majority(n: *const Node, mask: u64) -> bool
@@ -29943,7 +29988,9 @@ Simulated consensus over caller message pools (node ids as mask bits): Raft
 (`raft_election_step`, `raft_replicate_step`, `raft_propose`, `raft_snapshot` and
 `raft_snapshot_step`, `membership_change` by joint consensus, `raft_step`), single-decree
 `paxos` (`paxos_propose`, `paxos_step`), `multi_paxos` with a stable leader and
-viewstamped replication (`vr_request`, `vr_primary_dead`, `vr_step`).
+viewstamped replication (`vr_request`, `vr_primary_dead`, `vr_step`). These protocols
+represent node identities in `u64` masks: a 64-node configuration is valid, and a
+larger one is refused with `TooSmall` before it dispatches or forms a membership bit.
 
 ### `e.dist.commit`
 
@@ -29990,7 +30037,10 @@ fn tcc_cancel(t: *Tcc)
 
 `two_phase` and `three_phase` commit (`commit_begin`, `commit_step`, `commit_blocked`),
 sagas by choreography and orchestration (`saga_start`, `saga_step` with compensations
-in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`).
+in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`). An empty saga is
+immediately `Completed` and does not dispatch a step. 2PC/3PC use a
+64-bit acknowledgement mask: up to 64 participants are supported; `commit_begin`,
+`commit_step` and `send_all` answer `TooSmall` for a larger configuration.
 
 ### `e.dist.replica`
 
@@ -30433,7 +30483,9 @@ over an in-memory node set).
 type Instance = struct { up: bool, skew: i64, latency: u64, holder: u64, expires: u64 }
 type Lease = struct { holder: u64, granted: u64, expires: u64 }
 
+fn time_add(start: u64, span: u64) -> (u64, bool)
 fn instance(skew: i64, latency: u64) -> Instance
+fn local_time_checked(inst: *const Instance, now: u64) -> (u64, bool)
 fn local_time(inst: *const Instance, now: u64) -> u64
 fn instance_free(inst: *const Instance, now: u64) -> bool
 fn redlock_acquire(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
@@ -30443,13 +30495,16 @@ fn lease() -> Lease
 fn lease_expired(l: *const Lease, now: u64) -> bool
 fn lease_acquire(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
 fn lease_renew(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
+fn fraction_less(left_num: u64, left_den: u64, right_num: u64, right_den: u64) -> bool
 fn lease_due(l: *const Lease, now: u64, num: u64, den: u64) -> bool
 fn redlock(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
 ```
 
 Redlock over simulated instances with skew and latency (`redlock_acquire` needing a
 majority inside the validity window, `redlock_release`, `redlock_held`) and leases
-(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`).
+(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`). Overflowing time
+calculations fail an acquisition or renewal without granting it; `local_time` saturates
+for read-only callers, and `lease_due` compares its two fractions exactly.
 
 ### `e.dist.mutex`
 
@@ -32497,7 +32552,7 @@ and `pitch_shift` (phase vocoder over the STFT) and `psola`.
 
 ```neper
 type Stage = enum u8 { Idle, Attack, Decay, Sustain, Release }
-type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64 }
+type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64, stage_start: f64, stage_elapsed: f64 }
 type Waveform = enum u8 { Saw, Square, Triangle }
 type Interpolation = enum u8 { Linear, Cubic }
 error Invalid
@@ -32505,6 +32560,7 @@ error TooSmall
 
 fn fract(x: f64) -> f64
 fn rate(seconds: f64, sample_rate: f64) -> f64
+fn duration_samples(seconds: f64, sample_rate: f64) -> f64
 fn adsr(attack: f64, decay: f64, sustain: f64, release: f64, sample_rate: f64) -> Adsr
 fn adsr_gate(e: *Adsr, on: bool)
 fn adsr_next(e: *Adsr) -> f64
@@ -32516,9 +32572,11 @@ fn wavetable(table: []const f64, phase: f64, interpolation: Interpolation) -> f6
 fn karplus_strong(frequency: f64, sample_rate: f64, decay: f64, r: *rand.Pcg64, out: []f64) -> err
 ```
 
-`adsr` envelopes (`adsr_gate`, `adsr_next`), `oscillator_polyblep` (saw, square,
-triangle) beside `oscillator_naive`, `wavetable_build`/`wavetable` (linear and
-Catmull-Rom) and `karplus_strong`.
+`adsr` envelopes (`adsr_gate`, `adsr_next`) advance every attack, decay and
+release over its configured sample duration (positive fractional sample counts
+round up), alongside `oscillator_polyblep` (saw, square, triangle) beside
+`oscillator_naive`, `wavetable_build`/`wavetable` (linear and Catmull-Rom) and
+`karplus_strong`.
 
 ### `e.audio.spatial`
 
@@ -33748,9 +33806,9 @@ fn same_text(a: []const u8, b: str) -> bool
 fn in_list(list: []const u8, name: str) -> bool
 fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, rows: u32) -> (Session, err)
 fn use_key(s: *Session, seed: [32]u8)
-fn set_command(s: *Session, command: str)
-fn set_subsystem(s: *Session, name: str)
-fn set_forward(s: *Session, host: str, port: u32)
+fn set_command(s: *Session, command: str) -> err
+fn set_subsystem(s: *Session, name: str) -> err
+fn set_forward(s: *Session, host: str, port: u32) -> err
 fn fail(s: *Session, code: u32)
 fn chacha_nonce(seq: u32) -> [12]u8
 fn send_packet(s: *Session, payload: []const u8)
@@ -33786,7 +33844,7 @@ fn sent(s: *Session, n: usize)
 fn status(s: *Session) -> u32
 ```
 
-An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: one channel at a time, no other algorithms than curve25519, ed25519 and the three ciphers. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key. (C155) `set_subsystem` (`sftp`, no pty; READY when the server accepts it) and `set_forward` (a `direct-tcpip` channel to a host and port as the server reaches it; READY once the server has connected, `FAIL_CHANNEL` when it refuses) make the one channel something other than a shell; `read` and `write` then carry the SFTP packets of `e.net.sftp` or the TCP stream. Checked against asyncssh's sftp server over a chroot (realpath, listing, read, write, stat, a missing file) and its forwarding to an echo server and to a closed port.
+An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. `set_command`, `set_subsystem` and `set_forward` return `TooLong` without changing the selection when their command, subsystem name or host exceeds the 128-byte field. Password bytes are cleared after the user-authentication request is built. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: one channel at a time, no other algorithms than curve25519, ed25519 and the three ciphers. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key. (C155) `set_subsystem` (`sftp`, no pty; READY when the server accepts it) and `set_forward` (a `direct-tcpip` channel to a host and port as the server reaches it; READY once the server has connected, `FAIL_CHANNEL` when it refuses) make the one channel something other than a shell; `read` and `write` then carry the SFTP packets of `e.net.sftp` or the TCP stream. Checked against asyncssh's sftp server over a chroot (realpath, listing, read, write, stat, a missing file) and its forwarding to an echo server and to a closed port.
 
 
 ### `e.fmt.vcard`

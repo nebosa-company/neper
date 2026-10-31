@@ -13,6 +13,14 @@ fn main(a: *mem.Arena) -> err {
     let (bad, bad_error) = channel.init[i64](a, 0usize)
     if bad_error != sync.Invalid { ret Failed }
 
+    // A failed allocation after the channel state is reserved leaves this caller
+    // arena unchanged, so it can still be used for a smaller channel.
+    var tiny_bytes: [256]u8 = zero
+    var tiny = mem.arena_from(tiny_bytes[..])
+    let tiny_start = tiny.off
+    let (_, tiny_error) = channel.init[i64](&tiny, 1000usize)
+    if tiny_error != mem.Exhausted || tiny.off != tiny_start { ret Failed }
+
     let (made, init_error) = channel.init[i64](a, 3usize)
     if init_error != ok { ret init_error }
     var c = made

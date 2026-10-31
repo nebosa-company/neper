@@ -39,6 +39,14 @@ fn within(w: u32, h: u32, options: DecodeOptions) -> err {
     ret ok
 }
 
+fn mask_is_contiguous(mask: u32) -> bool {
+    if mask == 0u32 { ret false }
+    var value = mask
+    while (value & 1u32) == 0u32 { value = value >> 1u32 }
+    while (value & 1u32) != 0u32 { value = value >> 1u32 }
+    ret value == 0u32
+}
+
 fn parse_header(d: []const u8) -> (Header, err) {
     var h: Header = zero
     if d.len < 26usize { ret (h, Invalid) }
@@ -56,7 +64,7 @@ fn parse_header(d: []const u8) -> (Header, err) {
         h.compression = 0u32
         h.palette_entry = 3usize
     } else if size >= 40u32 && size <= 124u32 {
-        if d.len < 14usize + 40usize { ret (h, Invalid) }
+        if d.len < 14usize + usize(size) { ret (h, Invalid) }
         let w = le32(d, 18usize)
         let ht = le32(d, 22usize)
         if w >= 2147483648u32 { ret (h, Invalid) }
@@ -76,6 +84,9 @@ fn parse_header(d: []const u8) -> (Header, err) {
     } else {
         ret (h, Unsupported)
     }
+    // Pixel bytes cannot overlap the declared DIB header, even when the complete
+    // extended header is present in the input.
+    if usize(h.data_offset) < 14usize + usize(size) { ret (h, Invalid) }
     if width_signed <= 0i32 || height_signed <= 0i32 { ret (h, Invalid) }
     h.width = u32(width_signed)
     h.height = u32(height_signed)
@@ -109,11 +120,22 @@ fn parse_header(d: []const u8) -> (Header, err) {
             if size >= 56u32 && d.len >= 14usize + 56usize { h.masks[3] = le32(d, at + 12usize) }
             h.palette_at = 14usize + usize(size)
         }
+        var k = 0usize
+        while k < 3usize {
+            if !mask_is_contiguous(h.masks[k]) { ret (h, Invalid) }
+            k += 1usize
+        }
+        if h.masks[3] != 0u32 && !mask_is_contiguous(h.masks[3]) { ret (h, Invalid) }
         h.has_alpha_mask = h.masks[3] != 0u32
     } else {
         h.palette_at = 14usize + usize(size)
     }
     ret (h, ok)
+}
+
+fn alpha_of(h: Header) -> image.Alpha {
+    if h.has_alpha_mask { ret .Straight }
+    ret .Opaque
 }
 
 fn inspect(source: io.Reader) -> (image.Info, err) {
@@ -122,9 +144,9 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     var got = 0usize
     while got < head.len {
         let (n, read_error) = io.read(&r, head[got..])
+        got += n
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        got += n
     }
     let (h, failure) = parse_header(head[..got])
     if failure != ok { ret (zero, failure) }
@@ -133,8 +155,7 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     info.height = h.height
     info.format = .Rgba8
     info.frames = 1u32
-    info.alpha = .Opaque
-    if h.has_alpha_mask { info.alpha = .Straight }
+    info.alpha = alpha_of(h)
     ret (info, ok)
 }
 
@@ -161,9 +182,9 @@ fn bits_of(mask: u32) -> u32 {
 
 fn channel(pixel: u32, mask: u32, shift: u32, bits: u32) -> u8 {
     if mask == 0u32 || bits == 0u32 { ret 255u8 }
-    let v = (pixel & mask) >> shift
-    let top = (1u32 << bits) - 1u32
-    ret u8(v * 255u32 / top)
+    let v = u64((pixel & mask) >> shift)
+    let top = (1u64 << bits) - 1u64
+    ret u8(v * 255u64 / top)
 }
 
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err) {
@@ -176,12 +197,13 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     if within_error != ok { ret (zero, within_error) }
     let w = usize(h.width)
     let ht = usize(h.height)
-    let (out, out_error) = image.allocate(a, h.width, h.height, .Rgba8, .Straight)
+    let (out, out_error) = image.allocate(a, h.width, h.height, .Rgba8, alpha_of(h))
     if out_error != ok { ret (zero, out_error) }
     let start = usize(h.data_offset)
     if start > d.len { ret (zero, Invalid) }
     // the palette
     var palette: [256]u32 = zero
+    var palette_len = 0usize
     if h.bits <= 8u32 {
         var count = usize(h.colors)
         let full = 1usize << usize(h.bits)
@@ -194,6 +216,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             palette[k] = (u32(d[p + 2usize]) << 16u32) | (u32(d[p + 1usize]) << 8u32) | u32(d[p]) | 4278190080u32
             k += 1usize
         }
+        palette_len = count
     }
     // palette indices for RLE, decoded to one byte per pixel
     if h.compression == 1u32 || h.compression == 2u32 {
@@ -213,31 +236,38 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
             let v = d[at + 1usize]
             at += 2usize
             if n > 0usize {
+                if y >= ht || x > w || n > w - x { ret (zero, Invalid) }
                 var k = 0usize
                 while k < n {
                     var px = v
                     if h.compression == 2u32 {
                         if k % 2usize == 0usize { px = v >> 4u32 } else { px = v & 15u8 }
                     }
-                    if x < w && y < ht { idx[y * w + x] = px }
+                    if usize(px) >= palette_len { ret (zero, Invalid) }
+                    idx[y * w + x] = px
                     x += 1usize
                     k += 1usize
                 }
             } else if v == 0u8 {
+                if y >= ht { ret (zero, Invalid) }
                 x = 0usize
                 y += 1usize
             } else if v == 1u8 {
                 done = true
             } else if v == 2u8 {
                 if at + 2usize > d.len { ret (zero, Invalid) }
-                x += usize(d[at])
-                y += usize(d[at + 1usize])
+                let dx = usize(d[at])
+                let dy = usize(d[at + 1usize])
+                if y > ht || x > w || dx > w - x || dy > ht - y { ret (zero, Invalid) }
+                x += dx
+                y += dy
                 at += 2usize
             } else {
                 let count = usize(v)
                 var bytes_used = count
                 if h.compression == 2u32 { bytes_used = (count + 1usize) / 2usize }
                 if at + bytes_used > d.len { ret (zero, Invalid) }
+                if y >= ht || x > w || count > w - x { ret (zero, Invalid) }
                 var k = 0usize
                 while k < count {
                     var px = 0u8
@@ -247,15 +277,16 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                     } else {
                         px = d[at + k]
                     }
-                    if x < w && y < ht { idx[y * w + x] = px }
+                    if usize(px) >= palette_len { ret (zero, Invalid) }
+                    idx[y * w + x] = px
                     x += 1usize
                     k += 1usize
                 }
                 at += bytes_used
                 if bytes_used % 2usize == 1usize { at += 1usize }
             }
-            if y > ht + 1usize { break }
         }
+        if !done { ret (zero, Invalid) }
         var row = 0usize
         while row < ht {
             var dst_row = row
@@ -294,8 +325,6 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         widths[k] = bits_of(masks[k])
         k += 1usize
     }
-    // a 32 bit BI_RGB pixel's fourth byte is unused, as in Pillow and the browsers
-    let alpha_used = false
     var row = 0usize
     while row < ht {
         var dst_row = row
@@ -313,6 +342,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                 let byte = d[src + col / per]
                 let shift = u32(8usize - usize(h.bits) * (col % per + 1usize))
                 let index = usize((u32(byte) >> shift) & ((1u32 << h.bits) - 1u32))
+                if index >= palette_len { ret (zero, Invalid) }
                 let c = palette[index]
                 rr = u8((c >> 16u32) & 255u32)
                 gg = u8((c >> 8u32) & 255u32)
@@ -337,7 +367,6 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
                     bb = u8(pixel & 255u32)
                     gg = u8((pixel >> 8u32) & 255u32)
                     rr = u8((pixel >> 16u32) & 255u32)
-                    if alpha_used { aa = u8((pixel >> 24u32) & 255u32) }
                 }
             }
             out.pixels[o] = rr

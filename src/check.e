@@ -10346,6 +10346,20 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     // means spelling a nesting and a length, which this does not do yet.
     if subject.name.len == 0usize { ret (info, Unsupported) }
     info.name = subject.name
+    // Scalar names are language spellings, but a declared type imported from another
+    // module needs its defining module to stay distinguishable from a same-named type
+    // in this module.  `aggregate_for_type` also leaves synthetic names such as
+    // `target.Arch` in their already canonical form.
+    let (_, declared) = aggregate_for_type(c, subject)
+    if declared && subject.module_index != module_index && subject.module_index < g.count {
+        let qualifier = g.modules[subject.module_index].name
+        let (qualified, qualified_error) = mem.alloc[u8](c.arena, qualifier.len + subject.name.len + 1usize)
+        if qualified_error != ok { ret (info, qualified_error) }
+        os.copy_bytes(qualified[0usize..qualifier.len], qualifier)
+        qualified[qualifier.len] = 46u8
+        os.copy_bytes(qualified[qualifier.len + 1usize..], subject.name)
+        info.name = qualified
+    }
     info.result = make_type(.String, "str", target_module)
     ret (info, ok)
 }

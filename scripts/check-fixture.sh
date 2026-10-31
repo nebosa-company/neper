@@ -72,7 +72,8 @@ if [ -n "$target" ]; then
     exit "$status"
 fi
 
-written=$("$compiler" emit-executable "$source" "$repo" "$host_arch" "$host_os" "$exe" $release)
+# (D5946) Kernels carry GLSL too, so a fixture that opens OpenGL devices runs them; it changes nothing else.
+written=$("$compiler" emit-executable "$source" "$repo" "$host_arch" "$host_os" "$exe" $release --gpu glsl)
 [ "$written" = 'executable written' ] || { printf '%s\n' "$fixture did not emit: $written" >&2; exit 1; }
 [ "$host_os" = windows ] || chmod +x "$exe"
 

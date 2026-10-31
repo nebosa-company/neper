@@ -125,7 +125,64 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let not_image = [1]docx.Block{ docx.image(docx.Image { data: "GIF89a not a png", width_emu: 0u32, height_emu: 0u32, alt: "" }) }
     let (ni, ni_error) = docx.encode(a, not_image[0..], docx.default_meta())
     if ni_error != docx.BadImage { os.exit(40) }
+    // The old four-byte check accepted this false PNG prefix and read its fake dimensions.
+    let false_png_prefix = "\x89PNG\x00\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x00\x00\x00\x00"
+    let false_png_image = [1]docx.Block{ docx.image(docx.Image { data: false_png_prefix, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, false_png_error) = docx.encode(a, false_png_image[0..], docx.default_meta())
+    if false_png_error != docx.BadImage { os.exit(47) }
+    // A valid signature alone is not enough: dimensions follow an IHDR, not an arbitrary chunk.
+    let false_ihdr_png = "\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dJHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x00\x00\x00\x00"
+    let false_ihdr_image = [1]docx.Block{ docx.image(docx.Image { data: false_ihdr_png, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, false_ihdr_error) = docx.encode(a, false_ihdr_image[0..], docx.default_meta())
+    if false_ihdr_error != docx.BadImage { os.exit(48) }
+    // A complete signature and IHDR prefix still needs the rest of the 13-byte data and CRC.
+    let truncated_png_header = "\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    let truncated_png_image = [1]docx.Block{ docx.image(docx.Image { data: truncated_png_header, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, truncated_png_error) = docx.encode(a, truncated_png_image[0..], docx.default_meta())
+    if truncated_png_error != docx.BadImage { os.exit(49) }
+    // Its SOF segment says it includes a component count, but the data ends before it.
+    let truncated_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01"
+    let truncated_image = [1]docx.Block{ docx.image(docx.Image { data: truncated_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, truncated_error) = docx.encode(a, truncated_image[0..], docx.default_meta())
+    if truncated_error != docx.BadImage { os.exit(44) }
+    // A complete SOF needs one or more component records (three bytes each).
+    let zero_components_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01\x00"
+    let zero_components_image = [1]docx.Block{ docx.image(docx.Image { data: zero_components_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, zero_components_error) = docx.encode(a, zero_components_image[0..], docx.default_meta())
+    if zero_components_error != docx.BadImage { os.exit(45) }
+    let missing_component_jpeg = "\xff\xd8\xff\xc0\x00\x08\x08\x00\x01\x00\x01\x01"
+    let missing_component_image = [1]docx.Block{ docx.image(docx.Image { data: missing_component_jpeg, width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, missing_component_error) = docx.encode(a, missing_component_image[0..], docx.default_meta())
+    if missing_component_error != docx.BadImage { os.exit(46) }
     let (bm, bm_error) = docx.encode(a, no_blocks[0..0], docx.Meta { title: "a\x01", creator: "", created: "", page: .A4 })
     if bm_error != docx.BadMeta { os.exit(41) }
+    // DOCX parts are UTF-8 XML. A raw malformed byte must be refused instead of
+    // being copied into word/document.xml.
+    let bad_utf8 = [1]docx.Run{ docx.run("\x80") }
+    let bad_utf8_block = [1]docx.Block{ docx.paragraph(docx.para(.Normal, bad_utf8[0..])) }
+    let (_, bad_utf8_error) = docx.encode(a, bad_utf8_block[0..], docx.default_meta())
+    if bad_utf8_error != docx.BadText { os.exit(42) }
+    // A complete 500,000-by-1 1-bit PNG exceeds the default 96-dpi u32 EMU width.
+    // Keeping this image structurally valid makes the assertion exercise the extent
+    // bound rather than the independent PNG-header validation.
+    let oversized_png = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48\x44\x52\x00\x07\xa1\x20\x00\x00\x00\x01\x01\x00\x00\x00\x00\xd3\x9a\x1d\xcd\x00\x00\x00\x53\x49\x44\x41\x54\x78\x9c\xed\xc1\x31\x01\x00\x00\x00\xc2\xa0\xf5\x4f\x6d\x08\x5f\xa0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe0\x34\xf4\x25\x00\x01\xe8\x79\x9d\xec\x00\x00\x00\x00\x49\x45\x4e\x44\xae\x42\x60\x82"
+    let oversized_image = [1]docx.Block{ docx.image(docx.Image { data: oversized_png[0..], width_emu: 0u32, height_emu: 0u32, alt: "" }) }
+    let (_, oversized_error) = docx.encode(a, oversized_image[0..], docx.default_meta())
+    if oversized_error != docx.BadImage { os.exit(43) }
+    // UTF-8 alone is not enough: XML 1.0 excludes both terminal BMP noncharacters.
+    let bad_noncharacter_runs = [1]docx.Run{ docx.run("bad\xef\xbf\xbe") }
+    let bad_noncharacter_blocks = [1]docx.Block{ docx.paragraph(docx.para(.Normal, bad_noncharacter_runs[0..])) }
+    let (_, bad_noncharacter_error) = docx.encode(a, bad_noncharacter_blocks[0..], docx.default_meta())
+    if bad_noncharacter_error != docx.BadText { os.exit(51) }
+    let bad_noncharacter_image = [1]docx.Block{ docx.image(docx.Image { data: img13, width_emu: 0u32, height_emu: 0u32, alt: "bad\xef\xbf\xbf" }) }
+    let (_, bad_noncharacter_image_error) = docx.encode(a, bad_noncharacter_image[0..], docx.default_meta())
+    if bad_noncharacter_image_error != docx.BadImage { os.exit(52) }
+    let (_, bad_noncharacter_meta_error) = docx.encode(a, no_blocks[0..0], docx.Meta { title: "bad\xef\xbf\xbf", creator: "", created: "", page: .A4 })
+    if bad_noncharacter_meta_error != docx.BadMeta { os.exit(53) }
+    // Attribute whitespace must use character references so an XML parser preserves it.
+    let escaped_alt_image = [1]docx.Block{ docx.image(docx.Image { data: img13, width_emu: 0u32, height_emu: 0u32, alt: "tab\x09line\x0abreak" }) }
+    let (escaped_alt, escaped_alt_error) = docx.encode(a, escaped_alt_image[0..], docx.default_meta())
+    if escaped_alt_error != ok { os.exit(54) }
+    if !str.contains(escaped_alt, "descr=\"tab&#9;line&#10;break\"") { os.exit(55) }
     ret ok
 }

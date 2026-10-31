@@ -225,6 +225,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if xsd.valid(.Double, t_double[i_double]) != w_double[i_double] { try report("double", i_double) }
         i_double += 1usize
     }
+    let doubled_sign = [4]str{ "++1", "-+1.5", "+-3", "--1e5" }
+    var i_doubled_sign = 0usize
+    while i_doubled_sign < 4usize {
+        if xsd.valid(.Float, doubled_sign[i_doubled_sign]) || xsd.valid(.Double, doubled_sign[i_doubled_sign]) { try report("float-doubled-sign", i_doubled_sign) }
+        i_doubled_sign += 1usize
+    }
+    let long_integer = "123456789012345678901234567890123456789012345678901234567890"
+    let long_negative_integer = "-123456789012345678901234567890123456789012345678901234567890"
+    if !xsd.valid(.NonPositiveInteger, long_negative_integer) { try report("unbounded-integer", 0usize) }
+    if !xsd.valid(.NegativeInteger, long_negative_integer) { try report("unbounded-integer", 1usize) }
+    if !xsd.valid(.NonNegativeInteger, long_integer) { try report("unbounded-integer", 2usize) }
+    if !xsd.valid(.PositiveInteger, long_integer) { try report("unbounded-integer", 3usize) }
     let t_duration = [88]str{ "P1Y", "P1M", "P1D", "PT1H", "PT1M", "PT1S", "P", "PT", "-P1Y", "+P1Y", "P1Y2M3DT4H5M6S", "P1Y2M3DT4H5M6.7S", "P1.5Y", "P1.5D", "PT1.5H", "PT1.5S", "P1D1Y", "P1M1Y", "PT1S1M", "P1YT", "P0Y", "P0D", "P-1Y", "PT0S", "P1Y2M3DT", "P1", "PY", "P1Y 2M", "p1y", "P1W", "P0001Y", "P1Y1M43DT4H5M6S", "01.2M3T", "-PD", "-P0Y", "PY2Y3DT4H5M6S", "P1Y2M3D5T4HM6.7S", "P6T1M", "P1Y2M3.DT4H5M6.7DS", "+PY3-", "+PY", "PHY", "+P1", ".PTYM", "71y", "pS", "ST1S", "1y", "3H", "509", "1.5D", "Dy", "P01Y", "P4", "PW", "P0M1Y", "40D", "P1M1S", "P16W", "+15", "P1S", "S-61Y.", "3", "01YM", "P4T2.5H", "P1Y2M3DT4H5Y6.7S", "P0001YH", "P--S1M", "P11M64", "T0S6", "PT1.5SH7", "P15D", "P16 2M.", "P-1M1Y", "P6Y", "1Y", "1.5DD8", "P1T2T", "P1Y2M3DT4H5MSS.7S", "P1Y2", "515", "P1YPM3DT", "PDT1S1.", "P00035-Y", "-T12S1M", "TPT1S19M", "MT1M", "PT18M" }
     let w_duration = [88]bool{ true, true, true, true, true, true, false, false, true, false, true, true, false, false, false, true, false, false, false, false, true, true, false, true, false, false, false, false, false, false, true, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, true }
     var i_duration = 0usize

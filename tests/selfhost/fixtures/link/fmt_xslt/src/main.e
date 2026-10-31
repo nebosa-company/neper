@@ -247,6 +247,23 @@ fn agrees(a: *mem.Arena, sheet_text: str, doc_text: str, want: str, is_text: boo
     ret good
 }
 
+// Escaped AVT braces become literal bytes.  This deliberately exceeds the
+// compiler's fixed literal buffer so the load path must return `TooComplex`,
+// never write past the buffer.
+fn escaped_braces_sheet(a: *mem.Arena) -> (str, err) {
+    let (made, made_error) = str.builder(a, 10000usize)
+    if made_error != ok { ret ("", made_error) }
+    var b = made
+    try str.push(&b, "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"/\"><o a=\"")
+    var i = 0usize
+    while i < 4097usize {
+        try str.push(&b, "{{")
+        i += 1usize
+    }
+    try str.push(&b, "\"/></xsl:template></xsl:stylesheet>")
+    ret (str.done(&b), ok)
+}
+
 fn report(table: str, index: usize) -> err {
     var digits: [20]u8 = zero
     var count = 0usize
@@ -355,6 +372,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_10_error != xs.Invalid { try report("load-stray-top-level", 10usize) }
     let (_, load_11_error) = xs.load(a, "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"/\"><o/></xsl:template></xsl:stylesheet>")
     if load_11_error != ok { try report("load-good", 11usize) }
+    var avt_storage: [65536]u8 = zero
+    var avt_arena = mem.arena_from(avt_storage[..])
+    let (avt_sheet, avt_sheet_error) = escaped_braces_sheet(&avt_arena)
+    if avt_sheet_error != ok { try report("load-avt-build", 0usize) }
+    let (_, large_avt_error) = xs.load(&avt_arena, avt_sheet)
+    if large_avt_error != xs.TooComplex { try report("load-avt-cap", 0usize) }
     let override_sheet = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\" ><xsl:output method=\"xml\" omit-xml-declaration=\"yes\"/><xsl:param name=\"p\" select=\"'default'\"/><xsl:template match=\"/\"><o p=\"{$p}\"/></xsl:template></xsl:stylesheet>"
     let (override_ss, override_load) = xs.load(a, override_sheet)
     if override_load != ok { try report("override-load", 0usize) }

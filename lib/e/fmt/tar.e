@@ -117,7 +117,10 @@ fn name_allowed(name: str) -> bool {
     var at = 0usize
     while at <= name.len {
         var end = at
-        while end < name.len && name[end] != 47u8 && name[end] != 92u8 { end += 1usize }
+        while end < name.len && name[end] != 47u8 && name[end] != 92u8 {
+            if name[end] == 0u8 { ret false }
+            end += 1usize
+        }
         if end - at > 1usize && name[at + 1usize] == 58u8 { ret false }
         if end - at == 2usize && name[at] == 46u8 && name[at + 1usize] == 46u8 { ret false }
         at = end + 1usize
@@ -150,7 +153,7 @@ fn apply_pax(s: *State, block: []const u8) -> err {
         }
         if digits == 0usize || at >= block.len || block[at] != 32u8 { ret Invalid }
         let record_start = at - digits
-        if length < digits + 2usize || record_start + length > block.len { ret Invalid }
+        if length < digits + 2usize || length > block.len - record_start { ret Invalid }
         let record_end = record_start + length
         if block[record_end - 1usize] != 10u8 { ret Invalid }
         let body = block[at + 1usize..record_end - 1usize]
@@ -197,26 +200,47 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn count_entry(s: *State) -> err {
+    if s.entries >= s.entry_limit { ret TooLarge }
+    s.entries += 1usize
+    ret ok
+}
+
+fn count_bytes(s: *State, count: u64) -> err {
+    if s.bytes > s.byte_limit || count > s.byte_limit - s.bytes { ret TooLarge }
+    s.bytes += count
+    ret ok
+}
+
+fn drain_current(s: *State) -> err {
+    if s.remaining > 0u64 {
+        let content_error = drain(s, s.remaining)
+        if content_error != ok { ret content_error }
+        s.remaining = 0u64
+    }
+    if s.padding > 0u64 {
+        let padding_error = drain(s, s.padding)
+        if padding_error != ok { ret padding_error }
+        s.padding = 0u64
+    }
+    ret ok
+}
+
 // The next entry: `false` at the end-of-archive marker or a clean end of the source.
 fn next(r: *Reader) -> (Entry, bool, err) {
     let s = mem.cast[*State](r.state)
     if s.finished { ret (zero, false, ok) }
     // Whatever of the last entry was not read, and its padding.
-    let leftover = s.remaining + s.padding
-    if leftover > 0u64 {
-        let drain_error = drain(s, leftover)
-        if drain_error != ok { ret (zero, false, drain_error) }
-        s.remaining = 0u64
-        s.padding = 0u64
-    }
+    let initial_drain_error = drain_current(s)
+    if initial_drain_error != ok { ret (zero, false, initial_drain_error) }
     var header: [512]u8 = zero
     while true {
         let (first, first_error) = io.read(&s.source, header[0..])
-        if first_error == io.End {
+        if first == 0usize && first_error == io.End {
             s.finished = true
             ret (zero, false, ok)
         }
-        if first_error != ok { ret (zero, false, first_error) }
+        if first_error != ok && first_error != io.End { ret (zero, false, first_error) }
         if first < 512usize {
             let rest_error = io.read_exact(&s.source, header[first..])
             if rest_error != ok { ret (zero, false, Invalid) }
@@ -241,19 +265,28 @@ fn next(r: *Reader) -> (Entry, bool, err) {
         // A PAX header applies to the next entry; a global one is skipped.
         if kind == 120u8 || kind == 103u8 {
             if size > 65536u64 { ret (zero, false, TooLarge) }
-            let (block, block_error) = mem.alloc[u8](s.arena, usize(size))
-            if block_error != ok { ret (zero, false, block_error) }
-            let read_error = io.read_exact(&s.source, block)
-            if read_error != ok { ret (zero, false, Invalid) }
-            let drain_error = drain(s, padding)
-            if drain_error != ok { ret (zero, false, drain_error) }
+            let pax_entry_error = count_entry(s)
+            if pax_entry_error != ok { ret (zero, false, pax_entry_error) }
+            let pax_byte_error = count_bytes(s, size)
+            if pax_byte_error != ok { ret (zero, false, pax_byte_error) }
             if kind == 120u8 {
+                let (block, block_error) = mem.alloc[u8](s.arena, usize(size))
+                if block_error != ok { ret (zero, false, block_error) }
+                let read_error = io.read_exact(&s.source, block)
+                if read_error != ok { ret (zero, false, Invalid) }
+                let pax_padding_error = drain(s, padding)
+                if pax_padding_error != ok { ret (zero, false, pax_padding_error) }
                 let pax_error = apply_pax(s, block)
                 if pax_error != ok { ret (zero, false, pax_error) }
+            } else {
+                let global_content_error = drain(s, size)
+                if global_content_error != ok { ret (zero, false, global_content_error) }
+                let global_padding_error = drain(s, padding)
+                if global_padding_error != ok { ret (zero, false, global_padding_error) }
             }
         } else {
-            s.entries += 1usize
-            if s.entries > s.entry_limit { ret (zero, false, TooLarge) }
+            let regular_entry_error = count_entry(s)
+            if regular_entry_error != ok { ret (zero, false, regular_entry_error) }
             var e: Entry = zero
             e.kind = kind
             if kind == 0u8 { e.kind = 48u8 }
@@ -295,12 +328,12 @@ fn next(r: *Reader) -> (Entry, bool, err) {
             if s.has_pax_size { e.size = s.pax_size }
             let (mode, mode_valid) = octal(header[100..108])
             let (modified, modified_valid) = octal(header[136..148])
-            if !mode_valid || !modified_valid { ret (zero, false, Invalid) }
+            if !mode_valid || !modified_valid || mode > 4294967295u64 || modified > 9223372036854775807u64 { ret (zero, false, Invalid) }
             e.mode = u32(mode)
             e.modified = i64(modified)
             if e.kind != 48u8 { e.size = 0u64 }
-            s.bytes += e.size
-            if s.bytes > s.byte_limit { ret (zero, false, TooLarge) }
+            let regular_byte_error = count_bytes(s, e.size)
+            if regular_byte_error != ok { ret (zero, false, regular_byte_error) }
             s.remaining = e.size
             s.padding = (512u64 - e.size % 512u64) % 512u64
             s.pax_path = ""
@@ -324,15 +357,12 @@ fn content_read(ctx: *void, dst: []u8) -> (usize, err) {
     var take = dst.len
     if u64(take) > s.remaining { take = usize(s.remaining) }
     let (count, read_error) = io.read(&s.source, dst[..take])
-    if read_error != ok { ret (count, read_error) }
     s.remaining -= u64(count)
+    if read_error != ok { ret (count, read_error) }
     ret (count, ok)
 }
 
 fn skip(r: *Reader) -> err {
     let s = mem.cast[*State](r.state)
-    let drain_error = drain(s, s.remaining + s.padding)
-    s.remaining = 0u64
-    s.padding = 0u64
-    ret drain_error
+    ret drain_current(s)
 }

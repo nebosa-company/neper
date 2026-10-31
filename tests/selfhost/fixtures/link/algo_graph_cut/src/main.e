@@ -38,6 +38,16 @@ fn karate(a: *mem.Arena) -> (graph.Graph[i64], err) {
     ret (g, g_error)
 }
 
+fn disconnected_graph(a: *mem.Arena) -> (graph.Graph[i64], err) {
+    let (builder_value, builder_error) = graph.builder[i64](a, 4usize, 2usize)
+    if builder_error != ok { ret (zero, builder_error) }
+    var builder = builder_value
+    let edge_error = graph.add_undirected[i64](&builder, 0u32, 1u32, 1i64)
+    if edge_error != ok { ret (zero, edge_error) }
+    let (g, finish_error) = graph.finish[i64](a, &builder)
+    ret (g, finish_error)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (g, g_error) = karate(a)
     if g_error != ok { os.exit(1i32) }
@@ -87,8 +97,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 2: Karger.
     var r = rand.pcg64(8u64, 3u64)
     var best_side: [34]u8 = zero
+    let no_runs_at = a.off
+    let (_, no_runs_error) = cut.karger_best[i64](a, &g, 0usize, &r, best_side[..], side[..])
+    if no_runs_error != cut.Invalid || a.off != no_runs_at { os.exit(2i32) }
+    let scratch_start = a.off
     let (best, karger_error) = cut.karger_best[i64](a, &g, 400usize, &r, best_side[..], side[..])
-    if karger_error != ok || best != 1usize { os.exit(2i32) }
+    if karger_error != ok || best != 1usize || a.off - scratch_start > 2048usize { os.exit(2i32) }
     ones = 0usize
     i = 0usize
     while i < 34usize {
@@ -100,6 +114,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if single_error != ok || single < 1usize { os.exit(2i32) }
     let (_, karger_room) = cut.karger[i64](a, &g, &r, side[..3usize])
     if karger_room != cut.TooSmall { os.exit(2i32) }
+
+    let (disconnected, disconnected_error) = disconnected_graph(a)
+    if disconnected_error != ok { os.exit(3i32) }
+    var disconnected_random = rand.pcg64(11u64, 5u64)
+    var disconnected_side: [4]u8 = zero
+    let (disconnected_cut, disconnected_karger_error) = cut.karger[i64](a, &disconnected, &disconnected_random, disconnected_side[..])
+    if disconnected_karger_error != ok || disconnected_cut != 0usize || disconnected_side[0usize] != disconnected_side[1usize] { os.exit(3i32) }
+    var disconnected_zeros = 0usize
+    var disconnected_ones = 0usize
+    var disconnected_i = 0usize
+    while disconnected_i < 4usize {
+        if disconnected_side[disconnected_i] == 0u8 { disconnected_zeros += 1usize }
+        if disconnected_side[disconnected_i] == 1u8 { disconnected_ones += 1usize }
+        if disconnected_side[disconnected_i] > 1u8 { os.exit(3i32) }
+        disconnected_i += 1usize
+    }
+    if disconnected_zeros == 0usize || disconnected_ones == 0usize { os.exit(3i32) }
+    var disconnected_best_side: [4]u8 = zero
+    let (disconnected_best, disconnected_best_error) = cut.karger_best[i64](a, &disconnected, 8usize, &disconnected_random, disconnected_best_side[..], disconnected_side[..])
+    if disconnected_best_error != ok || disconnected_best != 0usize || disconnected_best_side[0usize] != disconnected_best_side[1usize] { os.exit(3i32) }
+    disconnected_ones = 0usize
+    disconnected_i = 0usize
+    while disconnected_i < 4usize {
+        if disconnected_best_side[disconnected_i] > 1u8 { os.exit(3i32) }
+        if disconnected_best_side[disconnected_i] == 1u8 { disconnected_ones += 1usize }
+        disconnected_i += 1usize
+    }
+    if disconnected_ones == 0usize || disconnected_ones == 4usize { os.exit(3i32) }
 
     try io.print("algo graph cut ok\n")
     ret ok

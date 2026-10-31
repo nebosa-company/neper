@@ -101,17 +101,11 @@ fn find(parent: []u32, v: u32) -> u32 {
     ret r
 }
 
-// One Karger run: edges (each undirected edge once, `from < to`) in a
-// random order are contracted until two groups remain; `side` receives
-// the group of each node (0 or 1). Answers the crossing edge count.
-fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8) -> (usize, err) {
+// Contract edges using caller-owned scratch so repeated runs share their arena space.
+fn karger_with_scratch[E: type](g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8, parent: []u32, order: []usize) -> (usize, err) {
     let n = graph.node_count[E](g)
-    if side.len < n { ret (0usize, TooSmall) }
+    if side.len < n || parent.len < n || order.len < g.edges.len { ret (0usize, TooSmall) }
     if n < 2usize { ret (0usize, Invalid) }
-    let (parent, parent_error) = mem.alloc[u32](a, n)
-    if parent_error != ok { ret (0usize, parent_error) }
-    let (order, order_error) = mem.alloc[usize](a, g.edges.len)
-    if order_error != ok { ret (0usize, order_error) }
     var i = 0usize
     while i < n {
         parent[i] = u32(i)
@@ -147,7 +141,8 @@ fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side
         }
         i += 1usize
     }
-    if groups > 2usize { ret (0usize, Invalid) }
+    // If more than two groups remain, the graph is disconnected and all edges
+    // were considered. Separating node 0's component from the others is a zero cut.
     let first = find(parent, 0u32)
     i = 0usize
     while i < n {
@@ -164,16 +159,38 @@ fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side
     ret (crossing, ok)
 }
 
-// The best cut of `runs` Karger runs; `best_side` keeps its sides,
-// `side` is scratch for each run.
+// One Karger run: edges (each undirected edge once, `from < to`) in a
+// random order are contracted until two groups remain or all edges are
+// exhausted; `side` receives the group of each node (0 or 1). A disconnected
+// graph returns a valid zero-cut partition.
+fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8) -> (usize, err) {
+    let n = graph.node_count[E](g)
+    if side.len < n { ret (0usize, TooSmall) }
+    if n < 2usize { ret (0usize, Invalid) }
+    let (parent, parent_error) = mem.alloc[u32](a, n)
+    if parent_error != ok { ret (0usize, parent_error) }
+    let (order, order_error) = mem.alloc[usize](a, g.edges.len)
+    if order_error != ok { ret (0usize, order_error) }
+    let (cut_value, run_error) = karger_with_scratch[E](g, r, side, parent, order)
+    ret (cut_value, run_error)
+}
+
+// `runs` must be nonzero. `side` and the arena scratch are reused across all runs.
 fn karger_best[E: type](a: *mem.Arena, g: *const graph.Graph[E], runs: usize, r: *rand.Pcg64, best_side: []u8, side: []u8) -> (usize, err) {
     let n = graph.node_count[E](g)
     if best_side.len < n { ret (0usize, TooSmall) }
+    if runs == 0usize { ret (0usize, Invalid) }
+    if side.len < n { ret (0usize, TooSmall) }
+    if n < 2usize { ret (0usize, Invalid) }
+    let (parent, parent_error) = mem.alloc[u32](a, n)
+    if parent_error != ok { ret (0usize, parent_error) }
+    let (order, order_error) = mem.alloc[usize](a, g.edges.len)
+    if order_error != ok { ret (0usize, order_error) }
     var best = 0usize
     var have = false
     var run = 0usize
     while run < runs {
-        let (cut, run_error) = karger[E](a, g, r, side)
+        let (cut, run_error) = karger_with_scratch[E](g, r, side, parent, order)
         if run_error != ok { ret (0usize, run_error) }
         if !have || cut < best {
             best = cut

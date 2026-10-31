@@ -95,6 +95,8 @@ fn checks_clean() -> i32 {
     let (_, a) = arch.add_module(&g, "core", 0u8)
     let (_, b) = arch.add_module(&g, "app", 1u8)
     if a != ok || b != ok { ret 20i32 }
+    let (duplicate, duplicate_error) = arch.add_module(&g, "core", 9u8)
+    if duplicate != arch.NONE || duplicate_error != arch.Duplicate || g.modules != 2usize { ret 25i32 }
     if arch.add_dep(&g, "app", "core") != ok { ret 21i32 }
     var rs: [2]arch.Rule = zero
     rs[0] = arch.Rule { kind: .Layering, from: "", to: "", lo: 0u8, hi: 0u8 }
@@ -105,6 +107,39 @@ fn checks_clean() -> i32 {
     // Storage limits are refused, not overrun.
     if arch.add_dep(&g, "app", "core") != ok || arch.add_dep(&g, "app", "core") != ok || arch.add_dep(&g, "app", "core") != ok { ret 23i32 }
     if arch.add_dep(&g, "app", "core") != arch.TooSmall { ret 24i32 }
+    ret 0i32
+}
+
+fn checks_cycle_scratch() -> i32 {
+    var cycle_rules: [1]arch.Rule = zero
+    cycle_rules[0] = arch.Rule { kind: .NoCycles, from: "", to: "", lo: 0u8, hi: 0u8 }
+    var out: [2]arch.Violation = zero
+
+    var mark_names: [2]str = zero
+    var mark_layers: [2]u8 = zero
+    var mark_from: [1]u32 = zero
+    var mark_to: [1]u32 = zero
+    var short_mark: [1]u8 = zero
+    var mark_stack: [2]u32 = zero
+    var mark_graph = arch.graph(mark_names[0..], mark_layers[0..], mark_from[0..], mark_to[0..], short_mark[0..], mark_stack[0..])
+    let (_, mark_a) = arch.add_module(&mark_graph, "a", 0u8)
+    let (_, mark_b) = arch.add_module(&mark_graph, "b", 0u8)
+    if mark_a != ok || mark_b != ok { ret 40i32 }
+    let (_, mark_error) = arch.check(&mark_graph, cycle_rules[0..], out[0..])
+    if mark_error != arch.TooSmall { ret 41i32 }
+
+    var stack_names: [2]str = zero
+    var stack_layers: [2]u8 = zero
+    var stack_from: [1]u32 = zero
+    var stack_to: [1]u32 = zero
+    var stack_mark: [2]u8 = zero
+    var short_stack: [1]u32 = zero
+    var stack_graph = arch.graph(stack_names[0..], stack_layers[0..], stack_from[0..], stack_to[0..], stack_mark[0..], short_stack[0..])
+    let (_, stack_a) = arch.add_module(&stack_graph, "a", 0u8)
+    let (_, stack_b) = arch.add_module(&stack_graph, "b", 0u8)
+    if stack_a != ok || stack_b != ok { ret 42i32 }
+    let (_, stack_error) = arch.check(&stack_graph, cycle_rules[0..], out[0..])
+    if stack_error != arch.TooSmall { ret 43i32 }
     ret 0i32
 }
 
@@ -123,6 +158,7 @@ fn checks_text() -> i32 {
 fn main(a: *mem.Arena) -> err {
     var code = checks_graph()
     if code == 0i32 { code = checks_clean() }
+    if code == 0i32 { code = checks_cycle_scratch() }
     if code == 0i32 { code = checks_text() }
     if code != 0i32 { os.exit(code) }
     ret ok

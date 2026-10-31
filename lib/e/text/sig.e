@@ -3,8 +3,8 @@
 // `??`, `4?`, `?A`, jumps `[n]` and `[n-m]`) and conditions (`and`, `or`, `not`, parentheses, `true`, `false`, `$a`, `$a at N`,
 // `#a OP N`, `filesize OP N`, `any|all|none|N of them`, `... of ($a, $b, $c*)`, numbers in decimal or `0x` with `KB`/`MB`) --
 // into arena tables; `scan` counts, per string, the offsets at which it matches (overlapping occurrences count; a string
-// matching as both ascii and wide at one offset counts once) and evaluates every rule. Hex strings backtrack over jumps, so
-// the cost of one start offset is bounded by the product of the jump widths. Not here: regular expressions, modules,
+// matching as both ascii and wide at one offset counts once) and evaluates every rule. Hex strings backtrack over jumps,
+// but a scan has a fixed match-work budget so hostile jump combinations cannot hang it. Not here: regular expressions, modules,
 // imports, `at`/`in` ranges beyond `$a at N`, string alternatives, tags, `private`/`global`, `for` loops, xor/base64.
 //
 // Memory: tables come from the arena given to `compile`; rule and string names borrow from the source text, which must
@@ -15,12 +15,14 @@ use e.mem
 error Syntax
 error TooMany
 error TooSmall
+error TooComplex
 
 type Token = struct { kind: u8, value: u8, mask: u8, min: u32, max: u32 }
 
 type Pattern = struct { name: str, first: u32, count: u32, hex: bool, nocase: bool, ascii: bool, wide: bool, fullword: bool }
 
 type Node = struct { kind: u8, op: u8, quant: u8, a: u32, b: u32, n: u64 }
+type MatchWork = struct { remaining: usize }
 
 type Rule = struct { name: str, first_string: u32, string_count: u32, root: u32 }
 
@@ -33,6 +35,7 @@ const MAX_PATTERNS: usize = 256usize
 const MAX_TOKENS: usize = 4096usize
 const MAX_NODES: usize = 1024usize
 const MAX_MEMBERS: usize = 1024usize
+const MAX_MATCH_WORK: usize = 4194304usize
 
 // node kinds
 const N_TRUE: u8 = 0u8
@@ -670,26 +673,39 @@ fn compile(a: *mem.Arena, source: str) -> (Set, err) {
     ret (p.s, ok)
 }
 
+fn take_match_work(work: *MatchWork) -> bool {
+    if work.remaining == 0usize { ret false }
+    work.remaining = work.remaining - 1usize
+    ret true
+}
+
 // Whether pattern `pi` matches starting exactly at `pos`.
-fn tokens_at(s: *const Set, t: usize, end: usize, data: []const u8, pos: usize) -> bool {
+fn tokens_at(s: *const Set, t: usize, end: usize, data: []const u8, pos: usize, work: *MatchWork) -> (bool, err) {
+    if !take_match_work(work) { ret (false, TooComplex) }
     var i = t
     var at = pos
     while i < end {
         let tok = s.tokens[i]
         if tok.kind == 1u8 {
+            if at > data.len { ret (false, ok) }
+            let available = data.len - at
             var gap = tok.min
             while gap <= tok.max {
-                if tokens_at(s, i + 1usize, end, data, at + usize(gap)) { ret true }
+                if usize(gap) > available { break }
+                if !take_match_work(work) { ret (false, TooComplex) }
+                let (found, next_error) = tokens_at(s, i + 1usize, end, data, at + usize(gap), work)
+                if next_error != ok { ret (false, next_error) }
+                if found { ret (true, ok) }
                 gap += 1u32
             }
-            ret false
+            ret (false, ok)
         }
-        if at >= data.len { ret false }
-        if (data[at] & tok.mask) != tok.value { ret false }
+        if at >= data.len { ret (false, ok) }
+        if (data[at] & tok.mask) != tok.value { ret (false, ok) }
         at += 1usize
         i += 1usize
     }
-    ret true
+    ret (true, ok)
 }
 
 fn literal_at(s: *const Set, pat: Pattern, data: []const u8, pos: usize, wide: bool) -> bool {
@@ -722,37 +738,45 @@ fn literal_at(s: *const Set, pat: Pattern, data: []const u8, pos: usize, wide: b
     ret true
 }
 
-fn pattern_at(s: *const Set, pi: usize, data: []const u8, pos: usize) -> bool {
+fn pattern_at(s: *const Set, pi: usize, data: []const u8, pos: usize, work: *MatchWork) -> (bool, err) {
     let pat = s.patterns[pi]
-    if pat.hex { ret tokens_at(s, usize(pat.first), usize(pat.first) + usize(pat.count), data, pos) }
-    if pat.ascii && literal_at(s, pat, data, pos, false) { ret true }
-    if pat.wide && literal_at(s, pat, data, pos, true) { ret true }
-    ret false
+    if pat.hex {
+        let (found, token_error) = tokens_at(s, usize(pat.first), usize(pat.first) + usize(pat.count), data, pos, work)
+        ret (found, token_error)
+    }
+    if pat.ascii && literal_at(s, pat, data, pos, false) { ret (true, ok) }
+    if pat.wide && literal_at(s, pat, data, pos, true) { ret (true, ok) }
+    ret (false, ok)
 }
 
 // The number of offsets at which pattern `pi` matches.
-fn count_matches(s: *const Set, pi: usize, data: []const u8) -> u32 {
+fn count_matches(s: *const Set, pi: usize, data: []const u8, work: *MatchWork) -> (u32, err) {
     var n = 0u32
     var pos = 0usize
     while pos < data.len {
-        if pattern_at(s, pi, data, pos) { n += 1u32 }
+        let (found, pattern_error) = pattern_at(s, pi, data, pos, work)
+        if pattern_error != ok { ret (n, pattern_error) }
+        if found { n += 1u32 }
         pos += 1usize
     }
-    ret n
+    ret (n, ok)
 }
 
 // The `k`th (from zero) match offset of pattern `pi`.
-fn nth_match(s: *const Set, pi: usize, data: []const u8, k: usize) -> (usize, bool) {
+fn nth_match(s: *const Set, pi: usize, data: []const u8, k: usize) -> (usize, bool, err) {
+    var work = MatchWork { remaining: MAX_MATCH_WORK }
     var seen = 0usize
     var pos = 0usize
     while pos < data.len {
-        if pattern_at(s, pi, data, pos) {
-            if seen == k { ret (pos, true) }
+        let (found, pattern_error) = pattern_at(s, pi, data, pos, &work)
+        if pattern_error != ok { ret (0usize, false, pattern_error) }
+        if found {
+            if seen == k { ret (pos, true, ok) }
             seen += 1usize
         }
         pos += 1usize
     }
-    ret (0usize, false)
+    ret (0usize, false, ok)
 }
 
 fn compare(op: u8, x: u64, y: u64) -> bool {
@@ -764,44 +788,90 @@ fn compare(op: u8, x: u64, y: u64) -> bool {
     ret x >= y
 }
 
-fn eval(s: *const Set, node: u32, data: []const u8, counts: []const u32) -> bool {
+fn eval(s: *const Set, node: u32, data: []const u8, counts: []const u32, work: *MatchWork) -> (bool, err) {
     let n = s.nodes[usize(node)]
-    if n.kind == N_TRUE { ret true }
-    if n.kind == N_FALSE { ret false }
-    if n.kind == N_AND { ret eval(s, n.a, data, counts) && eval(s, n.b, data, counts) }
-    if n.kind == N_OR { ret eval(s, n.a, data, counts) || eval(s, n.b, data, counts) }
-    if n.kind == N_NOT { ret !eval(s, n.a, data, counts) }
-    if n.kind == N_STRING { ret counts[usize(n.a)] > 0u32 }
-    if n.kind == N_AT {
-        if n.n >= u64(data.len) { ret false }
-        ret pattern_at(s, usize(n.a), data, usize(n.n))
+    if n.kind == N_TRUE { ret (true, ok) }
+    if n.kind == N_FALSE { ret (false, ok) }
+    if n.kind == N_AND {
+        let (left, left_error) = eval(s, n.a, data, counts, work)
+        if left_error != ok { ret (false, left_error) }
+        if !left { ret (false, ok) }
+        let (right, right_error) = eval(s, n.b, data, counts, work)
+        ret (right, right_error)
     }
-    if n.kind == N_COUNT { ret compare(n.op, u64(counts[usize(n.a)]), n.n) }
-    if n.kind == N_FILESIZE { ret compare(n.op, u64(data.len), n.n) }
+    if n.kind == N_OR {
+        let (left, left_error) = eval(s, n.a, data, counts, work)
+        if left_error != ok { ret (false, left_error) }
+        if left { ret (true, ok) }
+        let (right, right_error) = eval(s, n.b, data, counts, work)
+        ret (right, right_error)
+    }
+    if n.kind == N_NOT {
+        let (inner, inner_error) = eval(s, n.a, data, counts, work)
+        if inner_error != ok { ret (false, inner_error) }
+        ret (!inner, ok)
+    }
+    if n.kind == N_STRING { ret (counts[usize(n.a)] > 0u32, ok) }
+    if n.kind == N_AT {
+        if n.n >= u64(data.len) { ret (false, ok) }
+        let (found, pattern_error) = pattern_at(s, usize(n.a), data, usize(n.n), work)
+        ret (found, pattern_error)
+    }
+    if n.kind == N_COUNT { ret (compare(n.op, u64(counts[usize(n.a)]), n.n), ok) }
+    if n.kind == N_FILESIZE { ret (compare(n.op, u64(data.len), n.n), ok) }
     var hit = 0u64
     var i = 0usize
     while i < usize(n.b) {
         if counts[usize(s.members[usize(n.a) + i])] > 0u32 { hit += 1u64 }
         i += 1usize
     }
-    if n.quant == 0u8 { ret hit >= 1u64 }
-    if n.quant == 1u8 { ret hit == u64(n.b) }
-    if n.quant == 2u8 { ret hit == 0u64 }
-    ret hit >= n.n
+    if n.quant == 0u8 { ret (hit >= 1u64, ok) }
+    if n.quant == 1u8 { ret (hit == u64(n.b), ok) }
+    if n.quant == 2u8 { ret (hit == 0u64, ok) }
+    ret (hit >= n.n, ok)
 }
 
 // Counts every string's matches into `counts` (one per string, in source order) and sets `matched` per rule.
 fn scan(s: *const Set, data: []const u8, counts: []u32, matched: []bool) -> err {
     if counts.len < s.pattern_count || matched.len < s.rule_count { ret TooSmall }
+    var work = MatchWork { remaining: MAX_MATCH_WORK }
     var i = 0usize
     while i < s.pattern_count {
-        counts[i] = count_matches(s, i, data)
+        let (count, count_error) = count_matches(s, i, data, &work)
+        if count_error != ok { ret count_error }
+        counts[i] = count
         i += 1usize
     }
     i = 0usize
     while i < s.rule_count {
-        matched[i] = eval(s, s.rules[i].root, data, counts)
+        let (rule_match, eval_error) = eval(s, s.rules[i].root, data, counts, &work)
+        if eval_error != ok { ret eval_error }
+        matched[i] = rule_match
         i += 1usize
     }
+    ret ok
+}
+
+@test
+fn hex_jump_work_is_bounded(a: *mem.Arena) -> err {
+    var tokens: [11]Token = zero
+    var i = 0usize
+    while i < 5usize {
+        tokens[2usize * i] = Token { kind: 0u8, value: 0u8, mask: 255u8, min: 0u32, max: 0u32 }
+        if i < 4usize { tokens[2usize * i + 1usize] = Token { kind: 1u8, value: 0u8, mask: 0u8, min: 0u32, max: 1000u32 } }
+        i += 1usize
+    }
+    tokens[10usize] = Token { kind: 0u8, value: 1u8, mask: 255u8, min: 0u32, max: 0u32 }
+    var patterns: [1]Pattern = zero
+    patterns[0usize] = Pattern { name: "a", first: 0u32, count: 11u32, hex: true, nocase: false, ascii: false, wide: false, fullword: false }
+    var set: Set = zero
+    set.patterns = patterns[..]
+    set.tokens = tokens[..]
+    set.pattern_count = 1usize
+    set.token_count = 11usize
+    var data: [128]u8 = zero
+    var counts: [1]u32 = zero
+    var matched: [1]bool = zero
+    if scan(&set, data[..], counts[..], matched[..]) != TooComplex { ret TooSmall }
     ret ok
 }

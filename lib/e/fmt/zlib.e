@@ -3,7 +3,7 @@
 // compares the big-endian Adler-32 trailer before answering `io.End`; a writer that
 // puts the 0x78 0x9c header first, deflates through a 4 KiB staging buffer and
 // writes the trailer on `finish`. A preset dictionary (FDICT) is `Invalid`; output
-// past `output_limit` is `deflate.TooLarge`.
+// past `output_limit` is `deflate.TooLarge`. `remaining` exposes post-trailer bytes.
 use e.io
 use e.mem
 use e.algo.deflate as deflate
@@ -28,6 +28,7 @@ type ReaderState = struct {
     produced: u64,
     output_limit: u64,
     source_ended: bool,
+    pending_error: err,
 }
 
 type WriterState = struct {
@@ -36,6 +37,7 @@ type WriterState = struct {
     staging: []u8,
     started: bool,
     finished: bool,
+    failed: bool,
     adler_a: u32,
     adler_b: u32,
 }
@@ -74,6 +76,7 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
     s.produced = 0u64
     s.output_limit = output_limit
     s.source_ended = false
+    s.pending_error = ok
     var r: Reader = zero
     r.state = mem.cast[*void](s)
     ret (r, ok)
@@ -81,12 +84,23 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
 
 // Refills the input buffer from the source; false at its end.
 fn fill(s: *ReaderState) -> (bool, err) {
+    if s.pending_error != ok {
+        let pending = s.pending_error
+        s.pending_error = ok
+        if pending == io.End { ret (false, ok) }
+        ret (false, pending)
+    }
     let (count, read_error) = io.read(&s.source, s.input)
-    if read_error == io.End { ret (false, ok) }
-    if read_error != ok { ret (false, read_error) }
     s.in_at = 0usize
     s.in_len = count
-    ret (count > 0usize, ok)
+    if read_error == io.End { s.source_ended = true }
+    if count > 0usize {
+        if read_error != ok { s.pending_error = read_error }
+        ret (true, ok)
+    }
+    if read_error == io.End { ret (false, ok) }
+    if read_error != ok { ret (false, read_error) }
+    ret (false, io.NoProgress)
 }
 
 fn next_byte(s: *ReaderState) -> (u8, err) {
@@ -98,6 +112,31 @@ fn next_byte(s: *ReaderState) -> (u8, err) {
     let byte = s.input[s.in_at]
     s.in_at += 1usize
     ret (byte, ok)
+}
+
+// The unread bytes after a complete zlib stream. The returned reader borrows
+// this reader's storage, so it must be drained before that storage is reused.
+fn remaining(source_reader: *Reader) -> (io.Reader, err) {
+    let s = mem.cast[*ReaderState](source_reader.state)
+    if s.stage != 3u32 { ret (zero, Invalid) }
+    ret (io.Reader { ctx: mem.cast[*void](s), read: remaining_read }, ok)
+}
+
+fn remaining_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let s = mem.cast[*ReaderState](ctx)
+    if dst.len == 0usize { ret (0usize, ok) }
+    let held = deflate.leftover(&s.decoder, dst)
+    if held > 0usize { ret (held, ok) }
+    if s.in_at < s.in_len {
+        var take = s.in_len - s.in_at
+        if take > dst.len { take = dst.len }
+        mem.copy[u8](dst[..take], s.input[s.in_at..s.in_at + take])
+        s.in_at += take
+        ret (take, ok)
+    }
+    if s.pending_error != ok { ret (0usize, s.pending_error) }
+    let (count, read_error) = io.read(&s.source, dst)
+    ret (count, read_error)
 }
 
 fn adler_update(a_in: u32, b_in: u32, data: []const u8) -> (u32, u32) {
@@ -124,6 +163,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         if flg & 32u8 != 0u8 { ret (0usize, Invalid) }
         s.stage = 1u32
     }
+    if s.stage == 4u32 { ret (0usize, deflate.TooLarge) }
     if s.stage == 3u32 { ret (0usize, io.End) }
     if dst.len == 0usize { ret (0usize, ok) }
     while s.stage == 1u32 {
@@ -133,13 +173,29 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if !more { s.source_ended = true }
         }
         // With the source gone the decoder is told so, and a truncated stream is its Invalid.
-        let (consumed, written, status, decode_error) = deflate.decode(&s.decoder, s.input[s.in_at..s.in_len], dst, s.source_ended)
+        // Keep a private byte for the exact-limit probe: a completed stream
+        // must still reach its trailer, while a further decoded byte is TooLarge
+        // without ever being exposed through the caller's destination.
+        var destination = dst
+        var overflow_probe: [1]u8 = zero
+        var probing = false
+        if s.produced >= s.output_limit {
+            destination = overflow_probe[..]
+            probing = true
+        } else {
+            let budget_left = s.output_limit - s.produced
+            if u64(destination.len) > budget_left { destination = destination[..usize(budget_left)] }
+        }
+        let (consumed, written, status, decode_error) = deflate.decode(&s.decoder, s.input[s.in_at..s.in_len], destination, s.source_ended)
         if decode_error != ok { ret (0usize, Invalid) }
         s.in_at += consumed
         if written > 0usize {
+            if probing {
+                s.stage = 4u32
+                ret (0usize, deflate.TooLarge)
+            }
             s.produced += u64(written)
-            if s.produced > s.output_limit { ret (0usize, deflate.TooLarge) }
-            let (a, b) = adler_update(s.adler_a, s.adler_b, dst[..written])
+            let (a, b) = adler_update(s.adler_a, s.adler_b, destination[..written])
             s.adler_a = a
             s.adler_b = b
         }
@@ -147,7 +203,7 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         if written > 0usize { ret (written, ok) }
     }
     // The trailer: whatever the decoder over-read comes first.
-    var trailer: [8]u8 = zero
+    var trailer: [4]u8 = zero
     let held = deflate.leftover(&s.decoder, trailer[0..])
     var i = held
     while i < 4usize {
@@ -176,6 +232,7 @@ fn writer(storage: []u8, sink: io.Writer, level: deflate.Level) -> (Writer, err)
     s.sink = sink
     s.started = false
     s.finished = false
+    s.failed = false
     s.adler_a = 1u32
     s.adler_b = 0u32
     var w: Writer = zero
@@ -189,7 +246,9 @@ fn start(s: *WriterState) -> err {
     var header: [2]u8 = zero
     header[0] = 120u8
     header[1] = 156u8
-    ret io.write_all(&s.sink, header[0..])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok { s.failed = true }
+    ret header_error
 }
 
 // Runs the encoder over `src` until it asks for input, draining the staging buffer.
@@ -197,9 +256,18 @@ fn pump(s: *WriterState, src: []const u8, last: bool) -> err {
     var at = 0usize
     while true {
         let (consumed, written, status, encode_error) = deflate.encode(&s.encoder, src[at..], s.staging, last)
-        if encode_error != ok { ret encode_error }
+        if encode_error != ok {
+            s.failed = true
+            ret encode_error
+        }
         at += consumed
-        if written > 0usize { try io.write_all(&s.sink, s.staging[..written]) }
+        if written > 0usize {
+            let write_error = io.write_all(&s.sink, s.staging[..written])
+            if write_error != ok {
+                s.failed = true
+                ret write_error
+            }
+        }
         if status == .Finished { ret ok }
         if status == .NeedInput && at == src.len { ret ok }
     }
@@ -207,7 +275,7 @@ fn pump(s: *WriterState, src: []const u8, last: bool) -> err {
 
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
     let s = mem.cast[*WriterState](sink_writer.state)
-    if s.finished { ret (0usize, Invalid) }
+    if s.finished || s.failed { ret (0usize, Invalid) }
     let start_error = start(s)
     if start_error != ok { ret (0usize, start_error) }
     let pump_error = pump(s, src, false)
@@ -221,6 +289,7 @@ fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
 fn finish(sink_writer: *Writer) -> err {
     let s = mem.cast[*WriterState](sink_writer.state)
     if s.finished { ret ok }
+    if s.failed { ret Invalid }
     try start(s)
     var none: [1]u8 = zero
     try pump(s, none[0..0], true)
@@ -230,7 +299,16 @@ fn finish(sink_writer: *Writer) -> err {
     trailer[1] = u8((checksum >> 16u32) & 255u32)
     trailer[2] = u8((checksum >> 8u32) & 255u32)
     trailer[3] = u8(checksum & 255u32)
-    try io.write_all(&s.sink, trailer[0..])
+    let trailer_error = io.write_all(&s.sink, trailer[0..])
+    if trailer_error != ok {
+        s.failed = true
+        ret trailer_error
+    }
+    let flush_error = io.flush(&s.sink)
+    if flush_error != ok {
+        s.failed = true
+        ret flush_error
+    }
     s.finished = true
-    ret io.flush(&s.sink)
+    ret ok
 }

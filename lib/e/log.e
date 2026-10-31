@@ -5,12 +5,15 @@
 // backtrace's addresses after it -- and `jsonl_sink` one JSON object per line with
 // the same content under `time`, `level`, `message`, `fields` and `frames`. An `err`
 // field prints as `ok` or `error`, since an error has no name at run time yet. The
-// caller owns every string until `write` returns, and there is no global logger.
+// JSONL refuses malformed UTF-8 strings and spells a non-finite float field as
+// `null`, so each emitted line remains JSON. The caller owns every string until
+// `write` returns, and there is no global logger.
 use e.debug
 use e.io
 use e.mem
 use e.os
 use e.str
+use e.text.utf8
 use e.time
 
 type Level = enum u8 { Trace, Debug, Info, Warn, Error }
@@ -83,10 +86,11 @@ fn push_value(b: *str.Builder, value: Value, quoted: bool) -> err {
     case .U64 as unsigned:
         ret str.push_u64(b, unsigned)
     case .F64 as number:
+        if quoted && (mem.bitcast[u64](number) & 9218868437227405312u64) == 9218868437227405312u64 { ret str.push(b, "null") }
         ret str.push_f64(b, number)
     case .String as text:
         if quoted { ret push_json_string(b, text) }
-        ret str.push(b, text)
+        ret push_console_text(b, text)
     case .Error as failure:
         var name = "ok"
         if failure != ok { name = "error" }
@@ -96,6 +100,7 @@ fn push_value(b: *str.Builder, value: Value, quoted: bool) -> err {
 }
 
 fn push_json_string(b: *str.Builder, text: str) -> err {
+    if !utf8.validate(text) { ret utf8.Invalid }
     try str.push(b, "\"")
     var at = 0usize
     while at < text.len {
@@ -137,17 +142,45 @@ fn hex_digit(nibble: u8) -> u8 {
     ret 87u8 + nibble
 }
 
+fn push_console_text(b: *str.Builder, text: str) -> err {
+    var at = 0usize
+    while at < text.len {
+        let byte = text[at]
+        if byte == 10u8 {
+            try str.push(b, "\\n")
+        } else {
+        if byte == 13u8 {
+            try str.push(b, "\\r")
+        } else {
+        if byte == 9u8 {
+            try str.push(b, "\\t")
+        } else {
+        if byte < 32u8 {
+            try str.push(b, "\\x")
+            try str.push_byte(b, hex_digit(byte >> 4u8))
+            try str.push_byte(b, hex_digit(byte & 15u8))
+        } else {
+            try str.push_byte(b, byte)
+        }
+        }
+        }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn render_console(b: *str.Builder, record: *const Record) -> err {
     var stamp: [30]u8 = zero
     try str.push(b, time.format_iso8601(record.timestamp, stamp[0..]))
     try str.push(b, " ")
     try str.push(b, level_name(record.level))
     try str.push(b, " ")
-    try str.push(b, record.message)
+    try push_console_text(b, record.message)
     var i = 0usize
     while i < record.fields.len {
         try str.push(b, " ")
-        try str.push(b, record.fields[i].name)
+        try push_console_text(b, record.fields[i].name)
         try str.push(b, "=")
         try push_value(b, record.fields[i].value, false)
         i += 1usize
@@ -166,6 +199,7 @@ fn render_console(b: *str.Builder, record: *const Record) -> err {
 }
 
 fn render_jsonl(b: *str.Builder, record: *const Record) -> err {
+    if !json_record_utf8(record) { ret utf8.Invalid }
     var stamp: [30]u8 = zero
     try str.push(b, "{\"time\":\"")
     try str.push(b, time.format_iso8601(record.timestamp, stamp[0..]))
@@ -196,28 +230,56 @@ fn render_jsonl(b: *str.Builder, record: *const Record) -> err {
     ret str.push(b, "]}\n")
 }
 
-// A record is rendered into a 4 KiB stack line; a longer one is cut at the message.
+fn json_record_utf8(record: *const Record) -> bool {
+    if !utf8.validate(record.message) { ret false }
+    var i = 0usize
+    while i < record.fields.len {
+        if !utf8.validate(record.fields[i].name) { ret false }
+        if !json_value_utf8(record.fields[i].value) { ret false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < record.frames.len {
+        if !utf8.validate(record.frames[i].function) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn json_value_utf8(value: Value) -> bool {
+    switch value {
+    case .String as text:
+        ret utf8.validate(text)
+    default:
+        ret true
+    }
+}
+
+// Both built-in sinks render through this fixed 4 KiB stack buffer. A flushing
+// builder streams longer records instead of dropping or partially emitting them.
 const LINE: usize = 4096usize
 
-fn console_write(ctx: *void, record: *const Record) -> err {
-    var scratch: [4096]u8 = zero
-    var arena = mem.arena_from(scratch[0..])
-    let (b0, builder_error) = str.builder(&arena, LINE)
-    if builder_error != ok { ret builder_error }
-    var b = b0
-    let render_error = render_console(&b, record)
-    if render_error != ok && render_error != mem.Exhausted { ret render_error }
+fn console_flush(ctx: *void, bytes: []const u8) -> err {
     let file = mem.cast[*os.File](ctx)
-    var line = str.done(&b)
-    if render_error == mem.Exhausted { line = "" }
     var sent = 0usize
-    while sent < line.len {
-        let (count, write_error) = os.write(*file, line[sent..])
+    while sent < bytes.len {
+        let (count, write_error) = os.write(*file, bytes[sent..])
         if write_error != ok { ret write_error }
         if count == 0usize { ret io.NoProgress }
         sent += count
     }
     ret ok
+}
+
+fn console_write(ctx: *void, record: *const Record) -> err {
+    var scratch: [4096]u8 = zero
+    var arena = mem.arena_from(scratch[0..])
+    let sink = str.Sink { ctx: ctx, write: console_flush }
+    let (b0, builder_error) = str.builder_to(&arena, LINE, sink)
+    if builder_error != ok { ret builder_error }
+    var b = b0
+    try render_console(&b, record)
+    ret console_flush(ctx, str.done(&b))
 }
 
 fn console_sink(file: *os.File) -> Sink {
@@ -227,12 +289,17 @@ fn console_sink(file: *os.File) -> Sink {
 fn jsonl_write(ctx: *void, record: *const Record) -> err {
     var scratch: [4096]u8 = zero
     var arena = mem.arena_from(scratch[0..])
-    let (b0, builder_error) = str.builder(&arena, LINE)
+    let sink = str.Sink { ctx: ctx, write: jsonl_flush }
+    let (b0, builder_error) = str.builder_to(&arena, LINE, sink)
     if builder_error != ok { ret builder_error }
     var b = b0
     try render_jsonl(&b, record)
+    ret jsonl_flush(ctx, str.done(&b))
+}
+
+fn jsonl_flush(ctx: *void, bytes: []const u8) -> err {
     let writer = mem.cast[*io.Writer](ctx)
-    ret io.write_all(writer, str.done(&b))
+    ret io.write_all(writer, bytes)
 }
 
 fn jsonl_sink(writer: *io.Writer) -> Sink {

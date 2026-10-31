@@ -73,6 +73,12 @@ fn drive(g: *const base.Grammar, action: []const u32, gotos: []const u32, code: 
     let bad2 = [2]u32 { 0u32, 0u32 }
     let (_, reject2) = lr.parse(g, action, gotos, bad2[..], stack[..], rules[..])
     if reject2 != lr.Invalid { os.exit(code) }
+    let explicit_end = [1]u32 { 5u32 }
+    let (_, reject_end) = lr.parse(g, action, gotos, explicit_end[..], stack[..], rules[..])
+    if reject_end != lr.Invalid { os.exit(code) }
+    let outside_terminal = [1]u32 { 4294967295u32 }
+    let (_, reject_outside) = lr.parse(g, action, gotos, outside_terminal[..], stack[..], rules[..])
+    if reject_outside != lr.Invalid { os.exit(code) }
     ret (fold_u32(0u64, lengths[..]), rule_hash)
 }
 
@@ -144,6 +150,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if lr.items1(&g, 5u32, &tiny) != lr.TooSmall { os.exit(6i32) }
     var few = lr.collection(pool[..], set_start[..4usize], trans[..], nullable[..], first[..], follow[..])
     if lr.items(&g, 5u32, &few) != lr.TooSmall { os.exit(6i32) }
+
+    // LR entry points validate rule offsets before they reach the shared LL
+    // sets or reduce helpers. An empty offset slice used to underflow there.
+    let malformed_lhs = [1]u32 { 1u32 }
+    let malformed_rhs = [1]u32 { 0u32 }
+    let malformed_offsets = [1]usize { 0usize }
+    let malformed = base.grammar(malformed_lhs[..], malformed_rhs[..], malformed_offsets[0usize..0usize], 1u32)
+    var malformed_collection = lr.collection(pool[..], set_start[..], trans[..], nullable[..], first[..], follow[..])
+    if lr.items(&malformed, 1u32, &malformed_collection) != lr.Invalid { os.exit(7i32) }
+    if lr.items1(&malformed, 1u32, &malformed_collection) != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_slr_error) = lr.slr_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_slr_error != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_lr1_error) = lr.canonical_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_lr1_error != lr.Invalid { os.exit(7i32) }
+    let (_, _, malformed_lalr_error) = lr.lalr_table(&malformed, 1u32, &malformed_collection, merged[..], action[..], gotos[..])
+    if malformed_lalr_error != lr.Invalid { os.exit(7i32) }
+    let (_, malformed_parse_error) = lr.parse(&malformed, action[..], gotos[..], star[..], stack[..], rules[..])
+    if malformed_parse_error != lr.Invalid { os.exit(7i32) }
+
+    // Direct parser callers can also supply truncated or inconsistent tables;
+    // reject those indices instead of indexing action or goto storage.
+    let (_, short_action_error) = lr.parse(&g, action[0usize..0usize], gotos[..], star[0usize..0usize], stack[..], rules[..])
+    if short_action_error != lr.Invalid { os.exit(8i32) }
+    let one_terminal = [1]u32 { 0u32 }
+    var invalid_action: [6]u32 = zero
+    invalid_action[0usize] = (999u32 << 2u32) | 1u32
+    let (_, invalid_action_error) = lr.parse(&g, invalid_action[..], gotos[..], one_terminal[..], stack[..], rules[..])
+    if invalid_action_error != lr.Invalid { os.exit(8i32) }
+    let epsilon_lhs = [1]u32 { 1u32 }
+    let epsilon_rhs = [1]u32 { 0u32 }
+    let epsilon_offsets = [2]usize { 0usize, 0usize }
+    let epsilon = base.grammar(epsilon_lhs[..], epsilon_rhs[0usize..0usize], epsilon_offsets[..], 1u32)
+    var epsilon_action: [4]u32 = zero
+    epsilon_action[1usize] = 2u32
+    epsilon_action[3usize] = 3u32
+    var epsilon_gotos: [1]u32 = zero
+    let (_, missing_goto_error) = lr.parse(&epsilon, epsilon_action[..], epsilon_gotos[0usize..0usize], star[0usize..0usize], stack[..], rules[..])
+    if missing_goto_error != lr.Invalid { os.exit(8i32) }
+    epsilon_gotos[0usize] = 1u32
+    let (_, epsilon_stack_error) = lr.parse(&epsilon, epsilon_action[..], epsilon_gotos[..], star[0usize..0usize], stack[0usize..1usize], rules[..])
+    if epsilon_stack_error != lr.TooSmall { os.exit(8i32) }
+    let huge_lhs = [1]u32 { 64u32 }
+    let huge_rhs = [1]u32 { 0u32 }
+    let huge_offsets = [2]usize { 0usize, 1usize }
+    let huge = base.grammar(huge_lhs[..], huge_rhs[..], huge_offsets[..], 4294967295u32)
+    let (_, huge_error) = lr.parse(&huge, epsilon_action[..], epsilon_gotos[..], star[0usize..0usize], stack[..], rules[..])
+    if huge_error != lr.Invalid { os.exit(8i32) }
 
     try io.print("parse lr ok\n")
     ret ok

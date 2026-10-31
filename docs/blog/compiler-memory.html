@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A 1 TiB ceiling that costs 3 MiB — Neper blog</title>
+  <meta name="description" content="How a Neper program grows into memory with no flag: an arena is reserved, not allocated. Three small programs, the compiler building a million lines at 605 MB, and the limits, measured on Windows and Linux.">
+  <link rel="canonical" href="https://neper.dev/blog/compiler-memory.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="A 1 TiB ceiling that costs 3 MiB">
+  <meta property="og:description" content="An arena's size was never a cost. Reserved is not allocated: a program grows with no flag on Windows, Linux and macOS, and the compiler builds a million lines at 605 MB. The commit charge and the limits are listed.">
+  <meta property="og:url" content="https://neper.dev/blog/compiler-memory.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/compiler-memory.svg">
+  <meta property="article:published_time" content="2026-10-30">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    p code, li code { overflow-wrap: anywhere; }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+    <article>
+      <div class="eyebrow">&gt; blog // memory</div>
+      <h1>A 1 TiB ceiling that costs 3 MiB</h1>
+      <p class="meta">October 30, 2026 · Measured with Neper's own compiler on Windows and Linux; every number is from a run, and the limits are listed</p>
+      <img class="banner" src="img/compiler-memory.svg" width="1200" height="630" alt="A 1 TiB ceiling that costs 3 MiB. A program starts at 3 MiB of RAM; the compiler builds a million lines at 605 MB.">
+
+      <p class="lede">A Neper program used to stop at 1 GiB unless it was built with a flag, and the compiler was a Neper program like any other. A million-line build failed with an arena error, though it needs only 605 MB of RAM. Now a program takes what it needs, up to a 1 TiB ceiling, on Windows, Linux and macOS, and gives it back. That costs nothing, because the size of an arena was never a cost. It is a ceiling on addresses, and memory arrives when a page is first written.</p>
+
+      <div class="stats">
+        <div class="stat"><b>1 TiB</b><span>the default ceiling, with no flag</span></div>
+        <div class="stat"><b>3 MiB</b><span>peak RAM of a program at start (Windows)</span></div>
+        <div class="stat"><b>605 MB</b><span>peak RAM to compile 920,554 lines</span></div>
+        <div class="stat"><b>132 MiB</b><span>left in RAM after a 2 GiB spike and a reset</span></div>
+      </div>
+
+      <figure>
+        <iframe src="https://www.youtube-nocookie.com/embed/AVdIcX5iQH4?rel=0" title="A 1 TiB ceiling that costs 3 MiB" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <figcaption>The same story in 3 minutes 41 seconds, with the real commands and numbers. Captioned, with a synthetic voice. <a href="https://youtu.be/AVdIcX5iQH4" rel="noopener noreferrer">Watch on YouTube</a>.</figcaption>
+      </figure>
+
+      <h2>The error</h2>
+      <p>The workload is sc1m, the generated million-line program from <a href="sc1m-eight-compilers.html">A million lines, eight compilers</a>: 1,000 modules, 82,595 functions, 920,554 lines. That post had to build the compiler with <code>--arena 4g</code> first. This is why, with a release compiler built with the old 1 GiB ceiling:</p>
+      <pre><code><span class="prompt">$</span> neper-1g emit-executable src/main.e REPO x64 windows sc1m.exe --release --unchecked --cpu x64-v3 -j 8
+error[E-TYPE-9999]: resource limit: the compiler's arena is exhausted; the program is larger than this compiler was built to hold</code></pre>
+      <p>And this is the same command with the same compiler source, built with the new default:</p>
+      <pre><code><span class="prompt">$</span> neper emit-executable src/main.e REPO x64 windows sc1m.exe --release --unchecked --cpu x64-v3 -j 8
+executable written
+<span class="prompt">$</span> ./sc1m.exe
+108474335</code></pre>
+      <p>It took 3.6 seconds and the answer is the one the generator expected. The peak working set was 605 MB. The old build did not run out of memory. It ran out of a number.</p>
+
+      <h2>One arena, in the open</h2>
+      <p>Neper has no garbage collector and no hidden heap. A program's memory is an arena, a block with a base, a capacity and an offset, and <code>main</code> receives it as its first parameter. A function that allocates takes the arena as an argument, so you can see from a signature whether it can allocate at all.</p>
+      <pre><code><span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="kw">let</span> (block, block_error) = mem.alloc[u8](a, 4096usize)
+    <span class="kw">if</span> block_error != ok { <span class="kw">ret</span> block_error }
+    ...
+}</code></pre>
+      <p><code>mem.alloc</code> is a bump and a bounds compare. <code>mem.mark</code> and <code>mem.reset</code> free a whole phase at once. Running out is an ordinary error value, <code>mem.Exhausted</code>, and the program decides what to do with it.</p>
+      <p>Because an arena hands out raw pointers, it cannot be moved to a bigger block when it fills up. Nothing moves under a pointer in Neper. So an arena that can grow needs one unbroken range of addresses, set aside before the first allocation.</p>
+
+      <h2>Reserved is not allocated</h2>
+      <p>That range is what the startup code asks for, and asking for addresses is nearly free. The operating system records the range and hands over no memory. Real pages arrive the first time the program writes to them.</p>
+      <div class="tiles">
+        <div class="tile"><h3>Windows</h3><p>The arena is reserved, not committed. The first write to an uncommitted page faults, and a handler the runtime installs commits the 1 MiB chunk around it and resumes the instruction.</p></div>
+        <div class="tile"><h3>Linux</h3><p>The arena is an anonymous mapping with <code>MAP_NORESERVE</code>. The kernel backs each page on first touch, so a ceiling larger than the machine is not refused.</p></div>
+      </div>
+      <p>Both of those were already true. What changed is the default, from 1 GiB to 1 TiB, in one place in the compiler that every hosted linker reads, and what the startup does if the host says no, which comes below. <code>--arena</code> still sets the size either way.</p>
+
+      <h2>A program that grows</h2>
+      <p>This program allocates six blocks of 256 MiB and writes one byte to every page, so all of it becomes real. There is no flag anywhere. <a href="https://github.com/nebosa-company/neper/blob/master/docs/blog/code/compiler-memory/grow.e" rel="noopener noreferrer">The whole source</a> is 39 lines; this is its loop:</p>
+      <pre><code><span class="kw">while</span> grown &lt; BLOCKS {
+    <span class="kw">let</span> (block, block_error) = mem.alloc[u8](a, BLOCK)
+    <span class="kw">if</span> block_error != ok { <span class="kw">ret</span> block_error }
+    <span class="kw">var</span> at = 0usize
+    <span class="kw">while</span> at &lt; BLOCK {
+        block[at] = 1u8
+        at += PAGE
+    }
+    grown += 1usize
+    <span class="kw">try</span> report(a, <span class="str">"grew"</span>)
+}</code></pre>
+      <pre><code><span class="prompt">$</span> neper emit-executable grow.e . x64 windows grow.exe --release
+<span class="prompt">$</span> ./grow.exe
+start: ceiling 1048576 MiB, used 0 MiB, peak RAM 3 MiB
+grew: ceiling 1048576 MiB, used 256 MiB, peak RAM 259 MiB
+grew: ceiling 1048576 MiB, used 512 MiB, peak RAM 515 MiB
+grew: ceiling 1048576 MiB, used 768 MiB, peak RAM 771 MiB
+grew: ceiling 1048576 MiB, used 1024 MiB, peak RAM 1027 MiB
+grew: ceiling 1048576 MiB, used 1280 MiB, peak RAM 1283 MiB
+grew: ceiling 1048576 MiB, used 1536 MiB, peak RAM 1539 MiB
+first byte is still 42</code></pre>
+      <p>The program starts at 3 MiB under a 1 TiB ceiling, and RAM follows what it uses. It walks straight past the old 1 GiB limit. Its first allocation is still where it was, with what it held. Linux prints the same lines with slightly lower peaks: 1 MiB at the start and 1536 MiB at the end.</p>
+
+      <h2>Allocating is not touching</h2>
+      <p>A page costs nothing until it is written, so a large table that is mostly empty stays cheap. This one asks for 16 GiB, more than the machine has, and writes to 1,000 places:</p>
+      <pre><code><span class="kw">let</span> (table, table_error) = mem.alloc[u8](a, SIZE)
+<span class="kw">if</span> table_error != ok { <span class="kw">ret</span> table_error }
+<span class="kw">var</span> n = 0usize
+<span class="kw">while</span> n &lt; WRITES {
+    table[n * (SIZE / WRITES)] = 1u8
+    n += 1usize
+}</code></pre>
+      <pre><code><span class="prompt">$</span> ./sparse.exe
+allocated 16384 MiB, wrote 1000 places, peak RAM 7 MiB</code></pre>
+      <p>Linux reports 3 MiB. There is a catch on Windows. RAM is 7 MiB, but the commit charge, what counts against RAM plus pagefile, peaked at 1,006 MB. Each scattered write committed a whole 1 MiB chunk. On Windows, then, a program that touches memory sparsely pays for it in commit, though not in RAM.</p>
+
+      <h2>Giving memory back</h2>
+      <p>A long-running loop should not climb toward a ceiling at all. <code>mem.mark</code> notes the offset and <code>mem.reset</code> returns to it, so a frame's scratch memory is the next frame's scratch memory. This one allocates 1 MiB per frame for ten thousand frames:</p>
+      <pre><code><span class="kw">let</span> start = mem.mark(a)
+<span class="kw">var</span> frame = 0usize
+<span class="kw">while</span> frame &lt; FRAMES {
+    <span class="kw">try</span> draw(a)
+    mem.reset(a, start)
+    frame += 1usize
+}</code></pre>
+      <pre><code><span class="prompt">$</span> ./frames.exe
+allocated 10000 MiB in total, used now 0 MiB, peak RAM 4 MiB</code></pre>
+      <p>That is 10 GB of allocations in 4 MiB of RAM, with a peak commit of 1 MB. Linux reports a peak of 1 MiB.</p>
+      <p>Reusing memory is half of the job. A server that handles one huge request should not keep that memory for the rest of its life, and an arena used to do exactly that: <code>reset</code> moved an offset and nothing else. Now a reset that frees 512 MiB or more hands back all but the first 128 MiB of what it freed, with nothing asked for and no background thread:</p>
+      <pre><code><span class="prompt">$</span> ./spike.exe
+after the spike: 2051 MiB in RAM
+after mem.reset: 132 MiB in RAM</code></pre>
+      <p>Linux prints 2048 and 129. A reset under the threshold costs one compare and makes no system call, so the frame loop above never sees any of this.</p>
+      <p>This is safe because of a rule that was already there. Using a slice after its region is reset does not compile, so no checked program can see the pages go:</p>
+      <pre><code><span class="prompt">$</span> neper check-file main.e . x64 windows
+main.e:31:8: error[E-SAFETY-0013]: `small` points into a region that was reset at line 30, so it cannot be used here</code></pre>
+      <p>Our first thresholds were wrong, and the measurement said so. At 128 MiB, a program that spiked 200 MiB fifty times went from 37 ms to 1,432 ms, because it was refaulting the same pages every round. At 512 MiB that case is back to normal, and the cost has moved somewhere much less common:</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Windows, one byte written per page</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td>RAM after a 2 GiB spike and a reset</td><td>2,051 MiB</td><td class="win">132 MiB</td></tr>
+          <tr><td>2,000 rounds of 4 MiB</td><td>7 ms</td><td>12 ms</td></tr>
+          <tr><td>50 rounds of 200 MiB</td><td>37 ms</td><td>48 ms</td></tr>
+          <tr><td>10 rounds of 600 MiB</td><td class="win">23 ms</td><td>1,026 ms</td></tr>
+        </tbody>
+      </table></div>
+      <p>The last row is the real price: a program that repeatedly spikes past 512 MiB pays about 100 ms a round in page faults. A program that actually fills 600 MiB spends about that long writing it, so it is a slowdown of around double, not forty times, but it is a slowdown. On Linux those rows are 2,048 and 129 MiB, 9 and 8 ms, 42 and 54 ms, 24 and 1,395 ms.</p>
+
+      <h2>Freeing one object</h2>
+      <p>An arena frees everything after a mark, and nothing alone. Most of a compiler fits that shape. A server's sessions and caches do not, because their lifetimes overlap. That is what <code>e.mem.heap</code> is for: a heap you create and pass, so a function that takes no heap still allocates from none.</p>
+      <pre><code><span class="kw">let</span> (h, open_error) = heap.open(8589934592usize)
+<span class="kw">if</span> open_error != ok { <span class="kw">ret</span> open_error }
+
+<span class="kw">let</span> (session, session_error) = heap.alloc(h, 256usize)
+<span class="kw">if</span> session_error != ok { <span class="kw">ret</span> session_error }
+<span class="kw">let</span> (request, request_error) = heap.alloc(h, 4096usize)
+<span class="kw">if</span> request_error != ok {
+    heap.free(session)
+    <span class="kw">ret</span> request_error
+}
+
+<span class="com">// The older block goes first, which a stack of lifetimes cannot do.</span>
+heap.free(session)
+<span class="kw">let</span> working = heap.bytes(&amp;request)
+working[0usize] = 9u8</code></pre>
+      <p>The heap's 8 GiB is only addresses until it is written. Sizes up to 4 KiB come from a <code>Slab</code> and larger ones from a <code>Buddy</code>, and a freed block of 1 MiB or more goes back to the operating system. In our test, 2 GiB in sizes from a byte to a mebibyte went through 64 live slots, freed in no stack order, in about 50 ms.</p>
+      <p>The part we like most costs nothing when the program runs. A <code>Block</code> is a resource owed to <code>free</code>, so these three are compile errors:</p>
+      <pre><code><span class="com"># used after it was freed</span>
+main.e:11:28: error[E-SAFETY-0001]: `block` was moved or never owned (line 10), so it cannot be used here
+<span class="com"># freed twice</span>
+main.e:11:15: error[E-SAFETY-0001]: `block` was moved or never owned (line 10), so it cannot be used here
+<span class="com"># never freed</span>
+main.e:10:5: error[E-SAFETY-0002]: `block` acquired at line 8 is still owned at this exit: close it, defer its close, or move it out</code></pre>
+      <p>It caught us. Our first version of the sample above used <code>try</code> on a print while a block was live, and the compiler refused it, because that <code>try</code> could return and leak the block. It was right.</p>
+
+      <h2>The compiler</h2>
+      <p>The compiler is where this design earns its keep. It sizes its tables from the program, generously, before it knows how much of each it will need, and every phase's worker gets its own arena. Tables that are never filled are never touched, so the margin costs addresses and not memory.</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Release compiler, release build</th><th>1 GiB ceiling</th><th>1 TiB ceiling</th><th>Peak RAM</th><th>Peak commit</th></tr></thead>
+        <tbody>
+          <tr><td>Itself, 109,734 lines, 8 workers</td><td>0.81 s</td><td>0.82 s</td><td>339 MB</td><td>694 MB</td></tr>
+          <tr><td>Itself, 1 worker</td><td>1.95 s</td><td>1.97 s</td><td>169 MB</td><td>not measured</td></tr>
+          <tr><td>sc1m, 920,554 lines, 8 workers</td><td>E-TYPE-9999</td><td class="win">3.6 s</td><td>605 MB</td><td>940 MB</td></tr>
+          <tr><td>sc1m, 1 worker</td><td>E-TYPE-9999</td><td class="win">16 s</td><td>504 MB</td><td>not measured</td></tr>
+        </tbody>
+      </table></div>
+      <p>For the compiler building itself, the two ceilings tie: the memory is the same, and 0.02 s is noise. The sc1m row is the point. The workers' arenas reached 4,423 MB of addresses between them, and the process touched 605 MB. The old failure was an arena's offset reaching 1 GiB, not a shortage of RAM.</p>
+      <p>What happens when those tables do get touched shows how much of that margin is untouched. A debug-built compiler fills every allocation with a pattern, so every page is real:</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>The compiler building itself, 8 workers</th><th>Time</th><th>Peak RAM</th><th>Peak commit</th></tr></thead>
+        <tbody>
+          <tr><td>Release-built compiler, release output</td><td class="win">0.75 s</td><td class="win">339 MB</td><td class="win">694 MB</td></tr>
+          <tr><td>Debug-built compiler, release output</td><td>1.2 s</td><td>3,425 MB</td><td>3,440 MB</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><strong>Build your compiler with --release.</strong><p>The fill catches bugs, and a tenfold memory bill is what it costs. If a build of yours feels heavy, check which compiler you are running first.</p></div>
+
+      <h2>Why a ceiling at all</h2>
+      <p>A ceiling is what remains because nothing can move. The alternative is to chain regions: when an arena fills, reserve another and carry on. That has no ceiling, but it changes the 24-byte arena layout every runtime reads, leaves unused space at each boundary, and makes <code>mark</code> and <code>reset</code> span regions. On a 64-bit host, a bigger range gives the same behavior.</p>
+      <p>So the only question is how big, and that is where we went wrong first. We raised the default to 64 GiB and the Linux suite refused it. The suite runs one fixture under valgrind, and a 64 GiB arena would not start there, with the same program running natively:</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Arena size</th><th>1, 16, 24, 32, 40, 48, 56 GiB</th><th>64 GiB</th></tr></thead>
+        <tbody>
+          <tr><td>Under valgrind 3.22</td><td class="win">runs</td><td>exit 111, before <code>main</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>We dropped the default to 32 GiB, which fixed the suite and left a limit nobody wanted: a default build stopped at 32 GiB on a machine with more RAM. And 32 GiB was the wrong lesson. The limit was never the machine's. Valgrind loads itself at a fixed address, <code>vStart = 0x1002000000</code>, about 64 GiB in, so a program under it has that much on any hardware. The same kernel maps 1 TiB without complaint when valgrind is not there.</p>
+
+      <h2>When the host says no</h2>
+      <p>The real bug was that a refused reservation was fatal. Picking a smaller number only moves that cliff, so the startup no longer has one. If the host refuses the size, it halves the size and asks again, down to 1 MiB, and the arena's capacity is what was granted. This is the x64 Linux entry; Windows and both macOS entries do the same:</p>
+      <pre><code><span class="fn">.Lreserve:</span>
+    ...                  <span class="com"># mmap(0, rbp, ...)</span>
+    syscall
+    test rax, rax
+    jns  .Lmapped
+    shr  rbp, 1          <span class="com"># refused: ask for half</span>
+    cmp  rbp, 0x100000
+    jae  .Lreserve       <span class="com"># down to 1 MiB</span></code></pre>
+      <p>With that, nothing needs the default to be low, so it is 1 TiB. Every environment that used to stop a program now just gives it less. This prints the ceiling the program ended up with:</p>
+      <pre><code><span class="prompt">$</span> ./cap
+ceiling 1048576 MiB
+<span class="prompt">$</span> valgrind -q ./cap                  <span class="com"># was: exit 111 above 56 GiB</span>
+ceiling 32768 MiB
+<span class="prompt">$</span> (ulimit -v 8000000; ./cap)         <span class="com"># was: exit 111, silently</span>
+ceiling 4096 MiB</code></pre>
+      <p>The test for this is a program built to ask for a pebibyte, <code>--arena 1048576g</code>, which no 47-bit address space can hold. Before this change it exited 111. It now starts and allocates on Windows, on Linux, and on macOS. A program can also ask for far more than the old limits without a flag. This one takes 40 GiB in a single allocation, on Windows and Linux alike, and writes one page of it:</p>
+      <pre><code><span class="prompt">$</span> ./big
+ceiling 1048576 MiB: 40960 MiB allocated</code></pre>
+      <p>The compiler gets the same treatment. Each worker reserves about the root's size, so <code>-j 8</code> now asks for about 9 TiB of addresses, and a worker's reservation is halved the same way, since a root that took a whole small address space would leave none for its workers.</p>
+      <p>None of this costs anything we can measure. Compiling sc1m peaks at the same 605 MB as it did at 32 GiB. A small program starts and exits in 5.4 to 5.7 ms at 1 TiB and 5.4 to 5.5 ms at 1 GiB, 41 runs each, measured twice.</p>
+
+      <h2>When memory really runs out</h2>
+      <p>A 1 TiB ceiling has a hidden cost. <code>mem.Exhausted</code> now almost never fires, because the ceiling is far above any machine, so running out of real memory would end in the operating system's OOM killer. A page fault has no way to return an error.</p>
+      <p>So a program that cares can ask first. <code>pages.ensure</code> answers now, while the program can still do something about it, and it allocates nothing:</p>
+      <pre><code><span class="kw">if</span> pages.ensure(a, 512usize * GIB) == mem.Exhausted {
+    <span class="kw">try</span> io.printf[<span class="str">"512 GiB is not: shed the load, and keep running\n"</span>]()
+}</code></pre>
+      <pre><code><span class="prompt">$</span> ./ensure.exe
+1 GiB is there
+512 GiB is not: shed the load, and keep running</code></pre>
+      <p>How strong that answer is depends on the host. On Windows, <code>ensure</code> commits the bytes, a promise from the system that no later touch can fail. On Linux it checks available memory and the cgroup's limit, then backs the pages now. On macOS, which compresses and swaps rather than refuse, it can only answer against the machine's total memory, and then writes the pages.</p>
+      <p>On Windows there is one more step, for programs that did not ask. Each page is committed by a fault handler, and when the system refused, that handler used to report <code>fatal: access violation</code>, which told a program with no bug that it had a wild pointer. A refusal is often only for a moment, while the pagefile grows or another process exits. So the handler now asks again for two seconds, a trick we took from Firefox. If the memory really is not there, it says so:</p>
+      <pre><code>fatal: out of memory: the system refused to commit at 0x000000014ff11087</code></pre>
+      <p>The exit status is 137, as Linux's OOM killer leaves it. We test this by running the program in a job limited to 256 MiB of commit, where <code>ensure</code> answers <code>mem.Exhausted</code> first, and writing on regardless ends this way after 2.3 seconds.</p>
+      <p>One more Windows edge went the same way. A kernel call cannot fault a page in, so a buffer it writes must already be committed, and this failed only in release builds, because a debug build's fill commits everything. When an <code>@import</code> gets <code>&amp;slice[i]</code> through a writable pointer, the compiler now touches the slice first. A <code>ReadFile</code> into a fresh 8 MiB slice used to fail and now works. Read-only arguments cost nothing. A raw pointer from anywhere else is still the program's to touch.</p>
+
+      <h2>How it compares</h2>
+      <p>This is how the same questions are answered elsewhere. The other columns come from how those systems are documented, not from anything we measured.</p>
+      <div class="table-scroll"><table class="text-table">
+        <thead><tr><th></th><th>Neper</th><th>Go</th><th>Rust</th><th>C++</th><th>Node.js</th></tr></thead>
+        <tbody>
+          <tr><td>Who manages memory</td><td>arenas and explicit heaps, passed as arguments</td><td>garbage collector</td><td>ownership, over <code>malloc</code></td><td>RAII, over <code>malloc</code></td><td>moving garbage collector</td></tr>
+          <tr><td>Default limit</td><td>1 TiB, or what the host gives</td><td>none</td><td>none</td><td>none</td><td>a few GB, set by a flag</td></tr>
+          <tr><td>Do objects move?</td><td>never</td><td>heap no, stacks yes</td><td><code>Vec</code> growth, checked by the compiler</td><td>the same, not checked</td><td>yes, handled by the engine</td></tr>
+          <tr><td>Freeing one object</td><td><code>e.mem.heap</code>, or a whole phase by <code>reset</code></td><td>automatic</td><td>automatic</td><td>automatic</td><td>automatic</td></tr>
+          <tr><td>Memory back to the OS</td><td>on a large reset or free, no background work</td><td>yes, in the background</td><td>allocator's choice</td><td>allocator's choice</td><td>yes, after collection</td></tr>
+          <tr><td>Asking before running out</td><td><code>pages.ensure</code></td><td>no</td><td><code>try_reserve</code></td><td>exception, or the OOM killer</td><td>no</td></tr>
+          <tr><td>Use after free</td><td>compile error for heap blocks and arena regions</td><td>not possible</td><td>compile error</td><td>undefined behavior</td><td>not possible</td></tr>
+          <tr><td>Forgetting to free a block</td><td>compile error</td><td>collected</td><td>freed on drop</td><td>freed by RAII, else undetected</td><td>collected</td></tr>
+          <tr><td>Pauses for memory management</td><td>none</td><td>short</td><td>none</td><td>none</td><td>short</td></tr>
+        </tbody>
+      </table></div>
+      <p>Rust is the closest. Its allocator is general-purpose where ours is a choice you make per lifetime, and its borrow checker covers far more than blocks. A collector is still less work to use: Go and Node free memory with nothing to think about, and that is a real advantage for code where a little extra memory and a short pause do not matter.</p>
+
+      <h2>What it costs</h2>
+      <p>A runaway program is no longer stopped early. It keeps committing until the operating system pushes back, as a C or Go program does. If you want a hard stop, it is one flag, and the error is a value with a name:</p>
+      <pre><code><span class="prompt">$</span> neper emit-executable grow.e . x64 windows grow.exe --release --arena 512m
+<span class="prompt">$</span> ./grow.exe
+start: ceiling 512 MiB, used 0 MiB, peak RAM 3 MiB
+grew: ceiling 512 MiB, used 256 MiB, peak RAM 259 MiB
+error: e.mem.Exhausted</code></pre>
+      <p>Three smaller costs. A program can no longer assume it got the size it asked for, even with <code>--arena</code>, so one that needs a minimum reads <code>mem.stats(a).capacity</code> at the start. Picking an arena or a heap is a decision you make, per lifetime, that a garbage collector makes for you. And the repeated-spike cost above is real for programs in that range.</p>
+
+      <h2>Try it</h2>
+      <pre><code><span class="prompt">$</span> neper emit-executable grow.e . x64 windows grow.exe --release
+<span class="prompt">$</span> neper emit-executable grow.e . x64 linux grow --release --arena 2g   <span class="com"># a hard cap</span>
+<span class="prompt">$</span> neper emit-executable src/main.e . x64 windows neper.exe --release   <span class="com"># the compiler, the same way</span>
+<span class="prompt">$</span> ./spike.exe                                                     <span class="com"># the memory going back</span></code></pre>
+      <p>All of the programs are in <a href="https://github.com/nebosa-company/neper/tree/master/docs/blog/code/compiler-memory" rel="noopener noreferrer"><code>docs/blog/code/compiler-memory</code></a>. Add <code>--stats</code> to a compile to see <code>compiler peak working set</code> and <code>worker arenas reached</code> side by side.</p>
+
+      <h2>Honest limits of these numbers</h2>
+      <ul>
+        <li>One machine: Windows x64 with 16 logical cores and 16 GB of RAM, shared with other work, and Linux 6.18 under WSL2 on the same machine. The sc1m compile was timed three times at 8 workers (3.5, 3.6 and 3.7 s); the rest are single runs, so treat close pairs as ties.</li>
+        <li>Nothing here has filled more than this machine's RAM. The 40 GiB and 1 TiB cases are addresses, with few pages written.</li>
+        <li>Windows and Linux passed both full suites. macOS ran the fixtures on GitHub's <code>macos-14</code> runners, 1,136 passed and none failed, including the reset, <code>pages</code>, heap and pebibyte tests, on Apple Silicon and on x64. The x64 run was under Rosetta 2 on Apple Silicon, not on an Intel Mac. The samples and the memory numbers here were measured on Windows and Linux only.</li>
+        <li>arm64 Linux was checked under <code>qemu-aarch64</code>, not on hardware. Android's target is not on master yet; it needs no default of its own, but it is untested. A wasm32 module has at most 4 GiB and <code>discard</code> does nothing there. A NeperOS image keeps its own size. The C bootstrap compiler has no retry and no trimming.</li>
+        <li>The comparison table comes from documentation, not measurement. We have not run these samples in the other languages.</li>
+        <li>"Peak RAM" is the peak working set on Windows and the kernel's peak on Linux, from <code>os.peak_memory</code>. Peak commit is Windows only. "In RAM" in <code>spike</code> is the current working set or resident size.</li>
+        <li>The failing 1 GiB compiles stopped after 2.7 to 7.4 s, and we did not measure their memory.</li>
+        <li>A stair of resets each under 512 MiB gives nothing back, since the arena keeps no history. The pages of small heap blocks are reused and never returned. A heap belongs to one thread, as an arena does.</li>
+        <li>Blocks kept in an array are not tracked by the compiler the way a local is; the program keeps its own record of which are live.</li>
+        <li>On Linux, <code>ensure</code> can still lose a race with another process, and a process in a nested cgroup on a bare host sees the machine's limit. A kernel with strict overcommit ignores <code>MAP_NORESERVE</code>; the startup should halve down to what it allows, but we did not test that. If even 1 MiB is refused, the program exits 111 with no message.</li>
+        <li>That the intermittent crashes we saw on a loaded machine were refused commits is our best explanation, not something we proved.</li>
+        <li>The narration and captions of the video are a synthetic voice.</li>
+      </ul>
+
+      <h2>Sources</h2>
+      <ul>
+        <li>The default: <code>root_arena_bytes</code> in <code>src/nir.e</code>. The startups and resets: <code>src/runtime_pe_x64.asm</code>, <code>src/startup_elf_x64.s</code>, <code>src/runtime_elf_x64.s</code>, <code>src/runtime_elf_a64.s</code>, <code>src/runtime_macos_a64.s</code> and <code>src/runtime_macos_x64.s</code>. The workers: <code>reserve_arena</code> in <code>src/graph.e</code>. The touch at imports: <code>touch_import_buffer</code> in <code>src/lower.e</code>.</li>
+        <li>The libraries: <code>lib/e/mem/pages.e</code> and its host variants, and <code>lib/e/mem/heap.e</code>.</li>
+        <li>The checks: <code>tests/selfhost/fixtures/link/</code> <code>arena_size</code>, <code>arena_retry</code>, <code>mem_trim</code>, <code>mem_pages</code>, <code>mem_heap</code>, <code>import_touch</code> and <code>mem_commit_refused</code>, and <code>fixtures/check/heap_*</code>.</li>
+        <li>The arena and its error: section 8 of <code>docs/spec.md</code>, and <code>lib/e/mem.e</code>.</li>
+        <li>The decisions behind it are in <code>docs/decisions.md</code>: D133 and D340 (reserved, and committed as touched), D306 (tables sized from the program), D339 (workers' arenas), D348 (resources), D351 (nothing moves under a pointer), D552 (the arena's layout), D1655 (no global manager), D5912 and D5930 (the ceiling and halving), D5931 (a reset gives back), D5932 (<code>e.mem.pages</code>), D5933 (<code>e.mem.heap</code>), D5934 (a refused commit), D5935 (the touch at imports).</li>
+        <li>The workload: <code>benchmarks/scale/generate.py</code>, seed 1, as in <a href="sc1m-eight-compilers.html">the sc1m post</a>.</li>
+      </ul>
+      <p>Everything here was measured on October 28 and 30, 2026. If a number here has drifted, the commands above will show it.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS, WebAssembly.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>

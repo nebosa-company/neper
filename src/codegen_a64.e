@@ -726,6 +726,95 @@ fn canonicalize_nan(output: *emit_x64.Buffer, double: bool) -> err {
     ret emit_a64.patch_relative(output, ordered, output.count)
 }
 
+// f16 and bf16 (D5913), as on x64: sixteen bits in a general register, widened to f32
+// for every operation and rounded once to nearest-even after it. FCVT does the f16
+// halves in hardware; bf16 is the top half of an f32, and narrowing it is an integer
+// add-and-shift. x15-x17 are borrowed.
+fn widen_narrow(output: *emit_x64.Buffer, kind: usize, source: usize, vd: usize) -> err {
+    if kind == 2usize {
+        try emit_a64.shift_left_immediate(output, A64_S2, source, 16usize)
+        ret emit_a64.move_to_float(output, vd, A64_S2, false)
+    }
+    try emit_a64.move_to_float(output, vd, source, false)
+    ret emit_a64.float_half_to_single(output, vd, vd)
+}
+
+// The single (or, from a double, the double) in v16 rounded into x15's low sixteen
+// bits; a NaN is the canonical one of the width. An f16 from a double is one FCVT, so
+// one rounding; a bf16 goes through FCVTXN, round to odd, for the same reason.
+fn narrow_to_bits(output: *emit_x64.Buffer, kind: usize, from_double: bool) -> err {
+    try emit_a64.float_compare(output, A64_S0, A64_S0, from_double)
+    let (ordered, ordered_error) = emit_a64.branch_condition(output, emit_a64.A64_VC)
+    if ordered_error != ok { ret ordered_error }
+    try emit_a64.move_constant(output, A64_S2, codegen_x64.narrow_nan(kind))
+    let (done, done_error) = emit_a64.branch(output)
+    if done_error != ok { ret done_error }
+    try emit_a64.patch_relative(output, ordered, output.count)
+    if kind == 1usize {
+        if from_double { try emit_a64.float_double_to_half(output, A64_S0, A64_S0) } else { try emit_a64.float_single_to_half(output, A64_S0, A64_S0) }
+        try emit_a64.move_from_float(output, A64_S2, A64_S0, false)
+    } else {
+        if from_double { try emit_a64.float_narrow_odd(output, A64_S0, A64_S0) }
+        try emit_a64.move_from_float(output, A64_S2, A64_S0, false)
+        try emit_a64.ubfm(output, A64_S1, A64_S2, 16usize, 16usize)
+        try emit_a64.move_constant(output, A64_S0, 32767usize)
+        try emit_a64.add_register(output, A64_S1, A64_S1, A64_S0)
+        try emit_a64.add_register(output, A64_S2, A64_S2, A64_S1)
+        try emit_a64.shift_right_immediate(output, A64_S2, A64_S2, 16usize, false)
+    }
+    ret emit_a64.patch_relative(output, done, output.count)
+}
+
+fn narrow_infinity(kind: usize) -> usize {
+    if kind == 1usize { ret 31744usize }
+    ret 32640usize
+}
+
+fn finish_narrow(allocations: []regalloc.Allocation, result: usize, output: *emit_x64.Buffer) -> err {
+    let (destination, destination_error) = result_register(allocations, result, A64_S0)
+    if destination_error != ok { ret destination_error }
+    let needs_move = destination != A64_S2
+    if needs_move { try emit_a64.move_register(output, destination, A64_S2) }
+    ret store_result(allocations, result, destination, output)
+}
+
+fn select_narrow(kind: usize, builder: *nir.Builder, instruction: nir.Instruction, context: *codegen_x64.FunctionContext) -> err {
+    let output = context.output
+    let allocations = context.allocations
+    let opcode = instruction.opcode
+    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand], A64_S0, output)
+    if left_error != ok { ret left_error }
+    if opcode == .Negate {
+        try emit_a64.move_constant(output, A64_S1, 32768usize)
+        try emit_a64.eor_register(output, A64_S2, left, A64_S1)
+        try emit_a64.extend_integer(output, A64_S1, A64_S2, 15usize, false)
+        try emit_a64.move_constant(output, A64_S0, narrow_infinity(kind))
+        try emit_a64.compare_register(output, A64_S1, A64_S0)
+        let (kept, kept_error) = emit_a64.branch_condition(output, emit_a64.A64_LS)
+        if kept_error != ok { ret kept_error }
+        try emit_a64.move_constant(output, A64_S2, codegen_x64.narrow_nan(kind))
+        try emit_a64.patch_relative(output, kept, output.count)
+        ret finish_narrow(allocations, instruction.result, output)
+    }
+    if opcode == .Sqrt {
+        try widen_narrow(output, kind, left, A64_S0)
+        try emit_a64.float_sqrt(output, A64_S0, A64_S0, false)
+    } else {
+        if instruction.operand_count != 2usize { ret codegen_x64.Unsupported }
+        let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], A64_S1, output)
+        if right_error != ok { ret right_error }
+        try widen_narrow(output, kind, left, A64_S0)
+        try widen_narrow(output, kind, right, A64_S1)
+        var operation = 0usize
+        if opcode == .Subtract { operation = 1usize }
+        if opcode == .Multiply { operation = 2usize }
+        if opcode == .Divide { operation = 3usize }
+        try emit_a64.float_binary(output, operation, A64_S0, A64_S0, A64_S1, false)
+    }
+    try narrow_to_bits(output, kind, false)
+    ret finish_narrow(allocations, instruction.result, output)
+}
+
 fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, at: usize, end: usize, context: *codegen_x64.FunctionContext) -> err {
     let output = context.output
     let allocations = context.allocations
@@ -737,15 +826,22 @@ fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.I
         let left_value = builder.operands[instruction.first_operand]
         let (operand_type, operand_type_error) = codegen_x64.value_type(builder, current, left_value)
         if operand_type_error != ok { ret operand_type_error }
-        let width = codegen_x64.float_width(operand_type)
+        let narrow = codegen_x64.narrow_float(operand_type)
+        var width = codegen_x64.float_width(operand_type)
+        if narrow != 0usize { width = 32usize }
         if width == 0usize { ret codegen_x64.Unsupported }
         let double = width == 64usize
         let (left, left_error) = read_value(allocations, left_value, A64_S0, output)
         if left_error != ok { ret left_error }
         let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], A64_S1, output)
         if right_error != ok { ret right_error }
-        try emit_a64.move_to_float(output, A64_S0, left, double)
-        try emit_a64.move_to_float(output, A64_S1, right, double)
+        if narrow != 0usize {
+            try widen_narrow(output, narrow, left, A64_S0)
+            try widen_narrow(output, narrow, right, A64_S1)
+        } else {
+            try emit_a64.move_to_float(output, A64_S0, left, double)
+            try emit_a64.move_to_float(output, A64_S1, right, double)
+        }
         try emit_a64.float_compare(output, A64_S0, A64_S1, double)
         // An unordered compare sets C and V: EQ, MI, LS, GT and GE all fail on it,
         // and NE holds -- IEEE's answers.
@@ -760,6 +856,8 @@ fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.I
         try emit_a64.set_condition(output, destination, condition)
         ret store_result(allocations, instruction.result, destination, output)
     }
+    let narrow_result = codegen_x64.narrow_float(instruction.ty)
+    if narrow_result != 0usize { ret select_narrow(narrow_result, builder, instruction, context) }
     let width = codegen_x64.float_width(instruction.ty)
     if width == 0usize { ret codegen_x64.Unsupported }
     let double = width == 64usize
@@ -809,8 +907,45 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     if source_error != ok { ret source_error }
     let (destination, destination_error) = result_register(allocations, instruction.result, A64_S0)
     if destination_error != ok { ret destination_error }
-    let source_width = codegen_x64.float_width(source_type)
+    var source_width = codegen_x64.float_width(source_type)
     let target_width = codegen_x64.float_width(instruction.ty)
+    let source_narrow = codegen_x64.narrow_float(source_type)
+    let target_narrow = codegen_x64.narrow_float(instruction.ty)
+    if source_narrow != 0usize || target_narrow != 0usize {
+        if source_narrow == target_narrow {
+            if destination != source { try emit_a64.move_register(output, destination, source) }
+            ret store_result(allocations, instruction.result, destination, output)
+        }
+        if target_narrow != 0usize {
+            var from_double = false
+            if source_type.kind == .Float {
+                if source_narrow != 0usize {
+                    try widen_narrow(output, source_narrow, source, A64_S0)
+                } else {
+                    if source_width == 0usize { ret codegen_x64.Unsupported }
+                    from_double = source_width == 64usize
+                    try emit_a64.move_to_float(output, A64_S0, source, from_double)
+                }
+            } else {
+                if source_type.kind != .Integer { ret codegen_x64.Unsupported }
+                from_double = true
+                try emit_a64.float_from_integer(output, A64_S0, source, codegen_x64.unsigned_wide(source_type), true)
+            }
+            try narrow_to_bits(output, target_narrow, from_double)
+            ret finish_narrow(allocations, instruction.result, output)
+        }
+        if instruction.ty.kind == .Float {
+            if target_width == 0usize { ret codegen_x64.Unsupported }
+            try widen_narrow(output, source_narrow, source, A64_S0)
+            if target_width == 64usize { try emit_a64.float_widen(output, A64_S0, A64_S0) }
+            try canonicalize_nan(output, target_width == 64usize)
+            try emit_a64.move_from_float(output, destination, A64_S0, target_width == 64usize)
+            ret store_result(allocations, instruction.result, destination, output)
+        }
+        if instruction.ty.kind != .Integer { ret codegen_x64.Unsupported }
+        try widen_narrow(output, source_narrow, source, A64_S0)
+        source_width = 32usize
+    }
     if source_type.kind == .Float && instruction.ty.kind == .Float {
         if source_width == 0usize || target_width == 0usize { ret codegen_x64.Unsupported }
         if source_width == target_width {
@@ -835,7 +970,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     let double = source_width == 64usize
     let width = codegen_x64.integer_width(instruction.ty)
     let signed = codegen_x64.signed_integer(instruction.ty)
-    try emit_a64.move_to_float(output, A64_S0, source, double)
+    if source_narrow == 0usize { try emit_a64.move_to_float(output, A64_S0, source, double) }
     if instruction.immediate == 0usize && !instruction.nocheck && !builder.release {
         try emit_a64.move_constant(output, A64_S2, codegen_x64.float_bound_bits(width, signed, true, double))
         try emit_a64.move_to_float(output, A64_S1, A64_S2, double)
@@ -1036,38 +1171,52 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
             try read_into(allocations, builder.operands[instruction.first_operand + 1usize], A64_S1, output)
             let (desired, desired_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], A64_S2, output)
             if desired_error != ok { ret desired_error }
-            try emit_a64.compare_swap(output, A64_S1, desired, address, bytes)
+            // (D5945) An exclusive loop, not CASAL: x2 the store's status, x4 the expected
+            // value as the exclusive load answers it, zero-extended. x0-x7 hold nothing
+            // inside an instruction.
+            try emit_a64.extend_integer(output, 4usize, A64_S1, width, false)
+            let retry = output.count
+            try emit_a64.load_exclusive(output, A64_S1, address, bytes)
+            try emit_a64.compare_register(output, A64_S1, 4usize)
+            let (differ, differ_error) = emit_a64.branch_condition(output, emit_a64.A64_NE)
+            if differ_error != ok { ret differ_error }
+            try emit_a64.store_exclusive(output, 2usize, desired, address, bytes)
+            let (again, again_error) = emit_a64.branch_zero(output, 2usize, true)
+            if again_error != ok { ret again_error }
+            try emit_a64.patch_relative(output, again, retry)
+            try emit_a64.patch_relative(output, differ, output.count)
         } else {
             if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret codegen_x64.Unsupported }
             let (operand, operand_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], A64_S2, output)
             if operand_error != ok { ret operand_error }
-            // nir's kinds: xchg, add, sub, and, or, xor, min, max.
+            // nir's kinds: xchg, add, sub, and, or, xor, min, max. (D5945) The new value in
+            // x3, the store's status in x2; min and max compare at the width, so both sides
+            // are extended, the operand once into x4.
             let kind = instruction.immediate / 8usize
-            var operation = 0usize
-            var operand_register = operand
-            if kind == 1usize { operation = 1usize }
-            if kind == 2usize {
-                try emit_a64.negate_register(output, A64_S2, operand)
-                operand_register = A64_S2
-                operation = 1usize
+            if kind > 7usize { ret codegen_x64.Unsupported }
+            if kind >= 6usize { try emit_a64.extend_integer(output, 4usize, operand, width, signed) }
+            let retry = output.count
+            try emit_a64.load_exclusive(output, A64_S1, address, bytes)
+            var stored = 3usize
+            if kind == 0usize { stored = operand }
+            if kind == 1usize { try emit_a64.add_register(output, 3usize, A64_S1, operand) }
+            if kind == 2usize { try emit_a64.sub_register(output, 3usize, A64_S1, operand) }
+            if kind == 3usize { try emit_a64.and_register(output, 3usize, A64_S1, operand) }
+            if kind == 4usize { try emit_a64.orr_register(output, 3usize, A64_S1, operand) }
+            if kind == 5usize { try emit_a64.eor_register(output, 3usize, A64_S1, operand) }
+            if kind >= 6usize {
+                try emit_a64.extend_integer(output, 3usize, A64_S1, width, signed)
+                try emit_a64.compare_register(output, 3usize, 4usize)
+                var keep = emit_a64.A64_LO
+                if kind == 6usize && signed { keep = emit_a64.A64_LT }
+                if kind == 7usize { keep = emit_a64.A64_HI }
+                if kind == 7usize && signed { keep = emit_a64.A64_GT }
+                try emit_a64.select_condition(output, 3usize, 3usize, 4usize, keep)
             }
-            if kind == 3usize {
-                // AND is LDCLR of the complement: clear what the operand does not keep.
-                try emit_a64.not_register(output, A64_S2, operand)
-                operand_register = A64_S2
-                operation = 3usize
-            }
-            if kind == 4usize { operation = 4usize }
-            if kind == 5usize { operation = 5usize }
-            if kind == 6usize {
-                operation = 8usize
-                if signed { operation = 6usize }
-            }
-            if kind == 7usize {
-                operation = 9usize
-                if signed { operation = 7usize }
-            }
-            try emit_a64.atomic_operation(output, operation, operand_register, A64_S1, address, bytes)
+            try emit_a64.store_exclusive(output, 2usize, stored, address, bytes)
+            let (again, again_error) = emit_a64.branch_zero(output, 2usize, true)
+            if again_error != ok { ret again_error }
+            try emit_a64.patch_relative(output, again, retry)
         }
     }
     let (destination, destination_error) = result_register(allocations, instruction.result, A64_S1)
@@ -1187,7 +1336,7 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         let (argument_type, argument_type_error) = codegen_x64.value_type(builder, current, value)
         if argument_type_error != ok { ret argument_type_error }
         let width = codegen_x64.float_width(argument_type)
-        if argument_type.kind == .Float && width == 0usize { ret codegen_x64.Unsupported }
+        if argument_type.kind == .Float && width == 0usize && codegen_x64.narrow_float(argument_type) == 0usize { ret codegen_x64.Unsupported }
         variadic_to_stack(builder, instruction, at - first_argument, &integers, &floats)
         let place = place_argument(argument_type, &integers, &floats, &stacked, &index)
         if place == 4usize {
@@ -1317,7 +1466,7 @@ fn select_call(builder: *nir.Builder, current: nir.Function, instruction: nir.In
             if result_float != 0usize {
                 try emit_a64.move_from_float(output, A64_S0, 0usize, result_float == 64usize)
             } else {
-                if instruction.ty.kind == .Float { ret codegen_x64.Unsupported }
+                if instruction.ty.kind == .Float && codegen_x64.narrow_float(instruction.ty) == 0usize { ret codegen_x64.Unsupported }
                 // A callee narrower than a register defines only its own bits: widened here.
                 try normalize(output, A64_S0, 0usize, instruction.ty)
             }
@@ -1723,7 +1872,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let value = builder.operands[instruction.first_operand]
                 let (returned_type, returned_error) = codegen_x64.value_type(builder, current, value)
                 if returned_error != ok { ret returned_error }
-                if returned_type.kind == .Float {
+                if returned_type.kind == .Float && codegen_x64.narrow_float(returned_type) == 0usize {
                     let returned_width = codegen_x64.float_width(returned_type)
                     if returned_width == 0usize { ret codegen_x64.Unsupported }
                     let (source, source_error) = read_value(allocations, value, A64_S0, output)

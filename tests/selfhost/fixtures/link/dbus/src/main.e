@@ -484,7 +484,7 @@ fn vectors_18() -> str {
 }
 
 fn vectors_19() -> str {
-    ret "H\tmatch\t6c01000130000000020000007f00000001016f00150000002f6f72672f667265656465736b746f702f4442757300000002017300140000006f72672e667265656465736b746f702e444275730000000003017300080000004164644d61746368000000000000000006017300140000006f72672e667265656465736b746f702e444275730000000008016700017300002b000000747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e49666163652700\nA\t0\t00415554482045585445524e414c2033300d0a\nA\t1000\t00415554482045585445524e414c2033313330333033300d0a\nA\t65534\t00415554482045585445524e414c20333633353335333333340d0a\nA\t4294967294\t00415554482045585445524e414c2033343332333933343339333633373332333933340d0a\nAa\t004155544820414e4f4e594d4f55530d0a\nAr\t4f4b20313233346465616462656566\tbegin\nAr\t52454a45435445442045585445524e414c20414e4f4e594d4f5553\tRejected\nAr\t4552524f52202262616422\tRejected\nAr\t44415441203030\tcontinue\nAr\t41475245455f554e49585f4644\tcontinue\nR\t747970653d277369676e616c27\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t1\nR\t747970653d277369676e616c27\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t0\nR\t747970653d277369676e616c27\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t1\nR\t747970653d276d6574686f645f63616c6c27\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t0\nR\t747970653d276d6574686f645f63616c6c27\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t1\nR\t747970653d276d6574686f645f63616c6c27\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t0\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t1\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t0\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t0\n"
+    ret "H\tmatch\t6c01000130000000020000007f00000001016f00150000002f6f72672f667265656465736b746f702f4442757300000002017300140000006f72672e667265656465736b746f702e444275730000000003017300080000004164644d61746368000000000000000006017300140000006f72672e667265656465736b746f702e444275730000000008016700017300002b000000747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e49666163652700\nA\t0\t00415554482045585445524e414c2033300d0a\nA\t1000\t00415554482045585445524e414c2033313330333033300d0a\nA\t65534\t00415554482045585445524e414c20333633353335333333340d0a\nA\t4294967294\t00415554482045585445524e414c2033343332333933343339333633373332333933340d0a\nAa\t004155544820414e4f4e594d4f55530d0a\nAr\t4f4b203031323334353637383941424344454630313233343536373839616263646566\tbegin\nAr\t52454a45435445442045585445524e414c20414e4f4e594d4f5553\tRejected\nAr\t4552524f52202262616422\tRejected\nAr\t44415441203030\tcontinue\nAr\t41475245455f554e49585f4644\tcontinue\nR\t747970653d277369676e616c27\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t1\nR\t747970653d277369676e616c27\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t0\nR\t747970653d277369676e616c27\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t1\nR\t747970653d276d6574686f645f63616c6c27\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t0\nR\t747970653d276d6574686f645f63616c6c27\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t1\nR\t747970653d276d6574686f645f63616c6c27\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t0\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t7369676e616c\t3a312e35\t6f72672e6578616d706c652e4966616365\t4368616e676564\t2f6f72672f6578616d706c652f4f626a\t\t6f6e65,74776f\t1\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t6d6574686f645f63616c6c\t3a312e39\t6f72672e6578616d706c652e4966616365\t446f\t2f6f72672f6f74686572\t6f72672e6578616d706c652e417070\t-\t0\nR\t747970653d277369676e616c272c696e746572666163653d276f72672e6578616d706c652e496661636527\t7369676e616c\t6f72672e667265656465736b746f702e44427573\t6f72672e667265656465736b746f702e44427573\t4e616d654f776e65724368616e676564\t2f6f72672f667265656465736b746f702f44427573\t\t6f72672e6578616d706c652e417070,,3a312e37\t0\n"
 }
 
 fn vectors_20() -> str {
@@ -522,6 +522,153 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// A pending call can survive until the 32-bit serial counter wraps. The next
+// reply-expected call must skip the old serial, and replies must retire their
+// own slots rather than the first equal serial.
+fn serial_wrap_regression() -> bool {
+    var slots: [2]dbus.Pending = zero
+    var bus = dbus.bus_new(slots[..])
+    slots[0usize] = dbus.Pending { used: true, serial: 1u32 }
+    bus.serial = 4294967295u32
+    var no_body: []const dbus.Value = zero
+    let (call, call_error) = dbus.call(&bus, "org.example.Service", "/org/example/Object", "org.example.Interface", "Ping", "", no_body, 0u8)
+    if call_error != ok || call.serial != 2u32 { ret false }
+    if !slots[0usize].used || !slots[1usize].used || slots[1usize].serial != 2u32 { ret false }
+    var first_reply = dbus.message(dbus.METHOD_RETURN, 9u32)
+    first_reply.reply_serial = 1u32
+    if !dbus.retire(&bus, &first_reply) { ret false }
+    if slots[0usize].used || !slots[1usize].used { ret false }
+    var second_reply = dbus.message(dbus.METHOD_RETURN, 10u32)
+    second_reply.reply_serial = call.serial
+    if !dbus.retire(&bus, &second_reply) { ret false }
+    ret !slots[1usize].used
+}
+
+fn address_invalid(text: str) -> bool {
+    var out: [128]u8 = zero
+    let (addr, error_code) = dbus.parse_address(text, out[0usize..])
+    ret addr.transport.len > 0usize && error_code == dbus.Invalid
+}
+
+fn auth_invalid(line: str) -> bool {
+    var out: [64]u8 = zero
+    let (n, begun, error_code) = dbus.auth_reply(line, out[0usize..])
+    ret n == 0usize && !begun && error_code == dbus.Invalid
+}
+
+fn auth_address_regressions() -> bool {
+    if !auth_invalid("OK") || !auth_invalid("OKjunk") || !auth_invalid("OK 1234deadbeef") { ret false }
+    if !auth_invalid("OK 0123456789abcdef0123456789abcdeg") { ret false }
+    if !auth_invalid("OK 0123456789abcdef0123456789abcdef extra") { ret false }
+    var reply: [64]u8 = zero
+    let (reply_len, begun, reply_error) = dbus.auth_reply("OK 0123456789ABCDEF0123456789abcdef", reply[0usize..])
+    if reply_error != ok || !begun || !str.eq(reply[0usize..reply_len], "BEGIN\r\n") { ret false }
+    var address_out: [128]u8 = zero
+    let (decoded, address_error) = dbus.parse_address("unix:path=/tmp/a%2Cb%3Dc%25", address_out[0usize..])
+    if address_error != ok || !str.eq(decoded.path, "/tmp/a,b=c%") { ret false }
+    if !address_invalid("unix:path=/tmp/a%") || !address_invalid("unix:path=/tmp/a%2") { ret false }
+    if !address_invalid("unix:path=/tmp/a%GG") || !address_invalid("unix:path=/tmp/a%2G") { ret false }
+    if !address_invalid("unix:path=/tmp/a?b") || !address_invalid("unix:path=/tmp/a b") { ret false }
+    if !address_invalid("unix:path=/tmp/a=b") || !address_invalid("unix:path=/tmp/a,broken") { ret false }
+    if !address_invalid("unix:path=/tmp/a,=b") || !address_invalid("unix:path=/tmp/a,") { ret false }
+    ret true
+}
+
+fn unknown_header_regression() -> bool {
+    // A METHOD_RETURN with reply_serial=1 and an unknown `as` header field.
+    // Unknown compound fields must be skipped, not rejected for sig.len != 1.
+    var raw: [40]u8 = zero
+    raw[0usize] = 108u8
+    raw[1usize] = dbus.METHOD_RETURN
+    raw[3usize] = 1u8
+    raw[8usize] = 2u8
+    raw[12usize] = 20u8
+    raw[16usize] = 5u8
+    raw[17usize] = 1u8
+    raw[18usize] = 117u8
+    raw[20usize] = 1u8
+    raw[24usize] = 42u8
+    raw[25usize] = 2u8
+    raw[26usize] = 97u8
+    raw[27usize] = 115u8
+    var storage: [128]u8 = zero
+    var arena = mem.arena_from(storage[..])
+    let (decoded, used, decode_error) = dbus.message_decode(&arena, raw[..])
+    ret decode_error == ok && used == 40usize && decoded.reply_serial == 1u32
+}
+
+fn bus_builder_regressions() -> bool {
+    var slots: [4]dbus.Pending = zero
+    var bus = dbus.bus_new(slots[..])
+    var name_body: [2]dbus.Value = zero
+    let (request, request_error) = dbus.request_name(&bus, "org.example.App", 4u32, name_body[..])
+    if request_error != ok || !str.eq(request.member, "RequestName") || !str.eq(request.signature, "su") || request.body.len != 2usize { ret false }
+    switch name_body[0usize] {
+    case .Str as value:
+        if !str.eq(value, "org.example.App") { ret false }
+    default:
+        ret false
+    }
+    var match_body: [1]dbus.Value = zero
+    let (match_call, match_error) = dbus.add_match(&bus, "type='signal'", match_body[..])
+    if match_error != ok || !str.eq(match_call.member, "AddMatch") || !str.eq(match_call.signature, "s") || match_call.body.len != 1usize { ret false }
+    var hello_body: [1]dbus.Value = zero
+    let (hello_call, hello_error) = dbus.hello(&bus)
+    if hello_error != ok { ret false }
+    hello_body[0usize] = dbus.Value { Str: ":1.42" }
+    var reply = dbus.message(dbus.METHOD_RETURN, 9u32)
+    reply.reply_serial = hello_call.serial
+    reply.signature = "s"
+    reply.body = hello_body[..]
+    if dbus.hello_reply(&bus, &reply) != ok || !str.eq(bus.unique_name, ":1.42") || slots[2usize].used { ret false }
+    var too_small: [1]dbus.Value = zero
+    let (_, short_error) = dbus.request_name(&bus, "org.example.App", 0u32, too_small[..])
+    ret short_error == dbus.TooSmall
+}
+
+fn rule_escape_regressions() -> bool {
+    var m = dbus.message(dbus.SIGNAL, 1u32)
+    var body: [1]dbus.Value = zero
+    body[0usize] = dbus.Value { Str: "it's" }
+    m.body = body[..]
+    if !dbus.rule_matches("type='signal',arg0='it'\\''s'", &m) { ret false }
+    if dbus.rule_matches("type='signal',arg0='it'\\''x'", &m) { ret false }
+    body[0usize] = dbus.Value { Str: "prefix,member='wrong'" }
+    if !dbus.rule_matches("arg0='prefix,member=\\'wrong\\''", &m) { ret false }
+    ret true
+}
+
+fn message_safety_regressions() -> bool {
+    // A chain of variants is valid wire framing but must hit the same nesting
+    // bound while skip_value counts array members or skips unknown fields.
+    var nested: [200]u8 = zero
+    var level = 0usize
+    while level < 65usize {
+        let base = level * 3usize
+        nested[base] = 1u8
+        nested[base + 1usize] = 118u8
+        level += 1usize
+    }
+    let leaf = 65usize * 3usize
+    nested[leaf] = 1u8
+    nested[leaf + 1usize] = 121u8
+    nested[leaf + 3usize] = 7u8
+    var nested_at = 0usize
+    let (_, nested_error) = dbus.skip_value(nested[0usize..leaf + 4usize], &nested_at, true, "v", leaf + 4usize)
+    if nested_error != dbus.TooLarge { ret false }
+
+    var big_endian = dbus.message(dbus.METHOD_CALL, 1u32)
+    big_endian.little = false
+    var one_byte: [1]u8 = zero
+    let (_, encode_error) = dbus.message_encode(one_byte[0usize..0usize], &big_endian)
+    if encode_error != dbus.TooSmall { ret false }
+
+    var address_out: [128]u8 = zero
+    let (_, port_error) = dbus.parse_address("tcp:host=h,port=4294967376", address_out[0usize..])
+    if port_error != dbus.Invalid { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
@@ -546,6 +693,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_20()) != 0u8 { os.exit(120i32) }
     if run_chunk(a, vectors_21()) != 0u8 { os.exit(121i32) }
     if run_chunk(a, vectors_22()) != 0u8 { os.exit(122i32) }
+    if !serial_wrap_regression() { os.exit(123i32) }
+    if !auth_address_regressions() { os.exit(190i32) }
+    if !unknown_header_regression() { os.exit(192i32) }
+    if !bus_builder_regressions() { os.exit(193i32) }
+    if !rule_escape_regressions() { os.exit(194i32) }
+    if !message_safety_regressions() { os.exit(191i32) }
     try io.print("dbus ok")
     ret ok
 }

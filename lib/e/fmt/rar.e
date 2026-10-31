@@ -24,7 +24,8 @@ type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory
 type Archive = struct { state: *void }
 type Huff = struct { count: [16]u16, symbol: [306]u16 }
 type Bits = struct { data: []const u8, pos: usize, end: usize, bad: bool }
-type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_has: bool, chain_offsets: []u64 }
+type Decoder = struct { main: Huff, dist: Huff, low: Huff, lens: Huff, have_tables: bool, cache: [4]usize, last_len: usize }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_storage: []u8, chain_has: bool, chain_offsets: []u64, chain_offsets_storage: []u64 }
 
 error Invalid
 error Unsupported
@@ -56,6 +57,10 @@ fn rd_vint(c: *Cur) -> u64 {
         }
         let b = c.data[c.at]
         c.at += 1usize
+        if shift == 63u32 && (b & 127u8) > 1u8 {
+            c.bad = true
+            ret 0u64
+        }
         value = value | (u64(b & 127u8) << shift)
         if (b & 128u8) == 0u8 { break }
         shift += 7u32
@@ -72,6 +77,22 @@ fn rd_u32(c: *Cur) -> u32 {
     let v = u32(c.data[c.at]) | (u32(c.data[c.at + 1usize]) << 8u32) | (u32(c.data[c.at + 2usize]) << 16u32) | (u32(c.data[c.at + 3usize]) << 24u32)
     c.at += 4usize
     ret v
+}
+
+// The extra area is a sequence of size-prefixed records. File-encryption is
+// record type 1, whose data cannot be decoded without a password.
+fn file_extra_error(data: []const u8) -> err {
+    var c = Cur { data: data, at: 0usize, bad: false }
+    while c.at < data.len {
+        let size = rd_vint(&c)
+        if c.bad || size > u64(data.len - c.at) { ret Invalid }
+        let end = c.at + usize(size)
+        let kind = rd_vint(&c)
+        if c.bad || c.at > end { ret Invalid }
+        if kind == 1u64 { ret Unsupported }
+        c.at = end
+    }
+    ret ok
 }
 
 fn unsafe_name(name: str) -> bool {
@@ -161,12 +182,17 @@ fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err) {
             let info = rd_vint(&c)
             let host = rd_vint(&c)
             let name_length = rd_vint(&c)
-            if c.bad || name_length > u64(head_end - c.at) { ret (archive, Invalid) }
+            if c.bad || c.at > head_end { ret (archive, Invalid) }
+            if name_length > u64(head_end - c.at) { ret (archive, Invalid) }
             if (file_flags & 8u64) != 0u64 { ret (archive, Unsupported) }
             if (info & 63u64) != 0u64 { ret (archive, Unsupported) }
             if usize(name_length) > st.name_budget { ret (archive, TooLarge) }
+            let name_end = c.at + usize(name_length)
+            if extra > u64(head_end - name_end) { ret (archive, Invalid) }
+            let extra_error = file_extra_error(data[name_end..name_end + usize(extra)])
+            if extra_error != ok { ret (archive, extra_error) }
             st.name_budget = st.name_budget - usize(name_length)
-            let name = data[c.at..c.at + usize(name_length)]
+            let name = data[c.at..name_end]
             if unsafe_name(name) { ret (archive, Unsafe) }
             if st.count == st.entries.len {
                 let (bigger, bigger_error) = mem.alloc[Entry](a, st.entries.len * 2usize)
@@ -352,15 +378,8 @@ fn code_length(b: *Bits, slot: u32) -> u32 {
 
 // Decodes one file's stream `src` to `out[start .. start + size]`; `out[..start]` is the
 // window already produced by earlier files of the chain.
-fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> err {
+fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64, decoder: *Decoder) -> err {
     var b = Bits { data: src, pos: 0usize, end: src.len * 8usize, bad: false }
-    var main: Huff = zero
-    var dist: Huff = zero
-    var low: Huff = zero
-    var lens: Huff = zero
-    var have_tables = false
-    var cache: [4]usize = zero
-    var last_len = 0usize
     var at = start
     let stop = start + size
     var last_block = false
@@ -388,13 +407,13 @@ fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> e
         last_block = (flags & 64u32) != 0u32
         b.end = block_end
         if (flags & 128u32) != 0u32 {
-            let t = read_tables(&b, &main, &dist, &low, &lens)
+            let t = read_tables(&b, &decoder.main, &decoder.dist, &decoder.low, &decoder.lens)
             if t != ok { ret t }
-            have_tables = true
+            decoder.have_tables = true
         }
-        if !have_tables { ret Invalid }
+        if !decoder.have_tables { ret Invalid }
         while b.pos < block_end {
-            let sym = huff_decode(&main, &b)
+            let sym = huff_decode(&decoder.main, &b)
             if b.bad { ret Invalid }
             if sym < 256u32 {
                 if at >= stop { ret Invalid }
@@ -406,25 +425,25 @@ fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> e
             var length = 0usize
             var distance = 0usize
             if sym == 257u32 {
-                if last_len == 0usize { ret Invalid }
-                length = last_len
-                distance = cache[0]
+                if decoder.last_len == 0usize { ret Invalid }
+                length = decoder.last_len
+                distance = decoder.cache[0]
             } else if sym < 262u32 {
                 let index = usize(sym - 258u32)
-                distance = cache[index]
+                distance = decoder.cache[index]
                 var k = index
                 while k > 0usize {
-                    cache[k] = cache[k - 1usize]
+                    decoder.cache[k] = decoder.cache[k - 1usize]
                     k -= 1usize
                 }
-                cache[0] = distance
-                let slot = huff_decode(&lens, &b)
+                decoder.cache[0] = distance
+                let slot = huff_decode(&decoder.lens, &b)
                 if b.bad { ret Invalid }
                 length = usize(code_length(&b, slot))
-                last_len = length
+                decoder.last_len = length
             } else {
                 length = usize(code_length(&b, sym - 262u32))
-                let ds = huff_decode(&dist, &b)
+                let ds = huff_decode(&decoder.dist, &b)
                 if b.bad { ret Invalid }
                 var d = 1u64
                 if ds < 4u32 {
@@ -437,7 +456,7 @@ fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> e
                         if dbits > 4u32 {
                             d += u64(take(&b, dbits - 4u32)) << 4u32
                         }
-                        let lo = huff_decode(&low, &b)
+                        let lo = huff_decode(&decoder.low, &b)
                         if b.bad { ret Invalid }
                         d += u64(lo)
                     } else {
@@ -449,11 +468,11 @@ fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> e
                 if d > 262144u64 { length += 1usize }
                 if d > dict { ret Invalid }
                 distance = usize(d)
-                cache[3] = cache[2]
-                cache[2] = cache[1]
-                cache[1] = cache[0]
-                cache[0] = distance
-                last_len = length
+                decoder.cache[3] = decoder.cache[2]
+                decoder.cache[2] = decoder.cache[1]
+                decoder.cache[1] = decoder.cache[0]
+                decoder.cache[0] = distance
+                decoder.last_len = length
             }
             if distance == 0usize || distance > at { ret Invalid }
             if length > stop - at { ret Invalid }
@@ -474,6 +493,18 @@ fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> e
 // ---- extraction -------------------------------------------------------------------------
 
 fn compressed(e: Entry) -> bool { ret !e.directory && e.method != 0u8 }
+
+// The arena cannot release an older chain once an extracted result follows it.
+// Retain a geometrically grown backing store instead of allocating one per chain.
+fn grown_capacity(have: usize, need: usize, limit: usize) -> usize {
+    var capacity = have
+    if capacity == 0usize { capacity = 1usize }
+    while capacity < need {
+        if capacity > limit / 2usize { ret limit }
+        capacity = capacity * 2usize
+    }
+    ret capacity
+}
 
 fn decode_chain(st: *State, index: usize) -> err {
     // the chain's first file is the nearest compressed one at or before `index` that does
@@ -499,15 +530,33 @@ fn decode_chain(st: *State, index: usize) -> err {
     while k <= last {
         if compressed(st.entries[k]) {
             if st.entries[k].size > u64(st.limits.file_bytes) { ret TooLarge }
+            if st.entries[k].size > u64(st.limits.chain_bytes) - total { ret TooLarge }
             total += st.entries[k].size
-            if total > u64(st.limits.chain_bytes) { ret TooLarge }
         }
         k += 1usize
     }
-    let (buffer, buffer_error) = mem.alloc[u8](st.a, usize(total) + 1usize)
-    if buffer_error != ok { ret buffer_error }
-    let (offsets, offsets_error) = mem.alloc[u64](st.a, st.count + 1usize)
-    if offsets_error != ok { ret offsets_error }
+    if total == u64(0usize -% 1usize) { ret TooLarge }
+    let buffer_need = usize(total) + 1usize
+    if st.chain_storage.len < buffer_need {
+        var capacity_limit = st.limits.chain_bytes
+        if capacity_limit < buffer_need { capacity_limit = buffer_need }
+        let capacity = grown_capacity(st.chain_storage.len, buffer_need, capacity_limit)
+        let (storage, storage_error) = mem.alloc[u8](st.a, capacity)
+        if storage_error != ok { ret storage_error }
+        st.chain_storage = storage
+    }
+    let offsets_need = st.count + 1usize
+    if st.chain_offsets_storage.len < offsets_need {
+        let (storage, storage_error) = mem.alloc[u64](st.a, offsets_need)
+        if storage_error != ok { ret storage_error }
+        st.chain_offsets_storage = storage
+    }
+    let buffer = st.chain_storage[..buffer_need]
+    let offsets = st.chain_offsets_storage[..offsets_need]
+    // A failed decode may have overwritten the reusable backing store, so never
+    // expose the previous cache after beginning a different chain.
+    st.chain_has = false
+    var decoder: Decoder = zero
     var at = 0usize
     k = first
     while k <= last {
@@ -515,7 +564,7 @@ fn decode_chain(st: *State, index: usize) -> err {
             let e = st.entries[k]
             offsets[k] = u64(at)
             let dict = u64(131072u64) << e.dict_log
-            let failure = unpack(st.data[e.data_offset..e.data_offset + e.packed], buffer, at, usize(e.size), dict)
+            let failure = unpack(st.data[e.data_offset..e.data_offset + e.packed], buffer, at, usize(e.size), dict, &decoder)
             if failure != ok { ret failure }
             at += usize(e.size)
         }

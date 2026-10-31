@@ -176,6 +176,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage.bitmap_count(bitmaps[4usize..8usize]) != 53usize { os.exit(6i32) }
     if storage.bitmap_and(bitmaps[4usize..8usize], bitmaps[8usize..12usize], combined[..]) != ok || storage.bitmap_count(combined[..]) != 0usize { os.exit(6i32) }
     if storage.bitmap_or(bitmaps[4usize..8usize], bitmaps[8usize..12usize], combined[..]) != ok || storage.bitmap_count(combined[..]) != 107usize { os.exit(6i32) }
+    // Two words times this cardinality wraps to zero without a checked capacity
+    // preflight.  Reject it and leave the caller's undersized output untouched.
+    var long_column: [65]u8 = zero
+    var short_bitmaps: [2]u64 = zero
+    short_bitmaps[0usize] = 123u64
+    short_bitmaps[1usize] = 456u64
+    let overflow_cardinality = (0usize -% 1usize) / 2usize + 1usize
+    let (_, overflow_error) = storage.index_bitmap(long_column[..], overflow_cardinality, short_bitmaps[..])
+    if overflow_error != storage.TooSmall || short_bitmaps[0usize] != 123u64 || short_bitmaps[1usize] != 456u64 { os.exit(6i32) }
     column[3usize] = 4u8
     let (_, bad_value) = storage.index_bitmap(column[..], 4usize, bitmaps[..])
     if bad_value != storage.Invalid { os.exit(6i32) }
@@ -318,6 +327,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage.wal_truncate(&w, checkpoint_lsn) != 20usize || w.used != 609usize { os.exit(13i32) }
     if storage.wal_truncate(&w, checkpoint_lsn) != 0usize { os.exit(13i32) }
 
+    // A direct record read accepts complete records and rejects every short
+    // prefix or invalid offset as Corrupt instead of trapping on a slice.
+    let (record_lsn, record_kind, _, record_val, record_error) = storage.wal_record(log[..w.used], 0usize)
+    if record_error != ok || record_lsn != checkpoint_lsn || record_kind != storage.KIND_CHECKPOINT || record_val != 0i64 { os.exit(14i32) }
+    var prefix_len = 0usize
+    while prefix_len < 29usize {
+        let (_, _, _, _, prefix_error) = storage.wal_record(log[..prefix_len], 0usize)
+        if prefix_error != storage.Corrupt { os.exit(14i32) }
+        prefix_len += 1usize
+    }
+    let (_, _, _, _, end_error) = storage.wal_record(log[..w.used], w.used)
+    let (_, _, _, _, beyond_error) = storage.wal_record(log[..w.used], w.used + 1usize)
+    let (_, _, _, _, tail_error) = storage.wal_record(log[..w.used], w.used - 1usize)
+    if end_error != storage.Corrupt || beyond_error != storage.Corrupt || tail_error != storage.Corrupt { os.exit(14i32) }
+
     // 14: recovery replays the remaining puts and deletes; a torn tail stops
     // cleanly, a corrupt record answers Corrupt.
     var tkeys: [64]u64 = zero
@@ -362,6 +386,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 != ok || !g6 || d6 || storage.txn_unlock_all(&lt, 0u32) != 2usize || lt.n != 1usize { os.exit(18i32) }
     let (_, _, bad_txn) = storage.txn_lock_2pl(&lt, 3u32, 2u64, true)
     if bad_txn != storage.Invalid { os.exit(18i32) }
+
+    // Retrying one blocked request must retain, rather than duplicate, its edge.
+    var retry_keys: [2]u64 = zero
+    var retry_owners: [2]u32 = zero
+    var retry_exclusive: [2]bool = zero
+    var retry_waits: [1]dl.Edge = zero
+    var retry_scratch: [4]usize = zero
+    let (retry_table0, retry_table_error) = storage.lock_table(retry_keys[..], retry_owners[..], retry_exclusive[..], retry_waits[..], retry_scratch[..], 2usize)
+    if retry_table_error != ok { os.exit(18i32) }
+    var retry_table = retry_table0
+    let (retry_holder_granted, retry_holder_deadlock, retry_holder_error) = storage.txn_lock_2pl(&retry_table, 0u32, 7u64, true)
+    let (retry_first_granted, retry_first_deadlock, retry_first_error) = storage.txn_lock_2pl(&retry_table, 1u32, 7u64, true)
+    let (retry_again_granted, retry_again_deadlock, retry_again_error) = storage.txn_lock_2pl(&retry_table, 1u32, 7u64, true)
+    if retry_holder_error != ok || retry_first_error != ok || retry_again_error != ok { os.exit(18i32) }
+    if !retry_holder_granted || retry_holder_deadlock || retry_first_granted || retry_first_deadlock || retry_again_granted || retry_again_deadlock || retry_table.wait_n != 1usize { os.exit(18i32) }
 
     // 19: MVCC snapshots see committed versions only.
     var vkeys: [16]u64 = zero

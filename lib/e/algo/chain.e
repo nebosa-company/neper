@@ -184,6 +184,12 @@ fn last_hash(chain: *const list.List[json.Value]) -> str {
 
 // Append an entry; answers the stored record, `entry` with its `prev` and `hash`.
 fn chain_append(a: *mem.Arena, chain: *list.List[json.Value], entry: json.Value) -> (json.Value, err) {
+    // `hash` and `prev` belong to the enclosing chain record.  Accepting them
+    // here would overwrite caller data and hash a different value from the one
+    // that `verify_chain` later reconstructs.
+    let (_, has_hash) = get(entry, "hash")
+    let (_, has_prev) = get(entry, "prev")
+    if has_hash || has_prev { ret (.Null, Invalid) }
     let prev = last_hash(chain)
     let (canonical, canonical_error) = canonical_json(a, entry)
     if canonical_error != ok { ret (.Null, canonical_error) }
@@ -565,22 +571,29 @@ fn field_history(a: *mem.Arena, revisions: []const json.Value, record_id: json.V
 
 // --- retention and export -------------------------------------------------------------------------------------------
 
-fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool) {
+fn valid_window_days(days: f64) -> bool {
+    if days != days || days <= 0.0f64 { ret false }
+    // Infinity minus itself is NaN, while every finite value subtracts to zero.
+    ret days - days == 0.0f64
+}
+
+fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool, err) {
     if has_windows {
         let (w, found) = get(windows, plan)
-        if !found || ir.is_null(w) { ret (0.0f64, false) }
+        if !found || ir.is_null(w) { ret (0.0f64, false, ok) }
         switch w {
         case .Number as n:
             let (x, e) = json.number_f64(n)
-            ret (x, e == ok)
+            if e != ok || !valid_window_days(x) { ret (0.0f64, false, Invalid) }
+            ret (x, true, ok)
         default:
-            ret (0.0f64, false)
+            ret (0.0f64, false, ok)
         }
     }
-    if str.eq(plan, "free") { ret (14.0f64, true) }
-    if str.eq(plan, "pro") { ret (365.0f64, true) }
-    if str.eq(plan, "business") { ret (1095.0f64, true) }
-    ret (0.0f64, false)
+    if str.eq(plan, "free") { ret (14.0f64, true, ok) }
+    if str.eq(plan, "pro") { ret (365.0f64, true, ok) }
+    if str.eq(plan, "business") { ret (1095.0f64, true, ok) }
+    ret (0.0f64, false, ok)
 }
 
 // Milliseconds since the epoch of an ISO timestamp, or absent.
@@ -607,7 +620,8 @@ fn iso_ms(a: *mem.Arena, ms: i64) -> (str, err) {
 // `{chain, purged}`.
 fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, now_ms: i64, windows: json.Value, has_windows: bool) -> (json.Value, err) {
     var o = obj(a)
-    let (days, have_days) = window_days(plan, windows, has_windows)
+    let (days, have_days, window_error) = window_days(plan, windows, has_windows)
+    if window_error != ok { ret (.Null, window_error) }
     if !have_days {
         put(&o, "chain", json.Value{ Array: chain })
         put(&o, "purged", number(a, 0i64))
@@ -622,7 +636,13 @@ fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, 
         let (stamp, is_text) = member_text(chain[at], "at")
         if is_text {
             let (ms, good) = parse_ms(stamp)
-            if good && f64(ms) >= cutoff { try list.push[json.Value](&kept, chain[at]) }
+            // A malformed timestamp is not reliable evidence that a revision
+            // is old.  Keep it rather than silently destroying audit data.
+            if !good || f64(ms) >= cutoff { try list.push[json.Value](&kept, chain[at]) }
+        } else {
+            // Entries without a timestamp are likewise indeterminate and must
+            // not be counted as purged merely because a retention pass ran.
+            try list.push[json.Value](&kept, chain[at])
         }
         at += 1usize
     }

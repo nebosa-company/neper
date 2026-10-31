@@ -1,8 +1,8 @@
 // `e.test.prop`: generators stay in range over 1000 integer draws, 200
 // byte strings, 100 choices and 100 lists and hash to the Python PCG
-// replica's value; `shrink` takes a random failing `x > 100` to exactly
-// 101, `x < -100` to -101, and a non-monotone predicate to the replica's
-// answers; `shrink_bytes` takes a 20-byte list with an equal adjacent pair
+// replica's value; `shrink` maps `x > 100` to 101 even from i64.max and
+// `x < -100` to -101 even from i64.min, and checks a non-monotone predicate
+// against the replica's answers; `shrink_bytes` takes a 20-byte list with an equal pair
 // down to two bytes, and a "sum >= 300" list to the replica's result. Each
 // check exits with its own code.
 
@@ -117,6 +117,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if prop.shrink[Ctx](&ctx, below, x) != -101i64 { os.exit(2i32) }
         i += 1usize
     }
+    if prop.shrink[Ctx](&ctx, below, -9223372036854775807i64 - 1i64) != -101i64 { os.exit(2i32) }
+    if prop.shrink[Ctx](&ctx, above, 9223372036854775807i64) != 101i64 { os.exit(2i32) }
     if prop.shrink[Ctx](&ctx, above, 0i64) != 0i64 { os.exit(2i32) }
 
     // 3: byte-list shrinking.

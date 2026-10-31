@@ -202,6 +202,17 @@ fn main(a: *mem.Arena) -> err {
     if freed_error != ok { os.exit(85i32) }
     if freed.mode & 128u32 == 0u32 { os.exit(86i32) }
 
+    // Resolving a name only needs traversal permission. On macOS `canonical` uses an
+    // event-only descriptor for F_GETPATH, so it must not require data-read permission.
+    when target.os == .Macos {
+        if os.set_mode(a, "np-os-fs-dir/note.txt", 128u32) != ok { os.exit(300i32) }
+        let (write_only, write_only_error) = os.stat(a, "np-os-fs-dir/note.txt")
+        if write_only_error != ok || write_only.mode & 256u32 != 0u32 || write_only.mode & 128u32 == 0u32 { os.exit(301i32) }
+        let (write_only_path, write_only_path_error) = os.canonical(a, "np-os-fs-dir/note.txt")
+        if write_only_path_error != ok || !rooted_path(write_only_path) { os.exit(302i32) }
+        if os.set_mode(a, "np-os-fs-dir/note.txt", 438u32) != ok { os.exit(303i32) }
+    }
+
     // Neither call succeeds quietly on a path that is not there.
     if os.set_times(a, "np-os-fs-absent", STAMP_ACCESSED, STAMP_MODIFIED) != os.NotFound { os.exit(87i32) }
     if os.set_mode(a, "np-os-fs-absent", 438u32) != os.NotFound { os.exit(88i32) }
@@ -583,6 +594,21 @@ fn main(a: *mem.Arena) -> err {
     let (landed_at, landed_at_error) = os.stat(a, "np-os-fs-dir/landed_at.txt")
     if landed_at_error != ok { os.exit(213i32) }
     if landed_at.size != 2u64 { os.exit(214i32) }
+
+    // The durable variant must also work when source and destination have
+    // separate parent directories, which makes the source entry removal a
+    // distinct directory update on macOS.
+    if os.mkdir(a, "np-os-fs-dir/rename-from") != ok { os.exit(232i32) }
+    if os.mkdir(a, "np-os-fs-dir/rename-to") != ok { os.exit(233i32) }
+    if write_file_of(a, "np-os-fs-dir/rename-from/cross.txt", 5usize, 100u8) != ok { os.exit(234i32) }
+    if os.rename_at(a, root_handle, "rename-from/cross.txt", root_handle, "rename-to/cross.txt", false, true) != ok { os.exit(235i32) }
+    let (cross_landed, cross_landed_error) = os.stat(a, "np-os-fs-dir/rename-to/cross.txt")
+    if cross_landed_error != ok || cross_landed.size != 5u64 { os.exit(236i32) }
+    let (cross_gone, cross_gone_error) = os.stat(a, "np-os-fs-dir/rename-from/cross.txt")
+    if cross_gone_error != os.NotFound { os.exit(237i32) }
+    if os.remove_at(a, root_handle, "rename-to/cross.txt", false) != ok { os.exit(238i32) }
+    if os.remove_at(a, root_handle, "rename-from", true) != ok { os.exit(239i32) }
+    if os.remove_at(a, root_handle, "rename-to", true) != ok { os.exit(240i32) }
 
     // A source that is not there, and a shape that is refused.
     if os.rename_at(a, root_handle, "not-here.txt", root_handle, "x.txt", true, false) != os.NotFound { os.exit(215i32) }

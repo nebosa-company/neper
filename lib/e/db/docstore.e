@@ -60,6 +60,10 @@ error Corrupt
 
 fn magic() -> str { ret "NDS1" }
 
+// Frame and string lengths are encoded as u32 on disk. Keep the boundary separate
+// so callers and the fixture can verify it without allocating a multi-gibibyte slice.
+fn length_fits_u32(length: u64) -> bool { ret length <= 4294967295u64 }
+
 // ---- construction and recovery ----------------------------------------------------------
 
 fn create(a: *mem.Arena, lim: Limits) -> (Db, err) {
@@ -232,7 +236,7 @@ fn apply(db: *Db, payload: str) -> err {
         let (name_a, name_b) = rd_span(payload, &r)
         let name = payload[name_a..name_b]
         let seq = rd_u64(payload, &r)
-        if r.bad || r.pos != payload.len || ns > NS_SUBSCRIPTION { ret Corrupt }
+        if r.bad || r.pos != payload.len || ns > NS_SUBSCRIPTION || seq > u64(db.nevents) { ret Corrupt }
         let (at, found) = find_mark(db, ns, name)
         if found {
             db.marks[at].seq = seq
@@ -307,6 +311,7 @@ fn w_u64(db: *Db, v: u64) -> bool {
 }
 
 fn w_str(db: *Db, s: str) -> bool {
+    if !length_fits_u32(u64(s.len)) { ret false }
     if !w_u32(db, u32(s.len)) { ret false }
     var i = 0usize
     while i < s.len {
@@ -328,6 +333,10 @@ fn begin(db: *Db) -> (usize, bool) {
 // tables refuse is taken back out of the log.
 fn seal(db: *Db, start: usize) -> err {
     let n = db.used - start - 8usize
+    if !length_fits_u32(u64(n)) {
+        db.used = start
+        ret Full
+    }
     let payload = db.log[start + 8usize..db.used]
     let crc = hash.crc32(payload)
     var i = 0usize
@@ -448,6 +457,7 @@ fn read_stream(db: *Db, stream: str, from_version: u32, out: []Event) -> usize {
 
 // The events after global sequence `after_seq`, in order, into `out`; how many.
 fn read_all(db: *Db, after_seq: u64, out: []Event) -> usize {
+    if after_seq > u64(db.nevents) { ret 0usize }
     var n = 0usize
     var i = usize(after_seq)
     while i < db.nevents && n < out.len {
@@ -467,6 +477,7 @@ fn mark_of(db: *Db, ns: u8, name: str) -> u64 {
 }
 
 fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err {
+    if seq > u64(db.nevents) { ret Invalid }
     let (start, room) = begin(db)
     if !room { ret Full }
     let wrote = w_byte(db, KIND_MARK) && w_byte(db, ns) && w_str(db, name) && w_u64(db, seq)
@@ -479,6 +490,7 @@ fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err {
 fn project(db: *Db, p: Projection, limit: usize) -> (usize, err) {
     if p.name.len == 0usize { ret (0usize, Invalid) }
     let from = mark_of(db, NS_PROJECTION, p.name)
+    if from > u64(db.nevents) { ret (0usize, Invalid) }
     var applied = 0usize
     var seq = from
     while usize(seq) < db.nevents && applied < limit {

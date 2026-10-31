@@ -28,6 +28,7 @@ error Invalid
 error TooSmall
 error Full
 error NoCid
+error AmplificationLimited
 
 const KIND_INITIAL: u8 = 0u8
 const KIND_ZERO_RTT: u8 = 1u8
@@ -99,6 +100,7 @@ fn varint_decode(src: []const u8) -> (u64, usize, err) {
 
 // Append a varint at `*at`.
 fn put_varint(dst: []u8, at: *usize, v: u64) -> err {
+    if *at > dst.len { ret TooSmall }
     let (n, e) = varint_encode(dst[*at..], v)
     if e != ok { ret e }
     *at = *at + n
@@ -168,9 +170,10 @@ fn header_decode(src: []const u8, short_dcid_len: usize) -> (Header, err) {
         let (token_len, n, e) = varint_decode(src[at..])
         if e != ok { ret (h, e) }
         at += n
-        if src.len < at + usize(token_len) { ret (h, TooSmall) }
-        h.token = src[at..at + usize(token_len)]
-        at += usize(token_len)
+        if token_len > u64(src.len - at) { ret (h, TooSmall) }
+        let token_size = usize(token_len)
+        h.token = src[at..at + token_size]
+        at += token_size
     }
     if h.kind == KIND_RETRY {
         h.payload_offset = at
@@ -349,9 +352,10 @@ fn frame_decode(src: []const u8) -> (Frame, usize, err) {
         let (reason_len, n3, e3) = varint_decode(src[at..])
         if e3 != ok { ret (f, 0usize, e3) }
         at += n3
-        if src.len < at + usize(reason_len) { ret (f, 0usize, TooSmall) }
-        f.reason = src[at..at + usize(reason_len)]
-        ret (f, at + usize(reason_len), ok)
+        if reason_len > u64(src.len - at) { ret (f, 0usize, TooSmall) }
+        let reason_size = usize(reason_len)
+        f.reason = src[at..at + reason_size]
+        ret (f, at + reason_size, ok)
     }
     ret (f, 0usize, Invalid)
 }
@@ -549,28 +553,23 @@ fn bytes_equal(a: []const u8, b: []const u8) -> bool {
 // the same seq with other content or the same cid under another seq is
 // `Invalid`, `retire_prior_to > seq` is `Malformed`, `Full` when no slot is
 // left. A seq already below `retire_prior_to` is dropped silently, and a
-// larger `retire_prior_to` retires every earlier slot.
+// larger `retire_prior_to` retires every earlier slot, including when the CID
+// itself was already known.
 fn cids_insert(s: *CidSet, seq: u64, retire_prior_to: u64, cid: []const u8, token: []const u8) -> err {
     if retire_prior_to > seq { ret Malformed }
     if cid.len < 1usize || cid.len > MAX_CID || token.len != TOKEN_LEN { ret Invalid }
+    var duplicate = false
     var i = 0usize
     while i < s.count {
         if s.seq[i] == seq {
-            if bytes_equal(cid_bytes(s, i), cid) && bytes_equal(s.token[i * TOKEN_LEN..(i + 1usize) * TOKEN_LEN], token) { ret ok }
+            if bytes_equal(cid_bytes(s, i), cid) && bytes_equal(s.token[i * TOKEN_LEN..(i + 1usize) * TOKEN_LEN], token) {
+                duplicate = true
+                break
+            }
             ret Invalid
         }
         if bytes_equal(cid_bytes(s, i), cid) { ret Invalid }
         i += 1usize
-    }
-    if seq >= s.retire_prior_to {
-        if s.count >= s.seq.len { ret Full }
-        let slot = s.count
-        s.seq[slot] = seq
-        s.cid_len[slot] = u8(cid.len)
-        copy_bytes(s.cid, slot * MAX_CID, cid)
-        copy_bytes(s.token, slot * TOKEN_LEN, token)
-        s.active[slot] = CID_UNUSED
-        s.count += 1usize
     }
     if retire_prior_to > s.retire_prior_to {
         s.retire_prior_to = retire_prior_to
@@ -581,6 +580,16 @@ fn cids_insert(s: *CidSet, seq: u64, retire_prior_to: u64, cid: []const u8, toke
             if s.seq[k] < retire_prior_to { s.active[k] = CID_RETIRED }
             k += 1usize
         }
+    }
+    if !duplicate && seq >= s.retire_prior_to {
+        if s.count >= s.seq.len { ret Full }
+        let slot = s.count
+        s.seq[slot] = seq
+        s.cid_len[slot] = u8(cid.len)
+        copy_bytes(s.cid, slot * MAX_CID, cid)
+        copy_bytes(s.token, slot * TOKEN_LEN, token)
+        s.active[slot] = CID_UNUSED
+        s.count += 1usize
     }
     ret ok
 }
@@ -677,27 +686,38 @@ fn path_received(c: *Connection, index: usize, n: u64) {
 
 // Open a path to `new_remote` on a never-used peer CID and write the probe
 // datagram into `out`: a short header, PATH_CHALLENGE with `challenge`, and
-// PADDING up to 1200 bytes (s8.2.1, s9.3). `Invalid` when `new_remote` is
-// the active path's address, `Full` with no path slot, `NoCid` with no
-// unused CID (s9.5 forbids reusing one), `TooSmall` below 1200 bytes.
+// PADDING up to 1200 bytes (s8.2.1, s9.3). `received` is the byte count from
+// the datagram that introduced this server-side path; the probe is bounded by
+// that path's 3x allowance. `Invalid` when `new_remote` is the active path's
+// address, `Full` with no path slot, `NoCid` with no unused CID (s9.5 forbids
+// reusing one), `TooSmall` when `out` cannot hold the permitted probe, and
+// `AmplificationLimited` when it cannot hold the short header plus challenge.
 // Answers the datagram size; the new path is `path_count - 1`, Validating.
-fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, out: []u8) -> (usize, err) {
+fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, received: u64, out: []u8) -> (usize, err) {
     let cur = c.paths[usize(c.active_path)]
     if address_equal(new_remote, cur.remote) { ret (0usize, Invalid) }
     if c.path_count >= c.paths.len { ret (0usize, Full) }
     let (index, found) = cids_pick_unused(&c.peer_cids)
     if !found { ret (0usize, NoCid) }
-    if out.len < MIN_DATAGRAM { ret (0usize, TooSmall) }
+    let header_size = 1usize + cid_bytes(&c.peer_cids, index).len
+    let probe_min = header_size + 9usize
+    var budget_path: Path = zero
+    budget_path.bytes_received = received
+    let allowance = amplification_allowance(&budget_path)
+    if allowance < u64(probe_min) { ret (0usize, AmplificationLimited) }
+    var total = MIN_DATAGRAM
+    if allowance < u64(total) { total = usize(allowance) }
+    if out.len < total { ret (0usize, TooSmall) }
     let (h, he) = header_encode_short(out, cid_bytes(&c.peer_cids, index), false, false)
     if he != ok { ret (0usize, he) }
     let (f, fe) = frame_encode_path_challenge(out[h..], challenge)
     if fe != ok { ret (0usize, fe) }
-    let (_, pe) = frame_encode_padding(out[h + f..], MIN_DATAGRAM - h - f)
+    let (_, pe) = frame_encode_padding(out[h + f..], total - h - f)
     if pe != ok { ret (0usize, pe) }
     c.peer_cids.active[index] = CID_IN_USE
-    c.paths[c.path_count] = Path { local: cur.local, remote: new_remote, state: .Validating, challenge: challenge, sent_at: now, dcid_index: u32(index), bytes_sent: u64(MIN_DATAGRAM), bytes_received: 0u64 }
+    c.paths[c.path_count] = Path { local: cur.local, remote: new_remote, state: .Validating, challenge: challenge, sent_at: now, dcid_index: u32(index), bytes_sent: u64(total), bytes_received: received }
     c.path_count += 1usize
-    ret (MIN_DATAGRAM, ok)
+    ret (total, ok)
 }
 
 // A PATH_RESPONSE arrived: the Validating path whose challenge matches

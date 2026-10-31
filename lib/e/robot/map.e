@@ -30,6 +30,8 @@ error Invalid
 
 fn two_pi() -> f64 { ret 6.283185307179586f64 }
 
+fn finite(v: f64) -> bool { ret v - v == 0.0f64 }
+
 fn wrap_angle(th: f64) -> f64 {
     var t = th
     while t > 3.141592653589793f64 { t -= two_pi() }
@@ -47,7 +49,7 @@ fn abs_i64(v: i64) -> i64 {
 fn occupancy(grid: []f64, w: usize, h: usize, resolution: f64) -> (Occupancy, err) {
     let o = Occupancy { grid: grid, w: w, h: h, resolution: resolution }
     if grid.len < w * h { ret (o, TooSmall) }
-    if resolution <= 0.0f64 { ret (o, Invalid) }
+    if !finite(resolution) || resolution <= 0.0f64 { ret (o, Invalid) }
     ret (o, ok)
 }
 
@@ -94,7 +96,7 @@ fn occupancy_update(o: *Occupancy, px: f64, py: f64, pth: f64, ranges: []const f
                 y0 += sy
             }
         }
-        if hit { bump(o, x1, y1, l_occ) }
+        if hit { bump(o, x1, y1, l_occ) } else { bump(o, x1, y1, l_free) }
         k += 1usize
     }
     ret ok

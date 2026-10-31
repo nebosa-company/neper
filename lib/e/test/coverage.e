@@ -16,6 +16,7 @@
 
 use e.io
 use e.mem
+use e.sync
 use e.test
 
 type Counter = struct { file_id: u32, region_id: u32, hits: u64 }
@@ -27,38 +28,53 @@ const MAX_COUNTERS: usize = 4096usize
 
 var table: [4096]Counter = zero
 var used: usize = 0usize
+var coverage_locks: [1]sync.Mutex = zero
 
 // The instrumentation's entry: one more hit on (file_id, region_id).
 fn hit(file_id: u32, region_id: u32) {
+    sync.mutex_lock(&coverage_locks[0usize])
     var i = 0usize
+    var found = false
     while i < used {
         if table[i].file_id == file_id && table[i].region_id == region_id {
             table[i].hits += 1u64
-            ret
+            found = true
+            i = used
+        } else {
+            i += 1usize
         }
-        i += 1usize
     }
-    if used >= MAX_COUNTERS { ret }
-    table[used] = Counter { file_id: file_id, region_id: region_id, hits: 1u64 }
-    used += 1usize
+    if !found && used < MAX_COUNTERS {
+        table[used] = Counter { file_id: file_id, region_id: region_id, hits: 1u64 }
+        used += 1usize
+    }
+    sync.mutex_unlock(&coverage_locks[0usize])
 }
 
 fn snapshot(dst: []Counter) -> ([]Counter, err) {
-    if dst.len < used { ret (zero, TooLarge) }
+    sync.mutex_lock(&coverage_locks[0usize])
+    if dst.len < used {
+        sync.mutex_unlock(&coverage_locks[0usize])
+        ret (zero, TooLarge)
+    }
     var i = 0usize
     while i < used {
         dst[i] = table[i]
         i += 1usize
     }
-    ret (dst[..used], ok)
+    let result = dst[..used]
+    sync.mutex_unlock(&coverage_locks[0usize])
+    ret (result, ok)
 }
 
 fn reset() {
+    sync.mutex_lock(&coverage_locks[0usize])
     var i = 0usize
     while i < used {
         table[i].hits = 0u64
         i += 1usize
     }
+    sync.mutex_unlock(&coverage_locks[0usize])
 }
 
 fn before(a: Counter, b: Counter) -> bool {

@@ -104,6 +104,108 @@ fn join_all(workers: []os.Thread, count: usize) -> err {
     ret ok
 }
 
+// A raw futex wake is allowed to be spurious: it must not make either condition
+// wait return until the generation changes, and the mutex must be reacquired first.
+type ConditionProbe = struct {
+    condition: sync.Condition,
+    lock: sync.Mutex,
+    entered: Atomic[u32],
+    answer: Atomic[u32],
+    held: Atomic[u32],
+    done: sync.Semaphore,
+}
+
+fn condition_probe() -> ConditionProbe {
+    var probe: ConditionProbe = zero
+    probe.condition = sync.condition()
+    probe.lock = sync.mutex()
+    probe.done = sync.semaphore(0u32)
+    ret probe
+}
+
+fn wait_for_condition_entry(probe: *ConditionProbe) {
+    while atomic.load(&probe.entered, .Acquire) == 0u32 {}
+}
+
+fn raw_wake_condition(probe: *ConditionProbe) {
+    var wakes = 0usize
+    while wakes < 4096usize {
+        os.wake_one_u32(&probe.condition.state)
+        wakes += 1usize
+    }
+}
+
+fn condition_waiter(probe: *ConditionProbe) {
+    sync.mutex_lock(&probe.lock)
+    atomic.store(&probe.entered, 1u32, .Release)
+    sync.condition_wait(&probe.condition, &probe.lock)
+    let held = !sync.mutex_try_lock(&probe.lock)
+    if !held { sync.mutex_unlock(&probe.lock) }
+    if held { atomic.store(&probe.held, 1u32, .Release) }
+    atomic.store(&probe.answer, 1u32, .Release)
+    if held { sync.mutex_unlock(&probe.lock) }
+    let posted = sync.semaphore_post(&probe.done, 1u32)
+}
+
+fn timed_condition_waiter(probe: *ConditionProbe) {
+    sync.mutex_lock(&probe.lock)
+    atomic.store(&probe.entered, 1u32, .Release)
+    let signalled = sync.condition_wait_for(&probe.condition, &probe.lock, time.millis(150i64))
+    let held = !sync.mutex_try_lock(&probe.lock)
+    if !held { sync.mutex_unlock(&probe.lock) }
+    if held { atomic.store(&probe.held, 1u32, .Release) }
+    if signalled {
+        atomic.store(&probe.answer, 1u32, .Release)
+    } else {
+        atomic.store(&probe.answer, 2u32, .Release)
+    }
+    if held { sync.mutex_unlock(&probe.lock) }
+    let posted = sync.semaphore_post(&probe.done, 1u32)
+}
+
+fn check_condition_spurious_wakes() -> err {
+    // An untimed wait ignores raw wakes and returns only after the true signal.
+    var signal_probe = condition_probe()
+    let (signal_worker, signal_create_error) = os.thread_create[ConditionProbe](condition_waiter, &signal_probe, 1048576usize)
+    if signal_create_error != ok { ret signal_create_error }
+    wait_for_condition_entry(&signal_probe)
+    raw_wake_condition(&signal_probe)
+    if sync.semaphore_wait_for(&signal_probe.done, time.millis(25i64)) {
+        let signal_join_error = os.thread_join(signal_worker)
+        if signal_join_error != ok { ret signal_join_error }
+        ret Failed
+    }
+    sync.mutex_lock(&signal_probe.lock)
+    sync.condition_signal(&signal_probe.condition)
+    sync.mutex_unlock(&signal_probe.lock)
+    sync.semaphore_wait(&signal_probe.done)
+    let signal_join_error = os.thread_join(signal_worker)
+    if signal_join_error != ok { ret signal_join_error }
+    if atomic.load(&signal_probe.answer, .Acquire) != 1u32 { ret Failed }
+    if atomic.load(&signal_probe.held, .Acquire) != 1u32 { ret Failed }
+
+    // A timed wait ignores the same raw wakes, then reports false only after expiry.
+    var timeout_probe = condition_probe()
+    let (started, start_error) = time.monotonic()
+    if start_error != ok { ret start_error }
+    let (timeout_worker, timeout_create_error) = os.thread_create[ConditionProbe](timed_condition_waiter, &timeout_probe, 1048576usize)
+    if timeout_create_error != ok { ret timeout_create_error }
+    wait_for_condition_entry(&timeout_probe)
+    raw_wake_condition(&timeout_probe)
+    if sync.semaphore_wait_for(&timeout_probe.done, time.millis(25i64)) {
+        let timeout_join_error = os.thread_join(timeout_worker)
+        if timeout_join_error != ok { ret timeout_join_error }
+        ret Failed
+    }
+    sync.semaphore_wait(&timeout_probe.done)
+    let timeout_join_error = os.thread_join(timeout_worker)
+    if timeout_join_error != ok { ret timeout_join_error }
+    if atomic.load(&timeout_probe.answer, .Acquire) != 2u32 { ret Failed }
+    if atomic.load(&timeout_probe.held, .Acquire) != 1u32 { ret Failed }
+    if time.since(started).nanos < 100000000i64 { ret Failed }
+    ret ok
+}
+
 fn main(a: *mem.Arena) -> err {
     // A mutex that does not exclude loses increments.
     var g: Guarded = zero
@@ -165,6 +267,8 @@ fn main(a: *mem.Arena) -> err {
     }
     try join_all(workers[..], 4usize)
     if atomic.load(&s.calls, .Acquire) != 1u32 { ret Failed }
+
+    try check_condition_spurious_wakes()
 
     // Readers share and a writer excludes them.
     started = 0usize

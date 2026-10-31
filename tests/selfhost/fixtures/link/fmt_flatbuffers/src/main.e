@@ -106,7 +106,8 @@ fn build_monster(storage: []u8) -> ([]const u8, err) {
     let y_error = fb.put[f32](&b, 2.0f32)
     let x_error = fb.put[f32](&b, 1.0f32)
     if z_error != ok || y_error != ok || x_error != ok { ret (zero, x_error) }
-    fb.slot(&b, 0usize)
+    let pos_slot_error = fb.slot(&b, 0usize)
+    if pos_slot_error != ok { ret (zero, pos_slot_error) }
     let hp_error = fb.add_i16(&b, 2usize, 300i16, 100i16)
     if hp_error != ok { ret (zero, hp_error) }
     let mana_error = fb.add_i16(&b, 1usize, 150i16, 150i16)
@@ -163,6 +164,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if short_root_error != fb.Invalid { os.exit(4i32) }
     let (_, bad_table_error) = fb.field_offset(buf, 2usize, 0usize)
     if bad_table_error != fb.Invalid { os.exit(4i32) }
+    // The i32::MIN soffset cannot be negated in i32. It is malformed input, not a trap.
+    var min_soffset: [8]u8 = zero
+    min_soffset[3usize] = 128u8
+    let (_, min_soffset_error) = fb.field_offset(min_soffset[..], 0usize, 0usize)
+    if min_soffset_error != fb.Invalid { os.exit(4i32) }
+    // A caller can request any field number; a huge one is simply absent and must not overflow
+    // while computing its two-byte vtable slot.
+    let (huge_field, huge_field_error) = fb.field_offset(buf, root, 18446744073709551615usize)
+    if huge_field_error != ok || huge_field != 0usize { os.exit(4i32) }
 
     // 5: a vector index out of range answers Invalid.
     let (weapons, weapons_error) = fb.get_vector(buf, root, 7usize)
@@ -178,6 +188,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (ninth, ninth_error) = fb.vector_at[u8](buf, inv, 9usize)
     if ninth_error != ok || ninth != 9u8 { os.exit(5i32) }
 
+    // FlatBuffers strings are UTF-8 and have an in-buffer NUL terminator.
+    // Mutating the Python fixture keeps the table and field offsets real.
+    var missing_nul: [164]u8 = zero
+    mem.copy[u8](missing_nul[..], buf)
+    let (name_slot, name_slot_error) = fb.field_offset(missing_nul[..], root, 3usize)
+    let (name_start, name_start_error) = fb.uoffset(missing_nul[..], name_slot)
+    let (name_len, name_len_error) = fb.load[u32](missing_nul[..], name_start)
+    if name_slot_error != ok || name_start_error != ok || name_len_error != ok { os.exit(12i32) }
+    missing_nul[name_start + 4usize + usize(name_len)] = 1u8
+    let (_, missing_nul_error) = fb.get_string(missing_nul[..], root, 3usize)
+    if missing_nul_error != fb.Invalid { os.exit(12i32) }
+    var invalid_utf8: [164]u8 = zero
+    mem.copy[u8](invalid_utf8[..], buf)
+    invalid_utf8[name_start + 4usize] = 128u8
+    let (_, invalid_utf8_error) = fb.get_string(invalid_utf8[..], root, 3usize)
+    if invalid_utf8_error != fb.Invalid { os.exit(12i32) }
+    // A vector-of-strings also receives `string_at` validation.
+    var invalid_vector_string: [10]u8 = zero
+    invalid_vector_string[0usize] = 4u8
+    invalid_vector_string[4usize] = 1u8
+    invalid_vector_string[8usize] = 128u8
+    let string_vector = fb.Vector { at: 0usize, len: 1usize }
+    let (_, invalid_vector_string_error) = fb.vector_string_at(invalid_vector_string[..], string_vector, 0usize)
+    if invalid_vector_string_error != fb.Invalid { os.exit(12i32) }
+
     // 6: the Neper builder's Monster reads back to the same values.
     var storage: [256]u8 = zero
     let (built, build_error) = build_monster(storage[..])
@@ -189,6 +224,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tb = fb.builder(tiny[..])
     let (_, tiny_error) = fb.create_string(&tb, "too long for eight bytes")
     if tiny_error != fb.TooSmall { os.exit(8i32) }
+
+    // A four-byte storage area cannot prepend a u64. The builder must answer
+    // TooSmall before it subtracts the scalar size from its head.
+    var scalar_storage: [4]u8 = zero
+    var scalar_builder = fb.builder(scalar_storage[..])
+    if fb.put[u64](&scalar_builder, 1u64) != fb.TooSmall { os.exit(9i32) }
+
+    // Field writers and the public inline-struct slot API must reject a field
+    // that is not declared by the current table, before indexing `slots`.
+    var field_storage: [64]u8 = zero
+    var field_builder = fb.builder(field_storage[..])
+    if fb.start_table(&field_builder, 1usize) != ok { os.exit(10i32) }
+    if fb.add_u8(&field_builder, 1usize, 1u8, 0u8) != fb.Invalid { os.exit(10i32) }
+    if fb.add_offset(&field_builder, 1usize, 1usize) != fb.Invalid { os.exit(10i32) }
+    if fb.slot(&field_builder, 1usize) != fb.Invalid { os.exit(10i32) }
+
+    // FlatBuffers stores the table and every vtable entry in u16. A table that
+    // exceeds that format limit must fail rather than truncating its size.
+    var large_payload: [65532]u8 = zero
+    var large_storage: [66000]u8 = zero
+    var large_builder = fb.builder(large_storage[..])
+    if fb.start_table(&large_builder, 0usize) != ok { os.exit(11i32) }
+    if fb.put_bytes(&large_builder, large_payload[..]) != ok { os.exit(11i32) }
+    let (_, large_error) = fb.end_table(&large_builder)
+    if large_error != fb.TooSmall { os.exit(11i32) }
 
     try io.print("fmt flatbuffers ok\n")
     ret ok

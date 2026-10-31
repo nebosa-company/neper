@@ -1369,6 +1369,27 @@ fn fav_slot(r: *Recents, user: str, create: bool) -> usize {
     ret r.fav_count - 1usize
 }
 
+// Favorite IDs are unbounded at the API level. Grow the per-user backing array
+// before inserting the first item past its current capacity; the arena keeps the
+// retired allocation alive, so copy the live prefix before publishing the new one.
+fn grow_favorites(r: *Recents, slot: usize) -> bool {
+    let old = r.favs[slot].ids
+    let count = r.favs[slot].count
+    if count < old.len { ret true }
+    if count != old.len { ret false }
+    let maximum = 0usize -% 1usize
+    var capacity = 256usize
+    if old.len != 0usize {
+        if old.len > maximum / 2usize { ret false }
+        capacity = old.len * 2usize
+    }
+    let (ids, allocation_error) = mem.alloc[str](r.a, capacity)
+    if allocation_error != ok { ret false }
+    mem.copy[str](ids[0usize..count], old)
+    r.favs[slot].ids = ids
+    ret true
+}
+
 // Note that a user opened an artifact: it moves to the front, the list is cut to the limit.
 fn touch(r: *Recents, user: str, id: str, at: str) {
     let slot = user_slot(r, user)
@@ -1416,10 +1437,9 @@ fn favorite(r: *Recents, user: str, id: str) {
         if str.eq(r.favs[slot].ids[i], id) { ret }
         i += 1usize
     }
-    if r.favs[slot].count < r.favs[slot].ids.len {
-        r.favs[slot].ids[r.favs[slot].count] = id
-        r.favs[slot].count += 1usize
-    }
+    if !grow_favorites(r, slot) { ret }
+    r.favs[slot].ids[r.favs[slot].count] = id
+    r.favs[slot].count += 1usize
 }
 
 fn unfavorite(r: *Recents, user: str, id: str) {

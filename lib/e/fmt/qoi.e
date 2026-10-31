@@ -135,5 +135,13 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         out.pixels[o + 3usize] = a8
         p += 1usize
     }
+    if run != 0u32 { ret (zero, Invalid) }
+    if data.len - at != 8usize { ret (zero, Invalid) }
+    var marker = 0usize
+    while marker < 7usize {
+        if data[at + marker] != 0u8 { ret (zero, Invalid) }
+        marker += 1usize
+    }
+    if data[at + 7usize] != 1u8 { ret (zero, Invalid) }
     ret (out, ok)
 }

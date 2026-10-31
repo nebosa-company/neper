@@ -98,6 +98,11 @@ fn channel(pixel: u32, index: u32) -> u32 {
     ret (pixel >> (index * 8u32)) & 255u32
 }
 
+@gpu(1, 1)
+fn queued_fault(values: []u32) {
+    values[usize(gpu.gid.x) + 1usize] = 1u32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -189,7 +194,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let list = scene.finish(&builder)
     let (compiled, compile_error) = scene.compile(&renderer, list)
     if compile_error != ok { os.exit(37i32) }
+    // A queue fault makes write_image fail after render has acquired its frame.
+    let (fault_values, fault_values_error) = gpu.alloc[u32](q, 1usize)
+    if fault_values_error != ok { os.exit(63i32) }
+    if gpu.launch[queued_fault](q, gpu.grid1(1usize), fault_values) != ok { os.exit(64i32) }
+    let injected_render_error = scene.render(&renderer, compiled, canvas, geometry.Size { width: 64.0, height: 64.0 })
+    if injected_render_error != scene.Invalid { os.exit(65i32) }
+    let (retry_frame, retry_frame_error) = gpu.acquire(t)
+    if retry_frame_error != ok || retry_frame.serial != 0u64 { os.exit(66i32) }
+    if gpu.abandon(t, retry_frame) != ok { os.exit(67i32) }
     if scene.render(&renderer, compiled, canvas, geometry.Size { width: 64.0, height: 64.0 }) != ok { os.exit(38i32) }
+    if gpu.release(q, fault_values) != ok { os.exit(69i32) }
 
     // The pixels, in Rgba8 order: R in the low byte.
     let (shown, shown_error) = gpu.presented(t)

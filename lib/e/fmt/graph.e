@@ -518,7 +518,6 @@ fn read_gexf(a: *mem.Arena, source: str) -> (Document, err) {
             try gexf_nodes(&r, &doc, c, defs, def_count, directed, 0usize, &nodes_l)
         } else if is_element(&doc, c, "edges") {
             var e = doc.nodes[c].first_child
-            var ordinal = 0usize
             while usize(e) < doc.nodes.len {
                 let ec = usize(e)
                 if is_element(&doc, ec, "edge") {
@@ -538,7 +537,6 @@ fn read_gexf(a: *mem.Arena, source: str) -> (Document, err) {
                     var id = ""
                     if has_eid { id = eid }
                     try list.push[Edge](&edges_l, Edge { id: id, source: source_id, target: target_id, directed: edge_directed, attrs: list.slice_const[Attr](&attrs) })
-                    ordinal += 1usize
                 }
                 e = doc.nodes[ec].next_sibling
             }
@@ -589,7 +587,7 @@ fn gml_unescape(a: *mem.Arena, raw: str) -> (str, err) {
     while i < raw.len {
         if raw[i] == 38u8 {
             let (semi, has_semi) = str.find_from(raw, ";", i + 1usize)
-            if has_semi && semi - i <= 8usize {
+            if has_semi && semi - i <= 10usize {
                 let name = raw[i + 1usize..semi]
                 var code = 0u32
                 var known = true
@@ -795,7 +793,7 @@ fn gml_graph(r: *Reader, p: *GmlParser, first: u32, depth: usize, names: []str, 
             if source_id.len == 0usize || target_id.len == 0usize { ret (NONE, Malformed) }
             try list.push[Edge](&edges_l, Edge { id: "", source: source_id, target: target_id, directed: g.directed, attrs: list.slice_const[Attr](&attrs) })
         } else if !item.is_list {
-            if str.eq(item.key, "id") || str.eq(item.key, "label") || !str.eq(item.key, "directed") {
+            if !str.eq(item.key, "directed") {
                 try list.push[Attr](&attrs_l, Attr { name: item.key, kind: gml_kind_of(item), value: item.text })
             }
         }
@@ -806,6 +804,44 @@ fn gml_graph(r: *Reader, p: *GmlParser, first: u32, depth: usize, names: []str, 
     g.attrs = list.slice_const[Attr](&attrs_l)
     r.graphs.items[usize(index)] = g
     ret (index, ok)
+}
+
+// A one-time id table turns the endpoint rewrite after GML parsing from a scan
+// of every node per endpoint into expected constant-time lookups.
+fn gml_id_table(a: *mem.Arena, ids: []const str) -> ([]u32, err) {
+    var slots = 16usize
+    while slots < ids.len * 2usize { slots *= 2usize }
+    let (table, table_error) = mem.alloc[u32](a, slots)
+    if table_error != ok { ret (zero, table_error) }
+    var i = 0usize
+    while i < table.len {
+        table[i] = NONE
+        i += 1usize
+    }
+    let mask = u32(slots - 1usize)
+    i = 0usize
+    while i < ids.len {
+        var at = hash.fnv1a32(ids[i]) & mask
+        while table[usize(at)] != NONE {
+            if str.eq(ids[usize(table[usize(at)])], ids[i]) { ret (zero, Malformed) }
+            at = (at + 1u32) & mask
+        }
+        table[usize(at)] = u32(i)
+        i += 1usize
+    }
+    ret (table, ok)
+}
+
+fn gml_id_lookup(table: []const u32, ids: []const str, names: []const str, id: str) -> (str, bool) {
+    if table.len == 0usize { ret ("", false) }
+    let mask = u32(table.len - 1usize)
+    var at = hash.fnv1a32(id) & mask
+    while table[usize(at)] != NONE {
+        let found = usize(table[usize(at)])
+        if str.eq(ids[found], id) { ret (names[found], true) }
+        at = (at + 1u32) & mask
+    }
+    ret ("", false)
 }
 
 fn read_gml(a: *mem.Arena, source: str) -> (Document, err) {
@@ -832,6 +868,8 @@ fn read_gml(a: *mem.Arena, source: str) -> (Document, err) {
     let (index, graph_error) = gml_graph(&r, &p, p.items[usize(graph_item)].first, 0usize, names, &name_count, name_ids)
     if graph_error != ok { ret (zero, graph_error) }
     // Edges name nodes by `id`; the model names them by label-or-id, so map each endpoint.
+    let (id_table, table_error) = gml_id_table(a, name_ids[0usize..name_count])
+    if table_error != ok { ret (zero, table_error) }
     var g = 0usize
     while g < r.graphs.len {
         var e = 0usize
@@ -840,22 +878,12 @@ fn read_gml(a: *mem.Arena, source: str) -> (Document, err) {
         if rewritten_error != ok { ret (zero, rewritten_error) }
         while e < edges.len {
             var edge = edges[e]
-            var k = 0usize
-            while k < name_count {
-                if str.eq(name_ids[k], edge.source) {
-                    edge.source = names[k]
-                    break
-                }
-                k += 1usize
-            }
-            k = 0usize
-            while k < name_count {
-                if str.eq(name_ids[k], edge.target) {
-                    edge.target = names[k]
-                    break
-                }
-                k += 1usize
-            }
+            let (mapped_source, has_source) = gml_id_lookup(id_table, name_ids[0usize..name_count], names[0usize..name_count], edge.source)
+            if !has_source { ret (zero, Dangling) }
+            edge.source = mapped_source
+            let (mapped_target, has_target) = gml_id_lookup(id_table, name_ids[0usize..name_count], names[0usize..name_count], edge.target)
+            if !has_target { ret (zero, Dangling) }
+            edge.target = mapped_target
             rewritten[e] = edge
             e += 1usize
         }
@@ -884,6 +912,12 @@ fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err {
             rep = "&gt;"
         } else if attribute && c == 34u8 {
             rep = "&quot;"
+        } else if attribute && c == 9u8 {
+            rep = "&#9;"
+        } else if attribute && c == 10u8 {
+            rep = "&#10;"
+        } else if c == 13u8 {
+            rep = "&#13;"
         }
         if rep.len > 0usize {
             try str.push(b, s[from..i])
@@ -1395,11 +1429,15 @@ fn push_spaces(b: *str.Builder, n: usize) -> err {
     ret ok
 }
 
-fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, skip_label: bool) -> err {
+// `ignored` is a field represented by the model rather than an attribute. The
+// two reserved names are emitted structurally, so allowing an attribute with
+// either name would let the later duplicate change a reader's identity fields.
+fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, ignored: str, reserved_first: str, reserved_second: str) -> err {
     var i = 0usize
     while i < attrs.len {
         let at = attrs[i]
-        let skipped = skip_label && str.eq(at.name, "label")
+        if str.eq(at.name, reserved_first) || str.eq(at.name, reserved_second) { ret BadName }
+        let skipped = str.eq(at.name, ignored)
         if !skipped {
             if !gml_key_ok(at.name) { ret BadName }
             try push_spaces(b, spaces)
@@ -1413,32 +1451,137 @@ fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, skip_label: bo
     ret ok
 }
 
-// The index, among the graph's own nodes, of the node called `name`, or all ones.
-fn node_index(g: Graph, name: str) -> u32 {
+// A bounded open-addressing map of node name to its number in a graph scope.
+// The scope may include nested graphs, so root-level GEXF edges can point at
+// hierarchy nodes without a linear scan of every node per endpoint.
+type NodeIndex = struct { slots: []u32, names: []str, count: usize }
+
+fn mark_node_scope(d: Document, graph_index: usize, marks: []u8, depth: usize) -> err {
+    if graph_index >= d.graphs.len { ret BadName }
+    if depth > MAX_DEPTH { ret TooLarge }
+    if marks[graph_index] == 1u8 { ret Malformed }
+    if marks[graph_index] == 2u8 { ret ok }
+    marks[graph_index] = 1u8
+    var n = 0usize
+    while n < d.graphs[graph_index].nodes.len {
+        let subgraph = d.graphs[graph_index].nodes[n].subgraph
+        if subgraph != NONE {
+            let mark_error = mark_node_scope(d, usize(subgraph), marks, depth + 1usize)
+            if mark_error != ok { ret mark_error }
+        }
+        n += 1usize
+    }
+    marks[graph_index] = 2u8
+    ret ok
+}
+
+fn scoped_node_index(a: *mem.Arena, d: Document, root: usize) -> (NodeIndex, err) {
+    if root >= d.graphs.len { ret (zero, Dangling) }
+    let (marks, marks_error) = mem.alloc[u8](a, d.graphs.len)
+    if marks_error != ok { ret (zero, marks_error) }
     var i = 0usize
-    while i < g.nodes.len {
-        if str.eq(g.nodes[i].id, name) { ret u32(i) }
+    while i < marks.len {
+        marks[i] = 0u8
         i += 1usize
+    }
+    let mark_error = mark_node_scope(d, root, marks, 0usize)
+    if mark_error != ok { ret (zero, mark_error) }
+    var total = 0usize
+    i = 0usize
+    while i < d.graphs.len {
+        if marks[i] == 2u8 { total += d.graphs[i].nodes.len }
+        i += 1usize
+    }
+    var slot_count = 16usize
+    while slot_count < total * 2usize { slot_count *= 2usize }
+    let (slots, slots_error) = mem.alloc[u32](a, slot_count)
+    if slots_error != ok { ret (zero, slots_error) }
+    let (names, names_error) = mem.alloc[str](a, total + 1usize)
+    if names_error != ok { ret (zero, names_error) }
+    i = 0usize
+    while i < slots.len {
+        slots[i] = NONE
+        i += 1usize
+    }
+    let mask = u32(slot_count - 1usize)
+    var count = 0usize
+    var g = 0usize
+    while g < d.graphs.len {
+        if marks[g] == 2u8 {
+            var n = 0usize
+            while n < d.graphs[g].nodes.len {
+                let name = d.graphs[g].nodes[n].id
+                var at = hash.fnv1a32(name) & mask
+                while slots[usize(at)] != NONE {
+                    if str.eq(names[usize(slots[usize(at)])], name) { ret (zero, Malformed) }
+                    at = (at + 1u32) & mask
+                }
+                slots[usize(at)] = u32(count)
+                names[count] = name
+                count += 1usize
+                n += 1usize
+            }
+        }
+        g += 1usize
+    }
+    ret (NodeIndex { slots: slots, names: names[0usize..count], count: count }, ok)
+}
+
+fn selected_node_index(a: *mem.Arena, scope: *const NodeIndex, selected: []const u8) -> (NodeIndex, err) {
+    if selected.len != scope.count { ret (zero, Malformed) }
+    var total = 0usize
+    var i = 0usize
+    while i < selected.len {
+        if selected[i] != 0u8 { total += 1usize }
+        i += 1usize
+    }
+    var slot_count = 16usize
+    while slot_count < total * 2usize { slot_count *= 2usize }
+    let (slots, slots_error) = mem.alloc[u32](a, slot_count)
+    if slots_error != ok { ret (zero, slots_error) }
+    let (names, names_error) = mem.alloc[str](a, total + 1usize)
+    if names_error != ok { ret (zero, names_error) }
+    i = 0usize
+    while i < slots.len {
+        slots[i] = NONE
+        i += 1usize
+    }
+    let mask = u32(slot_count - 1usize)
+    var count = 0usize
+    i = 0usize
+    while i < scope.count {
+        if selected[i] != 0u8 {
+            let name = scope.names[i]
+            var at = hash.fnv1a32(name) & mask
+            while slots[usize(at)] != NONE {
+                if str.eq(names[usize(slots[usize(at)])], name) { ret (zero, Malformed) }
+                at = (at + 1u32) & mask
+            }
+            slots[usize(at)] = u32(count)
+            names[count] = name
+            count += 1usize
+        }
+        i += 1usize
+    }
+    ret (NodeIndex { slots: slots, names: names[0usize..count], count: count }, ok)
+}
+
+fn node_index(nodes: *const NodeIndex, name: str) -> u32 {
+    if nodes.slots.len == 0usize { ret NONE }
+    let mask = u32(nodes.slots.len - 1usize)
+    var at = hash.fnv1a32(name) & mask
+    while nodes.slots[usize(at)] != NONE {
+        let found = usize(nodes.slots[usize(at)])
+        if str.eq(nodes.names[found], name) { ret u32(found) }
+        at = (at + 1u32) & mask
     }
     ret NONE
 }
 
-// Node ids are indexes over all graphs in array order, so nested graphs never collide.
-fn gml_base(d: Document, index: usize) -> u32 {
-    var total = 0usize
-    var i = 0usize
-    while i < index {
-        total += d.graphs[i].nodes.len
-        i += 1usize
-    }
-    ret u32(total)
-}
-
 // `spaces` is the indentation of the `graph [` line; its contents sit two columns in.
-fn gml_graph_out(b: *str.Builder, d: Document, index: usize, spaces: usize, depth: usize) -> err {
+fn gml_graph_out(b: *str.Builder, d: Document, nodes: *const NodeIndex, index: usize, spaces: usize, depth: usize) -> err {
     if depth > MAX_DEPTH { ret TooLarge }
     let g = d.graphs[index]
-    let base = gml_base(d, index)
     try push_spaces(b, spaces)
     try str.push(b, "graph [\n")
     try push_spaces(b, spaces + 2usize)
@@ -1450,18 +1593,20 @@ fn gml_graph_out(b: *str.Builder, d: Document, index: usize, spaces: usize, dept
     var n = 0usize
     while n < g.nodes.len {
         let node = g.nodes[n]
+        let node_id = node_index(nodes, node.id)
+        if node_id == NONE { ret Dangling }
         try push_spaces(b, spaces + 2usize)
         try str.push(b, "node [\n")
         try push_spaces(b, spaces + 4usize)
         try str.push(b, "id ")
-        try str.push_u32(b, base + u32(n))
+        try str.push_u32(b, node_id)
         try str.push(b, "\n")
         try push_spaces(b, spaces + 4usize)
         try str.push(b, "label ")
         try push_gml_string(b, node.id)
         try str.push(b, "\n")
-        try gml_attrs(b, node.attrs, spaces + 4usize, true)
-        if node.subgraph != NONE { try gml_graph_out(b, d, usize(node.subgraph), spaces + 4usize, depth + 1usize) }
+        try gml_attrs(b, node.attrs, spaces + 4usize, "label", "id", "")
+        if node.subgraph != NONE { try gml_graph_out(b, d, nodes, usize(node.subgraph), spaces + 4usize, depth + 1usize) }
         try push_spaces(b, spaces + 2usize)
         try str.push(b, "]\n")
         n += 1usize
@@ -1469,54 +1614,84 @@ fn gml_graph_out(b: *str.Builder, d: Document, index: usize, spaces: usize, dept
     var e = 0usize
     while e < g.edges.len {
         let edge = g.edges[e]
-        let s = node_index(g, edge.source)
-        let t = node_index(g, edge.target)
+        let s = node_index(nodes, edge.source)
+        let t = node_index(nodes, edge.target)
         if s == NONE || t == NONE { ret Dangling }
         try push_spaces(b, spaces + 2usize)
         try str.push(b, "edge [\n")
         try push_spaces(b, spaces + 4usize)
         try str.push(b, "source ")
-        try str.push_u32(b, base + s)
+        try str.push_u32(b, s)
         try str.push(b, "\n")
         try push_spaces(b, spaces + 4usize)
         try str.push(b, "target ")
-        try str.push_u32(b, base + t)
+        try str.push_u32(b, t)
         try str.push(b, "\n")
-        try gml_attrs(b, edge.attrs, spaces + 4usize, false)
+        try gml_attrs(b, edge.attrs, spaces + 4usize, "", "source", "target")
         try push_spaces(b, spaces + 2usize)
         try str.push(b, "]\n")
         e += 1usize
     }
-    try gml_attrs(b, g.attrs, spaces + 2usize, false)
+    try gml_attrs(b, g.attrs, spaces + 2usize, "", "directed", "")
     try push_spaces(b, spaces)
     ret str.push(b, "]\n")
 }
 
 fn write_gml(a: *mem.Arena, d: Document) -> (str, err) {
     try check_names(d)
+    let (nodes, nodes_error) = scoped_node_index(a, d, 0usize)
+    if nodes_error != ok { ret ("", nodes_error) }
     var (b, b_error) = str.builder(a, 0usize)
     if b_error != ok { ret ("", b_error) }
     try str.push(&b, "Creator \"Neper e.fmt.graph\"\n")
-    try gml_graph_out(&b, d, 0usize, 0usize, 0usize)
+    try gml_graph_out(&b, d, &nodes, 0usize, 0usize, 0usize)
     ret (str.done(&b), ok)
 }
 
 // ---- into e.data.graph -------------------------------------------------------------------
 
-// Graph `index` of `d` as a CSR graph of f64 weights (the `weight` attribute, else 1): node
-// `n` is the graph's n-th node, an undirected edge is two directed ones. An edge naming a
-// node outside the graph is `Dangling`.
+// Graph `index` of `d` as a CSR graph of f64 weights (the `weight` attribute, else 1): its
+// own nodes and any descendants named by its edges are numbered in source order. An
+// undirected edge is two directed ones; an endpoint outside this graph's hierarchy is Dangling.
 fn to_csr(a: *mem.Arena, d: Document, index: usize) -> (graph.Graph[f64], err) {
     if index >= d.graphs.len { ret (zero, Dangling) }
     let g = d.graphs[index]
-    let (b0, b_error) = graph.builder[f64](a, g.nodes.len, g.edges.len * 2usize)
-    if b_error != ok { ret (zero, b_error) }
-    var b = b0
+    let (scope, scope_error) = scoped_node_index(a, d, index)
+    if scope_error != ok { ret (zero, scope_error) }
+    let (selected, selected_error) = mem.alloc[u8](a, scope.count)
+    if selected_error != ok { ret (zero, selected_error) }
+    var i = 0usize
+    while i < selected.len {
+        selected[i] = 0u8
+        i += 1usize
+    }
+    var n = 0usize
+    while n < g.nodes.len {
+        let at = node_index(&scope, g.nodes[n].id)
+        if at == NONE { ret (zero, Dangling) }
+        selected[usize(at)] = 1u8
+        n += 1usize
+    }
     var e = 0usize
     while e < g.edges.len {
         let edge = g.edges[e]
-        let s = node_index(g, edge.source)
-        let t = node_index(g, edge.target)
+        let s = node_index(&scope, edge.source)
+        let t = node_index(&scope, edge.target)
+        if s == NONE || t == NONE { ret (zero, Dangling) }
+        selected[usize(s)] = 1u8
+        selected[usize(t)] = 1u8
+        e += 1usize
+    }
+    let (nodes, nodes_error) = selected_node_index(a, &scope, selected)
+    if nodes_error != ok { ret (zero, nodes_error) }
+    let (b0, b_error) = graph.builder[f64](a, nodes.count, g.edges.len * 2usize)
+    if b_error != ok { ret (zero, b_error) }
+    var b = b0
+    e = 0usize
+    while e < g.edges.len {
+        let edge = g.edges[e]
+        let s = node_index(&nodes, edge.source)
+        let t = node_index(&nodes, edge.target)
         if s == NONE || t == NONE { ret (zero, Dangling) }
         var weight = 1.0f64
         let (text, has_weight) = attr_value(edge.attrs, "weight")

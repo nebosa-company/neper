@@ -78,6 +78,16 @@ fn sample(px: [1024]u8, x: f32, y: f32) -> f32 {
     ret total / 255.0
 }
 
+fn spin_level(px: [1024]u8, cosine: f32, sine: f32, alpha: f32, scale: f32, x: i32, y: i32) -> u8 {
+    let lx = (f32(x) + 0.5) / scale - 16.0
+    let ly = (f32(y) + 0.5) / scale - 16.0
+    let sx = cosine * lx + sine * ly + 15.5
+    let sy = 0.0 - sine * lx + cosine * ly + 15.5
+    var sampled = sample(px, sx, sy)
+    if sampled > 1.0 { sampled = 1.0 }
+    ret u8(sampled * alpha * 255.0 + 0.5)
+}
+
 fn paint_spin(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let spin = mem.cast[*Spin](ctx)
     let scale = scene.builder_scale(b)
@@ -88,30 +98,20 @@ fn paint_spin(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let side = i32(32.0 * scale + 0.5)
     var y: i32 = 0
     while y < side {
-        var levels: [192]u8 = zero
         var x: i32 = 0
-        let n = usize(side)
         while x < side {
-            let lx = (f32(x) + 0.5) / scale - 16.0
-            let ly = (f32(y) + 0.5) / scale - 16.0
-            let sx = c * lx + s * ly + 15.5
-            let sy = 0.0 - s * lx + c * ly + 15.5
-            var m = sample(px, sx, sy)
-            if m > 1.0 { m = 1.0 }
-            levels[usize(x)] = u8(m * spin.ink.alpha * 255.0 + 0.5)
-            x += 1
-        }
-        var at: usize = 0usize
-        while at < n {
-            let level = levels[at]
+            let level = spin_level(px, c, s, spin.ink.alpha, scale, x, y)
             if level == 0u8 {
-                at += 1usize
+                x += 1
                 continue
             }
-            var run: usize = 1usize
-            while at + run < n && levels[at + run] == level { run += 1usize }
-            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + f32(at) / scale, y: area.y + f32(y) / scale, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.Color { red: spin.ink.red, green: spin.ink.green, blue: spin.ink.blue, alpha: f32(level) / 255.0 } } } })
-            at += run
+            var run: i32 = 1
+            while x + run < side {
+                if spin_level(px, c, s, spin.ink.alpha, scale, x + run, y) != level { break }
+                run += 1
+            }
+            try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: area.x + f32(x) / scale, y: area.y + f32(y) / scale, width: f32(run) / scale, height: 1.0 / scale }, brush: paint.Brush { Solid: paint.Color { red: spin.ink.red, green: spin.ink.green, blue: spin.ink.blue, alpha: f32(level) / 255.0 } } } })
+            x += run
         }
         y += 1
     }

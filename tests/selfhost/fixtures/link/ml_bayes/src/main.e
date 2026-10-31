@@ -112,6 +112,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bayes.multinomial_predict(doc[..], 3usize, 2usize, log_probability[..], log_prior[..]) != 1usize { os.exit(2i32) }
     if bayes.multinomial_fit(docs[..], kinds[..], 5usize, 3usize, 2usize, 0.0f64 - 1.0f64, log_probability[..], log_prior[..], counts[..]) != bayes.Invalid { os.exit(2i32) }
 
+    // With alpha zero, a missing word has log probability -infinity. Its zero
+    // query count must not turn the competing class score into NaN.
+    var raw_docs: [4]f64 = zero
+    raw_docs[0usize] = 1.0f64
+    raw_docs[3usize] = 1.0f64
+    var raw_kinds: [2]usize = zero
+    raw_kinds[1usize] = 1usize
+    var raw_log_probability: [4]f64 = zero
+    var raw_log_prior: [2]f64 = zero
+    if bayes.multinomial_fit(raw_docs[..], raw_kinds[..], 2usize, 2usize, 2usize, 0.0f64, raw_log_probability[..], raw_log_prior[..], counts[..]) != ok { os.exit(3i32) }
+    var raw_query: [2]f64 = zero
+    raw_query[1usize] = 1.0f64
+    if bayes.multinomial_predict(raw_query[..], 2usize, 2usize, raw_log_probability[..], raw_log_prior[..]) != 1usize { os.exit(3i32) }
+
     try io.print("ml bayes ok\n")
     ret ok
 }

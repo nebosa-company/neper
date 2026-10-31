@@ -204,6 +204,12 @@ fn quine_mccluskey(n: usize, minterms: []const u32, dont_cares: []const u32, pri
 // Does the cover agree with the function on every minterm and reject
 // every other input outside the don't cares?
 fn verify(n: usize, minterms: []const u32, dont_cares: []const u32, primes: []const Implicant, chosen: []const usize) -> bool {
+    if n > 16usize { ret false }
+    var checked = 0usize
+    while checked < chosen.len {
+        if chosen[checked] >= primes.len { ret false }
+        checked += 1usize
+    }
     let total = 1u32 << u32(n)
     var m = 0u32
     while m < total {

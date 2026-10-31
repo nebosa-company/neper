@@ -76,6 +76,13 @@ fn decompose2d(m: [6]f64) -> Decomposed {
         row1y = row1y / scale_y
         skew = skew / scale_y
     }
+    // A rank-one matrix can still have a meaningful second axis. Supply the
+    // perpendicular first basis so its angle round-trips that surviving axis;
+    // the fully zero matrix retains the zero-angle representation below.
+    if scale_x == 0.0f64 && scale_y != 0.0f64 {
+        row0x = row1y
+        row0y = -row1x
+    }
     if row0x * row1y - row0y * row1x < 0.0f64 {
         row0x = -row0x
         row0y = -row0y

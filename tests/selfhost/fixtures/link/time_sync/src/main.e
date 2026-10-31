@@ -23,6 +23,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     highs[2usize] = 15i64
     let (lo, hi, best, e1) = sync.marzullo(lows[..], highs[..], 3usize, scratch[..])
     if e1 != ok || lo != 11i64 || hi != 12i64 || best != 2usize { os.exit(1i32) }
+    lows[0usize] = 0i64
+    highs[0usize] = 1i64
+    lows[1usize] = 1i64
+    highs[1usize] = 2i64
+    let (touch_lo, touch_hi, touch_best, touch_error) = sync.marzullo(lows[..], highs[..], 2usize, scratch[..])
+    if touch_error != ok || touch_lo != 1i64 || touch_hi != 1i64 || touch_best != 2usize { os.exit(1i32) }
     let (_, _, _, small) = sync.marzullo(lows[..], highs[..], 3usize, scratch[..11usize])
     if small != sync.TooSmall { os.exit(1i32) }
     let (_, _, _, none) = sync.marzullo(lows[..], highs[..], 0usize, scratch[..])
@@ -59,6 +65,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     highs[2usize] = 15i64
     let (mid, e3) = sync.marzullo_estimate(lows[..], highs[..], 3usize, scratch[..])
     if e3 != ok || mid != 11i64 { os.exit(3i32) }
+    lows[0usize] = -3i64
+    highs[0usize] = 2i64
+    let (odd_mid, odd_mid_error) = sync.marzullo_estimate(lows[..], highs[..], 1usize, scratch[..])
+    if odd_mid_error != ok || odd_mid != -1i64 { os.exit(3i32) }
+    lows[0usize] = -9223372036854775807i64 - 1i64
+    highs[0usize] = 9223372036854775807i64
+    let (wide_mid, wide_mid_error) = sync.marzullo_estimate(lows[..], highs[..], 1usize, scratch[..])
+    if wide_mid_error != ok || wide_mid != -1i64 { os.exit(3i32) }
 
     // 4: Berkeley with the 300 outlier dropped, then a negative outlier.
     var offsets: [6]i64 = zero

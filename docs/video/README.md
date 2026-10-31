@@ -91,3 +91,15 @@ From the repository root, with Playwright, FFmpeg and Windows PowerShell on the 
 powershell.exe -File docs/video/neper-wasm/make-audio-winrt.ps1 -Voice 'Microsoft George' -Out docs/video/neper-wasm/audio
 node docs/video/neper-wasm/build.mjs
 ```
+
+# Neper memory (about 3 min 41 s)
+
+`neper-memory/` builds the video for the post `docs/blog/compiler-memory.html`, the same way as `neper-wasm/`: the same
+voice (Microsoft George), `make-audio-winrt.ps1` and `build.mjs`, with `narration.json`, `scenes.html` and
+`youtube-description.txt` of its own. The timings in `scenes.html` are seconds into each scene, set from this voice's
+measured lengths, and the numbers on screen are the ones in the post. MP4 and WAV files are not committed.
+
+```powershell
+powershell.exe -File docs/video/neper-memory/make-audio-winrt.ps1 -Voice 'Microsoft George' -Out docs/video/neper-memory/audio
+node docs/video/neper-memory/build.mjs
+```

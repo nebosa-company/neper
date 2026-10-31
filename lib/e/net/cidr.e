@@ -81,7 +81,7 @@ fn parse(prefix: str) -> (Ipv4Prefix, err) {
 
 // The mask of a prefix length as an address.
 fn mask_of(length: u32) -> u32 {
-    if length == 0u32 { ret 0u32 }
+    if length == 0u32 || length > 32u32 { ret 0u32 }
     ret u32((4294967295u64 << u64(32u32 - length)) & 4294967295u64)
 }
 
@@ -98,6 +98,7 @@ fn netmask(p: Ipv4Prefix) -> u32 {
 // `cidrsubnet`: the prefix `newbits` longer whose number among the 2^newbits subnets is `netnum`.
 fn subnet(p: Ipv4Prefix, newbits: i64, netnum: i64) -> (Ipv4Prefix, err) {
     var empty: Ipv4Prefix = zero
+    if p.len > 32u32 { ret (empty, LengthTooLong) }
     if newbits < 0i64 || netnum < 0i64 { ret (empty, Negative) }
     if newbits > 32i64 || u64(p.len) + u64(newbits) > 32u64 { ret (empty, NewbitsTooBig) }
     if u64(netnum) >= (1u64 << u64(newbits)) { ret (empty, NetnumRange) }
@@ -110,6 +111,7 @@ fn subnet(p: Ipv4Prefix, newbits: i64, netnum: i64) -> (Ipv4Prefix, err) {
 
 // `cidrhost`: the address `hostnum` into the prefix (0 is the network address).
 fn host(p: Ipv4Prefix, hostnum: i64) -> (u32, err) {
+    if p.len > 32u32 { ret (0u32, LengthTooLong) }
     if hostnum < 0i64 { ret (0u32, Negative) }
     let capacity = 1u64 << u64(32u32 - p.len)
     if u64(hostnum) >= capacity { ret (0u32, HostRange) }
@@ -119,6 +121,7 @@ fn host(p: Ipv4Prefix, hostnum: i64) -> (u32, err) {
 // `cidrsubnets`: one subnet per entry of `newbits`, in order, each at the next offset aligned to its size.
 // `out` must hold `newbits.len` prefixes; the count is answered.
 fn subnets(p: Ipv4Prefix, newbits: []const i64, out: []Ipv4Prefix) -> (usize, err) {
+    if p.len > 32u32 { ret (0usize, LengthTooLong) }
     if out.len < newbits.len { ret (0usize, DoesNotFit) }
     let parent_size = 1u64 << u64(32u32 - p.len)
     var position = 0u64
@@ -171,6 +174,7 @@ fn format_addr(a: *mem.Arena, addr: u32) -> (str, err) {
 
 // "10.1.2.0/24" from a prefix (the address as stored).
 fn format(a: *mem.Arena, p: Ipv4Prefix) -> (str, err) {
+    if p.len > 32u32 { ret ("", LengthTooLong) }
     let (address, address_error) = format_addr(a, p.addr)
     if address_error != ok { ret ("", address_error) }
     let (buffer, buffer_error) = mem.alloc[u8](a, address.len + 3usize)

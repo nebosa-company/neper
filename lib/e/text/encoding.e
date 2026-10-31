@@ -53,6 +53,40 @@ fn bom_length(encoding: Encoding) -> usize {
     ret unit_size(encoding)
 }
 
+fn bom_byte(encoding: Encoding, at: usize) -> u8 {
+    if encoding == .Utf8 {
+        if at == 0usize { ret 239u8 }
+        if at == 1usize { ret 187u8 }
+        ret 191u8
+    }
+    if encoding == .Utf16Le || encoding == .Utf32Le {
+        if at == 0usize { ret 255u8 }
+        if at == 1usize { ret 254u8 }
+        ret 0u8
+    }
+    if encoding == .Utf16Be {
+        if at == 0usize { ret 254u8 }
+        ret 255u8
+    }
+    if at == 0usize || at == 1usize { ret 0u8 }
+    if at == 2usize { ret 254u8 }
+    ret 255u8
+}
+
+fn bom_matches_prefix(encoding: Encoding, src: []const u8) -> bool {
+    if src.len > bom_length(encoding) { ret false }
+    var at = 0usize
+    while at < src.len {
+        if src[at] != bom_byte(encoding, at) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn bom_is_complete(encoding: Encoding, src: []const u8) -> bool {
+    ret src.len == bom_length(encoding) && bom_matches_prefix(encoding, src)
+}
+
 fn utf8_length(scalar: u32) -> usize {
     if scalar < 128u32 { ret 1usize }
     if scalar < 2048u32 { ret 2usize }
@@ -186,15 +220,42 @@ fn read_wide(src: []const u8, at: usize, encoding: Encoding) -> (u32, usize, u8)
 // Decodes from `src` into UTF-8 in `dst_utf8`: (consumed, written, err). The bytes of a
 // trailing partial scalar are kept in the decoder unless `final`, when they are
 // `Incomplete`. `TooSmall` leaves the scalar that did not fit for the next call. A BOM
-// is looked for once, at the very start of the stream, and only in the first call's
-// bytes -- a BOM split across calls is read as text.
+// is looked for once at the start of the stream, even when its bytes arrive across calls.
 fn decode(d: *Decoder, src: []const u8, dst_utf8: []u8, final: bool) -> (usize, usize, err) {
     var consumed = 0usize
     var written = 0usize
     if !d.bom_seen {
-        d.bom_seen = true
-        let (bom, bom_len, has_bom) = detect_bom(src)
-        if has_bom && bom == d.encoding { consumed = bom_len }
+        // Reuse `pending` before the first scalar begins: it holds a prefix of this
+        // decoder's BOM, then goes back to carrying partial scalars below.
+        let old = usize(d.pending_len)
+        var probe: [4]u8 = zero
+        var at = 0usize
+        while at < old {
+            probe[at] = d.pending[at]
+            at += 1usize
+        }
+        var added = 0usize
+        let bom_len = bom_length(d.encoding)
+        while old + added < bom_len && added < src.len {
+            probe[old + added] = src[added]
+            added += 1usize
+        }
+        let total = old + added
+        if bom_is_complete(d.encoding, probe[..total]) {
+            d.bom_seen = true
+            d.pending_len = 0u8
+            consumed = bom_len - old
+        } else if bom_matches_prefix(d.encoding, probe[..total]) && !final {
+            at = 0usize
+            while at < total {
+                d.pending[at] = probe[at]
+                at += 1usize
+            }
+            d.pending_len = u8(total)
+            ret (total - old, written, ok)
+        } else {
+            d.bom_seen = true
+        }
     }
     // A scalar begun in the last call is finished from the front of this one.
     if d.pending_len != 0u8 {
@@ -327,8 +388,8 @@ fn encode(e: *Encoder, src_utf8: str, dst: []u8, final: bool) -> (usize, usize, 
 fn decoded_len(encoding: Encoding, src: []const u8, policy: InvalidPolicy) -> (usize, err) {
     var total = 0usize
     var at = 0usize
-    let (bom, bom_len, has_bom) = detect_bom(src)
-    if has_bom && bom == encoding { at = bom_len }
+    let bom_len = bom_length(encoding)
+    if src.len >= bom_len && bom_is_complete(encoding, src[..bom_len]) { at = bom_len }
     while at < src.len {
         var (scalar, taken, verdict) = read_any(src, at, encoding)
         if verdict == 2u8 {

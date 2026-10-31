@@ -112,11 +112,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         state = state *% 6364136223846793005u64 +% 1442695040888963407u64
         let bit = (state >> 33u32) % 10u64 < 3u64
         if bit { true_ones += 1usize }
-        if privacy.randomized_response_seeded(bit, 0.75f64, &r) { ones += 1usize }
+        let (response, response_error) = privacy.randomized_response_seeded(bit, 0.75f64, &r)
+        if response_error != ok { os.exit(7i32) }
+        if response { ones += 1usize }
         i += 1usize
     }
-    let estimate = privacy.randomized_response_estimate(ones, 4000usize, 0.75f64)
-    if ones != 1577usize || true_ones != 1183usize { os.exit(7i32) }
+    let (estimate, estimate_error) = privacy.randomized_response_estimate(ones, 4000usize, 0.75f64)
+    if estimate_error != ok || ones != 1577usize || true_ones != 1183usize { os.exit(7i32) }
     if !near(estimate, 0.28849999999999998f64, 0.000000000001f64) || !near(estimate, f64(true_ones) / 4000.0f64, 0.05f64) { os.exit(7i32) }
 
     // 8: compositions, clip, laplace_vector, report_noisy_max.
@@ -143,6 +145,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_delta != privacy.Invalid { os.exit(10i32) }
     let (_, bad_delta_low) = privacy.gaussian_seeded(0.0f64, 1.0f64, 0.5f64, 0.0f64, &r)
     if bad_delta_low != privacy.Invalid { os.exit(10i32) }
+    let (_, bad_gaussian_epsilon) = privacy.gaussian_sigma(1.0f64, 1.0f64, 0.00001f64)
+    if bad_gaussian_epsilon != privacy.Invalid { os.exit(10i32) }
+    let (_, bad_response) = privacy.randomized_response(true, 1.0f64)
+    let (_, bad_seeded_response) = privacy.randomized_response_seeded(true, 0.5f64, &r)
+    let (_, bad_estimate) = privacy.randomized_response_estimate(0usize, 0usize, 0.75f64)
+    let (_, bad_estimate_probability) = privacy.randomized_response_estimate(1usize, 1usize, 0.5f64)
+    if bad_response != privacy.Invalid || bad_seeded_response != privacy.Invalid || bad_estimate != privacy.Invalid || bad_estimate_probability != privacy.Invalid { os.exit(10i32) }
     let (_, bad_empty) = privacy.exponential_seeded(scores[..0usize], 1.0f64, 1.0f64, &r)
     if bad_empty != privacy.Invalid { os.exit(10i32) }
     let (_, bad_empty_max) = privacy.report_noisy_max_seeded(scores[..0usize], 1.0f64, 1.0f64, &r)

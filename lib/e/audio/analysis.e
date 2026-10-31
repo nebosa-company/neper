@@ -170,7 +170,7 @@ fn pitch_autocorrelation(x: []const f64, sample_rate: f64, f_min: f64, f_max: f6
 // f0, refined by a parabola through the log product; `scratch.len >= 3 * x.len`.
 fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64) -> (f64, err) {
     let n = x.len
-    if harmonics == 0usize || n < 4usize * harmonics { ret (0.0f64, Invalid) }
+    if harmonics == 0usize || harmonics > n / 4usize { ret (0.0f64, Invalid) }
     if scratch.len < 3usize * n { ret (0.0f64, TooSmall) }
     var re = scratch[..n]
     var im = scratch[n..2usize * n]
@@ -212,15 +212,18 @@ fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64)
 
 // --- onsets, tempo and beats ------------------------------------------------------
 
-fn frame_count(n: usize, frame: usize, hop: usize) -> usize { ret (n - frame) / hop + 1usize }
+fn frame_count(n: usize, frame: usize, hop: usize) -> usize {
+    if frame == 0usize || hop == 0usize || n < frame { ret 0usize }
+    ret (n - frame) / hop + 1usize
+}
 
 // Spectral flux: the half-wave rectified magnitude increase summed over the
 // bins up to Nyquist of every Hann-windowed STFT frame (`frame` a power of
 // two), the first frame against silence; answers the frame count
 // `(x.len - frame) / hop + 1`; `scratch.len >= (2 * frames + 1) * frame`.
 fn onset_strength(x: []const f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if out.len < frames || scratch.len < (2usize * frames + 1usize) * frame { ret (0usize, TooSmall) }
     var win = scratch[..frame]
     var re = scratch[frame..(frames + 1usize) * frame]
@@ -280,8 +283,8 @@ fn onsets_pick(envelope: []const f64, threshold: f64, out: []usize) -> (usize, e
 // Onset frames of `x`: `onset_strength` followed by `onsets_pick`;
 // `scratch.len >= (2 * frames + 1) * frame + frames`; answers the onset count.
 fn onsets(x: []const f64, frame: usize, hop: usize, threshold: f64, scratch: []f64, out: []usize) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if scratch.len < frames { ret (0usize, TooSmall) }
     let (_, strength_error) = onset_strength(x, frame, hop, scratch[frames..], scratch[..frames])
     if strength_error != ok { ret (0usize, strength_error) }
@@ -293,12 +296,15 @@ fn onsets(x: []const f64, frame: usize, hop: usize, threshold: f64, scratch: []f
 // autocorrelation of the mean-removed onset envelope is largest.
 fn tempo(envelope: []const f64, hop: usize, sample_rate: f64) -> (f64, err) {
     let n = envelope.len
-    if hop == 0usize || sample_rate <= 0.0f64 || n < 2usize { ret (0.0f64, Invalid) }
+    if hop == 0usize || !(sample_rate > 0.0f64) || sample_rate == math.inf64() || n < 2usize { ret (0.0f64, Invalid) }
     let frames_per_second = sample_rate / f64(hop)
-    var lo = usize(math.ceil[f64](60.0f64 * frames_per_second / 200.0f64))
+    let lo_float = 60.0f64 * frames_per_second / 200.0f64
+    if !(lo_float < f64(n)) { ret (0.0f64, Invalid) }
+    var lo = usize(math.ceil[f64](lo_float))
     if lo < 1usize { lo = 1usize }
-    var hi = usize(60.0f64 * frames_per_second / 40.0f64)
-    if hi >= n { hi = n - 1usize }
+    let hi_float = 60.0f64 * frames_per_second / 40.0f64
+    var hi = n - 1usize
+    if hi_float < f64(n) { hi = usize(hi_float) }
     if lo > hi { ret (0.0f64, Invalid) }
     var mean = 0.0f64
     var t = 0usize
@@ -338,8 +344,17 @@ fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightnes
     var score = scratch[..n]
     var link = scratch[n..2usize * n]
     let period = 60.0f64 * sample_rate / (bpm * f64(hop))
-    let lo = usize(math.round[f64](period / 2.0f64))
-    let hi = usize(math.round[f64](period * 2.0f64))
+    if !(period > 0.0f64) || period == math.inf64() { ret (0usize, Invalid) }
+    let low_period = math.round[f64](period / 2.0f64)
+    let high_period = math.round[f64](period * 2.0f64)
+    if low_period < 1.0f64 || high_period < low_period { ret (0usize, Invalid) }
+    // A lag beyond the envelope cannot be a predecessor, so cap it before
+    // converting a large finite floating-point period to `usize`.
+    var lo = n
+    if low_period < f64(n) { lo = usize(low_period) }
+    var hi = n
+    if high_period < f64(n) { hi = usize(high_period) }
+    if hi < lo { ret (0usize, Invalid) }
     var t = 0usize
     while t < n {
         var best = 0.0f64
@@ -390,8 +405,9 @@ fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightnes
 // pitch class nearest its centre (C = 0); `out` holds `12 * frames`, frame
 // major; `scratch.len >= (2 * frames + 1) * frame`; answers the frame count.
 fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err) {
-    if hop == 0usize || frame == 0usize || x.len < frame || sample_rate <= 0.0f64 { ret (0usize, Invalid) }
+    if !(sample_rate > 0.0f64) || sample_rate == math.inf64() { ret (0usize, Invalid) }
     let frames = frame_count(x.len, frame, hop)
+    if frames == 0usize { ret (0usize, Invalid) }
     if out.len < 12usize * frames || scratch.len < (2usize * frames + 1usize) * frame { ret (0usize, TooSmall) }
     var win = scratch[..frame]
     var re = scratch[frame..(frames + 1usize) * frame]
@@ -409,7 +425,7 @@ fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: [
         }
         var k = 1usize
         while k <= frame / 2usize {
-            let hz = f64(k) * sample_rate / f64(frame)
+            let hz = f64(k) / f64(frame) * sample_rate
             if hz >= 27.5f64 {
                 let midi = 69.0f64 + 12.0f64 * math.log2[f64](hz / 440.0f64)
                 let class = usize(math.round[f64](midi)) % 12usize
@@ -432,14 +448,16 @@ fn block_loudness(z: f64) -> f64 { ret -0.691f64 + 10.0f64 * math.log10[f64](z) 
 // (the high shelf and the high-pass as tabulated for 48 kHz), 400 ms blocks
 // every 100 ms, blocks below -70 LUFS dropped, then blocks more than 10 LU
 // below the mean of the rest dropped; answers the mean loudness of what
-// remains, `-inf` for silence; `scratch.len >= 2 * x.len + 4`.
+// remains, `-inf` for silence; `sample_rate` must be exactly 48 kHz and
+// `scratch.len >= 2 * x.len + 4`.
 // ponytail: the filter coefficients are the specification's 48 kHz table;
 // another rate needs the Annex 1 redesign, which is not done here.
 fn loudness_lufs(x: []const f64, sample_rate: f64, scratch: []f64) -> (f64, err) {
     let n = x.len
+    if sample_rate != 48000.0f64 { ret (0.0f64, Invalid) }
     let block = usize(0.4f64 * sample_rate)
     let hop = usize(0.1f64 * sample_rate)
-    if sample_rate <= 0.0f64 || block == 0usize || hop == 0usize || n < block { ret (0.0f64, Invalid) }
+    if block == 0usize || hop == 0usize || n < block { ret (0.0f64, Invalid) }
     if scratch.len < 2usize * n + 4usize { ret (0.0f64, TooSmall) }
     var shelf: [6]f64 = zero
     shelf[0usize] = 1.53512485958697f64

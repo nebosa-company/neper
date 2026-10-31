@@ -2,12 +2,14 @@
 // `Card` values and `write` writes cards as vCard 3.0. A card keeps the display name (FN), the structured name
 // (N: family and given), up to four telephone numbers with their first TYPE, up to two e-mail addresses, the
 // organisation (the first ORG component) and a note. Lines are unfolded (a line that starts with a space or a tab
-// continues the one before), property groups ("item1.TEL") and parameters are read, values are unescaped
-// (\n \N \, \; \\); everything else (photos, addresses, extended properties) is skipped. A text that has no
+// continues the one before), property groups ("item1.TEL") and parameters are read, quoted-printable vCard 2.1
+// values are decoded, and values are unescaped (\n \N \, \; \\); everything else (photos, addresses, extended
+// properties) is skipped. A text that has no
 // BEGIN:VCARD is `Malformed`.
 //
 // Memory: the strings of a card are copies in the arena passed in.
 use e.mem
+use e.text.charset
 
 error Malformed
 error TooLong
@@ -43,6 +45,98 @@ fn equals_fold(a: []const u8, b: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// The value of a parameter named `wanted`, without its enclosing quotes.
+fn parameter_value(params: []const u8, wanted: str) -> (str, bool) {
+    var at = 0usize
+    while at < params.len {
+        if params[at] != 59u8 {
+            at += 1usize
+            continue
+        }
+        at += 1usize
+        let start = at
+        var quoted = false
+        while at < params.len {
+            if params[at] == 34u8 { quoted = !quoted }
+            if params[at] == 59u8 && !quoted { break }
+            at += 1usize
+        }
+        let parameter = params[start..at]
+        var eq = 0usize
+        while eq < parameter.len && parameter[eq] != 61u8 { eq += 1usize }
+        if eq < parameter.len && equals_fold(parameter[0usize..eq], wanted) {
+            var value = parameter[eq + 1usize..parameter.len]
+            if value.len >= 2usize && value[0usize] == 34u8 && value[value.len - 1usize] == 34u8 {
+                value = value[1usize..value.len - 1usize]
+            }
+            ret (value, true)
+        }
+    }
+    ret ("", false)
+}
+
+fn hex_value(c: u8) -> (u8, bool) {
+    if c >= 48u8 && c <= 57u8 { ret (c - 48u8, true) }
+    if c >= 65u8 && c <= 70u8 { ret (c - 65u8 + 10u8, true) }
+    if c >= 97u8 && c <= 102u8 { ret (c - 97u8 + 10u8, true) }
+    ret (0u8, false)
+}
+
+// Decode one already-unfolded quoted-printable value. Soft line breaks are removed by `parse`.
+fn decode_quoted_printable(a: *mem.Arena, value: []const u8) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, value.len)
+    if out_error != ok { ret ("", out_error) }
+    var n = 0usize
+    var i = 0usize
+    while i < value.len {
+        if value[i] == 61u8 {
+            if i + 2usize >= value.len { ret ("", Malformed) }
+            let (hi, high) = hex_value(value[i + 1usize])
+            let (lo, low) = hex_value(value[i + 2usize])
+            if !high || !low { ret ("", Malformed) }
+            out[n] = hi * 16u8 + lo
+            n += 1usize
+            i += 3usize
+        } else {
+            out[n] = value[i]
+            n += 1usize
+            i += 1usize
+        }
+    }
+    ret (out[0usize..n], ok)
+}
+
+fn quoted_printable_value(a: *mem.Arena, value: []const u8, params: []const u8) -> (str, err) {
+    let (bytes, bytes_error) = decode_quoted_printable(a, value)
+    if bytes_error != ok { ret ("", bytes_error) }
+    let (label, has_charset) = parameter_value(params, "CHARSET")
+    if !has_charset { ret (bytes, ok) }
+    let (name, known) = charset.label_to_name(label)
+    if !known { ret ("", Malformed) }
+    let (text, text_error) = charset.decode(a, name, bytes)
+    if text_error != ok {
+        if text_error == charset.Unsupported { ret ("", Malformed) }
+        ret ("", text_error)
+    }
+    ret (text, ok)
+}
+
+// Whether a physical line has an `ENCODING=QUOTED-PRINTABLE` parameter.
+fn is_quoted_printable_line(line: []const u8) -> bool {
+    var colon = 0usize
+    var quoted = false
+    var found = false
+    while colon < line.len && !found {
+        if line[colon] == 34u8 { quoted = !quoted }
+        if line[colon] == 58u8 && !quoted { found = true } else { colon += 1usize }
+    }
+    if !found { ret false }
+    var semi = 0usize
+    while semi < colon && line[semi] != 59u8 { semi += 1usize }
+    let (encoding, has_encoding) = parameter_value(line[semi..colon], "ENCODING")
+    ret has_encoding && equals_fold(encoding, "QUOTED-PRINTABLE")
 }
 
 fn empty_card() -> Card {
@@ -121,35 +215,45 @@ fn property(a: *mem.Arena, card: *Card, line: []const u8) -> err {
     }
     let name = head[start..i]
     let params = head[i..head.len]
+    let text_property = equals_fold(name, "FN") || equals_fold(name, "N") || equals_fold(name, "TEL") || equals_fold(name, "EMAIL") || equals_fold(name, "ORG") || equals_fold(name, "NOTE")
+    var text_value = value
+    if text_property {
+        let (encoding, has_encoding) = parameter_value(params, "ENCODING")
+        if has_encoding && equals_fold(encoding, "QUOTED-PRINTABLE") {
+            let (decoded, decoded_error) = quoted_printable_value(a, value, params)
+            if decoded_error != ok { ret decoded_error }
+            text_value = decoded
+        }
+    }
     if equals_fold(name, "FN") {
-        let (v, e) = unescape(a, value)
+        let (v, e) = unescape(a, text_value)
         if e != ok { ret e }
         card.name = v
     } else if equals_fold(name, "N") {
-        let (family, family_error) = first_component(a, value)
+        let (family, family_error) = first_component(a, text_value)
         if family_error != ok { ret family_error }
         card.family = family
         // The given name is the second component.
         var k = 0usize
         var semis = 0usize
-        while k < value.len && semis < 1usize {
-            if value[k] == 92u8 {
+        while k < text_value.len && semis < 1usize {
+            if text_value[k] == 92u8 {
                 k += 2usize
-            } else if value[k] == 59u8 {
+            } else if text_value[k] == 59u8 {
                 semis += 1usize
                 k += 1usize
             } else {
                 k += 1usize
             }
         }
-        if k <= value.len {
-            let (given, given_error) = first_component(a, value[k..value.len])
+        if k <= text_value.len {
+            let (given, given_error) = first_component(a, text_value[k..text_value.len])
             if given_error != ok { ret given_error }
             card.given = given
         }
     } else if equals_fold(name, "TEL") {
         if card.tel_count < 4usize {
-            let (v, e) = unescape(a, value)
+            let (v, e) = unescape(a, text_value)
             if e != ok { ret e }
             card.tel[card.tel_count] = v
             // The first type: TYPE=cell, TYPE="cell,voice", or a bare parameter (2.1: TEL;CELL;VOICE).
@@ -196,17 +300,17 @@ fn property(a: *mem.Arena, card: *Card, line: []const u8) -> err {
         }
     } else if equals_fold(name, "EMAIL") {
         if card.email_count < 2usize {
-            let (v, e) = unescape(a, value)
+            let (v, e) = unescape(a, text_value)
             if e != ok { ret e }
             card.email[card.email_count] = v
             card.email_count += 1usize
         }
     } else if equals_fold(name, "ORG") {
-        let (v, e) = first_component(a, value)
+        let (v, e) = first_component(a, text_value)
         if e != ok { ret e }
         card.org = v
     } else if equals_fold(name, "NOTE") {
-        let (v, e) = unescape(a, value)
+        let (v, e) = unescape(a, text_value)
         if e != ok { ret e }
         card.note = v
     }
@@ -238,6 +342,42 @@ fn parse(a: *mem.Arena, data: []const u8, out: []Card) -> (usize, err) {
             i += 1usize
         }
     }
+    // QP soft line breaks are not normal vCard folds. Compact them only after the
+    // first physical line proves that its property declares quoted-printable.
+    var physical = 0usize
+    var logical = 0usize
+    while physical < n {
+        var from = physical
+        var end = from
+        while end < n && flat[end] != 10u8 { end += 1usize }
+        let quoted_printable = is_quoted_printable_line(flat[from..end])
+        var joining = true
+        while joining {
+            var copied_end = end
+            let soft_break = quoted_printable && end > from && flat[end - 1usize] == 61u8 && end < n
+            if soft_break { copied_end -= 1usize }
+            var p = from
+            while p < copied_end {
+                flat[logical] = flat[p]
+                logical += 1usize
+                p += 1usize
+            }
+            if soft_break {
+                physical = end + 1usize
+                from = physical
+                end = from
+                while end < n && flat[end] != 10u8 { end += 1usize }
+            } else {
+                if end < n {
+                    flat[logical] = 10u8
+                    logical += 1usize
+                }
+                physical = end + 1usize
+                joining = false
+            }
+        }
+    }
+    n = logical
     var count = 0usize
     var card = empty_card()
     var inside = false
@@ -273,18 +413,24 @@ fn parse(a: *mem.Arena, data: []const u8, out: []Card) -> (usize, err) {
 
 type Out = struct { buf: []u8, len: usize, column: usize, over: bool }
 
+fn out_fold(o: *Out) {
+    if o.len + 3usize > o.buf.len {
+        o.over = true
+        ret
+    }
+    o.buf[o.len] = 13u8
+    o.buf[o.len + 1usize] = 10u8
+    o.buf[o.len + 2usize] = 32u8
+    o.len += 3usize
+    o.column = 1usize
+}
+
 fn out_byte(o: *Out, b: u8) {
+    if o.over { ret }
     // Lines are folded at 75 octets: a CRLF and a space.
     if o.column >= 75usize && b != 13u8 && b != 10u8 {
-        if o.len + 3usize > o.buf.len {
-            o.over = true
-            ret
-        }
-        o.buf[o.len] = 13u8
-        o.buf[o.len + 1usize] = 10u8
-        o.buf[o.len + 2usize] = 32u8
-        o.len += 3usize
-        o.column = 1usize
+        out_fold(o)
+        if o.over { ret }
     }
     if o.len >= o.buf.len {
         o.over = true
@@ -303,10 +449,34 @@ fn out_raw(o: *Out, s: str) {
     }
 }
 
+fn continuation(byte: u8) -> bool { ret byte >= 128u8 && byte <= 191u8 }
+
+// The width of a complete UTF-8 sequence at `at`; malformed input remains one
+// byte at a time, but a valid character is never split by a physical-line fold.
+fn utf8_width(s: str, at: usize) -> usize {
+    let first = s[at]
+    let remaining = s.len - at
+    if first >= 194u8 && first <= 223u8 && remaining >= 2usize && continuation(s[at + 1usize]) { ret 2usize }
+    if first >= 224u8 && first <= 239u8 && remaining >= 3usize && continuation(s[at + 1usize]) && continuation(s[at + 2usize]) { ret 3usize }
+    if first >= 240u8 && first <= 244u8 && remaining >= 4usize && continuation(s[at + 1usize]) && continuation(s[at + 2usize]) && continuation(s[at + 3usize]) { ret 4usize }
+    ret 1usize
+}
+
+fn out_utf8(o: *Out, s: str, at: usize, width: usize) {
+    if o.over { ret }
+    if o.column + width > 75usize { out_fold(o) }
+    var i = 0usize
+    while i < width {
+        out_byte(o, s[at + i])
+        i += 1usize
+    }
+}
+
 fn out_value(o: *Out, s: str) {
     var i = 0usize
     while i < s.len {
         let c = s[i]
+        var width = 1usize
         if c == 10u8 {
             out_byte(o, 92u8)
             out_byte(o, 110u8)
@@ -314,14 +484,15 @@ fn out_value(o: *Out, s: str) {
             out_byte(o, 92u8)
             out_byte(o, c)
         } else if c != 13u8 {
-            out_byte(o, c)
+            width = utf8_width(s, i)
+            if width > 1usize { out_utf8(o, s, i, width) } else { out_byte(o, c) }
         }
-        i += 1usize
+        i += width
     }
 }
 
 fn out_end(o: *Out) {
-    if o.len + 2usize > o.buf.len {
+    if o.over || o.len + 2usize > o.buf.len {
         o.over = true
         ret
     }
@@ -337,6 +508,7 @@ fn write(cards: []const Card, buf: []u8) -> (usize, err) {
     var i = 0usize
     while i < cards.len {
         let card = cards[i]
+        if card.tel_count > 4usize || card.email_count > 2usize { ret (0usize, Malformed) }
         out_raw(&o, "BEGIN:VCARD")
         out_end(&o)
         out_raw(&o, "VERSION:3.0")

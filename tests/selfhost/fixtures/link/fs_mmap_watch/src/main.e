@@ -43,26 +43,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if write_whole(a, "np-fs-map.bin", original[..]) != ok { os.exit(10) }
     let (_, empty) = mmap.open(a, "np-fs-map.bin", false, 0u64, 0usize)
     if empty != mmap.Empty { os.exit(11) }
+    let (_, at_end) = mmap.open(a, "np-fs-map.bin", false, 16u64, 1usize)
+    if at_end != mmap.Invalid { os.exit(25) }
+    let (_, crossing_end) = mmap.open(a, "np-fs-map.bin", false, 15u64, 2usize)
+    if crossing_end != mmap.Invalid { os.exit(26) }
     let (reader, reader_error) = mmap.open(a, "np-fs-map.bin", false, 0u64, 16usize)
     if reader_error != ok { os.exit(12) }
     let seen = mmap.bytes(reader)
     if seen.len != 16usize || seen[0] != 65u8 || seen[15] != 80u8 { os.exit(13) }
-    if mmap.close(reader) != ok { os.exit(14) }
+    let (refused, refused_error) = mmap.bytes_mut(reader)
+    if refused_error != os.Unsupported || refused.len != 0usize { os.exit(14) }
+    if mmap.close(reader) != ok { os.exit(15) }
     let (writer, writer_error) = mmap.open(a, "np-fs-map.bin", true, 0u64, 16usize)
-    if writer_error != ok { os.exit(15) }
-    let region = mmap.bytes(writer)
+    if writer_error != ok { os.exit(16) }
+    let (region, region_error) = mmap.bytes_mut(writer)
+    if region_error != ok { os.exit(17) }
     region[0] = 122u8
     region[15] = 121u8
-    if mmap.flush(writer) != ok { os.exit(16) }
-    if mmap.close(writer) != ok { os.exit(17) }
+    if mmap.flush(writer) != ok { os.exit(18) }
+    if mmap.close(writer) != ok { os.exit(19) }
     let (again, again_error) = mmap.open(a, "np-fs-map.bin", false, 0u64, 16usize)
-    if again_error != ok { os.exit(18) }
+    if again_error != ok { os.exit(20) }
     let back = mmap.bytes(again)
-    if back[0] != 122u8 || back[15] != 121u8 || back[1] != 66u8 { os.exit(19) }
-    if mmap.close(again) != ok { os.exit(20) }
+    if back[0] != 122u8 || back[15] != 121u8 || back[1] != 66u8 { os.exit(21) }
+    if mmap.close(again) != ok { os.exit(22) }
     let (_, missing) = mmap.open(a, "np-fs-map-absent.bin", false, 0u64, 4usize)
-    if missing == ok { os.exit(21) }
-    if os.remove_file(a, "np-fs-map.bin") != ok { os.exit(22) }
+    if missing == ok { os.exit(23) }
+    if os.remove_file(a, "np-fs-map.bin") != ok { os.exit(24) }
     // Watching: a fresh directory, a file added, seen through the watch.
     let stale_file = os.remove_file(a, "np-fs-watch/seen.txt")
     let stale_dir = os.remove_dir(a, "np-fs-watch")

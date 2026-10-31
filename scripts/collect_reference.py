@@ -189,6 +189,8 @@ def L_pow(x, y):
 
 
 def L_log(n, b):
+    if not math.isfinite(n) or not math.isfinite(b) or n <= 0 or b <= 0 or b == 1:
+        return op_line('G', [n, b], err('NotFinite'))
     r = fdiv(ln(float(n)), ln(float(b)))
     if math.isnan(r) or math.isinf(r):
         return op_line('G', [n, b], err('NotFinite'))

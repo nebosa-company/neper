@@ -16,6 +16,15 @@ fn bytes_equal(a: []const u8, b: []const u8) -> bool {
     ret true
 }
 
+fn split_bom(encoding: enc.Encoding, first: []const u8, rest: []const u8) -> bool {
+    var d = enc.decoder(encoding, .Reject, true)
+    var out: [8]u8 = zero
+    let (c1, w1, s1) = enc.decode(&d, first, out[0..], false)
+    if s1 != ok || c1 != first.len || w1 != 0usize { ret false }
+    let (c2, w2, s2) = enc.decode(&d, rest, out[0..], true)
+    ret s2 == ok && c2 == rest.len && w2 == 1usize && out[0usize] == 65u8
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // "aé€😀" in UTF-8: 61 C3A9 E282AC F09F9880
     let text: [10]u8 = [10]u8{ 97, 195, 169, 226, 130, 172, 240, 159, 152, 128 }
@@ -68,6 +77,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n16, e9) = enc.encoded_len(.Utf16Le, text[0..], false)
     let (n8, e10) = enc.decoded_len(.Utf16Le, u16le, .Reject)
     if e9 != ok || n16 != 10usize || e10 != ok || n8 != 10usize { os.exit(20) }
+    let bom8a: [1]u8 = [1]u8{ 239 }
+    let bom8b: [3]u8 = [3]u8{ 187, 191, 65 }
+    let bom16lea: [1]u8 = [1]u8{ 255 }
+    let bom16leb: [3]u8 = [3]u8{ 254, 65, 0 }
+    let bom16le_taila: [3]u8 = [3]u8{ 255, 254, 65 }
+    let bom16le_tailb: [1]u8 = [1]u8{ 0 }
+    let bom16le_nul: [4]u8 = [4]u8{ 255, 254, 0, 0 }
+    let bom16bea: [1]u8 = [1]u8{ 254 }
+    let bom16beb: [3]u8 = [3]u8{ 255, 0, 65 }
+    let bom32lea: [2]u8 = [2]u8{ 255, 254 }
+    let bom32leb: [6]u8 = [6]u8{ 0, 0, 65, 0, 0, 0 }
+    let bom32bea: [3]u8 = [3]u8{ 0, 0, 254 }
+    let bom32beb: [5]u8 = [5]u8{ 255, 0, 0, 0, 65 }
+    if !split_bom(.Utf8, bom8a[0..], bom8b[0..]) { os.exit(21) }
+    if !split_bom(.Utf16Le, bom16lea[0..], bom16leb[0..]) { os.exit(22) }
+    if !split_bom(.Utf16Be, bom16bea[0..], bom16beb[0..]) { os.exit(23) }
+    if !split_bom(.Utf32Le, bom32lea[0..], bom32leb[0..]) { os.exit(24) }
+    if !split_bom(.Utf32Be, bom32bea[0..], bom32beb[0..]) { os.exit(25) }
+    if !split_bom(.Utf16Le, bom16le_taila[0..], bom16le_tailb[0..]) { os.exit(26) }
+    var nul_decoder = enc.decoder(.Utf16Le, .Reject, true)
+    var nul_out: [4]u8 = zero
+    let (nul_consumed, nul_written, nul_error) = enc.decode(&nul_decoder, bom16le_nul[0..], nul_out[0..], true)
+    if nul_error != ok || nul_consumed != 4usize || nul_written != 1usize || nul_out[0usize] != 0u8 { os.exit(27) }
+    let (nul_len, nul_len_error) = enc.decoded_len(.Utf16Le, bom16le_nul[0..], .Reject)
+    if nul_len_error != ok || nul_len != 1usize { os.exit(28) }
     os.exit(0)
     ret ok
 }

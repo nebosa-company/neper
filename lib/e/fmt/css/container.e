@@ -38,8 +38,11 @@ fn compare(c: Condition, actual: f64) -> bool {
     case .Ge:
         ret actual >= c.value
     case .Eq:
-        if math.abs[f64](actual - c.value) < 0.5f64 { ret true }
-        ret c.value != 0.0f64 && math.abs[f64](actual / c.value - 1.0f64) < 0.001f64
+        if c.feature == .AspectRatio {
+            if c.value == 0.0f64 { ret actual == 0.0f64 }
+            ret math.abs[f64](actual / c.value - 1.0f64) < 0.001f64
+        }
+        ret math.abs[f64](actual - c.value) < 0.5f64
     }
 }
 

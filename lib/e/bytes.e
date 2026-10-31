@@ -237,16 +237,17 @@ fn base64_alphabet(alphabet: Base64Alphabet) -> str {
 
 fn base64_encoded_len(n: usize, padded: bool) -> (usize, err) {
     // Four characters per three bytes; the last group is padded or shortened.
-    if n > 18446744073709551615usize / 4usize { ret (0usize, TooLarge) }
     let whole = n / 3usize
     let rest = n % 3usize
+    if whole > 18446744073709551615usize / 4usize { ret (0usize, TooLarge) }
     var length = whole * 4usize
     if rest != 0usize {
+        var tail = rest + 1usize
         if padded {
-            length += 4usize
-        } else {
-            length += rest + 1usize
+            tail = 4usize
         }
+        if length > 18446744073709551615usize - tail { ret (0usize, TooLarge) }
+        length += tail
     }
     ret (length, ok)
 }
@@ -355,17 +356,17 @@ fn base32_alphabet(alphabet: Base32Alphabet) -> str {
 
 fn base32_encoded_len(n: usize, padded: bool) -> (usize, err) {
     // Eight characters per five bytes.
-    if n > 18446744073709551615usize / 8usize { ret (0usize, TooLarge) }
     let whole = n / 5usize
     let rest = n % 5usize
+    if whole > 18446744073709551615usize / 8usize { ret (0usize, TooLarge) }
     var length = whole * 8usize
     if rest != 0usize {
+        var tail = (rest * 8usize + 4usize) / 5usize
         if padded {
-            length += 8usize
-        } else {
-            // 1, 2, 3 and 4 bytes are 2, 4, 5 and 7 characters: the bits, rounded up to fives.
-            length += (rest * 8usize + 4usize) / 5usize
+            tail = 8usize
         }
+        if length > 18446744073709551615usize - tail { ret (0usize, TooLarge) }
+        length += tail
     }
     ret (length, ok)
 }
@@ -469,13 +470,17 @@ fn base85_value(alphabet: Base85Alphabet, byte: u8) -> (u32, bool) {
 }
 
 fn base85_encoded_len(n: usize, alphabet: Base85Alphabet) -> (usize, err) {
-    if n > 18446744073709551615usize / 5usize { ret (0usize, TooLarge) }
     let whole = n / 4usize
     let rest = n % 4usize
     // Z85 is defined only on whole groups, and says so rather than padding.
     if alphabet == .Z85 && rest != 0usize { ret (0usize, Invalid) }
+    if whole > 18446744073709551615usize / 5usize { ret (0usize, TooLarge) }
     var length = whole * 5usize
-    if rest != 0usize { length += rest + 1usize }
+    if rest != 0usize {
+        let tail = rest + 1usize
+        if length > 18446744073709551615usize - tail { ret (0usize, TooLarge) }
+        length += tail
+    }
     ret (length, ok)
 }
 
@@ -604,8 +609,11 @@ fn reverse_bits[T: type](v: T) -> T {
     ret T.trunc(out)
 }
 
-// `v` with the bits at positions `i` and `j` exchanged.
+// `v` with the bits at positions `i` and `j` exchanged. A position outside `T`'s
+// width names no bit, so it leaves `v` unchanged rather than trapping on a shift.
 fn swap_bits[T: type](v: T, i: u32, j: u32) -> T {
+    let bits = u32(mem.size_of[T]() * 8usize)
+    if i >= bits || j >= bits { ret v }
     let one = T(1u64)
     if (((v >> i) ^ (v >> j)) & one) == T(0u64) { ret v }
     ret v ^ ((one << i) | (one << j))
@@ -807,40 +815,42 @@ fn base58_decode(dst: []u8, src: str) -> ([]u8, err) {
 // many bytes it put in `dst`, and the whole run is byte for byte what the one-shot pair makes.
 
 type Base64Encoder = struct { alphabet: Base64Alphabet, padded: bool, held: [3]u8, count: usize }
-type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize }
+type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize, finished: bool }
 
 fn base64_encoder(alphabet: Base64Alphabet, padded: bool) -> Base64Encoder {
     ret Base64Encoder { alphabet: alphabet, padded: padded, held: zero, count: 0usize }
 }
 
 fn base64_encoder_update(enc: *Base64Encoder, dst: []u8, src: []const u8) -> (usize, err) {
+    var trial = *enc
     var pos = 0usize
     var out = 0usize
     // Complete the group held from last time first.
-    while enc.count != 0usize && enc.count < 3usize && pos < src.len {
-        enc.held[enc.count] = src[pos]
-        enc.count += 1usize
+    while trial.count != 0usize && trial.count < 3usize && pos < src.len {
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
-    if enc.count == 3usize {
-        let (text, text_error) = base64_encode(dst, enc.held[..], enc.alphabet, true)
+    if trial.count == 3usize {
+        let (text, text_error) = base64_encode(dst, trial.held[..], trial.alphabet, true)
         if text_error != ok { ret (0usize, text_error) }
         out = text.len
-        enc.count = 0usize
+        trial.count = 0usize
     }
     // Then every whole group of the rest in one call, and hold what is left.
     let whole = (src.len - pos) / 3usize * 3usize
     if whole != 0usize {
-        let (text, text_error) = base64_encode(dst[out..], src[pos..pos + whole], enc.alphabet, true)
+        let (text, text_error) = base64_encode(dst[out..], src[pos..pos + whole], trial.alphabet, true)
         if text_error != ok { ret (0usize, text_error) }
         out += text.len
         pos += whole
     }
     while pos < src.len {
-        enc.held[enc.count] = src[pos]
-        enc.count += 1usize
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
+    *enc = trial
     ret (out, ok)
 }
 
@@ -853,35 +863,58 @@ fn base64_encoder_finish(enc: *Base64Encoder, dst: []u8) -> (usize, err) {
 }
 
 fn base64_decoder(alphabet: Base64Alphabet) -> Base64Decoder {
-    ret Base64Decoder { alphabet: alphabet, held: zero, count: 0usize }
+    ret Base64Decoder { alphabet: alphabet, held: zero, count: 0usize, finished: false }
 }
 
 fn base64_decoder_update(dec: *Base64Decoder, dst: []u8, src: str) -> (usize, err) {
+    var trial = *dec
+    if trial.finished && src.len != 0usize { ret (0usize, Invalid) }
     var pos = 0usize
     var out = 0usize
-    while dec.count != 0usize && dec.count < 4usize && pos < src.len {
-        dec.held[dec.count] = src[pos]
-        dec.count += 1usize
+    while trial.count != 0usize && trial.count < 4usize && pos < src.len {
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
-    if dec.count == 4usize {
-        let (data, data_error) = base64_decode(dst, dec.held[..], dec.alphabet)
+    if trial.count == 4usize {
+        let (data, data_error) = base64_decode(dst, trial.held[..], trial.alphabet)
         if data_error != ok { ret (0usize, data_error) }
         out = data.len
-        dec.count = 0usize
+        var held_at = 0usize
+        while held_at < 4usize {
+            if trial.held[held_at] == PAD { trial.finished = true }
+            held_at += 1usize
+        }
+        trial.count = 0usize
+        if trial.finished {
+            if pos != src.len { ret (0usize, Invalid) }
+            *dec = trial
+            ret (out, ok)
+        }
     }
     let whole = (src.len - pos) / 4usize * 4usize
     if whole != 0usize {
-        let (data, data_error) = base64_decode(dst[out..], src[pos..pos + whole], dec.alphabet)
+        let (data, data_error) = base64_decode(dst[out..], src[pos..pos + whole], trial.alphabet)
         if data_error != ok { ret (0usize, data_error) }
+        var whole_at = pos
+        while whole_at < pos + whole {
+            if src[whole_at] == PAD { trial.finished = true }
+            whole_at += 1usize
+        }
         out += data.len
         pos += whole
+        if trial.finished {
+            if pos != src.len { ret (0usize, Invalid) }
+            *dec = trial
+            ret (out, ok)
+        }
     }
     while pos < src.len {
-        dec.held[dec.count] = src[pos]
-        dec.count += 1usize
+        trial.held[trial.count] = src[pos]
+        trial.count += 1usize
         pos += 1usize
     }
+    *dec = trial
     ret (out, ok)
 }
 

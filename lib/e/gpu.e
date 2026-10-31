@@ -56,7 +56,7 @@ use e.gpu.vulkan
 use e.gpu.cuda
 use e.gpu.metal as mtl
 
-type Backend = enum u8 { Cpu, Vulkan, Cuda, Metal }
+type Backend = enum u8 { Cpu, Vulkan, Cuda, Metal, Gl }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
 type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
 type DeviceInfo = struct { key: DeviceKey, key_valid: bool, index: u32, name: str, kind: DeviceKind, memory_bytes: u64, memory_known: bool, capabilities: []const Cap, supported: bool }
@@ -79,7 +79,7 @@ type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
 type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
 type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
-type Frame = struct { image: Image, serial: u64 }
+type Frame = struct { image: Image, serial: u64, acquire_id: u64 }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
 error AmbiguousDevice
@@ -97,7 +97,7 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
-const CPU_CAPABILITIES: usize = 503usize
+const CPU_CAPABILITIES: usize = 511usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -120,10 +120,56 @@ const METAL_HEAPS: usize = 4usize
 const METAL_PENDING: usize = 4usize
 const METAL_CAPABILITIES: usize = 199usize
 
-type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
+// A heap device's driver (D5889): the device, its heap and per-launch argument buffers (host-visible, mapped while they live),
+// kernels compiled from the module's text by entry, a launch begun and later waited for. `e.gpu.metal` is Metal's. OpenGL's
+// (GLSL 4.30 over one persistently mapped SSBO) is `x.khronos.compute`'s, which `install_gl` takes, since `e.*` cannot import
+// `x.*`; until then `.Gl` has no devices.
+type HeapDriver = struct {
+    available: fn() -> bool,
+    name: fn(mtl.Context, []u8) -> usize,
+    open: fn(*mem.Arena) -> (mtl.Context, err),
+    close: fn(mtl.Context),
+    buffer: fn(mtl.Context, usize) -> (mtl.Buffer, err),
+    free: fn(mtl.Buffer),
+    compile: fn(mtl.Context, str, str) -> (mtl.Pipeline, err),
+    destroy: fn(mtl.Pipeline),
+    dispatch_begin: fn(mtl.Context, mtl.Pipeline, []const mtl.Buffer, mtl.Size, mtl.Size, usize) -> (usize, err),
+    dispatch_wait: fn(usize) -> err,
+    // `Cap` bits for this open context: a driver may learn them from its device.
+    capabilities: fn(mtl.Context) -> usize,
+}
+
+var gl_driver: HeapDriver = zero
+var gl_installed: bool = false
+
+fn install_gl(driver: HeapDriver) {
+    gl_driver = driver
+    gl_installed = true
+}
+
+fn heap_backend(backend: Backend) -> bool { ret backend == .Metal || backend == .Gl }
+
+fn metal_capabilities(context: mtl.Context) -> usize { ret METAL_CAPABILITIES }
+
+fn metal_driver() -> HeapDriver {
+    ret HeapDriver { available: mtl.available, name: mtl.name, open: mtl.open, close: mtl.close, buffer: mtl.buffer, free: mtl.free, compile: mtl.compile, destroy: mtl.destroy, dispatch_begin: mtl.dispatch_begin, dispatch_wait: mtl.dispatch_wait, capabilities: metal_capabilities }
+}
+
+fn driver_of(backend: Backend) -> HeapDriver {
+    if backend == .Gl { ret gl_driver }
+    ret metal_driver()
+}
+
+fn heap_available(backend: Backend) -> bool {
+    if backend == .Gl && !gl_installed { ret false }
+    let driver = driver_of(backend)
+    ret driver.available()
+}
+
+type QueueState = struct { device: *DeviceState, index: u32, staging_blocks: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
-type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, acquired: bool, closed: bool }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -540,20 +586,22 @@ fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceI
 }
 
 // The Mac's Metal device as `devices` and `info` report it (D5838). It has no UUID to key it by.
-fn metal_info(a: *mem.Arena) -> (DeviceInfo, err) {
+fn metal_info(a: *mem.Arena, backend: Backend) -> (DeviceInfo, err) {
     var record: DeviceInfo = zero
-    let (context, context_error) = mtl.open(a)
+    let driver = driver_of(backend)
+    let (context, context_error) = driver.open(a)
     if context_error != ok { ret (record, NoDevice) }
     let (text, text_error) = mem.alloc[u8](a, 128usize)
     if text_error != ok {
-        mtl.close(context)
+        driver.close(context)
         ret (record, text_error)
     }
-    let length = mtl.name(context, text)
-    mtl.close(context)
-    let (caps, caps_error) = capability_list(a, METAL_CAPABILITIES)
+    let length = driver.name(context, text)
+    let capability_bits = driver.capabilities(context)
+    driver.close(context)
+    let (caps, caps_error) = capability_list(a, capability_bits)
     if caps_error != ok { ret (record, caps_error) }
-    record.key.backend = .Metal
+    record.key.backend = backend
     record.key_valid = false
     record.index = 0u32
     record.name = text[0usize..length]
@@ -565,20 +613,21 @@ fn metal_info(a: *mem.Arena) -> (DeviceInfo, err) {
 }
 
 // A Metal device opened, with its heap (D5838).
-fn open_metal(a: *mem.Arena, index: u32) -> (*Device, err) {
+fn open_metal(a: *mem.Arena, index: u32, backend: Backend) -> (*Device, err) {
     if index != 0u32 { ret (zero, NoDevice) }
-    if !mtl.available() { ret (zero, NoDevice) }
-    let (context, context_error) = mtl.open(a)
+    if !heap_available(backend) { ret (zero, NoDevice) }
+    let driver = driver_of(backend)
+    let (context, context_error) = driver.open(a)
     if context_error != ok { ret (zero, NoDevice) }
-    let (heap, heap_error) = mtl.buffer(context, METAL_HEAP_BYTES)
+    let (heap, heap_error) = driver.buffer(context, METAL_HEAP_BYTES)
     if heap_error != ok {
-        mtl.close(context)
+        driver.close(context)
         ret (zero, OutOfMemory)
     }
-    let (device, device_error) = open_state(a, .Metal)
+    let (device, device_error) = open_state(a, backend)
     if device_error != ok {
-        mtl.free(heap)
-        mtl.close(context)
+        driver.free(heap)
+        driver.close(context)
         ret (zero, device_error)
     }
     let (state, state_error) = state_of(device)
@@ -603,7 +652,9 @@ fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, usize, err) {
     var heap_at = 0usize
     while heap_at < METAL_HEAPS {
         if heap_at == state.heap_count {
-            let (made, made_error) = mtl.buffer(state.metal, METAL_HEAP_BYTES)
+            // OpenGL's one SSBO is its whole heap: its shaders address it without a heap number (D5889).
+            if state.backend != .Metal { ret (0usize, 0usize, OutOfMemory) }
+            let (made, made_error) = driver_of(state.backend).buffer(state.metal, METAL_HEAP_BYTES)
             if made_error != ok { ret (0usize, 0usize, OutOfMemory) }
             state.more_heaps[heap_at - 1usize] = made
             state.heap_count += 1usize
@@ -612,7 +663,7 @@ fn metal_carve(state: *DeviceState, bytes: usize) -> (usize, usize, err) {
         var settled = false
         var fits = true
         while !settled {
-            if candidate + need > METAL_HEAP_BYTES {
+            if candidate + need > metal_heap(state, heap_at).bytes.len {
                 fits = false
                 break
             }
@@ -832,12 +883,12 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
         }
         ret (records, ok)
     }
-    if backend == .Metal {
-        if !mtl.available() { ret (zero, Unsupported) }
+    if heap_backend(backend) {
+        if !heap_available(backend) { ret (zero, Unsupported) }
         if limit < 1usize { ret (zero, TooLarge) }
         let (records, records_error) = mem.alloc[DeviceInfo](a, 1usize)
         if records_error != ok { ret (zero, records_error) }
-        let (record, record_error) = metal_info(a)
+        let (record, record_error) = metal_info(a, backend)
         if record_error != ok { ret (zero, record_error) }
         records[0usize] = record
         ret (records, ok)
@@ -924,8 +975,8 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
         let (device, device_error) = open_vulkan(a, index)
         ret (device, device_error)
     }
-    if backend == .Metal {
-        let (device, device_error) = open_metal(a, index)
+    if heap_backend(backend) {
+        let (device, device_error) = open_metal(a, index, backend)
         ret (device, device_error)
     }
     if backend != .Cpu { ret (zero, Unsupported) }
@@ -951,8 +1002,8 @@ fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err) {
         if width == 0u32 { ret (zero, Unsupported) }
         subgroup_width = width
     } else {
+        // (D5910) An environment the process may not read (an Android app's /proc/self/environ) configures nothing either.
         mem.reset(a, checkpoint)
-        if env_error != os.NotFound { ret (zero, Unsupported) }
     }
     let (device, device_error) = open_state(a, .Cpu)
     ret (device, device_error)
@@ -990,6 +1041,11 @@ fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Devi
 }
 
 fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
+    // Reserve capacity before any caller-arena allocation; keeping the registry
+    // lock through publication makes simultaneous opens observe the reservation.
+    locks.mutex_lock(&registry_locks[0usize])
+    defer locks.mutex_unlock(&registry_locks[0usize])
+    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[DeviceState](a, 1usize)
     if states_error != ok { ret (zero, states_error) }
     let (buffers, buffers_error) = mem.alloc[Buffer](a, MAX_BUFFERS)
@@ -1001,9 +1057,11 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
         i += 1usize
     }
     let state = &states[0usize]
-    var empty_stage: vulkan.Buffer = zero
+    var empty_stage: []vulkan.Buffer = zero
+    var empty_queue: *QueueState = zero
     var stage_at = 0usize
     while stage_at < MAX_QUEUES {
+        state.queue_states[stage_at] = empty_queue
         state.staging[stage_at] = empty_stage
         stage_at += 1usize
     }
@@ -1033,9 +1091,6 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
-    locks.mutex_lock(&registry_locks[0usize])
-    defer locks.mutex_unlock(&registry_locks[0usize])
-    if open_count >= MAX_DEVICES { ret (zero, TooLarge) }
     state.owner = next_owner
     next_owner += 1u32
     open_devices[open_count] = state
@@ -1118,6 +1173,11 @@ fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
         if cuda_chosen_error != ok { ret (zero, cuda_chosen_error) }
         ret (zero, Unsupported)
     }
+    // (D5906) A heap device's record carries no key, so a key names none of them where the backend is there at all.
+    if heap_backend(key.backend) {
+        if heap_available(key.backend) { ret (zero, NoDevice) }
+        ret (zero, Unsupported)
+    }
     if key.backend != .Vulkan { ret (zero, Unsupported) }
     // Enumerate the full set so a duplicate is seen, match, then open that very handle:
     // removal or a changed identity fails instead of opening a replacement at the ordinal.
@@ -1158,8 +1218,8 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
         let (record, record_error) = vulkan_info(a, state.physical, state.ordinal)
         ret (record, record_error)
     }
-    if state.backend == .Metal {
-        let (record, record_error) = metal_info(a)
+    if heap_backend(state.backend) {
+        let (record, record_error) = metal_info(a, state.backend)
         ret (record, record_error)
     }
     let (record, record_error) = cpu_info(a)
@@ -1180,19 +1240,22 @@ fn close(device: *Device) -> err {
         }
         i += 1usize
     }
-    if state.backend == .Metal {
+    if heap_backend(state.backend) {
+        // A GL launch still in flight is waited for before its buffers go.
+        if state.backend == .Gl { let finished = metal_finish(state) }
+        let driver = driver_of(state.backend)
         var made_metal = 0usize
         while made_metal < state.pipeline_count {
-            mtl.destroy(state.metal_pipelines[made_metal])
+            driver.destroy(state.metal_pipelines[made_metal])
             made_metal += 1usize
         }
         var freed_heap = 1usize
         while freed_heap < state.heap_count {
-            mtl.free(state.more_heaps[freed_heap - 1usize])
+            driver.free(state.more_heaps[freed_heap - 1usize])
             freed_heap += 1usize
         }
-        mtl.free(state.heap)
-        mtl.close(state.metal)
+        driver.free(state.heap)
+        driver.close(state.metal)
     }
     if state.backend == .Vulkan {
         var made = 0usize
@@ -1202,8 +1265,12 @@ fn close(device: *Device) -> err {
         }
         var stage_at = 0usize
         while stage_at < usize(state.queues) {
-            let stage = state.staging[stage_at]
-            if stage.handle != 0usize { vulkan.free(state.context, stage) }
+            let stages = state.staging[stage_at]
+            var block_at = 0usize
+            while block_at < stages.len {
+                if stages[block_at].handle != 0usize { vulkan.free(state.context, stages[block_at]) }
+                block_at += 1usize
+            }
             stage_at += 1usize
         }
         vulkan.close(state.context)
@@ -1231,28 +1298,31 @@ fn has(device: *Device, capability: Cap) -> bool {
     defer unlock_state(state)
     var available = CPU_CAPABILITIES
     if state.backend == .Vulkan { available = state.physical.caps }
-    if state.backend == .Metal { available = METAL_CAPABILITIES }
+    if heap_backend(state.backend) {
+        let driver = driver_of(state.backend)
+        available = driver.capabilities(state.metal)
+    }
     ret (available & capability_bit(capability)) != 0usize
 }
 
 fn queue(device: *Device) -> (*Queue, err) {
-    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 1u32, block_bytes: 65536usize })
+    let (q, queue_error) = queue_with(device, StagingLimits { blocks: 4u32, block_bytes: 16777216usize })
     ret (q, queue_error)
 }
 
 fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
-    if limits.blocks == 0u32 || limits.block_bytes == 0usize { ret (zero, TooLarge) }
+    if limits.blocks == 0u32 || limits.block_bytes == 0usize || limits.block_bytes > MAX_AXIS / usize(limits.blocks) { ret (zero, TooLarge) }
     let (state, state_error) = state_of(device)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state)
     if usize(state.queues) >= MAX_QUEUES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[QueueState](state.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
-    // ponytail: synchronous transfers reuse one block; use more only if transfers overlap.
-    states[0usize] = QueueState { device: state, index: state.queues, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
+    states[0usize] = QueueState { device: state, index: state.queues, staging_blocks: limits.blocks, staging_bytes: limits.block_bytes, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Queue { state: mem.cast[*void](&states[0usize]) }
+    state.queue_states[usize(state.queues)] = &states[0usize]
     state.queues += 1u32
     ret (&handles[0usize], ok)
 }
@@ -1300,7 +1370,7 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
         ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
     }
     // A Metal buffer is a piece of the device's heap: its bytes are the heap's mapping there (D5838).
-    if state.device.backend == .Metal {
+    if heap_backend(state.device.backend) {
         let (heap_at, offset, carve_error) = metal_carve(state.device, n * elem)
         if carve_error != ok { ret (zero, OutOfMemory) }
         var held: []u8 = zero
@@ -1359,6 +1429,31 @@ fn len[T: type](buf: Buf[T]) -> usize {
     ret buf.len
 }
 
+// Allocate every configured driver block together, so an upload cannot grow a
+// queue's staging pool after first use. The queue lock keeps this pool exclusive.
+fn staging_pool(state: *QueueState) -> err {
+    let staging = state.device.staging[usize(state.index)]
+    if staging.len != 0usize { ret ok }
+    let (blocks, blocks_error) = mem.alloc[vulkan.Buffer](state.device.arena, usize(state.staging_blocks))
+    if blocks_error != ok { ret OutOfMemory }
+    var made = 0usize
+    while made < blocks.len {
+        let (made_block, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
+        if make_error != ok {
+            var cleanup = 0usize
+            while cleanup < made {
+                vulkan.free(state.device.context, blocks[cleanup])
+                cleanup += 1usize
+            }
+            ret OutOfMemory
+        }
+        blocks[made] = made_block
+        made += 1usize
+    }
+    state.device.staging[usize(state.index)] = blocks
+    ret ok
+}
+
 fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
@@ -1371,20 +1466,21 @@ fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     let elem = buffer.elem
     let input = host_bytes[T](src)
     if state.device.backend == .Vulkan {
-        let stage = &state.device.staging[usize(state.index)]
-        if stage.handle == 0usize {
-            let (made, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
-            if make_error != ok { ret OutOfMemory }
-            *stage = made
-        }
+        let block_count = usize(state.staging_blocks)
+        if input.len > state.staging_bytes * block_count { ret TooLarge }
+        let pool_error = staging_pool(state)
+        if pool_error != ok { ret pool_error }
         var copied = 0usize
+        var block_at = 0usize
         while copied < input.len {
             var chunk = input.len - copied
             if chunk > state.staging_bytes { chunk = state.staging_bytes }
+            let stage = state.device.staging[usize(state.index)][block_at]
             copy_bytes(stage.bytes[..chunk], input[copied..copied + chunk])
             let at = off * elem + copied
             copy_bytes(buffer.bytes[at..at + chunk], stage.bytes[..chunk])
             copied += chunk
+            block_at += 1usize
         }
         ret ok
     }
@@ -1399,7 +1495,8 @@ fn token(q: *Queue) -> (Token, err) {
     ret (Token { owner: state.device.owner, queue: state.index, serial: state.serial }, ok)
 }
 
-fn token_device(token_value: Token) -> (*DeviceState, err) {
+// Resolves a token's issuing queue while keeping its device locked.
+fn token_queue(token_value: Token) -> (*QueueState, err) {
     locks.mutex_lock(&registry_locks[0usize])
     var found: *DeviceState = zero
     var i = 0usize
@@ -1415,32 +1512,39 @@ fn token_device(token_value: Token) -> (*DeviceState, err) {
     lock_state(found)
     if found.closed {
         unlock_state(found)
-        ret (found, InvalidHandle)
+        ret (zero, InvalidHandle)
     }
     if metal_finish(found) {
         unlock_state(found)
-        ret (found, Lost)
+        ret (zero, Lost)
     }
-    ret (found, ok)
+    if usize(token_value.queue) >= usize(found.queues) {
+        unlock_state(found)
+        ret (zero, InvalidHandle)
+    }
+    let state = found.queue_states[usize(token_value.queue)]
+    if mem.address_of(state) == 0usize || token_value.serial > state.serial {
+        unlock_state(found)
+        ret (zero, InvalidHandle)
+    }
+    ret (state, ok)
 }
 
 fn wait_for(q: *Queue, dependency: Token) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
     defer unlock_state(state.device)
-    if dependency.serial == 0u64 { ret ok }
     if dependency.owner != state.device.owner { ret WrongDevice }
-    let (device, device_error) = token_device(dependency)
-    if device_error != ok { ret device_error }
-    defer unlock_state(device)
+    let (dependency_state, dependency_error) = token_queue(dependency)
+    if dependency_error != ok { ret dependency_error }
+    defer unlock_state(dependency_state.device)
     ret ok
 }
 
 fn done(token_value: Token) -> (bool, err) {
-    if token_value.serial == 0u64 { ret (true, ok) }
-    let (device, device_error) = token_device(token_value)
-    if device_error != ok { ret (false, device_error) }
-    defer unlock_state(device)
+    let (state, state_error) = token_queue(token_value)
+    if state_error != ok { ret (false, state_error) }
+    defer unlock_state(state.device)
     // Every submission on the CPU backend has completed before its launch returned.
     ret (true, ok)
 }
@@ -1641,13 +1745,26 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.device)
     if surface.kind != .Offscreen { ret (zero, Unsupported) }
+    let target_mark = mem.mark(state.device.arena)
     let (states, states_error) = mem.alloc[TargetState](state.device.arena, 1usize)
-    if states_error != ok { ret (zero, states_error) }
-    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquired: false, closed: false }
+    if states_error != ok {
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, states_error)
+    }
+    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, acquired: false, closed: false }
     let images_error = target_images(&states[0usize], width, height)
-    if images_error != ok { ret (zero, images_error) }
+    if images_error != ok {
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, images_error)
+    }
     let (handles, handles_error) = mem.alloc[Target](state.device.arena, 1usize)
-    if handles_error != ok { ret (zero, handles_error) }
+    if handles_error != ok {
+        var handle = Queue { state: mem.cast[*void](state) }
+        let abandoned_front = release_image(&handle, states[0usize].images[0usize])
+        let abandoned_back = release_image(&handle, states[0usize].images[1usize])
+        mem.reset(state.device.arena, target_mark)
+        ret (zero, handles_error)
+    }
     handles[0usize] = Target { state: mem.cast[*void](&states[0usize]) }
     ret (&handles[0usize], ok)
 }
@@ -1664,40 +1781,82 @@ fn resize(t: *Target, width: u32, height: u32) -> err {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret state_error }
     defer unlock_state(state.queue.device)
+    // Build the replacement independently so an invalid extent or allocation
+    // failure cannot invalidate the target's currently acquired frame/images.
+    var replacement: TargetState = zero
+    replacement.queue = state.queue
+    replacement.format = state.format
+    let images_error = target_images(&replacement, width, height)
+    if images_error != ok { ret images_error }
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
+    state.images = replacement.images
+    state.width = replacement.width
+    state.height = replacement.height
     state.acquired = false
-    ret target_images(state, width, height)
+    ret ok
 }
 
 // The back image, to draw the next frame into; one frame in flight, so a second
-// acquire before its present is `InvalidHandle`.
+// acquire before its present or abandonment is `InvalidHandle`.
 fn acquire(t: *Target) -> (Frame, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.queue.device)
     if state.acquired { ret (zero, InvalidHandle) }
+    state.acquire_id += 1u64
     state.acquired = true
-    ret (Frame { image: state.images[1usize - state.front], serial: state.serial }, ok)
+    ret (Frame { image: state.images[1usize - state.front], serial: state.serial, acquire_id: state.acquire_id }, ok)
+}
+
+fn frame_matches(state: *TargetState, frame: Frame) -> bool {
+    let expected = state.images[1usize - state.front]
+    ret state.acquired && frame.serial == state.serial && frame.acquire_id == state.acquire_id && frame.image.data.owner == expected.data.owner && frame.image.data.slot == expected.data.slot && frame.image.data.generation == expected.data.generation
+}
+
+// Retires a valid frame without changing the last presented image or serial.
+fn abandon(t: *Target, frame: Frame) -> err {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret state_error }
+    defer unlock_state(state.queue.device)
+    if !frame_matches(state, frame) { ret InvalidHandle }
+    state.acquired = false
+    ret ok
 }
 
 // Orders the present behind every submission on `q`, swaps the images, and answers
-// the token of the work it waited for. A frame that is not the acquired one is stale.
+// the token of the work it waited for. A rejected valid frame is retired; an invalid
+// or stale frame cannot retire the current acquisition.
 fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.queue.device)
+    if !frame_matches(state, frame) { ret (zero, InvalidHandle) }
     let raw_presenter = mem.cast[*QueueState](q.state)
-    if mem.address_of(raw_presenter) == 0usize { ret (zero, InvalidHandle) }
-    if mem.address_of(raw_presenter.device) != mem.address_of(state.queue.device) { ret (zero, WrongDevice) }
+    if mem.address_of(raw_presenter) == 0usize {
+        state.acquired = false
+        ret (zero, InvalidHandle)
+    }
+    if mem.address_of(raw_presenter.device) != mem.address_of(state.queue.device) {
+        state.acquired = false
+        ret (zero, WrongDevice)
+    }
     let (presenter, presenter_error) = queue_state(q)
-    if presenter_error != ok { ret (zero, presenter_error) }
+    if presenter_error != ok {
+        state.acquired = false
+        ret (zero, presenter_error)
+    }
     defer unlock_state(presenter.device)
-    if presenter.device.owner != state.queue.device.owner { ret (zero, WrongDevice) }
-    if !state.acquired || frame.serial != state.serial { ret (zero, InvalidHandle) }
+    if presenter.device.owner != state.queue.device.owner {
+        state.acquired = false
+        ret (zero, WrongDevice)
+    }
     let sync_error = sync(q)
-    if sync_error != ok { ret (zero, sync_error) }
+    if sync_error != ok {
+        state.acquired = false
+        ret (zero, sync_error)
+    }
     state.front = 1usize - state.front
     state.serial += 1u64
     state.acquired = false
@@ -1735,8 +1894,10 @@ const FAULTED: usize = 4294967294usize
 // rounded up; zero invocations is zero workgroups.
 fn groups_along(invocations: usize, size: usize) -> (usize, err) {
     if invocations > MAX_AXIS { ret (0usize, TooLarge) }
+    if size == 0usize { ret (0usize, TooLarge) }
     if invocations == 0usize { ret (0usize, ok) }
-    let groups = (invocations + size - 1usize) / size
+    var groups = invocations / size
+    if invocations % size != 0usize { groups += 1usize }
     if groups > 65535usize { ret (0usize, TooLarge) }
     ret (groups, ok)
 }
@@ -1752,7 +1913,7 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
     // A Vulkan buffer crosses as its device address (D1611).
     if state.device.backend == .Vulkan { ret (usize(buffer.device.address), buffer.count, ok) }
     // A Metal buffer crosses as its offset in the heap (D5838).
-    if state.device.backend == .Metal { ret (buffer.heap_index * 72057594037927936usize + buffer.heap_offset, buffer.count, ok) }
+    if heap_backend(state.device.backend) { ret (buffer.heap_index * 72057594037927936usize + buffer.heap_offset, buffer.count, ok) }
     if buffer.count == 0usize { ret (0usize, 0usize, ok) }
     ret (mem.address_of(&buffer.bytes[0usize]), buffer.count, ok)
 }
@@ -1788,7 +1949,23 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
         compiler_identity = compiler_identity * 16u64 + u64(digit)
         identity_at += 1usize
     }
-    let module_code = module[module_at + 17usize..]
+    // (D5888) A build under `--gpu glsl` puts `;` and the kernels' GLSL after the module; that text is a GL device's.
+    var module_code = module[module_at + 17usize..]
+    var glsl_code = module_code[module_code.len..]
+    var split = 0usize
+    while split < module_code.len {
+        if module_code[split] == 59u8 {
+            glsl_code = module_code[split + 1usize..]
+            module_code = module_code[0usize..split]
+            break
+        }
+        split += 1usize
+    }
+    if device.backend == .Gl {
+        if glsl_code.len == 0usize { ret Unsupported }
+        ret launch_metal(state, gx, gy, gz, x, y, z, shared_bytes, ctx, glsl_code, entry, layout, checked)
+    }
+    if module_code.len == 0usize { ret Unsupported }
     if device.backend == .Metal { ret launch_metal(state, gx, gy, gz, x, y, z, shared_bytes, ctx, module_code, entry, layout, checked) }
     let parameter_count = layout.len
     var over: mem.Arena = zero
@@ -1880,6 +2057,32 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     ret ok
 }
 
+// A workgroup must have at least one thread, and each intermediate product must
+// stay below the device limit before it is multiplied.
+fn workgroup_fits(x: usize, y: usize, z: usize, max_threads: usize) -> bool {
+    if x == 0usize || y == 0usize || z == 0usize { ret false }
+    if x > max_threads / y { ret false }
+    let xy = x * y
+    if xy > max_threads / z { ret false }
+    ret true
+}
+
+// These boundary checks are host-only: they cover the arithmetic without a GPU
+// loader or a Metal-capable machine.
+@test
+fn workgroup_dimensions_do_not_wrap(a: *mem.Arena) -> err {
+    if !workgroup_fits(4usize, 8usize, 8usize, 256usize) { ret TooLarge }
+    if workgroup_fits(0usize, 1usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(257usize, 1usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(9223372036854775808usize, 2usize, 1usize, 256usize) { ret TooLarge }
+    if workgroup_fits(1usize, 9223372036854775808usize, 2usize, 256usize) { ret TooLarge }
+    let (zero_groups, zero_error) = groups_along(1usize, 0usize)
+    if zero_error != TooLarge || zero_groups != 0usize { ret TooLarge }
+    let (huge_groups, huge_error) = groups_along(MAX_AXIS, 18446744073709551615usize)
+    if huge_error != ok || huge_groups != 1usize { ret TooLarge }
+    ret ok
+}
+
 // A launch on a Metal device (D5838): the same argument block as a Vulkan launch, in a buffer of its own, over the device's
 // heap, whose first 32 bytes are the checked build's fault block. The embedded text is MSL, as hex.
 fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y: usize, z: usize, shared_bytes: usize, ctx: *void, module_code: str, entry: str, layout: str, checked: bool) -> err {
@@ -1897,7 +2100,8 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     over.cap = 16usize * parameter_count
     over.off = 16usize * parameter_count
     let source = mem.view(&over, 0usize, 16usize * parameter_count)
-    let (block, block_error) = mtl.buffer(device.metal, 16usize * parameter_count + 24usize)
+    let driver = driver_of(device.backend)
+    let (block, block_error) = driver.buffer(device.metal, 16usize * parameter_count + 24usize)
     if block_error != ok { ret OutOfMemory }
     var offset = 0usize
     if checked {
@@ -1913,7 +2117,7 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     var at = 0usize
     while at < layout.len {
         if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
-            mtl.free(block)
+            driver.free(block)
             ret Unsupported
         }
         let code = usize(layout[at]) - 48usize
@@ -1931,11 +2135,11 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     }
     let (pipeline, pipeline_error) = metal_pipeline(device, module_code, entry)
     if pipeline_error != ok {
-        mtl.free(block)
+        driver.free(block)
         ret pipeline_error
     }
-    if x * y * z > pipeline.max_threads {
-        mtl.free(block)
+    if !workgroup_fits(x, y, z, pipeline.max_threads) {
+        driver.free(block)
         ret TooLarge
     }
     // Buffer 0 is the argument block, 1 to 4 the heaps; a heap not made yet is heap 0 again, which no address names.
@@ -1949,9 +2153,9 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
     }
     // The launch is committed and not waited for (D5875): the host's next call into this device finishes it (`metal_finish`), so
     // the CPU can work while the GPU runs. The argument block lives until then.
-    let (command, begin_error) = mtl.dispatch_begin(device.metal, pipeline, buffers[0usize..5usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
+    let (command, begin_error) = driver.dispatch_begin(device.metal, pipeline, buffers[0usize..5usize], mtl.Size { width: gx, height: gy, depth: gz }, mtl.Size { width: x, height: y, depth: z }, shared_bytes)
     if begin_error != ok {
-        mtl.free(block)
+        driver.free(block)
         ret Lost
     }
     device.pending_commands[slot] = command
@@ -1966,12 +2170,13 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
 // Waits for the launches `launch_metal` left running, in order, and reads each one's fault block as the Vulkan path reads its
 // buffer; called with the device locked at every entry that could see their effects. True when the device failed one.
 fn metal_finish(device: *DeviceState) -> bool {
-    if device.backend != .Metal || device.pending_count == 0usize { ret false }
+    if !heap_backend(device.backend) || device.pending_count == 0usize { ret false }
+    let driver = driver_of(device.backend)
     var failed = false
     var slot = 0usize
     while slot < device.pending_count {
-        let waited = mtl.dispatch_wait(device.pending_commands[slot])
-        mtl.free(device.pending_blocks[slot])
+        let waited = driver.dispatch_wait(device.pending_commands[slot])
+        driver.free(device.pending_blocks[slot])
         // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
         if waited != ok { failed = true }
         if waited == ok && device.pending_checks[slot] { metal_fault(device, slot) }
@@ -2038,7 +2243,8 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
         if entry[copied] == 46u8 { name_bytes[copied] = 95u8 }
         copied += 1usize
     }
-    let (made, made_error) = mtl.compile(device.metal, text, name_bytes)
+    let driver = driver_of(device.backend)
+    let (made, made_error) = driver.compile(device.metal, text, name_bytes)
     if made_error != ok { ret (none, Unsupported) }
     device.pipeline_modules[device.pipeline_count] = key
     device.pipeline_entries[device.pipeline_count] = entry
@@ -2383,9 +2589,12 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     defer unlock_state(state.device)
     var available = CPU_CAPABILITIES
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
-    if state.device.backend == .Metal { available = METAL_CAPABILITIES }
+    if heap_backend(state.device.backend) {
+        let driver = driver_of(state.device.backend)
+        available = driver.capabilities(state.device.metal)
+    }
     if (requirements & available) != requirements { ret Unsupported }
-    if state.device.backend == .Vulkan || state.device.backend == .Metal { ret launch_device(state, grid, x, y, z, shared_bytes, ctx, module, entry, layout) }
+    if state.device.backend == .Vulkan || heap_backend(state.device.backend) { ret launch_device(state, grid, x, y, z, shared_bytes, ctx, module, entry, layout) }
     // A CPU run under `ftz` sets MXCSR's FTZ and DAZ (D4203), which flush `f64` as well:
     // a kernel that is both `ftz` and `f64` cannot keep section 11's "`f64` is not
     // flushed" there, so it is refused rather than run flushed.
@@ -2393,7 +2602,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     locks.mutex_lock(&cpu_launch_locks[0usize])
     defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     if launch_active { ret Unsupported }
-    if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
+    if !workgroup_fits(x, y, z, 1024usize) { ret Unsupported }
     let (gx, gx_error) = groups_along(grid.x, x)
     if gx_error != ok { ret gx_error }
     let (gy, gy_error) = groups_along(grid.y, y)
@@ -2581,14 +2790,18 @@ fn sort_step(ctx: *void, frame: *u8, workgroup: *u8) {
     mark_done(frame)
 }
 
-const MAX_SORT: usize = 16777216usize
+// A one-dimensional launch has at most 65,535 workgroups of 256 invocations.
+const MAX_LAUNCH_INVOCATIONS: usize = 16776960usize
+// Bitonic sort rounds its input up to a power of two. The next size after this
+// limit is 16,777,216, which would need 65,536 workgroups.
+const MAX_SORT: usize = 8388608usize
 
 // The first `n` keys of `buffer` sorted ascending by a bitonic network: for every
 // stage `k` (2, 4, ..., p) and pass `j` (k/2, ..., 1) one launch of `p` invocations,
 // each one compare-exchange. `p` is `n` rounded up to a power of two; a shorter
 // `n` is sorted through a padded device copy whose tail is `0xFFFFFFFF`, the
 // largest key, and written back over the first `n`. `n` past the buffer's length,
-// or past MAX_SORT (65535 workgroups of 256), is `TooLarge`.
+// or past MAX_SORT (the largest power-of-two launch that fits the grid), is `TooLarge`.
 fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
     let (owner, owner_error) = state_of(device)
     if owner_error != ok { ret owner_error }
@@ -2727,7 +2940,7 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     defer unlock_state(state.device)
     if owner_id != state.device.owner { ret (0usize, WrongDevice) }
     if query.owner != owner_id || key.owner != owner_id || value.owner != owner_id || out.owner != owner_id { ret (0usize, WrongDevice) }
-    if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_SORT { ret (0usize, TooLarge) }
+    if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_LAUNCH_INVOCATIONS { ret (0usize, TooLarge) }
     let total = n * d
     if query.len < total || key.len < total || value.len < total || out.len < total { ret (0usize, TooLarge) }
     let tiles = (n + tile - 1usize) / tile

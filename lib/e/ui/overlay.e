@@ -462,6 +462,13 @@ fn menu_radio_dot(a: *mem.Arena, color: paint.Color, slot: f32) -> (widget.Node,
 // placed only while `open`; a press outside it or Escape fires `dismiss`. The
 // items outlive the frame. The v2 menu of D975 below over plain commands.
 fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = menu_arrow(a, key, t, anchor, label, items, open, dismiss, 0.0 - 1.0)
+    ret (made, made_error)
+}
+
+// A menu whose root Linux panel may have an arrow centred at `arrow_x`; a
+// negative value makes the regular arrowless menu.
+fn menu_arrow(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit, arrow_x: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (commands, commands_error) = mem.alloc[MenuCommand](a, items.len)
     if commands_error != ok { ret (zero, TooLarge) }
@@ -471,7 +478,7 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
         commands[i].enabled = items[i].enabled
         i += 1usize
     }
-    let (made, made_error) = menu_of(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss)
+    let (made, made_error) = menu_at_arrow(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss, .Below, geometry.Point { x: 0.0, y: 4.0 }, 4.0, true, arrow_x)
     ret (made, made_error)
 }
 
@@ -490,16 +497,23 @@ fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // keyed `key + 8192` that is there open or shut (`menu_at_moving` takes another
 // duration and starting scale); closing is at once.
 fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
-    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, t.tokens.durations.medium1, 0.8)
+    let (made, made_error) = menu_at_arrow(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, 0.0 - 1.0)
     ret (made, made_error)
 }
 
-fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32) -> (widget.Node, err) {
+// A menu with a Linux popover arrow whose centre is `arrow_x` from its surface's
+// left. A negative value omits it; only the root panel receives it.
+fn menu_at_arrow(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, arrow_x: f32) -> (widget.Node, err) {
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, rim, allow_submenus, t.tokens.durations.medium1, 0.8, arrow_x)
+    ret (made, made_error)
+}
+
+fn menu_at_moving(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool, in_millis: u32, from: f32, arrow_x: f32) -> (widget.Node, err) {
     var entering = opening_share_over(t, key, open, in_millis)
     // The Linux look (worker l3) shows its menus settled, as the reference crops are.
     if t.tokens.profile == .Linux { entering = 1.0 }
     if !open { ret (widget.box(key + 8192u64, style.defaults(), zero), ok) }
-    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss, arrow_x)
     if panel_error != ok { ret (zero, panel_error) }
     let (scaled, scaled_error) = scaled_in(a, t, panel, entering, from)
     if scaled_error != ok { ret (zero, scaled_error) }
@@ -528,7 +542,7 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
     }
     // (D1428, docs/ux/components/ContextMenu, motion) Pointer menus fade and
     // scale from 95% over `duration-short-4`.
-    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true, t.tokens.durations.short4, 0.95)
+    let (made, made_error) = menu_at_moving(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true, t.tokens.durations.short4, 0.95, 0.0 - 1.0)
     ret (made, made_error)
 }
 
@@ -692,17 +706,6 @@ fn linux_menu_shadow(a: *mem.Arena, key: widget.Key, across: f32, down: f32) -> 
     ret (node, ok)
 }
 
-// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover arrow). A 45 degree triangle 26 wide and 13 high on the
-// surface's top edge whose centre is `linux_arrow_x` from the surface's left (below 0: no arrow), a 1 px rim (the face at 86 %) on its two
-// slanted sides and the face inside; set with `linux_menu_arrow_at` before the menu is built.
-var linux_arrow_x: f32 = zero
-var linux_arrow_on: bool = zero
-
-fn linux_menu_arrow_at(x: f32) {
-    linux_arrow_x = x
-    linux_arrow_on = x >= 0.0
-}
-
 type LinuxArrow = struct { arena: *mem.Arena, x: f32, face: paint.Color, rim: paint.Color }
 
 fn linux_arrow_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
@@ -734,10 +737,13 @@ fn linux_arrow_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&face), brush: paint.Brush { Solid: arrow.face } } })
 }
 
-fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
+// Round 22 (lc): the arrow of a popover opened from a button (GTK's popover
+// arrow). Its centre is `x` from the surface's left; the caller keeps that
+// per-panel so an open submenu cannot inherit the root popover's arrow.
+fn linux_menu_arrow(a: *mem.Arena, across: f32, down: f32, x: f32, face: paint.Color, rim: paint.Color) -> (widget.Node, err) {
     let (arrows, arrows_error) = mem.alloc[LinuxArrow](a, 1usize)
     if arrows_error != ok { ret (zero, TooLarge) }
-    arrows[0usize] = LinuxArrow { arena: a, x: linux_arrow_x, face: face, rim: rim }
+    arrows[0usize] = LinuxArrow { arena: a, x: x, face: face, rim: rim }
     var fill = control.sized_style(across, down)
     fill.position = .Absolute
     var none: []const widget.Node = zero
@@ -1076,7 +1082,7 @@ fn menu_back_row(a: *mem.Arena, key: widget.Key, return_key: widget.Key, t: *con
 // aligned to the parent row; Right opens, Left closes, and hover uses D1004's
 // delay and safe triangle. At touch density the child replaces the parent page,
 // led by a Back row and separator.
-fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit) -> (widget.Node, err) {
+fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit, arrow_x: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var around = control.if_else(touch, 8.0, 4.0)
     let linux = t.tokens.profile == .Linux
@@ -1096,7 +1102,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             if c.submenu.len == 0usize || c.submenu.len > 8usize { ret (zero, TooLarge) }
             let item_key = key + 1u64 + u64(opened)
             let submenu_key = key + 1024u64 + 16u64 * u64(opened)
-            let (page, page_error) = menu_panel(a, submenu_key, t, c.label, c.submenu, &c.submenu_toggle, rim, false, c.label, item_key, &c.submenu_toggle)
+            let (page, page_error) = menu_panel(a, submenu_key, t, c.label, c.submenu, &c.submenu_toggle, rim, false, c.label, item_key, &c.submenu_toggle, 0.0 - 1.0)
             ret (page, page_error)
         }
     }
@@ -1248,7 +1254,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         caption.wrap = .None
         var across: f32 = 108.0
         // the popover of a menu button is 133 wide in the capture whatever its rows ask for
-        if linux_arrow_on { across = 121.0 }
+        if arrow_x >= 0.0 { across = 121.0 }
         var down: f32 = 12.0
         var m = 0usize
         while m < commands.len {
@@ -1285,9 +1291,9 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         layers[0usize] = shadow
         layers[1usize] = column[0usize]
         var layer_count = 2usize
-        if linux_arrow_on {
+        if arrow_x >= 0.0 {
             let face = style.color(t.tokens, .SurfaceBright)
-            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
+            let (pointer, pointer_error) = linux_menu_arrow(a, linux_across, linux_down, arrow_x, face, paint.rgba(face.red * 0.86, face.green * 0.86, face.blue * 0.86, 1.0))
             if pointer_error != ok { ret (zero, pointer_error) }
             layers[2usize] = pointer
             layer_count = 3usize
@@ -1318,10 +1324,20 @@ fn menu_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     if open { states = accessibility.STATE_EXPANDED }
     let (head, head_error) = control.pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, label_node)
     if head_error != ok { ret (zero, head_error) }
+    var arrow_x: f32 = 0.0 - 1.0
+    if t.tokens.profile == .Linux && open {
+        let (label_width, label_width_error) = control.linux_label_width(a, t, caption, label)
+        if label_width_error != ok { ret (zero, label_width_error) }
+        var end = t.tokens.spacing.md
+        if look.padding > 0.0 || look.custom_padding { end = look.padding }
+        var start = end
+        if look.padding_start > 0.0 { start = look.padding_start }
+        arrow_x = start + label_width * 0.5
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
-    let (opened, opened_error) = menu(a, key + 1u64, t, key, label, items, open, toggle)
+    let (opened, opened_error) = menu_arrow(a, key + 1u64, t, key, label, items, open, toggle, arrow_x)
     if opened_error != ok { ret (zero, opened_error) }
     parts[1usize] = opened
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
@@ -3527,9 +3543,20 @@ fn write_two(out: []u8, at: usize, value: i64) -> usize {
     ret at + 2usize
 }
 
+// Four decimal year digits for the picker range; preserve wider or signed years.
+fn write_year(out: []u8, at: usize, value: i64) -> usize {
+    if value < 0i64 || value >= 10000i64 { ret at + control.write_i64(out[at..out.len], value) }
+    if at + 4usize > out.len { ret at }
+    out[at] = u8(48i64 + value / 1000i64 % 10i64)
+    out[at + 1usize] = u8(48i64 + value / 100i64 % 10i64)
+    out[at + 2usize] = u8(48i64 + value / 10i64 % 10i64)
+    out[at + 3usize] = u8(48i64 + value % 10i64)
+    ret at + 4usize
+}
+
 // A date as `YYYY-MM-DD` into `out`; the length.
 fn write_date(out: []u8, d: time.Date) -> usize {
-    let year_len = control.write_i64(out, i64(d.year))
+    let year_len = write_year(out, 0usize, i64(d.year))
     if year_len == 0usize || year_len + 6usize > out.len { ret 0usize }
     out[year_len] = 45u8
     var at = write_two(out, year_len + 1usize, i64(d.month))
@@ -3566,7 +3593,7 @@ fn write_date_in(out: []u8, d: time.Date, language: str) -> usize {
     if out.len < 12usize { ret 0usize }
     let form = date_form(language)
     if form.order == 2u8 {
-        var at = control.write_i64(out, i64(d.year))
+        var at = write_year(out, 0usize, i64(d.year))
         out[at] = form.separator
         at = write_two(out, at + 1usize, i64(d.month))
         out[at] = form.separator
@@ -3585,7 +3612,7 @@ fn write_date_in(out: []u8, d: time.Date, language: str) -> usize {
     }
     out[at] = form.separator
     at += 1usize
-    ret at + control.write_i64(out[at..out.len], i64(d.year))
+    ret write_year(out, at, i64(d.year))
 }
 
 // (D1231) The hint that names the locale's form: "mm/dd/yyyy", "dd.mm.yyyy",
@@ -3724,9 +3751,7 @@ fn week_start_of(language: str) -> usize {
     var at = 0usize
     while at < language.len {
         if (language[at] == 45u8 || language[at] == 95u8) && at + 3usize <= language.len {
-            let a = language[at + 1usize]
-            let b = language[at + 2usize]
-            if a >= 65u8 && a <= 90u8 && b >= 65u8 && b <= 90u8 && (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) {
+            if at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8 {
                 region = language[at + 1usize..at + 3usize]
             }
         }
@@ -3741,15 +3766,36 @@ fn week_start_of(language: str) -> usize {
     }
     var lang_end = 0usize
     while lang_end < language.len && language[lang_end] != 45u8 && language[lang_end] != 95u8 { lang_end += 1usize }
-    let lang = language[0usize..lang_end]
-    if lang.len == 2usize && ((lang[0usize] == 106u8 && lang[1usize] == 97u8) || (lang[0usize] == 107u8 && lang[1usize] == 111u8) || (lang[0usize] == 104u8 && lang[1usize] == 101u8)) { ret 6usize }
+    if lang_end == 2usize && (language_code_is(language, "ja") || language_code_is(language, "ko") || language_code_is(language, "he")) { ret 6usize }
     ret 0usize
 }
 
+fn ascii_lower(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+fn ascii_same(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if ascii_lower(left[at]) != ascii_lower(right[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Whether `language` begins with the two-letter BCP 47 `code`, ignoring ASCII case.
+fn language_code_is(language: str, code: str) -> bool {
+    if language.len < 2usize || code.len != 2usize { ret false }
+    ret ascii_same(language[0usize..2usize], code)
+}
+
 fn week_region_in(list: str, region: str) -> bool {
+    if region.len != 2usize { ret false }
     var at = 0usize
     while at + 2usize <= list.len {
-        if list[at] == region[0usize] && list[at + 1usize] == region[1usize] { ret true }
+        if ascii_same(list[at..at + 2usize], region) { ret true }
         at += 3usize
     }
     ret false
@@ -4553,30 +4599,22 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
 // English in the US or with no region, and en-PH), 1 day-month-year (most), 2
 // year-month-day (ja, zh, ko, hu, lt).
 fn date_order_of(language: str) -> u8 {
-    let code = language_code(language)
-    if code.len == 0usize { ret 0u8 }
-    if mem.eq[u8](code, "ja") || mem.eq[u8](code, "zh") || mem.eq[u8](code, "ko") || mem.eq[u8](code, "hu") || mem.eq[u8](code, "lt") { ret 2u8 }
-    if mem.eq[u8](code, "en") {
+    if language.len == 0usize { ret 0u8 }
+    if language_code_is(language, "ja") || language_code_is(language, "zh") || language_code_is(language, "ko") || language_code_is(language, "hu") || language_code_is(language, "lt") { ret 2u8 }
+    if language_code_is(language, "en") {
         if language.len == 2usize { ret 0u8 }
         if language.len >= 5usize {
             let region = language[3usize..5usize]
-            if mem.eq[u8](region, "US") || mem.eq[u8](region, "PH") { ret 0u8 }
+            if week_region_in("US PH", region) { ret 0u8 }
         }
     }
     ret 1u8
 }
 
-// (D1388) The theme language's two-letter code, lower case ("de" of "de-AT").
-fn language_code(language: str) -> str {
-    if language.len < 2usize { ret "" }
-    ret language[0usize..2usize]
-}
-
 // (D1388, docs/ux/components/DatePicker, locale) A month's name in German,
 // French or Spanish when the theme language is one, else English.
 fn month_name_in(month: i64, language: str) -> str {
-    let code = language_code(language)
-    if control.same_text(code, "de") {
+    if language_code_is(language, "de") {
         if month == 1i64 { ret "Januar" }
         if month == 2i64 { ret "Februar" }
         if month == 3i64 { ret "März" }
@@ -4590,7 +4628,7 @@ fn month_name_in(month: i64, language: str) -> str {
         if month == 11i64 { ret "November" }
         ret "Dezember"
     }
-    if control.same_text(code, "fr") {
+    if language_code_is(language, "fr") {
         if month == 1i64 { ret "janvier" }
         if month == 2i64 { ret "février" }
         if month == 3i64 { ret "mars" }
@@ -4604,7 +4642,7 @@ fn month_name_in(month: i64, language: str) -> str {
         if month == 11i64 { ret "novembre" }
         ret "décembre"
     }
-    if control.same_text(code, "es") {
+    if language_code_is(language, "es") {
         if month == 1i64 { ret "enero" }
         if month == 2i64 { ret "febrero" }
         if month == 3i64 { ret "marzo" }
@@ -4624,8 +4662,7 @@ fn month_name_in(month: i64, language: str) -> str {
 // (D1388) A weekday's column head (Monday 0) in German, French or Spanish when
 // the theme language is one, else English.
 fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
-    let code = language_code(language)
-    if control.same_text(code, "de") {
+    if language_code_is(language, "de") {
         if narrow {
             if day == 0usize { ret "M" }
             if day == 1usize || day == 3usize { ret "D" }
@@ -4641,7 +4678,7 @@ fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
         if day == 5usize { ret "Sa" }
         ret "So"
     }
-    if control.same_text(code, "fr") {
+    if language_code_is(language, "fr") {
         if narrow {
             if day == 0usize { ret "L" }
             if day == 1usize || day == 2usize { ret "M" }
@@ -4658,7 +4695,7 @@ fn weekday_name_in(day: usize, narrow: bool, language: str) -> str {
         if day == 5usize { ret "sa" }
         ret "di"
     }
-    if control.same_text(code, "es") {
+    if language_code_is(language, "es") {
         if narrow {
             if day == 0usize { ret "L" }
             if day == 1usize || day == 2usize { ret "M" }
@@ -4758,9 +4795,10 @@ fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     ret (made, made_error)
 }
 
-// (D1257) A typed date's Enter: the text as last built, parsed in the theme's
-// language against `today`, reaching `picked` when it reads as a date.
-type DateCommit = struct { text: str, language: str, today: time.Date, picked: widget.Change[time.Date] }
+// (D1257, D1395) A typed date's Enter: the text as last built, parsed in the
+// theme's language against `today`, reaching `picked` only when it reads as a
+// date within the optional bounds.
+type DateCommit = struct { text: str, language: str, today: time.Date, earliest: time.Date, latest: time.Date, picked: widget.Change[time.Date] }
 
 // (D1366) Whether an element held the focus at the last build, kept on it.
 type FocusMemo = struct { held: bool }
@@ -4782,6 +4820,8 @@ fn date_commit_fire(ctx: *void) -> err {
     let c = mem.cast[*DateCommit](ctx)
     let (day, read) = parse_date(c.text, c.language, c.today)
     if !read { ret ok }
+    if c.earliest.year != 0i32 && date_before(day, c.earliest) { ret ok }
+    if c.latest.year != 0i32 && date_before(c.latest, day) { ret ok }
     ret widget.fire_change[time.Date](c.picked, day)
 }
 
@@ -4846,7 +4886,7 @@ fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     let hint = date_format_hint(t.language)
     let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
     if commits_error != ok { ret (zero, TooLarge) }
-    commits[0usize] = DateCommit { text: text, language: t.language, today: today, picked: picked }
+    commits[0usize] = DateCommit { text: text, language: t.language, today: today, earliest: earliest, latest: latest, picked: picked }
     var options = control.field_options()
     options.width = width
     options.invalid = wrong || outside
@@ -5416,7 +5456,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     if footer.typing {
         let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
         if commits_error != ok { ret (zero, TooLarge) }
-        commits[0usize] = DateCommit { text: footer.buffer[0usize..footer.len], language: t.language, today: footer.today, picked: pick }
+        commits[0usize] = DateCommit { text: footer.buffer[0usize..footer.len], language: t.language, today: footer.today, earliest: zero, latest: zero, picked: pick }
         committing = widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }
     }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: committing, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
@@ -6968,9 +7008,7 @@ fn uses_12_hour(language: str) -> bool {
     var at = 0usize
     while at + 3usize <= language.len {
         if language[at] == 45u8 || language[at] == 95u8 {
-            let a = language[at + 1usize]
-            let b = language[at + 2usize]
-            if (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) && week_region_in(twelve, language[at + 1usize..at + 3usize]) && a >= 65u8 && b >= 65u8 { ret true }
+            if (at + 3usize == language.len || language[at + 3usize] == 45u8 || language[at + 3usize] == 95u8) && week_region_in(twelve, language[at + 1usize..at + 3usize]) { ret true }
         }
         at += 1usize
     }
@@ -7130,6 +7168,15 @@ fn clock_digits(text: str) -> i64 {
     ret n
 }
 
+// The complete spelling of a typed duration unit, in seconds. Keeping this
+// table exact prevents a typo such as `minutely` from silently becoming minutes.
+fn duration_unit(text: str) -> i64 {
+    if clock_word(text, "h") || clock_word(text, "hr") || clock_word(text, "hrs") || clock_word(text, "hour") || clock_word(text, "hours") { ret 3600i64 }
+    if clock_word(text, "m") || clock_word(text, "min") || clock_word(text, "mins") || clock_word(text, "minute") || clock_word(text, "minutes") { ret 60i64 }
+    if clock_word(text, "s") || clock_word(text, "sec") || clock_word(text, "secs") || clock_word(text, "second") || clock_word(text, "seconds") { ret 1i64 }
+    ret 0i64
+}
+
 fn write_clock(out: []u8, value: time.Time) -> usize {
     if out.len < 5usize { ret 0usize }
     let at = write_two(out, 0usize, i64(value.hour))
@@ -7185,15 +7232,18 @@ fn read_duration(text: str) -> (time.Duration, bool) {
         var acc = 0i64
         var part = 0i64
         var digits = 0usize
+        var field = 0usize
         i = 0usize
         while i <= text.len {
             var c = 58u8
             if i < text.len { c = text[i] }
             if c == 58u8 {
                 if digits == 0usize || digits > 6usize { ret (zero, false) }
+                if field > 0usize && part > 59i64 { ret (zero, false) }
                 acc = acc * 60i64 + part
                 part = 0i64
                 digits = 0usize
+                field += 1usize
             } else {
                 if is_digit(c) {
                     part = part * 10i64 + i64(c - 48u8)
@@ -7240,14 +7290,11 @@ fn read_duration(text: str) -> (time.Duration, bool) {
         if !seen { ret (zero, false) }
         while i < text.len && text[i] == 32u8 { i += 1usize }
         var unit = 0i64
-        if i < text.len {
-            let u = text[i] | 32u8
-            if u == 104u8 { unit = 3600i64 }
-            if u == 109u8 { unit = 60i64 }
-            if u == 115u8 { unit = 1i64 }
-            if unit != 0i64 {
-                while i < text.len && (text[i] | 32u8) >= 97u8 && (text[i] | 32u8) <= 122u8 { i += 1usize }
-            }
+        let unit_from = i
+        while i < text.len && clock_letter(text[i]) { i += 1usize }
+        if i > unit_from {
+            unit = duration_unit(text[unit_from..i])
+            if unit == 0i64 { ret (zero, false) }
         }
         if unit == 0i64 {
             if last == 0i64 { unit = 60i64 }
@@ -8600,13 +8647,25 @@ fn windows_dialog_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     // the button row
     let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
     if row_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var i = 0usize
     while i < buttons.len {
         var options = control.button_options()
         options.variant = .Filled
-        if buttons[i].kind == .Default { options.variant = .Default }
-        if busy && buttons[i].kind != .Default { options.enabled = false }
-        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, buttons[i].label, &buttons[i].action, options)
+        if buttons[i].kind == .Default {
+            options.variant = .Default
+            options.loading = busy
+        }
+        if busy { options.enabled = false }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, buttons[i].label, action, options)
         if pressed_error != ok { ret (zero, pressed_error) }
         row[i] = pressed
         i += 1usize
@@ -8763,19 +8822,26 @@ fn cupertino_menu_row(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.K
 // hairline, then the buttons 44 tall -- two sit side by side, more stack -- in the accent (the default one semibold,
 // a destructive one red), pressed they take a grey fill. The card is a flat, near-opaque face (iOS blurs what is
 // behind it).
-fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton, busy: bool) -> (widget.Node, err) {
     let dark = t.tokens.palette == .Dark
     let sideways = buttons.len == 2usize
     var each: f32 = 270.0
     if sideways { each = 135.0 }
     let (cells, cells_error) = mem.alloc[widget.Node](a, buttons.len * 2usize)
     if cells_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var used = 0usize
     let rule_ink = style.cupertino_separator(t.tokens)
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        let state = control.control_state(t, button_key, true, false)
+        let state = control.control_state(t, button_key, !busy, false)
         var look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
         look.background = control.with_alpha(style.color(t.tokens, .Text), 0.0)
         if state.hovered && !state.pressed { look.background = style.cup_fill(t.tokens, 0.8) }
@@ -8796,7 +8862,11 @@ fn cupertino_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if one_error != ok { ret (zero, TooLarge) }
         one[0usize] = word
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 44.0), one[0usize..1usize])
-        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        var sem_states = 0u32
+        if busy && buttons[i].kind == .Default { sem_states = accessibility.STATE_BUSY }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, !busy, false, sem_states, 0u32, 0u64, action, content)
         if pressed_error != ok { ret (zero, pressed_error) }
         cells[used] = pressed
         used += 1usize
@@ -8866,7 +8936,7 @@ fn dialog_cupertino(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         i += 1usize
     }
     if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
-    let (card, card_error) = cupertino_alert_card(a, key, t, title, content, buttons)
+    let (card, card_error) = cupertino_alert_card(a, key, t, title, content, buttons, busy)
     if card_error != ok { ret (zero, card_error) }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -8916,7 +8986,7 @@ fn linux_scrim_share(t: *const control.Theme) -> f32 {
     ret wanted / t.tokens.states.scrim
 }
 
-fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton) -> (widget.Node, err) {
+fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: widget.Node, buttons: []const DialogButton, busy: bool) -> (widget.Node, err) {
     let width: f32 = 300.0
     let ink = style.color(t.tokens, .OnSurface)
     var heading = control.text_options()
@@ -8952,11 +9022,18 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     rule.background = paint.Brush { Solid: rule_ink }
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * buttons.len)
     if cells_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var used = 0usize
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        let state = control.control_state(t, button_key, true, false)
+        let state = control.control_state(t, button_key, !busy, false)
         var look = style.adwaita_resolve(t.tokens, .Plain, state)
         look.radius = 0.0
         look.min_height = 43.0
@@ -8981,7 +9058,11 @@ fn linux_alert_card(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
         if i == 0usize { shove_left = 1.0 } else { shove_right = 2.0 }
         let held = widget.padded(0u64, shove_left, 0.0, shove_right, 2.0, style.defaults(), one_of_node(a, word))
         let content = widget.aligned(0u64, .Center, .Center, control.sized_style(each, 43.0), one_of_node(a, held))
-        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, buttons[i].label, look, true, false, &buttons[i].action, content)
+        var sem_states = 0u32
+        if busy && buttons[i].kind == .Default { sem_states = accessibility.STATE_BUSY }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, !busy, false, sem_states, 0u32, 0u64, action, content)
         if pressed_error != ok { ret (zero, pressed_error) }
         cells[used] = pressed
         used += 1usize
@@ -9040,7 +9121,7 @@ fn dialog_linux(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         i += 1usize
     }
     if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
-    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons)
+    let (card, card_error) = linux_alert_card(a, key, t, title, content, buttons, busy)
     if card_error != ok { ret (zero, card_error) }
     var none: []const widget.Shortcut = zero
     let scoped = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), one_of_node(a, card))

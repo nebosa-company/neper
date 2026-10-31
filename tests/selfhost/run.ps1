@@ -812,6 +812,11 @@ $mathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mathWritten -ne 'executable written') { throw 'e.math emission failed' }
 & $mathPath
 if ($LASTEXITCODE -ne 0) { throw "an e.math answer is wrong: exit $LASTEXITCODE" }
+# f16 and bf16 use the same bit helpers as f32/f64.  This is a NIR check rather than a
+# runtime fixture because the host narrow-float backend is covered independently by
+# narrow_float; it pins the generic lowering that used to reject these instances.
+$mathNarrow = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\link\math_narrow\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $mathNarrow -ne 'module nir ok') { throw 'narrow e.math generic lowering failed' }
 # `exp`, `exp2`, `log`, `log2` and `log10` against mpmath at 200 bits: within 1 ULP of the correctly rounded answer at every input, the reductions and the subnormal results included.
 $mathExpLogPath = Join-Path $testBuild 'math-exp-log-selfhost.exe'
 $mathExpLogWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_exp_log\src\main.e') $repo 'x64' 'windows' $mathExpLogPath
@@ -844,6 +849,32 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
+# call reach its explicit contract trap, while an equal-lane conversion remains valid.
+foreach ($simdConvertBuild in @(@('debug', @()), @('release', @('--release')))) {
+    $simdConvertPath = Join-Path $testBuild "simd-convert-lanes-$($simdConvertBuild[0]).exe"
+    $simdConvertWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_convert_lanes\src\main.e') $repo 'x64' 'windows' $simdConvertPath @($simdConvertBuild[1])
+    if ($LASTEXITCODE -ne 0 -or $simdConvertWritten -ne 'executable written') { throw "simd_convert_lanes emission failed ($($simdConvertBuild[0]))" }
+    foreach ($simdConvertCase in @('expand', 'narrow')) {
+        $simdConvertOutput = & $simdConvertPath $simdConvertCase 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($simdConvertOutput -join "`n") -notmatch 'trap\[unreachable\]: simd\.convert requires equal lane counts') { throw "the SIMD conversion $simdConvertCase case did not reject unequal lanes ($($simdConvertBuild[0])): exit $LASTEXITCODE, $($simdConvertOutput -join "`n")" }
+    }
+    & $simdConvertPath same 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "an equal-lane SIMD conversion failed ($($simdConvertBuild[0])): exit $LASTEXITCODE" }
+}
+# Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
+# check in both build modes. A disabled lane at that same offset is deliberately quiet.
+foreach ($simdMaskedBuild in @(@('debug', @()), @('release', @('--release')))) {
+    $simdMaskedPath = Join-Path $testBuild "simd-masked-bounds-$($simdMaskedBuild[0]).exe"
+    $simdMaskedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_masked_bounds\src\main.e') $repo 'x64' 'windows' $simdMaskedPath @($simdMaskedBuild[1])
+    if ($LASTEXITCODE -ne 0 -or $simdMaskedWritten -ne 'executable written') { throw "simd_masked_bounds emission failed ($($simdMaskedBuild[0]))" }
+    foreach ($simdMaskedCase in @('load', 'store')) {
+        $simdMaskedOutput = & $simdMaskedPath $simdMaskedCase 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($simdMaskedOutput -join "`n") -notmatch 'trap\[bounds\]') { throw "the masked SIMD $simdMaskedCase case did not trap ($($simdMaskedBuild[0])): exit $LASTEXITCODE, $($simdMaskedOutput -join "`n")" }
+    }
+    $simdMaskedQuiet = & $simdMaskedPath quiet 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($simdMaskedQuiet -join "`n") -ne '') { throw "a disabled masked SIMD lane trapped ($($simdMaskedBuild[0])): exit $LASTEXITCODE, $($simdMaskedQuiet -join "`n")" }
+}
 # The same fixture under `--cpu x64-v3` (D765): every thirty-two-byte vector is one
 # AVX2 instruction over a ymm register, the VEX forms of the same selection, in debug
 # and in release; the suite's hosts have AVX2. The manifest names the level.
@@ -1299,6 +1330,12 @@ $fmtXlsxBookWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookWritten -ne 'executable written') { throw 'fmt_xlsx_book emission failed' }
 & $fmtXlsxBookPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book check failed: exit $LASTEXITCODE" }
+# `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
+$fmtXlsxBookUtf8Path = Join-Path $testBuild 'fmt-xlsx-book-utf8-selfhost.exe'
+$fmtXlsxBookUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx_book_utf8\src\main.e') $repo 'x64' 'windows' $fmtXlsxBookUtf8Path
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookUtf8Written -ne 'executable written') { throw 'fmt_xlsx_book_utf8 emission failed' }
+& $fmtXlsxBookUtf8Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book_utf8 check failed: exit $LASTEXITCODE" }
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 $fmtOoxmlPath = Join-Path $testBuild 'fmt-ooxml-selfhost.exe'
 $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ooxml\src\main.e') $repo 'x64' 'windows' $fmtOoxmlPath
@@ -1461,6 +1498,12 @@ $netcookieWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $netcookieWritten -ne 'executable written') { throw 'net_cookie emission failed' }
 & $netcookiePath
 if ($LASTEXITCODE -ne 0) { throw "a net_cookie check failed: exit $LASTEXITCODE" }
+# `e.net.fetch`: caller credentials are filtered case-insensitively on cross-origin redirects (issue #1103).
+$netFetchPath = Join-Path $testBuild 'net-fetch-selfhost.exe'
+$netFetchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_fetch\src\main.e') $repo 'x64' 'windows' $netFetchPath
+if ($LASTEXITCODE -ne 0 -or $netFetchWritten -ne 'executable written') { throw 'net_fetch emission failed' }
+& $netFetchPath
+if ($LASTEXITCODE -ne 0) { throw "a net_fetch check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
@@ -1653,6 +1696,12 @@ $fmtGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $fmtGraphWritten -ne 'executable written') { throw 'fmt_graph emission failed' }
 & $fmtGraphPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_graph check failed: exit $LASTEXITCODE" }
+# `e.async.init`: a failed poller setup returns the caller's tiny arena to its entry mark.
+$asyncInitPath = Join-Path $testBuild 'async-init-selfhost.exe'
+$asyncInitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async_init\src\main.e') $repo 'x64' 'windows' $asyncInitPath
+if ($LASTEXITCODE -ne 0 -or $asyncInitWritten -ne 'executable written') { throw 'async_init emission failed' }
+& $asyncInitPath
+if ($LASTEXITCODE -ne 0) { throw "a async_init check failed: exit $LASTEXITCODE" }
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 $asyncPath = Join-Path $testBuild 'async-selfhost.exe'
 $asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async\src\main.e') $repo 'x64' 'windows' $asyncPath
@@ -3667,6 +3716,132 @@ $sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
 & $sqlitePath
 if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
+# `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
+# table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
+& python (Join-Path $repo 'scripts\gen_khronos_gl.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'lib/x/khronos is not what scripts/gen_khronos_gl.py generates' }
+$khronosLoadPath = Join-Path $testBuild 'x-khronos-gl-load-selfhost.exe'
+$khronosLoadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_load\src\main.e') $repo 'x64' 'windows' $khronosLoadPath
+if ($LASTEXITCODE -ne 0 -or $khronosLoadWritten -ne 'executable written') { throw 'x.khronos.gl loader fixture emission failed' }
+& $khronosLoadPath
+if ($LASTEXITCODE -ne 0) { throw "the GL loader answered wrongly: exit $LASTEXITCODE" }
+# The EGL mock fixture checks pbuffer config compatibility and shared display lifetime without a driver.
+$khronosEglMockPath = Join-Path $testBuild 'x-khronos-egl-context-mock-selfhost.exe'
+$khronosEglMockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_egl_context_mock\src\main.e') $repo 'x64' 'windows' $khronosEglMockPath
+if ($LASTEXITCODE -ne 0 -or $khronosEglMockWritten -ne 'executable written') { throw 'x_khronos_egl_context_mock emission failed' }
+& $khronosEglMockPath
+if ($LASTEXITCODE -ne 0) { throw "the EGL mock regressions answered wrongly: exit $LASTEXITCODE" }
+# Partial EGL/WGL construction unwinds display, context, surface, HDC and hidden-window state through injected releasers.
+$khronosCleanupPath = Join-Path $testBuild 'x-khronos-context-cleanup-selfhost.exe'
+$khronosCleanupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_context_cleanup\src\main.e') $repo 'x64' 'windows' $khronosCleanupPath
+if ($LASTEXITCODE -ne 0 -or $khronosCleanupWritten -ne 'executable written') { throw 'x_khronos_context_cleanup emission failed' }
+& $khronosCleanupPath
+if ($LASTEXITCODE -ne 0) { throw "partial GL context cleanup answered wrongly: exit $LASTEXITCODE" }
+# `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 through WGL and GLES 3.0/3.1 through
+# ANGLE's libEGL.dll when one is on PATH, drawn, read back and computed on; then a context on an
+# os window, cleared, scissored, read back and swapped; then examples/gl_triangle for 3 frames.
+# A host without the interface prints what it skipped.
+$khronosHeadlessPath = Join-Path $testBuild 'x-khronos-gl-headless-selfhost.exe'
+$khronosHeadlessWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_headless\src\main.e') $repo 'x64' 'windows' $khronosHeadlessPath
+if ($LASTEXITCODE -ne 0 -or $khronosHeadlessWritten -ne 'executable written') { throw 'x_khronos_gl_headless emission failed' }
+& $khronosHeadlessPath
+if ($LASTEXITCODE -ne 0) { throw "a headless GL context answered wrongly: exit $LASTEXITCODE" }
+$khronosWindowPath = Join-Path $testBuild 'x-khronos-gl-window-selfhost.exe'
+$khronosWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_window\src\main.e') $repo 'x64' 'windows' $khronosWindowPath
+if ($LASTEXITCODE -ne 0 -or $khronosWindowWritten -ne 'executable written') { throw 'x_khronos_gl_window emission failed' }
+& $khronosWindowPath
+if ($LASTEXITCODE -ne 0) { throw "a window's GL context answered wrongly: exit $LASTEXITCODE" }
+# (D5899) Twelve resizes from outside, each frame drawn and read back at its new size.
+$khronosResizePath = Join-Path $testBuild 'x-khronos-gl-resize-selfhost.exe'
+$khronosResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_resize\src\main.e') $repo 'x64' 'windows' $khronosResizePath
+if ($LASTEXITCODE -ne 0 -or $khronosResizeWritten -ne 'executable written') { throw 'x_khronos_gl_resize emission failed' }
+& $khronosResizePath
+if ($LASTEXITCODE -ne 0) { throw "a resized window's GL frame was stale: exit $LASTEXITCODE" }
+# (D5911) WM_DPICHANGED: the window takes the suggested rectangle and GL draws at the new size.
+$khronosDpiPath = Join-Path $testBuild 'x-khronos-gl-dpi-selfhost.exe'
+$khronosDpiWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_dpi\src\main.e') $repo 'x64' 'windows' $khronosDpiPath
+if ($LASTEXITCODE -ne 0 -or $khronosDpiWritten -ne 'executable written') { throw 'x_khronos_gl_dpi emission failed' }
+& $khronosDpiPath
+if ($LASTEXITCODE -ne 0) { throw "a window did not follow WM_DPICHANGED: exit $LASTEXITCODE" }
+# `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
+# back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
+$khronosPresentPath = Join-Path $testBuild 'x-khronos-gl-present-selfhost.exe'
+$khronosPresentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_present\src\main.e') $repo 'x64' 'windows' $khronosPresentPath
+if ($LASTEXITCODE -ne 0 -or $khronosPresentWritten -ne 'executable written') { throw 'x_khronos_gl_present emission failed' }
+& $khronosPresentPath
+if ($LASTEXITCODE -ne 0) { throw "the GL presenter answered wrongly: exit $LASTEXITCODE" }
+# e.gpu's `.Gl` backend (D5888, D5889): built with `--gpu glsl`, x.khronos.compute installed, and every word of saxpy (ftz
+# where the driver flushes denormals), racing u8/i16 stores, signed division by negatives and a 2-D grid equal to the CPU
+# backend's; a checked overrun comes back as a Bounds fault.
+$gpuGlPath = Join-Path $testBuild 'gpu-gl-selfhost.exe'
+$gpuGlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl\src\main.e') $repo 'x64' 'windows' $gpuGlPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlWritten -ne 'executable written') { throw 'gpu_gl emission failed' }
+& $gpuGlPath
+if ($LASTEXITCODE -ne 0) { throw "e.gpu on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5908) A shared library is written for Linux and Android (run.sh loads it into a C host; Windows cannot load it).
+foreach ($sharedTarget in @(@('x64', 'linux'), @('aarch64', 'android'))) {
+    $sharedPath = Join-Path $testBuild "libshared-library-$($sharedTarget[0])-$($sharedTarget[1]).so"
+    $sharedWritten = & $compiler emit-shared-library (Join-Path $PSScriptRoot 'fixtures\link\shared_library\src\main.e') $repo $sharedTarget[0] $sharedTarget[1] $sharedPath
+    if ($LASTEXITCODE -ne 0 -or $sharedWritten -ne 'executable written') { throw "shared_library emission failed ($($sharedTarget -join ' '))" }
+}
+# (D5943) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
+$gpuGlExactPath = Join-Path $testBuild 'gpu-gl-exact-selfhost.exe'
+$gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_exact\src\main.e') $repo 'x64' 'windows' $gpuGlExactPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
+& $gpuGlExactPath
+if ($LASTEXITCODE -ne 0) { throw "exact f32 division, square root or fma on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
+$gpuGlSubgroupPath = Join-Path $testBuild 'gpu-gl-subgroup-selfhost.exe'
+$gpuGlSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_subgroup\src\main.e') $repo 'x64' 'windows' $gpuGlSubgroupPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlSubgroupWritten -ne 'executable written') { throw 'gpu_gl_subgroup emission failed' }
+& $gpuGlSubgroupPath
+if ($LASTEXITCODE -ne 0) { throw "a subgroup collective on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
+$gpuGlLimitsPath = Join-Path $testBuild 'gpu-gl-limits-selfhost.exe'
+$gpuGlLimitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_limits\src\main.e') $repo 'x64' 'windows' $gpuGlLimitsPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlLimitsWritten -ne 'executable written') { throw 'gpu_gl_limits emission failed' }
+& $gpuGlLimitsPath
+if ($LASTEXITCODE -ne 0) { throw "an OpenGL device limit answered wrongly: exit $LASTEXITCODE" }
+# (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
+$gpuGlF64Path = Join-Path $testBuild 'gpu-gl-f64-selfhost.exe'
+$gpuGlF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_f64\src\main.e') $repo 'x64' 'windows' $gpuGlF64Path --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlF64Written -ne 'executable written') { throw 'gpu_gl_f64 emission failed' }
+& $gpuGlF64Path
+if ($LASTEXITCODE -ne 0) { throw "f64 on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
+$gpuGlNarrowPath = Join-Path $testBuild 'gpu-gl-narrow-selfhost.exe'
+$gpuGlNarrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_narrow\src\main.e') $repo 'x64' 'windows' $gpuGlNarrowPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlNarrowWritten -ne 'executable written') { throw 'gpu_gl_narrow emission failed' }
+& $gpuGlNarrowPath
+if ($LASTEXITCODE -ne 0) { throw "f16 or bf16 on OpenGL answered wrongly: exit $LASTEXITCODE" }
+# (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
+$gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
+$gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlThreadsWritten -ne 'executable written') { throw 'gpu_gl_threads emission failed' }
+& $gpuGlThreadsPath
+if ($LASTEXITCODE -ne 0) { throw "the GL device answered wrongly across threads: exit $LASTEXITCODE" }
+# (D5898) A reopened GL device takes its kernel from the program-binary cache.
+$gpuGlCachePath = Join-Path $testBuild 'gpu-gl-cache-selfhost.exe'
+$gpuGlCacheWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_cache\src\main.e') $repo 'x64' 'windows' $gpuGlCachePath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $gpuGlCacheWritten -ne 'executable written') { throw 'gpu_gl_cache emission failed' }
+& $gpuGlCachePath
+if ($LASTEXITCODE -ne 0) { throw "the GL program cache answered wrongly: exit $LASTEXITCODE" }
+# (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
+$saxpyGlslPath = Join-Path $testBuild 'saxpy-glsl-selfhost.exe'
+$saxpyGlslWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyGlslPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $saxpyGlslWritten -ne 'executable written') { throw 'examples/saxpy.e --gpu glsl emission failed' }
+& python (Join-Path $repo 'scripts\dump_glsl.py') $saxpyGlslPath --check (Join-Path $repo 'tests\conformance\glsl\saxpy.glsl')
+if ($LASTEXITCODE -ne 0) { throw 'the saxpy GLSL is not tests/conformance/glsl/saxpy.glsl' }
+$loopGlslPath = Join-Path $testBuild 'loop-glsl-selfhost.exe'
+$loopGlslWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_loop\src\main.e') $repo 'x64' 'windows' $loopGlslPath --gpu glsl
+if ($LASTEXITCODE -ne 0 -or $loopGlslWritten -ne 'executable written') { throw 'gpu_vulkan_loop --gpu glsl emission failed' }
+& python (Join-Path $repo 'scripts\dump_glsl.py') $loopGlslPath --check (Join-Path $repo 'tests\conformance\glsl\loops.glsl')
+if ($LASTEXITCODE -ne 0) { throw 'the loop GLSL is not tests/conformance/glsl/loops.glsl' }
+$glTrianglePath = Join-Path $testBuild 'gl-triangle-selfhost.exe'
+$glTriangleWritten = & $compiler emit-executable (Join-Path $repo 'examples\gl_triangle.e') $repo 'x64' 'windows' $glTrianglePath
+if ($LASTEXITCODE -ne 0 -or $glTriangleWritten -ne 'executable written') { throw 'examples/gl_triangle.e emission failed' }
+& $glTrianglePath --frames 3
+if ($LASTEXITCODE -ne 0) { throw "examples/gl_triangle.e failed: exit $LASTEXITCODE" }
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 $dbUnitsPath = Join-Path $testBuild 'x-db-units-selfhost.exe'
@@ -4868,6 +5043,16 @@ $procSysWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $procSysWritten -ne 'executable written') { throw 'proc_sys emission failed' }
 $procSysOutput = & $procSysPath
 if ($LASTEXITCODE -ne 0 -or $procSysOutput -ne 'proc sys ok') { throw "proc_sys answered wrongly: exit $LASTEXITCODE" }
+# PROCESSENTRY32W uses a 556-byte Win32 layout and a 568-byte 64-bit layout.
+$procEntryLayoutSource = Join-Path $PSScriptRoot 'fixtures\link\proc_sys_windows_layout\src\main.e'
+$procEntryLayoutX86Path = Join-Path $testBuild 'proc-entry-layout-x86.em'
+$procEntryLayoutX86Written = & $compiler emit-em $procEntryLayoutSource $repo 'x86' 'windows' $procEntryLayoutX86Path
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutX86Written -ne 'compiled module written') { throw 'proc_sys_windows_layout x86 compile failed' }
+$procEntryLayoutPath = Join-Path $testBuild 'proc-entry-layout-selfhost.exe'
+$procEntryLayoutWritten = & $compiler emit-executable $procEntryLayoutSource $repo 'x64' 'windows' $procEntryLayoutPath -j 2
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutWritten -ne 'executable written') { throw 'proc_sys_windows_layout x64 emission failed' }
+$procEntryLayoutOutput = & $procEntryLayoutPath
+if ($LASTEXITCODE -ne 0 -or $procEntryLayoutOutput -ne 'proc entry layout ok') { throw "proc_sys_windows_layout answered wrongly: exit $LASTEXITCODE" }
 # e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
 $metricsExportPath = Join-Path $testBuild 'metrics-export-selfhost.exe'
 $metricsExportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\metrics_export\src\main.e') $repo 'x64' 'windows' $metricsExportPath -j 2
@@ -5789,8 +5974,14 @@ $floatSpirv = Join-Path $testBuild 'float.spv'
 $floatSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\float.e') $repo 'spv' 'none' $floatSpirv
 if ($LASTEXITCODE -ne 0 -or $floatSpirvWritten -ne 'spir-v written') { throw 'float SPIR-V emission failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $floatSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\float.spv')).Hash) { throw 'the float SPIR-V module differs from the conformance corpus' }
+# (#1311) f16 and bf16 remain distinct raw u16 formats in SPIR-V. The
+# corpus covers scalar arithmetic, comparisons, casts and vector simd.fma lanes.
+$narrowSpirv = Join-Path $testBuild 'narrow.spv'
+$narrowSpirvWritten = & $compiler emit-executable (Join-Path $repo 'tests\conformance\spirv\narrow.e') $repo 'spv' 'none' $narrowSpirv
+if ($LASTEXITCODE -ne 0 -or $narrowSpirvWritten -ne 'spir-v written') { throw 'narrow-float SPIR-V emission failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $narrowSpirv).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\conformance\spirv\narrow.spv')).Hash) { throw 'the narrow-float SPIR-V module differs from the conformance corpus' }
 $gpuVulkanFloatPath = Join-Path $testBuild 'gpu-vulkan-float-selfhost.exe'
-$gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath
+$gpuVulkanFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_vulkan_float\src\main.e') $repo 'x64' 'windows' $gpuVulkanFloatPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatWritten -ne 'executable written') { throw 'gpu_vulkan_float emission failed' }
 $gpuVulkanFloatOutput = & $gpuVulkanFloatPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanFloatOutput -notmatch '^gpu float (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan float runtime failed: $gpuVulkanFloatOutput" }
@@ -5827,7 +6018,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|
 # leaving the host alone, on the CPU build and on every Vulkan device at the floor.
 $gpuFloatModesPath = Join-Path $testBuild 'gpu-float-modes-selfhost.exe'
 foreach ($floatMode in @('', '--release')) {
-    if ($floatMode -eq '') { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath } else { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath $floatMode }
+    if ($floatMode -eq '') { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath --gpu glsl } else { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath $floatMode --gpu glsl }
     if ($LASTEXITCODE -ne 0 -or $gpuFloatModesWritten -ne 'executable written') { throw "gpu_float_modes emission failed ($floatMode)" }
     $gpuFloatModesOutput = & $gpuFloatModesPath
     if ($LASTEXITCODE -ne 0 -or $gpuFloatModesOutput -notmatch '^gpu float modes ok on cpu( and [0-9]+ devices)?$') { throw "an e.gpu floating-point mode answered wrongly ($floatMode): exit $LASTEXITCODE $gpuFloatModesOutput" }
@@ -6798,6 +6989,14 @@ $floatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $floatWritten -ne 'executable written') { throw 'float executable emission failed' }
 & $floatPath
 if ($LASTEXITCODE -ne 0) { throw 'a float literal, operator, comparison or conversion is wrong' }
+# f16 and bf16 (D5913): widen to f32, operate, round once to nearest-even, in integer
+# instructions; every operation and conversion folds thousands of operands into a hash that
+# scripts/narrow_float_vectors.py computes with numpy and exact rational rounding.
+$narrowPath = Join-Path $testBuild 'narrow-float-selfhost.exe'
+$narrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\narrow_float\src\main.e') $repo 'x64' 'windows' $narrowPath
+if ($LASTEXITCODE -ne 0 -or $narrowWritten -ne 'executable written') { throw 'narrow_float executable emission failed' }
+& $narrowPath
+if ($LASTEXITCODE -ne 0) { throw "an f16 or bf16 operation or conversion is wrong: exit $LASTEXITCODE" }
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty
@@ -8373,6 +8572,15 @@ foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('re
     if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
+# `resource` is permitted only before struct and union bodies (D5921).
+$resourcePrefixFixture = Join-Path $conformanceRoot 'reject\resource_prefix.e'
+$resourcePrefixExpected = Join-Path $conformanceRoot 'reject\resource_prefix.expected.jsonl'
+$resourcePrefixActual = Join-Path $testBuild 'conformance-reject-resource_prefix.jsonl'
+$resourcePrefixStderr = Join-Path $testBuild 'conformance-reject-resource_prefix.stderr'
+cmd /c "`"$compiler`" check-file `"$resourcePrefixFixture`" `"$repo`" x64 windows --json > `"$resourcePrefixActual`" 2> `"$resourcePrefixStderr`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/resource_prefix.e exited $LASTEXITCODE, not 1" }
+if ((Get-Item -LiteralPath $resourcePrefixStderr).Length -ne 0) { throw 'check-file --json on reject/resource_prefix.e wrote to stderr' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $resourcePrefixActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $resourcePrefixExpected).Hash) { throw 'check-file --json on reject/resource_prefix.e differs from the conformance corpus' }
 # D672-D715: alias-aware region/thread identity and deferred-reset timing.
 foreach ($case in @(@('reject', 'regions_pointer_chain', 1), @('reject', 'regions_arena_alias', 1), @('reject', 'safety_thread_context_alias', 1), @('accept', 'regions_deferred_after_alloc', 0), @('reject', 'regions_deferred_escape', 1), @('reject', 'regions_cast', 1), @('accept', 'regions_cast_valid', 0), @('reject', 'regions_freeze_grow', 1), @('reject', 'regions_freeze_forgotten', 1), @('accept', 'pins_last_use', 0), @('reject', 'regions_container_retain', 1), @('accept', 'regions_container_valid', 0), @('reject', 'regions_retained_argument', 1), @('accept', 'regions_retained_argument_valid', 0), @('reject', 'regions_noescape_store', 1), @('reject', 'owning_forgotten', 1), @('reject', 'owning_put_back_ignored', 1), @('reject', 'regions_arena_pointer_copy', 1), @('reject', 'regions_mark_copy', 1), @('reject', 'regions_accessor_alias', 1), @('reject', 'safety_thread_slice_context', 1), @('reject', 'regions_deferred_slice_escape', 1), @('reject', 'regions_deferred_pointer_escape', 1), @('reject', 'regions_deferred_pointer_alias_escape', 1), @('reject', 'regions_deferred_aggregate_escape', 1), @('reject', 'regions_deferred_aggregate_copy_escape', 1), @('reject', 'regions_deferred_aggregate_assignment_escape', 1), @('reject', 'safety_thread_aggregate_field_context', 1), @('reject', 'regions_aggregate_field_mutation', 1), @('reject', 'regions_aggregate_field_accessor', 1), @('reject', 'regions_deferred_nested_aggregate_escape', 1), @('reject', 'regions_deferred_nested_field_assignment_escape', 1), @('reject', 'regions_second_aggregate_field_alias', 1), @('reject', 'regions_deferred_second_aggregate_escape', 1), @('reject', 'regions_deferred_second_aggregate_copy_escape', 1), @('reject', 'regions_deferred_second_field_assignment_escape', 1), @('reject', 'safety_thread_second_aggregate_field_context', 1), @('reject', 'regions_third_aggregate_field_alias', 1), @('reject', 'regions_deferred_third_aggregate_escape', 1), @('reject', 'regions_deferred_third_aggregate_copy_escape', 1), @('reject', 'regions_deferred_third_field_assignment_escape', 1), @('reject', 'safety_thread_third_aggregate_field_context', 1), @('reject', 'regions_nested_second_field_alias', 1), @('reject', 'regions_deferred_nested_second_escape', 1), @('reject', 'regions_deferred_nested_second_copy_escape', 1), @('reject', 'regions_deferred_nested_pointer_assignment_escape', 1), @('reject', 'safety_thread_nested_second_field_context', 1), @('reject', 'regions_array_second_element_alias', 1), @('reject', 'regions_deferred_array_escape', 1), @('reject', 'regions_deferred_array_copy_escape', 1), @('reject', 'regions_deferred_array_element_assignment_escape', 1), @('reject', 'safety_thread_array_element_context', 1), @('reject', 'regions_dynamic_array_element_alias', 1), @('reject', 'regions_deferred_dynamic_array_element_escape', 1), @('reject', 'regions_dynamic_array_element_mutation', 1), @('reject', 'safety_thread_dynamic_array_element_context', 1), @('reject', 'regions_nested_dynamic_array_element_alias', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
@@ -9507,6 +9715,15 @@ cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestUnsafeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_unsafe.x64-windows.expected.jsonl')).Hash) { throw "the unsafe inventory differs from the conformance corpus" }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
+$windowHelpersTest = & $compiler test-file (Join-Path $repo 'lib\e\os\window_helpers.e') $repo 'x64' 'windows' $testBuild --json
+if ($LASTEXITCODE -ne 0 -or ($windowHelpersTest -join "`n") -notmatch '"passed":2,"failed":0') { throw 'portable Cocoa window helper regression tests failed' }
+# The Vulkan constructor fakes its creation/destruction edge, so this rollback check needs
+# neither a loader nor a physical device.
+$vulkanBufferTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu\vulkan.e') $repo 'x64' 'windows' $testBuild --json
+if ($LASTEXITCODE -ne 0 -or ($vulkanBufferTest -join "`n") -notmatch '"passed":2,"failed":0') { throw 'Vulkan buffer rollback regression test failed' }
+# The workgroup-size guard is pure arithmetic, so it runs without a GPU loader.
+$gpuWorkgroupTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu.e') $repo 'x64' 'windows' $testBuild --json
+if ($LASTEXITCODE -ne 0 -or ($gpuWorkgroupTest -join "`n") -notmatch '"passed":1,"failed":0') { throw 'GPU workgroup-size overflow regression test failed' }
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
@@ -11093,7 +11310,7 @@ if ($wasmNode) {
     $wasmRun = Invoke-Wasm $wasmOpsPlain @()
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 0`nthread.id 0`nspawn -1`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0") { throw "the plain module's thread instructions answered: $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmOpsThreads @()
-    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
+    if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "threads 1`nthread.id 0`nspawn null -6`nspawn unaligned -6`nspawn past end -6`npoll valid 0`npoll subscription 21`npoll event 21`npoll taken 21`npoll count 21`nload 7`ncas hit 7`nload 4000000000`ncas miss 4000000000`nload 4000000000`nnotify 0`nwait different 1`nwait timeout 2") { throw "the threaded module's thread instructions answered: $($wasmRun.Output)" }
     # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
     # inotify watch hands events over differently).
     $wasmWatch = Join-Path $wasmBuild 'os_watch_modify.wasm'
@@ -11109,6 +11326,18 @@ if ($wasmNode) {
     if ($wasmRun.Status -ne 0 -or $wasmRun.Output -ne "atomic 8000`nmutex 8000`nids distinct`nmain id 1`na thread started a thread`ndetached`nwait timeout`ndetails per thread`n200 cycles`nmain returns") { throw "wasm_threads answered: exit $($wasmRun.Status) $($wasmRun.Output)" }
     $wasmRun = Invoke-Wasm $wasmThreadsPath @('exit')
     if ($wasmRun.Status -ne 7) { throw "wasm_threads exit answered $($wasmRun.Status), not 7" }
+    # A capped thread host makes a fresh 64 KiB stack's memory.grow fail. The fixture also pins
+    # the near-4 GiB stack bound and checks that the failed growth did not advance a reservation.
+    $wasmFixture = 'wasm_thread_reservation'
+    $wasmReservationPath = Join-Path $wasmBuild "$wasmFixture.threads.wasm"
+    if ((& $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$wasmFixture\src\main.e") $repo 'wasm32' 'wasi' $wasmReservationPath --threads) -ne 'executable written') { throw 'wasm_thread_reservation did not emit as a threaded WebAssembly module' }
+    $hadWasmMaxPages = Test-Path Env:NEPER_WASM_MAX_PAGES
+    $previousWasmMaxPages = $env:NEPER_WASM_MAX_PAGES
+    $env:NEPER_WASM_MAX_PAGES = 'initial'
+    try { $wasmRun = Invoke-Wasm $wasmReservationPath @() } finally {
+        if ($hadWasmMaxPages) { $env:NEPER_WASM_MAX_PAGES = $previousWasmMaxPages } else { Remove-Item Env:NEPER_WASM_MAX_PAGES }
+    }
+    if ($wasmRun.Status -ne 0) { throw "wasm_thread_reservation failed under a capped threaded host: exit $($wasmRun.Status) $($wasmRun.Output)" }
     # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
     # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
     foreach ($wasmFixture in 'os_pipe_threads', 'net_pop3') {
@@ -11171,8 +11400,18 @@ if ($wasmNode) {
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     $wasmFilesPath = Join-Path $wasmBuild 'host_files.wasm'
     if ((& $compiler emit-executable (Join-Path $repo 'tests\wasm\browser\host_files\src\main.e') $repo 'wasm32' 'wasi' $wasmFilesPath) -ne 'executable written') { throw 'host_files did not emit as WebAssembly' }
-    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath) (Join-Path $repo 'tests\wasm\host.mjs')
+    $wasmApi = Invoke-Wasm $wasmFilesPath @($wasmDebugPath, $wasmReleasePath, $wasmThreadsPath, $wasmOpsThreads) (Join-Path $repo 'tests\wasm\host.mjs')
     if ($wasmApi.Status -ne 0) { throw "the lib/wasm/neper-host.js API check failed: $($wasmApi.Output)" }
+    $wasmProcCleanup = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs') @() (Join-Path $repo 'tests\wasm\host_proc_cleanup.mjs')
+    if ($wasmProcCleanup.Status -ne 0) { throw "the WASM process-host cleanup check failed: $($wasmProcCleanup.Output)" }
+    $wasmPreopenSymlink = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs') @() (Join-Path $repo 'tests\wasm\host_preopen_symlink.mjs')
+    if ($wasmPreopenSymlink.Status -ne 0) { throw "the WASM preopen symlink boundary check failed: $($wasmPreopenSymlink.Output)" }
+    $wasmSysDiskPrecision = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_sys_disk_precision.mjs') @() (Join-Path $repo 'tests\wasm\host_sys_disk_precision.mjs')
+    if ($wasmSysDiskPrecision.Status -ne 0) { throw "the WASM sys_disk precision check failed: $($wasmSysDiskPrecision.Output)" }
+    $wasmHostImportRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\host_import_ranges.mjs') @() (Join-Path $repo 'tests\wasm\host_import_ranges.mjs')
+    if ($wasmHostImportRanges.Status -ne 0) { throw "the WASM host-import guest-range check failed: $($wasmHostImportRanges.Output)" }
+    $wasmWindowRanges = Invoke-Wasm (Join-Path $repo 'tests\wasm\window_ranges.mjs') @() (Join-Path $repo 'tests\wasm\window_ranges.mjs')
+    if ($wasmWindowRanges.Status -ne 0) { throw "the WASM window guest-range check failed: $($wasmWindowRanges.Output)" }
     # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     $wasmCounterPath = Join-Path $wasmBuild 'ui_counter.wasm'
     $wasmCounterThreads = Join-Path $wasmBuild 'ui_counter.threads.wasm'
@@ -11335,7 +11574,7 @@ if ($neperosQemu) {
     $fsServerStream = [IO.File]::Create($fsServerDisk); $fsServerStream.SetLength(1MB); $fsServerStream.Close()
     $fsBlk = @('-drive', "file=$fsServerDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
     $fsWriteBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fswrite"') + $fsBlk)
-    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'fs client canonical /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
         if ($fsWriteBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem write boot missing (${fsMark}): $fsWriteBoot" }
     }
     if ($fsWriteBoot -notmatch "fs client list /docs:\s*greeting") { throw "the filesystem server did not list the written file: $fsWriteBoot" }
@@ -11489,6 +11728,17 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
     $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
     if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*io roundtrip ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run the portable surface and buffer round-trip: $ioBoot" }
+    # `window_present` must reject a source shorter than width * height before it reads the source
+    # or signals the compositor. This stand-alone program has neither mapping nor endpoint, so a
+    # successful result proves the guard ran before either side effect.
+    $windowPresentTest = Join-Path $testBuild 'window_present_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\window_present_test.e') $repo aarch64 neperos $windowPresentTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS window_present bounds program did not build' }
+    $windowPresentArchive = Join-Path $testBuild 'window-present-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $windowPresentArchive $windowPresentTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS window_present bounds archive did not assemble' }
+    $windowPresentBoot = Invoke-NeperOS $neperosImage @('-initrd', $windowPresentArchive, '-append', 'shell')
+    if ($windowPresentBoot -notmatch '(?s)window present short frame refused.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS window_present read a short frame: $windowPresentBoot" }
     # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
     # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
     $mapTest = Join-Path $testBuild 'map_test.img'
@@ -11555,6 +11805,34 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # A NeperOS file cursor is bounded by its 512-byte client-side buffer. Negative seeks from
+    # every origin, over-capacity seeks and both signed extremes must fail without moving it.
+    $fsSeekTest = Join-Path $testBuild 'fs_seek_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_seek_test.e') $repo aarch64 neperos $fsSeekTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS seek-bounds program did not build' }
+    $fsSeekArchive = Join-Path $testBuild 'fs-seek-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsSeekArchive $fsServer $fsSeekTest $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS seek-bounds archive did not assemble' }
+    $fsSeekDisk = Join-Path $testBuild 'fs-seek-disk.img'
+    $fsSeekStream = [IO.File]::Create($fsSeekDisk); $fsSeekStream.SetLength(1MB); $fsSeekStream.Close()
+    $fsSeekBlk = @('-drive', "file=$fsSeekDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsSeekBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsSeekArchive, '-append', 'fsserver fswrite') + $fsSeekBlk)
+    if ($fsSeekBoot -notmatch '(?s)fs seek bounds ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS seek did not reject invalid client cursors: $fsSeekBoot" }
+    if ($fsSeekBoot -match 'fs seek bounds failed') { throw "NeperOS seek accepted an invalid client cursor: $fsSeekBoot" }
+    # A buffered `e.os` write reaches the server on close. Its missing parent makes that flush
+    # fail after the local write succeeded, so close must return Failed rather than hide the reply.
+    $fsCloseErrorTest = Join-Path $testBuild 'fs_close_error_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_close_error_test.e') $repo aarch64 neperos $fsCloseErrorTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS close-error program did not build' }
+    $fsCloseErrorArchive = Join-Path $testBuild 'fs-close-error-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsCloseErrorArchive $fsServer $fsCloseErrorTest $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS close-error archive did not assemble' }
+    $fsCloseErrorDisk = Join-Path $testBuild 'fs-close-error-disk.img'
+    $fsCloseErrorStream = [IO.File]::Create($fsCloseErrorDisk); $fsCloseErrorStream.SetLength(1MB); $fsCloseErrorStream.Close()
+    $fsCloseErrorBlk = @('-drive', "file=$fsCloseErrorDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsCloseErrorBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsCloseErrorArchive, '-append', 'fsserver fswrite') + $fsCloseErrorBlk)
+    if ($fsCloseErrorBoot -notmatch '(?s)fs close error propagated.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS close discarded a filesystem write error: $fsCloseErrorBoot" }
+    if ($fsCloseErrorBoot -match 'fs close error discarded') { throw "NeperOS close hid a filesystem write error: $fsCloseErrorBoot" }
     # (D2248) A driver server's aux page must not alias its image: aux_test, padded with 0xA5 to 300,000 bytes
     # (past the old 262,080-byte aux location), checks that the padding there is untouched and the page filled.
     $auxTest = Join-Path $testBuild 'aux_test.img'

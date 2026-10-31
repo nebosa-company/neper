@@ -12,14 +12,12 @@
 // Also the .xz container: stream header and footer, block headers with the single
 // LZMA2 filter, LZMA2 chunk framing (uncompressed chunks, LZMA chunks with the
 // state/props/dictionary reset bits), block padding, the CRC32, CRC64 or SHA-256
-// check and the index (record count, total uncompressed size and its CRC32).
+// check and the index (per-block unpadded/uncompressed sizes and its CRC32).
 // Compression is not written.
 //
-// ponytail: the .xz reader takes one filter (LZMA2) per block and does not verify
-// the optional compressed/uncompressed sizes in a block header nor each index
-// record against its block, only the count, the total and the index CRC; add BCJ
-// or delta filters and per-record checks when a producer other than xz/liblzma
-// defaults shows up.
+// ponytail: the .xz reader takes one LZMA2 filter per block; its optional block
+// sizes and every Index record are checked. Add BCJ or delta filters when a
+// producer other than xz/liblzma defaults shows up.
 use e.algo.hash as hash
 use e.crypto.hash as chash
 
@@ -68,7 +66,6 @@ fn set_props_byte(p: *Props, b: u8) -> err {
     v = v / 9u32
     p.lp = v % 5u32
     p.pb = v / 5u32
-    if p.lc + p.lp > 4u32 { ret Invalid }
     ret ok
 }
 
@@ -228,11 +225,17 @@ fn reset_probs(probs: []u16, lc: u32, lp: u32) {
 
 // Decodes symbols until `end_pos` is reached (with `has_size`, exactly, allowing a
 // trailing end marker) or until the end marker (without, `end_pos` is the buffer
-// end and running past it is TooSmall).
-fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err {
+// end and running past it is TooSmall). LZMA2 gives every chunk an exact output
+// length and forbids an end marker there.
+fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool, allow_marker: bool) -> err {
     while true {
         if d.bad { ret Malformed }
-        if has_size && d.pos == end_pos && d.code == 0u32 { ret ok }
+        if has_size && d.pos == end_pos && d.code == 0u32 {
+            // A size-bounded raw stream may carry its optional marker. LZMA2
+            // chunks instead must have consumed their exact range-coded payload.
+            if !allow_marker && d.at != d.end { ret Malformed }
+            ret ok
+        }
         let pos_state = (d.pos - d.start) & ((1usize << d.pb) - 1usize)
         if rc_bit(d, probs, IS_MATCH + usize(d.state) * 16usize + pos_state) == 0u32 {
             if d.pos == end_pos {
@@ -289,7 +292,10 @@ fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err {
             if d.state < 7u32 { d.state = 7u32 } else { d.state = 10u32 }
             d.rep0 = distance(d, probs, len)
             if d.rep0 == MARKER {
-                if d.code == 0u32 && !d.bad { ret ok }
+                if d.code == 0u32 && !d.bad && allow_marker {
+                    if has_size && d.pos != end_pos { ret Malformed }
+                    ret ok
+                }
                 ret Malformed
             }
             if d.pos == end_pos {
@@ -326,7 +332,7 @@ fn set_lz_props(d: *Lz, p: Props) {
 // TooSmall when `dst` or `probs` is short, Malformed on a bad stream or a missing
 // end marker when the size is unknown, Invalid for unusable properties.
 fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
-    if p.lc > 8u32 || p.lp > 4u32 || p.pb > 4u32 || p.lc + p.lp > 4u32 { ret (0usize, Invalid) }
+    if p.lc > 8u32 || p.lp > 4u32 || p.pb > 4u32 { ret (0usize, Invalid) }
     if probs.len < probs_required(p.lc, p.lp) { ret (0usize, TooSmall) }
     if p.has_size && p.unpacked > u64(dst.len) { ret (0usize, TooSmall) }
     reset_probs(probs, p.lc, p.lp)
@@ -339,7 +345,7 @@ fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err
     if e != ok { ret (0usize, e) }
     var end_pos = dst.len
     if p.has_size { end_pos = usize(p.unpacked) }
-    let e2 = run(&d, probs, dst, end_pos, p.has_size)
+    let e2 = run(&d, probs, dst, end_pos, p.has_size, true)
     ret (d.pos, e2)
 }
 
@@ -361,7 +367,12 @@ fn vli(src: []const u8, at: *usize) -> (u64, err) {
         let b = u64(src[*at])
         *at += 1usize
         v = v | ((b & 127u64) << (7u32 * i))
-        if (b & 128u64) == 0u64 { ret (v, ok) }
+        if (b & 128u64) == 0u64 {
+            // XZ VLIs use the minimum number of bytes. A trailing zero payload
+            // after a continuation would be a second spelling of the same value.
+            if i > 0u32 && b == 0u64 { ret (0u64, Malformed) }
+            ret (v, ok)
+        }
         i += 1u32
     }
     ret (0u64, Malformed)
@@ -417,6 +428,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
             if c == 1u32 {
                 d.start = d.pos
                 need_dict = false
+                need_props = true
             } else if need_dict {
                 ret (at, d.pos, Malformed)
             }
@@ -451,6 +463,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
                 var p: Props = zero
                 let e = set_props_byte(&p, src[at])
                 if e != ok { ret (at, d.pos, e) }
+                if p.lc + p.lp > 4u32 { ret (at, d.pos, Invalid) }
                 at += 1usize
                 p.dict_size = dict_size
                 set_lz_props(&d, p)
@@ -473,7 +486,7 @@ fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_
             d.end = at + packed
             let e2 = rc_init(&d)
             if e2 != ok { ret (at, d.pos, e2) }
-            let e3 = run(&d, probs, dst, d.pos + unpacked, true)
+            let e3 = run(&d, probs, dst, d.pos + unpacked, true, false)
             if e3 != ok { ret (at, d.pos, e3) }
             if d.at != d.end { ret (at, d.pos, Malformed) }
             at = d.end
@@ -491,6 +504,46 @@ fn check_size(kind: u32) -> usize {
     ret 64usize
 }
 
+// The Index and Footer precede optional four-byte Stream Padding. Parse them before
+// the Blocks so their records can be consumed beside the corresponding block
+// without allocating a block-size table.
+type IndexCursor = struct { at: usize, end: usize, count: u64, start: usize }
+
+fn index_cursor(src: []const u8, flags: u8) -> (IndexCursor, err) {
+    if src.len < 24usize { ret (zero, Malformed) }
+    var stream_end = src.len
+    while stream_end > 0usize && src[stream_end - 1usize] == 0u8 { stream_end -= 1usize }
+    if ((src.len - stream_end) & 3usize) != 0usize || stream_end < 24usize { ret (zero, Malformed) }
+    let footer = stream_end - 12usize
+    if hash.crc32(src[footer + 4usize..footer + 10usize]) != le32(src, footer) { ret (zero, Checksum) }
+    if src[footer + 8usize] != 0u8 || src[footer + 9usize] != flags || src[footer + 10usize] != 89u8 || src[footer + 11usize] != 90u8 { ret (zero, Malformed) }
+    let index_size = (u64(le32(src, footer + 4usize)) + 1u64) * 4u64
+    if index_size > u64(footer - 12usize) { ret (zero, Malformed) }
+    let start = footer - usize(index_size)
+    if src[start] != 0u8 { ret (zero, Malformed) }
+    var at = start + 1usize
+    let (count, count_error) = vli(src, &at)
+    if count_error != ok || at > footer { ret (zero, Malformed) }
+    let records = at
+    var scan = at
+    var i = 0u64
+    while i < count {
+        let (_, unpadded_error) = vli(src, &scan)
+        if unpadded_error != ok { ret (zero, unpadded_error) }
+        let (_, unpacked_error) = vli(src, &scan)
+        if unpacked_error != ok || scan > footer { ret (zero, Malformed) }
+        i += 1u64
+    }
+    let records_end = scan
+    while ((scan - start) & 3usize) != 0usize {
+        if scan >= footer || src[scan] != 0u8 { ret (zero, Malformed) }
+        scan += 1usize
+    }
+    if scan + 4usize != footer { ret (zero, Malformed) }
+    if hash.crc32(src[start..scan]) != le32(src, scan) { ret (zero, Checksum) }
+    ret (IndexCursor { at: records, end: records_end, count: count, start: start }, ok)
+}
+
 // A .xz stream: every block (single LZMA2 filter) decoded into `dst`, each block's
 // check verified (CRC32, CRC64, SHA-256; none accepted; other kinds Unsupported),
 // then the index and the footer. Answers the bytes written.
@@ -501,6 +554,9 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
     if hash.crc32(src[6..8]) != le32(src, 8usize) { ret (0usize, Checksum) }
     let kind = u32(src[7])
     let clen = check_size(kind)
+    let (index0, index_error) = index_cursor(src, src[7])
+    if index_error != ok { ret (0usize, index_error) }
+    var index = index0
     var at = 12usize
     var out = 0usize
     var blocks = 0u64
@@ -517,13 +573,21 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             if (flags & 3u32) != 0u32 { ret (out, Unsupported) }
             if (flags & 60u32) != 0u32 { ret (out, Malformed) }
             var h = at + 2usize
+            var has_compressed_size = false
+            var compressed_size = 0u64
             if (flags & 64u32) != 0u32 {
-                let (_, e) = vli(src, &h)
+                let (value, e) = vli(src, &h)
                 if e != ok { ret (out, e) }
+                compressed_size = value
+                has_compressed_size = true
             }
+            var has_unpacked_size = false
+            var unpacked_size = 0u64
             if (flags & 128u32) != 0u32 {
-                let (_, e) = vli(src, &h)
+                let (value, e) = vli(src, &h)
                 if e != ok { ret (out, e) }
+                unpacked_size = value
+                has_unpacked_size = true
             }
             let (id, e1) = vli(src, &h)
             if e1 != ok { ret (out, e1) }
@@ -538,6 +602,10 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             let block_out = out
             let (at2, out2, e4) = lzma2(src, at, dst, out, probs, dict_size)
             if e4 != ok { ret (out2, e4) }
+            let used_compressed = u64(at2 - block_start)
+            let used_unpacked = u64(out2 - block_out)
+            if has_compressed_size && compressed_size != used_compressed { ret (out2, Malformed) }
+            if has_unpacked_size && unpacked_size != used_unpacked { ret (out2, Malformed) }
             at = at2
             out = out2
             while ((at - block_start) & 3usize) != 0usize {
@@ -559,39 +627,17 @@ fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err) {
             } else if kind != 0u32 {
                 ret (out, Unsupported)
             }
+            if blocks >= index.count { ret (out, Malformed) }
+            let (index_unpadded, index_unpadded_error) = vli(src, &index.at)
+            if index_unpadded_error != ok { ret (out, index_unpadded_error) }
+            let (index_unpacked, index_unpacked_error) = vli(src, &index.at)
+            if index_unpacked_error != ok { ret (out, index_unpacked_error) }
+            let used_unpadded = u64(hlen) + used_compressed + u64(clen)
+            if index_unpadded != used_unpadded || index_unpacked != used_unpacked { ret (out, Malformed) }
             at += clen
             blocks += 1u64
         }
     }
-    // Index: indicator, record count, (unpadded size, uncompressed size) pairs,
-    // padding, CRC32.
-    let index_start = at
-    at += 1usize
-    let (count, e5) = vli(src, &at)
-    if e5 != ok { ret (out, e5) }
-    if count != blocks { ret (out, Malformed) }
-    var total = 0u64
-    var r = 0u64
-    while r < count {
-        let (_, e6) = vli(src, &at)
-        if e6 != ok { ret (out, e6) }
-        let (unpacked, e7) = vli(src, &at)
-        if e7 != ok { ret (out, e7) }
-        total += unpacked
-        r += 1u64
-    }
-    if total != u64(out) { ret (out, Malformed) }
-    while ((at - index_start) & 3usize) != 0usize {
-        if at >= src.len || src[at] != 0u8 { ret (out, Malformed) }
-        at += 1usize
-    }
-    if at + 4usize > src.len { ret (out, Malformed) }
-    if hash.crc32(src[index_start..at]) != le32(src, at) { ret (out, Checksum) }
-    at += 4usize
-    // Footer: CRC32, backward size, stream flags, "YZ".
-    if at + 12usize > src.len { ret (out, Malformed) }
-    if hash.crc32(src[at + 4usize..at + 10usize]) != le32(src, at) { ret (out, Checksum) }
-    if (usize(le32(src, at + 4usize)) + 1usize) * 4usize != at - index_start { ret (out, Malformed) }
-    if src[at + 8usize] != 0u8 || src[at + 9usize] != src[7] || src[at + 10usize] != 89u8 || src[at + 11usize] != 90u8 { ret (out, Malformed) }
+    if at != index.start || blocks != index.count || index.at != index.end { ret (out, Malformed) }
     ret (out, ok)
 }

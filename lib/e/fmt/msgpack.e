@@ -8,9 +8,11 @@
 // exactly; nothing is buffered, so a stream can be read piecemeal by the caller.
 
 use e.io
+use e.data.list as list
 use e.mem
 use e.meta
 use e.str
+use e.text.utf8
 
 type Pair = struct { key: Value, value: Value }
 type Ext = struct { kind: i8, data: []const u8 }
@@ -85,6 +87,7 @@ fn read_depth(a: *mem.Arena, s: *State, depth: u16) -> (Value, err) {
     if format >= 160u8 && format <= 191u8 {
         let (text, text_error) = read_bytes(a, s, usize(format - 160u8))
         if text_error != ok { ret (nil_value, text_error) }
+        if !utf8.validate(text[0..]) { ret (nil_value, Invalid) }
         ret (Value{ String: text[0..] }, ok)
     }
     if format >= 144u8 && format <= 159u8 {
@@ -152,6 +155,7 @@ fn read_depth(a: *mem.Arena, s: *State, depth: u16) -> (Value, err) {
         if count_error != ok { ret (nil_value, count_error) }
         let (text, text_error) = read_bytes(a, s, usize(count))
         if text_error != ok { ret (nil_value, text_error) }
+        if !utf8.validate(text[0..]) { ret (nil_value, Invalid) }
         ret (Value{ String: text[0..] }, ok)
     }
     // array 16/32, map 16/32
@@ -186,34 +190,43 @@ fn read_ext(a: *mem.Arena, s: *State, count: usize) -> (Ext, err) {
 fn read_array(a: *mem.Arena, s: *State, count: usize, depth: u16) -> ([]const Value, err) {
     if depth >= s.max_depth { ret (zero, TooDeep) }
     if count > 16777216usize { ret (zero, TooLarge) }
-    let (items, items_error) = mem.alloc[Value](a, count)
+    // The count comes from an unbuffered stream. Start small and grow only after
+    // an item has actually arrived, so a truncated array32 header cannot reserve
+    // its declared maximum before its first byte is available.
+    var capacity = count
+    if capacity > 8usize { capacity = 8usize }
+    let (items0, items_error) = list.init[Value](a, capacity)
     if items_error != ok { ret (zero, items_error) }
+    var items = items0
     var at = 0usize
     while at < count {
         let (item, item_error) = read_depth(a, s, depth + 1u16)
         if item_error != ok { ret (zero, item_error) }
-        items[at] = item
+        try list.push[Value](&items, item)
         at += 1usize
     }
-    ret (items[0..], ok)
+    ret (list.slice_const[Value](&items), ok)
 }
 
 fn read_map(a: *mem.Arena, s: *State, count: usize, depth: u16) -> ([]const Pair, err) {
     if depth >= s.max_depth { ret (zero, TooDeep) }
     if count > 16777216usize { ret (zero, TooLarge) }
-    let (pairs, pairs_error) = mem.alloc[Pair](a, count)
+    // Match arrays: the header alone must not dictate an arena reservation.
+    var capacity = count
+    if capacity > 8usize { capacity = 8usize }
+    let (pairs0, pairs_error) = list.init[Pair](a, capacity)
     if pairs_error != ok { ret (zero, pairs_error) }
+    var pairs = pairs0
     var at = 0usize
     while at < count {
         let (key, key_error) = read_depth(a, s, depth + 1u16)
         if key_error != ok { ret (zero, key_error) }
         let (value, value_error) = read_depth(a, s, depth + 1u16)
         if value_error != ok { ret (zero, value_error) }
-        pairs[at].key = key
-        pairs[at].value = value
+        try list.push[Pair](&pairs, Pair { key: key, value: value })
         at += 1usize
     }
-    ret (pairs[0..], ok)
+    ret (list.slice_const[Pair](&pairs), ok)
 }
 
 fn write_be(writer: *io.Writer, value: u64, width: usize) -> err {
@@ -285,12 +298,24 @@ fn write_u64(writer: *io.Writer, value: u64) -> err {
 }
 
 fn write_string(writer: *io.Writer, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     if text.len < 32usize {
         try write_byte(writer, 160u8 + u8(text.len))
     } else {
         try write_length(writer, 217u8, text.len)
     }
     ret io.write_all(writer, text)
+}
+
+fn write_map_header(writer: *io.Writer, count: usize) -> err {
+    if count < 16usize { ret write_byte(writer, 128u8 + u8(count)) }
+    if count < 65536usize {
+        try write_byte(writer, 222u8)
+        ret write_be(writer, u64(count), 2usize)
+    }
+    if count > 4294967295usize { ret TooLarge }
+    try write_byte(writer, 223u8)
+    ret write_be(writer, u64(count), 4usize)
 }
 
 fn write(writer: *io.Writer, value: *const Value) -> err {
@@ -332,18 +357,7 @@ fn write(writer: *io.Writer, value: *const Value) -> err {
         }
         ret ok
     case .Map as pairs:
-        if pairs.len < 16usize {
-            try write_byte(writer, 128u8 + u8(pairs.len))
-        } else {
-            if pairs.len < 65536usize {
-                try write_byte(writer, 222u8)
-                try write_be(writer, u64(pairs.len), 2usize)
-            } else {
-                if pairs.len > 4294967295usize { ret TooLarge }
-                try write_byte(writer, 223u8)
-                try write_be(writer, u64(pairs.len), 4usize)
-            }
-        }
+        try write_map_header(writer, pairs.len)
         var at = 0usize
         while at < pairs.len {
             try write(writer, &pairs[at].key)
@@ -400,6 +414,37 @@ fn integer_of(value: Value) -> (i64, u64, bool, bool) {
     }
 }
 
+// Decide the target range before converting: a direct narrowing cast traps in debug
+// and truncates in release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
 fn float_of(value: Value) -> (f64, bool) {
     switch value {
     case .F64 as number:
@@ -453,8 +498,8 @@ fn decode[T: type](a: *mem.Arena, source: io.Reader, max_depth: u16) -> (T, err)
             if meta.kind[f.ty]() == .Int {
                 let (signed, unsigned, is_signed, is_integer) = integer_of(found)
                 if !is_integer { ret (out, Invalid) }
-                var slot: f.ty = zero
-                if is_signed { slot = f.ty(signed) } else { slot = f.ty(unsigned) }
+                let (slot, slot_error) = integer_into[f.ty](signed, unsigned, is_signed)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
@@ -479,12 +524,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
     for f in meta.fields[T]() {
         count += 1usize
     }
-    if count < 16usize {
-        try write_byte(writer, 128u8 + u8(count))
-    } else {
-        try write_byte(writer, 222u8)
-        try write_be(writer, u64(count), 2usize)
-    }
+    try write_map_header(writer, count)
     for f in meta.fields[T]() {
         try write_string(writer, f.name)
         var slot: f.ty = zero

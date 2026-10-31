@@ -6,6 +6,7 @@ use check
 use e.mem
 use e.os
 use decimal
+use glsl
 use graph
 use layout
 use lex
@@ -266,6 +267,8 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     var width = 0usize
     if check.same(ty.name, "f32") { width = 32usize }
     if check.same(ty.name, "f64") { width = 64usize }
+    if check.same(ty.name, "f16") { width = 16usize }
+    if check.same(ty.name, "bf16") { width = 17usize }
     if width == 0usize { ret (0usize, ty, check.Unsupported) }
     let (pattern, pattern_error) = decimal.literal_bits(lex.token_text(text, token), width)
     if pattern_error != ok { ret (0usize, ty, pattern_error) }
@@ -8794,6 +8797,23 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
             if escaped_error != ok { ret escaped_error }
             spelling = escaped
         }
+        // (D5888) `--gpu glsl`: the same kernels as GLSL after a `;`, for an OpenGL device; without SPIR-V the module is empty before it.
+        if g.gpu_glsl && !check.same(g.os, "macos") {
+            var glsl_message = ""
+            var glsl_checked = false
+            let (source, source_error) = glsl.emit(c.arena, c, g, builder, signatures, at.function_count, &glsl_message, &glsl_checked)
+            if source_error == ok {
+                if emit_error != ok {
+                    var no_module: []u8 = zero
+                    let (header, header_error) = hex_string(c.arena, no_module, glsl_checked, g.compiler_identity)
+                    if header_error != ok { ret header_error }
+                    spelling = header
+                }
+                let (joined, joined_error) = hex_append(c.arena, spelling, source)
+                if joined_error != ok { ret joined_error }
+                spelling = joined
+            }
+        }
     }
     // The body edges the device build took (D36): the copies it made of other modules'
     // helpers, which the reset below would drop with the lowering. They are put back
@@ -8875,6 +8895,29 @@ fn hex_string(a: *mem.Arena, bytes: []const u8, checked: bool, compiler_identity
         identity_at += 1usize
     }
     storage[at] = 58u8
+    at += 1usize
+    var index = 0usize
+    while index < bytes.len {
+        storage[at] = digits[usize(bytes[index]) / 16usize]
+        storage[at + 1usize] = digits[usize(bytes[index]) % 16usize]
+        at += 2usize
+        index += 1usize
+    }
+    storage[at] = 34u8
+    ret (storage[0usize..at + 1usize], ok)
+}
+
+// `spelling` (a `hex_string` literal) with `;` and `bytes` in hex before its closing quote (D5888).
+fn hex_append(a: *mem.Arena, spelling: str, bytes: []const u8) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, spelling.len + bytes.len * 2usize + 2usize)
+    if storage_error != ok { ret ("", storage_error) }
+    let digits = "0123456789abcdef"
+    var at = 0usize
+    while at + 1usize < spelling.len {
+        storage[at] = spelling[at]
+        at += 1usize
+    }
+    storage[at] = 59u8
     at += 1usize
     var index = 0usize
     while index < bytes.len {

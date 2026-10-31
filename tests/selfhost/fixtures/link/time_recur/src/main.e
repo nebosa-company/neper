@@ -139,6 +139,11 @@ fn run_durations(text: str) -> u8 {
     ret 0u8
 }
 
+fn duplicate_rule_invalid(text: str) -> bool {
+    let (_, parse_error) = recur.parse_rule(text)
+    ret parse_error == recur.Invalid
+}
+
 fn recur_vectors_0() -> str {
     ret "R 19970902T090000 24 FREQ=DAILY;COUNT=10 => 10 120888103\nR 19970902T090000 24 FREQ=DAILY;UNTIL=19971224T000000 => 24 867923786\nR 19970902T090000 24 FREQ=DAILY;INTERVAL=2 => 24 993807796\nR 19970902T090000 24 FREQ=DAILY;INTERVAL=10;COUNT=5 => 5 929126665\nR 19980101T090000 24 FREQ=YEARLY;UNTIL=20000131T140000;BYMONTH=1;BYDAY=SU,MO,TU,WE,TH,FR,SA => 24 205122363\nR 19970902T090000 24 FREQ=WEEKLY;COUNT=10 => 10 160100702\nR 19970902T090000 24 FREQ=WEEKLY;UNTIL=19971224T000000 => 17 374753104\nR 19970902T090000 24 FREQ=WEEKLY;INTERVAL=2;WKST=SU => 24 430259063\nR 19970902T090000 24 FREQ=WEEKLY;UNTIL=19971007T000000;WKST=SU;BYDAY=TU,TH => 10 423355851\nR 19970902T090000 24 FREQ=WEEKLY;COUNT=10;WKST=SU;BYDAY=TU,TH => 10 423355851\nR 19970902T090000 24 FREQ=WEEKLY;INTERVAL=2;UNTIL=19971224T000000;WKST=SU;BYDAY=MO,WE,FR => 24 829461638\nR 19970902T090000 24 FREQ=WEEKLY;INTERVAL=2;COUNT=8;WKST=SU;BYDAY=TU,TH => 8 6297581\nR 19970905T090000 24 FREQ=MONTHLY;COUNT=10;BYDAY=1FR => 10 888866203\nR 19970905T090000 24 FREQ=MONTHLY;UNTIL=19971224T000000;BYDAY=1FR => 4 727068934\nR 19970907T090000 24 FREQ=MONTHLY;INTERVAL=2;COUNT=10;BYDAY=1SU,-1SU => 10 587955350\nR 19970922T090000 24 FREQ=MONTHLY;COUNT=6;BYDAY=-2MO => 6 284126170\nR 19970928T090000 24 FREQ=MONTHLY;BYMONTHDAY=-3 => 24 640461611\nR 19970902T090000 24 FREQ=MONTHLY;COUNT=10;BYMONTHDAY=2,15 => 10 700321217\nR 19970930T090000 24 FREQ=MONTHLY;COUNT=10;BYMONTHDAY=1,-1 => 10 871442115\nR 19970910T090000 24 FREQ=MONTHLY;INTERVAL=18;COUNT=10;BYMONTHDAY=10,11,12,13,14,15 => 10 919917280\nR 19970902T090000 24 FREQ=MONTHLY;INTERVAL=2;BYDAY=TU => 24 892370975\nR 19970310T090000 24 FREQ=YEARLY;INTERVAL=2;COUNT=10;BYMONTH=1,2,3 => 10 119984005\nR 19970101T090000 24 FREQ=YEARLY;INTERVAL=3;COUNT=10;BYYEARDAY=1,100,200 => 10 472192626\nR 19970519T090000 24 FREQ=YEARLY;BYDAY=20MO => 24 668625023\nR 19971229T090000 24 FREQ=YEARLY;BYDAY=-1MO => 24 657665134\nR 19970313T090000 24 FREQ=YEARLY;BYMONTH=3;BYDAY=TH => 24 602993012\nR 19970605T090000 24 FREQ=YEARLY;BYDAY=TH;BYMONTH=6,7,8 => 24 250663106\nR 19970902T090000 24 FREQ=MONTHLY;BYDAY=FR;BYMONTHDAY=13 => 24 542963298\nR 19970913T090000 24 FREQ=MONTHLY;BYDAY=SA;BYMONTHDAY=7,8,9,10,11,12,13 => 24 330727520\nR 19961105T090000 24 FREQ=YEARLY;INTERVAL=4;BYMONTH=11;BYDAY=TU;BYMONTHDAY=2,3,4,5,6,7,8 => 24 605385917\n"
 }
@@ -236,12 +241,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_month) = recur.parse_rule("FREQ=MONTHLY;BYMONTH=13")
     let (_, zero_interval) = recur.parse_rule("FREQ=DAILY;INTERVAL=0")
     if no_freq != recur.Invalid || weekno != recur.Invalid || bad_ordinal != recur.Invalid || bad_month != recur.Invalid || zero_interval != recur.Invalid { os.exit(90i32) }
+    // RFC 5545 permits each rule part at most once, including list-valued parts.
+    if !duplicate_rule_invalid("FREQ=DAILY;FREQ=DAILY") || !duplicate_rule_invalid("FREQ=DAILY;INTERVAL=1;INTERVAL=1") || !duplicate_rule_invalid("FREQ=DAILY;COUNT=1;COUNT=1") || !duplicate_rule_invalid("FREQ=DAILY;UNTIL=20240101T000000;UNTIL=20240101T000000") || !duplicate_rule_invalid("FREQ=DAILY;WKST=MO;WKST=MO") || !duplicate_rule_invalid("FREQ=DAILY;BYMONTH=1;BYMONTH=1") || !duplicate_rule_invalid("FREQ=DAILY;BYMONTHDAY=1;BYMONTHDAY=1") || !duplicate_rule_invalid("FREQ=DAILY;BYDAY=MO;BYDAY=MO") || !duplicate_rule_invalid("FREQ=DAILY;BYHOUR=1;BYHOUR=1") || !duplicate_rule_invalid("FREQ=DAILY;BYMINUTE=1;BYMINUTE=1") || !duplicate_rule_invalid("FREQ=DAILY;BYSECOND=1;BYSECOND=1") || !duplicate_rule_invalid("FREQ=DAILY;BYYEARDAY=1;BYYEARDAY=1") || !duplicate_rule_invalid("FREQ=DAILY;BYSETPOS=1;BYSETPOS=1") { os.exit(95i32) }
     // A leading RRULE: and lower case are read; the start itself is produced when it matches.
     let (r, r_error) = recur.parse_rule("RRULE:freq=daily;count=3")
     let (start, start_error) = recur.parse_stamp("20240228T093000")
     if r_error != ok || start_error != ok { os.exit(91i32) }
     let (n, n_error) = recur.expand(r, start, out[0usize..64usize])
     if n_error != ok || n != 3usize || out[2usize].date.month != 3u8 || out[2usize].date.day != 1u8 { os.exit(92i32) }
+    // A full zero-capacity result slice stops before its first write.
+    let (one, one_error) = recur.parse_rule("FREQ=DAILY;COUNT=1")
+    var no_dates: [0]calendar.DateTime = zero
+    let (zero_written, zero_error) = recur.expand(one, start, no_dates[..])
+    if one_error != ok || zero_error != ok || zero_written != 0usize { os.exit(92i32) }
     // expand_from drops what is before `from` but counts it toward COUNT.
     let (m, m_error) = recur.expand_from(r, start, out[1usize], out[0usize..64usize])
     if m_error != ok || m != 2usize || out[0usize].date.day != 29u8 { os.exit(93i32) }
@@ -268,6 +280,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_parse(parse_vectors_9()) != 0u8 { os.exit(50i32) }
     if run_parse(parse_vectors_10()) != 0u8 { os.exit(51i32) }
     if run_parse(parse_vectors_11()) != 0u8 { os.exit(52i32) }
+    let (_, punctuation_error) = parse.parse_date("2024@03#05!", false)
+    if punctuation_error != parse.Invalid { os.exit(53i32) }
     if run_durations(duration_vectors_0()) != 0u8 { os.exit(81i32) }
     if run_durations(duration_vectors_1()) != 0u8 { os.exit(82i32) }
     if run_durations(duration_vectors_2()) != 0u8 { os.exit(83i32) }

@@ -571,10 +571,13 @@ fn led(p: *Parser, kind: u8, left: i32) -> (i32, err) {
         while current(p) != T_RPAREN {
             let (arg, arg_error) = expression(p, 0i32)
             if arg_error != ok { ret (0i32, arg_error) }
-            if current(p) == T_COMMA { p.pos += 1usize }
             if count == 16usize { ret (0i32, TooLarge) }
             args[count] = arg
             count += 1usize
+            if current(p) == T_RPAREN { break }
+            let separator_error = match_token(p, T_COMMA)
+            if separator_error != ok { ret (0i32, separator_error) }
+            if current(p) == T_RPAREN { ret (0i32, Syntax) }
         }
         p.pos += 1usize
         let (start, edges_error) = add_edges(p, args[0usize..count])
@@ -1486,22 +1489,56 @@ fn homogeneous(v: json.Value) -> u8 {
     ret first
 }
 
-// Stable sort of `items` by `keys` (numbers or strings of one kind), in place.
-fn sort_pairs(items: []json.Value, keys: []json.Value) {
-    var i = 1usize
-    while i < items.len {
-        var j = i
-        while j > 0usize && order(keys[j - 1usize], keys[j]) > 0i32 {
-            let ti = items[j]
-            items[j] = items[j - 1usize]
-            items[j - 1usize] = ti
-            let tk = keys[j]
-            keys[j] = keys[j - 1usize]
-            keys[j - 1usize] = tk
-            j -= 1usize
+// Stable merge sort of `items` by `keys` (numbers or strings of one kind), in place.
+fn merge_pairs(items: []json.Value, keys: []json.Value, tmp_items: []json.Value, tmp_keys: []json.Value, lo: usize, hi: usize) {
+    if hi - lo < 2usize { ret }
+    let mid = lo + (hi - lo) / 2usize
+    merge_pairs(items, keys, tmp_items, tmp_keys, lo, mid)
+    merge_pairs(items, keys, tmp_items, tmp_keys, mid, hi)
+    var i = lo
+    var j = mid
+    var k = lo
+    while i < mid && j < hi {
+        // Take from the right only when it is strictly smaller, preserving ties.
+        if order(keys[j], keys[i]) < 0i32 {
+            tmp_items[k] = items[j]
+            tmp_keys[k] = keys[j]
+            j += 1usize
+        } else {
+            tmp_items[k] = items[i]
+            tmp_keys[k] = keys[i]
+            i += 1usize
         }
-        i += 1usize
+        k += 1usize
     }
+    while i < mid {
+        tmp_items[k] = items[i]
+        tmp_keys[k] = keys[i]
+        i += 1usize
+        k += 1usize
+    }
+    while j < hi {
+        tmp_items[k] = items[j]
+        tmp_keys[k] = keys[j]
+        j += 1usize
+        k += 1usize
+    }
+    k = lo
+    while k < hi {
+        items[k] = tmp_items[k]
+        keys[k] = tmp_keys[k]
+        k += 1usize
+    }
+}
+
+fn sort_pairs(a: *mem.Arena, items: []json.Value, keys: []json.Value) -> err {
+    if items.len < 2usize { ret ok }
+    let (tmp_items, items_error) = values_of(a, items.len)
+    if items_error != ok { ret items_error }
+    let (tmp_keys, keys_error) = values_of(a, keys.len)
+    if keys_error != ok { ret keys_error }
+    merge_pairs(items, keys, tmp_items, tmp_keys, 0usize, items.len)
+    ret ok
 }
 
 fn parse_number_text(a: *mem.Arena, s: str) -> (json.Value, bool) {
@@ -1829,7 +1866,8 @@ fn call(c: *Ctx, node: Node, v: json.Value) -> (json.Value, err) {
             keys[k] = items[k]
             k += 1usize
         }
-        sort_pairs(out, keys)
+        let sort_error = sort_pairs(a, out, keys)
+        if sort_error != ok { ret (null_value(), sort_error) }
         ret (array_value(out), ok)
     }
     if str.eq(name, "map") {
@@ -1879,7 +1917,8 @@ fn call(c: *Ctx, node: Node, v: json.Value) -> (json.Value, err) {
                 out[k] = items[k]
                 k += 1usize
             }
-            sort_pairs(out, keys)
+            let sort_error = sort_pairs(a, out, keys)
+            if sort_error != ok { ret (null_value(), sort_error) }
             ret (array_value(out), ok)
         }
         var best = 0usize
@@ -1896,12 +1935,14 @@ fn call(c: *Ctx, node: Node, v: json.Value) -> (json.Value, err) {
 }
 
 fn math_floor(x: f64) -> f64 {
+    if x >= 4503599627370496.0f64 || x <= -4503599627370496.0f64 { ret x }
     let t = f64(i64(x))
     if t > x { ret t - 1.0f64 }
     ret t
 }
 
 fn math_ceil(x: f64) -> f64 {
+    if x >= 4503599627370496.0f64 || x <= -4503599627370496.0f64 { ret x }
     let t = f64(i64(x))
     if t < x { ret t + 1.0f64 }
     ret t

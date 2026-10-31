@@ -78,8 +78,8 @@ type Tab = struct {
 // (C159) The line's style from the stylesheet: a colour (ARGB), a size in px (0 for the default), bold, centred.
 type PageLine = struct { text: [56]u8, len: usize, kind: usize, href: [48]u8, href_len: usize, aux: usize, has_color: bool, color: u32, px: usize, bold: bool, center: bool }
 
-// (C159) The style rules of the page's <style> elements as cascade rules, and the matcher over its document.
-type Styler = struct { m: match.Matcher, author: []const cascade.Rule, active: bool }
+// (C159) The page stylesheet's prebuilt cascade indexes and the matcher over its document.
+type Styler = struct { m: match.Matcher, ua: cascade.Index, author: cascade.Index, active: bool }
 
 type Url = struct { host: [40]u8, host_len: usize, path: [64]u8, path_len: usize, used: bool }
 
@@ -418,10 +418,24 @@ fn walk(a: *mem.Arena, s: *State, st: *Styler, doc: *const html.Document, id: ht
     }
     var inline: []const cascade.Declaration = zero
     let (style_attr, has_style) = html.attribute(n, "style")
-    if has_style { inline = cascade.inline_declarations(a, style_attr) }
-    var no_rules: []const cascade.Rule = zero
+    if has_style {
+        let (parsed_inline, inline_error) = cascade.inline_declarations(a, style_attr)
+        // This small browser has no style-error channel.  Stop using its
+        // stylesheet rather than rendering this node with a partial cascade.
+        if inline_error != ok {
+            st.active = false
+            walk_node(a, s, st, doc, id, kind, href)
+            ret
+        }
+        inline = parsed_inline
+    }
     var no_stack: []const cascade.ContainerBox = zero
-    let winners = cascade.resolve(&st.m, no_rules, st.author, id, no_stack, inline)
+    let (winners, winner_error) = cascade.resolve(&st.m, &st.ua, &st.author, id, no_stack, inline)
+    if winner_error != ok {
+        st.active = false
+        walk_node(a, s, st, doc, id, kind, href)
+        ret
+    }
     let (display, has_display) = winner_value(winners, "display")
     if has_display && ui.same(display, "none") { ret }
     let had_color = s.st_has_color
@@ -1076,12 +1090,20 @@ fn fetch_page(a: *mem.Arena, kit: *appkit.Kit, s: *State, hint: usize, host: str
     find_title(a, s, &doc)
     // (C159) The page's own stylesheet, applied through the cascade (only when it has a <style>).
     var styler: Styler = zero
-    styler.author = style_rules(a, &doc)
+    let author_rules = style_rules(a, &doc)
+    if author_rules.len > 0usize {
+        let (ua_index, ua_index_error) = cascade.build_index(a, zero, false)
+        let (author_index, author_index_error) = cascade.build_index(a, author_rules, false)
+        if ua_index_error == ok && author_index_error == ok {
+            styler.ua = ua_index
+            styler.author = author_index
+            styler.active = true
+        }
+    }
     styler.m = match.new_matcher(a, &doc, match.no_state())
-    styler.active = styler.author.len > 0usize
     if styler.active {
         ui.say("browser css ")
-        ui.say_num(styler.author.len)
+        ui.say_num(author_rules.len)
         ui.say(" rules\n")
     }
     walk(a, s, &styler, &doc, doc.root, KIND_BODY, "")

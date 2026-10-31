@@ -141,6 +141,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if balance.maglev_build(names[..], old_table, scratch[..], 65536usize) != balance.Invalid { os.exit(5i32) }
     if balance.maglev_build(names[..], old_table[..100usize], scratch[..], m) != balance.TooSmall { os.exit(5i32) }
     if balance.maglev_build(names[..], old_table, scratch[..14usize], m) != balance.TooSmall { os.exit(5i32) }
+    if balance.maglev_lookup(old_table[..0usize], 123u64) != 0u32 { os.exit(5i32) }
 
     try io.print("net balance ok\n")
     ret ok

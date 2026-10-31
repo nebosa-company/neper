@@ -423,8 +423,8 @@ fn app_event(app: *App, ev: gs.Event, out: []u8, at: *usize) -> err {
             raw_init[3usize] = 255u8
             let (bn, be) = grpc.binary_value_encode(bin_text[0usize..], raw_init[0usize..4usize])
             let bin_value: str = bin_text[0usize..bn]
-            meta[0usize] = h2.Header { name: "x-init", value: "first" }
-            meta[1usize] = h2.Header { name: "x-init-bin", value: bin_value }
+            meta[0usize] = h2.Header { name: "x-init", value: "first", staged: 0u8 }
+            meta[1usize] = h2.Header { name: "x-init-bin", value: bin_value, staged: 0u8 }
             let (hn, he) = gs.response_headers(app.srv, out[*at..], id, meta[0usize..2usize])
             if he != ok { ret he }
             *at += hn
@@ -448,8 +448,8 @@ fn app_event(app: *App, ev: gs.Event, out: []u8, at: *usize) -> err {
             raw_trail[2usize] = 16u8
             let (tn, te) = grpc.binary_value_encode(trail_bin[0usize..], raw_trail[0usize..3usize])
             let trail_value: str = trail_bin[0usize..tn]
-            trail[0usize] = h2.Header { name: "x-trail", value: "last" }
-            trail[1usize] = h2.Header { name: "x-trail-bin", value: trail_value }
+            trail[0usize] = h2.Header { name: "x-trail", value: "last", staged: 0u8 }
+            trail[1usize] = h2.Header { name: "x-trail-bin", value: trail_value, staged: 0u8 }
             ret finish(app, out, at, id, grpc.OK, "", trail[0usize..2usize])
         }
         if slot.kind == K_BIG {
@@ -472,7 +472,7 @@ fn app_event(app: *App, ev: gs.Event, out: []u8, at: *usize) -> err {
         }
         if slot.kind == K_GZIP {
             var meta: [1]h2.Header = zero
-            meta[0usize] = h2.Header { name: "grpc-encoding", value: "gzip" }
+            meta[0usize] = h2.Header { name: "grpc-encoding", value: "gzip", staged: 0u8 }
             let (hn, he) = gs.response_headers(app.srv, out[*at..], id, meta[0usize..1usize])
             if he != ok { ret he }
             *at += hn

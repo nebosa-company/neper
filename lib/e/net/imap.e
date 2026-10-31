@@ -18,7 +18,7 @@ use e.net.tls as tls
 use e.str
 
 type Session = struct {
-    a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool,
+    a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, poisoned: bool,
     greeting: str, last: str, authenticated: bool, caps: Capabilities, tag: u32, limit: usize,
     buf: []u8, at: usize, len: usize, line: []u8, cmd: []u8,
 }
@@ -49,6 +49,7 @@ error Unsupported
 
 const LINE_LIMIT: usize = 8192usize
 const COMMAND_LIMIT: usize = 4096usize
+const LITERAL_LIMIT: usize = 1073741824usize
 
 fn no_capabilities() -> Capabilities {
     ret Capabilities { imap4rev1: false, starttls: false, login_disabled: false, auth_plain: false, sasl_ir: false, uidplus: false, idle: false, move: false, raw: "" }
@@ -219,8 +220,9 @@ fn literal_size(n: usize, line: []const u8) -> (usize, bool) {
     var value = 0usize
     var i = start
     while i < end {
-        value = value * 10usize + usize(line[i] - 48u8)
-        if value > 1073741824usize { ret (0usize, false) }
+        let digit = usize(line[i] - 48u8)
+        if value > LITERAL_LIMIT / 10usize || (value == LITERAL_LIMIT / 10usize && digit > LITERAL_LIMIT % 10usize) { ret (0usize, false) }
+        value = value * 10usize + digit
         i += 1usize
     }
     ret (value, true)
@@ -267,6 +269,7 @@ fn tag_text(s: *Session, buf: []u8, at: *usize) -> err {
 // up to the tagged completion. NO is `No`, BAD is `Bad`; `Reply.text` is the completion's text.
 fn run(s: *Session, text: []const u8, continuation: []const u8, has_continuation: bool) -> (Reply, err) {
     var none = Reply { text: "", untagged: zero }
+    if s.poisoned { ret (none, Closed) }
     s.tag += 1u32
     var n = 0usize
     let tag_error = tag_text(s, s.cmd, &n)
@@ -346,7 +349,7 @@ fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, limit: usize) -> (
     let (cmd, cmd_error) = mem.alloc[u8](a, COMMAND_LIMIT)
     if cmd_error != ok { ret (empty, cmd_error) }
     var s = Session {
-        a: a, source: source, sink: sink, stream: nil, secured: false, greeting: "", last: "", authenticated: false,
+        a: a, source: source, sink: sink, stream: nil, secured: false, poisoned: false, greeting: "", last: "", authenticated: false,
         caps: no_capabilities(), tag: 0u32, limit: limit, buf: buf, at: 0usize, len: 0usize, line: line, cmd: cmd,
     }
     let (greeting, greeting_error) = read_response(&s)
@@ -397,16 +400,31 @@ fn capability(s: *Session) -> err {
 
 // STARTTLS, the handshake over the same connection, then CAPABILITY again.
 fn starttls(s: *Session, config: tls.ClientConfig) -> err {
+    if s.poisoned { ret Closed }
     if s.secured { ret Unsupported }
     let (_, run_error) = run(s, "STARTTLS", "", false)
     if run_error != ok { ret run_error }
-    if s.at < s.len { ret Protocol }
+    if s.at < s.len {
+        s.poisoned = true
+        ret Protocol
+    }
     let (slot, slot_error) = mem.alloc[tls.Stream](s.a, 1usize)
-    if slot_error != ok { ret slot_error }
+    if slot_error != ok {
+        s.poisoned = true
+        ret slot_error
+    }
     let (made, make_error) = tls.client(s.a, s.source, s.sink, config)
-    if make_error != ok { ret make_error }
+    if make_error != ok {
+        s.poisoned = true
+        ret make_error
+    }
     slot[0] = made
-    try tls.handshake(&slot[0])
+    let handshake_error = tls.handshake(&slot[0])
+    if handshake_error != ok {
+        let _ = tls.close(&slot[0])
+        s.poisoned = true
+        ret handshake_error
+    }
     s.stream = &slot[0]
     s.source = tls.reader(s.stream)
     s.sink = tls.writer(s.stream)
@@ -419,6 +437,7 @@ fn starttls(s: *Session, config: tls.ClientConfig) -> err {
 
 // LOGIN with both arguments quoted; refused when the server advertised LOGINDISABLED.
 fn login(s: *Session, user: str, password: str) -> err {
+    if s.poisoned { ret Closed }
     if s.caps.login_disabled { ret Unsupported }
     var text: [1024]u8 = zero
     var t = 0usize
@@ -439,6 +458,7 @@ fn login(s: *Session, user: str, password: str) -> err {
 
 // AUTHENTICATE PLAIN: the server's `+` is answered with the base64 of NUL user NUL password.
 fn authenticate_plain(s: *Session, user: str, password: str) -> err {
+    if s.poisoned { ret Closed }
     if !s.caps.auth_plain { ret Unsupported }
     if !clean(user) || !clean(password) { ret Invalid }
     var raw: [512]u8 = zero

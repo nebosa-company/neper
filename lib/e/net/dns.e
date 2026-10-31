@@ -717,7 +717,8 @@ fn ascii_fold_equal(a: []const u8, b: str) -> bool {
 
 // The body of an HTTP/1.x response with status 200; `Invalid` for any other status,
 // `Malformed` without a status line or blank line, `TooSmall` when Content-Length
-// promises more than arrived.
+// promises more than arrived, and `Unsupported` for transfer-encoded bodies because
+// this borrowed slice API cannot dechunk them in place.
 fn doh_response_body(http_response: []const u8) -> ([]const u8, err) {
     var none: []const u8 = zero
     if http_response.len < 12usize || http_response[0] != 72u8 || http_response[1] != 84u8 || http_response[2] != 84u8 || http_response[3] != 80u8 || http_response[4] != 47u8 { ret (none, Malformed) }
@@ -726,6 +727,7 @@ fn doh_response_body(http_response: []const u8) -> ([]const u8, err) {
     var at = 0usize
     var content_length = 0usize
     var has_length = false
+    var has_transfer_encoding = false
     var line_start = 0usize
     while at + 1usize < http_response.len {
         if http_response[at] == 13u8 && http_response[at + 1usize] == 10u8 {
@@ -743,8 +745,15 @@ fn doh_response_body(http_response: []const u8) -> ([]const u8, err) {
                     i += 1usize
                 }
             }
+            if line.len >= 18usize && ascii_fold_equal(line[..18usize], "transfer-encoding:") {
+                var transfer_at = 18usize
+                while transfer_at < line.len && line[transfer_at] == 32u8 { transfer_at += 1usize }
+                if transfer_at == line.len { ret (none, Malformed) }
+                has_transfer_encoding = true
+            }
             if line.len == 0usize {
                 let body = http_response[at + 2usize..]
+                if has_transfer_encoding { ret (none, Unsupported) }
                 if has_length {
                     if body.len < content_length { ret (none, TooSmall) }
                     ret (body[..content_length], ok)

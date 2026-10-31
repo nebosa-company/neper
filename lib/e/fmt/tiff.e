@@ -90,9 +90,10 @@ fn parse(r: *Rd) -> (Ifd, err) {
     if magic == 43u32 { ret (h, Unsupported) }
     if magic != 42u32 { ret (h, Invalid) }
     let ifd = usize(u32_at(r, 4usize))
-    if ifd + 2usize > d.len { ret (h, Invalid) }
+    if ifd > d.len || d.len - ifd < 2usize { ret (h, Invalid) }
     let n = usize(u16_at(r, ifd))
-    if ifd + 2usize + n * 12usize + 4usize > d.len { ret (h, Invalid) }
+    let table_len = 2usize + n * 12usize + 4usize
+    if table_len > d.len - ifd { ret (h, Invalid) }
     h.bits = 1u32
     h.compression = 1u32
     h.samples = 1u32
@@ -103,6 +104,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
     var bits_type = 0u32
     var bits_count = 0u32
     var strips = 0u32
+    var strip_counts = 0u32
     var extra_at = 0usize
     var extra_count = 0u32
     var tiled = false
@@ -142,7 +144,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
             } else {
                 h.counts_at = at
                 h.counts_type = t
-                if count != strips && strips != 0u32 { ret (h, Invalid) }
+                strip_counts = count
             }
         } else if tag == 320u32 {
             if t != 3u32 { ret (h, Invalid) }
@@ -166,6 +168,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
         k += 1usize
     }
     if tiled { ret (h, Unsupported) }
+    if strip_counts != 0u32 && strip_counts != strips { ret (h, Invalid) }
     if h.width == 0u32 || h.height == 0u32 { ret (h, Invalid) }
     if h.offsets_at == 0usize || h.counts_at == 0usize && h.compression != 1u32 { ret (h, Invalid) }
     if h.planar != 1u32 { ret (h, Unsupported) }
@@ -187,7 +190,7 @@ fn parse(r: *Rd) -> (Ifd, err) {
     if h.predictor != 1u32 && (h.predictor != 2u32 || h.bits != 8u32) { ret (h, Unsupported) }
     if h.rows_per_strip == 0u32 { ret (h, Invalid) }
     if h.rows_per_strip > h.height { h.rows_per_strip = h.height }
-    h.strips = usize((h.height + h.rows_per_strip - 1u32) / h.rows_per_strip)
+    h.strips = usize(1u32 + (h.height - 1u32) / h.rows_per_strip)
     if strips != 0u32 && usize(strips) < h.strips { ret (h, Invalid) }
     h.extra = 0u32
     if extra_count > 0u32 { h.extra = u16_at(r, extra_at) }
@@ -269,7 +272,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
     var first = 0u32
     while true {
         while nbits < size {
-            if pos >= src.len { ret (produced, ok) }
+            if pos >= src.len { ret (produced, Invalid) }
             acc = (acc << 8u32) | u32(src[pos])
             nbits += 8u32
             pos += 1usize
@@ -285,7 +288,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
         }
         if old == 4294967295u32 {
             if code >= 256u32 { ret (produced, Invalid) }
-            if produced >= out.len { break }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = u8(code)
             produced += 1usize
             old = code
@@ -312,7 +315,7 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
         sp += 1usize
         while sp > 0usize {
             sp -= 1usize
-            if produced >= out.len { ret (produced, ok) }
+            if produced >= out.len { ret (produced, Invalid) }
             out[produced] = stack[sp]
             produced += 1usize
         }

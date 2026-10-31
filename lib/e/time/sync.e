@@ -63,7 +63,14 @@ fn marzullo(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> 
 fn marzullo_estimate(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> (i64, err) {
     let (lo, hi, _, e) = marzullo(lows, highs, n, scratch)
     if e != ok { ret (0i64, e) }
-    ret (lo + (hi - lo) / 2i64, ok)
+    // Preserve `lo + (hi - lo) / 2`'s floor midpoint without overflowing the difference.
+    var left = lo / 2i64
+    var right = hi / 2i64
+    if lo < 0i64 && lo % 2i64 != 0i64 { left -= 1i64 }
+    if hi < 0i64 && hi % 2i64 != 0i64 { right -= 1i64 }
+    let left_remainder = lo - left * 2i64
+    let right_remainder = hi - right * 2i64
+    ret (left + right + (left_remainder + right_remainder) / 2i64, ok)
 }
 
 // The master's step: `offsets[i]` is node i's clock minus the master's (the
@@ -129,8 +136,8 @@ fn cristian(t0_send: i64, t_server: i64, t1_receive: i64, min_one_way: i64) -> (
 // reads its own clock. A timestamp is the 64-bit NTP fixed point (32 bits of seconds since
 // 1900-01-01, 32 of fraction); with the usual pivot (seconds with the top bit set are era 0,
 // the rest era 1) it covers 1968-01-20 03:14:08 to 2104-02-26 06:28:16 UTC, and conversions
-// outside that are refused. 16.16 "short" values (root delay and dispersion) are nanoseconds
-// in and out. Extension fields and the MAC after byte 48 are ignored on decode and never
+// outside that are refused. The 16.16 root delay is signed and root dispersion is unsigned;
+// both have nanosecond conversions. Extension fields and the MAC after byte 48 are ignored on decode and never
 // written. `offset_delay` is RFC 5905 section 8's clock offset and round-trip delay.
 
 error KissOfDeath
@@ -144,7 +151,7 @@ const NTP_MODE_SERVER: u8 = 4u8
 
 type NtpPacket = struct {
     leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32,
-    root_delay: u32, root_dispersion: u32, reference_id: u32,
+    root_delay: i32, root_dispersion: u32, reference_id: u32,
     reference: u64, origin: u64, receive: u64, transmit: u64,
 }
 
@@ -173,6 +180,16 @@ fn signed_byte(b: u8) -> i32 {
     ret i32(b)
 }
 
+fn i32_from_bits(v: u32) -> i32 {
+    if v < 2147483648u32 { ret i32(v) }
+    ret i32(0i64 - i64(4294967296u64 - u64(v)))
+}
+
+fn bits_from_i32(v: i32) -> u32 {
+    if v >= 0i32 { ret u32(v) }
+    ret u32(4294967296i64 + i64(v))
+}
+
 // Parse the first 48 bytes. Fewer is refused.
 fn ntp_decode(bytes: []const u8) -> (NtpPacket, err) {
     if bytes.len < 48usize { ret (zero, Invalid) }
@@ -180,7 +197,7 @@ fn ntp_decode(bytes: []const u8) -> (NtpPacket, err) {
     ret (NtpPacket {
         leap: first >> 6u8, version: (first >> 3u8) & 7u8, mode: first & 7u8, stratum: bytes[1usize],
         poll: signed_byte(bytes[2usize]), precision: signed_byte(bytes[3usize]),
-        root_delay: read_u32(bytes, 4usize), root_dispersion: read_u32(bytes, 8usize), reference_id: read_u32(bytes, 12usize),
+        root_delay: i32_from_bits(read_u32(bytes, 4usize)), root_dispersion: read_u32(bytes, 8usize), reference_id: read_u32(bytes, 12usize),
         reference: read_u64(bytes, 16usize), origin: read_u64(bytes, 24usize), receive: read_u64(bytes, 32usize), transmit: read_u64(bytes, 40usize),
     }, ok)
 }
@@ -193,7 +210,7 @@ fn ntp_encode(p: NtpPacket, out: []u8) -> err {
     out[1usize] = p.stratum
     out[2usize] = u8((p.poll + 256i32) & 255i32)
     out[3usize] = u8((p.precision + 256i32) & 255i32)
-    write_u32(out, 4usize, p.root_delay)
+    write_u32(out, 4usize, bits_from_i32(p.root_delay))
     write_u32(out, 8usize, p.root_dispersion)
     write_u32(out, 12usize, p.reference_id)
     write_u64(out, 16usize, p.reference)
@@ -245,9 +262,16 @@ fn unix_nanos_to_ntp(nanos: i64) -> (u64, err) {
     ret ((u64(ntp_seconds) & 4294967295u64) << 32u64 | fraction, ok)
 }
 
-// A 16.16 value (root delay, root dispersion) as nanoseconds, and back (refused above 65535.99 s or below 0).
+// An unsigned 16.16 value (such as root dispersion) as nanoseconds, and back (refused above 65535.99 s or below 0).
 fn ntp_short_to_nanos(v: u32) -> i64 {
     ret i64(v >> 16u32) * 1000000000i64 + ((i64(v & 65535u32) * 1000000000i64 + 32768i64) / 65536i64)
+}
+
+// A signed 16.16 root delay as nanoseconds, rounded to the nearest nanosecond.
+fn ntp_signed_short_to_nanos(v: i32) -> i64 {
+    let scaled = i64(v) * 1000000000i64
+    if scaled < 0i64 { ret 0i64 - ((0i64 - scaled + 32768i64) / 65536i64) }
+    ret (scaled + 32768i64) / 65536i64
 }
 
 fn nanos_to_ntp_short(nanos: i64) -> (u32, err) {

@@ -25,6 +25,46 @@ fn strip_cr(line: str) -> str {
     ret line
 }
 
+// RFC 7468 labels are printable ASCII words separated by at most one space or
+// hyphen. Keeping the delimiter sequence out of a label also prevents it from
+// changing the BEGIN or END line that encode writes.
+fn valid_label(label: str) -> bool {
+    if label.len == 0usize { ret false }
+    var separated = false
+    var at = 0usize
+    while at < label.len {
+        let byte = label[at]
+        if byte == 32u8 || byte == 45u8 {
+            if at == 0usize || separated { ret false }
+            separated = true
+        } else {
+            if byte < 33u8 || byte > 126u8 { ret false }
+            separated = false
+        }
+        at += 1usize
+    }
+    ret !separated
+}
+
+fn valid_header_name(name: str) -> bool {
+    if name.len == 0usize { ret false }
+    var at = 0usize
+    while at < name.len {
+        if name[at] == 58u8 || name[at] == 13u8 || name[at] == 10u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn valid_header_value(value: str) -> bool {
+    var at = 0usize
+    while at < value.len {
+        if value[at] == 13u8 || value[at] == 10u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn is_base64_byte(c: u8) -> bool {
     ret str.is_ascii_alnum(c) || c == 43u8 || c == 47u8 || c == 61u8
 }
@@ -38,7 +78,7 @@ fn decode(a: *mem.Arena, source: str, byte_limit: usize) -> (Block, str, err) {
     let begin_line = strip_cr(source[at..end])
     if !str.ends_with(begin_line, "-----") { ret (zero, source, Invalid) }
     let label = begin_line[11usize..begin_line.len - 5usize]
-    if label.len == 0usize { ret (zero, source, Invalid) }
+    if !valid_label(label) { ret (zero, source, Invalid) }
     at = end + 1usize
     if at > source.len { ret (zero, source, Invalid) }
     // Header lines: a colon in the first line marks a header block, closed by an empty line.
@@ -114,10 +154,18 @@ fn decode(a: *mem.Arena, source: str, byte_limit: usize) -> (Block, str, err) {
 }
 
 fn encode(writer: *io.Writer, block: *const Block) -> err {
+    // Validate all text before writing the BEGIN line so an invalid block cannot
+    // leave a partial, structurally injected PEM document in the caller's writer.
+    if !valid_label(block.label) { ret Invalid }
+    var index = 0usize
+    while index < block.headers.len {
+        if !valid_header_name(block.headers[index].name) || !valid_header_value(block.headers[index].value) { ret Invalid }
+        index += 1usize
+    }
     try io.write_all(writer, "-----BEGIN ")
     try io.write_all(writer, block.label)
     try io.write_all(writer, "-----\n")
-    var index = 0usize
+    index = 0usize
     while index < block.headers.len {
         try io.write_all(writer, block.headers[index].name)
         try io.write_all(writer, ": ")

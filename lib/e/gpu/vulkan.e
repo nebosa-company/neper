@@ -9,6 +9,7 @@
 
 use e.mem
 use e.os
+use e.sync
 
 error NoLoader
 error NoDevice
@@ -43,6 +44,7 @@ type Api = struct {
     free_memory: fn(usize, usize, usize),
     bind_buffer_memory: fn(usize, usize, usize, u64) -> i32,
     map_memory: fn(usize, usize, u64, u64, u32, **u8) -> i32,
+    unmap_memory: fn(usize, usize),
     get_buffer_device_address: fn(usize, *u8) -> u64,
     device_wait_idle: fn(usize) -> i32,
     create_shader_module: fn(usize, *u8, usize, *usize) -> i32,
@@ -114,6 +116,7 @@ type Buffer = struct {
     memory: usize,
     address: u64,
     bytes: []u8,
+    mapped: bool,
 }
 
 var api: Api = zero
@@ -121,6 +124,8 @@ var api: Api = zero
 var loader: os.Lib = zero
 var loaded: bool = zero
 var instance: usize = zero
+// Device enumeration can be called by several application threads.
+var loader_locks: [1]sync.Mutex = zero
 
 fn library_name() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "vulkan-1.dll" }
@@ -177,6 +182,8 @@ fn put_const_pointer(bytes: []u8, at: usize, pointee: []const u8) {
 
 // The loader and every entry point this runtime calls, once per process.
 fn load(a: *mem.Arena) -> err {
+    sync.mutex_lock(&loader_locks[0usize])
+    defer sync.mutex_unlock(&loader_locks[0usize])
     if loaded { ret ok }
     let (library, library_error) = os.dlopen(a, library_name())
     if library_error != ok { ret NoLoader }
@@ -197,8 +204,17 @@ fn load(a: *mem.Arena) -> err {
     let (p15, e15) = os.dlsym[fn(usize, usize, usize)](a, library, "vkFreeMemory")
     let (p16, e16) = os.dlsym[fn(usize, usize, usize, u64) -> i32](a, library, "vkBindBufferMemory")
     let (p17, e17) = os.dlsym[fn(usize, usize, u64, u64, u32, **u8) -> i32](a, library, "vkMapMemory")
-    let (p18, e18) = os.dlsym[fn(usize, *u8) -> u64](a, library, "vkGetBufferDeviceAddress")
-    let (p19, e19) = os.dlsym[fn(usize) -> i32](a, library, "vkDeviceWaitIdle")
+    let (p18, e18) = os.dlsym[fn(usize, usize)](a, library, "vkUnmapMemory")
+    let (p19, e19) = os.dlsym[fn(usize, *u8) -> u64](a, library, "vkGetBufferDeviceAddress")
+    let (p20, e20) = os.dlsym[fn(usize) -> i32](a, library, "vkDeviceWaitIdle")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
+    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
     let dispatch_error = load_dispatch(a, library)
     if dispatch_error != ok {
         let closed = os.dlclose(library)
@@ -209,20 +225,27 @@ fn load(a: *mem.Arena) -> err {
         let closed = os.dlclose(library)
         ret cache_error
     }
-    loader = library
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret NoLoader }
-    if e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok { ret NoLoader }
-    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, get_buffer_device_address: p18, device_wait_idle: p19, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
+    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, unmap_memory: p18, get_buffer_device_address: p19, device_wait_idle: p20, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
     // One instance for the process: the application record, then the instance's.
     let (application, application_error) = record(a, 48usize)
-    if application_error != ok { ret application_error }
+    if application_error != ok {
+        let closed = os.dlclose(library)
+        ret application_error
+    }
     put32(application, 44usize, usize(API_VERSION))
     let (create, create_error) = record(a, 64usize)
-    if create_error != ok { ret create_error }
+    if create_error != ok {
+        let closed = os.dlclose(library)
+        ret create_error
+    }
     put32(create, 0usize, 1usize)
     put_pointer(create, 24usize, application)
     var made = 0usize
-    if api.create_instance(&create[0usize], 0usize, &made) != 0i32 { ret NoLoader }
+    if api.create_instance(&create[0usize], 0usize, &made) != 0i32 {
+        let closed = os.dlclose(library)
+        ret NoLoader
+    }
+    loader = library
     instance = made
     loaded = true
     ret ok
@@ -708,44 +731,41 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     if api.create_buffer(context.device, &create[0usize], 0usize, &handle) != 0i32 { ret (made, OutOfMemory) }
     made.handle = handle
     let (requirements, requirements_error) = record(a, 24usize)
-    if requirements_error != ok { ret (made, requirements_error) }
+    if requirements_error != ok { ret (rollback_buffer(context, made), requirements_error) }
     api.get_buffer_memory_requirements(context.device, handle, &requirements[0usize])
     if (get32(requirements, 16usize) & (1usize << usize(context.memory_type))) == 0usize {
-        api.destroy_buffer(context.device, handle, 0usize)
-        ret (made, Unsupported)
+        ret (rollback_buffer(context, made), Unsupported)
     }
     let (flags, flags_error) = record(a, 24usize)
-    if flags_error != ok { ret (made, flags_error) }
+    if flags_error != ok { ret (rollback_buffer(context, made), flags_error) }
     put32(flags, 0usize, 1000060000usize)
     put32(flags, 16usize, 2usize)
     let (allocate, allocate_error) = record(a, 32usize)
-    if allocate_error != ok { ret (made, allocate_error) }
+    if allocate_error != ok { ret (rollback_buffer(context, made), allocate_error) }
     put32(allocate, 0usize, 5usize)
     put_pointer(allocate, 8usize, flags)
     put64(allocate, 16usize, get64(requirements, 0usize))
     put32(allocate, 24usize, usize(context.memory_type))
     var memory = 0usize
     if api.allocate_memory(context.device, &allocate[0usize], 0usize, &memory) != 0i32 {
-        api.destroy_buffer(context.device, handle, 0usize)
-        ret (made, OutOfMemory)
+        ret (rollback_buffer(context, made), OutOfMemory)
     }
     made.memory = memory
     if api.bind_buffer_memory(context.device, handle, memory, 0u64) != 0i32 {
-        free(context, made)
-        ret (made, Failed)
+        ret (rollback_buffer(context, made), Failed)
     }
     var mapped: *u8 = zero
     if api.map_memory(context.device, memory, 0u64, u64(bytes_size), 0u32, &mapped) != 0i32 {
-        free(context, made)
-        ret (made, Failed)
+        ret (rollback_buffer(context, made), Failed)
     }
+    made.mapped = true
     var region: mem.Arena = zero
     region.base = mapped
     region.cap = bytes_size
     region.off = 0usize
     made.bytes = mem.view(&region, 0usize, size)
     let (address_info, address_error) = record(a, 24usize)
-    if address_error != ok { ret (made, address_error) }
+    if address_error != ok { ret (rollback_buffer(context, made), address_error) }
     put32(address_info, 0usize, 1000244001usize)
     put64(address_info, 16usize, handle)
     made.address = api.get_buffer_device_address(context.device, &address_info[0usize])
@@ -753,6 +773,78 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
 }
 
 fn free(context: Context, made: Buffer) {
+    if made.memory != 0usize && made.mapped { api.unmap_memory(context.device, made.memory) }
     if made.handle != 0usize { api.destroy_buffer(context.device, made.handle, 0usize) }
     if made.memory != 0usize { api.free_memory(context.device, made.memory, 0usize) }
+}
+
+// An unsuccessful constructor owns no Vulkan handles. A successfully mapped allocation
+// is unmapped before its buffer and memory are released.
+fn rollback_buffer(context: Context, made: Buffer) -> Buffer {
+    free(context, made)
+    ret zero
+}
+
+var buffer_test_destroyed: usize = zero
+
+fn buffer_test_create(device: usize, create: *u8, allocator: usize, out: *usize) -> i32 {
+    *out = 41usize
+    ret 0i32
+}
+
+fn buffer_test_destroy(device: usize, handle: usize, allocator: usize) {
+    if handle == 41usize { buffer_test_destroyed += 1usize }
+}
+
+var buffer_test_release_step: usize = zero
+
+fn buffer_test_unmap(device: usize, memory: usize) {
+    if memory == 43usize && buffer_test_release_step == 0usize { buffer_test_release_step = 1usize }
+}
+
+fn buffer_test_free(device: usize, memory: usize, allocator: usize) {
+    if memory == 43usize && buffer_test_release_step == 1usize { buffer_test_release_step = 2usize }
+}
+
+// The first record after `vkCreateBuffer` must tear the handle down when its arena is full.
+// This fake API makes the ownership boundary executable on hosts without a Vulkan loader.
+@test
+fn buffer_rolls_back_after_record_exhaustion(a: *mem.Arena) -> err {
+    let saved_api = api
+    defer { api = saved_api }
+    var fake: Api = zero
+    fake.create_buffer = buffer_test_create
+    fake.destroy_buffer = buffer_test_destroy
+    api = fake
+    buffer_test_destroyed = 0usize
+    var storage: [56]u8 = zero
+    var limited = mem.arena_from(storage[..])
+    var context: Context = zero
+    context.device = 1usize
+    let (made, made_error) = buffer(&limited, context, 32usize)
+    if made_error != mem.Exhausted { ret Failed }
+    if made.handle != 0usize || made.memory != 0usize || made.address != 0u64 || made.bytes.len != 0usize { ret Failed }
+    if buffer_test_destroyed != 1usize { ret Failed }
+    ret ok
+}
+
+// A mapped allocation must reach vkUnmapMemory before vkFreeMemory. Keep this
+// executable with a fake dispatch so hosts without a Vulkan driver cover it.
+@test
+fn buffer_unmaps_before_memory_free(a: *mem.Arena) -> err {
+    let saved_api = api
+    defer { api = saved_api }
+    var fake: Api = zero
+    fake.unmap_memory = buffer_test_unmap
+    fake.free_memory = buffer_test_free
+    api = fake
+    buffer_test_release_step = 0usize
+    var made: Buffer = zero
+    made.memory = 43usize
+    made.mapped = true
+    var context: Context = zero
+    context.device = 1usize
+    free(context, made)
+    if buffer_test_release_step != 2usize { ret Failed }
+    ret ok
 }

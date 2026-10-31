@@ -10,6 +10,7 @@
 use e.mem
 use e.sync
 use e.time
+use e.atomic
 
 error Failed
 
@@ -50,6 +51,13 @@ fn main(a: *mem.Arena) -> err {
     if sync.rwlock_write_lock_for(&l, time.millis(20i64)) { ret Failed }
     sync.rwlock_write_unlock(&l)
     if !sync.rwlock_read_lock_for(&l, time.millis(20i64)) { ret Failed }
+    sync.rwlock_read_unlock(&l)
+    // Capture the held word, then release before the timed wait helper. This
+    // is the lost-wake window: the helper must retry and acquire immediately.
+    sync.rwlock_write_lock(&l)
+    let stale_seen = atomic.load(&l.state, .Acquire)
+    sync.rwlock_write_unlock(&l)
+    if !sync.rwlock_wait_read_after_seen(&l, stale_seen, 1000000000i64) { ret Failed }
     sync.rwlock_read_unlock(&l)
     sync.rwlock_write_lock(&l)
     sync.rwlock_write_unlock(&l)

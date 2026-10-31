@@ -34,6 +34,13 @@ const KIND_BUILTIN: u8 = 3u8
 const KIND_SHARED: u8 = 4u8
 const KIND_INPUT: u8 = 5u8
 
+// f16 and bf16 both travel through SPIR-V storage as a raw u16.  Keep the
+// source format beside that representation: its widening and one final rounding
+// are observably different, even though both have the same size and alignment.
+const T_NONE: u8 = 0u8
+const T_F16: u8 = 1u8
+const T_BF16: u8 = 2u8
+
 type Module = struct {
     bound: usize,
     capabilities: Words,
@@ -122,6 +129,7 @@ type Values = struct {
     id: []usize,
     ty: []usize,
     signed: []bool,
+    half_kind: []u8,
     offset: []usize,
     dynamic: []usize,
 }
@@ -246,7 +254,7 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                     if instruction.opcode == .Call {
                         if instruction.immediate >= builder.function_ref_count { ret (no_bytes, fail(&m, "a helper call has no function reference")) }
                         let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
-                        if is_math_fma(&m, c, builder, instruction) {
+                        if is_math_fma(&m, c, builder, instruction) || is_simd_fma(c, builder, instruction) {
                             instruction_at += 1usize
                             continue
                         }
@@ -911,6 +919,7 @@ fn value_type(m: *Module, ty: check.Type) -> (usize, bool) {
     if ty.kind == .Float {
         if same(ty.name, "f32") { ret (m.t_f32, false) }
         if same(ty.name, "f64") { ret (f64_type(m), false) }
+        if same(ty.name, "f16") || same(ty.name, "bf16") { ret (u16_type(m), false) }
         ret (0usize, false)
     }
     if ty.kind == .Integer {
@@ -924,6 +933,17 @@ fn value_type(m: *Module, ty: check.Type) -> (usize, bool) {
         if same(ty.name, "i64") { ret (u64_type(m), true) }
     }
     ret (0usize, false)
+}
+
+fn half_type(ty: check.Type) -> u8 {
+    if ty.kind != .Float { ret T_NONE }
+    if same(ty.name, "f16") { ret T_F16 }
+    if same(ty.name, "bf16") { ret T_BF16 }
+    ret T_NONE
+}
+
+fn tag_half(values: *Values, value: usize, ty: check.Type) {
+    values.half_kind[value] = half_type(ty)
 }
 
 fn same(left: str, right: str) -> bool {
@@ -1239,6 +1259,7 @@ fn emit_helper(a: *mem.Arena, m: *Module, c: *check.Checker, builder: *nir.Build
                 } else {
                     let (ty, signed) = value_type(m, instruction.ty)
                     scalar(&values, instruction.result, parameters[first], ty, signed)
+                    tag_half(&values, instruction.result, instruction.ty)
                 }
             }
         }
@@ -1288,6 +1309,8 @@ fn init_values(a: *mem.Arena, values: *Values, count: usize) -> err {
     if tys_error != ok { ret tys_error }
     let (signs, signs_error) = mem.alloc[bool](a, count)
     if signs_error != ok { ret signs_error }
+    let (narrows, narrows_error) = mem.alloc[u8](a, count)
+    if narrows_error != ok { ret narrows_error }
     let (offsets, offsets_error) = mem.alloc[usize](a, count)
     if offsets_error != ok { ret offsets_error }
     let (dynamics, dynamics_error) = mem.alloc[usize](a, count)
@@ -1298,6 +1321,7 @@ fn init_values(a: *mem.Arena, values: *Values, count: usize) -> err {
         ids[at] = 0usize
         tys[at] = 0usize
         signs[at] = false
+        narrows[at] = T_NONE
         offsets[at] = 0usize
         dynamics[at] = 0usize
         at += 1usize
@@ -1306,6 +1330,7 @@ fn init_values(a: *mem.Arena, values: *Values, count: usize) -> err {
     values.id = ids
     values.ty = tys
     values.signed = signs
+    values.half_kind = narrows
     values.offset = offsets
     values.dynamic = dynamics
     ret ok
@@ -1348,7 +1373,7 @@ fn declare_privates(m: *Module, c: *check.Checker, builder: *nir.Builder, functi
             bytes = instruction.immediate * 8usize
             if bytes == 0usize { bytes = 8usize }
         }
-        if instruction.opcode == .Parameter && aggregate(instruction.ty) {
+        if (instruction.opcode == .Parameter || instruction.opcode == .Call) && aggregate(instruction.ty) {
             let (words, words_error) = aggregate_words(c, instruction.ty)
             if words_error != ok { ret words_error }
             bytes = words * 4usize
@@ -1677,13 +1702,136 @@ fn is_math_fma(m: *Module, c: *check.Checker, builder: *nir.Builder, call: nir.I
     ret false
 }
 
+// `simd.fma` is a vector-valued generic helper.  SPIR-V's scalar emitter keeps
+// aggregates in private word arrays rather than as composite function values, so
+// lower its short lane loop here instead of giving the helper an ABI that cannot
+// preserve a raw f16/bf16 lane representation.
+fn is_simd_fma(c: *check.Checker, builder: *nir.Builder, call: nir.Instruction) -> bool {
+    if !c.has_simd || call.opcode != .Call || call.immediate >= builder.function_ref_count { ret false }
+    let reference = builder.function_refs[call.immediate]
+    if !same(reference.name, "fma") { ret false }
+    var at = check.function_row(c, 0usize)
+    while at < c.function_count {
+        let function = c.functions[at]
+        if function.owner_module_index == reference.module_index && function.instance_id == reference.instance && same(function.name, "fma") {
+            var declared = function.module_index
+            let generic = c.function_generics[at]
+            if generic.instance && generic.template_index < c.function_count { declared = c.functions[generic.template_index].module_index }
+            if declared == c.simd_module { ret true }
+        }
+        at = check.function_row(c, at + 1usize)
+    }
+    ret false
+}
+
+fn private_u16_load(m: *Module, values: *Values, address: usize, extra: usize) -> usize {
+    let low = load_word(m, private_word(m, values, address, extra))
+    let bytes = private_bytes(m, values, address, extra)
+    let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+    let narrowed = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, low, shift)
+    ret convert(m, OP_U_CONVERT, u16_type(m), narrowed)
+}
+
+fn private_u16_store(m: *Module, values: *Values, address: usize, extra: usize, raw: usize) {
+    let pointer = private_word(m, values, address, extra)
+    let old = load_word(m, pointer)
+    let bytes = private_bytes(m, values, address, extra)
+    let shift = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bytes, constant(m, m.t_u32, 3usize)), constant(m, m.t_u32, 3usize))
+    let mask = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 65535usize), shift)
+    let cleared = binary(m, OP_BITWISE_AND, m.t_u32, old, convert(m, OP_NOT, m.t_u32, mask))
+    let widened = convert(m, OP_U_CONVERT, m.t_u32, raw)
+    let placed = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, widened, shift)
+    store_word(m, pointer, binary(m, OP_BITWISE_OR, m.t_u32, cleared, placed))
+}
+
+fn simd_lane_load(m: *Module, values: *Values, address: usize, extra: usize, lane: check.Type) -> usize {
+    if (half_type(lane) != T_NONE) { ret private_u16_load(m, values, address, extra) }
+    if same(lane.name, "f32") { ret convert(m, OP_BITCAST, m.t_f32, load_word(m, private_word(m, values, address, extra))) }
+    let low = load_word(m, private_word(m, values, address, extra))
+    let high = load_word(m, private_word(m, values, address, extra + 4usize))
+    ret convert(m, OP_BITCAST, f64_type(m), pair(m, low, high))
+}
+
+fn simd_lane_store(m: *Module, values: *Values, address: usize, extra: usize, lane: check.Type, value: usize) {
+    if (half_type(lane) != T_NONE) {
+        private_u16_store(m, values, address, extra, value)
+        ret
+    }
+    if same(lane.name, "f32") {
+        store_word(m, private_word(m, values, address, extra), convert(m, OP_BITCAST, m.t_u32, value))
+        ret
+    }
+    let words = convert(m, OP_BITCAST, m.t_v2u32, value)
+    store_word(m, private_word(m, values, address, extra), extract(m, words, 0usize))
+    store_word(m, private_word(m, values, address, extra + 4usize), extract(m, words, 1usize))
+}
+
+fn emit_simd_fma(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.immediate >= builder.function_ref_count { ret fail(m, "a simd.fma call has no function reference") }
+    let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
+    if !found || callee >= m.signatures.entries.len { ret fail(m, "a simd.fma call has no signature") }
+    let signature = m.signatures.entries[callee]
+    if signature.return_count != 1usize || signature.first_return_type >= m.signatures.types.len { ret fail(m, "a simd.fma call has no vector result") }
+    let vector_type = m.signatures.types[signature.first_return_type]
+    var destination = 0usize
+    var first_argument = 0usize
+    if instruction.has_result {
+        if instruction.operand_count != 3usize { ret fail(m, "a simd.fma call has the wrong argument count") }
+        destination = instruction.result
+    } else {
+        if instruction.operand_count != 4usize { ret fail(m, "a simd.fma call has the wrong hidden result") }
+        destination = operand(builder, instruction, 0usize)
+        first_argument = 1usize
+    }
+    let (lanes, vector) = check.vector_lanes(c, vector_type)
+    if !vector || !lanes.has_element || lanes.element >= c.type_count { ret fail(m, "a simd.fma result is not a concrete vector") }
+    let lane = c.types[lanes.element]
+    if lane.kind != .Float || (!same(lane.name, "f16") && !same(lane.name, "bf16") && !same(lane.name, "f32") && !same(lane.name, "f64")) { ret fail(m, "simd.fma has an unsupported lane type") }
+    let (lane_info, lane_error) = layout.type_info(c, lane)
+    if lane_error != ok { ret lane_error }
+    if lane_info.size != 2usize && lane_info.size != 4usize && lane_info.size != 8usize { ret fail(m, "simd.fma has an unsupported lane size") }
+    let left = operand(builder, instruction, first_argument)
+    let right = operand(builder, instruction, first_argument + 1usize)
+    let addend = operand(builder, instruction, first_argument + 2usize)
+    if KIND_PRIVATE != values.kind[destination] || KIND_PRIVATE != values.kind[left] || KIND_PRIVATE != values.kind[right] || KIND_PRIVATE != values.kind[addend] { ret fail(m, "simd.fma needs private vector lanes") }
+    let format = half_type(lane)
+    var lane_at = 0usize
+    while lane_at < lanes.array_length {
+        let offset = lane_at * lane_info.size
+        let a = simd_lane_load(m, values, left, offset, lane)
+        let b = simd_lane_load(m, values, right, offset, lane)
+        let c_value = simd_lane_load(m, values, addend, offset, lane)
+        var result = 0usize
+        if (format != T_NONE) {
+            result = half_round(m, format, float_fma(m, half_widen(m, format, a), half_widen(m, format, b), half_widen(m, format, c_value)))
+        } else {
+            var float_type = m.t_f32
+            if same(lane.name, "f64") { float_type = f64_type(m) }
+            result = float_fma_of(m, float_type, a, b, c_value)
+        }
+        simd_lane_store(m, values, destination, offset, lane, result)
+        lane_at += 1usize
+    }
+    ret ok
+}
+
 fn emit_fma(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     if instruction.operand_count != 3usize || !instruction.has_result { ret fail(m, "a math.fma call has the wrong argument count") }
-    if instruction.ty.kind != .Float || (!same(instruction.ty.name, "f32") && !same(instruction.ty.name, "f64")) { ret fail(m, "math.fma is written for f32 and f64 only") }
+    let half_kind = half_type(instruction.ty)
+    if instruction.ty.kind != .Float || (half_kind == T_NONE && !same(instruction.ty.name, "f32") && !same(instruction.ty.name, "f64")) { ret fail(m, "math.fma is written for floating-point values only") }
     let a = operand(builder, instruction, 0usize)
     let b = operand(builder, instruction, 1usize)
     let c_value = operand(builder, instruction, 2usize)
     if KIND_SCALAR != values.kind[a] || KIND_SCALAR != values.kind[b] || KIND_SCALAR != values.kind[c_value] { ret fail(m, "a math.fma argument is not a scalar") }
+    if (half_kind != T_NONE) {
+        if values.half_kind[a] != half_kind || values.half_kind[b] != half_kind || values.half_kind[c_value] != half_kind { ret fail(m, "a narrow math.fma mixes storage formats") }
+        let widened_a = half_widen(m, half_kind, values.id[a])
+        let widened_b = half_widen(m, half_kind, values.id[b])
+        let widened_c = half_widen(m, half_kind, values.id[c_value])
+        scalar(values, instruction.result, half_round(m, half_kind, float_fma(m, widened_a, widened_b, widened_c)), m.t_u16, false)
+        values.half_kind[instruction.result] = half_kind
+        ret ok
+    }
     var float_type = m.t_f32
     if same(instruction.ty.name, "f64") { float_type = f64_type(m) }
     let id = float_fma_of(m, float_type, values.id[a], values.id[b], values.id[c_value])
@@ -1694,6 +1842,7 @@ fn emit_fma(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, val
 fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     if instruction.immediate >= builder.function_ref_count { ret fail(m, "a helper call has no function reference") }
     if is_math_fma(m, c, builder, instruction) { ret emit_fma(m, builder, instruction, values) }
+    if is_simd_fma(c, builder, instruction) { ret emit_simd_fma(m, c, builder, instruction, values) }
     let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
     if !found || callee >= builder.function_count || m.function_ids[callee] == 0usize { ret fail(m, "a helper call has no SPIR-V body") }
     var result_type = m.t_void
@@ -1759,11 +1908,15 @@ fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: 
         put(&m.code, arguments[flat_at])
         flat_at += 1usize
     }
-    if instruction.has_result { scalar(values, instruction.result, result, result_type, signed) }
+    if instruction.has_result {
+        scalar(values, instruction.result, result, result_type, signed)
+        tag_half(values, instruction.result, instruction.ty)
+    }
     ret ok
 }
 
 fn emit_subgroup(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if (half_type(instruction.ty) != T_NONE) { ret fail(m, "a subgroup operation on a narrow float is not yet written as SPIR-V") }
     if instruction.immediate >= 5usize && instruction.immediate <= 10usize {
         if instruction.operand_count != 1usize { ret fail(m, "a subgroup reduction has the wrong argument count") }
         let value = operand(builder, instruction, 0usize)
@@ -1899,6 +2052,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         var bits = instruction.immediate
         if opcode == .Zero { bits = 0usize }
         scalar(values, instruction.result, constant(m, ty, bits), ty, signed)
+        tag_half(values, instruction.result, instruction.ty)
         ret ok
     }
     if opcode == .GlobalAddress { ret emit_global_address(m, builder, instruction, values) }
@@ -1912,6 +2066,7 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
     if opcode == .AtomicRmw { ret emit_atomic_rmw(m, builder, instruction, values) }
     if opcode == .AtomicCas { ret emit_atomic_cas(m, builder, instruction, values) }
     if opcode == .Cast { ret emit_cast(m, builder, instruction, values) }
+    if opcode == .Bitcast { ret emit_bitcast(m, builder, instruction, values) }
     if opcode == .Sqrt { ret emit_sqrt(m, builder, instruction, values) }
     if opcode == .Add || opcode == .AddWrap || opcode == .Subtract || opcode == .SubtractWrap || opcode == .Multiply || opcode == .MultiplyWrap || opcode == .Divide || opcode == .Remainder || opcode == .BitAnd || opcode == .BitOr || opcode == .BitXor || opcode == .ShiftLeft || opcode == .ShiftRight { ret emit_binary(m, builder, instruction, values) }
     if opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual { ret emit_compare(m, builder, instruction, values) }
@@ -1977,7 +2132,6 @@ fn emit_instruction(m: *Module, c: *check.Checker, builder: *nir.Builder, kernel
         ret ok
     }
     if opcode == .Phi { ret fail(m, "a phi operation is not yet written as SPIR-V") }
-    if opcode == .Bitcast { ret fail(m, "a bitcast operation is not yet written as SPIR-V") }
     if opcode == .AtomicFence { ret fail(m, "an atomic fence is not yet written as SPIR-V") }
     if opcode == .Switch { ret fail(m, "a switch is not yet written as SPIR-V") }
     if opcode == .Trap {
@@ -2031,6 +2185,7 @@ fn emit_parameter(m: *Module, c: *check.Checker, kernel: check.Function, instruc
     if !aggregate(instruction.ty) {
         let (ty, signed) = value_type(m, instruction.ty)
         scalar(values, instruction.result, device_load(m, address, ty), ty, signed)
+        tag_half(values, instruction.result, instruction.ty)
         ret ok
     }
     // A slice: the address's two words and the length, into the header's words.
@@ -2560,6 +2715,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         put(&m.code, id)
         put(&m.code, values.id[address])
         scalar(values, result, id, ty, signed)
+        tag_half(values, result, instruction.ty)
         ret ok
     }
     if KIND_BUILTIN == values.kind[address] {
@@ -2576,6 +2732,7 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         put(&m.code, id)
         put(&m.code, chain)
         scalar(values, result, id, ty, signed)
+        tag_half(values, result, instruction.ty)
         ret ok
     }
     if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
@@ -2603,11 +2760,13 @@ fn emit_load(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
             value = binary(m, OP_BITWISE_OR, m.t_u64, upper, convert(m, OP_U_CONVERT, m.t_u64, low))
         }
         scalar(values, result, value, ty, signed)
+        tag_half(values, result, instruction.ty)
         ret ok
     }
     if KIND_SCALAR != values.kind[address] { ret fail(m, "a load has no address") }
     if ty == m.t_bool { ret fail(m, "a bool in device memory is not a device storage type") }
     scalar(values, result, device_load(m, values.id[address], ty), ty, signed)
+    tag_half(values, result, instruction.ty)
     ret ok
 }
 
@@ -2620,6 +2779,8 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     }
     if KIND_SCALAR != values.kind[value] { ret fail(m, "a store of an aggregate is not yet written as SPIR-V") }
     let ty = values.ty[value]
+    let storage_half = half_type(instruction.ty)
+    if storage_half != T_NONE && values.half_kind[value] != storage_half { ret fail(m, "a narrow store changes its raw storage format") }
     if KIND_PRIVATE == values.kind[address] || KIND_SHARED == values.kind[address] {
         if ty == m.t_bool || ty == m.t_u8 || ty == m.t_u16 {
             let pointer = private_word(m, values, address, 0usize)
@@ -2664,13 +2825,285 @@ fn emit_store(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     ret ok
 }
 
+// Narrow formats never become an SPIR-V 16-bit float value.  They are raw u16
+// storage, widened into f32 for the operation, then rounded once back into their
+// own representation.  This keeps bf16 distinct from IEEE binary16 and avoids a
+// driver's native 16-bit arithmetic or conversion mode changing the language rule.
+fn f16_widen(m: *Module, raw: usize) -> usize {
+    let bits = convert(m, OP_U_CONVERT, m.t_u32, raw)
+    let sign = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 32768usize)), constant(m, m.t_u32, 16usize))
+    let exponent = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, bits, constant(m, m.t_u32, 10usize)), constant(m, m.t_u32, 31usize))
+    let fraction = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 1023usize))
+    let exponent_zero = binary(m, OP_I_EQUAL, m.t_bool, exponent, constant(m, m.t_u32, 0usize))
+    let exponent_max = binary(m, OP_I_EQUAL, m.t_bool, exponent, constant(m, m.t_u32, 31usize))
+    let fraction_zero = binary(m, OP_I_EQUAL, m.t_bool, fraction, constant(m, m.t_u32, 0usize))
+    let nan = binary(m, OP_LOGICAL_AND, m.t_bool, exponent_max, convert(m, OP_LOGICAL_NOT, m.t_bool, fraction_zero))
+    var mantissa = fraction
+    var subnormal_exponent = constant(m, m.t_u32, 113usize)
+    var step = 0usize
+    while step < 10usize {
+        let shift = binary(m, OP_U_LESS_THAN, m.t_bool, mantissa, constant(m, m.t_u32, 1024usize))
+        mantissa = select_u32(m, shift, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, mantissa, constant(m, m.t_u32, 1usize)), mantissa)
+        subnormal_exponent = select_u32(m, shift, binary(m, OP_I_SUB, m.t_u32, subnormal_exponent, constant(m, m.t_u32, 1usize)), subnormal_exponent)
+        step += 1usize
+    }
+    let normal_exponent = binary(m, OP_I_ADD, m.t_u32, exponent, constant(m, m.t_u32, 112usize))
+    let normal_bits = binary(m, OP_BITWISE_OR, m.t_u32, sign, binary(m, OP_BITWISE_OR, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, normal_exponent, constant(m, m.t_u32, 23usize)), binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, fraction, constant(m, m.t_u32, 13usize))))
+    let subnormal_bits = binary(m, OP_BITWISE_OR, m.t_u32, sign, binary(m, OP_BITWISE_OR, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, subnormal_exponent, constant(m, m.t_u32, 23usize)), binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, mantissa, constant(m, m.t_u32, 1023usize)), constant(m, m.t_u32, 13usize))))
+    let subnormal = binary(m, OP_LOGICAL_AND, m.t_bool, exponent_zero, convert(m, OP_LOGICAL_NOT, m.t_bool, fraction_zero))
+    let zero_or_subnormal = select_u32(m, subnormal, subnormal_bits, sign)
+    let infinity_bits = binary(m, OP_BITWISE_OR, m.t_u32, sign, constant(m, m.t_u32, 2139095040usize))
+    let finite = select_u32(m, exponent_zero, zero_or_subnormal, normal_bits)
+    let infinite = select_u32(m, exponent_max, infinity_bits, finite)
+    let canonical = select_u32(m, nan, constant(m, m.t_u32, 2143289344usize), infinite)
+    ret convert(m, OP_BITCAST, m.t_f32, canonical)
+}
+
+fn bf16_widen(m: *Module, raw: usize) -> usize {
+    let bits = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, convert(m, OP_U_CONVERT, m.t_u32, raw), constant(m, m.t_u32, 16usize))
+    let absolute = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483647usize))
+    let nan = binary(m, OP_U_GREATER_THAN, m.t_bool, absolute, constant(m, m.t_u32, 2139095040usize))
+    ret convert(m, OP_BITCAST, m.t_f32, select_u32(m, nan, constant(m, m.t_u32, 2143289344usize), bits))
+}
+
+fn half_widen(m: *Module, kind: u8, raw: usize) -> usize {
+    if (kind == T_F16) { ret f16_widen(m, raw) }
+    ret bf16_widen(m, raw)
+}
+
+fn f16_round(m: *Module, value: usize) -> usize {
+    let bits = convert(m, OP_BITCAST, m.t_u32, value)
+    let sign = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483648usize)), constant(m, m.t_u32, 16usize))
+    let absolute = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483647usize))
+    let nan = binary(m, OP_U_GREATER_THAN, m.t_bool, absolute, constant(m, m.t_u32, 2139095040usize))
+    let infinity = binary(m, OP_I_EQUAL, m.t_bool, absolute, constant(m, m.t_u32, 2139095040usize))
+    let overflow = binary(m, OP_U_GREATER_THAN_EQUAL, m.t_bool, absolute, constant(m, m.t_u32, 1199566848usize))
+    let exponent = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, absolute, constant(m, m.t_u32, 23usize))
+    let low_exponent = binary(m, OP_U_LESS_THAN, m.t_bool, exponent, constant(m, m.t_u32, 95usize))
+    let low_clamped_exponent = select_u32(m, low_exponent, constant(m, m.t_u32, 95usize), exponent)
+    // The subnormal sequence is selected away for normal inputs, but its shifts
+    // still execute in SPIR-V. Keep their count in 1..31 for every f32 bit pattern.
+    let high_exponent = binary(m, OP_U_GREATER_THAN, m.t_bool, low_clamped_exponent, constant(m, m.t_u32, 125usize))
+    let clamped_exponent = select_u32(m, high_exponent, constant(m, m.t_u32, 125usize), low_clamped_exponent)
+    let shift = binary(m, OP_I_SUB, m.t_u32, constant(m, m.t_u32, 126usize), clamped_exponent)
+    let mantissa = binary(m, OP_BITWISE_OR, m.t_u32, binary(m, OP_BITWISE_AND, m.t_u32, absolute, constant(m, m.t_u32, 8388607usize)), constant(m, m.t_u32, 8388608usize))
+    let subnormal_base = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, mantissa, shift)
+    let half = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 1usize), binary(m, OP_I_SUB, m.t_u32, shift, constant(m, m.t_u32, 1usize)))
+    let mask = binary(m, OP_I_SUB, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 1usize), shift), constant(m, m.t_u32, 1usize))
+    let tail = binary(m, OP_BITWISE_AND, m.t_u32, mantissa, mask)
+    let above_half = binary(m, OP_U_GREATER_THAN, m.t_bool, tail, half)
+    let at_half = binary(m, OP_I_EQUAL, m.t_bool, tail, half)
+    let odd = binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, subnormal_base, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 0usize))
+    let round_up = binary(m, OP_LOGICAL_OR, m.t_bool, above_half, binary(m, OP_LOGICAL_AND, m.t_bool, at_half, odd))
+    let subnormal = binary(m, OP_I_ADD, m.t_u32, subnormal_base, select_u32(m, round_up, constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize)))
+    let normal_adjusted = binary(m, OP_I_ADD, m.t_u32, absolute, binary(m, OP_I_ADD, m.t_u32, constant(m, m.t_u32, 4095usize), binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, absolute, constant(m, m.t_u32, 13usize)), constant(m, m.t_u32, 1usize))))
+    let normal = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, normal_adjusted, constant(m, m.t_u32, 13usize)), constant(m, m.t_u32, 32767usize))
+    let is_subnormal = binary(m, OP_U_LESS_THAN, m.t_bool, absolute, constant(m, m.t_u32, 947912704usize))
+    let underflow = binary(m, OP_U_LESS_THAN, m.t_bool, absolute, constant(m, m.t_u32, 855638016usize))
+    let rounded_subnormal = binary(m, OP_BITWISE_OR, m.t_u32, sign, subnormal)
+    let finite = select_u32(m, is_subnormal, select_u32(m, underflow, sign, rounded_subnormal), binary(m, OP_BITWISE_OR, m.t_u32, sign, normal))
+    let infinity_bits = binary(m, OP_BITWISE_OR, m.t_u32, sign, constant(m, m.t_u32, 31744usize))
+    let saturated = select_u32(m, overflow, infinity_bits, finite)
+    let infinite = select_u32(m, infinity, infinity_bits, saturated)
+    ret convert(m, OP_U_CONVERT, m.t_u16, select_u32(m, nan, constant(m, m.t_u32, 32256usize), infinite))
+}
+
+fn bf16_round(m: *Module, value: usize) -> usize {
+    let bits = convert(m, OP_BITCAST, m.t_u32, value)
+    let absolute = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 2147483647usize))
+    let nan = binary(m, OP_U_GREATER_THAN, m.t_bool, absolute, constant(m, m.t_u32, 2139095040usize))
+    let upper = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, bits, constant(m, m.t_u32, 16usize))
+    let lower = binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, 65535usize))
+    let above_half = binary(m, OP_U_GREATER_THAN, m.t_bool, lower, constant(m, m.t_u32, 32768usize))
+    let at_half = binary(m, OP_I_EQUAL, m.t_bool, lower, constant(m, m.t_u32, 32768usize))
+    let odd = binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, upper, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 0usize))
+    let round_up = binary(m, OP_LOGICAL_OR, m.t_bool, above_half, binary(m, OP_LOGICAL_AND, m.t_bool, at_half, odd))
+    let rounded = binary(m, OP_I_ADD, m.t_u32, upper, select_u32(m, round_up, constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize)))
+    ret convert(m, OP_U_CONVERT, m.t_u16, select_u32(m, nan, constant(m, m.t_u32, 32704usize), rounded))
+}
+
+fn half_round(m: *Module, kind: u8, value: usize) -> usize {
+    if (kind == T_F16) { ret f16_round(m, value) }
+    ret bf16_round(m, value)
+}
+
+fn narrow_integer_width(m: *Module, ty: usize) -> usize {
+    if ty == m.t_u8 { ret 8usize }
+    if ty == m.t_u16 { ret 16usize }
+    if ty == m.t_u32 { ret 32usize }
+    ret 0usize
+}
+
+// Round an integer directly into a narrow format.  Routing an i32 or u32 through
+// f32 loses its low bits before the narrow rounding point; this is the one
+// round-to-nearest-even sequence over the integer magnitude instead.
+fn integer_to_narrow(m: *Module, kind: u8, bits: usize, width: usize, signed: bool) -> usize {
+    var sign_mask = 0usize
+    if width == 8usize { sign_mask = 128usize }
+    if width == 16usize { sign_mask = 32768usize }
+    if width == 32usize { sign_mask = 2147483648usize }
+    var negative = constant(m, m.t_bool, 0usize)
+    if signed { negative = binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, bits, constant(m, m.t_u32, sign_mask)), constant(m, m.t_u32, 0usize)) }
+    let magnitude = select_u32(m, negative, binary(m, OP_I_SUB, m.t_u32, constant(m, m.t_u32, 0usize), bits), bits)
+    var precision = 10usize
+    var exponent_add = 14usize
+    var infinity = 31744usize
+    if (kind == T_BF16) {
+        precision = 7usize
+        exponent_add = 126usize
+        infinity = 32640usize
+    }
+    var highest = constant(m, m.t_u32, 0usize)
+    var shifted = magnitude
+    var bit = 0usize
+    while bit < 31usize {
+        shifted = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, shifted, constant(m, m.t_u32, 1usize))
+        highest = select_u32(m, binary(m, OP_I_NOT_EQUAL, m.t_bool, shifted, constant(m, m.t_u32, 0usize)), constant(m, m.t_u32, bit + 1usize), highest)
+        bit += 1usize
+    }
+    let wide = binary(m, OP_U_GREATER_THAN, m.t_bool, highest, constant(m, m.t_u32, precision))
+    let low_highest = select_u32(m, wide, constant(m, m.t_u32, precision), highest)
+    let left_shift = binary(m, OP_I_SUB, m.t_u32, constant(m, m.t_u32, precision), low_highest)
+    let left = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, magnitude, left_shift)
+    // Keep the discarded-bit shift in range even for the left-shift path.
+    let safe_highest = select_u32(m, wide, highest, constant(m, m.t_u32, precision + 1usize))
+    let right_shift = binary(m, OP_I_SUB, m.t_u32, safe_highest, constant(m, m.t_u32, precision))
+    let right = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, magnitude, right_shift)
+    let mask = binary(m, OP_I_SUB, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 1usize), right_shift), constant(m, m.t_u32, 1usize))
+    let remainder = binary(m, OP_BITWISE_AND, m.t_u32, magnitude, mask)
+    let half = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 1usize), binary(m, OP_I_SUB, m.t_u32, right_shift, constant(m, m.t_u32, 1usize)))
+    let above_half = binary(m, OP_U_GREATER_THAN, m.t_bool, remainder, half)
+    let at_half = binary(m, OP_I_EQUAL, m.t_bool, remainder, half)
+    let odd = binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, right, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 0usize))
+    let round_up = binary(m, OP_LOGICAL_OR, m.t_bool, above_half, binary(m, OP_LOGICAL_AND, m.t_bool, at_half, odd))
+    let rounded_right = binary(m, OP_I_ADD, m.t_u32, right, select_u32(m, round_up, constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize)))
+    let mantissa = select_u32(m, wide, rounded_right, left)
+    let exponent = binary(m, OP_I_ADD, m.t_u32, highest, constant(m, m.t_u32, exponent_add))
+    let encoded = binary(m, OP_I_ADD, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, exponent, constant(m, m.t_u32, precision)), mantissa)
+    let capped = select_u32(m, binary(m, OP_U_GREATER_THAN_EQUAL, m.t_bool, encoded, constant(m, m.t_u32, infinity)), constant(m, m.t_u32, infinity), encoded)
+    let sign = select_u32(m, negative, constant(m, m.t_u32, 32768usize), constant(m, m.t_u32, 0usize))
+    let nonzero = binary(m, OP_BITWISE_OR, m.t_u32, sign, capped)
+    let is_zero = binary(m, OP_I_EQUAL, m.t_bool, magnitude, constant(m, m.t_u32, 0usize))
+    ret convert(m, OP_U_CONVERT, m.t_u16, select_u32(m, is_zero, constant(m, m.t_u32, 0usize), nonzero))
+}
+
+// A double has fifty-three significant bits, so f64 -> f16/bf16 cannot pass
+// through f32 without a possible double rounding.  Reduce its bit pair directly,
+// retain a jam bit for every discarded bit, then make the one nearest-even choice.
+fn f64_to_narrow(m: *Module, kind: u8, value: usize) -> usize {
+    let words = convert(m, OP_BITCAST, m.t_v2u32, value)
+    let low = extract(m, words, 0usize)
+    let high = extract(m, words, 1usize)
+    let exponent = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, high, constant(m, m.t_u32, 20usize)), constant(m, m.t_u32, 2047usize))
+    let fraction_high = binary(m, OP_BITWISE_AND, m.t_u32, high, constant(m, m.t_u32, 1048575usize))
+    let sign = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, high, constant(m, m.t_u32, 16usize)), constant(m, m.t_u32, 32768usize))
+    var precision = 10usize
+    var min_bias = 1009usize
+    var max_bias = 1038usize
+    var infinity = 31744usize
+    var nan = 32256usize
+    var nominal_shift = 42usize
+    if (kind == T_BF16) {
+        precision = 7usize
+        min_bias = 897usize
+        max_bias = 1150usize
+        infinity = 32640usize
+        nan = 32704usize
+        nominal_shift = 45usize
+    }
+    let exponent_zero = binary(m, OP_I_EQUAL, m.t_bool, exponent, constant(m, m.t_u32, 0usize))
+    let exponent_max = binary(m, OP_I_EQUAL, m.t_bool, exponent, constant(m, m.t_u32, 2047usize))
+    let fraction_zero = binary(m, OP_I_EQUAL, m.t_bool, binary(m, OP_BITWISE_OR, m.t_u32, fraction_high, low), constant(m, m.t_u32, 0usize))
+    let is_nan = binary(m, OP_LOGICAL_AND, m.t_bool, exponent_max, convert(m, OP_LOGICAL_NOT, m.t_bool, fraction_zero))
+    let is_infinite = binary(m, OP_LOGICAL_AND, m.t_bool, exponent_max, fraction_zero)
+    let below_minimum = binary(m, OP_U_LESS_THAN, m.t_bool, exponent, constant(m, m.t_u32, min_bias))
+    let subnormal_exponent = select_u32(m, below_minimum, exponent, constant(m, m.t_u32, min_bias))
+    let subnormal_shift = binary(m, OP_I_SUB, m.t_u32, constant(m, m.t_u32, min_bias), subnormal_exponent)
+    let shift = binary(m, OP_I_ADD, m.t_u32, constant(m, m.t_u32, nominal_shift), subnormal_shift)
+    let too_tiny = binary(m, OP_U_GREATER_THAN, m.t_bool, shift, constant(m, m.t_u32, 54usize))
+    let safe_shift = select_u32(m, too_tiny, constant(m, m.t_u32, 54usize), shift)
+    let pair_shift = binary(m, OP_I_SUB, m.t_u32, safe_shift, constant(m, m.t_u32, 2usize))
+    let high_shift = binary(m, OP_I_SUB, m.t_u32, pair_shift, constant(m, m.t_u32, 32usize))
+    let shifted = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, binary(m, OP_BITWISE_OR, m.t_u32, fraction_high, constant(m, m.t_u32, 1048576usize)), high_shift)
+    let lost_mask = binary(m, OP_I_SUB, m.t_u32, binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, constant(m, m.t_u32, 1usize), high_shift), constant(m, m.t_u32, 1usize))
+    let lost_high = binary(m, OP_BITWISE_AND, m.t_u32, fraction_high, lost_mask)
+    let lost = binary(m, OP_LOGICAL_OR, m.t_bool, binary(m, OP_I_NOT_EQUAL, m.t_bool, low, constant(m, m.t_u32, 0usize)), binary(m, OP_I_NOT_EQUAL, m.t_bool, lost_high, constant(m, m.t_u32, 0usize)))
+    let reduced = select_u32(m, lost, binary(m, OP_BITWISE_OR, m.t_u32, shifted, constant(m, m.t_u32, 1usize)), shifted)
+    let mantissa = binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, reduced, constant(m, m.t_u32, 2usize))
+    let guard_bit = binary(m, OP_BITWISE_AND, m.t_u32, binary(m, OP_SHIFT_RIGHT_LOGICAL, m.t_u32, reduced, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 1usize))
+    let sticky = binary(m, OP_BITWISE_AND, m.t_u32, reduced, constant(m, m.t_u32, 1usize))
+    let rounds_up = binary(m, OP_LOGICAL_AND, m.t_bool, binary(m, OP_I_NOT_EQUAL, m.t_bool, guard_bit, constant(m, m.t_u32, 0usize)), binary(m, OP_LOGICAL_OR, m.t_bool, binary(m, OP_I_NOT_EQUAL, m.t_bool, sticky, constant(m, m.t_u32, 0usize)), binary(m, OP_I_NOT_EQUAL, m.t_bool, binary(m, OP_BITWISE_AND, m.t_u32, mantissa, constant(m, m.t_u32, 1usize)), constant(m, m.t_u32, 0usize))))
+    let base_source = select_u32(m, below_minimum, constant(m, m.t_u32, min_bias), exponent)
+    let base_exponent = binary(m, OP_I_SUB, m.t_u32, base_source, constant(m, m.t_u32, min_bias))
+    let base = binary(m, OP_SHIFT_LEFT_LOGICAL, m.t_u32, base_exponent, constant(m, m.t_u32, precision))
+    let rounded = binary(m, OP_I_ADD, m.t_u32, binary(m, OP_I_ADD, m.t_u32, base, mantissa), select_u32(m, rounds_up, constant(m, m.t_u32, 1usize), constant(m, m.t_u32, 0usize)))
+    let capped = select_u32(m, binary(m, OP_U_GREATER_THAN_EQUAL, m.t_bool, rounded, constant(m, m.t_u32, infinity)), constant(m, m.t_u32, infinity), rounded)
+    let too_large = binary(m, OP_U_GREATER_THAN, m.t_bool, exponent, constant(m, m.t_u32, max_bias))
+    let finite = select_u32(m, too_tiny, sign, binary(m, OP_BITWISE_OR, m.t_u32, sign, capped))
+    let limited = select_u32(m, too_large, binary(m, OP_BITWISE_OR, m.t_u32, sign, constant(m, m.t_u32, infinity)), finite)
+    let zeroed = select_u32(m, exponent_zero, sign, limited)
+    let infinite = binary(m, OP_BITWISE_OR, m.t_u32, sign, constant(m, m.t_u32, infinity))
+    let special = select_u32(m, is_infinite, infinite, zeroed)
+    ret convert(m, OP_U_CONVERT, m.t_u16, select_u32(m, is_nan, constant(m, m.t_u32, nan), special))
+}
+
 fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
     let (ty, signed) = value_type(m, instruction.ty)
     if ty == 0usize || KIND_SCALAR != values.kind[source] { ret fail(m, "a conversion of this type is not yet written as SPIR-V") }
     let from = values.ty[source]
+    let source_half = values.half_kind[source]
+    let result_half = half_type(instruction.ty)
     if from == m.t_v2u32 || ty == m.t_v2u32 {
         if from != ty { ret fail(m, "a conversion between an address and an integer is not written as SPIR-V") }
+    }
+    if (result_half != T_NONE) {
+        if source_half == result_half {
+            scalar(values, instruction.result, values.id[source], m.t_u16, false)
+            values.half_kind[instruction.result] = result_half
+            ret ok
+        }
+        var widened = values.id[source]
+        if (source_half != T_NONE) {
+            widened = half_widen(m, source_half, values.id[source])
+        } else {
+            if from != m.t_f32 {
+                if from != 0usize && from == m.t_f64 {
+                    scalar(values, instruction.result, f64_to_narrow(m, result_half, values.id[source]), m.t_u16, false)
+                    values.half_kind[instruction.result] = result_half
+                    ret ok
+                }
+                let width = narrow_integer_width(m, from)
+                if width == 0usize { ret fail(m, "a wide float to narrow float conversion is not yet written as SPIR-V") }
+                var raw = values.id[source]
+                if from != m.t_u32 { raw = convert(m, OP_U_CONVERT, m.t_u32, raw) }
+                scalar(values, instruction.result, integer_to_narrow(m, result_half, raw, width, values.signed[source]), m.t_u16, false)
+                values.half_kind[instruction.result] = result_half
+                ret ok
+            }
+        }
+        scalar(values, instruction.result, half_round(m, result_half, widened), m.t_u16, false)
+        values.half_kind[instruction.result] = result_half
+        ret ok
+    }
+    if (source_half != T_NONE) {
+        let widened = half_widen(m, source_half, values.id[source])
+        if ty == m.t_f32 {
+            scalar(values, instruction.result, widened, ty, false)
+            ret ok
+        }
+        if ty != 0usize && ty == m.t_f64 {
+            scalar(values, instruction.result, convert(m, OP_F_CONVERT, ty, widened), ty, false)
+            ret ok
+        }
+        let integer_to = ty == m.t_u8 || ty == m.t_u16 || ty == m.t_u32 || (ty != 0usize && ty == m.t_u64)
+        if integer_to {
+            var opcode = OP_CONVERT_F_TO_U
+            if signed { opcode = OP_CONVERT_F_TO_S }
+            scalar(values, instruction.result, convert(m, opcode, ty, widened), ty, signed)
+            ret ok
+        }
+        ret fail(m, "a narrow float conversion is not yet written as SPIR-V")
     }
     let integer_from = from == m.t_u8 || from == m.t_u16 || from == m.t_u32 || (from != 0usize && from == m.t_u64)
     let integer_to = ty == m.t_u8 || ty == m.t_u16 || ty == m.t_u32 || (ty != 0usize && ty == m.t_u64)
@@ -2703,6 +3136,19 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         }
     }
     scalar(values, instruction.result, id, ty, signed)
+    ret ok
+}
+
+fn emit_bitcast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    let source = operand(builder, instruction, 0usize)
+    let (ty, signed) = value_type(m, instruction.ty)
+    if ty == 0usize || KIND_SCALAR != values.kind[source] { ret fail(m, "a bitcast of this type is not yet written as SPIR-V") }
+    let from = values.ty[source]
+    if from == m.t_bool || ty == m.t_bool || type_bytes(m, from) != type_bytes(m, ty) { ret fail(m, "a bitcast has unlike storage representations") }
+    var id = values.id[source]
+    if from != ty { id = convert(m, OP_BITCAST, ty, id) }
+    scalar(values, instruction.result, id, ty, signed)
+    tag_half(values, instruction.result, instruction.ty)
     ret ok
 }
 
@@ -2973,6 +3419,21 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
     if ty == 0usize || values.kind[left] != KIND_SCALAR || KIND_SCALAR != values.kind[right] { ret fail(m, "an arithmetic operation of this type is not yet written as SPIR-V") }
     let opcode = instruction.opcode
     var spirv = 0usize
+    let half_kind = half_type(instruction.ty)
+    if (half_kind != T_NONE) {
+        if values.half_kind[left] != half_kind || values.half_kind[right] != half_kind { ret fail(m, "a narrow arithmetic operation mixes storage formats") }
+        let widened_left = half_widen(m, half_kind, values.id[left])
+        let widened_right = half_widen(m, half_kind, values.id[right])
+        var result = 0usize
+        if opcode == .Add { result = float_binary(m, OP_F_ADD, widened_left, widened_right) }
+        if opcode == .Subtract { result = float_binary(m, OP_F_SUB, widened_left, widened_right) }
+        if opcode == .Multiply { result = float_binary(m, OP_F_MUL, widened_left, widened_right) }
+        if opcode == .Divide { result = divide_float(m, widened_left, widened_right) }
+        if result == 0usize { ret fail(m, "a narrow float operation is not yet written as SPIR-V") }
+        scalar(values, instruction.result, half_round(m, half_kind, result), m.t_u16, false)
+        values.half_kind[instruction.result] = half_kind
+        ret ok
+    }
     if ty != 0usize && ty == m.t_f64 {
         // IEEE add, subtract and multiply round once on a device; division and square root
         // wait for an exact sequence like f32's.
@@ -3026,6 +3487,13 @@ fn emit_binary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, 
 fn emit_sqrt(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
     let (ty, signed) = value_type(m, instruction.ty)
+    let half_kind = half_type(instruction.ty)
+    if (half_kind != T_NONE) {
+        if KIND_SCALAR != values.kind[source] || values.half_kind[source] != half_kind { ret fail(m, "a narrow square root has no matching operand") }
+        scalar(values, instruction.result, half_round(m, half_kind, sqrt_float(m, half_widen(m, half_kind, values.id[source]))), m.t_u16, false)
+        values.half_kind[instruction.result] = half_kind
+        ret ok
+    }
     if ty != m.t_f32 || KIND_SCALAR != values.kind[source] { ret fail(m, "a square root of this type is not yet written as SPIR-V") }
     scalar(values, instruction.result, sqrt_float(m, values.id[source]), ty, signed)
     ret ok
@@ -3039,6 +3507,19 @@ fn emit_compare(m: *Module, builder: *nir.Builder, instruction: nir.Instruction,
     let signed = values.signed[left]
     let opcode = instruction.opcode
     var spirv = 0usize
+    let half_kind = values.half_kind[left]
+    if (half_kind != T_NONE) {
+        if values.half_kind[right] != half_kind { ret fail(m, "a narrow comparison mixes storage formats") }
+        if opcode == .Equal { spirv = OP_F_ORD_EQUAL }
+        if opcode == .NotEqual { spirv = OP_F_UNORD_NOT_EQUAL }
+        if opcode == .Less { spirv = OP_F_ORD_LESS_THAN }
+        if opcode == .LessEqual { spirv = OP_F_ORD_LESS_THAN_EQUAL }
+        if opcode == .Greater { spirv = OP_F_ORD_GREATER_THAN }
+        if opcode == .GreaterEqual { spirv = OP_F_ORD_GREATER_THAN_EQUAL }
+        if spirv == 0usize { ret fail(m, "a narrow comparison is not yet written as SPIR-V") }
+        scalar(values, instruction.result, binary(m, spirv, m.t_bool, half_widen(m, half_kind, values.id[left]), half_widen(m, half_kind, values.id[right])), m.t_bool, false)
+        ret ok
+    }
     if ty == m.t_f32 || (ty != 0usize && ty == m.t_f64) {
         if opcode == .Equal { spirv = OP_F_ORD_EQUAL }
         if opcode == .NotEqual { spirv = OP_F_UNORD_NOT_EQUAL }
@@ -3075,6 +3556,15 @@ fn emit_unary(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, v
     let source = operand(builder, instruction, 0usize)
     if KIND_SCALAR != values.kind[source] { ret fail(m, "a unary operation has no operand") }
     let ty = values.ty[source]
+    let half_kind = values.half_kind[source]
+    if (half_kind != T_NONE) {
+        if instruction.opcode != .Negate { ret fail(m, "a narrow float bit operation is not written as SPIR-V") }
+        let negated = convert(m, OP_F_NEGATE, m.t_f32, half_widen(m, half_kind, values.id[source]))
+        no_contraction(m, negated)
+        scalar(values, instruction.result, half_round(m, half_kind, negated), m.t_u16, false)
+        values.half_kind[instruction.result] = half_kind
+        ret ok
+    }
     var spirv = OP_NOT
     if instruction.opcode == .Negate {
         spirv = OP_S_NEGATE

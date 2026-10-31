@@ -11,6 +11,8 @@ use e.fs
 use e.time
 use e.debug
 use e.log
+use e.text.utf8
+use e.fmt.json as json
 
 type Capture = struct { count: u32, last_level: log.Level, last_message: str, last_fields: usize, fail: bool }
 
@@ -68,8 +70,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     all[5] = log.Field { name: "e", value: log.Value{ Error: io.End } }
     if log.write(&j, .Trace, "line\none", all[0..]) != ok { os.exit(8) }
     let line = buffer[..sink_state.off]
-    if !str.starts_with(line, "{\"time\":\"") || line.len < 40usize || line[38] != 90u8 { os.exit(9) }
+    if !str.starts_with(line, "{\"time\":\"") || line.len < 40usize || line[38] != 90u8 || line[39] != 34u8 { os.exit(9) }
     if !str.ends_with(line, "\",\"level\":\"TRACE\",\"message\":\"line\\none\",\"fields\":{\"b\":true,\"i\":-1,\"u\":18446744073709551615,\"f\":0.5,\"s\":\"q\\\"uote\",\"e\":\"error\"},\"frames\":[]}\n") { os.exit(10) }
+    // JSONL refuses malformed UTF-8 before anything reaches the sink, whether it
+    // arrives as the message, a field name, or a field string value.
+    sink_state.off = 0usize
+    if log.write(&j, .Trace, "\xFF", zero) != utf8.Invalid || sink_state.off != 0usize { os.exit(21) }
+    var invalid_name: [1]log.Field = zero
+    invalid_name[0usize] = log.Field { name: "\xFF", value: log.Value{ String: "ok" } }
+    if log.write(&j, .Trace, "line", invalid_name[..]) != utf8.Invalid || sink_state.off != 0usize { os.exit(22) }
+    var invalid_value: [1]log.Field = zero
+    invalid_value[0usize] = log.Field { name: "value", value: log.Value{ String: "\xFF" } }
+    if log.write(&j, .Trace, "line", invalid_value[..]) != utf8.Invalid || sink_state.off != 0usize { os.exit(23) }
+    // JSON has no NaN or infinity token, so those field values become null while
+    // the console keeps its diagnostic spelling.
+    var nonfinite: [3]log.Field = zero
+    nonfinite[0usize] = log.Field { name: "nan", value: log.Value{ F64: mem.bitcast[f64](9221120237041090560u64) } }
+    nonfinite[1usize] = log.Field { name: "positive", value: log.Value{ F64: mem.bitcast[f64](9218868437227405312u64) } }
+    nonfinite[2usize] = log.Field { name: "negative", value: log.Value{ F64: 0.0f64 - mem.bitcast[f64](9218868437227405312u64) } }
+    sink_state.off = 0usize
+    if log.write(&j, .Trace, "numbers", nonfinite[..]) != ok { os.exit(24) }
+    let nonfinite_line = buffer[..sink_state.off]
+    if !str.contains(nonfinite_line, "\"nan\":null") || !str.contains(nonfinite_line, "\"positive\":null") || !str.contains(nonfinite_line, "\"negative\":null") { os.exit(25) }
+    let (_, nonfinite_json_error) = json.parse(a, nonfinite_line, json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if nonfinite_json_error != ok { os.exit(26) }
+    // Both sinks stream past their 4 KiB stack buffer. JSONL stays a complete,
+    // parseable record, while the console record is nonempty and newline-terminated.
+    var long_text: [5000]u8 = zero
+    var long_at = 0usize
+    while long_at < long_text.len {
+        long_text[long_at] = 120u8
+        long_at += 1usize
+    }
+    var long_json_bytes: [6000]u8 = zero
+    var long_json_state = io.SliceWriter { data: long_json_bytes[..], off: 0usize }
+    var long_json_writer = io.slice_writer(&long_json_state)
+    var long_json_sinks: [1]log.Sink = zero
+    long_json_sinks[0usize] = log.jsonl_sink(&long_json_writer)
+    var long_json_logger = log.logger(long_json_sinks[..], .Trace)
+    if log.write(&long_json_logger, .Info, long_text[..], zero) != ok || long_json_state.off <= 4096usize { os.exit(27) }
+    let long_json_line = long_json_bytes[..long_json_state.off]
+    let (_, long_json_error) = json.parse(a, long_json_line, json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if long_json_error != ok { os.exit(28) }
     // The console sink over a file.
     var flags: os.OpenFlags = zero
     flags.write = true
@@ -88,6 +130,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_break || !str.ends_with(first_line, " INFO to file count=-7 who=neper") || first_line.len != 62usize { os.exit(16) }
     if !str.ends_with(rest, " ERROR traced\n") || rest.len != 44usize { os.exit(17) }
     if fs.remove_file(a, "log-fixture.txt") != ok { os.exit(18) }
+    let (long_file, long_open_error) = os.open(a, "log-long-fixture.txt", flags)
+    if long_open_error != ok { os.exit(29) }
+    var long_handle = long_file
+    var long_console_sinks: [1]log.Sink = zero
+    long_console_sinks[0usize] = log.console_sink(&long_handle)
+    var long_console = log.logger(long_console_sinks[..], .Trace)
+    if log.write(&long_console, .Info, long_text[..], zero) != ok { os.exit(30) }
+    if log.write(&long_console, .Info, "nonfinite", nonfinite[..]) != ok { os.exit(31) }
+    if os.close(long_handle) != ok { os.exit(32) }
+    let (long_contents, long_read_error) = fs.read_file(a, "log-long-fixture.txt", 6000usize)
+    if long_read_error != ok || long_contents.len <= 4096usize || long_contents[long_contents.len - 1usize] != 10u8 { os.exit(33) }
+    if !str.contains(long_contents, " INFO nonfinite nan=nan positive=inf negative=-inf\n") { os.exit(34) }
+    if fs.remove_file(a, "log-long-fixture.txt") != ok { os.exit(35) }
+    let (escaped_file, escaped_open_error) = os.open(a, "log-escaped-fixture.txt", flags)
+    if escaped_open_error != ok { os.exit(36) }
+    var escaped_handle = escaped_file
+    var escaped_sinks: [1]log.Sink = zero
+    escaped_sinks[0usize] = log.console_sink(&escaped_handle)
+    var escaped_logger = log.logger(escaped_sinks[..], .Trace)
+    var escaped_fields: [1]log.Field = zero
+    escaped_fields[0usize] = log.Field { name: "key\n", value: log.Value{ String: "value\r\t\x01" } }
+    if log.write(&escaped_logger, .Info, "message\nnext", escaped_fields[..]) != ok { os.exit(37) }
+    if os.close(escaped_handle) != ok { os.exit(38) }
+    let (escaped_contents, escaped_read_error) = fs.read_file(a, "log-escaped-fixture.txt", 1024usize)
+    if escaped_read_error != ok || !str.ends_with(escaped_contents, " INFO message\\nnext key\\n=value\\r\\t\\x01\n") { os.exit(39) }
+    var newlines = 0usize
+    var escaped_at = 0usize
+    while escaped_at < escaped_contents.len {
+        if escaped_contents[escaped_at] == 10u8 { newlines += 1usize }
+        escaped_at += 1usize
+    }
+    if newlines != 1usize { os.exit(40) }
+    if fs.remove_file(a, "log-escaped-fixture.txt") != ok { os.exit(41) }
     // debug answers what it has: no frames, the address kept.
     var scratch: [8]debug.Frame = zero
     let frames = debug.backtrace(scratch[0..])

@@ -65,10 +65,12 @@ fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *ran
     let first = usize(c.first_variant)
     let count = usize(c.variant_count)
     if count == 0usize || first + count > variants.len { ret (0usize, Unknown) }
-    let pick = first + usize(rand.pcg64_bounded(state, u64(count)))
+    var trial = *state
+    let pick = first + usize(rand.pcg64_bounded(&trial, u64(count)))
     let gain = fixed.mul(c.gain, fixed.mul(s.gain, attenuate(l, s)))
     let (slot, play_error) = mixer.play(m, variants[pick], gain, false)
     if play_error != ok { ret (0usize, play_error) }
+    *state = trial
     c.remaining = c.cooldown
     ret (slot, ok)
 }

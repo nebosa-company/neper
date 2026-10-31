@@ -131,6 +131,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (swaps, pam_error) = cluster.kmedoids(x[..], 24usize, 2usize, 3usize, medoids[..], labels[..], 20u32)
     if pam_error != ok || swaps < 2u32 || !partitioned(labels[..], 3usize) { os.exit(3i32) }
     if medoids[0usize] / 8usize == medoids[1usize] / 8usize || medoids[1usize] / 8usize == medoids[2usize] / 8usize || medoids[0usize] / 8usize == medoids[2usize] / 8usize { os.exit(3i32) }
+    var edge_medoid: [1]usize = zero
+    edge_medoid[0usize] = 24usize
+    let (_, invalid_medoid_error) = cluster.kmedoids(x[..], 24usize, 2usize, 1usize, edge_medoid[..], labels[..], 0u32)
+    if invalid_medoid_error != cluster.Invalid { os.exit(3i32) }
+    edge_medoid[0usize] = 23usize
+    let (_, valid_medoid_error) = cluster.kmedoids(x[..], 24usize, 2usize, 1usize, edge_medoid[..], labels[..], 0u32)
+    if valid_medoid_error != ok { os.exit(3i32) }
 
     // 4: agglomerative linkages against scikit-learn (blob A first, then B, then C).
     var distances: [576]f64 = zero

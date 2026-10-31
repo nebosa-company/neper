@@ -1,6 +1,5 @@
-// A published tree as VoiceOver would meet it: three nodes (a group holding a button and a text) become elements; the window's view
-// answers the group as its child, the group answers the two, the button says AXButton and "OK", and pressing it through the
-// accessibility API reaches `accessibility_take` as a press of node 2. macOS only; the corpus runs it on a Mac.
+// Published accessibility trees are per window: two windows retain different groups and buttons, and each action reaches only its
+// own `accessibility_take`. macOS only; the corpus runs it on a Mac.
 use e.mem
 use e.os
 
@@ -71,11 +70,52 @@ fn main(a: *mem.Arena) -> err {
     if !equals(os.msg0(button, os.cocoa_sel("accessibilityRole\x00")), "AXButton") { os.exit(7i32) }
     if !equals(os.msg0(button, os.cocoa_sel("accessibilityLabel\x00")), "OK") { os.exit(8i32) }
     say("tree ok\n")
+    var second_options: os.WindowOptions = zero
+    second_options.title = "Neper: accessibility other"
+    second_options.width = 300u32
+    second_options.height = 200u32
+    let (second, second_open_error) = os.window_open(a, second_options)
+    if second_open_error != ok { os.exit(9i32) }
+    var second_nodes: [2]os.AccessibleNode = zero
+    second_nodes[0usize].id = 10u32
+    second_nodes[0usize].generation = 1u32
+    second_nodes[0usize].role = 2u8
+    second_nodes[0usize].label = "Other panel"
+    second_nodes[0usize].width = 300.0f32
+    second_nodes[0usize].height = 200.0f32
+    second_nodes[1usize].id = 20u32
+    second_nodes[1usize].generation = 1u32
+    second_nodes[1usize].parent = 10u32
+    second_nodes[1usize].parent_generation = 1u32
+    second_nodes[1usize].has_parent = true
+    second_nodes[1usize].role = 3u8
+    second_nodes[1usize].label = "Other OK"
+    second_nodes[1usize].width = 80.0f32
+    second_nodes[1usize].height = 30.0f32
+    if os.accessibility_publish(second, second_nodes[..]) != ok { os.exit(10i32) }
+    let (second_handle, second_view, second_native_error) = os.window_native(second)
+    if second_native_error != ok { os.exit(11i32) }
+    let second_top = os.msg0(second_view, os.cocoa_sel("accessibilityChildren\x00"))
+    if second_top == 0usize || os.msg0(second_top, os.cocoa_sel("count\x00")) != 1usize { os.exit(12i32) }
+    let second_group = os.msg1(second_top, os.cocoa_sel("objectAtIndex:\x00"), 0usize)
+    let second_kids = os.msg0(second_group, os.cocoa_sel("accessibilityChildren\x00"))
+    if second_kids == 0usize || os.msg0(second_kids, os.cocoa_sel("count\x00")) != 1usize { os.exit(13i32) }
+    let second_button = os.msg1(second_kids, os.cocoa_sel("objectAtIndex:\x00"), 0usize)
+    if !equals(os.msg0(second_button, os.cocoa_sel("accessibilityLabel\x00")), "Other OK") { os.exit(14i32) }
+    // Publishing the second tree must leave the first tree and its callback registration intact.
+    if os.msg0(top, os.cocoa_sel("count\x00")) != 1usize || !equals(os.msg0(button, os.cocoa_sel("accessibilityLabel\x00")), "OK") { os.exit(15i32) }
     let pressed = os.msg0(button, os.cocoa_sel("accessibilityPerformPress\x00"))
     let (request, any) = os.accessibility_take(window)
-    if !any || request.id != 2u32 || request.action != 1u8 { os.exit(9i32) }
-    let (again, more) = os.accessibility_take(window)
-    if more { os.exit(10i32) }
+    if !any || request.id != 2u32 || request.action != 1u8 { os.exit(16i32) }
+    let pressed_second = os.msg0(second_button, os.cocoa_sel("accessibilityPerformPress\x00"))
+    let (wrong, leaked) = os.accessibility_take(window)
+    if leaked { os.exit(17i32) }
+    let (second_request, second_any) = os.accessibility_take(second)
+    if !second_any || second_request.id != 20u32 || second_request.action != 1u8 { os.exit(18i32) }
+    // An empty replacement must clear the view's old top-level children instead of retaining this tree.
+    if os.accessibility_publish(second, second_nodes[..0usize]) != ok { os.exit(19i32) }
+    let empty_top = os.msg0(second_view, os.cocoa_sel("accessibilityChildren\x00"))
+    if empty_top == 0usize || os.msg0(empty_top, os.cocoa_sel("count\x00")) != 0usize { os.exit(20i32) }
     say("press ok\n")
     say("accessibility ok\n")
     ret ok

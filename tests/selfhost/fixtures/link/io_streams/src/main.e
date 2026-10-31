@@ -10,6 +10,19 @@ use e.test.support
 
 error Failed
 
+type FinalDetailEndReader = struct { data: []const u8, off: usize }
+
+fn final_detail_end_read(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    let state = mem.cast[*FinalDetailEndReader](ctx)
+    if state.off >= state.data.len { ret (0usize, io.End) }
+    var count = state.data.len - state.off
+    if count > dst.len { count = dst.len }
+    mem.copy[u8](dst[..count], state.data[state.off..state.off + count])
+    state.off += count
+    if state.off == state.data.len { ret (count, io.End) }
+    ret (count, ok)
+}
+
 fn main(a: *mem.Arena) -> err {
     var source = "hello world"
     var reader_state = io.SliceReader { data: source, off: 0usize }
@@ -27,6 +40,22 @@ fn main(a: *mem.Arena) -> err {
     let exact_error = io.read_exact(&r, rest[..])
     if exact_error != ok { ret exact_error }
     if !str.eq(rest[0usize..6usize], " world") { ret Failed }
+
+    // A final callback may fill an exact request while reporting End.
+    let final_exact_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "edge", failure: io.End } }
+    var (final_exact_script, final_exact_script_error) = support.scripted_reader(a, final_exact_steps[..])
+    if final_exact_script_error != ok { ret final_exact_script_error }
+    var final_exact = support.reader(&final_exact_script)
+    var final_exact_bytes: [4]u8 = zero
+    if io.read_exact(&final_exact, final_exact_bytes[..]) != ok || !str.eq(final_exact_bytes[..], "edge") { ret Failed }
+
+    // Detail readers have the same exact-read rule.
+    var final_exact_detail_state = FinalDetailEndReader { data: "detail", off: 0usize }
+    var final_exact_detail = io.detail_reader(mem.cast[*void](&final_exact_detail_state), final_detail_end_read)
+    var final_exact_detail_bytes: [6]u8 = zero
+    var final_exact_detail_info: os.ErrorDetail = zero
+    let (final_exact_detail_count, final_exact_detail_error) = io.read_exact_detail(&final_exact_detail, final_exact_detail_bytes[..], &final_exact_detail_info)
+    if final_exact_detail_count != 6usize || final_exact_detail_error != ok || !str.eq(final_exact_detail_bytes[..], "detail") { ret Failed }
 
     // Past the end is `End`, not a zero-length success -- a callback that made no
     // progress and did not say why would spin a caller forever.
@@ -91,6 +120,19 @@ fn main(a: *mem.Arena) -> err {
     let (over, over_error) = io.read(&limited, three[..])
     if over_error != io.End { ret Failed }
 
+    // A limited reader accounts for final bytes before returning the source End.
+    let final_limit_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_limit_script, final_limit_script_error) = support.scripted_reader(a, final_limit_steps[..])
+    if final_limit_script_error != ok { ret final_limit_script_error }
+    var final_limit_source = support.reader(&final_limit_script)
+    var final_limit_state: io.LimitedReader = zero
+    var final_limit = io.limited_reader(&final_limit_state, final_limit_source, 3u64)
+    var final_limit_bytes: [4]u8 = zero
+    let (final_limit_count, final_limit_error) = io.read(&final_limit, final_limit_bytes[..])
+    if final_limit_count != 3usize || final_limit_error != io.End || final_limit_state.remaining != 0u64 || !str.eq(final_limit_bytes[..3usize], "end") { ret Failed }
+    let (after_final_limit_count, after_final_limit_error) = io.read(&final_limit, final_limit_bytes[..])
+    if after_final_limit_count != 0usize || after_final_limit_error != io.End { ret Failed }
+
     // `counting_writer` passes bytes through and counts them.
     var sink_buffer: [16]u8 = zero
     var sink_state = io.SliceWriter { data: sink_buffer[..], off: 0usize }
@@ -114,6 +156,25 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(left_buffer[0usize..5usize], "twice") { ret Failed }
     if !str.eq(right_buffer[0usize..5usize], "twice") { ret Failed }
 
+    // Flushing a tee flushes both wrapped sinks in the same left-before-right order.
+    var tee_flush_left_bytes: [4]u8 = zero
+    var tee_flush_right_bytes: [4]u8 = zero
+    var tee_flush_left_state = io.SliceWriter { data: tee_flush_left_bytes[..], off: 0usize }
+    var tee_flush_right_state = io.SliceWriter { data: tee_flush_right_bytes[..], off: 0usize }
+    let (tee_flush_left_handle, tee_flush_left_error) = io.buffered_writer(a, io.slice_writer(&tee_flush_left_state), 4usize)
+    if tee_flush_left_error != ok { ret tee_flush_left_error }
+    let (tee_flush_right_handle, tee_flush_right_error) = io.buffered_writer(a, io.slice_writer(&tee_flush_right_state), 4usize)
+    if tee_flush_right_error != ok { ret tee_flush_right_error }
+    var tee_flush_left = tee_flush_left_handle
+    var tee_flush_right = tee_flush_right_handle
+    var tee_flush_state: io.TeeWriter = zero
+    var tee_flush_writer = io.tee_writer(&tee_flush_state, io.buffered_sink(&tee_flush_left), io.buffered_sink(&tee_flush_right))
+    if io.write_all(&tee_flush_writer, "x") != ok { ret Failed }
+    if tee_flush_left_state.off != 0usize || tee_flush_right_state.off != 0usize { ret Failed }
+    if io.flush(&tee_flush_writer) != ok { ret Failed }
+    if tee_flush_left_state.off != 1usize || tee_flush_right_state.off != 1usize { ret Failed }
+    if !str.eq(tee_flush_left_bytes[0usize..1usize], "x") || !str.eq(tee_flush_right_bytes[0usize..1usize], "x") { ret Failed }
+
     // `copy` moves a whole stream through a scratch buffer smaller than it.
     var copy_source = io.SliceReader { data: "0123456789", off: 0usize }
     var copy_from = io.slice_reader(&copy_source)
@@ -125,6 +186,17 @@ fn main(a: *mem.Arena) -> err {
     if copy_error != ok { ret copy_error }
     if moved != 10u64 { ret Failed }
     if !str.eq(copy_buffer[0usize..10usize], "0123456789") { ret Failed }
+
+    // A partial write followed by an error has already reached the destination,
+    // so copy must include it in the reported byte count.
+    let partial_copy_steps: [1]support.WriteStep = [1]support.WriteStep{ support.WriteStep { max_bytes: 2usize, failure: Failed } }
+    var (partial_copy_script, partial_copy_script_error) = support.scripted_writer(a, partial_copy_steps[..], 8usize)
+    if partial_copy_script_error != ok { ret partial_copy_script_error }
+    var partial_copy_source_state = io.SliceReader { data: "abc", off: 0usize }
+    var partial_copy_source = io.slice_reader(&partial_copy_source_state)
+    var partial_copy_sink = support.writer(&partial_copy_script)
+    let (partial_copy_moved, partial_copy_error) = io.copy(&partial_copy_sink, &partial_copy_source, scratch[..])
+    if partial_copy_error != Failed || partial_copy_moved != 2u64 || !str.eq(support.captured(&partial_copy_script), "ab") { ret Failed }
 
     // `read_all` grows its own claim; `limit` is a hard maximum and keeps no partial
     // result when it is crossed.
@@ -138,12 +210,92 @@ fn main(a: *mem.Arena) -> err {
     let (nothing, small_error) = io.read_all(a, &small_from, 4usize)
     if small_error != io.TooSmall { ret Failed }
 
+    // A hard limit allows an input that ends exactly at it: the helper probes once
+    // for EOF rather than rejecting the full buffer before asking the source.
+    var exact_all_source = io.SliceReader { data: "four", off: 0usize }
+    var exact_all = io.slice_reader(&exact_all_source)
+    let (exact_all_bytes, exact_all_error) = io.read_all(a, &exact_all, 4usize)
+    if exact_all_error != ok || !str.eq(exact_all_bytes, "four") { ret Failed }
+
+    var empty_all_source = io.SliceReader { data: "", off: 0usize }
+    var empty_all = io.slice_reader(&empty_all_source)
+    let (empty_all_bytes, empty_all_error) = io.read_all(a, &empty_all, 0usize)
+    if empty_all_error != ok || empty_all_bytes.len != 0usize { ret Failed }
+
+    var exact_detail_source = io.SliceReader { data: "detail", off: 0usize }
+    var exact_detail = io.slice_detail_reader(&exact_detail_source)
+    var exact_detail_error_info: os.ErrorDetail = zero
+    let (exact_detail_bytes, exact_detail_error) = io.read_all_detail(a, &exact_detail, 6usize, &exact_detail_error_info)
+    if exact_detail_error != ok || !str.eq(exact_detail_bytes, "detail") { ret Failed }
+
+    // A geometric growth must still consult EOF when the first claim has used the
+    // caller's entire arena. SliceReader returns its full final read with `ok`, so
+    // this exercises the subsequent EOF probe rather than the count-plus-End path.
+    var exact_capacity_input: [512]u8 = zero
+    exact_capacity_input[0usize] = 65u8
+    exact_capacity_input[511usize] = 90u8
+    var exact_capacity_storage: [512]u8 = zero
+    var exact_capacity_arena = mem.arena_from(exact_capacity_storage[..])
+    var exact_capacity_source = io.SliceReader { data: exact_capacity_input[..], off: 0usize }
+    var exact_capacity_reader = io.slice_reader(&exact_capacity_source)
+    let (exact_capacity_bytes, exact_capacity_error) = io.read_all(&exact_capacity_arena, &exact_capacity_reader, 1024usize)
+    if exact_capacity_error != ok || exact_capacity_bytes.len != 512usize { ret Failed }
+    if exact_capacity_bytes[0usize] != 65u8 || exact_capacity_bytes[511usize] != 90u8 { ret Failed }
+    if mem.mark(&exact_capacity_arena) != 512usize { ret Failed }
+
+    var exact_detail_capacity_storage: [512]u8 = zero
+    var exact_detail_capacity_arena = mem.arena_from(exact_detail_capacity_storage[..])
+    var exact_detail_capacity_source = io.SliceReader { data: exact_capacity_input[..], off: 0usize }
+    var exact_detail_capacity_reader = io.slice_detail_reader(&exact_detail_capacity_source)
+    var exact_detail_capacity_info: os.ErrorDetail = zero
+    exact_detail_capacity_info.native_code = 91i32
+    let (exact_detail_capacity_bytes, exact_detail_capacity_error) = io.read_all_detail(&exact_detail_capacity_arena, &exact_detail_capacity_reader, 1024usize, &exact_detail_capacity_info)
+    if exact_detail_capacity_error != ok || exact_detail_capacity_bytes.len != 512usize { ret Failed }
+    if exact_detail_capacity_bytes[0usize] != 65u8 || exact_detail_capacity_bytes[511usize] != 90u8 { ret Failed }
+    if mem.mark(&exact_detail_capacity_arena) != 512usize || exact_detail_capacity_info.native_code != 91i32 { ret Failed }
+
     // `read_until` stops after the delimiter and keeps it.
     var line_source = io.SliceReader { data: "first\nsecond\n", off: 0usize }
     var lines = io.slice_reader(&line_source)
     let (line, line_error) = io.read_until(a, &lines, 10u8, 64usize)
     if line_error != ok { ret line_error }
     if !str.eq(line, "first\n") { ret Failed }
+
+    var exact_until_source = io.SliceReader { data: "edge", off: 0usize }
+    var exact_until = io.slice_reader(&exact_until_source)
+    let (exact_until_bytes, exact_until_error) = io.read_until(a, &exact_until, 10u8, 4usize)
+    if exact_until_error != ok || !str.eq(exact_until_bytes, "edge") { ret Failed }
+
+    var empty_until_source = io.SliceReader { data: "", off: 0usize }
+    var empty_until = io.slice_reader(&empty_until_source)
+    let (empty_until_bytes, empty_until_error) = io.read_until(a, &empty_until, 10u8, 0usize)
+    if empty_until_error != ok || empty_until_bytes.len != 0usize { ret Failed }
+
+    // A callback may carry its final bytes with End. Every aggregation helper keeps
+    // that payload, including when the delimiter is the final byte.
+    let final_all_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "all end", failure: io.End } }
+    var (final_all_script, final_all_script_error) = support.scripted_reader(a, final_all_steps[..])
+    if final_all_script_error != ok { ret final_all_script_error }
+    var final_all = support.reader(&final_all_script)
+    let (final_all_bytes, final_all_error) = io.read_all(a, &final_all, 64usize)
+    if final_all_error != ok || !str.eq(final_all_bytes, "all end") { ret Failed }
+
+    let final_until_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "last\n", failure: io.End } }
+    var (final_until_script, final_until_script_error) = support.scripted_reader(a, final_until_steps[..])
+    if final_until_script_error != ok { ret final_until_script_error }
+    var final_until = support.reader(&final_until_script)
+    let (final_until_bytes, final_until_error) = io.read_until(a, &final_until, 10u8, 64usize)
+    if final_until_error != ok || !str.eq(final_until_bytes, "last\n") { ret Failed }
+
+    let final_copy_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end copy", failure: io.End } }
+    var (final_copy_script, final_copy_script_error) = support.scripted_reader(a, final_copy_steps[..])
+    if final_copy_script_error != ok { ret final_copy_script_error }
+    var final_copy_from = support.reader(&final_copy_script)
+    var final_copy_bytes: [16]u8 = zero
+    var final_copy_sink_state = io.SliceWriter { data: final_copy_bytes[..], off: 0usize }
+    var final_copy_sink = io.slice_writer(&final_copy_sink_state)
+    let (final_copy_count, final_copy_error) = io.copy(&final_copy_sink, &final_copy_from, scratch[..])
+    if final_copy_error != ok || final_copy_count != 8u64 || !str.eq(final_copy_bytes[0usize..8usize], "end copy") { ret Failed }
 
     // A buffered source reads through a buffer of its own and hands back the same
     // bytes the unbuffered one would.
@@ -155,6 +307,29 @@ fn main(a: *mem.Arena) -> err {
     let (drained, drained_error) = io.read_all(a, &buffered, 1024usize)
     if drained_error != ok { ret drained_error }
     if !str.eq(drained, "buffered bytes") { ret Failed }
+
+    // A buffered source preserves the final bytes when the callback returns them
+    // together with its terminal error, just as read_all and copy do above.
+    let final_buffered_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_buffered_script, final_buffered_script_error) = support.scripted_reader(a, final_buffered_steps[..])
+    if final_buffered_script_error != ok { ret final_buffered_script_error }
+    var final_buffered_source = support.reader(&final_buffered_script)
+    var (final_buffered_handle, final_buffered_handle_error) = io.buffered_reader(a, final_buffered_source, 8usize)
+    if final_buffered_handle_error != ok { ret final_buffered_handle_error }
+    var final_buffered = io.buffered_source(&final_buffered_handle)
+    var final_buffered_bytes: [8]u8 = zero
+    let (final_buffered_count, final_buffered_error) = io.read(&final_buffered, final_buffered_bytes[..])
+    if final_buffered_count != 3usize || final_buffered_error != io.End || !str.eq(final_buffered_bytes[..3usize], "end") { ret Failed }
+
+    let failed_buffered_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "bad", failure: Failed } }
+    var (failed_buffered_script, failed_buffered_script_error) = support.scripted_reader(a, failed_buffered_steps[..])
+    if failed_buffered_script_error != ok { ret failed_buffered_script_error }
+    var failed_buffered_source = support.reader(&failed_buffered_script)
+    var (failed_buffered_handle, failed_buffered_handle_error) = io.buffered_reader(a, failed_buffered_source, 8usize)
+    if failed_buffered_handle_error != ok { ret failed_buffered_handle_error }
+    var failed_buffered = io.buffered_source(&failed_buffered_handle)
+    let (failed_buffered_count, failed_buffered_error) = io.read(&failed_buffered, final_buffered_bytes[..])
+    if failed_buffered_count != 3usize || failed_buffered_error != Failed || !str.eq(final_buffered_bytes[..3usize], "bad") { ret Failed }
 
     // A buffered sink holds bytes back until it is flushed.
     var flushed_buffer: [32]u8 = zero
@@ -183,6 +358,25 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(support.captured(&scripted), "he") { ret Failed }
     if io.flush(&retry_sink) != ok { ret Failed }
     if !str.eq(support.captured(&scripted), "held") { ret Failed }
+
+    // `memory_writer` returns a ready-to-use sink with stable state behind the handle.
+    var (memory, memory_sink, memory_error) = io.memory_writer(a, 0usize)
+    if memory_error != ok { ret memory_error }
+    let memory_write_error = io.write_all(&memory_sink, "direct")
+    if memory_write_error != ok { ret Failed }
+    if !str.eq(io.memory_bytes(&memory), "direct") { ret Failed }
+
+    // An allocation between writes is not part of the memory writer's output.
+    var (interleaved, interleaved_sink, interleaved_error) = io.memory_writer(a, 0usize)
+    if interleaved_error != ok { ret interleaved_error }
+    if io.write_all(&interleaved_sink, "a") != ok { ret Failed }
+    let (unrelated, unrelated_error) = mem.alloc[u8](a, 3usize)
+    if unrelated_error != ok { ret unrelated_error }
+    unrelated[0usize] = 120u8
+    unrelated[1usize] = 121u8
+    unrelated[2usize] = 122u8
+    if io.write_all(&interleaved_sink, "b") != ok { ret Failed }
+    if !str.eq(io.memory_bytes(&interleaved), "ab") { ret Failed }
 
     // Detail streams compose without changing success provenance.
     var detail_source_state = io.SliceReader { data: "detail copy", off: 0usize }
@@ -213,5 +407,20 @@ fn main(a: *mem.Arena) -> err {
     if large_error == ok || buffer_allocation_detail.kind != .OutOfMemory { ret Failed }
     if !str.eq(buffer_allocation_detail.operation, "buffered_reader") || !str.eq(buffer_allocation_detail.subject, "buffer") { ret Failed }
     if mem.mark(&one_step) != 0usize { ret Failed }
+
+    // Plain buffered constructors roll back their state allocation when the byte
+    // buffer cannot fit, just as their detail forms do.
+    var plain_reader_bytes: [128]u8 = zero
+    var plain_reader_arena = mem.arena_from(plain_reader_bytes[..])
+    var plain_source_state = io.SliceReader { data: "", off: 0usize }
+    let (_, plain_reader_error) = io.buffered_reader(&plain_reader_arena, io.slice_reader(&plain_source_state), 1024usize)
+    if plain_reader_error != mem.Exhausted || mem.mark(&plain_reader_arena) != 0usize { ret Failed }
+
+    var plain_writer_bytes: [128]u8 = zero
+    var plain_writer_arena = mem.arena_from(plain_writer_bytes[..])
+    var plain_sink_bytes: [1]u8 = zero
+    var plain_sink_state = io.SliceWriter { data: plain_sink_bytes[..], off: 0usize }
+    let (_, plain_writer_error) = io.buffered_writer(&plain_writer_arena, io.slice_writer(&plain_sink_state), 1024usize)
+    if plain_writer_error != mem.Exhausted || mem.mark(&plain_writer_arena) != 0usize { ret Failed }
     ret ok
 }

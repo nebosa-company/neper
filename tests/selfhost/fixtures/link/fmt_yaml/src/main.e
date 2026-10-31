@@ -4,7 +4,8 @@
 // and folded blocks with chomping, comments and a leading `---`; the writer's block
 // output read back equal; the typed codec both ways; refusals for a tab indent, a
 // duplicate key (and its allowance), a depth over the limit, an alias, a second
-// document, and an unclosed flow. Every check has its own exit code.
+// document, and an unclosed flow. Issue 150 regressions cover UTF-8, quote-aware
+// comments, all YAML escapes, bounded collections and depth, and key equality.
 use e.os
 use e.mem
 use e.io
@@ -12,6 +13,9 @@ use e.str
 use e.fmt.yaml as yaml
 
 type Config = struct { name: str, port: i32, ratio: f64, debug: bool }
+type NarrowConfig = struct { port: u8 }
+type NarrowFloat = struct { ratio: f32 }
+type WideConfig = struct { big: u64 }
 
 fn options(depth: u16, duplicates: bool) -> yaml.Options {
     ret yaml.Options { max_depth: depth, allow_duplicate_keys: duplicates }
@@ -90,6 +94,320 @@ fn is_null(value: yaml.Value) -> bool {
     default:
         ret false
     }
+}
+
+fn yaml_limit_input(a: *mem.Arena, count: usize, kind: u8) -> (str, err) {
+    let (builder0, builder_error) = str.builder(a, count * 16usize + 8usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var builder = builder0
+    if kind == 0u8 {
+        try str.push(&builder, "[")
+        var i = 0usize
+        while i < count {
+            if i > 0usize { try str.push(&builder, ", ") }
+            try str.push(&builder, "0")
+            i += 1usize
+        }
+        try str.push(&builder, "]")
+    } else {
+    if kind == 1u8 {
+        var i = 0usize
+        while i < count {
+            try str.push(&builder, "- 0\n")
+            i += 1usize
+        }
+    } else {
+    if kind == 2u8 {
+        try str.push(&builder, "{")
+        var i = 0usize
+        while i < count {
+            if i > 0usize { try str.push(&builder, ", ") }
+            try str.push(&builder, "k")
+            try str.push_usize(&builder, i)
+            try str.push(&builder, ": 0")
+            i += 1usize
+        }
+        try str.push(&builder, "}")
+    } else {
+    if kind == 3u8 {
+        var i = 0usize
+        while i < count {
+            try str.push(&builder, "k")
+            try str.push_usize(&builder, i)
+            try str.push(&builder, ": 0\n")
+            i += 1usize
+        }
+    }
+    }
+    }
+    }
+    ret (str.done(&builder), ok)
+}
+
+fn nested_yaml_block(a: *mem.Arena, depth: usize) -> (str, err) {
+    let (builder0, builder_error) = str.builder(a, depth * depth * 4usize + 8usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var builder = builder0
+    var i = 0usize
+    while i < depth {
+        var spaces = 0usize
+        while spaces < i * 2usize {
+            try str.push(&builder, " ")
+            spaces += 1usize
+        }
+        try str.push(&builder, "a:\n")
+        i += 1usize
+    }
+    var spaces = 0usize
+    while spaces < depth * 2usize {
+        try str.push(&builder, " ")
+        spaces += 1usize
+    }
+    try str.push(&builder, "x: 1\n")
+    ret (str.done(&builder), ok)
+}
+
+fn nested_yaml_flow(a: *mem.Arena, depth: usize) -> (str, err) {
+    let (builder0, builder_error) = str.builder(a, depth * 2usize + 1usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var builder = builder0
+    var i = 0usize
+    while i < depth {
+        try str.push(&builder, "[")
+        i += 1usize
+    }
+    try str.push(&builder, "0")
+    i = 0usize
+    while i < depth {
+        try str.push(&builder, "]")
+        i += 1usize
+    }
+    ret (str.done(&builder), ok)
+}
+
+fn issue_150_regressions(a: *mem.Arena) -> err {
+    let (tab_doc, tab_error) = yaml.parse(a, "script: |\n  echo hi\n  \tindented\n", options(4u16, false))
+    if tab_error != ok { os.exit(100) }
+    let (script, has_script) = lookup(mapping_of(tab_doc, 101), "script")
+    if !has_script || !str.eq(text_of(script, 102), "echo hi\n\tindented\n") { os.exit(103) }
+
+    let (comment_doc, comment_error) = yaml.parse(a, "name: it's fine # note\nsingle: 'it''s # inside' # note\n", options(4u16, false))
+    if comment_error != ok { os.exit(104) }
+    let comment_pairs = mapping_of(comment_doc, 105)
+    let (plain_apostrophe, has_plain_apostrophe) = lookup(comment_pairs, "name")
+    let (quoted_apostrophe, has_quoted_apostrophe) = lookup(comment_pairs, "single")
+    if !has_plain_apostrophe || !str.eq(text_of(plain_apostrophe, 106), "it's fine") { os.exit(107) }
+    if !has_quoted_apostrophe || !str.eq(text_of(quoted_apostrophe, 108), "it's # inside") { os.exit(109) }
+
+    let (escape_doc, escape_error) = yaml.parse(a, "escapes: \"\\a\\b\\f\\e\\v\\N\\_\\L\\P\"\n", options(4u16, false))
+    if escape_error != ok { os.exit(110) }
+    let (escape_value, has_escapes) = lookup(mapping_of(escape_doc, 111), "escapes")
+    let expected_escapes = "\x07\x08\x0c\x1b\x0b\xc2\x85\xc2\xa0\xe2\x80\xa8\xe2\x80\xa9"
+    if !has_escapes || !str.eq(text_of(escape_value, 112), expected_escapes) { os.exit(113) }
+
+    var zero_options: yaml.Options = zero
+    let (zero_block, zero_block_error) = yaml.parse(a, "a:\n  b: 1\n", zero_options)
+    if zero_block_error != ok { os.exit(114) }
+    let (zero_flow, zero_flow_error) = yaml.parse(a, "[[1]]", zero_options)
+    if zero_flow_error != ok { os.exit(115) }
+
+    let (deep_block, deep_block_build_error) = nested_yaml_block(a, 17usize)
+    if deep_block_build_error != ok { os.exit(116) }
+    let (too_deep_block, too_deep_block_error) = yaml.parse(a, deep_block, options(100u16, false))
+    if too_deep_block_error != yaml.TooDeep { os.exit(117) }
+    let (deep_flow, deep_flow_build_error) = nested_yaml_flow(a, 17usize)
+    if deep_flow_build_error != ok { os.exit(118) }
+    let (too_deep_flow, too_deep_flow_error) = yaml.parse(a, deep_flow, options(100u16, false))
+    if too_deep_flow_error != yaml.TooDeep { os.exit(119) }
+
+    let (block_sequence, block_sequence_build_error) = yaml_limit_input(a, 257usize, 1u8)
+    if block_sequence_build_error != ok { os.exit(120) }
+    let (too_many_block_sequence, too_many_block_sequence_error) = yaml.parse(a, block_sequence, options(4u16, false))
+    if too_many_block_sequence_error != yaml.TooLarge { os.exit(121) }
+    let (block_mapping, block_mapping_build_error) = yaml_limit_input(a, 257usize, 3u8)
+    if block_mapping_build_error != ok { os.exit(122) }
+    let (too_many_block_mapping, too_many_block_mapping_error) = yaml.parse(a, block_mapping, options(4u16, false))
+    if too_many_block_mapping_error != yaml.TooLarge { os.exit(123) }
+    let (flow_sequence, flow_sequence_build_error) = yaml_limit_input(a, 65usize, 0u8)
+    if flow_sequence_build_error != ok { os.exit(124) }
+    let (too_many_flow_sequence, too_many_flow_sequence_error) = yaml.parse(a, flow_sequence, options(4u16, false))
+    if too_many_flow_sequence_error != yaml.TooLarge { os.exit(125) }
+    let (flow_mapping, flow_mapping_build_error) = yaml_limit_input(a, 65usize, 2u8)
+    if flow_mapping_build_error != ok { os.exit(126) }
+    let (too_many_flow_mapping, too_many_flow_mapping_error) = yaml.parse(a, flow_mapping, options(4u16, false))
+    if too_many_flow_mapping_error != yaml.TooLarge { os.exit(127) }
+
+    let (block_sequence_limit, block_sequence_limit_build_error) = yaml_limit_input(a, 256usize, 1u8)
+    if block_sequence_limit_build_error != ok { os.exit(128) }
+    let (block_sequence_limit_value, block_sequence_limit_error) = yaml.parse(a, block_sequence_limit, options(4u16, false))
+    if block_sequence_limit_error != ok || sequence_of(block_sequence_limit_value, 129).len != 256usize { os.exit(130) }
+    let (block_mapping_limit, block_mapping_limit_build_error) = yaml_limit_input(a, 256usize, 3u8)
+    if block_mapping_limit_build_error != ok { os.exit(131) }
+    let (block_mapping_limit_value, block_mapping_limit_error) = yaml.parse(a, block_mapping_limit, options(4u16, false))
+    if block_mapping_limit_error != ok || mapping_of(block_mapping_limit_value, 132).len != 256usize { os.exit(133) }
+    let (flow_sequence_limit, flow_sequence_limit_build_error) = yaml_limit_input(a, 64usize, 0u8)
+    if flow_sequence_limit_build_error != ok { os.exit(134) }
+    let (flow_sequence_limit_value, flow_sequence_limit_error) = yaml.parse(a, flow_sequence_limit, options(4u16, false))
+    if flow_sequence_limit_error != ok || sequence_of(flow_sequence_limit_value, 135).len != 64usize { os.exit(136) }
+    let (flow_mapping_limit, flow_mapping_limit_build_error) = yaml_limit_input(a, 64usize, 2u8)
+    if flow_mapping_limit_build_error != ok { os.exit(137) }
+    let (flow_mapping_limit_value, flow_mapping_limit_error) = yaml.parse(a, flow_mapping_limit, options(4u16, false))
+    if flow_mapping_limit_error != ok || mapping_of(flow_mapping_limit_value, 138).len != 64usize { os.exit(139) }
+
+    let (quoted_sequence, quoted_sequence_error) = yaml.parse(a, "- \"a\": 1\n- 'b': 2\n", options(4u16, false))
+    if quoted_sequence_error != ok { os.exit(140) }
+    let quoted_maps = sequence_of(quoted_sequence, 141)
+    if quoted_maps.len != 2usize { os.exit(142) }
+    let quoted_first = mapping_of(quoted_maps[0usize], 143)
+    let quoted_second = mapping_of(quoted_maps[1usize], 144)
+    if quoted_first.len != 1usize || !str.eq(text_of(quoted_first[0usize].key, 145), "a") || integer_of(quoted_first[0usize].value, 146) != 1i64 { os.exit(147) }
+    if quoted_second.len != 1usize || !str.eq(text_of(quoted_second[0usize].key, 148), "b") || integer_of(quoted_second[0usize].value, 149) != 2i64 { os.exit(150) }
+
+    let (number_doc, number_error) = yaml.parse(a, "leading: .5\ntrailing: 5.\nplus: +5\nsigned_hex: -0x1F\nsigned_oct: -0o17\n", options(4u16, false))
+    if number_error != ok { os.exit(151) }
+    let number_pairs = mapping_of(number_doc, 152)
+    let (leading, has_leading) = lookup(number_pairs, "leading")
+    let (trailing, has_trailing) = lookup(number_pairs, "trailing")
+    let (plus, has_plus) = lookup(number_pairs, "plus")
+    let (signed_hex, has_signed_hex) = lookup(number_pairs, "signed_hex")
+    let (signed_oct, has_signed_oct) = lookup(number_pairs, "signed_oct")
+    if !has_leading || float_of(leading, 153) != 0.5 { os.exit(154) }
+    if !has_trailing || float_of(trailing, 155) != 5.0 { os.exit(156) }
+    if !has_plus || integer_of(plus, 157) != 5i64 { os.exit(158) }
+    if !has_signed_hex || !str.eq(text_of(signed_hex, 159), "-0x1F") { os.exit(160) }
+    if !has_signed_oct || !str.eq(text_of(signed_oct, 161), "-0o17") { os.exit(162) }
+
+    // Core schema permits a sign for `.inf`, but not for any spelling of `.nan`.
+    let (signed_nan_doc, signed_nan_error) = yaml.parse(a, "minus: -.nan\nplus: +.NaN\nplain: .nan\n", options(4u16, false))
+    if signed_nan_error != ok { os.exit(500i32) }
+    let signed_nan_pairs = mapping_of(signed_nan_doc, 501i32)
+    let (minus_nan, has_minus_nan) = lookup(signed_nan_pairs, "minus")
+    let (plus_nan, has_plus_nan) = lookup(signed_nan_pairs, "plus")
+    let (plain_nan, has_plain_nan) = lookup(signed_nan_pairs, "plain")
+    if !has_minus_nan || !str.eq(text_of(minus_nan, 502i32), "-.nan") { os.exit(503i32) }
+    if !has_plus_nan || !str.eq(text_of(plus_nan, 504i32), "+.NaN") { os.exit(505i32) }
+    if !has_plain_nan || mem.bitcast[u64](float_of(plain_nan, 506i32)) != 9221120237041090560u64 { os.exit(507i32) }
+
+    let (plain_continuation, plain_continuation_error) = yaml.parse(a, "x: this is\n  continued\n", options(4u16, false))
+    if plain_continuation_error != yaml.Unsupported { os.exit(163) }
+    let (quoted_continuation, quoted_continuation_error) = yaml.parse(a, "x: \"a\n  b\"\n", options(4u16, false))
+    if quoted_continuation_error != yaml.Unsupported { os.exit(164) }
+    let (single_continuation, single_continuation_error) = yaml.parse(a, "x: 'a\n  b'\n", options(4u16, false))
+    if single_continuation_error != yaml.Unsupported { os.exit(165) }
+
+    let (ended_doc, ended_error) = yaml.parse(a, "a: 1\n...\n", options(4u16, false))
+    if ended_error != ok || mapping_of(ended_doc, 166).len != 1usize { os.exit(167) }
+    let (after_end_doc, after_end_error) = yaml.parse(a, "a: 1\n...\nb: 2\n", options(4u16, false))
+    if after_end_error != yaml.Unsupported { os.exit(168) }
+
+    var invalid_yaml: [5]u8 = zero
+    invalid_yaml[0usize] = 107u8
+    invalid_yaml[1usize] = 58u8
+    invalid_yaml[2usize] = 32u8
+    invalid_yaml[3usize] = 255u8
+    invalid_yaml[4usize] = 10u8
+    let (invalid_doc, invalid_doc_error) = yaml.parse(a, invalid_yaml[..], options(4u16, false))
+    if invalid_doc_error != yaml.Invalid { os.exit(169) }
+    var invalid_value = yaml.Value { String: invalid_yaml[3usize..4usize] }
+    var invalid_output: [32]u8 = zero
+    var invalid_state = io.SliceWriter { data: invalid_output[..], off: 0usize }
+    var invalid_sink = io.slice_writer(&invalid_state)
+    if yaml.write(&invalid_sink, &invalid_value, 2u8) != yaml.Invalid || invalid_state.off != 0usize { os.exit(170) }
+
+    let (float_duplicates, float_duplicates_error) = yaml.parse(a, "{1.0: a, 1.0: b}", options(8u16, false))
+    if float_duplicates_error != yaml.DuplicateKey { os.exit(171) }
+    let (sequence_duplicates, sequence_duplicates_error) = yaml.parse(a, "{[1, 2]: a, [1, 2]: b}", options(8u16, false))
+    if sequence_duplicates_error != yaml.DuplicateKey { os.exit(172) }
+    let (mapping_duplicates, mapping_duplicates_error) = yaml.parse(a, "{{a: 1, b: 2}: x, {b: 2, a: 1}: y}", options(8u16, false))
+    if mapping_duplicates_error != yaml.DuplicateKey { os.exit(173) }
+    ret ok
+}
+
+fn issue_1570_regressions(a: *mem.Arena) -> err {
+    // YAML inline separation accepts a tab after a mapping colon or sequence dash,
+    // including a flow mapping. It is still invalid as indentation elsewhere.
+    let (tab_mapping, tab_mapping_error) = yaml.parse(a, "key:\tvalue\n", options(4u16, false))
+    if tab_mapping_error != ok { os.exit(540i32) }
+    let tab_mapping_pairs = mapping_of(tab_mapping, 541i32)
+    let (mapped_value, has_mapped_value) = lookup(tab_mapping_pairs, "key")
+    if tab_mapping_pairs.len != 1usize || !has_mapped_value || !str.eq(text_of(mapped_value, 542i32), "value") { os.exit(543i32) }
+
+    let (tab_sequence, tab_sequence_error) = yaml.parse(a, "-\tvalue\n", options(4u16, false))
+    if tab_sequence_error != ok { os.exit(544i32) }
+    let tab_items = sequence_of(tab_sequence, 545i32)
+    if tab_items.len != 1usize || !str.eq(text_of(tab_items[0usize], 546i32), "value") { os.exit(547i32) }
+
+    let (tab_flow, tab_flow_error) = yaml.parse(a, "{key:\tvalue}", options(4u16, false))
+    if tab_flow_error != ok { os.exit(548i32) }
+    let tab_flow_pairs = mapping_of(tab_flow, 549i32)
+    let (flow_value, has_flow_value) = lookup(tab_flow_pairs, "key")
+    if tab_flow_pairs.len != 1usize || !has_flow_value || !str.eq(text_of(flow_value, 550i32), "value") { os.exit(551i32) }
+
+    // A plain scalar containing a tab can expose a following # as a comment. Quote
+    // and escape it so writer output remains a parser round trip.
+    var tab_string = yaml.Value { String: "a\t#lost" }
+    var tab_output: [64]u8 = zero
+    var tab_state = io.SliceWriter { data: tab_output[..], off: 0usize }
+    var tab_sink = io.slice_writer(&tab_state)
+    if yaml.write(&tab_sink, &tab_string, 2u8) != ok { os.exit(552i32) }
+    let tab_text = tab_output[..tab_state.off]
+    if !str.eq(tab_text, "\"a\\t#lost\"\n") { os.exit(553i32) }
+    let (tab_again, tab_again_error) = yaml.parse(a, tab_text, options(4u16, false))
+    if tab_again_error != ok || !str.eq(text_of(tab_again, 554i32), "a\t#lost") { os.exit(555i32) }
+    ret ok
+}
+
+fn issue_1571_regressions(a: *mem.Arena) -> err {
+    // Bare CR and CRLF are both YAML line breaks, not scalar content.
+    let (cr_doc, cr_error) = yaml.parse(a, "a: 1\rb: 2\r", options(4u16, false))
+    if cr_error != ok { os.exit(520i32) }
+    let cr_pairs = mapping_of(cr_doc, 521i32)
+    let (cr_a, has_cr_a) = lookup(cr_pairs, "a")
+    let (cr_b, has_cr_b) = lookup(cr_pairs, "b")
+    if cr_pairs.len != 2usize || !has_cr_a || !has_cr_b || integer_of(cr_a, 522i32) != 1i64 || integer_of(cr_b, 523i32) != 2i64 { os.exit(524i32) }
+
+    // Raw presentation controls are rejected, while their double-quote escapes stay legal.
+    var raw_soh: [7]u8 = zero
+    raw_soh[0usize] = 120u8
+    raw_soh[1usize] = 58u8
+    raw_soh[2usize] = 32u8
+    raw_soh[3usize] = 34u8
+    raw_soh[4usize] = 1u8
+    raw_soh[5usize] = 34u8
+    raw_soh[6usize] = 10u8
+    let (_, raw_soh_error) = yaml.parse(a, raw_soh[..], options(4u16, false))
+    if raw_soh_error != yaml.Invalid { os.exit(525i32) }
+    let (escaped_doc, escaped_error) = yaml.parse(a, "x: \"\\x01\"\n", options(4u16, false))
+    if escaped_error != ok { os.exit(526i32) }
+    let (escaped_soh, has_escaped_soh) = lookup(mapping_of(escaped_doc, 527i32), "x")
+    if !has_escaped_soh || !str.eq(text_of(escaped_soh, 528i32), "\x01") { os.exit(529i32) }
+
+    // U+0080 is valid UTF-8 but outside YAML's raw printable set.  Escape it and
+    // verify that re-reading the emitted document preserves the scalar.
+    var c1_value = yaml.Value { String: "\xc2\x80" }
+    var c1_output: [32]u8 = zero
+    var c1_state = io.SliceWriter { data: c1_output[..], off: 0usize }
+    var c1_sink = io.slice_writer(&c1_state)
+    if yaml.write(&c1_sink, &c1_value, 2u8) != ok { os.exit(530i32) }
+    let c1_text = c1_output[..c1_state.off]
+    if !str.eq(c1_text, "\"\\x80\"\n") { os.exit(531i32) }
+    let (c1_again, c1_error) = yaml.parse(a, c1_text, options(4u16, false))
+    if c1_error != ok || !str.eq(text_of(c1_again, 532i32), "\xc2\x80") { os.exit(533i32) }
+    let (_, raw_c1_error) = yaml.parse(a, "x: \"\xc2\x80\"\n", options(4u16, false))
+    if raw_c1_error != yaml.Invalid { os.exit(534i32) }
+
+    // Line breaks are YAML-printable but cannot be emitted as an unquoted plain
+    // scalar: quote them and preserve the parser round trip.
+    var line_break_value = yaml.Value { String: "one\ntwo" }
+    var line_break_output: [32]u8 = zero
+    var line_break_state = io.SliceWriter { data: line_break_output[..], off: 0usize }
+    var line_break_sink = io.slice_writer(&line_break_state)
+    if yaml.write(&line_break_sink, &line_break_value, 2u8) != ok { os.exit(536i32) }
+    let line_break_text = line_break_output[..line_break_state.off]
+    if !str.eq(line_break_text, "\"one\\ntwo\"\n") { os.exit(537i32) }
+    let (line_break_again, line_break_error) = yaml.parse(a, line_break_text, options(4u16, false))
+    if line_break_error != ok || !str.eq(text_of(line_break_again, 538i32), "one\ntwo") { os.exit(539i32) }
+    ret ok
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -190,8 +508,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var typed_sink = io.slice_writer(&typed_state)
     if yaml.encode[Config](&typed_sink, &config) != ok { os.exit(77) }
     if !str.eq(buffer[..typed_state.off], "name: svc\nport: 99\nratio: 2.5\ndebug: true\n") { os.exit(78) }
+    var wide_config: WideConfig = zero
+    wide_config.big = 18446744073709551615u64
+    var wide_state = io.SliceWriter { data: buffer[..], off: 0usize }
+    var wide_sink = io.slice_writer(&wide_state)
+    if yaml.encode[WideConfig](&wide_sink, &wide_config) != ok || !str.eq(buffer[..wide_state.off], "big: 18446744073709551615\n") { os.exit(99) }
     let (bad_config, e4) = yaml.decode[Config](a, "name: [1]\n", options(4u16, false))
     if e4 != yaml.Invalid { os.exit(79) }
+    let (narrow_config, narrow_error) = yaml.decode[NarrowConfig](a, "port: 256\n", options(4u16, false))
+    if narrow_error != yaml.Invalid { os.exit(97) }
+    let (narrow_float, narrow_float_error) = yaml.decode[NarrowFloat](a, "ratio: 1e300\n", options(4u16, false))
+    if narrow_float_error != yaml.Invalid { os.exit(98) }
     // Refusals.
     let (t1, e5) = yaml.parse(a, "a:\n\tb: 1\n", options(4u16, false))
     if e5 != yaml.Invalid { os.exit(80) }
@@ -209,5 +536,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e11 != yaml.Invalid { os.exit(87) }
     let (t8, e12) = yaml.parse(a, "", options(4u16, false))
     if e12 != ok || !is_null(t8) { os.exit(88) }
+    let (t9, e13) = yaml.parse(a, "a: \"quote \\\" # inside\"\n", options(4u16, false))
+    if e13 != ok { os.exit(89) }
+    let (escaped, has_escaped) = lookup(mapping_of(t9, 90), "a")
+    if !has_escaped || !str.eq(text_of(escaped, 91), "quote \" # inside") { os.exit(92) }
+    // YAML double quotes cannot carry raw C0/DEL bytes.  The writer must use
+    // the parser's existing `\\xHH` spelling so arbitrary byte strings round-trip.
+    var controls: [3]u8 = zero
+    controls[0usize] = 0u8
+    controls[1usize] = 1u8
+    controls[2usize] = 127u8
+    var control_value = yaml.Value { String: controls[..] }
+    var control_buffer: [64]u8 = zero
+    var control_state = io.SliceWriter { data: control_buffer[..], off: 0usize }
+    var control_sink = io.slice_writer(&control_state)
+    if yaml.write(&control_sink, &control_value, 2u8) != ok { os.exit(93) }
+    let control_text = control_buffer[..control_state.off]
+    if !str.eq(control_text, "\"\\x00\\x01\\x7f\"\n") { os.exit(94) }
+    let (control_again, control_error) = yaml.parse(a, control_text, options(4u16, false))
+    if control_error != ok || !str.eq(text_of(control_again, 95), controls[..]) { os.exit(96) }
+    if issue_150_regressions(a) != ok { os.exit(172) }
+    if issue_1570_regressions(a) != ok { os.exit(556i32) }
+    if issue_1571_regressions(a) != ok { os.exit(535i32) }
     ret ok
 }

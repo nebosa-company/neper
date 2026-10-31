@@ -5,8 +5,9 @@
 // that is HTML forms' convention, not a URI's.
 
 use e.mem
+use e.text.utf8
 
-type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, fragment: str }
+type Uri = struct { scheme: str, authority: str, has_authority: bool, userinfo: str, host: str, port: str, path: str, query: str, has_query: bool, fragment: str, has_fragment: bool }
 type EncodeSet = enum u8 { Path, PathSegment, Query, QueryComponent, Fragment, UserInfo }
 error Invalid
 
@@ -59,6 +60,7 @@ fn parse(source: str) -> (Uri, err) {
     }
     // Authority: after "//", up to the next "/", "?" or "#".
     if at + 1usize < source.len && source[at] == 47u8 && source[at + 1usize] == 47u8 {
+        u.has_authority = true
         at += 2usize
         let authority_start = at
         while at < source.len && source[at] != 47u8 && source[at] != 63u8 && source[at] != 35u8 { at += 1usize }
@@ -70,12 +72,16 @@ fn parse(source: str) -> (Uri, err) {
     while at < source.len && source[at] != 63u8 && source[at] != 35u8 { at += 1usize }
     u.path = source[path_start..at]
     if at < source.len && source[at] == 63u8 {
+        u.has_query = true
         at += 1usize
         let query_start = at
         while at < source.len && source[at] != 35u8 { at += 1usize }
         u.query = source[query_start..at]
     }
-    if at < source.len && source[at] == 35u8 { u.fragment = source[at + 1usize..] }
+    if at < source.len && source[at] == 35u8 {
+        u.has_fragment = true
+        u.fragment = source[at + 1usize..]
+    }
     // A percent must start two hex digits, everywhere.
     at = 0usize
     while at < source.len {
@@ -130,6 +136,11 @@ fn split_authority(u: *Uri) -> err {
 fn remove_dot_segments(path: str, out: []u8) -> usize {
     var written = 0usize
     var at = 0usize
+    let rootless = path.len == 0usize || path[0] != 47u8
+    // A slash on the first segment after leading "./" or "../" is only an
+    // artifact of splitting the source into slash-prefixed segments. Once a
+    // real segment has been emitted, later slashes retain their RFC meaning.
+    var emitted_segment = false
     while at < path.len {
         // Take one segment, including its leading slash if any.
         let segment_start = at
@@ -144,23 +155,27 @@ fn remove_dot_segments(path: str, out: []u8) -> usize {
             // Drop the last complete segment of the output.
             while written > 0usize && out[written - 1usize] != 47u8 { written -= 1usize }
             if written > 0usize { written -= 1usize }
-            if at >= path.len && written < out.len {
+            if at >= path.len && segment.len > 0usize && segment[0] == 47u8 && (!rootless || emitted_segment) && written < out.len {
                 out[written] = 47u8
                 written += 1usize
             }
         } else {
             if is_dot {
-                if at >= path.len && written < out.len {
+                if at >= path.len && segment.len > 0usize && segment[0] == 47u8 && (!rootless || emitted_segment) && written < out.len {
                     out[written] = 47u8
                     written += 1usize
                 }
             } else {
                 var copy = 0usize
+                var copied = false
+                if rootless && !emitted_segment && segment.len > 0usize && segment[0] == 47u8 { copy = 1usize }
                 while copy < segment.len && written < out.len {
                     out[written] = segment[copy]
                     written += 1usize
                     copy += 1usize
+                    copied = true
                 }
+                if copied { emitted_segment = true }
             }
         }
     }
@@ -168,7 +183,7 @@ fn remove_dot_segments(path: str, out: []u8) -> usize {
 }
 
 fn merge_paths(a: *mem.Arena, base: Uri, reference_path: str) -> (str, err) {
-    if base.authority.len > 0usize && base.path.len == 0usize {
+    if authority_present(base) && base.path.len == 0usize {
         let (joined, joined_error) = mem.alloc[u8](a, reference_path.len + 1usize)
         if joined_error != ok { ret ("", joined_error) }
         joined[0] = 47u8
@@ -203,6 +218,12 @@ fn cleaned_path(a: *mem.Arena, path: str) -> (str, err) {
     ret (out[..used], ok)
 }
 
+// A nonempty public component has always meant that its delimiter is present. The
+// flags additionally preserve an explicitly empty delimiter parsed from source.
+fn authority_present(value: Uri) -> bool { ret value.has_authority || value.authority.len > 0usize || value.userinfo.len > 0usize || value.host.len > 0usize || value.port.len > 0usize }
+fn query_present(value: Uri) -> bool { ret value.has_query || value.query.len > 0usize }
+fn fragment_present(value: Uri) -> bool { ret value.has_fragment || value.fragment.len > 0usize }
+
 // RFC 3986 5.2.2: the reference's components take over from the first one it has.
 fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
     var result: Uri = zero
@@ -214,8 +235,9 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
         ret (result, ok)
     }
     result.scheme = base.scheme
-    if reference.authority.len > 0usize {
+    if authority_present(reference) {
         result.authority = reference.authority
+        result.has_authority = authority_present(reference)
         result.userinfo = reference.userinfo
         result.host = reference.host
         result.port = reference.port
@@ -223,17 +245,24 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
         if path_error != ok { ret (zero, path_error) }
         result.path = path
         result.query = reference.query
+        result.has_query = query_present(reference)
         result.fragment = reference.fragment
+        result.has_fragment = fragment_present(reference)
         ret (result, ok)
     }
     result.authority = base.authority
+    result.has_authority = authority_present(base)
     result.userinfo = base.userinfo
     result.host = base.host
     result.port = base.port
     if reference.path.len == 0usize {
         result.path = base.path
         result.query = base.query
-        if reference.query.len > 0usize { result.query = reference.query }
+        result.has_query = query_present(base)
+        if query_present(reference) {
+            result.query = reference.query
+            result.has_query = true
+        }
     } else {
         if reference.path[0] == 47u8 {
             let (path, path_error) = cleaned_path(a, reference.path)
@@ -247,8 +276,10 @@ fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err) {
             result.path = path
         }
         result.query = reference.query
+        result.has_query = query_present(reference)
     }
     result.fragment = reference.fragment
+    result.has_fragment = fragment_present(reference)
     ret (result, ok)
 }
 
@@ -374,19 +405,19 @@ fn format(a: *mem.Arena, value: Uri) -> (str, err) {
         out[written] = 58u8
         written += 1usize
     }
-    if shown.len > 0usize || value.authority.len > 0usize {
+    if authority_present(value) {
         out[written] = 47u8
         out[written + 1usize] = 47u8
         written += 2usize
         written = append(out, written, shown)
     }
     written = append(out, written, value.path)
-    if value.query.len > 0usize {
+    if query_present(value) {
         out[written] = 63u8
         written += 1usize
         written = append(out, written, value.query)
     }
-    if value.fragment.len > 0usize {
+    if fragment_present(value) {
         out[written] = 35u8
         written += 1usize
         written = append(out, written, value.fragment)
@@ -491,7 +522,8 @@ fn query_get(query: str, name: str) -> (str, bool, err) {
 
 error TooSmall
 
-// One form-encoded component decoded: `+` is a space, `%XX` a byte.
+// One form-encoded component decoded: `+` is a space, `%XX` a byte. The
+// resulting component is UTF-8 text, so malformed percent-decoded bytes fail.
 fn form_decode(a: *mem.Arena, source: str) -> (str, err) {
     let (out, out_error) = mem.alloc[u8](a, source.len)
     if out_error != ok { ret ("", out_error) }
@@ -509,6 +541,7 @@ fn form_decode(a: *mem.Arena, source: str) -> (str, err) {
         }
         written += 1usize
     }
+    if !utf8.validate(out[..written]) { ret ("", Invalid) }
     ret (out[..written], ok)
 }
 

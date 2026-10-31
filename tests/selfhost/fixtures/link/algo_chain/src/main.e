@@ -206,6 +206,46 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Invalid custom retention values must report an error before filtering can
+    // rebuild or truncate a valid chain.
+    let (negative_windows, negative_parse_error) = json.parse(a, "{\"custom\":-1}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (zero_windows, zero_parse_error) = json.parse(a, "{\"custom\":0}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (infinite_windows, infinite_parse_error) = json.parse(a, "{\"custom\":1e999}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if negative_parse_error != ok || zero_parse_error != ok || infinite_parse_error != ok { os.exit(100i32) }
+    var no_chain: [1]json.Value = zero
+    let (_, negative_error) = chain.apply_history_retention(a, no_chain[0usize..0usize], "custom", 0i64, negative_windows, true)
+    let (_, zero_error) = chain.apply_history_retention(a, no_chain[0usize..0usize], "custom", 0i64, zero_windows, true)
+    let (_, infinite_error) = chain.apply_history_retention(a, no_chain[0usize..0usize], "custom", 0i64, infinite_windows, true)
+    if negative_error != chain.Invalid || zero_error != chain.Invalid || infinite_error != chain.Invalid { os.exit(101i32) }
+    // `hash` and `prev` are reserved chain metadata.  Rejecting them keeps
+    // caller data from being overwritten with metadata that cannot verify.
+    let (reserved, reserved_parse_error) = json.parse(a, "{\"action\":\"upload\",\"hash\":\"file-digest\",\"prev\":\"external\"}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if reserved_parse_error != ok { os.exit(102i32) }
+    let (reserved_list, reserved_list_error) = list.init[json.Value](a, 2usize)
+    if reserved_list_error != ok { os.exit(103i32) }
+    var reserved_chain = reserved_list
+    let (_, reserved_error) = chain.chain_append(a, &reserved_chain, reserved)
+    if reserved_error != chain.Invalid || reserved_chain.len != 0usize { os.exit(104i32) }
+    // An old dated revision is purged, but timestamp-less or malformed entries
+    // are retained because their age cannot be established safely.
+    let (retention_windows, retention_windows_error) = json.parse(a, "{\"custom\":1}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (old_entry, old_entry_error) = json.parse(a, "{\"action\":\"old\",\"at\":\"1970-01-01T00:00:00.000Z\"}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (missing_entry, missing_entry_error) = json.parse(a, "{\"action\":\"missing\"}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (invalid_entry, invalid_entry_error) = json.parse(a, "{\"action\":\"invalid\",\"at\":\"not-a-timestamp\"}", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if retention_windows_error != ok || old_entry_error != ok || missing_entry_error != ok || invalid_entry_error != ok { os.exit(105i32) }
+    let (retention_list, retention_list_error) = list.init[json.Value](a, 4usize)
+    if retention_list_error != ok { os.exit(106i32) }
+    var retention_chain = retention_list
+    let (_, old_append_error) = chain.chain_append(a, &retention_chain, old_entry)
+    let (_, missing_append_error) = chain.chain_append(a, &retention_chain, missing_entry)
+    let (_, invalid_append_error) = chain.chain_append(a, &retention_chain, invalid_entry)
+    if old_append_error != ok || missing_append_error != ok || invalid_append_error != ok { os.exit(107i32) }
+    let (retained, retained_error) = chain.apply_history_retention(a, list.slice_const[json.Value](&retention_chain), "custom", 172800000i64, retention_windows, true)
+    if retained_error != ok || count_of(retained, "purged") != 1i64 { os.exit(108i32) }
+    let rebuilt = items(ir.value_of(retained, "chain"))
+    if rebuilt.len != 3usize || !str.eq(text_field(rebuilt[1usize], "action"), "missing") || !str.eq(text_field(rebuilt[2usize], "action"), "invalid") { os.exit(109i32) }
+    let (retained_verdict, retained_verify_error) = chain.verify_chain(a, rebuilt)
+    if retained_verify_error != ok || !ir.truthy(ir.value_of(retained_verdict, "ok")) { os.exit(110i32) }
     //__VECTOR_CALLS__
     try io.print("algo chain ok")
     ret ok

@@ -1,19 +1,20 @@
 // JPEG (ITU T.81) both ways. Decoding takes baseline and extended sequential Huffman
 // (SOF0, SOF1) and progressive Huffman (SOF2) at 8 bits, greyscale, YCbCr and RGB
-// (Adobe transform 0), any sampling factors, restart intervals and several scans per
-// component; every scan is decoded through the one progressive machinery -- a baseline
+// (Adobe transform 0), integral sampling-factor ratios, restart intervals and several
+// scans per component; every scan is decoded through the one progressive machinery -- a baseline
 // scan is the case `Ss = 0, Se = 63` -- into coefficient planes held in the arena, then
 // dequantised, run through a separable float IDCT, upsampled with the triangle filter
 // libjpeg calls fancy, and converted to `image.Rgba8` (opaque) or `image.R8` for
 // greyscale. Arithmetic coding (SOF9-11), lossless (SOF3), 12-bit samples, hierarchical
 // frames and CMYK answer `Unsupported`; a stream that lies about itself is `Invalid`.
-// `inspect` reads through the headers up to the first scan. Dimensions are checked
-// against the options before any plane is allocated; zero selects finite defaults.
+// `inspect` streams segments through the first SOF (bounded by `READ_LIMIT`). Dimensions
+// are checked against the options before any plane is allocated; zero selects finite defaults.
 //
 // Encoding writes baseline 4:4:4 YCbCr from `Rgba8` and `Bgra8` (alpha dropped) and
 // greyscale from `R8`, with the Annex K quantisation tables scaled by `quality` as
-// libjpeg scales them and the Annex K Huffman tables; the output is deterministic for
-// the same pixels and options. ponytail: `progressive` encoding and chroma subsampling
+// libjpeg scales them (zero selects the usual quality 75) and the Annex K Huffman
+// tables; the output is deterministic for the same pixels and options. ponytail:
+// `progressive` encoding and chroma subsampling
 // are `Unsupported`; a progressive writer needs scan scripting and a 4:2:0 writer a
 // chroma downsampler, and neither buys correctness. `Rgba16Float` is `Unsupported`.
 
@@ -93,46 +94,50 @@ type Bits = struct { data: []const u8, at: usize, cache: u32, count: u32, marker
 // ------------------------------------------------------------------ bit reading
 
 fn fill(b: *Bits) {
-    while b.count <= 24u32 {
-        var byte = 0u32
-        if !b.marker_hit && b.at < b.data.len {
-            byte = u32(b.data[b.at])
-            if byte == 255u32 {
-                var next = 0u32
-                if b.at + 1usize < b.data.len { next = u32(b.data[b.at + 1usize]) }
-                if next == 0u32 {
-                    b.at += 2usize
-                } else {
-                    b.marker_hit = true
-                    byte = 0u32
-                }
-            } else {
-                b.at += 1usize
+    while b.count <= 24u32 && !b.marker_hit {
+        if b.at >= b.data.len {
+            b.marker_hit = true
+            break
+        }
+        let byte = u32(b.data[b.at])
+        if byte == 255u32 {
+            if b.at + 1usize >= b.data.len || b.data[b.at + 1usize] != 0u8 {
+                b.marker_hit = true
+                break
             }
+            b.at += 2usize
+        } else {
+            b.at += 1usize
         }
         b.cache = b.cache | (byte << (24u32 - b.count))
         b.count += 8u32
     }
 }
 
-fn take(b: *Bits, n: u32) -> u32 {
-    if n == 0u32 { ret 0u32 }
+fn take(b: *Bits, n: u32) -> (u32, err) {
+    if n == 0u32 { ret (0u32, ok) }
     fill(b)
+    if b.count < n { ret (0u32, Invalid) }
     let v = b.cache >> (32u32 - n)
     b.cache = b.cache << n
     b.count -= n
-    ret v
+    ret (v, ok)
 }
 
-fn take_bit(b: *Bits) -> u32 {
-    ret take(b, 1u32)
+fn take_bit(b: *Bits) -> (u32, err) {
+    let (bit, bit_error) = take(b, 1u32)
+    ret (bit, bit_error)
 }
 
 fn decode_symbol(b: *Bits, h: *const Huffman) -> (u32, err) {
-    var code = i32(take_bit(b))
+    let (first, first_error) = take_bit(b)
+    if first_error != ok { ret (0u32, first_error) }
+    var code = i32(first)
     var length = 1usize
     while length <= 16usize && code > h.maxcode[length] {
-        code = (code << 1u32) | i32(take_bit(b))
+        let (bit, bit_error) = take_bit(b)
+        if bit_error != ok { ret (0u32, bit_error) }
+        code = (code << 1u32) | i32(bit)
         length += 1usize
     }
     if length > 16usize { ret (0u32, Invalid) }
@@ -147,8 +152,18 @@ fn extend(value: u32, bits: u32) -> i32 {
     ret i32(value)
 }
 
+// A decoded scan may leave only the padding bits of its final entropy byte.
+// Its next unread byte must be an unstuffed marker, never more entropy data.
+fn scan_boundary(b: *Bits) -> err {
+    if b.count > 7u32 { ret Invalid }
+    if b.at + 1usize >= b.data.len || b.data[b.at] != 255u8 || b.data[b.at + 1usize] == 0u8 { ret Invalid }
+    ret ok
+}
+
 // After a restart marker: the bit buffer starts over at the byte after it.
 fn restart(b: *Bits) -> err {
+    let boundary_error = scan_boundary(b)
+    if boundary_error != ok { ret boundary_error }
     b.cache = 0u32
     b.count = 0u32
     b.marker_hit = false
@@ -208,12 +223,21 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if !dc[c.dc_table].present { ret Invalid }
             let (t, t_error) = decode_symbol(b, &dc[c.dc_table])
             if t_error != ok { ret t_error }
-            if t > 16u32 { ret Invalid }
-            let diff = extend(take(b, t), t)
-            c.predictor += diff
-            c.coefficients[base] = c.predictor << s.al
-        } else if take_bit(b) != 0u32 {
-            c.coefficients[base] = c.coefficients[base] | (1i32 << s.al)
+            // This decoder accepts only 8-bit DCT frames, whose DC categories are 0..11.
+            if t > 11u32 { ret Invalid }
+            let (dc_bits, dc_bits_error) = take(b, t)
+            if dc_bits_error != ok { ret dc_bits_error }
+            let diff = extend(dc_bits, t)
+            let predicted = i64(c.predictor) + i64(diff)
+            if predicted < -2147483648i64 || predicted > 2147483647i64 { ret Invalid }
+            c.predictor = i32(predicted)
+            let coefficient = i64(c.predictor) * (1i64 << s.al)
+            if coefficient < -2147483648i64 || coefficient > 2147483647i64 { ret Invalid }
+            c.coefficients[base] = i32(coefficient)
+        } else {
+            let (dc_refine, dc_refine_error) = take_bit(b)
+            if dc_refine_error != ok { ret dc_refine_error }
+            if dc_refine != 0u32 { c.coefficients[base] = c.coefficients[base] | (1i32 << s.al) }
         }
         if s.se == 0usize { ret ok }
     }
@@ -234,7 +258,11 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if size == 0u32 {
                 if r < 15u32 {
                     s.eobrun = (1u32 << r) - 1u32
-                    if r > 0u32 { s.eobrun += take(b, r) }
+                    if r > 0u32 {
+                        let (run_bits, run_bits_error) = take(b, r)
+                        if run_bits_error != ok { ret run_bits_error }
+                        s.eobrun += run_bits
+                    }
                     break
                 }
                 k += 16usize
@@ -242,7 +270,9 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             }
             k += usize(r)
             if k > 63usize { ret Invalid }
-            c.coefficients[base + zz(k)] = extend(take(b, size), size) << s.al
+            let (ac_bits, ac_bits_error) = take(b, size)
+            if ac_bits_error != ok { ret ac_bits_error }
+            c.coefficients[base + zz(k)] = extend(ac_bits, size) << s.al
             k += 1usize
         }
         ret ok
@@ -261,17 +291,25 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
             if size == 0u32 {
                 if r < 15i32 {
                     s.eobrun = (1u32 << u32(r))
-                    if r > 0i32 { s.eobrun += take(b, u32(r)) }
+                    if r > 0i32 {
+                        let (refine_run_bits, refine_run_bits_error) = take(b, u32(r))
+                        if refine_run_bits_error != ok { ret refine_run_bits_error }
+                        s.eobrun += refine_run_bits
+                    }
                     break
                 }
             } else {
                 if size != 1u32 { ret Invalid }
-                if take_bit(b) != 0u32 { value = p1 } else { value = m1 }
+                let (new_sign, new_sign_error) = take_bit(b)
+                if new_sign_error != ok { ret new_sign_error }
+                if new_sign != 0u32 { value = p1 } else { value = m1 }
             }
             while k <= s.se {
                 let at = base + zz(k)
                 if c.coefficients[at] != 0i32 {
-                    if take_bit(b) != 0u32 {
+                    let (existing_bit, existing_bit_error) = take_bit(b)
+                    if existing_bit_error != ok { ret existing_bit_error }
+                    if existing_bit != 0u32 {
                         let coef = c.coefficients[at]
                         if (coef & p1) == 0i32 {
                             if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
@@ -292,10 +330,14 @@ fn decode_block(b: *Bits, f: *Frame, s: *Scan, dc: []Huffman, ac: []Huffman, c: 
     if s.eobrun > 0u32 {
         while k <= s.se {
             let at = base + zz(k)
-            if c.coefficients[at] != 0i32 && take_bit(b) != 0u32 {
-                let coef = c.coefficients[at]
-                if (coef & p1) == 0i32 {
-                    if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
+            if c.coefficients[at] != 0i32 {
+                let (eob_bit, eob_bit_error) = take_bit(b)
+                if eob_bit_error != ok { ret eob_bit_error }
+                if eob_bit != 0u32 {
+                    let coef = c.coefficients[at]
+                    if (coef & p1) == 0i32 {
+                        if coef >= 0i32 { c.coefficients[at] = coef + p1 } else { c.coefficients[at] = coef + m1 }
+                    }
                 }
             }
             k += 1usize
@@ -453,10 +495,7 @@ fn idct_block(coefficients: []const i32, base: usize, quant: []const u8, t: []co
                 sum += t[v * 8usize + y] * tmp[v * 8usize + x]
                 v += 1usize
             }
-            var value = i32(sum + 128.5)
-            if sum + 128.5 < 0.0 { value = 0i32 }
-            if value > 255i32 { value = 255i32 }
-            out[out_at + y * stride + x] = u8(value)
+            out[out_at + y * stride + x] = clamp_byte(sum + 128.0)
             y += 1usize
         }
         x += 1usize
@@ -505,10 +544,113 @@ type Decoder = struct {
     dc: [4]Huffman,
     ac: [4]Huffman,
     seen_frame: bool,
+    restart_interval: usize,
+    adobe_transform: u32,
+    has_adobe: bool,
 }
+
+// `inspect` only needs the first frame marker, so it walks segments through a small
+// buffer rather than imposing a fixed cap on valid APP metadata before SOF.
+type InspectStream = struct { source: io.Reader, buffer: [4096]u8, at: usize, len: usize, total: usize, ended: bool }
 
 fn u16_at(d: []const u8, at: usize) -> usize {
     ret (usize(d[at]) << 8u32) | usize(d[at + 1usize])
+}
+
+fn inspect_fill(s: *InspectStream) -> err {
+    while s.at == s.len {
+        if s.ended { ret Invalid }
+        let (got, read_error) = io.read(&s.source, s.buffer[..])
+        if read_error != ok && read_error != io.End { ret read_error }
+        if got == 0usize {
+            if read_error == io.End { s.ended = true }
+            ret Invalid
+        }
+        if got > READ_LIMIT - s.total { ret TooLarge }
+        s.total += got
+        s.at = 0usize
+        s.len = got
+        if read_error == io.End { s.ended = true }
+    }
+    ret ok
+}
+
+fn inspect_byte(s: *InspectStream) -> (u8, err) {
+    let fill_error = inspect_fill(s)
+    if fill_error != ok { ret (0u8, fill_error) }
+    let byte = s.buffer[s.at]
+    s.at += 1usize
+    ret (byte, ok)
+}
+
+fn inspect_u16(s: *InspectStream) -> (usize, err) {
+    let (hi, hi_error) = inspect_byte(s)
+    if hi_error != ok { ret (0usize, hi_error) }
+    let (lo, lo_error) = inspect_byte(s)
+    if lo_error != ok { ret (0usize, lo_error) }
+    ret ((usize(hi) << 8u32) | usize(lo), ok)
+}
+
+fn inspect_skip(s: *InspectStream, count: usize) -> err {
+    var left = count
+    while left > 0usize {
+        let fill_error = inspect_fill(s)
+        if fill_error != ok { ret fill_error }
+        let available = s.len - s.at
+        var portion = available
+        if portion > left { portion = left }
+        s.at += portion
+        left -= portion
+    }
+    ret ok
+}
+
+fn inspect_sof(s: *InspectStream, body_len: usize) -> (image.Info, err) {
+    var f: Frame = zero
+    if body_len < 6usize { ret (zero, Invalid) }
+    let (precision, precision_error) = inspect_byte(s)
+    if precision_error != ok { ret (zero, precision_error) }
+    if precision != 8u8 { ret (zero, Unsupported) }
+    let (height, height_error) = inspect_u16(s)
+    if height_error != ok { ret (zero, height_error) }
+    let (width, width_error) = inspect_u16(s)
+    if width_error != ok { ret (zero, width_error) }
+    let (count_byte, count_error) = inspect_byte(s)
+    if count_error != ok { ret (zero, count_error) }
+    f.width = width
+    f.height = height
+    f.count = usize(count_byte)
+    if f.width == 0usize || f.height == 0usize { ret (zero, Invalid) }
+    if f.count != 1usize && f.count != 3usize { ret (zero, Unsupported) }
+    let needed = 6usize + 3usize * f.count
+    if body_len < needed { ret (zero, Invalid) }
+    var i = 0usize
+    while i < f.count {
+        let (id, id_error) = inspect_byte(s)
+        if id_error != ok { ret (zero, id_error) }
+        let (sampling, sampling_error) = inspect_byte(s)
+        if sampling_error != ok { ret (zero, sampling_error) }
+        let (quant, quant_error) = inspect_byte(s)
+        if quant_error != ok { ret (zero, quant_error) }
+        let h = usize(sampling >> 4u32)
+        let v = usize(sampling & 15u8)
+        if h == 0usize || h > 4usize || v == 0usize || v > 4usize || quant > 3u8 { ret (zero, Invalid) }
+        f.components[i].id = u32(id)
+        f.components[i].h = h
+        f.components[i].v = v
+        f.components[i].quant = usize(quant)
+        if h > f.hmax { f.hmax = h }
+        if v > f.vmax { f.vmax = v }
+        i += 1usize
+    }
+    i = 0usize
+    while i < f.count {
+        if f.hmax % f.components[i].h != 0usize || f.vmax % f.components[i].v != 0usize { ret (zero, Unsupported) }
+        i += 1usize
+    }
+    let skip_error = inspect_skip(s, body_len - needed)
+    if skip_error != ok { ret (zero, skip_error) }
+    ret (info_of(f), ok)
 }
 
 fn parse_dqt(dec: *Decoder, body: []const u8) -> err {
@@ -552,6 +694,23 @@ fn parse_dht(dec: *Decoder, body: []const u8) -> err {
     ret ok
 }
 
+fn parse_dri(dec: *Decoder, body: []const u8) -> err {
+    if body.len < 2usize { ret Invalid }
+    let interval = u16_at(body, 0usize)
+    dec.restart_interval = interval
+    dec.frame.restart_interval = interval
+    ret ok
+}
+
+fn parse_adobe(dec: *Decoder, body: []const u8) {
+    if body.len >= 12usize && body[0] == 65u8 && body[1usize] == 100u8 && body[2usize] == 111u8 && body[3usize] == 98u8 && body[4usize] == 101u8 {
+        dec.has_adobe = true
+        dec.adobe_transform = u32(body[11usize])
+        dec.frame.has_adobe = true
+        dec.frame.adobe_transform = dec.adobe_transform
+    }
+}
+
 fn parse_sof(dec: *Decoder, body: []const u8, progressive: bool) -> err {
     if dec.seen_frame { ret Unsupported }
     if body.len < 6usize { ret Invalid }
@@ -561,6 +720,9 @@ fn parse_sof(dec: *Decoder, body: []const u8, progressive: bool) -> err {
     f.width = u16_at(body, 3usize)
     f.count = usize(body[5])
     f.progressive = progressive
+    f.restart_interval = dec.restart_interval
+    f.adobe_transform = dec.adobe_transform
+    f.has_adobe = dec.has_adobe
     if f.width == 0usize || f.height == 0usize { ret Invalid }
     if f.count != 1usize && f.count != 3usize { ret Unsupported }
     if body.len < 6usize + 3usize * f.count { ret Invalid }
@@ -576,6 +738,11 @@ fn parse_sof(dec: *Decoder, body: []const u8, progressive: bool) -> err {
         if c.h > f.hmax { f.hmax = c.h }
         if c.v > f.vmax { f.vmax = c.v }
         f.components[i] = c
+        i += 1usize
+    }
+    i = 0usize
+    while i < f.count {
+        if f.hmax % f.components[i].h != 0usize || f.vmax % f.components[i].v != 0usize { ret Unsupported }
         i += 1usize
     }
     f.mcus_x = (f.width + 8usize * f.hmax - 1usize) / (8usize * f.hmax)
@@ -617,13 +784,10 @@ fn parse_headers(dec: *Decoder) -> err {
         } else if marker == 195u32 || (marker >= 197u32 && marker <= 207u32 && marker != 200u32) {
             ret Unsupported
         } else if marker == 221u32 {
-            if body.len < 2usize { ret Invalid }
-            dec.frame.restart_interval = u16_at(body, 0usize)
+            let dri_error = parse_dri(dec, body)
+            if dri_error != ok { ret dri_error }
         } else if marker == 238u32 {
-            if body.len >= 12usize && body[0] == 65u8 && body[1] == 100u8 && body[2] == 111u8 && body[3] == 98u8 && body[4] == 101u8 {
-                dec.frame.has_adobe = true
-                dec.frame.adobe_transform = u32(body[11])
-            }
+            parse_adobe(dec, body)
         }
     }
     ret Invalid
@@ -636,21 +800,38 @@ fn info_of(f: Frame) -> image.Info {
 }
 
 fn inspect(source: io.Reader) -> (image.Info, err) {
-    var r = source
-    var head: [65536]u8 = zero
-    var filled = 0usize
-    while filled < head.len {
-        let (got, read_error) = io.read(&r, head[filled..])
-        if read_error == io.End { break }
-        if read_error != ok { ret (zero, read_error) }
-        filled += got
+    var s: InspectStream = zero
+    s.source = source
+    let (first, first_error) = inspect_byte(&s)
+    if first_error != ok { ret (zero, first_error) }
+    let (second, second_error) = inspect_byte(&s)
+    if second_error != ok { ret (zero, second_error) }
+    if first != 255u8 || second != 216u8 { ret (zero, Invalid) }
+    while true {
+        let (prefix, prefix_error) = inspect_byte(&s)
+        if prefix_error != ok { ret (zero, prefix_error) }
+        if prefix != 255u8 { ret (zero, Invalid) }
+        var marker = 255u8
+        while marker == 255u8 {
+            let (next, next_error) = inspect_byte(&s)
+            if next_error != ok { ret (zero, next_error) }
+            marker = next
+        }
+        if marker == 0u8 || marker == 217u8 || marker == 218u8 { ret (zero, Invalid) }
+        if marker >= 208u8 && marker <= 215u8 { continue }
+        let (length, length_error) = inspect_u16(&s)
+        if length_error != ok { ret (zero, length_error) }
+        if length < 2usize { ret (zero, Invalid) }
+        let body_len = length - 2usize
+        if marker == 192u8 || marker == 193u8 || marker == 194u8 {
+            let (info, sof_error) = inspect_sof(&s, body_len)
+            ret (info, sof_error)
+        }
+        if marker == 195u8 || (marker >= 197u8 && marker <= 207u8 && marker != 200u8) { ret (zero, Unsupported) }
+        let skip_error = inspect_skip(&s, body_len)
+        if skip_error != ok { ret (zero, skip_error) }
     }
-    var dec: Decoder = zero
-    dec.data = head[..filled]
-    let header_error = parse_headers(&dec)
-    if header_error != ok && !dec.seen_frame { ret (zero, header_error) }
-    if !dec.seen_frame { ret (zero, Invalid) }
-    ret (info_of(dec.frame), ok)
+    ret (zero, Invalid)
 }
 
 fn within(f: Frame, options: DecodeOptions) -> err {
@@ -734,6 +915,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     }
     // Every scan, up to EOI; the header walker stopped at the first SOS marker byte.
     var scans = 0usize
+    var components_seen: [4]bool = zero
     while true {
         let marker = u32(dec.data[dec.at - 1usize])
         if marker == 217u32 { break }
@@ -747,6 +929,13 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         var b = Bits { data: dec.data, at: dec.at + length, cache: 0u32, count: 0u32, marker_hit: false }
         let decode_error = decode_scan(&b, f, &s, dec.dc[0..], dec.ac[0..])
         if decode_error != ok { ret (zero, decode_error) }
+        let boundary_error = scan_boundary(&b)
+        if boundary_error != ok { ret (zero, boundary_error) }
+        var member_at = 0usize
+        while member_at < scan.count {
+            components_seen[scan.members[member_at]] = true
+            member_at += 1usize
+        }
         scans += 1usize
         // Resume the marker walk after the entropy data.
         dec.at = b.at
@@ -754,6 +943,13 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
         if more_error != ok { ret (zero, more_error) }
     }
     if scans == 0usize { ret (zero, Invalid) }
+    if !f.progressive {
+        i = 0usize
+        while i < f.count {
+            if !components_seen[i] { ret (zero, Invalid) }
+            i += 1usize
+        }
+    }
     // Planes: dequantise and transform every block.
     var t: [64]f32 = zero
     cos_table(t[0..])
@@ -814,7 +1010,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
 // Continues the marker walk from `dec.at` after a scan's entropy data.
 fn parse_headers_from(dec: *Decoder) -> err {
     while true {
-        while dec.at < dec.data.len && dec.data[dec.at] != 255u8 { dec.at += 1usize }
+        if dec.at >= dec.data.len || dec.data[dec.at] != 255u8 { ret Invalid }
         while dec.at < dec.data.len && dec.data[dec.at] == 255u8 { dec.at += 1usize }
         if dec.at >= dec.data.len { ret Invalid }
         let marker = u32(dec.data[dec.at])
@@ -833,8 +1029,10 @@ fn parse_headers_from(dec: *Decoder) -> err {
             let dht_error = parse_dht(dec, body)
             if dht_error != ok { ret dht_error }
         } else if marker == 221u32 {
-            if body.len < 2usize { ret Invalid }
-            dec.frame.restart_interval = u16_at(body, 0usize)
+            let dri_error = parse_dri(dec, body)
+            if dri_error != ok { ret dri_error }
+        } else if marker == 238u32 {
+            parse_adobe(dec, body)
         } else if marker >= 192u32 && marker <= 207u32 && marker != 196u32 && marker != 200u32 {
             ret Unsupported
         }
@@ -914,7 +1112,7 @@ fn codes_of(bits: str, values: str) -> Codes {
 
 fn scaled_quant(base: str, quality: u8, out: []u8) {
     var q = u32(quality)
-    if q == 0u32 { q = 1u32 }
+    if q == 0u32 { q = 75u32 }
     if q > 100u32 { q = 100u32 }
     var scale = 200u32 - 2u32 * q
     if q < 50u32 { scale = 5000u32 / q }

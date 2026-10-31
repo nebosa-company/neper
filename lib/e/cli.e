@@ -5,7 +5,9 @@
 // its `env` variable, and `Missing` if that is unset too. `parse_into` reads a struct's
 // fields as `--name` options by their `meta` kind -- bool, integer, float, string --
 // with no `Command` in between. `help` renders usage, options and subcommands, the
-// help text word-wrapped to `width`.
+// help text word-wrapped to `width`. Options belong to the selected command;
+// supplying an option before a subcommand is `InvalidArgument` rather than
+// silently discarding it.
 use e.mem
 use e.meta
 use e.os
@@ -17,13 +19,25 @@ type Command = struct { name: str, help: str, options: []const Option, subcomman
 type Value = union enum u8 { Bool: bool, I64: i64, U64: u64, F64: f64, String: str }
 type ParsedOption = struct { name: str, values: []const Value }
 type Result = struct { command: str, options: []const ParsedOption, positionals: []const str }
+type ValidationLink = struct { command: *const Command, parent: *const ValidationLink }
 error InvalidSpec
 error InvalidArgument
 error Missing
 error Unknown
 
 fn validate(command: *const Command) -> err {
+    ret validate_inner(command, nil)
+}
+
+fn validate_inner(command: *const Command, ancestors: *const ValidationLink) -> err {
+    var cursor = ancestors
+    while cursor != nil {
+        if cursor.command == command { ret InvalidSpec }
+        cursor = cursor.parent
+    }
+    let current = ValidationLink{ command: command, parent: ancestors }
     if command.name.len == 0usize { ret InvalidSpec }
+    if command.options.len > 256usize { ret InvalidSpec }
     var i = 0usize
     while i < command.options.len {
         let o = command.options[i]
@@ -44,7 +58,7 @@ fn validate(command: *const Command) -> err {
             if str.eq(command.subcommands[j].name, command.subcommands[i].name) { ret InvalidSpec }
             j += 1usize
         }
-        try validate(&command.subcommands[i])
+        try validate_inner(&command.subcommands[i], &current)
         i += 1usize
     }
     ret ok
@@ -72,6 +86,28 @@ fn parse_value(kind: ValueKind, text: str) -> (Value, err) {
         ret (Value{ F64: number }, ok)
     }
     ret (Value{ String: text }, ok)
+}
+
+// Parse an integer into exactly `T`, deciding its range before the explicit
+// conversion so a malformed command line never traps in debug or wraps in release.
+fn parse_integer[T: type](text: str) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if meta.signed[T]() {
+        let (signed_number, signed_error) = str.parse_i64(text)
+        if signed_error != ok { ret (out, InvalidArgument) }
+        if bits < 64u64 {
+            let high = i64((1u64 << (bits - 1u64)) - 1u64)
+            if signed_number > high || signed_number < 0i64 - high - 1i64 { ret (out, InvalidArgument) }
+        }
+        out = T(signed_number)
+        ret (out, ok)
+    }
+    let (unsigned_number, unsigned_error) = str.parse_u64(text)
+    if unsigned_error != ok { ret (out, InvalidArgument) }
+    if bits < 64u64 && unsigned_number > (1u64 << bits) - 1u64 { ret (out, InvalidArgument) }
+    out = T(unsigned_number)
+    ret (out, ok)
 }
 
 fn find_option(command: *const Command, long: str, short: u8) -> (usize, bool) {
@@ -163,6 +199,11 @@ fn parse(a: *mem.Arena, command: *const Command, args: []const str) -> (Result, 
                 sub += 1usize
             }
             if descended {
+                i = 0usize
+                while i < 256usize {
+                    if counts[i] != 0usize { ret (zero, InvalidArgument) }
+                    i += 1usize
+                }
                 // The subcommand starts its own option table.
                 i = 0usize
                 while i < 256usize {
@@ -180,8 +221,9 @@ fn parse(a: *mem.Arena, command: *const Command, args: []const str) -> (Result, 
     i = 0usize
     while i < current.options.len && i < 256usize {
         let o = current.options[i]
-        if counts[i] == 0usize && o.env.len > 0usize {
+        if counts[i] == 0usize && o.required && o.env.len > 0usize {
             let (from_env, env_error) = os.env(a, o.env)
+            if env_error != ok && env_error != os.NotFound { ret (zero, env_error) }
             if env_error == ok {
                 let (value, value_error) = parse_value(o.kind, from_env)
                 if value_error != ok { ret (zero, value_error) }
@@ -371,10 +413,8 @@ fn parse_into[T: type](a: *mem.Arena, args: []const str) -> (T, err) {
                         meta.set[f, T](&out, text)
                     } else {
                     if meta.kind[f.ty]() == .Int {
-                        let (number, number_error) = str.parse_i64(text)
-                        if number_error != ok { ret (out, InvalidArgument) }
-                        var slot: f.ty = zero
-                        slot = f.ty(number)
+                        let (slot, slot_error) = parse_integer[f.ty](text)
+                        if slot_error != ok { ret (out, slot_error) }
                         meta.set[f, T](&out, slot)
                     } else {
                     if meta.kind[f.ty]() == .Float {

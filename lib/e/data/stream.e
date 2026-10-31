@@ -71,7 +71,7 @@ fn merge_at(m: *Merge, now: u64) -> u64 {
     var any = false
     var i = 0usize
     while i < m.marks.len {
-        if m.last[i] +% m.idle > now {
+        if now -% m.last[i] < m.idle {
             if !any || m.marks[i] < lowest { lowest = m.marks[i] }
             any = true
         }
@@ -90,7 +90,8 @@ fn sliding_windows(event_time: u64, size: u64, slide: u64, out: []u64) -> (usize
     if size == 0u64 || slide == 0u64 { ret (0usize, Invalid) }
     var start = event_time - event_time % slide
     var n = 0usize
-    while start +% size > event_time {
+    // A window end may wrap, so membership is elapsed time modulo u64.
+    while event_time -% start < size {
         if n >= out.len { ret (n, TooSmall) }
         out[n] = start
         n += 1usize
@@ -110,9 +111,25 @@ fn window_buffer(size: u64, slide: u64, windows: []Window) -> (WindowBuffer, err
 // passed `mark` (the current watermark); windows already past count as late.
 fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
     var start = event_time - event_time % b.slide
-    while start +% b.size > event_time {
+    // Count every new open window before updating one: a full caller pool must
+    // leave the buffer retryable instead of keeping an arbitrary prefix.
+    var needed = 0usize
+    while event_time -% start < b.size {
+        if start +% b.size > mark {
+            var i = 0usize
+            while i < b.used && b.windows[i].start != start { i += 1usize }
+            if i == b.used { needed += 1usize }
+        }
+        if start < b.slide { break }
+        start -= b.slide
+    }
+    if needed > b.windows.len - b.used { ret TooSmall }
+
+    start = event_time - event_time % b.slide
+    var late = false
+    while event_time -% start < b.size {
         if start +% b.size <= mark {
-            b.late += 1u64
+            late = true
         } else {
             // ponytail: linear scan over open windows; a map by start if thousands stay open.
             var i = 0usize
@@ -128,6 +145,9 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
         if start < b.slide { break }
         start -= b.slide
     }
+    // A sliding event can belong to several already-fired windows, but is one
+    // late event rather than one late event per overlapping window.
+    if late { b.late += 1u64 }
     ret ok
 }
 

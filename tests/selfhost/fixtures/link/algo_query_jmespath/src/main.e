@@ -323,6 +323,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wrong != jmespath.Type { os.exit(95i32) }
     let (_, arity) = jmespath.search(a, "abs(arr, arr)", docs[0usize])
     if arity != jmespath.Arity { os.exit(96i32) }
+    // #17: large f64 operands stay integral, and the merge sort retains equal-key order.
+    if run(a, "0\tfloor(`4503599627370496`)\t4503599627370496\n0\tfloor(`1e20`)\t1e20\n0\tceil(`1e20`)\t1e20\n0\tfloor(`-1e20`)\t-1e20\n0\tceil(`-1e20`)\t-1e20\n0\tsort(`[3,1,2,1,3,2,1]`)\t[1,1,1,2,2,3,3]\n0\tsort_by(`[{\"id\":\"first\",\"rank\":2},{\"id\":\"low\",\"rank\":1},{\"id\":\"second\",\"rank\":2},{\"id\":\"third\",\"rank\":2}]`, &rank)[*].id\t[\"low\",\"first\",\"second\",\"third\"]\n", docs[0usize..8usize]) != 0u8 { os.exit(97i32) }
+    let (_, missing_comma) = jmespath.compile(a, "abs(a b)")
+    if missing_comma != jmespath.Syntax { os.exit(98i32) }
+    let (_, trailing_comma) = jmespath.compile(a, "length(a,)")
+    if trailing_comma != jmespath.Syntax { os.exit(99i32) }
     try io.print("algo query jmespath ok")
     ret ok
 }

@@ -38,8 +38,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(decoded(a, "Big5", "\xa4\x40"), "\xe4\xb8\x80") { os.exit(9i32) }
     if !str.eq(decoded(a, "GBK", "\xb0\xa1"), "\xe5\x95\x8a") { os.exit(10i32) }
     if !str.eq(decoded(a, "gb18030", "\x81\x30\x81\x30"), "\xc2\x80") { os.exit(11i32) }
+    if !str.eq(decoded(a, "gb18030", "\x81\x30AB"), "\xef\xbf\xbd0AB") { os.exit(36i32) }
     if !str.eq(decoded(a, "EUC-KR", "\xb0\xa1"), "\xea\xb0\x80") { os.exit(12i32) }
     if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B$\x22\x1b(Bx"), "\xe3\x81\x82x") { os.exit(13i32) }
+    // ISO-2022-JP's state machine rejects malformed bytes without treating them
+    // as ASCII, and an ESC after a pending JIS lead first reports that lead.
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B!\x1b(BA"), "\xef\xbf\xbdA") { os.exit(25i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(I\x20"), "\xef\xbf\xbd") { os.exit(26i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B\x20"), "\xef\xbf\xbd") { os.exit(27i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$"), "\xef\xbf\xbd") { os.exit(28i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$X"), "\xef\xbf\xbd$X") { os.exit(29i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b$B!\x1b$X"), "\xef\xbf\xbd\xef\xbf\xbd\xe3\x81\xb8") { os.exit(30i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(I\x1b$X"), "\xef\xbf\xbd\xef\xbd\xa4\xef\xbe\x98") { os.exit(31i32) }
+    if !str.eq(decoded(a, "ISO-2022-JP", "\x1b(B\x1b(B"), "\xef\xbf\xbd") { os.exit(32i32) }
     // A malformed sequence is one replacement character; an ASCII byte after a lone lead byte survives.
     if !str.eq(decoded(a, "Shift_JIS", "\x82A"), "\xef\xbf\xbdA") { os.exit(14i32) }
     // UTF-16 through the BOM.
@@ -56,5 +67,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(sniff.determine("<meta http-equiv=refresh content=\"0; charset=koi8-r\">", ""), "windows-1252") { os.exit(23i32) }
     let (doc, used, de) = sniff.decode_document(a, "<meta charset=windows-1251><p>\xcf\xf0\xe8\xe2\xe5\xf2", "")
     if de != ok || !str.eq(used, "windows-1251") || !str.eq(doc, "<meta charset=windows-1251><p>\xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82") { os.exit(24i32) }
+    // BOM-less UTF-16 XML declarations select their byte order before the
+    // ASCII-oriented meta prescan, then decode as ordinary UTF-8 text.
+    let (le_doc, le_used, le_error) = sniff.decode_document(a, "\x3c\x00\x3f\x00\x78\x00\x6d\x00\x6c\x00\x3f\x00\x3e\x00", "")
+    if le_error != ok || !str.eq(le_used, "UTF-16LE") || !str.eq(le_doc, "<?xml?>") { os.exit(34i32) }
+    let (be_doc, be_used, be_error) = sniff.decode_document(a, "\x00\x3c\x00\x3f\x00\x78\x00\x6d\x00\x6c\x00\x3f\x00\x3e", "")
+    if be_error != ok || !str.eq(be_used, "UTF-16BE") || !str.eq(be_doc, "<?xml?>") { os.exit(35i32) }
     ret ok
 }

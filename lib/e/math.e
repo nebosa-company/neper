@@ -33,6 +33,7 @@ use e.mem
 
 // Every float carries its sign in its top bit, so the sign is a mask on the bits of the width
 // -- which `size_of` folds for a scalar, so the branch that is not this width is gone (D144).
+fn sign_bit_f16() -> u16 { ret 32768u16 }
 fn sign_bit_f32() -> u32 { ret 2147483648u32 }
 fn sign_bit_f64() -> u64 { ret 9223372036854775808u64 }
 
@@ -43,6 +44,10 @@ fn rsqrt[F: type](x: F) -> F {
 }
 
 fn abs[F: type](x: F) -> F {
+    if mem.size_of[F]() == 2usize {
+        let bits = mem.bitcast[u16](x) & (sign_bit_f16() - 1u16)
+        ret mem.bitcast[F](bits)
+    }
     if mem.size_of[F]() == 4usize {
         let bits = mem.bitcast[u32](x) & (sign_bit_f32() - 1u32)
         ret mem.bitcast[F](bits)
@@ -73,6 +78,10 @@ fn max[F: type](a: F, b: F) -> F {
 }
 
 fn is_negative[F: type](x: F) -> bool {
+    if mem.size_of[F]() == 2usize {
+        let narrowest = mem.bitcast[u16](x) & sign_bit_f16()
+        ret narrowest != 0u16
+    }
     if mem.size_of[F]() == 4usize {
         let narrow = mem.bitcast[u32](x) & sign_bit_f32()
         ret narrow != 0u32
@@ -120,6 +129,11 @@ fn round[F: type](x: F) -> F {
 }
 
 fn copysign[F: type](x: F, y: F) -> F {
+    if mem.size_of[F]() == 2usize {
+        let magnitude = mem.bitcast[u16](x) & (sign_bit_f16() - 1u16)
+        let sign = mem.bitcast[u16](y) & sign_bit_f16()
+        ret mem.bitcast[F](magnitude | sign)
+    }
     if mem.size_of[F]() == 4usize {
         let magnitude = mem.bitcast[u32](x) & (sign_bit_f32() - 1u32)
         let sign = mem.bitcast[u32](y) & sign_bit_f32()
@@ -478,6 +492,9 @@ fn fma_bits(a: u64, b: u64, c: u64, mantissa: u32, exponent_bits: u32) -> u64 {
 }
 
 fn fma[F: type](a: F, b: F, c: F) -> F {
+    // f16 and bf16 (D5913) widen to f32, fuse there and round once back, as every other
+    // operation on them does (section 4).
+    if mem.size_of[F]() == 2usize { ret F(fma[f32](f32(a), f32(b), f32(c))) }
     if mem.size_of[F]() == 4usize {
         let result = fma_bits(u64(mem.bitcast[u32](a)), u64(mem.bitcast[u32](b)), u64(mem.bitcast[u32](c)), 24u32, 8u32)
         ret mem.bitcast[F](u32(result))
@@ -881,7 +898,7 @@ fn atan2_64(y: f64, x: f64) -> f64 {
             ret 0.0f64 - 3.0f64 * k(PIO4_HI) - k(ATAN_LO_2)
         }
         if m == 0u32 { ret 0.0f64 }
-        if m == 1u32 { ret 0.0f64 - 0.0f64 }
+        if m == 1u32 { ret k(9223372036854775808u64) }
         if m == 2u32 { ret k(PI) + k(PI_LO) }
         ret 0.0f64 - k(PI) - k(PI_LO)
     }
@@ -1529,7 +1546,7 @@ fn pow64(x: f64, y: f64) -> f64 {
     } else {
         if (j & 2147483647i64) >= 1083231232i64 {
             // z <= -1075: underflow, with the same edge.
-            if ((j + 1064317952i64) | i64(i)) != 0i64 { ret s * 0.0f64 }
+            if ((j + 1064252416i64) | i64(i)) != 0i64 { ret s * 0.0f64 }
             if p_l <= z - p_h { ret s * 0.0f64 }
         }
     }

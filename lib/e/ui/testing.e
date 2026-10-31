@@ -33,8 +33,12 @@ type State = struct { runtime: *widget.Runtime, frames: *gpu.Target, drawable: s
 const FRAME_BYTES: usize = 16777216usize
 const TREE_BYTES: usize = 524288usize
 
+fn finite(value: f32) -> bool {
+    ret value == value && value - value == 0.0
+}
+
 fn harness(a: *mem.Arena, runtime: *widget.Runtime, width: u32, height: u32, scale: f32) -> (Harness, err) {
-    if width == 0u32 || height == 0u32 || !(scale > 0.0) { ret (zero, NotFound) }
+    if width == 0u32 || height == 0u32 || !finite(scale) || !(scale > 0.0) { ret (zero, NotFound) }
     let queue = widget.queue_of(runtime)
     if mem.address_of(queue) == 0usize { ret (zero, NotFound) }
     let (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, width, height, .Rgba8)
@@ -172,7 +176,9 @@ fn pointer_at(x: f32, y: f32) -> input.Pointer {
 // `notches` (positive away from the user) at a point.
 fn tap(h: *Harness, x: f32, y: f32) -> err {
     try send(h, input.Event { PointerDown: pointer_at(x, y) })
-    ret send(h, input.Event { PointerUp: pointer_at(x, y) })
+    var released = pointer_at(x, y)
+    released.buttons = 0u32
+    ret send(h, input.Event { PointerUp: released })
 }
 
 fn drag(h: *Harness, from: geometry.Point, to: geometry.Point, steps: usize) -> err {
@@ -185,7 +191,9 @@ fn drag(h: *Harness, from: geometry.Point, to: geometry.Point, steps: usize) -> 
         try send(h, input.Event { PointerMove: pointer_at(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t) })
         i += 1usize
     }
-    ret send(h, input.Event { PointerUp: pointer_at(to.x, to.y) })
+    var released = pointer_at(to.x, to.y)
+    released.buttons = 0u32
+    ret send(h, input.Event { PointerUp: released })
 }
 
 fn hover(h: *Harness, x: f32, y: f32) -> err {

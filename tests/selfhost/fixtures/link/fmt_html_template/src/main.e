@@ -94,5 +94,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if html_template.execute_typed_with_limits[Page](&typed, &sink, &page, 100u64, 10u64) != html_template.TooLarge || sink_state.off > 10usize { os.exit(28) }
     sink_state.off = 0usize
     if html_template.execute_typed_with_limits[Page](&typed, &sink, &page, 100u64, 100u64) != ok { os.exit(29) }
+    // `</scriptx>` is script data, not an end tag. The interpolation must stay
+    // in the JavaScript-string context rather than becoming executable script.
+    let (false_raw_close, false_raw_close_error) = render(a, "<script>// </scriptx>\n{{js}}</script>", bindings[0..], out[0..])
+    if false_raw_close_error != ok || !str.eq(false_raw_close, "<script>// </scriptx>\n\"javascript:alert(1)\"</script>") { os.exit(30) }
     ret ok
 }

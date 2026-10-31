@@ -20,7 +20,9 @@ jobs:
           build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
       - name: Compile the fixtures
         run: |
-          CORPUS_ARCHS=${{ matrix.arch }} bash tests/macos/build-corpus.sh "$PWD/build/linux/neper-self" "$PWD" /tmp/corpus-out 4 | tee /tmp/corpus-build.tsv | awk -F'\t' '$3 != "ok"'
+          set -o pipefail
+          CORPUS_ARCHS=${{ matrix.arch }} bash tests/macos/build-corpus.sh "$PWD/build/linux/neper-self" "$PWD" /tmp/corpus-out 4 | tee /tmp/corpus-build.tsv
+          awk -F'\t' '$3 != "ok"' /tmp/corpus-build.tsv
           echo "built: $(grep -c -P '\tok\t' /tmp/corpus-build.tsv) of $(wc -l < /tmp/corpus-build.tsv)"
           tar -czf /tmp/corpus-${{ matrix.arch }}.tar.gz -C /tmp/corpus-out/${{ matrix.arch }} .
       - uses: actions/upload-artifact@v4
@@ -60,29 +62,40 @@ jobs:
           file /tmp/cabi/libnepercabi.dylib
       - name: Run
         run: |
+          set -o pipefail
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
-          CORPUS_LIBS=/tmp/cabi CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt | grep -E "^(FAIL|TOTAL)|^    \|" | head -80
+          CORPUS_LIBS=/tmp/cabi CORPUS_CWD="$GITHUB_WORKSPACE" bash tests/macos/run-corpus.sh /tmp/corpus "${runner[@]}" | tee /tmp/corpus-results.txt
+          awk '/^(FAIL|TOTAL)/ || /^    \|/ { print; shown += 1; if (shown == 80) exit }' /tmp/corpus-results.txt
       - name: SSH client against a real server
         # net_ssh is driven by a Python SSH server (asyncssh), as the Linux suite does with drive.py; its result is a line of
         # the results file, SSH PASS or SSH FAIL, with the driver's last lines.
         run: |
+          set -o pipefail
           python3 -m venv /tmp/sshenv && /tmp/sshenv/bin/pip install --quiet asyncssh cryptography 2>&1 | tail -2
           printf '#!/bin/sh\nexec %s /tmp/corpus/net_ssh "$@"\n' "$([ "${{ matrix.arch }}" = "x64" ] && echo 'arch -x86_64' || echo '')" > /tmp/net_ssh_run.sh
           chmod +x /tmp/net_ssh_run.sh
-          if perl -e 'alarm 240; exec @ARGV' /tmp/sshenv/bin/python tests/selfhost/fixtures/link/net_ssh/drive.py /tmp/net_ssh_run.sh > /tmp/ssh-out.txt 2>&1; then echo "SSH PASS" >> /tmp/corpus-results.txt; else echo "SSH FAIL" >> /tmp/corpus-results.txt; tail -8 /tmp/ssh-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt; fi
+          if perl -e 'alarm 240; exec @ARGV' /tmp/sshenv/bin/python tests/selfhost/fixtures/link/net_ssh/drive.py /tmp/net_ssh_run.sh > /tmp/ssh-out.txt 2>&1; then
+            echo "SSH PASS" >> /tmp/corpus-results.txt
+          else
+            echo "SSH FAIL" >> /tmp/corpus-results.txt
+            tail -8 /tmp/ssh-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt
+            exit 1
+          fi
           tail -3 /tmp/ssh-out.txt
       - name: Application bundle
         # scripts/macos-bundle.sh makes an .app of a corpus program with an icon, and the program inside it runs; the result is a line
         # of the results file, BUNDLE PASS or BUNDLE FAIL.
         run: |
+          set -o pipefail
           runner=()
           if [ "${{ matrix.arch }}" = "x64" ]; then runner=(arch -x86_64); fi
-          icon=$(find docs -name '*.png' -size +8k | head -1)
+          icon=$(find docs -name '*.png' -size +8k -print -quit)
           if bash scripts/macos-bundle.sh --exe /tmp/corpus/os_poller --name "Neper Hello" --id com.neper.hello --version 1.2 ${icon:+--icon "$icon"} --agent --usage-camera "test" --url-scheme neperhello --doc-type nhello --out /tmp/bundles --zip --dmg > /tmp/bundle-out.txt 2>&1              && test -f "/tmp/bundles/Neper Hello.app/Contents/Info.plist"              && test -f "/tmp/bundles/Neper Hello.zip" && test -f "/tmp/bundles/Neper Hello.dmg" && hdiutil imageinfo "/tmp/bundles/Neper Hello.dmg" > /dev/null && /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "/tmp/bundles/Neper Hello.app/Contents/Info.plist" | grep -q neperhello && /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0" "/tmp/bundles/Neper Hello.app/Contents/Info.plist" | grep -q nhello              && /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/tmp/bundles/Neper Hello.app/Contents/Info.plist" | grep -q com.neper.hello              && "${runner[@]}" "/tmp/bundles/Neper Hello.app/Contents/MacOS/Neper Hello" > /dev/null 2>&1; then
             echo "BUNDLE PASS" >> /tmp/corpus-results.txt
           else
             echo "BUNDLE FAIL" >> /tmp/corpus-results.txt; tail -8 /tmp/bundle-out.txt | sed 's/^/    | /' >> /tmp/corpus-results.txt
+            exit 1
           fi
           tail -3 /tmp/bundle-out.txt
       - uses: actions/upload-artifact@v4

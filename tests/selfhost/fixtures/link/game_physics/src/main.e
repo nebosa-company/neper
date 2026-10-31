@@ -138,7 +138,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, full) = physics.sweep_and_prune(boxes[..], order[..], few[..])
     if full != physics.TooSmall { os.exit(5i32) }
 
-    // 6: ten SPH steps over a 4 x 4 lattice match the replica bit for bit.
+    // 6: invalid SPH parameters are rejected before they can turn state into NaN.
     var fluid_pos: [32]f64 = zero
     var fluid_vel: [32]f64 = zero
     var density: [16]f64 = zero
@@ -152,6 +152,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let params = physics.SphParams { h: 1.0f64, mass: 1.0f64, rest_density: 2.0f64, stiffness: 10.0f64, viscosity: 0.1f64, gravity: 0.0f64 - 1.0f64 }
+    var rejected_pos: [2]f64 = zero
+    var rejected_vel: [2]f64 = zero
+    var rejected_density: [1]f64 = zero
+    var rejected_pressure: [1]f64 = zero
+    var rejected_fx: [1]f64 = zero
+    var rejected_fy: [1]f64 = zero
+    let infinity = mem.bitcast[f64](9218868437227405312u64)
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    var rejected_params = params
+    rejected_params.h = 0.0f64
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], rejected_params, 0.001f64) != physics.Invalid || rejected_pos[0usize] != 0.0f64 || rejected_pos[1usize] != 0.0f64 || rejected_vel[0usize] != 0.0f64 || rejected_vel[1usize] != 0.0f64 { os.exit(6i32) }
+    rejected_params = params
+    rejected_params.mass = 0.0f64
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], rejected_params, 0.001f64) != physics.Invalid { os.exit(6i32) }
+    rejected_params = params
+    rejected_params.h = infinity
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], rejected_params, 0.001f64) != physics.Invalid { os.exit(6i32) }
+    rejected_params = params
+    rejected_params.mass = nan
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], rejected_params, 0.001f64) != physics.Invalid { os.exit(6i32) }
+    rejected_params = params
+    rejected_params.gravity = nan
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], rejected_params, 0.001f64) != physics.Invalid { os.exit(6i32) }
+    if physics.sph(rejected_pos[..], rejected_vel[..], rejected_density[..], rejected_pressure[..], rejected_fx[..], rejected_fy[..], params, infinity) != physics.Invalid { os.exit(6i32) }
+    // Ten SPH steps over a 4 x 4 lattice match the replica bit for bit.
     step = 0usize
     while step < 10usize {
         if physics.sph(fluid_pos[..], fluid_vel[..], density[..], pressure[..], fx[..], fy[..], params, 0.001f64) != ok { os.exit(6i32) }

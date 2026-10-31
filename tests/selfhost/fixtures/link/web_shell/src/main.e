@@ -1,12 +1,15 @@
 // The browser shell's model: the omnibox rules, tabs with their own session history (back, forward, a new navigation cutting the
 // forward entries), `about:` pages, the error page, bookmarks and the profile text.
 use e.fs
+use e.fmt.dom as dom
+use e.fmt.html as html
 use e.mem
 use e.net.fetch as fetch
 use e.os
 use e.str
 use e.text.fontset as fontset
 use e.web.shell as shell
+use e.web.script as script
 
 fn page(a: *mem.Arena, title: str) -> str {
     let (s, e) = str.concat(a, "data:text/html,<title>", title)
@@ -14,7 +17,23 @@ fn page(a: *mem.Arena, title: str) -> str {
     ret s2
 }
 
+fn frame_registry_is_live(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+    let (parsed, pe) = dom.parse(a, "<!doctype html><html><body></body></html>", options, 32usize)
+    if pe != ok { ret false }
+    var tree = parsed
+    let (it, ie) = script.new_context(a, &tree, "https://frame-registry.test/")
+    if ie != ok { ret false }
+    let setup = "{ const frame = document.createElement('iframe'); document.body.appendChild(frame); window.frameRegistryOld = frame.contentWindow; window.frameRegistryHits = 0; window.frameRegistryOld.__realm.ensureCeWrapped = function() { window.frameRegistryHits += 1; }; frame.srcdoc = '<p>replacement</p>'; window.frameRegistryFrame = frame; }"
+    if !script.run_script(it, setup, "frame-registry-setup.js") { ret false }
+    script.pump(it, 0.0f64)
+    let check = "{ const frame = window.frameRegistryFrame; class FrameRegistryProbe extends HTMLElement {} customElements.define('frame-registry-probe', FrameRegistryProbe); if (window.frameRegistryHits !== 0) throw new Error('dropped frame was retained'); if (frame.contentWindow === window.frameRegistryOld || window.length !== 1) throw new Error('frame replacement failed'); frame.remove(); if (window.length !== 0) throw new Error('frame removal failed'); }"
+    ret script.run_script(it, check, "frame-registry-check.js")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
+    if !frame_registry_is_live(a) { os.exit(86i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }
@@ -71,6 +90,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 5. A failed load leaves an error page, and the history keeps the attempt.
     let (t4, e4) = shell.open_tab(sh, "ftp://nowhere.test/file")
     if e4 != ok || !str.eq(t4.pg.title, "Can't load page") { os.exit(39i32) }
+    let old_backing = mem.address_of(&t4.backing[0usize])
     if shell.close_tab(sh, 3usize) != ok || shell.tab_count(sh) != 3usize { os.exit(40i32) }
     if shell.close_tab(sh, 9usize) == ok { os.exit(41i32) }
     // 6. The visit log: one entry per address, a revisit bumps the count and takes the newest end; it can be searched, deleted,
@@ -102,5 +122,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         vi += 1i64
     }
     if vs.visits.len != 5000usize || !str.eq(vs.visits.items[0usize].url, "https://many.test/2") { os.exit(52i32) }
+    var reuse = 0usize
+    while reuse < 3usize {
+        let (reopened, re) = shell.open_tab(sh, "about:blank")
+        if re != ok || mem.address_of(&reopened.backing[0usize]) != old_backing { os.exit(80i32 + i32(reuse)) }
+        if shell.close_tab(sh, 3usize) != ok { os.exit(83i32 + i32(reuse)) }
+        reuse += 1usize
+    }
     ret ok
 }

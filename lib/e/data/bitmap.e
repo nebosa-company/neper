@@ -275,20 +275,32 @@ fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
             j += 1usize
             continue
         }
-        let e = new_container(out, out.n, a.keys[i])
-        if e != ok { ret e }
-        let pos = out.n - 1usize
-        let c = chunk_of(out, pos)
         let ca = chunk_of(a, i)
         let cb = chunk_of(b, j)
+        // Probe a matching bucket before reserving caller-owned output space.
         if a.kind[i] == BITSET && b.kind[j] == BITSET {
-            out.kind[pos] = BITSET
-            var w = 0usize
-            while w < CHUNK {
-                c[w] = ca[w] & cb[w]
-                w += 1usize
+            var bitset_nonempty = false
+            var scan_word = 0usize
+            while scan_word < CHUNK {
+                if (ca[scan_word] & cb[scan_word]) != 0u16 {
+                    bitset_nonempty = true
+                    break
+                }
+                scan_word += 1usize
             }
-            out.count[pos] = chunk_ones(c)
+            if bitset_nonempty {
+                let bitset_error = new_container(out, out.n, a.keys[i])
+                if bitset_error != ok { ret bitset_error }
+                let bitset_pos = out.n - 1usize
+                let bitset_chunk = chunk_of(out, bitset_pos)
+                out.kind[bitset_pos] = BITSET
+                var write_word = 0usize
+                while write_word < CHUNK {
+                    bitset_chunk[write_word] = ca[write_word] & cb[write_word]
+                    write_word += 1usize
+                }
+                out.count[bitset_pos] = chunk_ones(bitset_chunk)
+            }
         } else {
             // Walk the array side and test each value against the other.
             var src = ca
@@ -303,18 +315,32 @@ fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
                 other_kind = a.kind[i]
                 other_count = usize(a.count[i])
             }
-            var k = 0usize
-            var n = 0usize
-            while k < src_count {
-                if container_has(other, other_kind, other_count, src[k]) {
-                    c[n] = src[k]
-                    n += 1usize
+            var array_nonempty = false
+            var scan_value = 0usize
+            while scan_value < src_count {
+                if container_has(other, other_kind, other_count, src[scan_value]) {
+                    array_nonempty = true
+                    break
                 }
-                k += 1usize
+                scan_value += 1usize
             }
-            out.count[pos] = u32(n)
+            if array_nonempty {
+                let array_error = new_container(out, out.n, a.keys[i])
+                if array_error != ok { ret array_error }
+                let array_pos = out.n - 1usize
+                let array_chunk = chunk_of(out, array_pos)
+                var write_value = 0usize
+                var source_value = 0usize
+                while source_value < src_count {
+                    if container_has(other, other_kind, other_count, src[source_value]) {
+                        array_chunk[write_value] = src[source_value]
+                        write_value += 1usize
+                    }
+                    source_value += 1usize
+                }
+                out.count[array_pos] = u32(write_value)
+            }
         }
-        if out.count[pos] == 0u32 { out.n -= 1usize }
         i += 1usize
         j += 1usize
     }
@@ -331,27 +357,32 @@ fn roaring_or(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
         let take_b = i >= a.n || (j < b.n && b.keys[j] <= a.keys[i])
         var key = 0u16
         if take_a { key = a.keys[i] } else { key = b.keys[j] }
-        let e = new_container(out, out.n, key)
-        if e != ok { ret e }
-        let pos = out.n - 1usize
-        let c = chunk_of(out, pos)
-        zero_chunk(c)
-        if take_a {
-            or_into(c, chunk_of(a, i), a.kind[i], usize(a.count[i]))
-            i += 1usize
+        // Removes retain empty input containers; they are not output containers.
+        var union_nonempty = false
+        if take_a && a.count[i] != 0u32 { union_nonempty = true }
+        if take_b && b.count[j] != 0u32 { union_nonempty = true }
+        if union_nonempty {
+            let union_error = new_container(out, out.n, key)
+            if union_error != ok { ret union_error }
+            let union_pos = out.n - 1usize
+            let union_chunk = chunk_of(out, union_pos)
+            zero_chunk(union_chunk)
+            if take_a {
+                or_into(union_chunk, chunk_of(a, i), a.kind[i], usize(a.count[i]))
+            }
+            if take_b {
+                or_into(union_chunk, chunk_of(b, j), b.kind[j], usize(b.count[j]))
+            }
+            let total = chunk_ones(union_chunk)
+            out.count[union_pos] = total
+            if usize(total) <= CHUNK {
+                to_array(union_chunk)
+            } else {
+                out.kind[union_pos] = BITSET
+            }
         }
-        if take_b {
-            or_into(c, chunk_of(b, j), b.kind[j], usize(b.count[j]))
-            j += 1usize
-        }
-        let total = chunk_ones(c)
-        out.count[pos] = total
-        if usize(total) <= CHUNK {
-            to_array(c)
-        } else {
-            out.kind[pos] = BITSET
-        }
-        if total == 0u32 { out.n -= 1usize }
+        if take_a { i += 1usize }
+        if take_b { j += 1usize }
     }
     ret ok
 }

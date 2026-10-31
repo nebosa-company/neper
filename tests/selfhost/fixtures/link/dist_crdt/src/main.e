@@ -191,6 +191,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if crdt.orset_add(&t, 1u64) != ok || crdt.orset_add(&t, 2u64) != ok || crdt.orset_add(&t, 3u64) != crdt.TooSmall { os.exit(4i32) }
     if crdt.orset_merge(&t, &x) != crdt.TooSmall { os.exit(4i32) }
 
+    // Tags are unique per site. The final representable tag may be issued, but
+    // the next add must preserve the counter and refuse to wrap/reuse tag zero.
+    var last_tag_storage: [2]crdt.OrElem = zero
+    var last_tag = crdt.orset(last_tag_storage[..], 10u32)
+    last_tag.counter = 4294967294u32
+    if crdt.orset_add(&last_tag, 5u64) != ok || last_tag.counter != 4294967295u32 || last_tag_storage[0usize].tag.counter != 4294967295u32 { os.exit(4i32) }
+    if crdt.orset_add(&last_tag, 6u64) != crdt.Exhausted || last_tag.counter != 4294967295u32 || last_tag.count != 1usize { os.exit(4i32) }
+
     try io.print("dist crdt ok\n")
     ret ok
 }

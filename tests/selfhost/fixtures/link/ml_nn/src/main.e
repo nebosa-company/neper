@@ -86,6 +86,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, full) = nn.input(&small, 1.0f64)
     if full != nn.TooSmall { os.exit(2i32) }
 
+    // Stable tanh must saturate finite large inputs rather than form Inf / Inf.
+    var large_ops: [4]nn.Op = zero
+    var large_left: [4]usize = zero
+    var large_right: [4]usize = zero
+    var large_values: [4]f64 = zero
+    var large_gradients: [4]f64 = zero
+    var large_tape = nn.tape(large_ops[..], large_left[..], large_right[..], large_values[..], large_gradients[..])
+    let (large_positive, large_positive_error) = nn.input(&large_tape, 1000.0f64)
+    let (large_positive_tanh, large_positive_tanh_error) = nn.tanh(&large_tape, large_positive)
+    let (large_negative, large_negative_error) = nn.input(&large_tape, -1000.0f64)
+    let (large_negative_tanh, large_negative_tanh_error) = nn.tanh(&large_tape, large_negative)
+    if large_positive_error != ok || large_positive_tanh_error != ok || large_negative_error != ok || large_negative_tanh_error != ok { os.exit(2i32) }
+    if large_tape.value[large_positive_tanh] != 1.0f64 || large_tape.value[large_positive_tanh] != large_tape.value[large_positive_tanh] { os.exit(2i32) }
+    if large_tape.value[large_negative_tanh] != -1.0f64 || large_tape.value[large_negative_tanh] != large_tape.value[large_negative_tanh] { os.exit(2i32) }
+
     // 3: attention.
     var q: [4]f64 = zero
     q[0usize] = 1.0f64

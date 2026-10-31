@@ -32,6 +32,11 @@ fn same(left: str, right: str) -> bool {
     ret true
 }
 
+fn blocked_component_subject(subject: str) -> bool {
+    if os.NATIVE_SEPARATOR == 92u8 { ret same(subject, "np-fs\\one.txt") }
+    ret same(subject, "np-fs/one.txt")
+}
+
 // A previous failing run leaves its scratch behind, and `Exists` from that would fail
 // the next run for a reason that is not the one being tested.
 fn clear(a: *mem.Arena) {
@@ -39,6 +44,8 @@ fn clear(a: *mem.Arena) {
     let one = fs.remove_file(a, "np-fs/one.txt")
     let two = fs.remove_file(a, "np-fs/two.txt")
     let copy = fs.remove_file(a, "np-fs/copy.txt")
+    let directory_copy = fs.remove_file(a, "np-fs/directory-copy.txt")
+    let copy_alias = fs.remove_file(a, "np-fs/copy-alias.txt")
     let link = fs.remove_file(a, "np-fs/link.txt")
     let from_file = fs.remove_file(a, "np-fs/from.txt")
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
@@ -172,6 +179,16 @@ fn main(a: *mem.Arena) -> err {
     if detail.native_code == 0i32 { os.exit(15i32) }
     if detail.kind != .NotFound { os.exit(16i32) }
 
+    // Local path allocation failures stay `mem.Exhausted`, rather than being mistaken
+    // for an OS I/O error by the filesystem error mapper.
+    var tiny_make_dirs_storage: [1]u8 = zero
+    var tiny_make_dirs_arena = mem.arena_from(tiny_make_dirs_storage[..])
+    if fs.make_dirs(&tiny_make_dirs_arena, "x") != mem.Exhausted { os.exit(270i32) }
+    var tiny_make_dirs_detail_storage: [1]u8 = zero
+    var tiny_make_dirs_detail_arena = mem.arena_from(tiny_make_dirs_detail_storage[..])
+    var tiny_make_dirs_detail: os.ErrorDetail = zero
+    if fs.make_dirs_detail(&tiny_make_dirs_detail_arena, "x", &tiny_make_dirs_detail) != mem.Exhausted { os.exit(271i32) }
+
     // `make_dirs` makes every missing component, so one call covers two levels.
     if fs.make_dirs(a, "np-fs/deep") != ok { os.exit(20i32) }
     let (outer, outer_error) = fs.stat(a, "np-fs")
@@ -200,6 +217,13 @@ fn main(a: *mem.Arena) -> err {
     payload[9usize] = 108u8
     payload[10usize] = 100u8
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(30i32) }
+    // POSIX syscalls receive C strings, so a NUL in the caller's path must not
+    // turn a distinct Neper string into this existing file's name.
+    when target.os == .Linux || target.os == .Macos {
+        if fs.remove_file(a, "np-fs/one.txt\0suffix") != fs.Invalid { os.exit(293i32) }
+        let (nul_kept, nul_kept_error) = fs.exists(a, "np-fs/one.txt")
+        if nul_kept_error != ok || !nul_kept { os.exit(294i32) }
+    }
     let (read_back, read_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
     if read_error != ok { os.exit(31i32) }
     if read_back.len != 11usize { os.exit(32i32) }
@@ -214,6 +238,42 @@ fn main(a: *mem.Arena) -> err {
     if written_error != ok { os.exit(34i32) }
     if written_entry.kind != .File { os.exit(35i32) }
     if written_entry.size != 11u64 { os.exit(36i32) }
+
+    // A component that is already a file names that component in the detailed error.
+    // The subsequent allocation proves the detail does not borrow storage reset by the
+    // failed call.
+    var blocked_component_detail: os.ErrorDetail = zero
+    let blocked_component_error = fs.make_dirs_detail(a, "np-fs/one.txt/child", &blocked_component_detail)
+    if blocked_component_error != fs.Exists { os.exit(272i32) }
+    if !same(blocked_component_detail.operation, "mkdir") { os.exit(273i32) }
+    if !blocked_component_subject(blocked_component_detail.subject) { os.exit(274i32) }
+    if blocked_component_detail.native_code != 0i32 { os.exit(275i32) }
+    let (detail_noise, detail_noise_error) = mem.alloc[u8](a, blocked_component_detail.subject.len)
+    if detail_noise_error != ok { os.exit(276i32) }
+    var detail_noise_at = 0usize
+    while detail_noise_at < detail_noise.len {
+        detail_noise[detail_noise_at] = 88u8
+        detail_noise_at += 1usize
+    }
+    if !blocked_component_subject(blocked_component_detail.subject) { os.exit(277i32) }
+
+    // Once a walk has listed its root, exhausting its arena makes joining the next
+    // entry fail locally; it must surface `mem.Exhausted`, not `fs.Io`.
+    var tight_walk_storage: [32768]u8 = zero
+    var tight_walk_arena = mem.arena_from(tight_walk_storage[..])
+    var tight_walk_options: fs.WalkOptions = zero
+    let (tight_walk_value, tight_walk_start_error) = fs.walk(&tight_walk_arena, "np-fs", tight_walk_options)
+    if tight_walk_start_error != ok { os.exit(278i32) }
+    var tight_walk = tight_walk_value
+    let tight_walk_stats = mem.stats(&tight_walk_arena)
+    let tight_walk_remaining = tight_walk_stats.capacity - tight_walk_stats.used
+    if tight_walk_remaining > 0usize {
+        let (_, tight_walk_drain_error) = mem.alloc[u8](&tight_walk_arena, tight_walk_remaining)
+        if tight_walk_drain_error != ok { os.exit(279i32) }
+    }
+    let (_, tight_walk_more, tight_walk_error) = fs.walk_next_err(&tight_walk)
+    if tight_walk_more || tight_walk_error != mem.Exhausted { os.exit(280i32) }
+    if fs.walk_close(&tight_walk) != ok { os.exit(281i32) }
 
     // `metadata` is everything the host records about one path, and `follow_symlinks`
     // picks which path that is. With no link in the way the two agree, which is what
@@ -464,6 +524,13 @@ fn main(a: *mem.Arena) -> err {
         if cross_exists_error != ok { os.exit(146i32) }
         if cross_destination_exists { os.exit(147i32) }
         if fs.remove_file(a, "np-fs/cross-source.txt") != ok { os.exit(148i32) }
+        // A copy may cross a volume. Its file index need not be globally unique, so
+        // identity comparison also includes the host's device or volume component.
+        var cross_copy_scratch: [4]u8 = zero
+        if fs.copy_file(a, "np-fs/one.txt", cross_destination, cross_copy_scratch[..]) != ok { os.exit(290i32) }
+        let (cross_copy, cross_copy_error) = fs.stat(a, cross_destination)
+        if cross_copy_error != ok || cross_copy.size != 11u64 { os.exit(291i32) }
+        if fs.remove_file(a, cross_destination) != ok { os.exit(292i32) }
     } else {
         if cross_dir_error != os.NotFound { os.exit(149i32) }
     }
@@ -576,6 +643,38 @@ fn main(a: *mem.Arena) -> err {
     if root_read != 11usize { os.exit(243i32) }
     if os.close(through_root) != ok { os.exit(244i32) }
 
+    // Rooted metadata and directory creation use the held directory rather than a
+    // re-resolved path, including on WASI where these operations have their own host calls.
+    let (root_entry, root_entry_error) = fs.stat_at(a, &root_holder, "one.txt")
+    if root_entry_error != ok || root_entry.kind != .File || root_entry.size != 11u64 { os.exit(310i32) }
+    if fs.make_dirs_at(a, &root_holder, "one.txt") != fs.Exists { os.exit(327i32) }
+    if fs.make_dirs_at(a, &root_holder, "at-made/nested") != ok { os.exit(311i32) }
+    let (nested_entry, nested_entry_error) = fs.stat_at(a, &root_holder, "at-made/nested")
+    if nested_entry_error != ok || nested_entry.kind != .Directory { os.exit(312i32) }
+
+    // Redundant separators name the same rooted directories, but the whole original
+    // path is screened before a safe-looking prefix is allowed to be created.
+    if fs.make_dirs_at(a, &root_holder, "one/") != ok { os.exit(313i32) }
+    let (trailing_entry, trailing_entry_error) = fs.stat_at(a, &root_holder, "one")
+    if trailing_entry_error != ok || trailing_entry.kind != .Directory { os.exit(314i32) }
+    if fs.make_dirs_at(a, &root_holder, "one//two") != ok { os.exit(315i32) }
+    let (repeated_entry, repeated_entry_error) = fs.stat_at(a, &root_holder, "one/two")
+    if repeated_entry_error != ok || repeated_entry.kind != .Directory { os.exit(316i32) }
+    if fs.make_dirs_at(a, &root_holder, "safe/../evil") != fs.Denied { os.exit(317i32) }
+    let (_, safe_error) = fs.stat_at(a, &root_holder, "safe")
+    if safe_error != fs.NotFound { os.exit(318i32) }
+    when target.os == .Windows {
+        if fs.make_dirs_at(a, &root_holder, "windows\\nested") != ok { os.exit(319i32) }
+        let (windows_entry, windows_entry_error) = fs.stat_at(a, &root_holder, "windows\\nested")
+        if windows_entry_error != ok || windows_entry.kind != .Directory { os.exit(320i32) }
+        if fs.remove_at(a, &root_holder, "windows\\nested", true) != ok { os.exit(321i32) }
+        if fs.remove_at(a, &root_holder, "windows", true) != ok { os.exit(322i32) }
+    }
+    if fs.remove_at(a, &root_holder, "one/two", true) != ok { os.exit(323i32) }
+    if fs.remove_at(a, &root_holder, "one", true) != ok { os.exit(324i32) }
+    if fs.remove_at(a, &root_holder, "at-made/nested", true) != ok { os.exit(325i32) }
+    if fs.remove_at(a, &root_holder, "at-made", true) != ok { os.exit(326i32) }
+
     // A name that would leave the root, and one that ignores it entirely.
     let (upward, upward_error) = fs.open_at(a, &root_holder, "../np-fs", root_flags, .NoSymlinks)
     if upward_error != fs.Denied { os.exit(245i32) }
@@ -603,7 +702,7 @@ fn main(a: *mem.Arena) -> err {
     if moved_in_root.size != 2u64 { os.exit(254i32) }
     let (scratch_gone, scratch_gone_error) = fs.exists(a, "np-fs/scratch.txt")
     if scratch_gone_error != ok { os.exit(255i32) }
-    if scratch_gone { os.exit(256i32) }
+    if scratch_gone { os.exit(263i32) }
 
     // A name that would leave the root is refused by both of them as well.
     if fs.remove_at(a, &root_holder, "../np-fs", true) != fs.Denied { os.exit(257i32) }
@@ -657,6 +756,14 @@ fn main(a: *mem.Arena) -> err {
     let (allowed, allowed_error) = fs.read_file(a, "np-fs/one.txt", 11usize)
     if allowed_error != ok { os.exit(38i32) }
     if allowed.len != 11usize { os.exit(39i32) }
+    // Host file sizes are u64, but read buffers are target-sized.  On wasm32,
+    // a 4 GiB stat result must be refused before it can narrow to an empty read.
+    let (_, helper_limit_error) = fs.size_for_read(11u64, 10usize)
+    if helper_limit_error != fs.Invalid { os.exit(250i32) }
+    when target.arch == .Wasm32 {
+        let (oversize, oversize_error) = fs.size_for_read(4294967296u64, 0usize)
+        if oversize_error != fs.Invalid || oversize != 0usize { os.exit(251i32) }
+    }
 
     // A directory is not a file to read.
     let (as_file, as_file_error) = fs.read_file(a, "np-fs", 0usize)
@@ -676,6 +783,15 @@ fn main(a: *mem.Arena) -> err {
     // Copy through a buffer smaller than the file, so the loop runs more than once.
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(44i32) }
     var scratch: [4]u8 = zero
+    if fs.write_file(a, "np-fs/directory-copy.txt", shorter[..]) != ok { os.exit(328i32) }
+    if fs.copy_file(a, "np-fs/deep", "np-fs/directory-copy.txt", scratch[..]) != fs.Invalid { os.exit(329i32) }
+    let (directory_copy, directory_copy_error) = fs.read_file(a, "np-fs/directory-copy.txt", 0usize)
+    if directory_copy_error != ok || directory_copy.len != shorter.len { os.exit(330i32) }
+    at = 0usize
+    while at < shorter.len {
+        if directory_copy[at] != shorter[at] { os.exit(331i32) }
+        at += 1usize
+    }
     if fs.copy_file(a, "np-fs/one.txt", "np-fs/copy.txt", scratch[..]) != ok { os.exit(45i32) }
     let (copied, copied_error) = fs.read_file(a, "np-fs/copy.txt", 0usize)
     if copied_error != ok { os.exit(46i32) }
@@ -684,6 +800,30 @@ fn main(a: *mem.Arena) -> err {
     while at < 11usize {
         if copied[at] != payload[at] { os.exit(48i32) }
         at += 1usize
+    }
+    // A truncating destination may be another spelling of the source. Both the
+    // identical name and a symlink alias must leave the bytes intact and fail.
+    if fs.copy_file(a, "np-fs/one.txt", "np-fs/one.txt", scratch[..]) != fs.Invalid { os.exit(282i32) }
+    let (self_copy, self_copy_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
+    if self_copy_error != ok || self_copy.len != payload.len { os.exit(283i32) }
+    at = 0usize
+    while at < payload.len {
+        if self_copy[at] != payload[at] { os.exit(284i32) }
+        at += 1usize
+    }
+    let copy_alias_error = fs.symlink(a, "one.txt", "np-fs/copy-alias.txt")
+    if copy_alias_error == ok {
+        if fs.copy_file(a, "np-fs/one.txt", "np-fs/copy-alias.txt", scratch[..]) != fs.Invalid { os.exit(285i32) }
+        let (alias_copy, alias_copy_error) = fs.read_file(a, "np-fs/one.txt", 0usize)
+        if alias_copy_error != ok || alias_copy.len != payload.len { os.exit(286i32) }
+        at = 0usize
+        while at < payload.len {
+            if alias_copy[at] != payload[at] { os.exit(287i32) }
+            at += 1usize
+        }
+        if fs.remove_file(a, "np-fs/copy-alias.txt") != ok { os.exit(288i32) }
+    } else if copy_alias_error != fs.Denied {
+        os.exit(289i32)
     }
     // A buffer with no room would make no progress, so it is an error and not a hang.
     var empty: []u8 = zero

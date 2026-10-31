@@ -46,6 +46,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let close_op = os.send(REQ, fsproto.OP_CLOSE, fsproto.NO_SLOT)
         fsproto.send_str(REQ, "/docs/greeting")
         report("fs client close /docs/greeting")
+        // `canonical` has to make this relative, lexical detour the existing root path,
+        // and it must reject an absent name instead of returning it with success.
+        let (canonical, canonical_error) = os.canonical(a, "docs/../docs/greeting")
+        let (_, missing_canonical_error) = os.canonical(a, "missing")
+        if canonical_error != ok || !mem.eq[u8](canonical, "/docs/greeting") || missing_canonical_error != os.NotFound {
+            say("fs client canonical failed\n")
+        } else {
+            say("fs client canonical /docs/greeting ok\n")
+        }
         list("/docs")
         list("/")
     } else {

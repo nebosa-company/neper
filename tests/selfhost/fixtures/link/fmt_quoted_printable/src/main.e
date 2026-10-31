@@ -5,6 +5,7 @@
 use e.os
 use e.mem
 use e.io
+use e.test.support
 use e.fmt.quoted_printable as qp
 
 fn bytes_equal(a: []const u8, b: []const u8) -> bool {
@@ -37,6 +38,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Expected: h=C3=A9llo =3D w=C3=\r\nB6rld=20\r\nline two =20
     let want: [45]u8 = [45]u8{ 104, 61, 67, 51, 61, 65, 57, 108, 108, 111, 32, 61, 51, 68, 32, 119, 61, 67, 51, 61, 13, 10, 61, 66, 54, 114, 108, 100, 61, 50, 48, 13, 10, 108, 105, 110, 101, 32, 116, 119, 111, 32, 61, 50, 48 }
     if !bytes_equal(encoded, want[0..]) { os.exit(5) }
+    // A hard CRLF is one stream token, even when it crosses two writes. A final
+    // unmatched CR is ordinary data and is escaped at finish.
+    let hard: [4]u8 = [4]u8{ 65u8, 13u8, 10u8, 66u8 }
+    var whole_out: [32]u8 = zero
+    var whole_sink_state: io.SliceWriter = zero
+    whole_sink_state.data = whole_out[..]
+    var whole_storage: [128]u8 = zero
+    let (whole_writer_value, whole_writer_error) = qp.writer(whole_storage[..], io.slice_writer(&whole_sink_state), 20u8)
+    if whole_writer_error != ok { os.exit(13) }
+    var whole_writer = whole_writer_value
+    let (whole_count, whole_write_error) = qp.write(&whole_writer, hard[..])
+    if whole_write_error != ok || whole_count != hard.len || qp.finish(&whole_writer) != ok { os.exit(14) }
+
+    var split_out: [32]u8 = zero
+    var split_sink_state: io.SliceWriter = zero
+    split_sink_state.data = split_out[..]
+    var split_storage: [128]u8 = zero
+    let (split_writer_value, split_writer_error) = qp.writer(split_storage[..], io.slice_writer(&split_sink_state), 20u8)
+    if split_writer_error != ok { os.exit(15) }
+    var split_writer = split_writer_value
+    let (first_count, first_write_error) = qp.write(&split_writer, hard[0usize..2usize])
+    let (second_count, second_write_error) = qp.write(&split_writer, hard[2usize..])
+    if first_write_error != ok || first_count != 2usize || second_write_error != ok || second_count != 2usize || qp.finish(&split_writer) != ok { os.exit(16) }
+    if !bytes_equal(whole_out[..whole_sink_state.off], hard[..]) || !bytes_equal(split_out[..split_sink_state.off], whole_out[..whole_sink_state.off]) { os.exit(17) }
+
+    var literal_out: [16]u8 = zero
+    var literal_sink_state: io.SliceWriter = zero
+    literal_sink_state.data = literal_out[..]
+    var literal_storage: [128]u8 = zero
+    let (literal_writer_value, literal_writer_error) = qp.writer(literal_storage[..], io.slice_writer(&literal_sink_state), 20u8)
+    if literal_writer_error != ok { os.exit(18) }
+    var literal_writer = literal_writer_value
+    let (literal_first_count, literal_first_error) = qp.write(&literal_writer, "M\r")
+    let (literal_second_count, literal_second_error) = qp.write(&literal_writer, "N")
+    let literal_want: [5]u8 = [5]u8{ 77u8, 61u8, 48u8, 68u8, 78u8 }
+    if literal_first_error != ok || literal_first_count != 2usize || literal_second_error != ok || literal_second_count != 1usize || qp.finish(&literal_writer) != ok || !bytes_equal(literal_out[..literal_sink_state.off], literal_want[..]) { os.exit(19) }
+
+    var trailing_out: [16]u8 = zero
+    var trailing_sink_state: io.SliceWriter = zero
+    trailing_sink_state.data = trailing_out[..]
+    var trailing_storage: [128]u8 = zero
+    let (trailing_writer_value, trailing_writer_error) = qp.writer(trailing_storage[..], io.slice_writer(&trailing_sink_state), 20u8)
+    if trailing_writer_error != ok { os.exit(20) }
+    var trailing_writer = trailing_writer_value
+    let (trailing_count, trailing_write_error) = qp.write(&trailing_writer, "Z\r")
+    let trailing_want: [4]u8 = [4]u8{ 90u8, 61u8, 48u8, 68u8 }
+    if trailing_write_error != ok || trailing_count != 2usize || qp.finish(&trailing_writer) != ok || !bytes_equal(trailing_out[..trailing_sink_state.off], trailing_want[..]) { os.exit(21) }
     // Decode it back.
     var source_state: io.SliceReader = zero
     source_state.data = encoded
@@ -47,9 +95,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var total = 0usize
     while true {
         let (count, read_error) = qp.read(&r, decoded[total..])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(6) }
-        total += count
     }
     if !bytes_equal(decoded[..total], "h\xc3\xa9llo = w\xc3\xb6rld \r\nline two  ") { os.exit(7) }
     // Strict decoding: lower-case hex, a bare CR and a byte above 126 are invalid.
@@ -74,12 +122,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var n = 0usize
     while true {
         let (count, read_error) = qp.read(&small, one[0..])
+        if count > 0usize {
+            got[n] = one[0usize]
+            n += count
+        }
         if read_error == io.End { break }
         if read_error != ok { os.exit(10) }
-        got[n] = one[0]
-        n += count
     }
     if n != 3usize || got[0] != 120u8 || got[1] != 65u8 || got[2] != 121u8 { os.exit(11) }
+
+    // Three-byte quoted-printable decisions must survive a source that returns
+    // exactly one byte per read: an escaped byte, soft break, and hard CRLF.
+    let fragmented_steps: [9]support.ReadStep = [9]support.ReadStep{
+        support.ReadStep { bytes: "=", failure: ok },
+        support.ReadStep { bytes: "4", failure: ok },
+        support.ReadStep { bytes: "1", failure: ok },
+        support.ReadStep { bytes: "=", failure: ok },
+        support.ReadStep { bytes: "\r", failure: ok },
+        support.ReadStep { bytes: "\n", failure: ok },
+        support.ReadStep { bytes: "\r", failure: ok },
+        support.ReadStep { bytes: "\n", failure: ok },
+        support.ReadStep { bytes: "Z", failure: io.End },
+    }
+    var (fragmented_script, fragmented_script_error) = support.scripted_reader(a, fragmented_steps[..])
+    if fragmented_script_error != ok { os.exit(24) }
+    var fragmented_source = support.reader(&fragmented_script)
+    var fragmented_storage: [64]u8 = zero
+    var fragmented_reader = qp.reader(fragmented_storage[..], fragmented_source)
+    var fragmented_out: [8]u8 = zero
+    let (fragmented_count, fragmented_error) = qp.read(&fragmented_reader, fragmented_out[..])
+    if fragmented_count != 4usize || fragmented_error != io.End || !bytes_equal(fragmented_out[..4usize], "A\r\nZ") { os.exit(25) }
+
+    // A source is allowed to return its final decoded bytes and End together.
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "end", failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { os.exit(22) }
+    var final_source = support.reader(&final_script)
+    var final_storage: [64]u8 = zero
+    var final_reader = qp.reader(final_storage[..], final_source)
+    var final_out: [8]u8 = zero
+    let (final_count, final_error) = qp.read(&final_reader, final_out[..])
+    if final_count != 3usize || final_error != io.End || !bytes_equal(final_out[..3usize], "end") { os.exit(23) }
+
     let (_, limit_error) = qp.writer(writer_storage[0..], sink, 77u8)
     if limit_error != qp.Invalid { os.exit(12) }
     os.exit(0)

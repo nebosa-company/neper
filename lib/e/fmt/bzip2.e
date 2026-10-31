@@ -136,8 +136,12 @@ fn take_bits(s: *State, n: u32) -> (u32, err) {
     while s.bit_count < n {
         if s.in_at == s.in_len {
             let (count, read_error) = io.read(&s.source, s.input)
-            if read_error == io.End || (read_error == ok && count == 0usize) { ret (0u32, Invalid) }
-            if read_error != ok { ret (0u32, read_error) }
+            if count == 0usize {
+                if read_error == io.End { ret (0u32, Invalid) }
+                if read_error != ok { ret (0u32, read_error) }
+                ret (0u32, Invalid)
+            }
+            if read_error != ok && read_error != io.End { ret (0u32, read_error) }
             s.in_at = 0usize
             s.in_len = count
         }
@@ -440,12 +444,20 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
             if load_error != ok { ret (written, load_error) }
             if !loaded {
                 s.finished = true
-                if written > 0usize { ret (written, ok) }
+                if written > 0usize {
+                    s.output_total += u64(written)
+                    ret (written, ok)
+                }
                 ret (0usize, io.End)
             }
         }
         // Pending repeats first, then the next byte out of the transform.
         if s.repeat_left > 0u32 {
+            let remaining = s.output_limit - s.output_total
+            if u64(written) >= remaining {
+                s.output_total += u64(written)
+                ret (written, TooLarge)
+            }
             dst[written] = u8(s.last_byte)
             s.block_crc = crc_byte(s.block_crc, s.last_byte)
             written += 1usize
@@ -460,13 +472,22 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         }
         let link = get32(s.tt, s.t_pos)
         let byte = link & 255u32
-        s.t_pos = usize(link >> 8u32)
-        s.produced += 1usize
+        // The fifth symbol after a run is its repeat count, not output. Consume
+        // it before checking the caller-visible output budget.
         if s.run == 4u32 {
+            s.t_pos = usize(link >> 8u32)
+            s.produced += 1usize
             s.repeat_left = byte
             s.run = 0u32
             continue
         }
+        let remaining = s.output_limit - s.output_total
+        if u64(written) >= remaining {
+            s.output_total += u64(written)
+            ret (written, TooLarge)
+        }
+        s.t_pos = usize(link >> 8u32)
+        s.produced += 1usize
         if byte == s.last_byte { s.run += 1u32 } else {
             s.last_byte = byte
             s.run = 1u32
@@ -476,6 +497,5 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
         written += 1usize
     }
     s.output_total += u64(written)
-    if s.output_total > s.output_limit { ret (0usize, TooLarge) }
     ret (written, ok)
 }

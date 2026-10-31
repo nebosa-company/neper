@@ -78,6 +78,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, short_stride) = image.required_bytes(3u32, 2u32, .Rgba8, 8usize)
     let (_, huge) = image.required_bytes(65536u32, 65536u32, .R8, 65536usize)
     if short_stride != image.Invalid || huge != image.TooLarge { os.exit(24i32) }
+    if mem.size_of[usize]() == 4usize {
+        let (_, wrapped_row) = image.required_bytes(536870912u32, 1u32, .Rgba16Float, 0usize)
+        let (_, wrapped_alloc) = image.allocate(a, 536870912u32, 1u32, .Rgba16Float, .Straight)
+        if wrapped_row != image.TooLarge || wrapped_alloc != image.TooLarge { os.exit(38i32) }
+    }
     var raw: [20]u8 = zero
     let (_, small) = image.make(raw[0..], 3u32, 2u32, 16usize, .Rgba8, .Straight)
     if small != image.Invalid { os.exit(25i32) }
@@ -99,6 +104,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if u32(strip.pixels[0]) != v { os.exit(31i32) }
         v += 1u32
     }
+    // Clear encodes RGB and alpha according to the image alpha convention.
+    let (premultiplied, premultiplied_error) = image.allocate(a, 1u32, 1u32, .Rgba8, .Premultiplied)
+    if premultiplied_error != ok { os.exit(39i32) }
+    image.clear(premultiplied, paint.rgba(1.0, 0.0, 0.0, 0.5))
+    if premultiplied.pixels[0usize] == 255u8 || premultiplied.pixels[0usize] == 0u8 || premultiplied.pixels[3usize] != 128u8 { os.exit(40i32) }
+    image.clear(premultiplied, paint.rgba(1.0, 0.0, 0.0, 0.0))
+    if premultiplied.pixels[0usize] != 0u8 || premultiplied.pixels[1usize] != 0u8 || premultiplied.pixels[2usize] != 0u8 || premultiplied.pixels[3usize] != 0u8 { os.exit(41i32) }
+    let (premultiplied_bgra, premultiplied_bgra_error) = image.allocate(a, 1u32, 1u32, .Bgra8, .Premultiplied)
+    if premultiplied_bgra_error != ok { os.exit(42i32) }
+    image.clear(premultiplied_bgra, paint.rgba(1.0, 0.0, 0.0, 0.5))
+    if premultiplied_bgra.pixels[2usize] == 255u8 || premultiplied_bgra.pixels[2usize] == 0u8 || premultiplied_bgra.pixels[3usize] != 128u8 { os.exit(43i32) }
+    let (premultiplied_half, premultiplied_half_error) = image.allocate(a, 1u32, 1u32, .Rgba16Float, .Premultiplied)
+    if premultiplied_half_error != ok { os.exit(44i32) }
+    image.clear(premultiplied_half, paint.rgba(1.0, 0.0, 0.0, 0.5))
+    if premultiplied_half.pixels[0usize] != 0u8 || premultiplied_half.pixels[1usize] != 56u8 || premultiplied_half.pixels[6usize] != 0u8 || premultiplied_half.pixels[7usize] != 56u8 { os.exit(45i32) }
+    let (opaque, opaque_error) = image.allocate(a, 1u32, 1u32, .Rgba8, .Opaque)
+    if opaque_error != ok { os.exit(46i32) }
+    image.clear(opaque, paint.rgba(1.0, 0.0, 0.0, 0.5))
+    if opaque.pixels[0usize] != 255u8 || opaque.pixels[3usize] != 255u8 { os.exit(47i32) }
 
     // A blit clipped at the destination's edges, and a format that differs.
     let (sprite, sprite_error) = image.allocate(a, 2u32, 2u32, .Rgba8, .Straight)

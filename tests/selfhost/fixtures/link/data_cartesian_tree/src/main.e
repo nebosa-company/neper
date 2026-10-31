@@ -82,6 +82,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (empty, empty_error) = ct.build[i64](keys[..0usize], left[..], right[..], parent[..])
     if empty_error != ok || empty.root != ct.NONE || !ct.is_valid[i64](keys[..0usize], &empty) { os.exit(4i32) }
 
+    // 5: the u32 node-ID boundary, exercised with fabricated views rather
+    // than giant allocations. The largest count reaches the storage check.
+    if !ct.node_count_fits_ids(4294967295u64) || ct.node_count_fits_ids(4294967296u64) { os.exit(5i32) }
+    var id_cells: [1]u64 = zero
+    var largest_window = mem.Arena { base: mem.cast[*u8](&id_cells[0usize]), cap: usize(ct.NONE), off: 0usize }
+    let largest_keys = mem.view(&largest_window, 0usize, usize(ct.NONE))
+    var boundary_left: [1]u32 = [1]u32{ 101u32 }
+    var boundary_right: [1]u32 = [1]u32{ 102u32 }
+    var boundary_parent: [1]u32 = [1]u32{ 103u32 }
+    let (_, largest_error) = ct.build[u8](largest_keys, boundary_left[..], boundary_right[..], boundary_parent[..])
+    if largest_error != ct.TooSmall || boundary_left[0usize] != 101u32 || boundary_right[0usize] != 102u32 || boundary_parent[0usize] != 103u32 { os.exit(5i32) }
+
+    // wasm32 cannot express the first rejected length. x64 verifies that
+    // build returns Invalid before it can write the deliberately short arrays.
+    if mem.size_of[usize]() == 8usize {
+        let first_rejected = usize(ct.NONE) + 1usize
+        var rejected_window = mem.Arena { base: mem.cast[*u8](&id_cells[0usize]), cap: first_rejected, off: 0usize }
+        let rejected_keys = mem.view(&rejected_window, 0usize, first_rejected)
+        let (_, rejected_error) = ct.build[u8](rejected_keys, boundary_left[..], boundary_right[..], boundary_parent[..])
+        if rejected_error != ct.Invalid || boundary_left[0usize] != 101u32 || boundary_right[0usize] != 102u32 || boundary_parent[0usize] != 103u32 { os.exit(5i32) }
+    }
+
     try io.print("data cartesian_tree ok\n")
     ret ok
 }

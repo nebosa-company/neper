@@ -234,13 +234,16 @@ fn main(a: *mem.Arena) -> err {
     say("RIGHT-click it within 20 seconds.\n")
     tries = 0usize
     var right = false
-    while tries < 200usize && !right {
+    var wrong_kind = false
+    while tries < 200usize && !right && !wrong_kind {
         let (event, got) = shell.tray_poll()
-        if got && event.kind == .Context { right = true }
+        if got && event.id == 1u32 {
+            if event.kind == .Context { right = true } else if event.kind == .Select { wrong_kind = true }
+        }
         os.cocoa_pump(100000000i64)
         tries += 1usize
     }
-    if right { pass(a, "tray context click") } else { fail(a, "tray context click", "no Context event") }
+    if right { pass(a, "tray context click") } else if wrong_kind { fail(a, "tray context click", "got Select event") } else { fail(a, "tray context click", "no Context event") }
     let removed = shell.tray_remove(a, 1u32)
     say("\nA menu will appear at the top left of the screen. Choose \"Second\".\n")
     var items: [3]shell.MenuItem = zero

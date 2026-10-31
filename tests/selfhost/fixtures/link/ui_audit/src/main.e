@@ -131,7 +131,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var clean = clean_runtime
     let (clean_report, clean_run_error) = audit.run(a, &clean, page, o, findings)
     if clean_run_error != ok { os.exit(10i32) }
-    if clean_report.count != 0usize || clean_report.stops != 2usize || clean_report.nodes == 0usize { os.exit(11i32) }
+    if clean_report.count != 0usize || clean_report.stops != 2usize || clean_report.tab_truncated || clean_report.nodes == 0usize { os.exit(11i32) }
+    // A capped walk has not established that the next control is unreachable.
+    let (capped_runtime, capped_error) = widget.runtime(a, &renderer, limits)
+    if capped_error != ok { os.exit(21i32) }
+    var capped = capped_runtime
+    var capped_options = o
+    capped_options.max_stops = 1usize
+    let (capped_report, capped_run_error) = audit.run(a, &capped, page, capped_options, findings)
+    if capped_run_error != ok || capped_report.stops != 1usize || !capped_report.tab_truncated || counted(findings, capped_report.count, .Reach) != 0usize { os.exit(22i32) }
     // The faulty page: each kind it holds.
     w.faulty = true
     let (faulty_runtime, faulty_error) = widget.runtime(a, &renderer, limits)

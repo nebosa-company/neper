@@ -101,6 +101,10 @@ fn main() -> i64 {
     if square_area_error != ok || square_area != 25usize { ret 30i64 }
     let (centre_only, centre_error) = grid.ring(.Square, grid.coord(5i32, 5i32), 0u32, spread[..])
     if centre_error != ok || centre_only != 1usize { ret 31i64 }
+    // The signed lattice walk cannot represent a radius above i32's maximum.
+    let (wide_ring, wide_ring_error) = grid.ring(.Square, grid.coord(0i32, 0i32), 2147483648u32, spread[..])
+    let (wide_area, wide_area_error) = grid.area(.HexPointy, grid.coord(0i32, 0i32), 2147483648u32, spread[..])
+    if wide_ring != 0usize || wide_ring_error != grid.Invalid || wide_area != 0usize || wide_area_error != grid.Invalid { ret 99i64 }
 
     // Depth sorts by row, or by the diagonal for a diamond, with elevation breaking ties.
     if grid.depth(.IsoDiamond, grid.coord(2i32, 1i32), 5u8) != 773i32 { ret 32i64 }

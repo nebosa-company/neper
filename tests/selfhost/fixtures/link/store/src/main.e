@@ -12,11 +12,17 @@ use e.str
 
 type VKey = struct { key: str, good: bool, encoded: str }
 
-fn vectors() -> [100]VKey {
-    ret [100]VKey{     VKey{ key: "", good: false, encoded: "" },
+fn vectors() -> [106]VKey {
+    ret [106]VKey{     VKey{ key: "", good: false, encoded: "" },
     VKey{ key: "/", good: false, encoded: "/" },
     VKey{ key: "a", good: true, encoded: "a" },
     VKey{ key: "a/b", good: true, encoded: "a/b" },
+    VKey{ key: "a:b", good: false, encoded: "a%3Ab" },
+    VKey{ key: "NUL", good: false, encoded: "NUL" },
+    VKey{ key: "con.txt", good: false, encoded: "con.txt" },
+    VKey{ key: "COM1.txt", good: false, encoded: "COM1.txt" },
+    VKey{ key: "tail.", good: false, encoded: "tail." },
+    VKey{ key: "tail ", good: false, encoded: "tail%20" },
     VKey{ key: "a//b", good: false, encoded: "a//b" },
     VKey{ key: "/a", good: false, encoded: "/a" },
     VKey{ key: "a/", good: false, encoded: "a/" },
@@ -25,7 +31,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "a/./b", good: false, encoded: "a/./b" },
     VKey{ key: "a/../b", good: false, encoded: "a/../b" },
     VKey{ key: "a/..", good: false, encoded: "a/.." },
-    VKey{ key: "...", good: true, encoded: "..." },
+    VKey{ key: "...", good: false, encoded: "..." },
     VKey{ key: "a.b", good: true, encoded: "a.b" },
     VKey{ key: ".hidden", good: true, encoded: ".hidden" },
     VKey{ key: "a b", good: true, encoded: "a%20b" },
@@ -52,11 +58,11 @@ fn vectors() -> [100]VKey {
     VKey{ key: "&", good: true, encoded: "%26" },
     VKey{ key: "0\xc3\xbc", good: true, encoded: "0%C3%BC" },
     VKey{ key: "\x01#", good: true, encoded: "%01%23" },
-    VKey{ key: "%%.?..", good: true, encoded: "%25%25.%3F.." },
+    VKey{ key: "%%.?..", good: false, encoded: "%25%25.%3F.." },
     VKey{ key: "~?\\", good: false, encoded: "~%3F%5C" },
     VKey{ key: "~~_?\x01", good: true, encoded: "~~_%3F%01" },
     VKey{ key: "a..b+\xc3\xbc\xc3\xbc\xc3\xbcb", good: true, encoded: "a..b%2B%C3%BC%C3%BC%C3%BCb" },
-    VKey{ key: " ", good: true, encoded: "%20" },
+    VKey{ key: " ", good: false, encoded: "%20" },
     VKey{ key: "-\xc3\xbc+b-\xe2\x82\xac", good: true, encoded: "-%C3%BC%2Bb-%E2%82%AC" },
     VKey{ key: "ab\x01%a", good: true, encoded: "ab%01%25a" },
     VKey{ key: "\\?", good: false, encoded: "%5C%3F" },
@@ -64,12 +70,12 @@ fn vectors() -> [100]VKey {
     VKey{ key: "\xe2\x82\xac\xe2\x82\xac&+", good: true, encoded: "%E2%82%AC%E2%82%AC%26%2B" },
     VKey{ key: " \xc3\xbc~ a+&/", good: false, encoded: "%20%C3%BC~%20a%2B%26/" },
     VKey{ key: "\x01%\xe2\x82\xac#\xe2\x82\xac%", good: true, encoded: "%01%25%E2%82%AC%23%E2%82%AC%25" },
-    VKey{ key: "%?..&#..", good: true, encoded: "%25%3F..%26%23.." },
+    VKey{ key: "%?..&#..", good: false, encoded: "%25%3F..%26%23.." },
     VKey{ key: "A", good: true, encoded: "A" },
     VKey{ key: "#%&\x01..#", good: true, encoded: "%23%25%26%01..%23" },
     VKey{ key: "\\", good: false, encoded: "%5C" },
     VKey{ key: "\xe2\x82\xac%", good: true, encoded: "%E2%82%AC%25" },
-    VKey{ key: "0-_.", good: true, encoded: "0-_." },
+    VKey{ key: "0-_.", good: false, encoded: "0-_." },
     VKey{ key: "A", good: true, encoded: "A" },
     VKey{ key: "#=0", good: true, encoded: "%23%3D0" },
     VKey{ key: "+a_~#", good: true, encoded: "%2Ba_~%23" },
@@ -85,7 +91,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "a ..A", good: true, encoded: "a%20..A" },
     VKey{ key: "._/A_", good: true, encoded: "._/A_" },
     VKey{ key: "a\\a_\xe2\x82\xac ", good: false, encoded: "a%5Ca_%E2%82%AC%20" },
-    VKey{ key: "\xe2\x82\xac-.", good: true, encoded: "%E2%82%AC-." },
+    VKey{ key: "\xe2\x82\xac-.", good: false, encoded: "%E2%82%AC-." },
     VKey{ key: "+~A", good: true, encoded: "%2B~A" },
     VKey{ key: "=A%\xc3\xbc%._", good: true, encoded: "%3DA%25%C3%BC%25._" },
     VKey{ key: "?._~", good: true, encoded: "%3F._~" },
@@ -101,7 +107,7 @@ fn vectors() -> [100]VKey {
     VKey{ key: "b-A", good: true, encoded: "b-A" },
     VKey{ key: "=+\xc3\xbc", good: true, encoded: "%3D%2B%C3%BC" },
     VKey{ key: "/", good: false, encoded: "/" },
-    VKey{ key: "%..", good: true, encoded: "%25.." },
+    VKey{ key: "%..", good: false, encoded: "%25.." },
     VKey{ key: "..\xc3\xbc\xe2\x82\xac.\\", good: false, encoded: "..%C3%BC%E2%82%AC.%5C" },
     VKey{ key: "\\.~=_#", good: false, encoded: "%5C.~%3D_%23" },
     VKey{ key: ".0", good: true, encoded: ".0" },
@@ -112,11 +118,12 @@ fn vectors() -> [100]VKey {
     VKey{ key: ".", good: false, encoded: "." },
     VKey{ key: "a&=\x01.~ a", good: true, encoded: "a%26%3D%01.~%20a" },
     VKey{ key: "?-b", good: true, encoded: "%3F-b" },
-    VKey{ key: "+_ ", good: true, encoded: "%2B_%20" } }
+    VKey{ key: "+_ ", good: false, encoded: "%2B_%20" } }
 }
 
 // ---- the in-process server behind the HTTP transport ----
-type Server = struct { kv: store.MemoryStore, requests: u32, last_target: str }
+type Server = struct { kv: store.MemoryStore, requests: u32, last_target: str, decimal_mode: u8, decimal_headers: [1]http.Header }
+type TargetCapture = struct { target: str }
 
 fn hexval(c: u8) -> u8 {
     if c >= 97u8 { ret c - 87u8 }
@@ -153,6 +160,13 @@ fn reply(a: *mem.Arena, status: u16, headers: []const http.Header, body: []const
     ret r
 }
 
+fn capture_target(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err) {
+    let capture = mem.cast[*TargetCapture](ctx)
+    capture.target = req.target
+    var none: [1]http.Header = zero
+    ret (reply(a, 200u16, none[0usize..0usize], ""), ok)
+}
+
 fn serve(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err) {
     var s = mem.cast[*Server](ctx)
     s.requests += 1u32
@@ -161,6 +175,18 @@ fn serve(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response,
     let prefix = "/bucket/"
     if !str.starts_with(req.target, prefix) { ret (reply(a, 400u16, none[0usize..0usize], ""), ok) }
     let rest = req.target[prefix.len..]
+    // Controlled malformed-size replies exercise the HTTP store's response parser.
+    if (s.decimal_mode == 1u8 || s.decimal_mode == 2u8) && req.method == .Head {
+        var decimal = "18446744073709551615"
+        if s.decimal_mode == 2u8 { decimal = "18446744073709551616" }
+        s.decimal_headers[0usize] = http.Header{ name: "Content-Length", value: decimal }
+        ret (reply(a, 200u16, s.decimal_headers[0usize..1usize], ""), ok)
+    }
+    if (s.decimal_mode == 3u8 || s.decimal_mode == 4u8) && req.method == .Get && str.starts_with(rest, "?prefix=") {
+        var decimal_body = "decimal\t18446744073709551615\n"
+        if s.decimal_mode == 4u8 { decimal_body = "decimal\t18446744073709551616\n" }
+        ret (reply(a, 200u16, none[0usize..0usize], decimal_body), ok)
+    }
     var kv = store.memory_store(&s.kv)
     if req.method == .Get && str.starts_with(rest, "?prefix=") {
         let (p, pe) = decode(a, rest[8usize..])
@@ -222,13 +248,26 @@ fn hex_name(a: *mem.Arena, root: str) -> (str, err) {
     let (b0, be) = str.builder(a, root.len + 40usize)
     if be != ok { ret ("", be) }
     var b = b0
-    try str.push(&b, root)
-    try str.push(&b, "/neper-store-")
+    if root.len != 0usize {
+        try str.push(&b, root)
+        try str.push_byte(&b, 47u8)
+    }
+    try str.push(&b, "neper-store-")
     var i = 0usize
     while i < 8usize {
         try str.push_hex_u32(&b, u32(rnd[i]))
         i += 1usize
     }
+    ret (str.done(&b), ok)
+}
+
+fn child_path(a: *mem.Arena, parent: str, name: str) -> (str, err) {
+    let (b0, be) = str.builder(a, parent.len + name.len + 2usize)
+    if be != ok { ret ("", be) }
+    var b = b0
+    try str.push(&b, parent)
+    try str.push_byte(&b, 47u8)
+    try str.push(&b, name)
     ret (str.done(&b), ok)
 }
 
@@ -278,39 +317,126 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if store.put(&ss, a, "a", "1") != ok || store.put(&ss, a, "b", "1") != ok { os.exit(3i32) }
     if store.put(&ss, a, "c", "1") != store.TooLarge { os.exit(4i32) }
     if store.put(&ss, a, "a", "22") != ok { os.exit(5i32) }
+    // A failed memory-store constructor and an insertion rejected for capacity both
+    // preserve the caller arena for a later request.
+    var constructor_bytes: [24]u8 = zero
+    var constructor_arena = mem.arena_from(constructor_bytes[..])
+    let constructor_start = constructor_arena.off
+    let (_, constructor_error) = store.memory(&constructor_arena, 0usize)
+    if constructor_error != mem.Exhausted || constructor_arena.off != constructor_start { os.exit(131i32) }
+    var full_bytes: [256]u8 = zero
+    var full_arena = mem.arena_from(full_bytes[..])
+    let (full_memory, full_memory_error) = store.memory(&full_arena, 1usize)
+    if full_memory_error != ok { os.exit(132i32) }
+    var full = full_memory
+    var full_store = store.memory_store(&full)
+    if store.put(&full_store, &full_arena, "a", "one") != ok { os.exit(133i32) }
+    let full_start = full_arena.off
+    if store.put(&full_store, &full_arena, "b", "value which cannot be stored") != store.TooLarge || full_arena.off != full_start { os.exit(134i32) }
     // 2. filesystem
-    let (tmp, te) = fs.temp_dir(a)
-    if te != ok { os.exit(6i32) }
-    let (root, re) = hex_name(a, tmp)
+    let (root, re) = hex_name(a, "")
     if re != ok { os.exit(7i32) }
     if fs.make_dirs(a, root) != ok { os.exit(8i32) }
     var fstore = store.FsStore{ root: root }
     var fs_s = store.fs_store(&fstore)
     let c2 = store.conformance(&fs_s, a)
     if c2 != 0u32 { os.exit(i32(70u32 + c2)) }
+    // A caller may retain a trailing separator in its configured root; listing
+    // must not drop the first byte of every relative key.
+    let (trailing_root, trailing_root_error) = child_path(a, root, "")
+    if trailing_root_error != ok { os.exit(172i32) }
+    var trailing_fs = store.FsStore{ root: trailing_root }
+    var trailing_fs_store = store.fs_store(&trailing_fs)
+    if store.put(&trailing_fs_store, a, "tail.txt", "tail") != ok { os.exit(173i32) }
+    var trailing_entries: [1]store.Entry = zero
+    let (trailing_count, trailing_list_error) = store.list(&trailing_fs_store, a, "", trailing_entries[0usize..1usize])
+    if trailing_list_error != ok || trailing_count != 1usize || !str.eq(trailing_entries[0usize].key, "tail.txt") { os.exit(174i32) }
+    if store.delete(&trailing_fs_store, a, "tail.txt") != ok { os.exit(175i32) }
+    // The zero filesystem backend must not treat `/key` or the current directory
+    // as an implicit root.
+    var zero_fs: store.FsStore = zero
+    var zero_store = store.fs_store(&zero_fs)
+    if store.put(&zero_store, a, "zero", "x") != store.Invalid { os.exit(176i32) }
+    let (_, zero_get_error) = store.get(&zero_store, a, "zero", 0usize)
+    if zero_get_error != store.Invalid { os.exit(177i32) }
+    let (_, zero_stat_error) = store.stat(&zero_store, a, "zero")
+    if zero_stat_error != store.Invalid { os.exit(179i32) }
+    if store.delete(&zero_store, a, "zero") != store.Invalid { os.exit(180i32) }
+    var zero_entries: [1]store.Entry = zero
+    let (_, zero_list_error) = store.list(&zero_store, a, "", zero_entries[0usize..1usize])
+    if zero_list_error != store.Invalid { os.exit(178i32) }
     // a stray directory or foreign file under the root is not a key, and deleting through
     // the store leaves the empty directories (listing is files only)
     let (_, nf) = store.get(&fs_s, a, "dir", 0usize)
     if nf != store.NotFound { os.exit(9i32) }
+    // A link inside the root cannot redirect any key operation to a sibling directory.
+    let (outside_root, ore) = hex_name(a, "")
+    if ore != ok || fs.make_dirs(a, outside_root) != ok { os.exit(150i32) }
+    let (outside_marker, ome) = child_path(a, outside_root, "marker.txt")
+    let (outside_put, ope) = child_path(a, outside_root, "put.txt")
+    let (inside_link, ile) = child_path(a, root, "through-link")
+    if ome != ok || ope != ok || ile != ok { os.exit(151i32) }
+    if fs.write_file(a, outside_marker, "outside") != ok { os.exit(152i32) }
+    let link_error = fs.symlink(a, outside_root, inside_link)
+    if link_error == ok {
+        if store.put(&fs_s, a, "through-link/put.txt", "escaped") == ok { os.exit(153i32) }
+        let (_, get_error) = store.get(&fs_s, a, "through-link/marker.txt", 0usize)
+        if get_error == ok { os.exit(154i32) }
+        let (_, stat_error) = store.stat(&fs_s, a, "through-link/marker.txt")
+        if stat_error == ok { os.exit(155i32) }
+        if store.delete(&fs_s, a, "through-link/marker.txt") == ok { os.exit(156i32) }
+        let (put_created, put_exists_error) = fs.exists(a, outside_put)
+        if put_exists_error != ok || put_created { os.exit(157i32) }
+        let (outside_data, outside_read_error) = fs.read_file(a, outside_marker, 0usize)
+        let outside_text: str = outside_data
+        if outside_read_error != ok || !str.eq(outside_text, "outside") { os.exit(158i32) }
+        if fs.remove_file(a, inside_link) != ok { os.exit(159i32) }
+    } else if link_error != fs.Denied {
+        os.exit(160i32)
+    }
+    if fs.remove_file(a, outside_marker) != ok || fs.remove_dir(a, outside_root) != ok { os.exit(161i32) }
     let cleanup = rm_tree(a, root)
     // 3. HTTP through the in-process server
     let (kv0, kve) = store.memory(a, 64usize)
     if kve != ok { os.exit(130i32) }
-    var server = Server{ kv: kv0, requests: 0u32, last_target: "" }
+    var server = Server{ kv: kv0, requests: 0u32, last_target: "", decimal_mode: 0u8, decimal_headers: zero }
     var hs = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&server), send: serve }, host: "objects.test", base: "/bucket" }
     var hst = sh.http_store(&hs)
     let c3 = store.conformance(&hst, a)
     if c3 != 0u32 { os.exit(i32(130u32 + c3)) }
     if server.requests < 30u32 { os.exit(131i32) }
+    var target_capture = TargetCapture{ target: "" }
+    var trailing_base = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&target_capture), send: capture_target }, host: "objects.test", base: "/bucket/" }
+    var trailing_store = sh.http_store(&trailing_base)
+    if store.put(&trailing_store, a, "key", "v") != ok || !str.eq(target_capture.target, "/bucket/key") { os.exit(170i32) }
+    var root_base = sh.HttpStore{ transport: sh.Transport{ ctx: mem.cast[*void](&target_capture), send: capture_target }, host: "objects.test", base: "/" }
+    var root_store = sh.http_store(&root_base)
+    if store.put(&root_store, a, "key", "v") != ok || !str.eq(target_capture.target, "/key") { os.exit(171i32) }
     if store.put(&hst, a, "q/\xc3\xbc x%.txt", "v") != ok { os.exit(132i32) }
     if !str.eq(server.last_target, "/bucket/q/%C3%BC%20x%25.txt") { os.exit(133i32) }
     var entries: [4]store.Entry = zero
     let (n, ln) = store.list(&hst, a, "q/\xc3\xbc", entries[0usize..4usize])
     if ln != ok || n != 1usize || !str.eq(server.last_target, "/bucket/?prefix=q/%C3%BC") { os.exit(134i32) }
+    // #377: HTTP size fields accept the u64 limit and reject the next value in
+    // both a HEAD Content-Length and a listing entry.
+    server.decimal_mode = 1u8
+    let (head_max, head_max_error) = store.stat(&hst, a, "decimal")
+    if head_max_error != ok || head_max != 18446744073709551615u64 { os.exit(135i32) }
+    server.decimal_mode = 2u8
+    let (_, head_overflow_error) = store.stat(&hst, a, "decimal")
+    if head_overflow_error != store.Failed { os.exit(136i32) }
+    var decimal_entries: [1]store.Entry = zero
+    server.decimal_mode = 3u8
+    let (decimal_count, decimal_error) = store.list(&hst, a, "", decimal_entries[..])
+    if decimal_error != ok || decimal_count != 1usize || decimal_entries[0usize].size != 18446744073709551615u64 { os.exit(137i32) }
+    server.decimal_mode = 4u8
+    let (_, list_overflow_error) = store.list(&hst, a, "", decimal_entries[..])
+    if list_overflow_error != store.Failed { os.exit(138i32) }
+    server.decimal_mode = 0u8
     // 4. keys: validity and the HTTP encoding against Python
     let table = vectors()
     var i = 0usize
-    while i < 100usize {
+    while i < 106usize {
         let row = table[i]
         if store.valid_key(row.key) != row.good { os.exit(140i32) }
         if row.good {

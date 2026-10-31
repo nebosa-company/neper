@@ -33,6 +33,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e1c != quic.Malformed { os.exit(1i32) }
     let (_, e1d) = quic.header_decode(initial[..10usize], 0usize)
     if e1d != quic.TooSmall { os.exit(1i32) }
+    // An attacker-controlled Initial token length must be compared as u64
+    // before it is narrowed for the slice.
+    let huge_token: [15]u8 = [15]u8{ 192, 0, 0, 0, 1, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 }
+    let (_, e1e) = quic.header_decode(huge_token[0..], 0usize)
+    if e1e != quic.TooSmall { os.exit(1i32) }
 
     // 2: a short header round trip.
     let dcid: [8]u8 = [8]u8{ 17, 34, 51, 68, 85, 102, 119, 136 }
@@ -117,6 +122,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4k != ok || used_x != 7usize || fx.kind != quic.FRAME_CONNECTION_CLOSE || fx.error_code != 10u64 || fx.frame_type != 24u64 || !quic.bytes_equal(fx.reason, "bye") { os.exit(4i32) }
     let (n4d, e4l) = quic.frame_encode_connection_close(buf[0..], quic.FRAME_CONNECTION_CLOSE, 10u64, 24u64, "bye")
     if e4l != ok || n4d != 7usize || !quic.bytes_equal(buf[..7usize], close[0..]) { os.exit(4i32) }
+    let huge_reason: [11]u8 = [11]u8{ 28, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255 }
+    let (_, _, e4m0) = quic.frame_decode(huge_reason[0..])
+    if e4m0 != quic.TooSmall { os.exit(4i32) }
     let run: [6]u8 = [6]u8{ 0, 0, 0, 0, 0, 1 }
     let (fp, used_p, e4m) = quic.frame_decode(run[0..])
     if e4m != ok || fp.kind != quic.FRAME_PADDING || used_p != 5usize { os.exit(4i32) }
@@ -175,7 +183,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !found0 || unused0 != 1usize { os.exit(5i32) }
     let challenge: [8]u8 = [8]u8{ 90, 1, 2, 3, 4, 5, 6, 165 }
     var probe: [1200]u8 = zero
-    let (probe_len, e5e) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[0..])
+    // A server must defer a probe until the candidate path has enough received
+    // bytes for the short header and PATH_CHALLENGE.
+    let (_, e5e0) = quic.migrate(&conn, addr_b, 100u64, challenge, 4u64, probe[0..])
+    if e5e0 != quic.AmplificationLimited || conn.path_count != 1usize || peer_active[1] != quic.CID_UNUSED { os.exit(5i32) }
+    let (probe_len, e5e) = quic.migrate(&conn, addr_b, 100u64, challenge, 400u64, probe[0..])
     if e5e != ok || probe_len != 1200usize { os.exit(5i32) }
     let probe_head: [18]u8 = [18]u8{ 64, 176, 177, 178, 179, 180, 181, 182, 183, 26, 90, 1, 2, 3, 4, 5, 6, 165 }
     if !quic.bytes_equal(probe[..18usize], probe_head[0..]) { os.exit(5i32) }
@@ -184,11 +196,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if probe[i] != 0u8 { os.exit(5i32) }
         i += 1usize
     }
-    if conn.active_path != 0u32 || conn.path_count != 2usize || conn.paths[1].state != .Validating || conn.paths[1].dcid_index != 1u32 || conn.paths[1].bytes_sent != 1200u64 { os.exit(5i32) }
+    if conn.active_path != 0u32 || conn.path_count != 2usize || conn.paths[1].state != .Validating || conn.paths[1].dcid_index != 1u32 || conn.paths[1].bytes_sent != 1200u64 || conn.paths[1].bytes_received != 400u64 { os.exit(5i32) }
     if !quic.address_equal(conn.paths[1].remote, addr_b) || !quic.address_equal(conn.paths[1].local, conn.paths[0].local) { os.exit(5i32) }
     let (unused1, found1) = quic.cids_pick_unused(&conn.peer_cids)
     if !found1 || unused1 != 2usize { os.exit(5i32) }
-    let (_, e5f) = quic.migrate(&conn, addr_b, 100u64, challenge, probe[..100usize])
+    let (_, e5f) = quic.migrate(&conn, addr_b, 100u64, challenge, 400u64, probe[..100usize])
     if e5f != quic.TooSmall { os.exit(5i32) }
     var stray: [8]u8 = zero
     let (matched0, e5g) = quic.on_path_response(&conn, stray, 150u64)
@@ -200,21 +212,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if quic.cids_active_count(&conn.peer_cids) != 2usize || peer_active[0] != quic.CID_RETIRED { os.exit(5i32) }
     let (retire_again, e5j) = quic.retire_old(&conn, buf[0..])
     if e5j != ok || retire_again != 0usize { os.exit(5i32) }
-    let (_, e5k) = quic.migrate(&conn, addr_b, 200u64, challenge, probe[0..])
+    let (_, e5k) = quic.migrate(&conn, addr_b, 200u64, challenge, 0u64, probe[0..])
     if e5k != quic.Invalid { os.exit(5i32) }
     let challenge2: [8]u8 = [8]u8{ 9, 8, 7, 6, 5, 4, 3, 2 }
-    let (probe2_len, e5l) = quic.migrate(&conn, addr_c, 200u64, challenge2, probe[0..])
+    let (probe2_len, e5l) = quic.migrate(&conn, addr_c, 200u64, challenge2, 400u64, probe[0..])
     if e5l != ok || probe2_len != 1200usize { os.exit(5i32) }
     let probe2_head: [15]u8 = [15]u8{ 64, 192, 193, 194, 195, 196, 26, 9, 8, 7, 6, 5, 4, 3, 2 }
     if !quic.bytes_equal(probe[..15usize], probe2_head[0..]) || conn.paths[2].dcid_index != 2u32 { os.exit(5i32) }
     if quic.path_timeout(&conn, 289u64, 30u64) || conn.paths[2].state != .Validating { os.exit(5i32) }
     if !quic.path_timeout(&conn, 290u64, 30u64) || conn.paths[2].state != .Failed || conn.active_path != 1u32 { os.exit(5i32) }
-    let (_, e5m) = quic.migrate(&conn, addr_d, 300u64, challenge2, probe[0..])
+    let (_, e5m) = quic.migrate(&conn, addr_d, 300u64, challenge2, 0u64, probe[0..])
     if e5m != quic.NoCid { os.exit(5i32) }
     // A fourth CID lets one more path open; a fifth path has no slot.
     var cid_d: [4]u8 = [4]u8{ 1, 2, 3, 4 }
     if quic.cids_insert(&conn.peer_cids, 3u64, 0u64, cid_d[0..], zero_token[0..]) != ok { os.exit(5i32) }
-    let (_, e5n) = quic.migrate(&conn, addr_d, 300u64, challenge2, probe[0..])
+    let (_, e5n) = quic.migrate(&conn, addr_d, 300u64, challenge2, 400u64, probe[0..])
     if e5n != ok || conn.path_count != 4usize { os.exit(5i32) }
     if quic.cids_insert(&conn.peer_cids, 4u64, 0u64, cid_d[..3usize], zero_token[0..]) != quic.Full { os.exit(5i32) }
     // retire_prior_to sweeps the earlier slots.
@@ -226,6 +238,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (sweep0, _) = quic.cid_set(sweep_seq[0..], sweep_cid[0..], sweep_len[0..], sweep_token[0..], sweep_active[0..])
     var sweep = sweep0
     if quic.cids_insert(&sweep, 0u64, 0u64, cid_a[0..], zero_token[0..]) != ok || quic.cids_insert(&sweep, 1u64, 0u64, fb.cid, fb.token) != ok { os.exit(5i32) }
+    if quic.cids_insert(&sweep, 2u64, 0u64, fc.cid, fc.token) != ok { os.exit(5i32) }
+    // A duplicate NEW_CONNECTION_ID can still advance retire_prior_to.
     if quic.cids_insert(&sweep, 2u64, 2u64, fc.cid, fc.token) != ok || quic.cids_active_count(&sweep) != 1usize || sweep.retire_prior_to != 2u64 { os.exit(5i32) }
     if quic.cids_insert(&sweep, 1u64, 0u64, cid_d[0..], zero_token[0..]) != quic.Invalid { os.exit(5i32) }
     if quic.cids_retire(&sweep, 0u64) || !quic.cids_retire(&sweep, 2u64) || quic.cids_active_count(&sweep) != 0usize { os.exit(5i32) }
@@ -249,9 +263,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     quic.path_received(&conn, 2usize, 100u64)
     let (resp2_len, e6b) = quic.on_path_challenge(&conn, peer_challenge, 2usize, probe[0..])
     if e6b != ok || resp2_len != 15usize || probe[0] != 64u8 || probe[1] != 192u8 || probe[6] != 27u8 || probe[14] != 8u8 { os.exit(6i32) }
-    if conn.paths[2].bytes_sent != 1215u64 || conn.paths[2].bytes_received != 100u64 { os.exit(6i32) }
+    if conn.paths[2].bytes_sent != 1215u64 || conn.paths[2].bytes_received != 500u64 { os.exit(6i32) }
     let (_, e6c) = quic.on_path_challenge(&conn, peer_challenge, 7usize, probe[0..])
     if e6c != quic.Invalid { os.exit(6i32) }
+
+    // A small but sufficient receipt emits a bounded (not padded-to-1200)
+    // probe and consumes exactly the server's per-path allowance.
+    var limited_paths: [2]quic.Path = zero
+    var limited_seq: [2]u64 = zero
+    var limited_cid: [40]u8 = zero
+    var limited_len: [2]u8 = zero
+    var limited_token: [32]u8 = zero
+    var limited_active: [2]u8 = zero
+    let (limited_peer0, e7a) = quic.cid_set(limited_seq[0..], limited_cid[0..], limited_len[0..], limited_token[0..], limited_active[0..])
+    if e7a != ok { os.exit(7i32) }
+    var limited_peer = limited_peer0
+    if quic.cids_insert(&limited_peer, 0u64, 0u64, cid_a[0..], zero_token[0..]) != ok || quic.cids_insert(&limited_peer, 1u64, 0u64, fb.cid, fb.token) != ok { os.exit(7i32) }
+    let (limited_conn0, e7b) = quic.connection(limited_paths[0..], own, limited_peer, quic.ipv4(192u8, 168u8, 0u8, 8u8, 4001u16), addr_a, 0usize)
+    if e7b != ok { os.exit(7i32) }
+    var limited_conn = limited_conn0
+    let (limited_probe, e7c) = quic.migrate(&limited_conn, addr_b, 400u64, challenge, 10u64, probe[0..])
+    if e7c != ok || limited_probe != 30usize || limited_conn.path_count != 2usize { os.exit(7i32) }
+    if limited_conn.paths[1].bytes_received != 10u64 || limited_conn.paths[1].bytes_sent != 30u64 || quic.amplification_allowance(&limited_conn.paths[1]) != 0u64 || quic.can_send(&limited_conn.paths[1], 1u64) { os.exit(7i32) }
+    if probe[18] != 0u8 || probe[29] != 0u8 { os.exit(7i32) }
 
     try io.print("net quic ok\n")
     ret ok

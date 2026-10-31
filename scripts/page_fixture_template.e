@@ -253,12 +253,14 @@ fn render_fields(a: *mem.Arena, fields: []const f.Field) -> str {
 
 // --- batch and bulk callbacks ------------------------------------------------------------------------------------
 
-// What the host's apply does, as the vector describes it: ids that fail with a reason, ids that throw.
+// What the host's apply does, as the vector describes it: ids that fail with a reason, ids that throw, and
+// deliberately malformed outcome lists for the runner's accounting regression.
 type Behavior = struct {
     fail_ids: []const f.Field,
     throw_ids: []const str,
     chunk_throw: []const f64,
     void_chunks: bool,
+    malformed: str,
     cancel_after: f64,
     has_cancel: bool,
     chunk_no: f64,
@@ -328,12 +330,101 @@ fn bulk_apply(state: *void, ids: []const f.Value, patch: []const f.Field, correl
         }
         k += 1usize
     }
+    if str.eq(behavior.malformed, "short") { ret b.Applied { threw: false, reason: "", all_ok: false, results: out[..ids.len - 1usize] } }
+    if str.eq(behavior.malformed, "duplicate") && ids.len > 1usize { out[1usize].id = out[0usize].id }
+    if str.eq(behavior.malformed, "foreign") { out[0usize].id = f.text("foreign") }
     ret b.Applied { threw: false, reason: "", all_ok: false, results: out[0usize..ids.len] }
 }
 
 fn zero_outcomes() -> []const b.IdOutcome {
     var none: []const b.IdOutcome = zero
     ret none
+}
+
+fn malformed_outcomes_fail(a: *mem.Arena, kind: str, expected: str) -> bool {
+    g_arena = a
+    var behavior: Behavior = zero
+    behavior.malformed = kind
+    var targets: [2]f.Value = zero
+    targets[0usize] = f.text("one")
+    targets[1usize] = f.text("two")
+    var catalog: []const b.Message = zero
+    var fields: [1]f.Field = zero
+    fields[0usize] = f.Field { name: "Status", value: f.text("Done") }
+    let plan = b.plan_bulk_mutation(a, catalog, targets[..], fields[..], authorize_fn, false, mem.cast[*void](&behavior), false, 2usize, 2usize, true, "malformed")
+    let result = b.run_bulk_mutation(a, plan, bulk_apply, mem.cast[*void](&behavior), cancel_fn, false)
+    if !result.valid || result.cancelled || result.total != 2usize || result.applied != 0usize || result.failed != 2usize { ret false }
+    if result.outcomes.len != 2usize || result.progress.len != 1usize || result.progress[0usize].done != 2usize { ret false }
+    var i = 0usize
+    while i < 2usize {
+        if !view.same_value(result.outcomes[i].id, targets[i]) || result.outcomes[i].good || !str.eq(result.outcomes[i].reason, expected) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn malformed_bulk_outcomes_fail(a: *mem.Arena) -> bool {
+    if !malformed_outcomes_fail(a, "short", "missing-outcomes") { os.exit(121i32) }
+    if !malformed_outcomes_fail(a, "duplicate", "duplicate-outcomes") { os.exit(122i32) }
+    if !malformed_outcomes_fail(a, "foreign", "unknown-outcomes") { os.exit(123i32) }
+    ret true
+}
+
+// Regressions for issue #18: minters report exhaustion instead of reusing a key, missing/null ordering is a
+// strict order across a cursor, and NaN is not a percentile request.
+fn page_issue18_regressions(a: *mem.Arena) -> bool {
+    let (opened, open_error) = p.new_minter(a, 1usize)
+    if open_error != ok { ret false }
+    var minter = opened
+    let (first_key, first_error) = p.mint(a, &minter, "first", "ONE")
+    if first_error != ok || !str.eq(first_key, "ONE-1") { ret false }
+    let (other_key, other_error) = p.mint(a, &minter, "other", "TWO")
+    if other_error != p.Full || other_key.len != 0usize { ret false }
+    let (second_key, second_error) = p.mint(a, &minter, "first", "ONE")
+    if second_error != ok || !str.eq(second_key, "ONE-2") { ret false }
+
+    let (limit_opened, limit_open_error) = p.new_minter(a, 1usize)
+    if limit_open_error != ok { ret false }
+    var at_limit = limit_opened
+    if p.reserve(&at_limit, "table", 9007199254740992.0f64) != p.Invalid { ret false }
+    if at_limit.count != 0usize { ret false }
+    if p.reserve(&at_limit, "table", 9007199254740991.0f64) != ok { ret false }
+    let (limit_key, limit_error) = p.mint(a, &at_limit, "table", "TAB")
+    if limit_error != p.Full || limit_key.len != 0usize { ret false }
+    let (max_prefix, max_value, max_good) = p.parse_record_key("AB-9007199254740991")
+    if !max_good || !str.eq(max_prefix, "AB") || max_value != 9007199254740991.0f64 { ret false }
+    let (bad_prefix, bad_value, bad_good) = p.parse_record_key("AB-9007199254740992")
+    if bad_good || bad_prefix.len != 0usize || bad_value != 0.0f64 { ret false }
+
+    var measurements: [3]f64 = zero
+    measurements[0usize] = 1.0f64
+    measurements[1usize] = 2.0f64
+    measurements[2usize] = 3.0f64
+    let (nan_value, nan_good) = p.percentile(a, measurements[..], f.nan())
+    if nan_good || nan_value != 0.0f64 { ret false }
+
+    var missing_a: [1]f.Field = zero
+    missing_a[0usize] = f.Field { name: "id", value: f.text("a") }
+    var null_b: [2]f.Field = zero
+    null_b[0usize] = f.Field { name: "id", value: f.text("b") }
+    null_b[1usize] = f.Field { name: "f", value: f.blank() }
+    var missing_c: [1]f.Field = zero
+    missing_c[0usize] = f.Field { name: "id", value: f.text("c") }
+    var sort: [1]p.SortKey = zero
+    sort[0usize] = p.SortKey { field: "f", descending: false }
+    if p.compare_by(a, sort[..], missing_a[..], null_b[..]) != 1i32 { ret false }
+    if p.compare_by(a, sort[..], null_b[..], missing_a[..]) != -1i32 { ret false }
+    var rows: [3]p.Row = zero
+    rows[0usize] = p.Row { fields: missing_a[..] }
+    rows[1usize] = p.Row { fields: null_b[..] }
+    rows[2usize] = p.Row { fields: missing_c[..] }
+    let first_page = p.paginate(a, rows[..], sort[..], 1.0f64, "", false)
+    if !first_page.valid || first_page.positions.len != 1usize || first_page.positions[0usize] != 1usize || !first_page.has_next_cursor { ret false }
+    let second_page = p.paginate(a, rows[..], sort[..], 1.0f64, first_page.next_cursor, true)
+    if !second_page.valid || second_page.positions.len != 1usize || second_page.positions[0usize] != 0usize || !second_page.has_next_cursor { ret false }
+    let third_page = p.paginate(a, rows[..], sort[..], 1.0f64, second_page.next_cursor, true)
+    if !third_page.valid || third_page.positions.len != 1usize || third_page.positions[0usize] != 2usize || third_page.has_more || third_page.has_next_cursor { ret false }
+    ret true
 }
 
 fn cancel_fn(state: *void) -> bool {
@@ -525,11 +616,13 @@ fn evaluate(a: *mem.Arena, m: []const json.Member) -> str {
     }
     if str.eq(op, "keys") {
         let (initial, has_initial) = get(m, "initial")
-        var minter = p.new_minter(a, 64usize)
+        let (opened, open_error) = p.new_minter(a, 64usize)
+        if open_error != ok { ret "new-minter-error" }
+        var minter = opened
         let init_fields = fields_of(a, initial)
         var k = 0usize
         while k < init_fields.len {
-            p.reserve(&minter, init_fields[k].name, init_fields[k].value.n)
+            if p.reserve(&minter, init_fields[k].name, init_fields[k].value.n) != ok { ret "reserve-error" }
             k += 1usize
         }
         let (script, has_script) = get(m, "script")
@@ -540,17 +633,21 @@ fn evaluate(a: *mem.Arena, m: []const json.Member) -> str {
             let parts = items_of(steps[k])
             let kind = text_of(parts[0usize])
             if str.eq(kind, "mint") {
-                out = join(a, out, p.mint(a, &minter, text_of(parts[1usize]), text_of(parts[2usize])))
+                let (key, mint_error) = p.mint(a, &minter, text_of(parts[1usize]), text_of(parts[2usize]))
+                if mint_error != ok { ret "mint-error" }
+                out = join(a, out, key)
             } else if str.eq(kind, "many") {
                 var c = 0usize
                 let count = usize(number_of(parts[3usize], 0.0f64))
                 while c < count {
                     if c > 0usize { out = join(a, out, ",") }
-                    out = join(a, out, p.mint(a, &minter, text_of(parts[1usize]), text_of(parts[2usize])))
+                    let (key, mint_error) = p.mint(a, &minter, text_of(parts[1usize]), text_of(parts[2usize]))
+                    if mint_error != ok { ret "mint-error" }
+                    out = join(a, out, key)
                     c += 1usize
                 }
             } else if str.eq(kind, "reserve") {
-                p.reserve(&minter, text_of(parts[1usize]), number_of(parts[2usize], 0.0f64))
+                if p.reserve(&minter, text_of(parts[1usize]), number_of(parts[2usize], 0.0f64)) != ok { ret "reserve-error" }
                 out = join(a, out, "r")
             } else if str.eq(kind, "counter") {
                 out = join(a, out, num(a, p.counter_of(&minter, text_of(parts[1usize]))))
@@ -629,7 +726,9 @@ fn evaluate(a: *mem.Arena, m: []const json.Member) -> str {
         }
         let table = p.Table { id: text_member(tm, "id"), name: text_member(tm, "name"), columns: cols[0usize..col_items.len] }
         let (rows_value, hr) = get(m, "rows")
-        var minter = p.new_minter(a, 8usize)
+        let (opened, open_error) = p.new_minter(a, 8usize)
+        if open_error != ok { ret "new-minter-error" }
+        var minter = opened
         let d = p.duplicate_table(a, table, page_rows_of(a, rows_value), bool_of(m, "withRecords"), text_member(m, "newId"), text_member(m, "newName"), &minter, true)
         var out = join3(a, hex_text(a, d.table.id), "|", join(a, hex_text(a, d.table.name), "|"))
         k = 0usize
@@ -840,6 +939,8 @@ fn evaluate(a: *mem.Arena, m: []const json.Member) -> str {
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    if !malformed_bulk_outcomes_fail(a) { os.exit(120i32) }
+    if !page_issue18_regressions(a) { os.exit(124i32) }
     try io.print("algo page batch ok")
     ret ok
 }

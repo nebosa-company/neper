@@ -96,14 +96,18 @@ fn reader(storage: []u8, source: io.Reader, order: Order, literal_width: u8, out
     ret (r, ok)
 }
 
-// The next code of the current width, or `false` at a clean end of the source.
+// The next code of the current width, or `false` when the source ends before a
+// complete code. `read` accepts source completion only after an End code.
 fn read_code(s: *ReaderState) -> (u32, bool, err) {
     while s.bit_count < s.width {
         var byte: [1]u8 = zero
         let (count, read_error) = io.read(&s.source, byte[0..])
-        if read_error == io.End { ret (0u32, false, ok) }
-        if read_error != ok { ret (0u32, false, read_error) }
-        if count == 0usize { ret (0u32, false, Invalid) }
+        if count == 0usize {
+            if read_error == io.End { ret (0u32, false, ok) }
+            if read_error != ok { ret (0u32, false, read_error) }
+            ret (0u32, false, Invalid)
+        }
+        if read_error != ok && read_error != io.End { ret (0u32, false, read_error) }
         if s.order == .LeastSignificant {
             s.bits = s.bits | (u64(byte[0]) << s.bit_count)
         } else {
@@ -155,12 +159,14 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
                 if written == 0usize { ret (0usize, io.End) }
                 ret (written, ok)
             }
+            // With a one-bit literal alphabet the first free dictionary code is
+            // already 4, so it needs a wider code before the second literal.
+            // Other widths reach this state through the post-add widening below.
+            if s.has_previous && s.next == (1u32 << s.width) && s.width < MAX_WIDTH { s.width += 1u32 }
             let (code, has_code, code_error) = read_code(s)
             if code_error != ok { ret (written, code_error) }
             if !has_code {
-                s.finished = true
-                if written == 0usize { ret (0usize, io.End) }
-                ret (written, ok)
+                ret (written, Invalid)
             }
             if code == s.clear {
                 s.width = s.literal_width + 1u32
@@ -170,7 +176,10 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
                 if code == s.end {
                     s.finished = true
                 } else {
-                    if code > s.next { ret (written, Invalid) }
+                    // A synthesized KwKwK code is valid only while its dictionary
+                    // slot exists. In particular, code 4096 is never representable
+                    // by the 12-bit table, even when `next` has reached TABLE.
+                    if code >= u32(TABLE) || code > s.next { ret (written, Invalid) }
                     var first = 0u8
                     if code < s.next {
                         first = expand(s, code)
@@ -275,6 +284,13 @@ fn slot_of(s: *WriterState, key: u32) -> usize {
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
     if sink_writer.state == nil { ret (0usize, Invalid) }
     let s = mem.cast[*WriterState](sink_writer.state)
+    // Validate the complete input first so an out-of-range literal cannot emit a
+    // partial stream or spill into adjacent packed codes.
+    var checked = 0usize
+    while checked < src.len {
+        if u32(src[checked]) >= (1u32 << s.literal_width) { ret (0usize, Invalid) }
+        checked += 1usize
+    }
     if !s.started {
         let clear_error = emit(s, s.clear)
         if clear_error != ok { ret (0usize, clear_error) }
@@ -321,6 +337,13 @@ fn finish(sink_writer: *Writer) -> err {
     }
     if s.has_current {
         try emit(s, s.current)
+        // The reader adds one dictionary entry after it reads the final data code,
+        // before it reads End, except for the first code after Clear. Advance the
+        // writer's width only when that preceding code exists.
+        if s.next > s.end + 1u32 && s.next < u32(TABLE) {
+            s.next += 1u32
+            if s.next > (1u32 << s.width) && s.width < MAX_WIDTH { s.width += 1u32 }
+        }
         s.has_current = false
     }
     try emit(s, s.end)
@@ -383,9 +406,9 @@ fn decode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8, outpu
             capacity = capacity * 2usize
         }
         let (count, read_error) = read(&r, out[filled..])
+        filled += count
         if read_error == io.End { break }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     ret (out[..filled], ok)
 }

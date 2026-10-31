@@ -188,11 +188,17 @@ fn specificity(sel: Selector) -> Specificity {
 
 // --- the parser ------------------------------------------------------------------------------------------------------
 
-type Parser = struct { a: *mem.Arena, src: str }
+type Parser = struct { a: *mem.Arena, src: str, failure: *err }
 
 type SimpleResult = struct { good: bool, has_selector: bool, selector: Simple, has_pseudo: bool, pseudo: PseudoElement, next: usize }
 
 type Complex = struct { good: bool, selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
+
+fn parser_fail(p: *const Parser, e: err) {
+    if *p.failure == ok && e != ok { *p.failure = e }
+}
+
+fn parser_error(p: *const Parser) -> err { ret *p.failure }
 
 fn new_simple(kind: SimpleKind, name: str) -> Simple {
     ret Simple { kind: kind, name: name, argument: "", subs: zero, attr_ci: false }
@@ -210,9 +216,12 @@ fn found_pseudo(p: PseudoElement, next: usize) -> SimpleResult {
     ret SimpleResult { good: true, has_selector: false, selector: new_simple(.Universal, ""), has_pseudo: true, pseudo: p, next: next }
 }
 
-fn lower(a: *mem.Arena, s: str) -> str {
-    let (out, e) = mem.alloc[u8](a, s.len + 1usize)
-    if e != ok { ret s }
+fn lower(p: *const Parser, s: str) -> str {
+    let (out, e) = mem.alloc[u8](p.a, s.len + 1usize)
+    if e != ok {
+        parser_fail(p, e)
+        ret s
+    }
     var at = 0usize
     while at < s.len {
         var c = s[at]
@@ -240,11 +249,14 @@ fn skip_ws(toks: []const syntax.Token, from: usize) -> usize {
 fn is_delim(t: syntax.Token, value: str) -> bool { ret t.kind == .Delim && str.eq(t.value, value) }
 
 // Split on top-level commas (depth counted over parentheses, brackets and function openers), dropping a trailing `Eof`.
-fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const []const syntax.Token {
+fn split_top_level_comma_with(p: *const Parser, tokens: []const syntax.Token) -> []const []const syntax.Token {
     var toks = tokens
     if toks.len > 0usize && toks[toks.len - 1usize].kind == .Eof { toks = toks[0usize..toks.len - 1usize] }
-    let (made, e) = list.init[[]const syntax.Token](a, 4usize)
-    if e != ok { ret zero }
+    let (made, e) = list.init[[]const syntax.Token](p.a, 4usize)
+    if e != ok {
+        parser_fail(p, e)
+        ret zero
+    }
     var out = made
     var depth = 0i64
     var start = 0usize
@@ -257,25 +269,45 @@ fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const
             if depth > 0i64 { depth -= 1i64 }
         } else if depth == 0i64 && k == .Comma {
             let pushed = list.push[[]const syntax.Token](&out, toks[start..i])
+            if pushed != ok {
+                parser_fail(p, pushed)
+                ret zero
+            }
             start = i + 1usize
         }
         i += 1usize
     }
     let last = list.push[[]const syntax.Token](&out, toks[start..])
+    if last != ok {
+        parser_fail(p, last)
+        ret zero
+    }
     ret list.slice_const[[]const syntax.Token](&out)
+}
+
+// A public utility for callers that only need a best-effort token split. Rule
+// parsing uses the fallible `_with` form above so allocation failures propagate.
+fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const []const syntax.Token {
+    var failure: err = ok
+    let p = Parser { a: a, src: "", failure: &failure }
+    ret split_top_level_comma_with(&p, tokens)
 }
 
 fn rejected_complex() -> Complex {
     ret Complex { good: false, selector: Selector { compounds: zero, combinators: zero }, has_pseudo: false, pseudo: .Before }
 }
 
-fn push_simple(l: *list.List[Simple], s: Simple) {
+fn push_simple(p: *const Parser, l: *list.List[Simple], s: Simple) {
     let e = list.push[Simple](l, s)
+    parser_fail(p, e)
 }
 
-fn new_simples(a: *mem.Arena) -> list.List[Simple] {
-    let (l, e) = list.init[Simple](a, 4usize)
-    if e != ok { ret list.List[Simple] { items: zero, len: 0usize, arena: a } }
+fn new_simples(p: *const Parser) -> list.List[Simple] {
+    let (l, e) = list.init[Simple](p.a, 4usize)
+    if e != ok {
+        parser_fail(p, e)
+        ret list.List[Simple] { items: zero, len: 0usize, arena: p.a }
+    }
     ret l
 }
 
@@ -286,7 +318,8 @@ fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex {
     if ce != ok || be != ok { ret rejected_complex() }
     var compounds = cm
     var combinators = cb
-    var current = new_simples(a)
+    var current = new_simples(p)
+    if parser_error(p) != ok { ret rejected_complex() }
     var pending: Combinator = .Descendant
     var has_pending = false
     var pending_explicit = false
@@ -305,7 +338,8 @@ fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex {
         } else if t.kind == .Delim && (str.eq(t.value, ">") || str.eq(t.value, "+") || str.eq(t.value, "~")) {
             if current.len > 0usize {
                 let pushed = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&current) })
-                current = new_simples(a)
+                parser_fail(p, pushed)
+                current = new_simples(p)
             }
             if str.eq(t.value, ">") {
                 pending = .Child
@@ -321,10 +355,12 @@ fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex {
             if has_pending {
                 if current.len > 0usize {
                     let pushed = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&current) })
-                    current = new_simples(a)
+                    parser_fail(p, pushed)
+                    current = new_simples(p)
                 }
                 if compounds.len > 0usize {
                     let pushed = list.push[Combinator](&combinators, pending)
+                    parser_fail(p, pushed)
                 }
                 has_pending = false
                 pending_explicit = false
@@ -337,23 +373,26 @@ fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex {
                 pseudo_el = res.pseudo
                 has_pseudo = true
             } else if res.has_selector {
-                push_simple(&current, res.selector)
+                push_simple(p, &current, res.selector)
             }
         }
     }
     if pending_explicit && current.len == 0usize { ret rejected_complex() }
     if current.len > 0usize {
         let pushed = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&current) })
+        parser_fail(p, pushed)
     }
     if compounds.len == 0usize {
         if has_pseudo {
-            var only = new_simples(a)
-            push_simple(&only, new_simple(.Universal, "*"))
+            var only = new_simples(p)
+            push_simple(p, &only, new_simple(.Universal, "*"))
             let pushed = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&only) })
+            parser_fail(p, pushed)
         } else {
             ret rejected_complex()
         }
     }
+    if parser_error(p) != ok { ret rejected_complex() }
     ret Complex { good: true, selector: Selector { compounds: list.slice_const[Compound](&compounds), combinators: list.slice_const[Combinator](&combinators) }, has_pseudo: has_pseudo, pseudo: pseudo_el }
 }
 
@@ -379,7 +418,7 @@ fn parse_simple(p: *const Parser, toks: []const syntax.Token, start: usize) -> S
         }
         ret rejected()
     }
-    if t.kind == .Ident { ret found_simple(new_simple(.Type, lower(p.a, t.value)), i + 1usize) }
+    if t.kind == .Ident { ret found_simple(new_simple(.Type, lower(p, t.value)), i + 1usize) }
     if t.kind == .Hash { ret found_simple(new_simple(.Id, t.value), i + 1usize) }
     if t.kind == .LeftSquare { ret parse_attribute(p, toks, i) }
     if t.kind == .Colon { ret parse_pseudo(p, toks, i) }
@@ -421,7 +460,7 @@ fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simpl
         idx += 2usize
     }
     if idx >= inner.len || inner[idx].kind != .Ident { ret (none, false) }
-    let name = lower(p.a, inner[idx].value)
+    let name = lower(p, inner[idx].value)
     idx += 1usize
     idx = skip_ws(inner, idx)
     if idx >= inner.len { ret (new_simple(.AttrPresent, name), true) }
@@ -456,7 +495,7 @@ fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simpl
     idx = skip_ws(inner, idx)
     var ci = false
     if idx < inner.len && inner[idx].kind == .Ident {
-        let flag = lower(p.a, inner[idx].value)
+        let flag = lower(p, inner[idx].value)
         if str.eq(flag, "i") { ci = true }
     }
     ret (Simple { kind: kind, name: name, argument: value, subs: zero, attr_ci: ci }, true)
@@ -490,14 +529,14 @@ fn parse_pseudo(p: *const Parser, toks: []const syntax.Token, i: usize) -> Simpl
     let n = toks.len
     if i + 1usize < n && toks[i + 1usize].kind == .Colon {
         if i + 2usize < n && toks[i + 2usize].kind == .Ident {
-            ret pseudo_element_of(lower(p.a, toks[i + 2usize].value), i + 3usize)
+            ret pseudo_element_of(lower(p, toks[i + 2usize].value), i + 3usize)
         }
         ret rejected()
     }
     if i + 1usize >= n { ret rejected() }
     let next = toks[i + 1usize]
     if next.kind == .Ident {
-        let name = lower(p.a, next.value)
+        let name = lower(p, next.value)
         if str.eq(name, "before") || str.eq(name, "after") || str.eq(name, "first-line") || str.eq(name, "first-letter") {
             ret pseudo_element_of(name, i + 2usize)
         }
@@ -505,7 +544,7 @@ fn parse_pseudo(p: *const Parser, toks: []const syntax.Token, i: usize) -> Simpl
         ret found_simple(pseudo_class_by_name(name), i + 2usize)
     }
     if next.kind == .Function {
-        let name = lower(p.a, next.value)
+        let name = lower(p, next.value)
         var close = n
         var depth = 1i64
         var j = i + 2usize
@@ -534,15 +573,21 @@ fn parse_pseudo(p: *const Parser, toks: []const syntax.Token, i: usize) -> Simpl
 
 fn plain_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selector {
     let (made, e) = list.init[Selector](p.a, 4usize)
-    if e != ok { ret zero }
+    if e != ok {
+        parser_fail(p, e)
+        ret zero
+    }
     var out = made
-    let segs = split_top_level_comma(p.a, tokens)
+    let segs = split_top_level_comma_with(p, tokens)
+    if parser_error(p) != ok { ret zero }
     var s = 0usize
     while s < segs.len {
         let parsed = parse_complex(p, trim(segs[s]))
         if parsed.good && !parsed.has_pseudo {
             let pushed = list.push[Selector](&out, parsed.selector)
+            parser_fail(p, pushed)
         }
+        if parser_error(p) != ok { ret zero }
         s += 1usize
     }
     ret list.slice_const[Selector](&out)
@@ -550,9 +595,13 @@ fn plain_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selecto
 
 fn relative_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selector {
     let (made, e) = list.init[Selector](p.a, 4usize)
-    if e != ok { ret zero }
+    if e != ok {
+        parser_fail(p, e)
+        ret zero
+    }
     var out = made
-    let segs = split_top_level_comma(p.a, tokens)
+    let segs = split_top_level_comma_with(p, tokens)
+    if parser_error(p) != ok { ret zero }
     var s = 0usize
     while s < segs.len {
         var seg = trim(segs[s])
@@ -573,26 +622,36 @@ fn relative_list(p: *const Parser, tokens: []const syntax.Token) -> []const Sele
         if parsed.good && !parsed.has_pseudo {
             let (cm, ce) = list.init[Compound](p.a, parsed.selector.compounds.len + 1usize)
             let (cb, be) = list.init[Combinator](p.a, parsed.selector.combinators.len + 1usize)
-            if ce == ok && be == ok {
+            if ce != ok {
+                parser_fail(p, ce)
+            } else if be != ok {
+                parser_fail(p, be)
+            } else {
                 var compounds = cm
                 var combinators = cb
-                var anchor = new_simples(p.a)
-                push_simple(&anchor, new_simple(.Scope, ""))
+                var anchor = new_simples(p)
+                push_simple(p, &anchor, new_simple(.Scope, ""))
                 let a0 = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&anchor) })
+                parser_fail(p, a0)
                 var k = 0usize
                 while k < parsed.selector.compounds.len {
                     let pc = list.push[Compound](&compounds, parsed.selector.compounds[k])
+                    parser_fail(p, pc)
                     k += 1usize
                 }
                 let l0 = list.push[Combinator](&combinators, lead)
+                parser_fail(p, l0)
                 var m = 0usize
                 while m < parsed.selector.combinators.len {
                     let pb = list.push[Combinator](&combinators, parsed.selector.combinators[m])
+                    parser_fail(p, pb)
                     m += 1usize
                 }
                 let pushed = list.push[Selector](&out, Selector { compounds: list.slice_const[Compound](&compounds), combinators: list.slice_const[Combinator](&combinators) })
+                parser_fail(p, pushed)
             }
         }
+        if parser_error(p) != ok { ret zero }
         s += 1usize
     }
     ret list.slice_const[Selector](&out)
@@ -623,8 +682,10 @@ fn parse_nth(p: *const Parser, kind: SimpleKind, arg: []const syntax.Token) -> S
             let (sub_tokens, te) = syntax.tokenize(p.a, tail)
             var subs: []const Selector = zero
             if te == ok {
-                let inner = Parser { a: p.a, src: tail }
+                let inner = Parser { a: p.a, src: tail, failure: p.failure }
                 subs = plain_list(&inner, sub_tokens)
+            } else {
+                parser_fail(p, te)
             }
             ret Simple { kind: kind, name: kind_name(kind), argument: anb, subs: subs, attr_ci: false }
         }
@@ -639,7 +700,7 @@ fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> 
     if str.eq(name, "is") || str.eq(name, "matches") { ret (Simple { kind: .Is, name: "is", argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "where") { ret (Simple { kind: .Where, name: name, argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "has") { ret (Simple { kind: .Has, name: name, argument: raw, subs: relative_list(p, arg), attr_ci: false }, true) }
-    if str.eq(name, "lang") { ret (Simple { kind: .PseudoClass, name: "lang", argument: raw, subs: zero, attr_ci: false }, true) }
+    if str.eq(name, "lang") { ret (Simple { kind: .PseudoClass, name: "lang", argument: syntax.decoded_text(p.a, p.src, arg), subs: zero, attr_ci: false }, true) }
     if str.eq(name, "nth-child") { ret (parse_nth(p, .NthChild, arg), true) }
     if str.eq(name, "nth-last-child") { ret (parse_nth(p, .NthLastChild, arg), true) }
     if str.eq(name, "nth-of-type") { ret (parse_nth(p, .NthOfType, arg), true) }
@@ -647,21 +708,38 @@ fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> 
     ret (new_simple(.PseudoClass, name), true)
 }
 
-// Parse a rule's selector list: each comma-separated complex selector that can be represented, with the pseudo-element it
-// targets if any; the rest are dropped.
-fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
-    let p = Parser { a: a, src: source }
+fn parse_selector_list(a: *mem.Arena, source: str, tokens: []const syntax.Token, forgiving: bool) -> ([]const RuleSelector, err) {
+    var failure: err = ok
+    let p = Parser { a: a, src: source, failure: &failure }
     let (made, e) = list.init[RuleSelector](a, 4usize)
     if e != ok { ret (zero, e) }
     var out = made
-    let segs = split_top_level_comma(a, tokens)
+    let segs = split_top_level_comma_with(&p, tokens)
+    if failure != ok { ret (zero, failure) }
     var s = 0usize
     while s < segs.len {
         let parsed = parse_complex(&p, trim(segs[s]))
-        if parsed.good {
+        if failure != ok { ret (zero, failure) }
+        if !parsed.good {
+            if !forgiving { ret (zero, ok) }
+        } else {
             try list.push[RuleSelector](&out, RuleSelector { selector: parsed.selector, has_pseudo: parsed.has_pseudo, pseudo: parsed.pseudo })
         }
         s += 1usize
     }
     ret (list.slice_const[RuleSelector](&out), ok)
+}
+
+// Parse a rule's selector list. Unlike forgiving selector lists used by :is() and
+// :where(), one invalid arm invalidates the entire rule selector list.
+fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
+    let (out, e) = parse_selector_list(a, source, tokens, false)
+    ret (out, e)
+}
+
+// Differential parser tests use Vaper's forgiving list representation to retain
+// the valid arms of intentionally malformed fuzz cases.
+fn parse_selector_list_forgiving(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err) {
+    let (out, e) = parse_selector_list(a, source, tokens, true)
+    ret (out, e)
 }

@@ -95,6 +95,27 @@ fn check_stream(a: *mem.Arena, stream: str, pcm: str, channels: u8, rate: u32, b
     ret 0i32
 }
 
+fn skips_vbr_frame(a: *mem.Arena, tag: str, offset: usize) -> bool {
+    let mark = mem.mark(a)
+    // MPEG-1 Layer III mono at 32 kbps / 44.1 kHz: two 104-byte frames. The
+    // tag is after the first frame's 17-byte side information, except VBRI
+    // whose standardized offset is 36 bytes after the MPEG header.
+    var stream: [208]u8 = zero
+    stream[0usize] = 255u8
+    stream[1usize] = 251u8
+    stream[2usize] = 16u8
+    stream[3usize] = 196u8
+    stream[104usize] = 255u8
+    stream[105usize] = 251u8
+    stream[106usize] = 16u8
+    stream[107usize] = 196u8
+    mem.copy[u8](stream[offset..offset + 4usize], tag)
+    let (opened, open_error) = mp3.open(a, stream[..])
+    let good = open_error == ok && mp3.frame_count(opened) == 1152usize && opened.at == 104usize
+    mem.reset(a, mark)
+    ret good
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let mono_code = check_stream(a, mono_mp3(), mono_pcm(), 1u8, 44100u32, 0i32)
     if mono_code != 0i32 { os.exit(mono_code) }
@@ -106,6 +127,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Refusals: no frame at all, and a buffer in another format.
     let (_, garbage_error) = mp3.open(a, "not an mpeg stream at all, just text")
     if garbage_error != mp3.Invalid { os.exit(61i32) }
+    let (_, free_error) = mp3.open(a, "\xff\xfb\x00\xc0")
+    if free_error != mp3.Unsupported { os.exit(69i32) }
+    if mp3.hdr_test_intensity("\xff\xfb\x10\xd0") || !mp3.hdr_test_intensity("\xff\xfb\x10\x50") { os.exit(70i32) }
+    if !skips_vbr_frame(a, "Xing", 21usize) || !skips_vbr_frame(a, "Info", 21usize) || !skips_vbr_frame(a, "VBRI", 36usize) { os.exit(71i32) }
     let (opened, open_error) = mp3.open(a, mono_mp3())
     if open_error != ok { os.exit(62i32) }
     var d = opened
@@ -137,6 +162,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mem.copy[u8](tagged_bytes[20usize..], mono_mp3())
     let (tagged, tagged_error) = mp3.open(a, tagged_bytes)
     if tagged_error != ok || mp3.frame_count(tagged) != mp3.frame_count(d) || tagged.at != d.at + 20usize { os.exit(67i32) }
+
+    // 288 big-value pairs fill the 576 spectral slots; a following count-1 leaf must stop.
+    var count1_granules: [1]mp3.Granule = zero
+    count1_granules[0usize].big_values = 288u32
+    count1_granules[0usize].region_count[0usize] = 2u32
+    count1_granules[0usize].sfb = "\xfe\xfe\x44\x02"
+    var count1_scf: [4]f32 = zero
+    var count1_pow43: [17]f32 = zero
+    var count1_state: mp3.State = zero
+    count1_state.gr = count1_granules[..]
+    count1_state.scf = count1_scf[..]
+    count1_state.pow43 = count1_pow43[..]
+    var count1_guarded: [577]f32 = zero
+    count1_guarded[576usize] = 123.0
+    var count1_bits = mp3.Bits { data: "\x00\x00\x00\x00", pos: 0usize, limit: 32usize }
+    mp3.huffman(&count1_state, count1_guarded[..576usize], &count1_bits, 0usize, 32usize)
+    if count1_bits.pos != count1_bits.limit || count1_guarded[576usize] != 123.0 { os.exit(68i32) }
 
     try io.print("fmt mp3 ok\n")
     ret ok

@@ -1,11 +1,8 @@
-// Vectors for `e.fmt.css.container` (L040): random container-query condition trees evaluated at several container sizes by
-// Vaper's own Dart code (scripts/css_container_reference.dart) and written as the link fixture
-// tests/selfhost/fixtures/link/text_css_container. Usage: DART=D:/flutter/bin/dart.bat node scripts/css_container_vectors.mjs
-import { execFileSync } from 'node:child_process';
+// Vectors for `e.fmt.css.container` (L040): random container-query condition trees evaluated at several container sizes
+// by the documented container-query contract and written as the link fixture tests/selfhost/fixtures/link/text_css_container.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
 
 const here = dirname(fileURLToPath(import.meta.url));
 let seed = 0x2ec9;
@@ -27,12 +24,65 @@ function cond(depth) {
 const SIZES = [{ w: 800, h: 600 }, { w: 320, h: 480 }, { w: 400 }, { h: 300 }, {}, { w: 600, h: 0 }, { w: 799.9, h: 400 }, { w: 600.3, h: 600 }, { w: 0, h: 0 }, { w: 1000, h: 1000 }];
 const inputs = Array.from({ length: 400 }, () => ({ c: cond(0), sizes: SIZES }));
 
-const tmp = tmpdir();
-const inPath = resolve(tmp, 'css_container_inputs.json');
-const outPath = resolve(tmp, 'css_container_expected.json');
-writeFileSync(inPath, JSON.stringify(inputs));
-execFileSync(process.env.DART || 'dart', ['run', resolve(here, 'css_container_reference.dart'), inPath, outPath], { stdio: 'inherit', shell: true });
-const expected = JSON.parse(readFileSync(outPath, 'utf8'));
+function evaluate(c, width, height) {
+  if (c.t === 'and') {
+    let unknown = false;
+    for (const part of c.p) {
+      const value = evaluate(part, width, height);
+      if (value === false) return false;
+      if (value === null) unknown = true;
+    }
+    return unknown ? null : true;
+  }
+  if (c.t === 'or') {
+    let unknown = false;
+    for (const part of c.p) {
+      const value = evaluate(part, width, height);
+      if (value === true) return true;
+      if (value === null) unknown = true;
+    }
+    return unknown ? null : false;
+  }
+  if (c.t === 'not') {
+    const value = evaluate(c.p, width, height);
+    return value === null ? null : !value;
+  }
+  if (c.t === 'unknown') return null;
+  let actual;
+  if (c.f === 'width') actual = width;
+  else if (c.f === 'height') actual = height;
+  else if (c.f === 'aspectRatio') {
+    if (width === undefined || height === undefined || height <= 0) return null;
+    actual = width / height;
+  } else if (c.f === 'orientationPortrait') {
+    if (width === undefined || height === undefined) return null;
+    return height >= width;
+  } else {
+    if (width === undefined || height === undefined) return null;
+    return width > height;
+  }
+  if (actual === undefined) return null;
+  if (c.o === 'lt') return actual < c.v;
+  if (c.o === 'le') return actual <= c.v;
+  if (c.o === 'gt') return actual > c.v;
+  if (c.o === 'ge') return actual >= c.v;
+  if (c.f === 'aspectRatio') {
+    if (c.v === 0) return actual === 0;
+    return Math.abs(actual / c.v - 1) < 0.001;
+  }
+  return Math.abs(actual - c.v) < 0.5;
+}
+
+function usesBlockAxis(c) {
+  if (c.t === 'and' || c.t === 'or') return c.p.some(usesBlockAxis);
+  if (c.t === 'not') return usesBlockAxis(c.p);
+  return c.t === 'feat' && c.f !== 'width';
+}
+
+const expected = inputs.map(({ c, sizes }) => ({
+  e: sizes.map((s) => evaluate(c, s.w, s.h)),
+  block: usesBlockAxis(c),
+}));
 const cases = inputs.map((inp, i) => JSON.stringify({ c: inp.c, sizes: inp.sizes, e: expected[i] }));
 
 const chunks = [];

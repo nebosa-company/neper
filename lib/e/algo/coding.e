@@ -275,7 +275,8 @@ fn for_decode(src: []const u8, values: []u64) -> err {
     while at < values.len {
         let (offset, read_error) = read_bits(&r, width)
         if read_error != ok { ret read_error }
-        values[at] = least +% offset
+        if offset > 18446744073709551615u64 - least { ret Invalid }
+        values[at] = least + offset
         at += 1usize
     }
     ret ok
@@ -844,8 +845,8 @@ fn arith_bit(r: *BitReader) -> u64 {
 fn arithmetic_decode(src: []const u8, dst: []u8) -> (usize, err) {
     let (count, head, head_error) = varint_decode(src)
     if head_error != ok { ret (0usize, head_error) }
+    if count > u64(dst.len) { ret (0usize, TooSmall) }
     let n = usize(count)
-    if dst.len < n { ret (0usize, TooSmall) }
     var r = bit_reader(src[head..])
     var freq: [256]u32 = zero
     var total = 256u64
@@ -992,8 +993,8 @@ fn ans_decode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err) {
     if !ans_cumulative(freqs, cum[..]) { ret (0usize, Invalid) }
     let (count, head, head_error) = varint_decode(src)
     if head_error != ok { ret (0usize, head_error) }
+    if count > u64(dst.len) { ret (0usize, TooSmall) }
     let n = usize(count)
-    if dst.len < n { ret (0usize, TooSmall) }
     if src.len < head + 4usize { ret (0usize, Invalid) }
     var x = u64(src[head]) | (u64(src[head + 1usize]) << 8u64) | (u64(src[head + 2usize]) << 16u64) | (u64(src[head + 3usize]) << 24u64)
     var at = head + 4usize
@@ -1014,6 +1015,10 @@ fn ans_decode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err) {
         }
         i += 1usize
     }
+    // The encoder begins from this state and writes every renormalisation byte.
+    // Accepting any other end state would silently treat damaged or concatenated
+    // payloads as a valid message.
+    if x != 8388608u64 || at != src.len { ret (0usize, Invalid) }
     ret (n, ok)
 }
 
@@ -1070,8 +1075,8 @@ fn dictionary_decode(src: []const u8, dst: []u8, scratch: []u32) -> (usize, err)
     if scratch.len < 4096usize { ret (0usize, TooSmall) }
     let (total, head, head_error) = varint_decode(src)
     if head_error != ok { ret (0usize, head_error) }
+    if total > u64(dst.len) { ret (0usize, TooSmall) }
     let n = usize(total)
-    if dst.len < n { ret (0usize, TooSmall) }
     var r = bit_reader(src[head..])
     var count = 1usize
     var out = 0usize

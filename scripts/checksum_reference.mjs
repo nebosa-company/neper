@@ -94,7 +94,9 @@ for (const gen of GENERATORS) {
 for (let k = 0; k < 60; k += 1) values.push(rand(DIG + ALP + ' -.', 1 + int(34)));
 // well-known identifiers
 values.push('GB82 WEST 1234 5698 7654 32', 'DE89 3704 0044 0532 0130 00', 'US0378331005', '0306406152', '9780306406157', '4539 1488 0343 6467', '1HGCM82633A004352', '73211009', '2345-6',
-  '5493001KJTIGC8Y1R712', 'NL91 ABNA 0417 1643 00', '12-34', '4006381333931', '036000291452', 'U07.1', 'A00', '00:1A:2B:3C:4D:5E', '0000-0000-0000', '1234.5678.9ABC');
+  '5493001KJTIGC8Y1R712', 'NL91 ABNA 0417 1643 00', '12-34', '4006381333931', '036000291452', 'U07.1', 'A00', '00:1A:2B:3C:4D:5E', '0000-0000-0000', '1234.5678.9ABC',
+  // A non-North-American WMI accepts a structurally valid VIN regardless of position nine.
+  'YF29YARNDFPUSSCXY');
 for (const v of values) add({ v, e: bits(v) });
 
 // barcode symbologies
@@ -107,15 +109,24 @@ for (const b of B) for (const s of SYMS.slice(0, 7)) {
   add({ b, s, e: r.ok ? `ok|${hex(r.value)}|${r.symbology}` : `no|${r.reason}|${hex(r.message)}` });
 }
 for (const b of B.slice(0, 40)) add({ v: b, e: bits(b) });
-// scan to field value
+// scan to field value. Unknown detector formats are intentionally rejected:
+// treating a future detector name as Code 128 would bypass its format checks.
+function scanResult(raw, format, accepted) {
+  const key = format ? format.toLowerCase().replace(/[^a-z0-9]/g, '') : 'code128';
+  if (!['ean13', 'ean8', 'upca', 'code39', 'code128', 'qr'].includes(key)) {
+    return `no|unknown-symbology|${hex(`Unknown symbology "${key}".`)}`;
+  }
+  const r = barcode.scanToFieldValue({ rawValue: raw, format: format || undefined }, { acceptedSymbologies: accepted });
+  return r.ok ? `ok|${hex(r.value)}|${r.symbology}` : `no|${r.reason}|${hex(r.message)}`;
+}
 const FORMATS = ['ean_13', 'EAN-13', 'ean_8', 'upc_a', 'code_39', 'code_128', 'qr_code', 'QR', 'weird', '', 'pdf417', 'Code128'];
 for (let k = 0; k < 160; k += 1) {
   const raw = pick(B.filter((b) => b.trim() !== ''));
   const format = pick(FORMATS);
   const accepted = pick([[], ['ean13'], ['ean13', 'upca'], ['qr'], ['code39', 'bogus'], ['ean8', 'ean13', 'upca', 'code128']]);
-  const r = barcode.scanToFieldValue({ rawValue: raw, format: format || undefined }, { acceptedSymbologies: accepted });
-  add({ t: raw, f: format, x: accepted, e: r.ok ? `ok|${hex(r.value)}|${r.symbology}` : `no|${r.reason}|${hex(r.message)}` });
+  add({ t: raw, f: format, x: accepted, e: scanResult(raw, format, accepted) });
 }
+for (const format of ['weird', 'pdf417', 'qr_code']) add({ t: 'abc', f: format, x: [], e: scanResult('abc', format, []) });
 add({ t: '', f: 'ean_13', x: [], e: (() => { const r = barcode.scanToFieldValue({ rawValue: '' }, {}); return `no|${r.reason}|${hex(r.message)}`; })() });
 // scan capability
 for (const d of [true, false]) for (const s of [true, false]) for (const c of [true, false]) for (const p of ['granted', 'denied', 'prompt']) {

@@ -8,6 +8,62 @@ use e.mem
 use e.str
 use e.fmt.extract as x
 
+fn issue_42_checks(a: *mem.Arena) -> bool {
+    let mark = mem.mark(a)
+    defer { mem.reset(a, mark) }
+
+    // PDF metadata comes only from the final trailer's Info object, not a title
+    // found earlier in an outline or another arbitrary object.
+    let metadata_pdf = "1 0 obj << /Title (Outline title) >> endobj\x0a2 0 obj << /Title <54657374> /Author (\\376\\377\\000A\\000d\\000a) >> endobj\x0atrailer << /Info 2 0 R >>"
+    let (metadata_title, metadata_author, metadata_error) = x.pdf_metadata(a, metadata_pdf)
+    if metadata_error != ok || !str.eq(metadata_title, "Test") || !str.eq(metadata_author, "Ada") { ret false }
+    let lone_surrogate = "2 0 obj << /Title <FEFFD8000041> >> endobj\x0atrailer << /Info 2 0 R >>"
+    let (surrogate_title, _, surrogate_error) = x.pdf_metadata(a, lone_surrogate)
+    if surrogate_error != ok || !str.eq(surrogate_title, "\xef\xbf\xbdA") { ret false }
+
+    let (folded, found_folded, folded_error) = x.header_value(a, "Subject: first\x0d\x0a second\x0d\x0a third", "subject")
+    if folded_error != ok || !found_folded || !str.eq(folded, "first second third") { ret false }
+
+    let markdown = "# **Bold** [docs](https://example.test)\x0a2 * 3, ~/.bashrc, *.txt, a~b, `code` and ~~gone~~"
+    let (markdown_doc, markdown_error) = x.extract(a, markdown, "notes.md")
+    if markdown_error != ok || !str.eq(markdown_doc.title, "Bold docs") || !str.eq(markdown_doc.text, "Bold docs\x0a2 * 3, ~/.bashrc, *.txt, a~b, code and gone") { ret false }
+
+    // The facade recognizes Latin-1 mail by extension without preconverting the
+    // whole message, then applies the declared body charset exactly once.
+    let latin_mail = "Subject: Latin\x0d\x0aContent-Type: text/plain; charset=iso-8859-1\x0d\x0a\x0d\x0acaf\xe9"
+    let (latin_doc, latin_error) = x.extract(a, latin_mail, "latin.eml")
+    if latin_error != ok || !str.eq(latin_doc.text, "caf\xc3\xa9") { ret false }
+    let (latin_text_doc, latin_text_error) = x.extract(a, "caf\xe9", "latin.txt")
+    if latin_text_error != ok || latin_text_doc.format != .Text || !str.eq(latin_text_doc.text, "caf\xc3\xa9") { ret false }
+    let windows_mail = "Content-Type: text/plain; charset=windows-1252\x0d\x0a\x0d\x0aPrice \x80"
+    let (windows_doc, windows_error) = x.extract(a, windows_mail, "price.eml")
+    if windows_error != ok || !str.eq(windows_doc.text, "Price \xe2\x82\xac") { ret false }
+    let cyrillic_mail = "Content-Type: text/plain; charset=windows-1251\x0d\x0a\x0d\x0a\xcf\xf0\xe8\xe2\xe5\xf2"
+    let (cyrillic_doc, cyrillic_error) = x.extract(a, cyrillic_mail, "hello.eml")
+    if cyrillic_error != ok || !str.eq(cyrillic_doc.text, "\xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82") { ret false }
+    let (empty_header_doc, empty_header_error) = x.extract(a, "\x0d\x0ahello", "empty.eml")
+    if empty_header_error != ok || !str.eq(empty_header_doc.text, "hello") { ret false }
+    let multipart = "Content-Type: multipart/mixed; boundary=b\x0d\x0a\x0d\x0a--b\x0d\x0aContent-Type: text/plain\x0d\x0a\x0d\x0aone\x0d\x0a--b\x0d\x0aContent-Type: text/plain\x0d\x0a\x0d\x0atwo\x0d\x0a--b--\x0d\x0a"
+    let (multipart_doc, multipart_error) = x.extract(a, multipart, "parts.eml")
+    if multipart_error != ok || !str.eq(multipart_doc.text, "one\x0a\x0atwo") { ret false }
+
+    if x.detect(a, "notes about %PDF- but not a document", "notes.txt") != .Text { ret false }
+
+    // The extractor sizes the parse table from the input instead of silently
+    // dropping cards after its former fixed 256-card limit.
+    var (cards, cards_error) = str.builder(a, 0usize)
+    if cards_error != ok { ret false }
+    var card_at = 0usize
+    while card_at < 257usize {
+        if str.push(&cards, "BEGIN:VCARD\x0aFN:Person\x0aEND:VCARD\x0a") != ok { ret false }
+        card_at += 1usize
+    }
+    let card_source = str.done(&cards)
+    let (card_doc, card_error) = x.extract(a, card_source, "people.vcf")
+    if card_error != ok || card_doc.parts != 257usize { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let txt = "\xef\xbb\xbfFirst line caf\xc3\xa9\x0aSecond line \xe2\x82\xac5\x0a"
     let html = "<!DOCTYPE html><html><head><title> Neper &amp; friends </title><style>p{color:red}</style></head><body><h1>Heading One</h1><p>First   paragraph with <b>bold</b> and <a href=\"x\">a link</a>.</p><script>var hidden = 1;</script><ul><li>alpha</li><li>beta &amp; gamma</li></ul><table><tr><th>Name</th><th>Qty</th></tr><tr><td>Apple</td><td>3</td></tr></table><!-- a comment --><p>caf&eacute; &euro;5</p></body></html>"
@@ -181,6 +237,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_e != x.Corrupt { os.exit(120) }
     let (latin_d, latin_e) = x.extract_as(a, "caf\xe9", .Text)
     if latin_e != x.Encoding { os.exit(121) }
+    // An overlong spelling of U+00A0 is not valid UTF-8 text.
+    let (_, overlong_e) = x.extract_as(a, "\xe0\x82\xa0", .Text)
+    if overlong_e != x.Encoding { os.exit(123) }
     if !str.eq(x.media_type(.Docx), "application/vnd.openxmlformats-officedocument.wordprocessingml.document") { os.exit(122) }
+    if !issue_42_checks(a) { os.exit(124) }
     ret ok
 }

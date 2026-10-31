@@ -43,10 +43,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e2 != ok || n2 != 36usize || fold(buf[..n2]) != 0x8c4336622f7c6366u64 { os.exit(1i32) }
     let (n3, e3) = mqtt.encode_publish(buf[..], "a/b", "hello", 1u8, false, false, 10u16)
     if e3 != ok || n3 != 14usize || fold(buf[..n3]) != 0xf07a63e9d49ff04au64 { os.exit(1i32) }
+    var bad_client = mqtt.connect("bad\xc0\x80", 60u16, true)
+    let (_, bad_client_error) = mqtt.encode_connect(stream[..], &bad_client)
+    var nul_client = mqtt.connect("bad\x00id", 60u16, true)
+    let (_, nul_client_error) = mqtt.encode_connect(stream[..], &nul_client)
+    if bad_client_error != mqtt.Invalid || nul_client_error != mqtt.Invalid { os.exit(1i32) }
+    var binary = mqtt.connect("bin", 1u16, true)
+    binary.has_username = true
+    binary.username = "name"
+    binary.has_password = true
+    binary.password = "\xc0\x80\x00"
+    binary.has_will = true
+    binary.will_topic = "will"
+    binary.will_payload = "\xff\x00"
+    let (_, binary_error) = mqtt.encode_connect(stream[..], &binary)
+    if binary_error != ok { os.exit(1i32) }
+    let (_, empty_topic_error) = mqtt.encode_publish(buf[..], "", "", 0u8, false, false, 0u16)
+    let (_, plus_topic_error) = mqtt.encode_publish(buf[..], "a/+", "", 0u8, false, false, 0u16)
+    let (_, hash_topic_error) = mqtt.encode_publish(buf[..], "a/#", "", 0u8, false, false, 0u16)
+    if empty_topic_error != mqtt.Invalid || plus_topic_error != mqtt.Invalid || hash_topic_error != mqtt.Invalid { os.exit(1i32) }
     let topics = [2]str{ "a/b", "c/#" }
     let qoss = [2]u8{ 1u8, 2u8 }
     let (n4, e4) = mqtt.encode_subscribe(stream[..], 1u16, topics[..], qoss[..])
     if e4 != ok || n4 != 16usize || fold(stream[..n4]) != 0xbf799b6250917d0u64 { os.exit(1i32) }
+    let invalid_filters = [2]str{ "sport+", "a/#/b" }
+    let invalid_qoss = [2]u8{ 0u8, 0u8 }
+    let (_, invalid_filter_error) = mqtt.encode_subscribe(stream[..], 3u16, invalid_filters[..], invalid_qoss[..])
+    if invalid_filter_error != mqtt.Invalid { os.exit(1i32) }
+    let empty_level_filters = [3]str{ "a//b", "/", "+/#" }
+    let empty_level_qoss = [3]u8{ 0u8, 1u8, 2u8 }
+    let (empty_level_n, empty_level_error) = mqtt.encode_subscribe(stream[..], 4u16, empty_level_filters[..], empty_level_qoss[..])
+    if empty_level_error != ok || empty_level_n == 0usize { os.exit(1i32) }
     let (n5, e5) = mqtt.encode_unsubscribe(stream[..], 2u16, topics[..1usize])
     if e5 != ok || n5 != 9usize || fold(stream[..n5]) != 0x2b7b77a5a643ba55u64 { os.exit(1i32) }
     let values = [6]usize{ 0usize, 127usize, 128usize, 16383usize, 16384usize, 268435455usize }
@@ -71,16 +98,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p, pe) = mqtt.decode_publish(buf[..n3])
     if pe != ok || !mem.eq[u8](p.topic, "a/b") || !mem.eq[u8](p.payload, "hello") { os.exit(2i32) }
     if p.qos != 1u8 || p.retain || p.dup || p.packet_id != 10u16 { os.exit(2i32) }
+    let (_, empty_topic_decode) = mqtt.decode_publish("\x30\x02\x00\x00")
+    let (_, wildcard_topic_decode) = mqtt.decode_publish("\x30\x04\x00\x02a+")
+    let (_, malformed_utf8_decode) = mqtt.decode_publish("\x30\x04\x00\x02\xc3\x28")
+    let (_, nul_utf8_decode) = mqtt.decode_publish("\x30\x05\x00\x03a\x00b")
+    if empty_topic_decode != mqtt.Malformed || wildcard_topic_decode != mqtt.Malformed || malformed_utf8_decode != mqtt.Malformed || nul_utf8_decode != mqtt.Malformed { os.exit(2i32) }
     let (t, te) = mqtt.packet_type(buf[..n3])
     if te != ok || t != 3u8 { os.exit(2i32) }
     let (rl, hb, re) = mqtt.remaining_length(buf[..n3])
     if re != ok || rl != 12usize || hb != 2usize { os.exit(2i32) }
     let (present, code, ce) = mqtt.decode_connack("\x20\x02\x01\x00")
     if ce != ok || !present || code != 0u8 { os.exit(2i32) }
+    let (_, _, connack_reserved) = mqtt.decode_connack("\x20\x02\x00\x06")
+    if connack_reserved != mqtt.Malformed { os.exit(2i32) }
+    let (_, _, connack_present_refusal) = mqtt.decode_connack("\x20\x02\x01\x01")
+    if connack_present_refusal != mqtt.Malformed { os.exit(2i32) }
+    let (_, _, connack_tail) = mqtt.decode_connack("\x20\x02\x01\x00\xff")
+    if connack_tail != mqtt.Malformed { os.exit(2i32) }
+    buf[n3] = 255u8
+    let (_, publish_tail) = mqtt.decode_publish(buf[..n3 + 1usize])
+    if publish_tail != mqtt.Malformed { os.exit(2i32) }
     let (_, truncated) = mqtt.decode_publish(buf[..n3 - 1usize])
     if truncated != mqtt.TooSmall { os.exit(2i32) }
     let (kind, id, ae) = mqtt.decode_ack("\x62\x02\x00\x05")
     if ae != ok || kind != 6u8 || id != 5u16 { os.exit(2i32) }
+    var ack_kinds: [5]u8 = [5]u8{ 4u8, 5u8, 6u8, 7u8, 11u8 }
+    var zero_packets: [5]str = [5]str{ "\x40\x02\x00\x00", "\x50\x02\x00\x00", "\x62\x02\x00\x00", "\x70\x02\x00\x00", "\xb0\x02\x00\x00" }
+    var ack_i = 0usize
+    while ack_i < ack_kinds.len {
+        let (_, encode_zero) = mqtt.encode_ack(buf[..], ack_kinds[ack_i], 0u16)
+        if encode_zero != mqtt.Invalid { os.exit(2i32) }
+        let (_, _, decode_zero) = mqtt.decode_ack(zero_packets[ack_i])
+        if decode_zero != mqtt.Malformed { os.exit(2i32) }
+        ack_i += 1usize
+    }
+    let (_, _, ack_tail) = mqtt.decode_ack("\x62\x02\x00\x05\xff")
+    if ack_tail != mqtt.Malformed { os.exit(2i32) }
+    var sub_codes: [1]u8 = zero
+    let (_, sub_count, sub_tail) = mqtt.decode_suback("\x90\x03\x00\x01\x00\xff", sub_codes[..])
+    if sub_count != 0usize || sub_tail != mqtt.Malformed { os.exit(2i32) }
 
     // 3: topic filters from section 4.7.
     if !mqtt.topic_matches("sport/tennis/player1/#", "sport/tennis/player1") { os.exit(3i32) }

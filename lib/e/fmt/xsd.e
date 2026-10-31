@@ -264,9 +264,20 @@ fn int_in(s: str, negative_limit: str, positive_limit: str, zero_ok: bool) -> bo
     ret at_most(digits, positive_limit)
 }
 
+// An unbounded integer restricted only by its sign and whether zero is admitted.
+fn int_unbounded(s: str, negative_ok: bool, positive_ok: bool, zero_ok: bool) -> bool {
+    let at = after_sign(s)
+    let digits = s[at..]
+    if !all_digits(digits) { ret false }
+    if is_zero(digits) { ret zero_ok }
+    if at == 1usize && s[0usize] == 45u8 { ret negative_ok }
+    ret positive_ok
+}
+
 fn is_float(s: str) -> bool {
     if same(s, "INF") || same(s, "-INF") || same(s, "NaN") { ret true }
     let b = s[after_sign(s)..]
+    if b.len > 0usize && (b[0usize] == 43u8 || b[0usize] == 45u8) { ret false }
     var e = b.len
     var i = 0usize
     while i < b.len {
@@ -276,7 +287,7 @@ fn is_float(s: str) -> bool {
         }
         i += 1usize
     }
-    if !is_decimal(b[..e]) || (e < b.len && b[..e].len > 0usize && b[0usize] == 43u8) { ret false }
+    if !is_decimal(b[..e]) { ret false }
     if e == b.len { ret true }
     let exp = b[e + 1usize..]
     ret all_digits(exp[after_sign(exp)..])
@@ -542,10 +553,10 @@ fn valid(t: Type, text: str) -> bool {
     if t == .Boolean { ret same(s, "true") || same(s, "false") || same(s, "1") || same(s, "0") }
     if t == .Decimal { ret is_decimal(s) }
     if t == .Integer { ret all_digits(s[after_sign(s)..]) }
-    if t == .NonPositiveInteger { ret int_in(s, "99999999999999999999999999999999999999999999999999999999", "", true) && all_digits(s[after_sign(s)..]) }
-    if t == .NegativeInteger { ret int_in(s, "99999999999999999999999999999999999999999999999999999999", "", false) && all_digits(s[after_sign(s)..]) }
-    if t == .NonNegativeInteger { ret int_in(s, "", "99999999999999999999999999999999999999999999999999999999", true) && all_digits(s[after_sign(s)..]) }
-    if t == .PositiveInteger { ret int_in(s, "", "99999999999999999999999999999999999999999999999999999999", false) && all_digits(s[after_sign(s)..]) }
+    if t == .NonPositiveInteger { ret int_unbounded(s, true, false, true) }
+    if t == .NegativeInteger { ret int_unbounded(s, true, false, false) }
+    if t == .NonNegativeInteger { ret int_unbounded(s, false, true, true) }
+    if t == .PositiveInteger { ret int_unbounded(s, false, true, false) }
     if t == .Long { ret int_in(s, "9223372036854775808", "9223372036854775807", true) }
     if t == .Int { ret int_in(s, "2147483648", "2147483647", true) }
     if t == .Short { ret int_in(s, "32768", "32767", true) }

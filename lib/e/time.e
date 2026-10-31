@@ -5,12 +5,15 @@
 // spec 12 has no visibility, so a module held to its fence exactly could not have
 // them -- not because anything the fence names is missing.
 //
-// Every duration is a signed nanosecond count, so the whole module is i64 arithmetic
-// and the only failure is the clock's own. That count is also what bounds the
+// Every duration is a signed nanosecond count. Public duration and timestamp arithmetic
+// saturates at the i64 endpoints rather than wrapping, so an oversized deadline cannot
+// become a time in the opposite direction. The clock is still the only operation that
+// reports a failure. That count is also what bounds the
 // calendar: an i64 of nanoseconds reaches from 1677 to 2262, and no date outside
 // that is representable at all.
 
 use e.os
+use e.math
 
 type Timestamp = struct { nanos: i64 }
 type Instant = struct { nanos: i64 }
@@ -51,11 +54,11 @@ fn since(start: Instant) -> Duration {
 }
 
 fn timestamp_add(t: Timestamp, d: Duration) -> Timestamp {
-    ret Timestamp { nanos: t.nanos + d.nanos }
+    ret Timestamp { nanos: math.saturating_add[i64](t.nanos, d.nanos) }
 }
 
 fn timestamp_diff(a: Timestamp, b: Timestamp) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn timestamp_cmp(a: Timestamp, b: Timestamp) -> i32 {
@@ -63,11 +66,11 @@ fn timestamp_cmp(a: Timestamp, b: Timestamp) -> i32 {
 }
 
 fn instant_add(t: Instant, d: Duration) -> Instant {
-    ret Instant { nanos: t.nanos + d.nanos }
+    ret Instant { nanos: math.saturating_add[i64](t.nanos, d.nanos) }
 }
 
 fn instant_diff(a: Instant, b: Instant) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn instant_cmp(a: Instant, b: Instant) -> i32 {
@@ -75,19 +78,19 @@ fn instant_cmp(a: Instant, b: Instant) -> i32 {
 }
 
 fn duration_add(a: Duration, b: Duration) -> Duration {
-    ret Duration { nanos: a.nanos + b.nanos }
+    ret Duration { nanos: math.saturating_add[i64](a.nanos, b.nanos) }
 }
 
 fn duration_sub(a: Duration, b: Duration) -> Duration {
-    ret Duration { nanos: a.nanos - b.nanos }
+    ret Duration { nanos: math.saturating_sub[i64](a.nanos, b.nanos) }
 }
 
 fn duration_neg(d: Duration) -> Duration {
-    ret Duration { nanos: 0i64 - d.nanos }
+    ret Duration { nanos: math.saturating_mul[i64](d.nanos, -1i64) }
 }
 
 fn duration_scale(d: Duration, n: i64) -> Duration {
-    ret Duration { nanos: d.nanos * n }
+    ret Duration { nanos: math.saturating_mul[i64](d.nanos, n) }
 }
 
 fn duration_cmp(a: Duration, b: Duration) -> i32 {
@@ -101,27 +104,27 @@ fn compare_nanos(a: i64, b: i64) -> i32 {
 }
 
 fn days(n: i64) -> Duration {
-    ret Duration { nanos: n * 86400000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 86400000000000i64) }
 }
 
 fn hours(n: i64) -> Duration {
-    ret Duration { nanos: n * 3600000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 3600000000000i64) }
 }
 
 fn minutes(n: i64) -> Duration {
-    ret Duration { nanos: n * 60000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 60000000000i64) }
 }
 
 fn seconds(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000000000i64) }
 }
 
 fn millis(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000000i64) }
 }
 
 fn micros(n: i64) -> Duration {
-    ret Duration { nanos: n * 1000i64 }
+    ret Duration { nanos: math.saturating_mul[i64](n, 1000i64) }
 }
 
 fn nanos(n: i64) -> Duration {
@@ -168,12 +171,15 @@ const NANOS_PER_SECOND: i64 = 1000000000i64
 const NANOS_PER_DAY: i64 = 86400000000000i64
 const NANOS_PER_MINUTE: i64 = 60000000000i64
 
-// The days either side of the epoch that an i64 of nanoseconds can reach. The last
-// partial day at each end is left out: a whole day of nanoseconds added to 106751 days
-// passes what an i64 holds, and a range that is one day short at each extreme is
-// better than one that wraps.
-const MAX_CIVIL_DAY: i64 = 106750i64
-const MIN_CIVIL_DAY: i64 = -106750i64
+// The days either side of the epoch that an i64 of nanoseconds can reach. The
+// boundary days are partial: their in-day limits retain every representable
+// timestamp without admitting a civil time whose final sum would overflow.
+const MAX_CIVIL_DAY: i64 = 106751i64
+const MIN_CIVIL_DAY: i64 = -106752i64
+const MAX_CIVIL_NANOS: i64 = 85636854775807i64
+const MIN_CIVIL_NANOS: i64 = 763145224192i64
+const TIMESTAMP_MAX: i64 = 9223372036854775807i64
+const TIMESTAMP_MIN: i64 = -9223372036854775807i64 - 1i64
 
 const ISO8601_LENGTH: usize = 30usize
 
@@ -187,7 +193,11 @@ fn floor_div(value: i64, divisor: i64) -> i64 {
 }
 
 fn floor_mod(value: i64, divisor: i64) -> i64 {
-    ret value - floor_div(value, divisor) * divisor
+    // Normalize the remainder directly: reconstructing it from the quotient
+    // can underflow when `value` is i64.min even though the result fits.
+    let remainder = value % divisor
+    if remainder < 0i64 { ret remainder + divisor }
+    ret remainder
 }
 
 fn is_leap(year: i64) -> bool {
@@ -249,13 +259,15 @@ fn civil_from_days(count: i64) -> (i64, i64, i64) {
 // The offset is minutes and nothing more. A named zone is `e.tz`'s work, and so is
 // deciding which offset a local time had -- this only shifts by one it is given.
 fn to_date_at(t: Timestamp, offset_minutes: i32) -> Date {
-    let local = t.nanos + i64(offset_minutes) * NANOS_PER_MINUTE
+    let offset = math.saturating_mul[i64](i64(offset_minutes), NANOS_PER_MINUTE)
+    let local = math.saturating_add[i64](t.nanos, offset)
     let (year, month, day) = civil_from_days(floor_div(local, NANOS_PER_DAY))
     ret Date { year: i32(year), month: u8(month), day: u8(day) }
 }
 
 fn to_time_at(t: Timestamp, offset_minutes: i32) -> Time {
-    let local = t.nanos + i64(offset_minutes) * NANOS_PER_MINUTE
+    let offset = math.saturating_mul[i64](i64(offset_minutes), NANOS_PER_MINUTE)
+    let local = math.saturating_add[i64](t.nanos, offset)
     let within_day = floor_mod(local, NANOS_PER_DAY)
     let second_of_day = within_day / NANOS_PER_SECOND
     ret Time {
@@ -292,7 +304,16 @@ fn from_civil(d: Date, t: Time) -> (Timestamp, err) {
     let day_number = days_from_civil(year, month, day)
     if day_number > MAX_CIVIL_DAY || day_number < MIN_CIVIL_DAY { ret (Timestamp { nanos: 0i64 }, Invalid) }
     let second_of_day = i64(t.hour) * 3600i64 + i64(t.minute) * 60i64 + i64(t.second)
-    ret (Timestamp { nanos: day_number * NANOS_PER_DAY + second_of_day * NANOS_PER_SECOND + i64(t.nanos) }, ok)
+    let in_day = second_of_day * NANOS_PER_SECOND + i64(t.nanos)
+    if day_number == MAX_CIVIL_DAY && in_day > MAX_CIVIL_NANOS { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    if day_number == MIN_CIVIL_DAY && in_day < MIN_CIVIL_NANOS { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    // Multiplying the minimum partial day alone is below i64.min, although its
+    // late in-day values are representable. Form it from the preceding full day.
+    if day_number == MIN_CIVIL_DAY {
+        let preceding = (day_number + 1i64) * NANOS_PER_DAY
+        ret (Timestamp { nanos: preceding - (NANOS_PER_DAY - in_day) }, ok)
+    }
+    ret (Timestamp { nanos: day_number * NANOS_PER_DAY + in_day }, ok)
 }
 
 fn write_digits(buf: []u8, at: usize, value: i64, width: usize) {
@@ -424,7 +445,10 @@ fn parse_iso8601(s: str) -> (Timestamp, err) {
     if civil_error != ok { ret (Timestamp { nanos: 0i64 }, civil_error) }
     // The fields read were local to the offset given, so the offset comes back off to
     // leave the instant they name.
-    ret (Timestamp { nanos: civil.nanos - offset_minutes * NANOS_PER_MINUTE }, ok)
+    let offset = offset_minutes * NANOS_PER_MINUTE
+    if offset > 0i64 && civil.nanos < TIMESTAMP_MIN + offset { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    if offset < 0i64 && civil.nanos > TIMESTAMP_MAX + offset { ret (Timestamp { nanos: 0i64 }, Invalid) }
+    ret (Timestamp { nanos: civil.nanos - offset }, ok)
 }
 
 // --- Half-open intervals over any i64 unit (nanos, days, ...): `[start, end)`.

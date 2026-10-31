@@ -8,6 +8,16 @@ use e.mem
 use e.str
 use e.fmt.odf as odf
 use e.fmt.ooxml as ooxml
+use e.fmt.xml as xml
+use e.fmt.zip.write as zipw
+
+fn odf_element(name: str, attributes: []const xml.Attribute, parent: u32) -> xml.Node {
+    ret xml.Node { kind: .Element, name: name, value: "", attributes: attributes, parent: parent, first_child: 4294967295u32, last_child: 4294967295u32, next_sibling: 4294967295u32 }
+}
+
+fn odf_text(value: str, parent: u32) -> xml.Node {
+    ret xml.Node { kind: .Text, name: "", value: value, attributes: zero, parent: parent, first_child: 4294967295u32, last_child: 4294967295u32, next_sibling: 4294967295u32 }
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let odt: [821]u8 = [821]u8{ 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 94, 198, 50, 12, 39, 0, 0, 0, 39, 0, 0, 0, 8, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 97, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110, 47, 118, 110, 100, 46, 111, 97, 115, 105, 115, 46, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 46, 116, 101, 120, 116, 80, 75, 3, 4, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 9, 209, 183, 43, 135, 1, 0, 0, 107, 4, 0, 0, 11, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 141, 84, 203, 110, 195, 32, 16, 252, 21, 196, 161, 55, 151, 36, 189, 84, 110, 76, 212, 28, 170, 30, 170, 170, 82, 218, 115, 132, 97, 211, 160, 98, 64, 6, 231, 241, 247, 5, 219, 73, 237, 184, 137, 124, 225, 57, 51, 59, 236, 174, 61, 95, 28, 10, 133, 118, 80, 58, 105, 116, 134, 167, 247, 19, 140, 64, 115, 35, 164, 254, 206, 240, 215, 231, 75, 242, 136, 23, 116, 110, 54, 27, 201, 33, 21, 134, 87, 5, 104, 159, 112, 163, 125, 152, 81, 32, 107, 151, 54, 183, 25, 174, 74, 157, 26, 230, 164, 75, 53, 43, 192, 165, 158, 167, 198, 130, 62, 177, 210, 46, 58, 173, 67, 53, 39, 30, 14, 126, 44, 59, 98, 187, 92, 81, 178, 253, 88, 110, 196, 134, 119, 245, 66, 179, 92, 141, 118, 94, 131, 107, 246, 57, 35, 185, 17, 199, 243, 38, 122, 163, 243, 218, 225, 22, 213, 147, 243, 71, 5, 73, 212, 204, 240, 43, 176, 152, 213, 245, 108, 178, 158, 226, 230, 218, 84, 94, 73, 13, 137, 130, 29, 168, 144, 125, 76, 223, 193, 66, 137, 236, 214, 104, 152, 147, 70, 169, 85, 180, 67, 197, 149, 103, 90, 176, 82, 96, 250, 161, 152, 212, 168, 1, 58, 203, 244, 16, 187, 196, 52, 55, 74, 180, 162, 17, 67, 81, 96, 35, 214, 144, 194, 211, 8, 13, 67, 123, 111, 219, 160, 74, 58, 223, 89, 38, 210, 67, 113, 221, 207, 91, 128, 96, 186, 145, 165, 243, 40, 34, 255, 196, 200, 191, 18, 163, 37, 29, 132, 134, 19, 232, 142, 21, 246, 9, 41, 230, 252, 13, 101, 114, 105, 220, 82, 191, 55, 167, 128, 33, 217, 121, 9, 236, 135, 208, 184, 118, 23, 207, 181, 52, 36, 134, 131, 104, 19, 217, 216, 225, 25, 126, 192, 132, 134, 90, 181, 199, 97, 173, 57, 92, 82, 73, 191, 242, 23, 165, 157, 97, 186, 170, 114, 180, 109, 122, 160, 83, 218, 186, 165, 234, 177, 183, 73, 74, 179, 239, 31, 112, 80, 234, 108, 51, 110, 208, 115, 55, 11, 67, 228, 77, 238, 242, 38, 151, 12, 156, 144, 158, 81, 210, 107, 120, 210, 251, 22, 200, 149, 127, 5, 253, 5, 80, 75, 3, 4, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 60, 111, 102, 102, 105, 99, 101, 58, 100, 111, 99, 117, 109, 101, 110, 116, 45, 109, 101, 116, 97, 32, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 61, 34, 117, 114, 110, 58, 111, 97, 115, 105, 115, 58, 110, 97, 109, 101, 115, 58, 116, 99, 58, 111, 112, 101, 110, 100, 111, 99, 117, 109, 101, 110, 116, 58, 120, 109, 108, 110, 115, 58, 111, 102, 102, 105, 99, 101, 58, 49, 46, 48, 34, 47, 62, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 33, 0, 94, 198, 50, 12, 39, 0, 0, 0, 39, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 0, 0, 0, 0, 109, 105, 109, 101, 116, 121, 112, 101, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 8, 0, 251, 186, 75, 93, 9, 209, 183, 43, 135, 1, 0, 0, 107, 4, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 77, 0, 0, 0, 99, 111, 110, 116, 101, 110, 116, 46, 120, 109, 108, 80, 75, 1, 2, 20, 0, 20, 0, 0, 0, 0, 0, 251, 186, 75, 93, 84, 243, 74, 251, 87, 0, 0, 0, 87, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 1, 253, 1, 0, 0, 109, 101, 116, 97, 46, 120, 109, 108, 80, 75, 5, 6, 0, 0, 0, 0, 3, 0, 3, 0, 165, 0, 0, 0, 122, 2, 0, 0, 0, 0 }
@@ -54,5 +64,117 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ods_notes_error != ok || ods_notes.rows != 1usize || ods_notes.columns != 1usize || !str.eq(ods_notes.cells[0usize], "first second") { os.exit(29) }
     let (ods_none, ods_none_error) = odf.sheet_grid(a, ods_sheet[0..], 3usize)
     if ods_none_error != odf.NoContent { os.exit(30) }
+    // A table in a cell is part of its parent sheet, never a separately numbered sheet.
+    let nested_sheets_xml = "<office:document-content xmlns:office=\"urn:office\" xmlns:table=\"urn:table\"><office:body><office:spreadsheet><table:table table:name=\"First\"><table:table-row><table:table-cell office:value=\"outer\"><table:table table:name=\"Nested\"><table:table-row><table:table-cell office:value=\"inner\"/></table:table-row></table:table></table:table-cell></table:table-row></table:table><table:table table:name=\"Second\"><table:table-row><table:table-cell office:value=\"second\"/></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>"
+    let nested_sheets_part = [1]zipw.Part{ zipw.Part { name: "content.xml", data: nested_sheets_xml } }
+    let (nested_sheets_package, nested_sheets_package_error) = zipw.store(a, nested_sheets_part[0usize..])
+    if nested_sheets_package_error != ok { os.exit(39) }
+    let (nested_sheets_names, nested_sheets_names_error) = odf.sheet_names(a, nested_sheets_package)
+    if nested_sheets_names_error != ok || nested_sheets_names.len != 2usize || !str.eq(nested_sheets_names[0usize], "First") || !str.eq(nested_sheets_names[1usize], "Second") { os.exit(40) }
+    let (nested_first_grid, nested_first_grid_error) = odf.sheet_grid(a, nested_sheets_package, 1usize)
+    if nested_first_grid_error != ok || nested_first_grid.rows != 1usize || nested_first_grid.columns != 1usize || !str.eq(nested_first_grid.cells[0usize], "outer") { os.exit(41) }
+    let (nested_second_grid, nested_second_grid_error) = odf.sheet_grid(a, nested_sheets_package, 2usize)
+    if nested_second_grid_error != ok || nested_second_grid.rows != 1usize || nested_second_grid.columns != 1usize || !str.eq(nested_second_grid.cells[0usize], "second") { os.exit(42) }
+    // A nested table is part of its outer cell; it must not start a new row in
+    // the outer sheet's grid.
+    let nested_source = "<table><table-row><table-cell office:value=\"outer\"><table><table-row><table-cell office:value=\"inner\"/></table-row></table></table-cell><table-cell office:value=\"right\"/></table-row></table>"
+    let (nested_doc, nested_error) = xml.parse(a, nested_source)
+    if nested_error != ok { os.exit(31) }
+    var nested_cells: [4]str = zero
+    var nested_rows = 0usize
+    var nested_columns = 0usize
+    odf.walk_sheet(a, nested_doc.nodes, usize(nested_doc.root), false, nested_cells[0usize..], 0usize, &nested_rows, &nested_columns)
+    if nested_rows != 1usize || nested_columns != 2usize { os.exit(32) }
+    odf.walk_sheet(a, nested_doc.nodes, usize(nested_doc.root), true, nested_cells[0usize..], nested_columns, &nested_rows, &nested_columns)
+    if !str.eq(nested_cells[0usize], "outer") || !str.eq(nested_cells[1usize], "right") { os.exit(33) }
+    // A 32-bit coordinate must remain at the grid boundary after a large repeated region,
+    // rather than wrap and let a later cell overwrite the first one.  Exercise columns and
+    // rows separately with the smallest mixed repeat sequence that wraps a u32 cursor.
+    let no_attributes: []const xml.Attribute = zero
+    let repeated_columns = [1]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "100000" } }
+    let first_columns = [2]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "100000" }, xml.Attribute { name: "office:value", value: "first" } }
+    let tail_columns = [1]xml.Attribute{ xml.Attribute { name: "table:number-columns-repeated", value: "67296" } }
+    let repeated_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "100000" } }
+    let first_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "100000" } }
+    let tail_rows = [1]xml.Attribute{ xml.Attribute { name: "table:number-rows-repeated", value: "67296" } }
+    let first_value = [1]xml.Attribute{ xml.Attribute { name: "office:value", value: "first" } }
+    let alias_value = [1]xml.Attribute{ xml.Attribute { name: "office:value", value: "alias" } }
+    let (overflow_nodes, overflow_nodes_error) = mem.alloc[xml.Node](a, 42954usize)
+    if overflow_nodes_error != ok { os.exit(34) }
+    overflow_nodes[0usize] = odf_element("table", no_attributes, 4294967295u32)
+    overflow_nodes[1usize] = odf_element("table-row", no_attributes, 0u32)
+    overflow_nodes[2usize] = odf_element("table-cell", first_columns[0usize..], 1u32)
+    var i = 3usize
+    while i < 42951usize {
+        overflow_nodes[i] = odf_element("table-cell", repeated_columns[0usize..], 1u32)
+        i += 1usize
+    }
+    overflow_nodes[42951usize] = odf_element("table-cell", tail_columns[0usize..], 1u32)
+    overflow_nodes[42952usize] = odf_element("table-cell", alias_value[0usize..], 1u32)
+    var overflow_columns: [64]str = zero
+    var overflow_rows_out = 0usize
+    var overflow_columns_out = 0usize
+    odf.walk_sheet(a, overflow_nodes[0usize..42953usize], 0usize, false, overflow_columns[0usize..], 0usize, &overflow_rows_out, &overflow_columns_out)
+    if overflow_rows_out != 1usize || overflow_columns_out != 64usize { os.exit(35) }
+    odf.walk_sheet(a, overflow_nodes[0usize..42953usize], 0usize, true, overflow_columns[0usize..], overflow_columns_out, &overflow_rows_out, &overflow_columns_out)
+    if !str.eq(overflow_columns[0usize], "first") || !str.eq(overflow_columns[63usize], "first") { os.exit(36) }
+    overflow_nodes[0usize] = odf_element("table", no_attributes, 4294967295u32)
+    overflow_nodes[1usize] = odf_element("table-row", first_rows[0usize..], 0u32)
+    overflow_nodes[2usize] = odf_element("table-cell", first_value[0usize..], 1u32)
+    i = 3usize
+    while i < 42951usize {
+        overflow_nodes[i] = odf_element("table-row", repeated_rows[0usize..], 0u32)
+        i += 1usize
+    }
+    overflow_nodes[42951usize] = odf_element("table-row", tail_rows[0usize..], 0u32)
+    overflow_nodes[42952usize] = odf_element("table-row", no_attributes, 0u32)
+    overflow_nodes[42953usize] = odf_element("table-cell", alias_value[0usize..], 42952u32)
+    var overflow_rows: [2000]str = zero
+    overflow_rows_out = 0usize
+    overflow_columns_out = 0usize
+    odf.walk_sheet(a, overflow_nodes[0usize..42954usize], 0usize, false, overflow_rows[0usize..], 0usize, &overflow_rows_out, &overflow_columns_out)
+    if overflow_rows_out != 2000usize || overflow_columns_out != 1usize { os.exit(37) }
+    odf.walk_sheet(a, overflow_nodes[0usize..42954usize], 0usize, true, overflow_rows[0usize..], overflow_columns_out, &overflow_rows_out, &overflow_columns_out)
+    if !str.eq(overflow_rows[0usize], "first") || !str.eq(overflow_rows[1999usize], "first") { os.exit(38) }
+    // ODF uses namespace aliases just as freely on attributes as on elements.
+    let alias_text_xml = "<root xmlns:z=\"urn:text\"><z:p z:style-name=\"Body\">A<z:s z:c=\"2\"/>B</z:p><z:h z:outline-level=\"2\">Head</z:h></root>"
+    let alias_text_parts = [1]zipw.Part{ zipw.Part { name: "content.xml", data: alias_text_xml } }
+    let (alias_text_package, alias_text_package_error) = zipw.store(a, alias_text_parts[0usize..])
+    if alias_text_package_error != ok { os.exit(43) }
+    let (alias_paragraphs, alias_paragraphs_error) = odf.paragraphs(a, alias_text_package)
+    if alias_paragraphs_error != ok || alias_paragraphs.len != 2usize { os.exit(44) }
+    if !str.eq(alias_paragraphs[0usize].text, "A  B") || !str.eq(alias_paragraphs[0usize].style, "Body") { os.exit(45) }
+    if !str.eq(alias_paragraphs[1usize].text, "Head") || !str.eq(alias_paragraphs[1usize].style, "Heading2") { os.exit(46) }
+    let alias_sheet_xml = "<a:document-content xmlns:a=\"urn:office\" xmlns:q=\"urn:table\"><a:body><a:spreadsheet><q:table q:name=\"Alias\"><q:table-row q:number-rows-repeated=\"2\"><q:table-cell q:number-columns-repeated=\"2\" a:value=\"17\"/><q:table-cell a:date-value=\"2026-10-30\"/><q:table-cell a:boolean-value=\"true\"/></q:table-row></q:table></a:spreadsheet></a:body></a:document-content>"
+    let alias_sheet_parts = [1]zipw.Part{ zipw.Part { name: "content.xml", data: alias_sheet_xml } }
+    let (alias_sheet_package, alias_sheet_package_error) = zipw.store(a, alias_sheet_parts[0usize..])
+    if alias_sheet_package_error != ok { os.exit(47) }
+    let (alias_names, alias_names_error) = odf.sheet_names(a, alias_sheet_package)
+    if alias_names_error != ok || alias_names.len != 1usize || !str.eq(alias_names[0usize], "Alias") { os.exit(48) }
+    let (alias_grid, alias_grid_error) = odf.sheet_grid(a, alias_sheet_package, 1usize)
+    if alias_grid_error != ok || alias_grid.rows != 2usize || alias_grid.columns != 4usize { os.exit(49) }
+    if !str.eq(alias_grid.cells[0usize], "17") || !str.eq(alias_grid.cells[1usize], "17") || !str.eq(alias_grid.cells[2usize], "2026-10-30") || !str.eq(alias_grid.cells[3usize], "TRUE") { os.exit(50) }
+    if !str.eq(alias_grid.cells[4usize], "17") || !str.eq(alias_grid.cells[5usize], "17") || !str.eq(alias_grid.cells[6usize], "2026-10-30") || !str.eq(alias_grid.cells[7usize], "TRUE") { os.exit(51) }
+    // A cell made of many tiny runs should allocate its final text once rather
+    // than copy every accumulated prefix into the arena.
+    let run_count = 16384usize
+    let (run_nodes, run_nodes_error) = mem.alloc[xml.Node](a, run_count + 4usize)
+    if run_nodes_error != ok { os.exit(52) }
+    run_nodes[0usize] = odf_element("table", no_attributes, 4294967295u32)
+    run_nodes[1usize] = odf_element("table-row", no_attributes, 0u32)
+    run_nodes[2usize] = odf_element("table-cell", no_attributes, 1u32)
+    run_nodes[3usize] = odf_element("p", no_attributes, 2u32)
+    i = 4usize
+    while i < run_nodes.len {
+        run_nodes[i] = odf_text("x", 3u32)
+        i += 1usize
+    }
+    var run_cells: [1]str = zero
+    var run_rows = 0usize
+    var run_columns = 0usize
+    odf.walk_sheet(a, run_nodes, 0usize, false, run_cells[0usize..], 0usize, &run_rows, &run_columns)
+    if run_rows != 1usize || run_columns != 1usize { os.exit(53) }
+    odf.walk_sheet(a, run_nodes, 0usize, true, run_cells[0usize..], run_columns, &run_rows, &run_columns)
+    if run_cells[0usize].len != run_count || run_cells[0usize][0usize] != 120u8 || run_cells[0usize][run_count - 1usize] != 120u8 { os.exit(54) }
     ret ok
 }

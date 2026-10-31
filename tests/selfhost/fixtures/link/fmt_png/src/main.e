@@ -146,6 +146,68 @@ fn main(a: *mem.Arena, args: []str) -> err {
     corrupt[40] = corrupt[40] ^ 255u8
     let (_, crc_error) = png.decode(a, reader_of(&state, corrupt), options())
     if crc_error != png.Checksum { os.exit(212i32) }
+    let iend_at = rgba8_png().len - 12usize
+    let (_, missing_iend_error) = png.decode(a, reader_of(&state, rgba8_png()[..iend_at]), options())
+    if missing_iend_error != png.Invalid { os.exit(226i32) }
+    let (nonzero_iend, nonzero_iend_alloc) = mem.alloc[u8](a, rgba8_png().len + 1usize)
+    if nonzero_iend_alloc != ok { os.exit(227i32) }
+    mem.copy[u8](nonzero_iend[..iend_at + 8usize], rgba8_png()[..iend_at + 8usize])
+    nonzero_iend[iend_at + 3usize] = 1u8
+    nonzero_iend[iend_at + 8usize] = 0u8
+    png.put32(nonzero_iend, iend_at + 9usize, png.crc32(nonzero_iend[iend_at + 4usize..iend_at + 9usize]))
+    let (_, nonzero_iend_error) = png.decode(a, reader_of(&state, nonzero_iend), options())
+    if nonzero_iend_error != png.Invalid { os.exit(228i32) }
+    let (duplicate_iend, duplicate_iend_alloc) = mem.alloc[u8](a, rgba8_png().len + 12usize)
+    if duplicate_iend_alloc != ok { os.exit(229i32) }
+    mem.copy[u8](duplicate_iend[..rgba8_png().len], rgba8_png())
+    mem.copy[u8](duplicate_iend[rgba8_png().len..], rgba8_png()[iend_at..])
+    let (_, duplicate_iend_error) = png.decode(a, reader_of(&state, duplicate_iend), options())
+    if duplicate_iend_error != png.Invalid { os.exit(230i32) }
+
+    // An unknown uppercase chunk is critical and must be rejected by both header
+    // inspection and decoding. Its zero-length chunk still has a valid CRC.
+    let sample = rgb8_png()
+    let idat_at = 33usize
+    let (critical_chunk, critical_chunk_alloc) = mem.alloc[u8](a, sample.len + 12usize)
+    if critical_chunk_alloc != ok { os.exit(231i32) }
+    mem.copy[u8](critical_chunk[..idat_at], sample[..idat_at])
+    png.put32(critical_chunk, idat_at, 0u32)
+    mem.copy[u8](critical_chunk[idat_at + 4usize..idat_at + 8usize], "FAIL")
+    png.put32(critical_chunk, idat_at + 8usize, png.crc32(critical_chunk[idat_at + 4usize..idat_at + 8usize]))
+    mem.copy[u8](critical_chunk[idat_at + 12usize..], sample[idat_at..])
+    let (_, critical_inspect_error) = png.inspect(reader_of(&state, critical_chunk))
+    if critical_inspect_error != png.Unsupported { os.exit(232i32) }
+    let (_, critical_decode_error) = png.decode(a, reader_of(&state, critical_chunk), options())
+    if critical_decode_error != png.Unsupported { os.exit(233i32) }
+
+    // IDAT chunks form one consecutive sequence. Splitting this valid stream and
+    // inserting an ancillary chunk used to decode because all IDAT bodies joined.
+    let idat_length = 46usize
+    let split_at = 6usize
+    let idat_body_at = idat_at + 8usize
+    let idat_end = idat_at + 12usize + idat_length
+    let (split_idat, split_idat_alloc) = mem.alloc[u8](a, sample.len + 24usize)
+    if split_idat_alloc != ok { os.exit(234i32) }
+    mem.copy[u8](split_idat[..idat_at], sample[..idat_at])
+    png.put32(split_idat, idat_at, u32(split_at))
+    mem.copy[u8](split_idat[idat_at + 4usize..idat_at + 8usize], "IDAT")
+    mem.copy[u8](split_idat[idat_at + 8usize..idat_at + 8usize + split_at], sample[idat_body_at..idat_body_at + split_at])
+    png.put32(split_idat, idat_at + 8usize + split_at, png.crc32(split_idat[idat_at + 4usize..idat_at + 8usize + split_at]))
+    let text_at = idat_at + 12usize + split_at
+    png.put32(split_idat, text_at, 0u32)
+    mem.copy[u8](split_idat[text_at + 4usize..text_at + 8usize], "tEXt")
+    png.put32(split_idat, text_at + 8usize, png.crc32(split_idat[text_at + 4usize..text_at + 8usize]))
+    let second_idat_at = text_at + 12usize
+    let remainder = idat_length - split_at
+    png.put32(split_idat, second_idat_at, u32(remainder))
+    mem.copy[u8](split_idat[second_idat_at + 4usize..second_idat_at + 8usize], "IDAT")
+    mem.copy[u8](split_idat[second_idat_at + 8usize..second_idat_at + 8usize + remainder], sample[idat_body_at + split_at..idat_body_at + idat_length])
+    png.put32(split_idat, second_idat_at + 8usize + remainder, png.crc32(split_idat[second_idat_at + 4usize..second_idat_at + 8usize + remainder]))
+    let suffix_at = second_idat_at + 12usize + remainder
+    mem.copy[u8](split_idat[suffix_at..], sample[idat_end..])
+    let (_, split_idat_error) = png.decode(a, reader_of(&state, split_idat), options())
+    if split_idat_error != png.Invalid { os.exit(235i32) }
+
     let (_, bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 8u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
     let (_, pixel_bounded_error) = png.decode(a, reader_of(&state, rgba8_png()), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 62u64, verify_crc: true })
     if bounded_error != png.TooLarge || pixel_bounded_error != png.TooLarge { os.exit(213i32) }
@@ -157,6 +219,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var sink = io.SliceWriter { data: scratch, off: 0usize }
     var w = io.slice_writer(&sink)
     if png.encode(&w, half_view, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Unsupported { os.exit(216i32) }
+
+    // The encoder must refuse dimensions that PNG itself forbids before it checks the final row
+    // length: zero height used to underflow that calculation, while zero/2^31 dimensions could
+    // write an IHDR that this module's decoder rightly rejects.
+    var invalid_image: image.ConstImage = zero
+    invalid_image.width = 1u32
+    invalid_image.height = 0u32
+    invalid_image.stride = 4usize
+    invalid_image.format = .Rgba8
+    invalid_image.alpha = .Straight
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(221i32) }
+    if png.encode_adaptive(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(222i32) }
+    invalid_image.width = 0u32
+    invalid_image.height = 1u32
+    invalid_image.stride = 0usize
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(223i32) }
+    invalid_image.width = 2147483648u32
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(224i32) }
+    invalid_image.width = 1u32
+    invalid_image.height = 2147483648u32
+    if png.encode(&w, invalid_image, png.EncodeOptions { compression: .Fast, interlace: false }) != png.Invalid { os.exit(225i32) }
 
     mem.copy[u8](corrupt, rgba8_png())
     png.put32(corrupt, 16usize, 4097u32)

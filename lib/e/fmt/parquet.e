@@ -408,7 +408,10 @@ fn thrift_field(t: *Thrift, last: i16) -> (i16, u8, err) {
     if head == 0u8 { ret (0i16, 0u8, ok) }
     let kind = head & 15u8
     let delta = head >> 4u32
-    if delta != 0u8 { ret (last + i16(delta), kind, ok) }
+    if delta != 0u8 {
+        if last > 32767i16 - i16(delta) { ret (0i16, 0u8, Malformed) }
+        ret (last + i16(delta), kind, ok)
+    }
     let (id, e) = thrift_i64(t)
     if e != ok { ret (0i16, 0u8, e) }
     if id < 1i64 || id > 32767i64 { ret (0i16, 0u8, Malformed) }
@@ -877,6 +880,18 @@ fn store_value(v: *Values, row: usize, kind: i32, src: []const u8, at: usize) ->
     ret ok
 }
 
+// A null definition level carries no encoded value, so clear caller storage rather
+// than leaving a value from an earlier chunk behind.
+fn clear_null(v: *Values, row: usize, kind: i32) {
+    if kind == 0i32 || kind == 1i32 || kind == 2i32 {
+        v.ints[row] = 0i64
+    } else if kind == 4i32 || kind == 5i32 {
+        v.floats[row] = 0.0f64
+    } else if kind == 6i32 {
+        v.offsets[row + 1usize] = u32(v.data_len)
+    }
+}
+
 // The byte position of dictionary entry `index` in a PLAIN dictionary page.
 fn dictionary_entry(dict: []const u8, kind: i32, index: usize, dict_count: usize) -> (usize, err) {
     if index >= dict_count { ret (0usize, Malformed) }
@@ -930,6 +945,8 @@ fn data_page(v: *Values, base: usize, h: *const PageHeader, page: []const u8, ki
                     if k / 8usize >= body.len { ret Malformed }
                     v.ints[base + row] = i64((body[k / 8usize] >> u32(k % 8usize)) & 1u8)
                     k += 1usize
+                } else {
+                    clear_null(v, base + row, kind)
                 }
                 row += 1usize
             }
@@ -947,8 +964,8 @@ fn data_page(v: *Values, base: usize, h: *const PageHeader, page: []const u8, ki
                 } else {
                     at += physical_width(kind)
                 }
-            } else if kind == 6i32 {
-                v.offsets[base + row + 1usize] = u32(v.data_len)
+            } else {
+                clear_null(v, base + row, kind)
             }
             row += 1usize
         }
@@ -968,8 +985,8 @@ fn data_page(v: *Values, base: usize, h: *const PageHeader, page: []const u8, ki
                 if at_error != ok { ret at_error }
                 let e = store_value(v, base + row, kind, dict, at)
                 if e != ok { ret e }
-            } else if kind == 6i32 {
-                v.offsets[base + row + 1usize] = u32(v.data_len)
+            } else {
+                clear_null(v, base + row, kind)
             }
             row += 1usize
         }
@@ -1023,10 +1040,16 @@ fn decode(file: []const u8, m: *const FileMetaData, chunk_index: usize, v: *Valu
     if (kind == 4i32 || kind == 5i32) && rows > v.floats.len { ret (0usize, TooSmall) }
     if kind == 6i32 && rows >= v.offsets.len { ret (0usize, TooSmall) }
     if c.data_page_offset < 0i64 || c.dictionary_page_offset < 0i64 || c.total_compressed_size < 0i64 { ret (0usize, Malformed) }
-    var pos = usize(c.data_page_offset)
-    if c.dictionary_page_offset > 0i64 && usize(c.dictionary_page_offset) < pos { pos = usize(c.dictionary_page_offset) }
-    if usize(c.total_compressed_size) > file.len - pos { ret (0usize, Malformed) }
-    let end = pos + usize(c.total_compressed_size)
+    let file_size = u64(file.len)
+    let data_page_offset = u64(c.data_page_offset)
+    let dictionary_page_offset = u64(c.dictionary_page_offset)
+    let compressed_size = u64(c.total_compressed_size)
+    if data_page_offset > file_size || dictionary_page_offset > file_size || compressed_size > file_size { ret (0usize, Malformed) }
+    var pos = usize(data_page_offset)
+    if dictionary_page_offset > 0u64 && dictionary_page_offset < data_page_offset { pos = usize(dictionary_page_offset) }
+    let total = usize(compressed_size)
+    if total > file.len - pos { ret (0usize, Malformed) }
+    let end = pos + total
     v.count = 0usize
     v.data_len = 0usize
     if kind == 6i32 { v.offsets[0] = 0u32 }
@@ -1036,8 +1059,11 @@ fn decode(file: []const u8, m: *const FileMetaData, chunk_index: usize, v: *Valu
     var done = 0usize
     while done < rows {
         if pos >= end { ret (done, Malformed) }
-        let (h, h_error) = page_header(file, pos)
+        // A page header belongs to this column chunk too. Parsing it against the
+        // whole file could cross `end`, then make the following subtraction wrap.
+        let (h, h_error) = page_header(file[..end], pos)
         if h_error != ok { ret (done, h_error) }
+        if h.header_size > end - pos { ret (done, Malformed) }
         pos += h.header_size
         if usize(h.compressed_page_size) > end - pos { ret (done, Malformed) }
         let (page, page_error) = page_bytes(file, pos, &h, c.codec, scratch[scratch_base..])

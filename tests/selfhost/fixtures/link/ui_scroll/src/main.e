@@ -59,9 +59,10 @@ fn near(a: f32, b: f32) -> bool {
 }
 
 // The tree: viewport A (clamped, momentum, scrollbar) over a column of five boxes,
-// viewport B (bouncing) over a column of a tap-only region and four boxes, and the lazy viewport C over
-// the items `visible_range` names at `c_offset`.
-fn build(a: *mem.Arena, ctx: *void, c_offset: f32) -> (widget.Node, err) {
+// viewport B (bouncing) over a column of a tap-only region and four boxes, the lazy
+// viewport C over the items `visible_range` names at `c_offset`, and optionally a
+// modal viewport above them.
+fn build(a: *mem.Arena, ctx: *void, c_offset: f32, with_modal: bool) -> (widget.Node, err) {
     let (a_children, a_error) = mem.alloc[widget.Node](a, 5usize)
     if a_error != ok { ret (zero, a_error) }
     let (b_children, b_error) = mem.alloc[widget.Node](a, 5usize)
@@ -86,16 +87,31 @@ fn build(a: *mem.Arena, ctx: *void, c_offset: f32) -> (widget.Node, err) {
     if columns_error != ok { ret (zero, columns_error) }
     columns[0usize] = widget.flex(10u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sized(64.0, 100.0), a_children[0usize..5usize])
     columns[1usize] = widget.flex(20u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sized(64.0, 100.0), b_children[0usize..5usize])
-    let (top, top_error) = mem.alloc[widget.Node](a, 3usize)
+    var top_count = 3usize
+    if with_modal { top_count = 4usize }
+    let (top, top_error) = mem.alloc[widget.Node](a, top_count)
     if top_error != ok { ret (zero, top_error) }
     let red = paint.rgba(1.0, 0.0, 0.0, 1.0)
     top[0usize] = widget.scroll(1u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: red, change: widget.Change[f32] { ctx: ctx, invoke: on_scroll }, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, sized(64.0, 40.0), columns[0usize..1usize])
     top[1usize] = widget.scroll(2u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Bounce, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, sized(64.0, 40.0), columns[1usize..2usize])
     top[2usize] = widget.scroll(3u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: first, virtual_count: 100usize, virtual_extent: 10.0, fades: false, virtual_extras: zero }, sized(64.0, 40.0), c_children[0usize..count])
+    if with_modal {
+        let (modal_rows, modal_rows_error) = mem.alloc[widget.Node](a, 2usize)
+        if modal_rows_error != ok { ret (zero, modal_rows_error) }
+        modal_rows[0usize] = widget.box(402u64, sized(20.0, 20.0), zero)
+        modal_rows[1usize] = widget.box(403u64, sized(20.0, 20.0), zero)
+        let (modal_column, modal_column_error) = mem.alloc[widget.Node](a, 1usize)
+        if modal_column_error != ok { ret (zero, modal_column_error) }
+        modal_column[0usize] = widget.flex(401u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sized(20.0, 40.0), modal_rows[0usize..2usize])
+        let (modal_content, modal_content_error) = mem.alloc[widget.Node](a, 1usize)
+        if modal_content_error != ok { ret (zero, modal_content_error) }
+        modal_content[0usize] = widget.scroll(400u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: red, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, sized(20.0, 20.0), modal_column[0usize..1usize])
+        top[3usize] = widget.overlay(500u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: zero }, style.defaults(), modal_content[0usize..1usize])
+    }
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 128.0 }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, column, top[0usize..3usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, column, top[0usize..top_count]), ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -119,7 +135,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage_error != ok { os.exit(7i32) }
     var frame = mem.arena_from(frame_storage)
     let limits = ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 128.0 }
-    let (root, build_error) = build(&frame, ctx, 0.0)
+    let (root, build_error) = build(&frame, ctx, 0.0, false)
     if build_error != ok { os.exit(8i32) }
     let (first_scene, first_error) = widget.reconcile(&runtime, &frame, root, limits)
     if first_error != ok { os.exit(9i32) }
@@ -179,6 +195,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (far, _) = widget.scroll_offset_of(&runtime, va)
     if !near(far, 60.0) { os.exit(35i32) }
     if widget.scroll_to(&runtime, va, 0.0) != ok { os.exit(36i32) }
+    // A modal consumes a wheel outside its bounds, but its own viewport still
+    // receives a wheel inside the modal subtree.
+    let (modal_root, modal_build_error) = build(&frame, ctx, 0.0, true)
+    if modal_build_error != ok { os.exit(60i32) }
+    let (_, modal_reconcile_error) = widget.reconcile(&runtime, &frame, modal_root, limits)
+    if modal_reconcile_error != ok { os.exit(61i32) }
+    let (modal_overlay, modal_overlay_count) = widget.find_by_key(state, 500u64)
+    let (modal_scroll, modal_scroll_count) = widget.find_by_key(state, 400u64)
+    let (modal_bounds, has_modal_bounds) = widget.overlay_bounds_of(&runtime, modal_overlay)
+    if modal_overlay_count != 1usize || modal_scroll_count != 1usize || !has_modal_bounds { os.exit(62i32) }
+    if widget.dispatch(&runtime, input.Event { Scroll: pointer(10.0, 10.0, down_notch) }) != ok { os.exit(63i32) }
+    let (blocked_a, has_blocked_a) = widget.scroll_offset_of(&runtime, va)
+    if !has_blocked_a || !near(blocked_a, 0.0) { os.exit(64i32) }
+    if widget.dispatch(&runtime, input.Event { Scroll: pointer(modal_bounds.x + 1.0, modal_bounds.y + 1.0, down_notch) }) != ok { os.exit(65i32) }
+    let (inside_modal, has_inside_modal) = widget.scroll_offset_of(&runtime, modal_scroll)
+    if !has_inside_modal || !near(inside_modal, 20.0) { os.exit(66i32) }
+    let (unblocked_root, unblocked_build_error) = build(&frame, ctx, 0.0, false)
+    if unblocked_build_error != ok { os.exit(67i32) }
+    let (_, unblocked_reconcile_error) = widget.reconcile(&runtime, &frame, unblocked_root, limits)
+    if unblocked_reconcile_error != ok { os.exit(68i32) }
     // The bouncing viewport (y 44..84): a press on its tap-only region that travels
     // past the slop is the viewport's drag, at half speed past the start, and no
     // tap; once let go the offset springs back to the start.
@@ -214,7 +250,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.scroll_to(&runtime, vc, 550.0) != ok { os.exit(51i32) }
     let (moved_c, _) = widget.scroll_offset_of(&runtime, vc)
     if !near(moved_c, 550.0) { os.exit(52i32) }
-    let (root_2, build_2_error) = build(&frame, ctx, moved_c)
+    let (root_2, build_2_error) = build(&frame, ctx, moved_c, false)
     if build_2_error != ok { os.exit(53i32) }
     let (second_scene, second_error) = widget.reconcile(&runtime, &frame, root_2, limits)
     if second_error != ok { os.exit(54i32) }

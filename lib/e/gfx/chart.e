@@ -902,6 +902,9 @@ fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Dat
     let first_day = time.days_from_civil(i64(start.year), i64(start.month), i64(start.day))
     let last_day = time.days_from_civil(i64(end.year), i64(end.month), i64(end.day))
     if last_day <= first_day { ret (zero, Invalid) }
+    let layout_y_min = f32(y_min)
+    let layout_y_max = f32(y_max)
+    if !finite(layout_y_min) || !finite(layout_y_max) || layout_y_max <= layout_y_min { ret (zero, Invalid) }
     if points.len < n || segments.len < n - 1usize { ret (zero, TooLarge) }
     var previous = first_day - 1i64
     var i = 0usize
@@ -917,7 +920,7 @@ fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Dat
         previous = day
         i += 1usize
     }
-    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: f32(first_day), x_max: f32(last_day), y_min: f32(y_min), y_max: f32(y_max) }, ok)
+    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: f32(first_day), x_max: f32(last_day), y_min: layout_y_min, y_max: layout_y_max }, ok)
 }
 
 // Palette stays with the caller; each swatch and label shares its series index.
@@ -1815,7 +1818,11 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
     low -= pad
     high += pad
     spread_high *= 1.15f64
-    if !(high > low) || !(spread_high > 0.0f64) || high - high != 0.0f64 || spread_high - spread_high != 0.0f64 { ret (zero, Invalid) }
+    if !finite64(low) || !finite64(high) || !finite64(spread_high) || !(high > low) || !(spread_high > 0.0f64) { ret (zero, Invalid) }
+    let layout_low = f32(low)
+    let layout_high = f32(high)
+    let layout_spread_high = f32(spread_high)
+    if !finite(layout_low) || !finite(layout_high) || !finite(layout_spread_high) || !(layout_high > layout_low) || !(layout_spread_high > 0.0f32) { ret (zero, Invalid) }
     let mean_rect = panels[0usize]
     let spread_rect = panels[1usize]
     let bar_width = spread_rect.width / f32(n) * 0.65f32
@@ -1837,9 +1844,9 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
     work.guides[0usize] = Segment { from: Coord { x: mean_rect.x, y: lower_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: lower_y } }
     work.guides[1usize] = Segment { from: Coord { x: mean_rect.x, y: upper_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: upper_y } }
     work.guides[2usize] = Segment { from: Coord { x: spread_rect.x, y: within_y }, to: Coord { x: spread_rect.x + spread_rect.width, y: within_y } }
-    let means = Layout { kind: .PointLine, coords: work.mean_points[..n], segments: work.mean_lines[..n - 1usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
-    let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: f32(spread_high) }
-    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
+    let means = Layout { kind: .PointLine, coords: work.mean_points[..n], segments: work.mean_lines[..n - 1usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: layout_low, y_max: layout_high }
+    let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: layout_spread_high }
+    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: layout_low, y_max: layout_high }
     ret (BatchCapabilityLayout { means: means, spreads: spreads, guides: guides, summary: summary }, ok)
 }
 
@@ -2125,6 +2132,7 @@ fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []co
 // Circle area, not radius, is proportional to a nonnegative site value.
 fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err) {
     if !valid_bounds(bounds) || sites.len == 0usize || !finite(max_radius) || max_radius <= 0.0f32 { ret (zero, Invalid) }
+    if !finite(2.0f32 * max_radius) { ret (zero, Invalid) }
     if bars.len < sites.len { ret (zero, TooLarge) }
     var maximum = 0.0f64
     var present_count = 0usize
@@ -2145,7 +2153,9 @@ fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds
         if sites[i].present && sites[i].value > 0.0f64 && maximum > 0.0f64 {
             let (point, _) = map_point(sites[i].lon, sites[i].lat, window, bounds)
             let radius = max_radius * f32(math.sqrt[f64](sites[i].value / maximum))
-            bars[i] = geometry.rect(point.x - radius, point.y - radius, 2.0f32 * radius, 2.0f32 * radius)
+            let circle_rect = geometry.rect(point.x - radius, point.y - radius, 2.0f32 * radius, 2.0f32 * radius)
+            if !finite(circle_rect.x) || !finite(circle_rect.y) || !finite(circle_rect.width) || !finite(circle_rect.height) || !finite(circle_rect.x + circle_rect.width) || !finite(circle_rect.y + circle_rect.height) { ret (zero, Invalid) }
+            bars[i] = circle_rect
         }
         i += 1usize
     }
@@ -2478,7 +2488,7 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
     if s.x.len == 0usize { ret (zero, Empty) }
     if s.x.len != s.y.len || s.bounds.width <= 0.0 || s.bounds.height <= 0.0 { ret (zero, Invalid) }
     if (x_limits.len != 0usize && x_limits.len != 2usize) || (y_limits.len != 0usize && y_limits.len != 2usize) { ret (zero, Invalid) }
-    if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) { ret (zero, Invalid) }
+    if !finite(s.bounds.x) || !finite(s.bounds.y) || !finite(s.bounds.width) || !finite(s.bounds.height) || !finite(s.bounds.x + s.bounds.width) || !finite(s.bounds.y + s.bounds.height) { ret (zero, Invalid) }
     let (x0, x1, x_error) = extent(s.x)
     if x_error != ok { ret (zero, x_error) }
     let (raw_y0, raw_y1, y_error) = extent(s.y)
@@ -2633,6 +2643,23 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
             bars[bar_count] = geometry.rect(cx - width / 2.0, top, width, bottom - top)
             bar_count += 1usize
         }
+    }
+    var checked = 0usize
+    while checked < coord_count {
+        if !finite(coords[checked].x) || !finite(coords[checked].y) { ret (zero, Invalid) }
+        checked += 1usize
+    }
+    checked = 0usize
+    while checked < segment_count {
+        let segment = segments[checked]
+        if !finite(segment.from.x) || !finite(segment.from.y) || !finite(segment.to.x) || !finite(segment.to.y) { ret (zero, Invalid) }
+        checked += 1usize
+    }
+    checked = 0usize
+    while checked < bar_count {
+        let bar = bars[checked]
+        if !finite(bar.x) || !finite(bar.y) || !finite(bar.width) || !finite(bar.height) || !finite(bar.x + bar.width) || !finite(bar.y + bar.height) || bar.width < 0.0 || bar.height < 0.0 { ret (zero, Invalid) }
+        checked += 1usize
     }
     ret (Layout { kind: s.kind, coords: coords[..coord_count], segments: segments[..segment_count], bars: bars[..bar_count], x_min: xmin, x_max: xmax, y_min: y0, y_max: y1 }, ok)
 }
@@ -3124,12 +3151,12 @@ fn fan(x: []const f32, median: []const f32, lower: []const f32, upper: []const f
         if f64(upper[i]) > ymax { ymax = f64(upper[i]) }
         i += 1usize
     }
-    let raw_min = f32(ymin)
-    let raw_max = f32(ymax)
     if ymin == ymax {
         ymin -= 1.0f64
         ymax += 1.0f64
     }
+    let raw_min = f32(ymin)
+    let raw_max = f32(ymax)
     let x_span = f64(x[x.len - 1usize]) - f64(x[0usize])
     var band_index = 0usize
     while band_index < bands {
@@ -4389,6 +4416,10 @@ fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const
     let log_potency = shift + difference / slope
     let intercept_s = mean_ys - slope * mean_xs
     let intercept_t = mean_yt - slope * mean_xt
+    let potency = math.pow[f64](10.0f64, log_potency)
+    let potency_lower = math.pow[f64](10.0f64, shift + low_ratio)
+    let potency_upper = math.pow[f64](10.0f64, shift + high_ratio)
+    if !finite64(log_potency) || !finite64(potency) || !finite64(potency_lower) || !finite64(potency_upper) { ret (zero, Invalid) }
     var x_lo = xs[0usize]
     var x_hi = xs[0usize]
     var y_lo = resp_s[0usize]
@@ -4444,8 +4475,8 @@ fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const
     let fitted = Layout { kind: .Line, coords: zero, segments: lines[..2usize], bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
     ret (ParallelLineFit {
         observations: observations, lines: fitted, slope: slope, intercept_standard: intercept_s, intercept_test: intercept_t,
-        log_potency: log_potency, potency: math.pow[f64](10.0f64, log_potency),
-        potency_lower: math.pow[f64](10.0f64, shift + low_ratio), potency_upper: math.pow[f64](10.0f64, shift + high_ratio),
+        log_potency: log_potency, potency: potency,
+        potency_lower: potency_lower, potency_upper: potency_upper,
         parallelism_f: f_statistic, parallel: f_statistic <= f_critical, residual_df: df,
     }, ok)
 }
@@ -4587,6 +4618,7 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
     while i < n {
         if !finite64(values[i]) { ret (zero, Invalid) }
         var z = (values[i] - mean) / sd
+        if !finite64(z) { ret (zero, Invalid) }
         if z < 0.0f64 { z = 0.0f64 - z }
         if z > reach { reach = z }
         i += 1usize
@@ -4594,6 +4626,12 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
     let bottom = bounds.y + bounds.height
     let low = mean - reach * sd
     let span = 2.0f64 * reach * sd
+    let high = low + span
+    if !finite64(low) || !finite64(span) || !finite64(high) || !(span > 0.0f64) { ret (zero, Invalid) }
+    let layout_low = f32(low)
+    let layout_high = f32(high)
+    let layout_reach = f32(reach)
+    if !finite(layout_low) || !finite(layout_high) || !finite(layout_reach) || !(layout_high > layout_low) { ret (zero, Invalid) }
     i = 0usize
     while i < n {
         points[i] = Coord { x: bounds.x + bounds.width * f32(i) / f32(n - 1usize), y: bottom - bounds.height * f32((values[i] - low) / span) }
@@ -4649,10 +4687,10 @@ fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect
         }
         i += 1usize
     }
-    let trace = Layout { kind: .Line, coords: points[..n], segments: trace_segments[..n - 1usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    let limits = Layout { kind: .Rug, coords: zero, segments: limit_segments[..7usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    let marks = Layout { kind: .Scatter, coords: signals[..flagged], segments: zero, bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
-    ret (LeveyJennings { trace: trace, limits: limits, signals: marks, flagged: flagged, y_limit: f32(reach) }, ok)
+    let trace = Layout { kind: .Line, coords: points[..n], segments: trace_segments[..n - 1usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    let limits = Layout { kind: .Rug, coords: zero, segments: limit_segments[..7usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    let marks = Layout { kind: .Scatter, coords: signals[..flagged], segments: zero, bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: layout_low, y_max: layout_high }
+    ret (LeveyJennings { trace: trace, limits: limits, signals: marks, flagged: flagged, y_limit: layout_reach }, ok)
 }
 
 // Method-agreement scatter for Lin's concordance: both methods share one square domain

@@ -24,6 +24,60 @@ fn mode(a: *mem.Arena) -> str {
     ret arguments[1usize]
 }
 
+// Runs under `output`, where fd 0 is a read end and stdout/stderr are separate write pipes.
+// Its nested spawns therefore prove that a zero stream inherits fd 1 or 2 rather than duplicating
+// its fd 0, even on a terminal where all three descriptors happen to be writable.
+fn stdio_probe(a: *mem.Arena) {
+    let (image, image_error) = os.executable_path(a)
+    if image_error != ok { os.exit(120i32) }
+    var command: proc.Command = zero
+    command.program = image
+    command.inherit_env = true
+    var args: [1]str = zero
+    args[0usize] = "np-inherit-stdio"
+    command.args = args[..]
+
+    // Only stdout is redirected; stderr must stay the probe's inherited fd 2.
+    let (out_read, out_write, out_pipe_error) = os.pipe()
+    if out_pipe_error != ok { os.exit(121i32) }
+    var out_streams: proc.Streams = zero
+    out_streams.stdout = out_write
+    let (out_child, out_spawn_error) = proc.spawn(a, command, out_streams)
+    if out_spawn_error != ok { os.exit(122i32) }
+    var out_running = out_child
+    if os.close(out_streams.stdout) != ok { os.exit(123i32) }
+    var out_bytes: [16]u8 = zero
+    let (out_count, out_read_error) = os.read(out_read, out_bytes[..])
+    if out_read_error != ok { os.exit(124i32) }
+    if !str.eq(out_bytes[0usize..out_count], "stdout-ok") { os.exit(125i32) }
+    if os.close(out_read) != ok { os.exit(126i32) }
+    let (out_status, out_wait_error) = proc.wait(&out_running)
+    if out_wait_error != ok { os.exit(127i32) }
+    if out_status != 0i32 { os.exit(128i32) }
+
+    // Only stderr is redirected; stdout must stay the probe's inherited fd 1.
+    let (err_read, err_write, err_pipe_error) = os.pipe()
+    if err_pipe_error != ok { os.exit(129i32) }
+    var err_streams: proc.Streams = zero
+    err_streams.stderr = err_write
+    let (err_child, err_spawn_error) = proc.spawn(a, command, err_streams)
+    if err_spawn_error != ok { os.exit(130i32) }
+    var err_running = err_child
+    if os.close(err_streams.stderr) != ok { os.exit(131i32) }
+    var err_bytes: [16]u8 = zero
+    let (err_count, err_read_error) = os.read(err_read, err_bytes[..])
+    if err_read_error != ok { os.exit(132i32) }
+    if !str.eq(err_bytes[0usize..err_count], "stderr-ok") { os.exit(133i32) }
+    if os.close(err_read) != ok { os.exit(134i32) }
+    let (err_status, err_wait_error) = proc.wait(&err_running)
+    if err_wait_error != ok { os.exit(135i32) }
+    if err_status != 0i32 { os.exit(136i32) }
+
+    let (finished, finish_error) = os.write(os.stdout(), "stdio-probe-ok")
+    if finish_error != ok || finished != 14usize { os.exit(137i32) }
+    os.exit(0i32)
+}
+
 fn child(a: *mem.Arena, what: str) {
     if str.eq(what, "np-speak") {
         let (_, out_error) = os.write(os.stdout(), "out-line")
@@ -44,6 +98,16 @@ fn child(a: *mem.Arena, what: str) {
     }
     if str.eq(what, "np-status") {
         os.exit(42i32)
+    }
+    if str.eq(what, "np-inherit-stdio") {
+        let (out_count, out_error) = os.write(os.stdout(), "stdout-ok")
+        if out_error != ok || out_count != 9usize { os.exit(95i32) }
+        let (err_count, err_error) = os.write(os.stderr(), "stderr-ok")
+        if err_error != ok || err_count != 9usize { os.exit(94i32) }
+        os.exit(0i32)
+    }
+    if str.eq(what, "np-stdio-probe") {
+        stdio_probe(a)
     }
     if str.eq(what, "np-eight") {
         let (_, eight_error) = os.write(os.stdout(), "out-line")
@@ -210,26 +274,15 @@ fn main(a: *mem.Arena) -> err {
     if os.close(running.streams.stderr) != ok { os.exit(59i32) }
 
     // --- `spawn` with the caller's own streams: a zero stream is the parent's, and only the
-    // one set is redirected. The child's stdout goes to a pipe the caller made; its stderr and
-    // stdin stay the parent's.
-    let (reading, writing, pipe_error) = os.pipe()
-    if pipe_error != ok { os.exit(60i32) }
-    var streams: proc.Streams = zero
-    streams.stdout = writing
-    args[0usize] = "np-status"
+    // one set is redirected. The probe's own stdin is a pipe read end, so it catches an
+    // implementation that tries to duplicate fd 0 onto either unspecified output stream.
+    args[0usize] = "np-stdio-probe"
     command.args = args[..]
-    let (plain, plain_error) = proc.spawn(a, command, streams)
-    if plain_error != ok { os.exit(61i32) }
-    var plain_child = plain
-    if os.close(streams.stdout) != ok { os.exit(62i32) }
-    var nothing: [8]u8 = zero
-    let (silent, silent_error) = os.read(reading, nothing[..])
-    if silent_error != ok { os.exit(63i32) }
-    if silent != 0usize { os.exit(64i32) }
-    if os.close(reading) != ok { os.exit(65i32) }
-    let (plain_status, plain_wait) = proc.wait(&plain_child)
-    if plain_wait != ok { os.exit(66i32) }
-    if plain_status != 42i32 { os.exit(67i32) }
+    let (stdio_probe_result, stdio_probe_error) = proc.output(a, command, 0usize)
+    if stdio_probe_error != ok { os.exit(100i32) }
+    if stdio_probe_result.status != 0i32 { os.exit(101i32) }
+    if !str.eq(stdio_probe_result.stdout, "stdout-okstdio-probe-ok") { os.exit(102i32) }
+    if !str.eq(stdio_probe_result.stderr, "stderr-ok") { os.exit(103i32) }
 
     // --- `kill` ends a child that would otherwise run on; the status is a failure on both
     // hosts but not the same number, so only "not zero" is portable.

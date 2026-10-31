@@ -9,6 +9,8 @@ use e.atomic
 use e.io
 use e.mem
 use e.os
+use e.sync
+use e.time
 use e.thread.pool as pool
 
 type Adder = struct { sum: Atomic[u64], marks: []u8 }
@@ -16,6 +18,10 @@ type Summer = struct { values: []u64, total: Atomic[u64] }
 type Spinner = struct { ran: []u8, spun: []u64 }
 type Dag = struct { counter: Atomic[u32], seq: []u32 }
 type Recorder = struct { order: []u32, filled: usize }
+type RangeProbe = struct { calls: Atomic[u32], wrong_range: Atomic[u32] }
+type InjectDag = struct { pool: *void, calls: Atomic[u32], submit_failed: Atomic[u32] }
+type ClosingDag = struct { pool: *void, entered: sync.Event, filled: sync.Event, closing: sync.Event, release: sync.Event, helper_error: Atomic[u32], calls: Atomic[u32] }
+type InitialFailureDag = struct { pool: *void, entered: sync.Event, closed: sync.Event, calling: sync.Event, returned: sync.Event, release: sync.Event, helper_error: Atomic[u32], calls: Atomic[u32] }
 
 fn add_task(s: *Adder, id: u32) {
     let before = atomic.add(&s.sum, u64(id), .Relaxed)
@@ -52,6 +58,102 @@ fn dag_task(d: *Dag, id: u32) {
 fn record_task(r: *Recorder, id: u32) {
     r.order[r.filled] = id
     r.filled += 1usize
+}
+
+fn range_probe(r: *RangeProbe, lo: usize, hi: usize) {
+    if lo != 0usize || hi != 5usize { atomic.store(&r.wrong_range, 1u32, .Release) }
+    let before = atomic.add(&r.calls, 1u32, .AcqRel)
+}
+
+fn injected_dag_task(d: *InjectDag, id: u32) {
+    let before = atomic.add(&d.calls, 1u32, .AcqRel)
+    if id == 0u32 {
+        let p = mem.cast[*pool.Pool[InjectDag]](d.pool)
+        if pool.submit[InjectDag](p, 99u32) != ok { atomic.store(&d.submit_failed, 1u32, .Release) }
+    }
+}
+
+fn closing_dag_task(d: *ClosingDag, id: u32) {
+    if id == 0u32 {
+        sync.event_set(&d.entered)
+        sync.event_wait(&d.release)
+    }
+    let before = atomic.add(&d.calls, 1u32, .AcqRel)
+}
+
+fn fill_closing_dag(d: *ClosingDag) {
+    sync.event_wait(&d.entered)
+    let p = mem.cast[*pool.Pool[ClosingDag]](d.pool)
+    let first = pool.submit[ClosingDag](p, 99u32)
+    if first != ok {
+        atomic.store(&d.helper_error, 1u32, .Release)
+    } else {
+        let second = pool.submit[ClosingDag](p, 100u32)
+        if second != ok { atomic.store(&d.helper_error, 2u32, .Release) }
+    }
+    sync.event_set(&d.filled)
+}
+
+fn close_closing_dag(d: *ClosingDag) {
+    sync.event_wait(&d.filled)
+    sync.event_set(&d.closing)
+    let p = mem.cast[*pool.Pool[ClosingDag]](d.pool)
+    if pool.shutdown[ClosingDag](p) != ok { atomic.store(&d.helper_error, 3u32, .Release) }
+}
+
+fn release_closing_dag(d: *ClosingDag) {
+    sync.event_wait(&d.closing)
+    let p = mem.cast[*pool.Pool[ClosingDag]](d.pool)
+    while true {
+        let submit_error = pool.try_submit[ClosingDag](p, 101u32)
+        if submit_error == pool.Invalid {
+            sync.event_set(&d.release)
+            ret
+        }
+        if submit_error != pool.Full {
+            atomic.store(&d.helper_error, 4u32, .Release)
+            sync.event_set(&d.release)
+            ret
+        }
+    }
+}
+
+fn initial_failure_task(d: *InitialFailureDag, id: u32) {
+    if id == 99u32 {
+        sync.event_set(&d.entered)
+        sync.event_wait(&d.release)
+    }
+    let before = atomic.add(&d.calls, 1u32, .AcqRel)
+}
+
+fn close_initial_failure_pool(d: *InitialFailureDag) {
+    sync.event_wait(&d.entered)
+    let p = mem.cast[*pool.Pool[InitialFailureDag]](d.pool)
+    if pool.shutdown[InitialFailureDag](p) != ok { atomic.store(&d.helper_error, 1u32, .Release) }
+}
+
+fn release_initial_failure_task(d: *InitialFailureDag) {
+    sync.event_wait(&d.entered)
+    let p = mem.cast[*pool.Pool[InitialFailureDag]](d.pool)
+    while true {
+        let submit_error = pool.try_submit[InitialFailureDag](p, 101u32)
+        if submit_error == pool.Invalid {
+            sync.event_set(&d.closed)
+            sync.event_wait(&d.calling)
+            if sync.event_wait_for(&d.returned, time.millis(250i64)) {
+                atomic.store(&d.helper_error, 2u32, .Release)
+            }
+            sync.event_set(&d.release)
+            ret
+        }
+        if submit_error != ok && submit_error != pool.Full {
+            atomic.store(&d.helper_error, 3u32, .Release)
+            sync.event_set(&d.closed)
+            sync.event_wait(&d.calling)
+            sync.event_set(&d.release)
+            ret
+        }
+    }
 }
 
 fn lcg(state: *u64) -> u64 {
@@ -97,6 +199,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pool.fork_join[Summer](a, 4usize, &summer, 0usize, 100000usize, 4096usize, sum_leaf) != ok { os.exit(6i32) }
     if atomic.load(&summer.total, .Acquire) != 107338214866498u64 { os.exit(7i32) }
     if sequential != 107338214866498u64 { os.exit(8i32) }
+    // A one-chunk grain near usize::MAX must not overflow the ceil division to zero.
+    var range = RangeProbe { calls: atomic.init(0u32), wrong_range: atomic.init(0u32) }
+    let huge_grain = 0usize -% 1usize
+    if pool.fork_join[RangeProbe](a, 1usize, &range, 0usize, 5usize, huge_grain, range_probe) != ok { os.exit(89i32) }
+    if atomic.load(&range.calls, .Acquire) != 1u32 || atomic.load(&range.wrong_range, .Acquire) != 0u32 { os.exit(90i32) }
 
     // 3: work_stealing -- 2,000 tasks of uneven cost over four thieves.
     var ran: [2000]u8 = zero
@@ -167,7 +274,69 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pool.shutdown[Dag](&pd) != ok { os.exit(19i32) }
     if m != 204usize { os.exit(20i32) }
 
-    // 5: edf_order and edf -- ten deadlines with ties, one worker.
+    // 5: a regular task submitted by a DAG body is not a DAG node. The old global
+    // dag_nodes flag fed id 99 to dep_starts and trapped; tagged work runs it once.
+    var injected = InjectDag { pool: zero, calls: atomic.init(0u32), submit_failed: atomic.init(0u32) }
+    let (p4, e4) = pool.pool[InjectDag](a, 1usize, 1usize, &injected, injected_dag_task)
+    if e4 != ok { os.exit(91i32) }
+    var pi = p4
+    injected.pool = mem.cast[*void](&pi)
+    var inject_deps: [1]u32 = zero
+    let inject_starts: [2]usize = [2]usize{ 0usize, 0usize }
+    var inject_indegree: [1]Atomic[u32] = zero
+    if pool.run_dag[InjectDag](&pi, inject_deps[..0usize], inject_starts[..], inject_indegree[..]) != ok { os.exit(92i32) }
+    if atomic.load(&injected.calls, .Acquire) != 2u32 || atomic.load(&injected.submit_failed, .Acquire) != 0u32 { os.exit(93i32) }
+    if pool.shutdown[InjectDag](&pi) != ok { os.exit(94i32) }
+
+    // 6: closing a pool after a root starts makes a dependent submission fail. The
+    // DAG waits for all already queued work and reports Invalid instead of success.
+    var closing = ClosingDag { pool: zero, entered: sync.event(false, false), filled: sync.event(false, false), closing: sync.event(false, false), release: sync.event(false, false), helper_error: atomic.init(0u32), calls: atomic.init(0u32) }
+    let (p5, e5) = pool.pool[ClosingDag](a, 1usize, 2usize, &closing, closing_dag_task)
+    if e5 != ok { os.exit(95i32) }
+    var pc = p5
+    closing.pool = mem.cast[*void](&pc)
+    let (filler, filler_error) = os.thread_create[ClosingDag](fill_closing_dag, &closing, 1048576usize)
+    if filler_error != ok { os.exit(96i32) }
+    let (closer, closer_error) = os.thread_create[ClosingDag](close_closing_dag, &closing, 1048576usize)
+    if closer_error != ok { os.exit(97i32) }
+    let (releaser, releaser_error) = os.thread_create[ClosingDag](release_closing_dag, &closing, 1048576usize)
+    if releaser_error != ok { os.exit(98i32) }
+    let close_deps: [1]u32 = [1]u32{ 1u32 }
+    let close_starts: [3]usize = [3]usize{ 0usize, 1usize, 1usize }
+    var close_indegree: [2]Atomic[u32] = zero
+    let close_error = pool.run_dag[ClosingDag](&pc, close_deps[..], close_starts[..], close_indegree[..])
+    if os.thread_join(filler) != ok { os.exit(99i32) }
+    if os.thread_join(closer) != ok { os.exit(100i32) }
+    if os.thread_join(releaser) != ok { os.exit(101i32) }
+    if close_error != pool.Invalid { os.exit(102i32) }
+    if atomic.load(&closing.helper_error, .Acquire) != 0u32 || atomic.load(&closing.calls, .Acquire) != 3u32 { os.exit(103i32) }
+
+    // 7: when the first DAG root cannot be queued after close, `run_dag` waits for
+    // the ordinary task already running before it returns. The release helper waits
+    // for `returned`; seeing it before opening the task would reproduce the old leak.
+    var initial = InitialFailureDag { pool: zero, entered: sync.event(true, false), closed: sync.event(true, false), calling: sync.event(true, false), returned: sync.event(true, false), release: sync.event(true, false), helper_error: atomic.init(0u32), calls: atomic.init(0u32) }
+    let (p6, e6) = pool.pool[InitialFailureDag](a, 1usize, 1usize, &initial, initial_failure_task)
+    if e6 != ok { os.exit(104i32) }
+    var pf = p6
+    initial.pool = mem.cast[*void](&pf)
+    let (initial_closer, initial_closer_error) = os.thread_create[InitialFailureDag](close_initial_failure_pool, &initial, 1048576usize)
+    if initial_closer_error != ok { os.exit(105i32) }
+    let (initial_releaser, initial_releaser_error) = os.thread_create[InitialFailureDag](release_initial_failure_task, &initial, 1048576usize)
+    if initial_releaser_error != ok { os.exit(106i32) }
+    if pool.submit[InitialFailureDag](&pf, 99u32) != ok { os.exit(107i32) }
+    sync.event_wait(&initial.closed)
+    sync.event_set(&initial.calling)
+    var initial_deps: [1]u32 = zero
+    let initial_starts: [2]usize = [2]usize{ 0usize, 0usize }
+    var initial_indegree: [1]Atomic[u32] = zero
+    let initial_error = pool.run_dag[InitialFailureDag](&pf, initial_deps[..0usize], initial_starts[..], initial_indegree[..])
+    sync.event_set(&initial.returned)
+    if os.thread_join(initial_closer) != ok { os.exit(108i32) }
+    if os.thread_join(initial_releaser) != ok { os.exit(109i32) }
+    if initial_error != pool.Invalid { os.exit(110i32) }
+    if atomic.load(&initial.helper_error, .Acquire) != 0u32 || atomic.load(&initial.calls, .Acquire) == 0u32 { os.exit(111i32) }
+
+    // 8: edf_order and edf -- ten deadlines with ties, one worker.
     var deadlines: [10]u64 = zero
     state = 99u64
     i = 0usize

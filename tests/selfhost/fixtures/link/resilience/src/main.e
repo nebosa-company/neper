@@ -76,7 +76,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !saw_cap { os.exit(3i32) }
     if res.backoff_decorrelated(top, 100u64, top, &r) < 100u64 { os.exit(3i32) }
+    if res.backoff_decorrelated(6000u64, 100u64, 5000u64, &r) != 5000u64 { os.exit(3i32) }
     if res.backoff_decorrelated(0u64, 10u64, 10u64, &r) != 10u64 { os.exit(3i32) }
+    var low_draw = rand.pcg64(7u64, 3u64)
+    if res.backoff_decorrelated(10u64, 1u64, 100u64, &low_draw) != 2u64 { os.exit(3i32) }
+    var full_expected_rng = rand.pcg64(7u64, 3u64)
+    let full_expected = rand.pcg64_next(&full_expected_rng)
+    var full_range_rng = rand.pcg64(7u64, 3u64)
+    if res.backoff_decorrelated(top, 0u64, top, &full_range_rng) != full_expected { os.exit(3i32) }
 
     // 4: heartbeat observe and sweep.
     var ids: [4]u64 = zero
@@ -104,6 +111,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if res.heartbeat_observe(&h, 9u64, 1u64) != res.TooSmall { os.exit(4i32) }
     let (_, sweep_room) = res.heartbeat_sweep(&h, 100u64, 10u64, dead[..1usize])
     if sweep_room != res.TooSmall { os.exit(4i32) }
+
+    // A short dead-output buffer leaves the table and the caller's output unchanged.
+    var short_ids: [3]u64 = zero
+    var short_seen: [3]u64 = zero
+    var short_dead: [1]u64 = zero
+    short_dead[0usize] = 99u64
+    var short_heartbeat = res.heartbeat(short_ids[..], short_seen[..])
+    if res.heartbeat_observe(&short_heartbeat, 10u64, 0u64) != ok { os.exit(4i32) }
+    if res.heartbeat_observe(&short_heartbeat, 20u64, 100u64) != ok { os.exit(4i32) }
+    if res.heartbeat_observe(&short_heartbeat, 30u64, 0u64) != ok { os.exit(4i32) }
+    let (short_count, short_sweep_error) = res.heartbeat_sweep(&short_heartbeat, 100u64, 10u64, short_dead[..])
+    if short_sweep_error != res.TooSmall || short_count != 2usize || short_heartbeat.count != 3usize { os.exit(4i32) }
+    if short_ids[0usize] != 10u64 || short_ids[1usize] != 20u64 || short_ids[2usize] != 30u64 { os.exit(4i32) }
+    if short_seen[0usize] != 0u64 || short_seen[1usize] != 100u64 || short_seen[2usize] != 0u64 || short_dead[0usize] != 99u64 { os.exit(4i32) }
 
     // 5: load shedding by band.
     let thresholds: [3]f64 = [3]f64{ 0.9f64, 0.7f64, 0.4f64 }

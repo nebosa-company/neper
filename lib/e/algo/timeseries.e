@@ -23,6 +23,11 @@ type GarchFit = struct { returns: []const f64 }
 error TooSmall
 error Invalid
 
+// Ordered comparisons alone do not reject NaN: every comparison with it is
+// false. Infinity minus itself is NaN as well, so this admits only IEEE finite
+// values before a scalar model performs its domain checks.
+fn finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
 // Additive Holt-Winters: seasonal `period`, smoothing `alpha` (level),
 // `beta` (trend), `gamma` (season); the first two periods initialise the
 // state. `forecast` receives `horizon` values past the series;
@@ -877,21 +882,27 @@ fn arma_forecast(ar: []const f64, ma: []const f64, intercept: f64, past: []const
 
 // The economic order quantity `sqrt(2 * demand * order_cost / holding_cost)`.
 fn eoq(demand: f64, order_cost: f64, holding_cost: f64) -> (f64, err) {
-    if demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 { ret (0.0f64, Invalid) }
-    ret (math.sqrt[f64](2.0f64 * demand * order_cost / holding_cost), ok)
+    if !finite(demand) || !finite(order_cost) || !finite(holding_cost) || demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 { ret (0.0f64, Invalid) }
+    let result = math.sqrt[f64](2.0f64 * demand * order_cost / holding_cost)
+    if !finite(result) { ret (0.0f64, Invalid) }
+    ret (result, ok)
 }
 
 // The total cost at `quantity`: `demand / quantity * order_cost` ordering
 // plus `quantity / 2 * holding_cost` holding.
 fn eoq_total(demand: f64, order_cost: f64, holding_cost: f64, quantity: f64) -> (f64, err) {
-    if demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 || quantity <= 0.0f64 { ret (0.0f64, Invalid) }
-    ret (demand / quantity * order_cost + quantity / 2.0f64 * holding_cost, ok)
+    if !finite(demand) || !finite(order_cost) || !finite(holding_cost) || !finite(quantity) || demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 || quantity <= 0.0f64 { ret (0.0f64, Invalid) }
+    let result = demand / quantity * order_cost + quantity / 2.0f64 * holding_cost
+    if !finite(result) { ret (0.0f64, Invalid) }
+    ret (result, ok)
 }
 
 // The newsvendor critical ratio `underage / (underage + overage)`.
 fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err) {
-    if underage < 0.0f64 || overage < 0.0f64 || underage + overage <= 0.0f64 { ret (0.0f64, Invalid) }
-    ret (underage / (underage + overage), ok)
+    if !finite(underage) || !finite(overage) || underage < 0.0f64 || overage < 0.0f64 { ret (0.0f64, Invalid) }
+    let total = underage + overage
+    if !finite(total) || total <= 0.0f64 { ret (0.0f64, Invalid) }
+    ret (underage / total, ok)
 }
 
 // The smallest of the ascending candidate `demands` whose cumulative `probs`
@@ -900,13 +911,14 @@ fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err) {
 fn newsvendor_discrete(demands: []const f64, probs: []const f64, ratio: f64) -> (f64, err) {
     let n = demands.len
     if n == 0usize || probs.len != n { ret (0.0f64, Invalid) }
-    if ratio < 0.0f64 || ratio > 1.0f64 { ret (0.0f64, Invalid) }
+    if !finite(ratio) || ratio < 0.0f64 || ratio > 1.0f64 { ret (0.0f64, Invalid) }
     var cumulative = 0.0f64
     var i = 0usize
     while i < n {
-        if probs[i] < 0.0f64 { ret (0.0f64, Invalid) }
+        if !finite(demands[i]) || !finite(probs[i]) || probs[i] < 0.0f64 { ret (0.0f64, Invalid) }
         if i > 0usize && demands[i] < demands[i - 1usize] { ret (0.0f64, Invalid) }
         cumulative += probs[i]
+        if !finite(cumulative) { ret (0.0f64, Invalid) }
         if cumulative >= ratio { ret (demands[i], ok) }
         i += 1usize
     }

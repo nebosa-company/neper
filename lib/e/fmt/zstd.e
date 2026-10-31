@@ -21,6 +21,7 @@ error Checksum
 error Unsupported
 
 const BLOCK_MAX: usize = 131072usize
+const WINDOW_MAX: usize = 134217728usize
 const INPUT: usize = 131072usize + 32usize
 const HUFF_LOG_MAX: usize = 11usize
 const SEQ_TABLE: usize = 512usize
@@ -254,7 +255,7 @@ fn fse_build(table: []u8, counts: []const i32, symbols: usize, accuracy: u32) ->
     while s < symbols {
         if counts[s] == -1 {
             spread[high] = u8(s)
-            high -= 1usize
+            if high > 0usize { high -= 1usize }
         }
         s += 1usize
     }
@@ -344,7 +345,9 @@ fn fse_read_counts(data: []const u8, counts: []i32, max_symbols: usize, max_accu
         counts[fill] = 0
         fill += 1usize
     }
-    ret (accuracy, symbol, forward_used(&f), ok)
+    let used = forward_used(&f)
+    if used > data.len { ret (0u32, 0usize, 0usize, Invalid) }
+    ret (accuracy, symbol, used, ok)
 }
 
 // --- Huffman literals: a table of 2^max_bits entries, two bytes each (symbol, bits).
@@ -591,7 +594,7 @@ type State = struct { source: io.Reader, input: []u8, literals: []u8, history: [
 
 fn reader_storage(window_limit: usize) -> (usize, err) {
     if window_limit == 0usize { ret (0usize, Invalid) }
-    if window_limit > 134217728usize { ret (0usize, Unsupported) }
+    if window_limit > WINDOW_MAX { ret (0usize, Unsupported) }
     ret (mem.size_of[State]() + 8usize + INPUT + BLOCK_MAX + window_limit + BLOCK_MAX + (1usize << HUFF_LOG_MAX) * 2usize + SEQ_TABLE * 4usize * 4usize, ok)
 }
 
@@ -641,12 +644,13 @@ fn take(s: *State, n: usize) -> ([]u8, err) {
     var filled = 0usize
     while filled < n {
         let (count, read_error) = io.read(&s.source, s.input[filled..n])
+        filled += count
         if read_error == io.End || (read_error == ok && count == 0usize) {
+            if filled == n { ret (s.input[..n], ok) }
             if filled == 0usize { ret (zero, io.End) }
             ret (zero, Invalid)
         }
         if read_error != ok { ret (zero, read_error) }
-        filled += count
     }
     ret (s.input[..n], ok)
 }
@@ -703,6 +707,11 @@ fn start_frame(s: *State) -> err {
     s.ll.valid = false
     s.of.valid = false
     s.ml.valid = false
+    // Concatenated frames have no shared history. `next_block` reaches this point
+    // only after the caller has consumed the prior frame, so its retained bytes can
+    // be discarded before the first block of the next frame is decoded.
+    s.hist_len = 0usize
+    s.out_at = 0usize
     s.in_frame = true
     s.last_block = false
     ret ok
@@ -834,6 +843,7 @@ fn seq_symbol(t: *const SeqTable, state: usize) -> u32 {
 fn run_sequences(s: *State, block: []const u8, literal_count: usize) -> err {
     if block.len == 0usize { ret Invalid }
     var at = 0usize
+    let block_start = s.hist_len
     var count = usize(block[0])
     at = 1usize
     if count == 0usize {
@@ -920,11 +930,16 @@ fn run_sequences(s: *State, block: []const u8, literal_count: usize) -> err {
         }
         // Literals, then the match copied byte by byte so overlaps repeat.
         if literal_at + literal_length > literal_count { ret Invalid }
-        if s.hist_len + literal_length + match_length > s.history.len { ret Invalid }
+        let made = s.hist_len - block_start
+        if literal_length > BLOCK_MAX - made { ret Invalid }
+        let after_literals = made + literal_length
+        if match_length > BLOCK_MAX - after_literals { ret Invalid }
+        if literal_length > s.history.len - s.hist_len { ret Invalid }
         mem.copy[u8](s.history[s.hist_len..s.hist_len + literal_length], s.literals[literal_at..literal_at + literal_length])
         literal_at += literal_length
         s.hist_len += literal_length
         if usize(offset) > s.hist_len { ret Invalid }
+        if match_length > s.history.len - s.hist_len { ret Invalid }
         var k = 0usize
         while k < match_length {
             s.history[s.hist_len] = s.history[s.hist_len - usize(offset)]
@@ -936,7 +951,7 @@ fn run_sequences(s: *State, block: []const u8, literal_count: usize) -> err {
     if !back_finished(&stream) { ret Invalid }
     // Whatever literals remain go out last.
     let rest = literal_count - literal_at
-    if s.hist_len + rest > s.history.len { ret Invalid }
+    if rest > BLOCK_MAX - (s.hist_len - block_start) || rest > s.history.len - s.hist_len { ret Invalid }
     mem.copy[u8](s.history[s.hist_len..s.hist_len + rest], s.literals[literal_at..literal_count])
     s.hist_len += rest
     ret ok
@@ -1038,7 +1053,7 @@ fn read(r: *Reader, dst: []u8) -> (usize, err) {
 
 // --- The writer: raw blocks in one frame with a checksum.
 
-type WriterState = struct { sink: io.Writer, buffer: []u8, buffered: usize, started: bool, finished: bool, hash: Xxh64 }
+type WriterState = struct { sink: io.Writer, buffer: []u8, buffered: usize, started: bool, finished: bool, failed: bool, hash: Xxh64 }
 
 fn writer_storage(level: Level) -> usize {
     ret mem.size_of[WriterState]() + 8usize + BLOCK_MAX
@@ -1055,6 +1070,7 @@ fn writer(storage: []u8, sink: io.Writer, level: Level) -> (Writer, err) {
     s.sink = sink
     s.started = false
     s.finished = false
+    s.failed = false
     s.hash = xxh64_init()
     var w: Writer = zero
     w.state = mem.cast[*void](s)
@@ -1066,7 +1082,9 @@ fn start_writer(s: *WriterState) -> err {
     if s.started { ret ok }
     s.started = true
     var header: [6]u8 = [6]u8{ 40, 181, 47, 253, 4, 56 }
-    ret io.write_all(&s.sink, header[0..])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok { s.failed = true }
+    ret header_error
 }
 
 fn flush_block(s: *WriterState, last: bool) -> err {
@@ -1077,8 +1095,16 @@ fn flush_block(s: *WriterState, last: bool) -> err {
     header[0] = u8(raw & 255usize)
     header[1] = u8((raw >> 8u32) & 255usize)
     header[2] = u8((raw >> 16u32) & 255usize)
-    try io.write_all(&s.sink, header[0..])
-    try io.write_all(&s.sink, s.buffer[..s.buffered])
+    let header_error = io.write_all(&s.sink, header[0..])
+    if header_error != ok {
+        s.failed = true
+        ret header_error
+    }
+    let data_error = io.write_all(&s.sink, s.buffer[..s.buffered])
+    if data_error != ok {
+        s.failed = true
+        ret data_error
+    }
     xxh64_update(&s.hash, s.buffer[..s.buffered])
     s.buffered = 0usize
     ret ok
@@ -1086,7 +1112,7 @@ fn flush_block(s: *WriterState, last: bool) -> err {
 
 fn write(w: *Writer, src: []const u8) -> (usize, err) {
     let s = mem.cast[*WriterState](w.state)
-    if s.finished { ret (0usize, Invalid) }
+    if s.finished || s.failed { ret (0usize, Invalid) }
     var at = 0usize
     while at < src.len {
         var take_count = BLOCK_MAX - s.buffered
@@ -1105,6 +1131,7 @@ fn write(w: *Writer, src: []const u8) -> (usize, err) {
 fn finish(w: *Writer) -> err {
     let s = mem.cast[*WriterState](w.state)
     if s.finished { ret ok }
+    if s.failed { ret Invalid }
     try flush_block(s, true)
     let sum = u32(xxh64_done(&s.hash) & 4294967295u64)
     var trailer: [4]u8 = zero
@@ -1112,9 +1139,18 @@ fn finish(w: *Writer) -> err {
     trailer[1] = u8((sum >> 8u32) & 255u32)
     trailer[2] = u8((sum >> 16u32) & 255u32)
     trailer[3] = u8(sum >> 24u32)
-    try io.write_all(&s.sink, trailer[0..])
+    let trailer_error = io.write_all(&s.sink, trailer[0..])
+    if trailer_error != ok {
+        s.failed = true
+        ret trailer_error
+    }
+    let flush_error = io.flush(&s.sink)
+    if flush_error != ok {
+        s.failed = true
+        ret flush_error
+    }
     s.finished = true
-    ret io.flush(&s.sink)
+    ret ok
 }
 
 // --- The planned name `encode`: a whole-buffer compressor producing one frame with
@@ -1161,7 +1197,7 @@ fn fse_encoder_build(e: *FseEncoder, counts: []const i32, symbols: usize, accura
     while s < symbols {
         if counts[s] == -1 {
             spread[high] = u8(s)
-            high -= 1usize
+            if high > 0usize { high -= 1usize }
         }
         s += 1usize
     }
@@ -1521,9 +1557,11 @@ fn encode(a: *mem.Arena, src: []const u8, level: Level) -> ([]u8, err) {
     ret (out[..pos + 4usize], ok)
 }
 
-// The frame decoded whole in the arena, for callers with the bytes in hand.
-fn decode(a: *mem.Arena, src: []const u8, output_limit: u64) -> ([]u8, err) {
-    let (needed, needed_error) = reader_storage(BLOCK_MAX)
+// The frame decoded whole in the arena, for callers with the bytes in hand. The
+// caller supplies the retained-history budget, which is checked against each frame
+// descriptor before any block is decoded.
+fn decode_with_window(a: *mem.Arena, src: []const u8, output_limit: u64, window_limit: usize) -> ([]u8, err) {
+    let (needed, needed_error) = reader_storage(window_limit)
     if needed_error != ok { ret (zero, needed_error) }
     let words = needed / 8usize + 1usize
     let (aligned, aligned_error) = mem.alloc[u64](a, words)
@@ -1552,4 +1590,16 @@ fn decode(a: *mem.Arena, src: []const u8, output_limit: u64) -> ([]u8, err) {
         filled += count
     }
     ret (out[..filled], ok)
+}
+
+// The convenience form derives a bounded history budget from its output limit rather
+// than silently fixing it at one block. Call `decode_with_window` when the caller has
+// a stricter independent history budget.
+fn decode(a: *mem.Arena, src: []const u8, output_limit: u64) -> ([]u8, err) {
+    var window_limit = BLOCK_MAX
+    if output_limit >= u64(BLOCK_MAX) {
+        if output_limit > u64(WINDOW_MAX) { window_limit = WINDOW_MAX } else { window_limit = usize(output_limit) }
+    }
+    let (out, decode_error) = decode_with_window(a, src, output_limit, window_limit)
+    ret (out, decode_error)
 }

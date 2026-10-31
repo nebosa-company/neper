@@ -19,6 +19,7 @@
 
 use e.bytes as raw
 use e.fmt.flatbuffers as fb
+use e.text.utf8 as utf8
 
 type Kind = enum u8 { Bool, Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64, Utf8, Binary, List, Struct }
 type Column = struct { kind: Kind, len: usize, null_count: usize, validity: []const u8, offsets: []const u8, data: []const u8, child: u32, child_count: u32 }
@@ -153,6 +154,22 @@ fn list_range(c: *const Column, i: usize) -> (usize, usize, err) {
     ret (start, end, ok)
 }
 
+// Validate every offset, including offsets for null rows. `limit` is the data
+// buffer length for Utf8/Binary or the resolved child length for List.
+fn validate_offsets(c: *const Column, limit: usize) -> err {
+    var previous = 0usize
+    var entry = 0usize
+    while entry <= c.len {
+        let (offset, offset_error) = offset_at(c, entry)
+        if offset_error != ok { ret offset_error }
+        if entry > 0usize && offset < previous { ret Malformed }
+        previous = offset
+        entry += 1usize
+    }
+    if previous > limit { ret Malformed }
+    ret ok
+}
+
 // The bytes of a Utf8/Binary row.
 fn get_utf8(c: *const Column, i: usize) -> (str, bool, err) {
     if c.kind != .Utf8 && c.kind != .Binary { ret ("", false, Invalid) }
@@ -160,7 +177,9 @@ fn get_utf8(c: *const Column, i: usize) -> (str, bool, err) {
     if e != ok { ret ("", false, e) }
     if !is_valid(c, i) { ret ("", false, ok) }
     if end > c.data.len { ret ("", false, Malformed) }
-    ret (c.data[start..end], true, ok)
+    let text = c.data[start..end]
+    if c.kind == .Utf8 && !utf8.validate(text) { ret ("", false, Malformed) }
+    ret (text, true, ok)
 }
 
 fn get_binary(c: *const Column, i: usize) -> ([]const u8, bool, err) {
@@ -327,20 +346,34 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
         let here = nodes.at + 16usize * i
         let (n, n_error) = fb.load[i64](m.meta, here)
         let (nulls, nulls_error) = fb.load[i64](m.meta, here + 8usize)
-        if n_error != ok || nulls_error != ok || n < 0i64 || nulls < 0i64 { ret Malformed }
-        cols[i].len = usize(n)
-        cols[i].null_count = usize(nulls)
+        if n_error != ok || nulls_error != ok || n < 0i64 || nulls < 0i64 || nulls > n { ret Malformed }
+        let length = usize(n)
+        cols[i].len = length
         let (validity, validity_error) = buffer(m, buffers, b)
         if validity_error != ok { ret validity_error }
         b += 1usize
-        if validity.len != 0usize && validity.len * 8usize < usize(n) { ret Malformed }
+        var validity_bytes = length / 8usize
+        if length % 8usize != 0usize { validity_bytes += 1usize }
+        if validity.len != 0usize && validity.len < validity_bytes { ret Malformed }
+        if validity.len == 0usize {
+            if nulls != 0i64 { ret Malformed }
+        } else {
+            var found_nulls = 0usize
+            var row = 0usize
+            while row < length {
+                if ((validity[row >> 3u32] >> u32(row & 7usize)) & 1u8) == 0u8 { found_nulls += 1usize }
+                row += 1usize
+            }
+            if found_nulls != usize(nulls) { ret Malformed }
+        }
+        cols[i].null_count = usize(nulls)
         cols[i].validity = validity
         let kind = cols[i].kind
         if kind == .Utf8 || kind == .Binary || kind == .List {
             let (offsets, offsets_error) = buffer(m, buffers, b)
             if offsets_error != ok { ret offsets_error }
             b += 1usize
-            if offsets.len < (usize(n) + 1usize) * 4usize { ret Malformed }
+            if offsets.len / 4usize <= length { ret Malformed }
             cols[i].offsets = offsets
         }
         if kind != .List && kind != .Struct {
@@ -348,14 +381,25 @@ fn bind(m: *const Message, cols: []Column, count: usize) -> err {
             if data_error != ok { ret data_error }
             b += 1usize
             if kind == .Bool {
-                if data.len * 8usize < usize(n) { ret Malformed }
-            } else if kind == .Utf8 || kind == .Binary {
-                let (_, end, end_error) = list_range(&cols[i], usize(n) - 1usize)
-                if n > 0i64 && (end_error != ok || end > data.len) { ret Malformed }
-            } else if data.len < usize(n) * width(kind) {
-                ret Malformed
+                if data.len < validity_bytes { ret Malformed }
+            } else if kind != .Utf8 && kind != .Binary {
+                if data.len / width(kind) < length { ret Malformed }
             }
             cols[i].data = data
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < count {
+        let kind = cols[i].kind
+        if kind == .Utf8 || kind == .Binary {
+            let offset_error = validate_offsets(&cols[i], cols[i].data.len)
+            if offset_error != ok { ret offset_error }
+        } else if kind == .List {
+            let child = usize(cols[i].child)
+            if child >= count { ret Malformed }
+            let offset_error = validate_offsets(&cols[i], cols[child].len)
+            if offset_error != ok { ret offset_error }
         }
         i += 1usize
     }

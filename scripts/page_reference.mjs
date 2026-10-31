@@ -43,7 +43,7 @@ for (const name of ['Sales Invoices', 'Customers', '', '  ', 'a', 'ab', 'abcd', 
 }
 for (const key of ['INV-1042', 'ab-1', 'ABCDEFG-1', 'A-1', 'INV-', 'INV-12x', 'inv-1', 'INV-007', 'INV-1-2', '', null, 'AB-99999999999999999999']) {
   const r = engine.parseRecordKey(key);
-  add({ op: 'parsekey', key, e: r ? `${r.prefix}:${r.number}` : 'null' });
+  add({ op: 'parsekey', key, e: r && Number.isSafeInteger(r.number) ? `${r.prefix}:${r.number}` : 'null' });
 }
 for (let k = 0; k < 20; k += 1) {
   const initial = pick([{}, { tbl_a: 5 }, { tbl_a: 3, tbl_b: 10 }]);
@@ -64,11 +64,13 @@ for (let k = 0; k < 20; k += 1) {
 
 // keyset paging
 const VALUES = [1, 2, 10, 'a', 'B', 'b', '', null, true, false, 0, -1, '10', '9', 2.5];
+// Keep every generated sort field present, so this broad Appdor corpus does not encode its missing-versus-null
+// comparator defect.  The template below has a focused cursor regression for that pair.
 function makeRows(n) {
   return Array.from({ length: n }, (_, i) => {
     const r = { id: `r${String(i).padStart(3, '0')}`, '~idx': `\u0001${i}` };
-    if (rnd() < 0.9) r.a = pick(VALUES);
-    if (rnd() < 0.9) r.b = pick(VALUES);
+    if (rnd() < 0.9) r.a = pick(VALUES); else r.a = null;
+    if (rnd() < 0.9) r.b = pick(VALUES); else r.b = null;
     return r;
   });
 }

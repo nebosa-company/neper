@@ -8,10 +8,13 @@
 // tool or call here gives is `Unsupported` and the capability record says so. The type block is
 // a copy of `shell.windows.e`'s.
 
+use e.atomic
 use e.fs
 use e.mem
 use e.os
 use e.str
+use e.sync
+use e.text.shlex
 use e.time
 
 error Unsupported
@@ -23,7 +26,7 @@ error Cancelled
 type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss, Overflow }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
 // pixels, bytes under a MIME name the other side registers the same way, or a
@@ -47,7 +50,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
-type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
@@ -75,8 +78,9 @@ fn capabilities() -> Capabilities {
 }
 
 // The tray and the pop-up menu (D5207). AppKit calls back through a target and an action, so a class of our own is made
-// at run time (`NeperShellTarget`, a subclass of NSObject) with two methods whose implementations are `@cc(c)` functions
-// of this file: one for a status item's button, one for a menu item. What they do is write into the state below, which
+// at run time (`NeperShellTarget`, a subclass of NSObject). Its tray methods are `@cc(c)` functions of this file: one for a
+// status item's primary click, one for its secondary-click recognizer, and one for a menu item. What they do is write into the
+// state below, which
 // `tray_poll` and `popup_menu` read once the run loop has delivered the click.
 type MenuPoint = struct { x: f64, y: f64 }
 type MenuImp = union { function: fn(usize, usize, usize), bits: usize }
@@ -121,22 +125,29 @@ fn tray_push(event: TrayEvent) {
     tray_tail = next
 }
 
-// A status item's button was clicked: left is a Select, right a Context, at the pointer's place on the screen.
-@cc(c)
-fn target_tray_clicked(this: usize, command: usize, sender: usize) {
+fn tray_emit(button: usize, kind: TrayEventKind) {
     var slot = 0usize
-    while slot < TRAYS && tray_buttons[slot] != sender { slot += 1usize }
+    while slot < TRAYS && tray_buttons[slot] != button { slot += 1usize }
     if slot == TRAYS { ret }
     var event: TrayEvent = zero
-    event.kind = .Select
+    event.kind = kind
     event.id = tray_ids[slot]
-    let app = os.msg0(os.cocoa_class("NSApplication\x00"), os.cocoa_sel("sharedApplication\x00"))
-    let current = os.msg0(app, os.cocoa_sel("currentEvent\x00"))
-    if current != 0usize && os.msg0(current, os.cocoa_sel("type\x00")) == 4usize { event.kind = .Context }
     let at = msg_event_point(os.cocoa_class("NSEvent\x00"), os.cocoa_sel("mouseLocation\x00"))
     event.x = i32(at.x)
     event.y = i32(f64(cg_display_high(cg_main_display())) - at.y)
     tray_push(event)
+}
+
+// A status item's primary action is a Select at the pointer's place on the screen.
+@cc(c)
+fn target_tray_clicked(this: usize, command: usize, sender: usize) {
+    tray_emit(sender, .Select)
+}
+
+// The secondary-button recognizer identifies its attached status button as its view.
+@cc(c)
+fn target_tray_context(this: usize, command: usize, sender: usize) {
+    tray_emit(os.msg0(sender, os.cocoa_sel("view\x00")), .Context)
 }
 
 @cc(c)
@@ -183,9 +194,12 @@ fn target_ready() -> err {
     let types = "v@:@\x00"
     var tray: MenuImp = zero
     tray.function = target_tray_clicked
+    var context: MenuImp = zero
+    context.function = target_tray_context
     var chosen: MenuImp = zero
     chosen.function = target_menu_chosen
     let first = objc_class_method(class, os.cocoa_sel("neperTray:\x00"), tray.bits, &types[0usize])
+    let context_added = objc_class_method(class, os.cocoa_sel("neperTrayContext:\x00"), context.bits, &types[0usize])
     let second = objc_class_method(class, os.cocoa_sel("neperChoice:\x00"), chosen.bits, &types[0usize])
     var cancel: MenuImp = zero
     cancel.function = target_menu_cancel
@@ -244,7 +258,12 @@ fn target_ready() -> err {
 fn icon_image(icon: Icon) -> usize {
     let count = usize(icon.width) * usize(icon.height)
     let data = os.cf_data_create(0usize, mem.address_of(&icon.pixels[0usize]), count * 4usize)
+    if data == 0usize { ret 0usize }
     let provider = os.cg_provider_with_data(data)
+    if provider == 0usize {
+        os.cf_release(data)
+        ret 0usize
+    }
     let space = os.cg_color_space()
     let picture = os.cg_image_create(usize(icon.width), usize(icon.height), 8usize, 32usize, usize(icon.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
     var image = 0usize
@@ -291,15 +310,24 @@ fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
     let item = os.msg_double(bar, os.cocoa_sel("statusItemWithLength:\x00"), -1.0f64)
     var result = ok
     if item == 0usize { result = Failed } else {
-        let kept = os.msg0(item, os.cocoa_sel("retain\x00"))
         let button = os.msg0(item, os.cocoa_sel("button\x00"))
-        tray_decorate(button, icon, tooltip)
-        let targeted = os.msg1(button, os.cocoa_sel("setTarget:\x00"), shell_target)
-        let acted = os.msg1(button, os.cocoa_sel("setAction:\x00"), os.cocoa_sel("neperTray:\x00"))
-        let masked = os.msg1(button, os.cocoa_sel("sendActionOn:\x00"), 20usize)
-        tray_ids[slot] = id
-        tray_items[slot] = item
-        tray_buttons[slot] = button
+        if button == 0usize { result = Failed } else {
+            let gesture = os.msg2(os.msg0(os.cocoa_class("NSClickGestureRecognizer\x00"), os.cocoa_sel("alloc\x00")), os.cocoa_sel("initWithTarget:action:\x00"), shell_target, os.cocoa_sel("neperTrayContext:\x00"))
+            if gesture == 0usize { result = Failed } else {
+                let secondary = os.msg1(gesture, os.cocoa_sel("setButtonMask:\x00"), 2usize)
+                let attached = os.msg1(button, os.cocoa_sel("addGestureRecognizer:\x00"), gesture)
+                let released = os.msg0(gesture, os.cocoa_sel("release\x00"))
+                let kept = os.msg0(item, os.cocoa_sel("retain\x00"))
+                tray_decorate(button, icon, tooltip)
+                let targeted = os.msg1(button, os.cocoa_sel("setTarget:\x00"), shell_target)
+                let acted = os.msg1(button, os.cocoa_sel("setAction:\x00"), os.cocoa_sel("neperTray:\x00"))
+                let masked = os.msg1(button, os.cocoa_sel("sendActionOn:\x00"), 4usize)
+                tray_ids[slot] = id
+                tray_items[slot] = item
+                tray_buttons[slot] = button
+            }
+        }
+        if result != ok { let removed = os.msg1(bar, os.cocoa_sel("removeStatusItem:\x00"), item) }
     }
     os.objc_pool_pop(pool)
     ret result
@@ -412,6 +440,23 @@ fn dock_badge(label: str) {
     }
 }
 
+// `completed * 100 / total` can overflow even though the bounded badge answer cannot.
+// Split `total` into hundreds, then choose the largest percent whose rounded-up threshold
+// is met; every product here has a factor at most 100 and stays within the original total.
+fn dock_percent(completed: u64, total: u64) -> u64 {
+    if total == 0u64 { ret 0u64 }
+    let hundreds = total / 100u64
+    let remainder = total % 100u64
+    var percent = 100u64
+    while percent > 0u64 {
+        let whole = percent * hundreds
+        let fractional = (percent * remainder + 99u64) / 100u64
+        if completed >= whole + fractional { ret percent }
+        percent -= 1u64
+    }
+    ret 0u64
+}
+
 fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err {
     if state == .Normal || state == .Paused || state == .Error {
         if total == 0u64 || completed > total { ret Invalid }
@@ -427,7 +472,7 @@ fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed
         dock_badge("!")
     } else {
         var digits: [4]u8 = zero
-        let percent = (completed * 100u64) / total
+        let percent = dock_percent(completed, total)
         var count = 0usize
         if percent >= 100u64 {
             digits[0usize] = 49u8
@@ -495,48 +540,39 @@ fn target_dock_menu(this: usize, command: usize, sender: usize) -> usize {
     ret dock_menu
 }
 
-// A Dock menu item: its program and arguments run in the background.
+// A Dock menu item: its program and arguments run in the background. The shell only
+// receives a fixed script; the program and parsed words are positional parameters, so
+// task text cannot become shell syntax.
 @cc(c)
 fn target_dock_task(this: usize, command: usize, sender: usize) {
     let held = os.msg0(sender, os.cocoa_sel("representedObject\x00"))
     var text: [1024]u8 = zero
     let length = os.cocoa_read_text(held, text[..])
     if length == 0usize || length > 1000usize { ret }
-    // `sh` starts the program in the background and ends, so no child is left to wait for.
-    var line: [1040]u8 = zero
-    var out = 0usize
-    line[out] = 39u8
-    out += 1usize
-    var at = 0usize
-    while at < length && text[at] != 10u8 {
-        line[out] = text[at]
-        out += 1usize
-        at += 1usize
-    }
-    line[out] = 39u8
-    line[out + 1usize] = 32u8
-    out += 2usize
-    at += 1usize
-    while at < length {
-        line[out] = text[at]
-        out += 1usize
-        at += 1usize
-    }
-    let tail = " >/dev/null 2>&1 &"
-    var t = 0usize
-    while t < tail.len {
-        line[out] = tail[t]
-        out += 1usize
-        t += 1usize
-    }
+    var program_end = 0usize
+    while program_end < length && text[program_end] != 10u8 { program_end += 1usize }
+    if program_end == 0usize || program_end == length { ret }
+    var argument_bytes: [1024]u8 = zero
+    var arguments: [512]str = zero
+    let (argument_count, split_error) = shlex.split(text[program_end + 1usize..length], argument_bytes[..], arguments[..])
+    if split_error != ok { ret }
+    // `sh` starts its fixed positional-parameter command in the background and ends,
+    // so no child is left to wait for. "$@" begins at $1: the sentinel below is $0.
     var storage: [16384]u8 = zero
     var scratch = mem.arena_from(storage[..])
-    var argv: [3]str = zero
+    var argv: [512]str = zero
     argv[0usize] = "/bin/sh"
     argv[1usize] = "-c"
-    argv[2usize] = line[0usize..out]
+    argv[2usize] = "exec \"$@\" >/dev/null 2>&1 &"
+    argv[3usize] = "neper-dock-task"
+    argv[4usize] = text[0usize..program_end]
+    var at = 0usize
+    while at < argument_count {
+        argv[5usize + at] = arguments[at]
+        at += 1usize
+    }
     var options: os.SpawnOptions = zero
-    options.argv = argv[..]
+    options.argv = argv[0usize..5usize + argument_count]
     options.inherit_env = true
     options.stdio.stdout = os.File { raw: 1usize }
     options.stdio.stderr = os.File { raw: 2usize }
@@ -973,8 +1009,8 @@ fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
 // operation is written so that the day `e.os` learns the selection, these follow.
 
 // The clipboard (D5203), on NSPasteboard's general board. A text is `public.utf8-plain-text`; bytes sit under their
-// mime string as the type; files and an image have private types of their own (`com.neper.paths`: the paths, one per
-// line; `com.neper.image`: width and height as little-endian u32, then the pixels), which hold what was written exactly.
+// mime string as the type; files and an image have private types of their own (`com.neper.paths`: little-endian u64
+// byte lengths followed by path bytes; `com.neper.image`: width and height as little-endian u32, then the pixels).
 fn type_text() -> str { ret "public.utf8-plain-text" }
 fn type_paths() -> str { ret "com.neper.paths" }
 fn type_image() -> str { ret "com.neper.image" }
@@ -1034,17 +1070,20 @@ fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
             var total = 0usize
             var path = 0usize
             while path < item.paths.len {
-                total += item.paths[path].len + 1usize
+                total += item.paths[path].len + 8usize
                 path += 1usize
             }
-            let (joined, joined_error) = mem.alloc[u8](a, total + 1usize)
+            let (joined, joined_error) = mem.alloc[u8](a, total)
             if joined_error != ok { result = joined_error } else {
                 var written = 0usize
                 path = 0usize
                 while path < item.paths.len {
-                    if path != 0usize {
-                        joined[written] = 10u8
+                    let path_len = u64(item.paths[path].len)
+                    var shift = 0usize
+                    while shift < 8usize {
+                        joined[written] = u8((path_len >> u32(shift * 8usize)) & 255u64)
                         written += 1usize
+                        shift += 1usize
                     }
                     var byte = 0usize
                     while byte < item.paths[path].len {
@@ -1112,26 +1151,39 @@ fn clipboard_read(a: *mem.Arena, kind: ContentKind, mime: str) -> (Content, err)
         item.mime = mime
         item.bytes = data
     } else if kind == .Files {
-        var lines = 1usize
         var at = 0usize
+        var count = 0usize
         while at < data.len {
-            if data[at] == 10u8 { lines += 1usize }
-            at += 1usize
-        }
-        let (paths, paths_error) = mem.alloc[str](a, lines)
-        if paths_error != ok { ret (item, paths_error) }
-        var start = 0usize
-        var line = 0usize
-        at = 0usize
-        while at <= data.len {
-            if at == data.len || data[at] == 10u8 {
-                paths[line] = data[start..at]
-                line += 1usize
-                start = at + 1usize
+            if data.len - at < 8usize { ret (item, Failed) }
+            var path_len = 0u64
+            var shift = 0usize
+            while shift < 8usize {
+                path_len |= u64(data[at + shift]) << u32(shift * 8usize)
+                shift += 1usize
             }
-            at += 1usize
+            at += 8usize
+            if path_len > u64(data.len - at) { ret (item, Failed) }
+            at += usize(path_len)
+            count += 1usize
         }
-        item.paths = paths[0usize..lines]
+        let (paths, paths_error) = mem.alloc[str](a, count)
+        if paths_error != ok { ret (item, paths_error) }
+        at = 0usize
+        var path = 0usize
+        while path < count {
+            var path_len = 0u64
+            var shift = 0usize
+            while shift < 8usize {
+                path_len |= u64(data[at + shift]) << u32(shift * 8usize)
+                shift += 1usize
+            }
+            at += 8usize
+            let length = usize(path_len)
+            paths[path] = data[at..at + length]
+            at += length
+            path += 1usize
+        }
+        item.paths = paths[0usize..count]
     } else {
         if data.len < 8usize { ret (item, Failed) }
         var width = 0u32
@@ -1656,12 +1708,14 @@ fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
     if args.len < 2usize { ret activation }
     let first = args[1usize]
     if first.len == 0usize { ret activation }
+    let first_letter = (first[0usize] >= 97u8 && first[0usize] <= 122u8) || (first[0usize] >= 65u8 && first[0usize] <= 90u8)
+    if !first_letter { ret activation }
     var at = 0usize
     var scheme = false
     while at < first.len {
         let c = first[at]
         if c == 58u8 {
-            scheme = at > 1usize && at + 1usize < first.len
+            scheme = at > 0usize && at + 1usize < first.len
             break
         }
         let letter = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 45u8 || c == 46u8
@@ -1701,6 +1755,73 @@ fn valid_name(text: str) -> bool {
     ret true
 }
 
+// Bundle identifiers and launch-agent labels become identifiers in the plist;
+// they are deliberately narrower than a file name.  URL schemes have the URI
+// grammar rather than accepting arbitrary printable text.
+fn valid_identifier(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    let first = text[0usize]
+    if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8) || (first >= 48u8 && first <= 57u8)) { ret false }
+    let last = text[text.len - 1usize]
+    if !((last >= 65u8 && last <= 90u8) || (last >= 97u8 && last <= 122u8) || (last >= 48u8 && last <= 57u8)) { ret false }
+    var at = 0usize
+    while at < text.len {
+        let c = text[at]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        let digit = c >= 48u8 && c <= 57u8
+        if !letter && !digit && c != 46u8 && c != 45u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn valid_scheme(text: str) -> bool {
+    if text.len == 0usize || text.len > 64usize { ret false }
+    let first = text[0usize]
+    if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8)) { ret false }
+    var at = 1usize
+    while at < text.len {
+        let c = text[at]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        let digit = c >= 48u8 && c <= 57u8
+        if !letter && !digit && c != 43u8 && c != 45u8 && c != 46u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Every caller-supplied plist value is text-node content.  Quotes need no
+// treatment there, but XML's three markup characters always do.
+fn plist_escape(a: *mem.Arena, text: str) -> (str, err) {
+    let (made, make_error) = str.builder(a, text.len)
+    if make_error != ok { ret ("", make_error) }
+    var out = made
+    var at = 0usize
+    var from = 0usize
+    while at < text.len {
+        let c = text[at]
+        var replacement = ""
+        if c == 38u8 {
+            replacement = "&amp;"
+        } else if c == 60u8 {
+            replacement = "&lt;"
+        } else if c == 62u8 {
+            replacement = "&gt;"
+        }
+        if replacement.len != 0usize {
+            let prefix_error = str.push(&out, text[from..at])
+            if prefix_error != ok { ret ("", prefix_error) }
+            let replacement_error = str.push(&out, replacement)
+            if replacement_error != ok { ret ("", replacement_error) }
+            from = at + 1usize
+        }
+        at += 1usize
+    }
+    let tail_error = str.push(&out, text[from..text.len])
+    if tail_error != ok { ret ("", tail_error) }
+    ret (str.done(&out), ok)
+}
+
 // File types and URL schemes (D5217). A Mac sends "open this file" and "open this URL" as Apple events to an application
 // bundle that declares the type, so registering one writes a small bundle under `~/Library/Application Support/Neper/
 // Associations`: an Info.plist naming the extension (or the scheme) and, as its executable, a copy of this program, so the
@@ -1736,7 +1857,6 @@ fn act_push(kind: ActivationKind, string: usize) {
     act_kinds[act_tail] = kind
     act_used += length
     act_tail = next
-    if act_head == act_tail { act_used = 0usize }
 }
 
 @cc(c)
@@ -1787,6 +1907,13 @@ fn bundle_root(a: *mem.Arena, name: str) -> (str, err) {
     ret (bundle, bundle_error)
 }
 
+// A spawned helper only succeeded when wait itself succeeded and it returned zero.
+// Keeping this pure lets the macOS probe cover the nonzero-exit path without invoking
+// LaunchServices deliberately.
+fn lsregister_succeeded(wait_error: err, exit_code: i32) -> bool {
+    ret wait_error == ok && exit_code == 0i32
+}
+
 fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
     var argv: [3]str = zero
     argv[0usize] = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
@@ -1800,7 +1927,7 @@ fn lsregister(a: *mem.Arena, flag: str, bundle: str) -> err {
     let (child, spawn_error) = os.spawn_with_options(a, options)
     if spawn_error != ok { ret Failed }
     let (usage, wait_error) = os.wait_usage(child)
-    if wait_error != ok { ret Failed }
+    if !lsregister_succeeded(wait_error, usage.exit_code) { ret Failed }
     ret ok
 }
 
@@ -1821,27 +1948,37 @@ fn bundle_make(a: *mem.Arena, name: str, bundle_id: str, label: str, extension: 
     if scratch_error != ok { ret ("", scratch_error) }
     try fs.copy_file(a, exe, link, scratch)
     let moded = os.set_mode(a, link, 493u32)
+    let (plist_label, label_error) = plist_escape(a, label)
+    if label_error != ok { ret ("", label_error) }
     var declared = ""
     if extension.len != 0usize {
-        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
+        let (plist_extension, extension_error) = plist_escape(a, extension)
+        if extension_error != ok { ret ("", extension_error) }
+        let (opened, opened_error) = join3(a, "<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>", plist_label, "</string><key>CFBundleTypeRole</key><string>Viewer</string><key>CFBundleTypeExtensions</key><array><string>")
         if opened_error != ok { ret ("", opened_error) }
-        let (middle, middle_error) = str.concat(a, opened, extension)
+        let (middle, middle_error) = str.concat(a, opened, plist_extension)
         if middle_error != ok { ret ("", middle_error) }
         let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
         if closed_error != ok { ret ("", closed_error) }
         declared = closed
     } else {
-        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", label, "</string><key>CFBundleURLSchemes</key><array><string>")
+        let (plist_scheme, scheme_error) = plist_escape(a, scheme)
+        if scheme_error != ok { ret ("", scheme_error) }
+        let (opened, opened_error) = join3(a, "<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>", plist_label, "</string><key>CFBundleURLSchemes</key><array><string>")
         if opened_error != ok { ret ("", opened_error) }
-        let (middle, middle_error) = str.concat(a, opened, scheme)
+        let (middle, middle_error) = str.concat(a, opened, plist_scheme)
         if middle_error != ok { ret ("", middle_error) }
         let (closed, closed_error) = str.concat(a, middle, "</string></array></dict></array>")
         if closed_error != ok { ret ("", closed_error) }
         declared = closed
     }
-    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", bundle_id, "</string><key>CFBundleName</key><string>")
+    let (plist_bundle_id, bundle_id_error) = plist_escape(a, bundle_id)
+    if bundle_id_error != ok { ret ("", bundle_id_error) }
+    let (plist_name, name_error) = plist_escape(a, name)
+    if name_error != ok { ret ("", name_error) }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>", plist_bundle_id, "</string><key>CFBundleName</key><string>")
     if head_error != ok { ret ("", head_error) }
-    let (named, named_error) = join3(a, head, name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
+    let (named, named_error) = join3(a, head, plist_name, "</string><key>CFBundleExecutable</key><string>neper-app</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>")
     if named_error != ok { ret ("", named_error) }
     let (plist, plist_error) = join3(a, named, declared, "</dict></plist>\n")
     if plist_error != ok { ret ("", plist_error) }
@@ -1858,6 +1995,7 @@ fn bundle_remove(a: *mem.Arena, name: str) -> err {
     if exists_error != ok { ret exists_error }
     if !present { ret NotFound }
     let unregistered = lsregister(a, "-u", root)
+    if unregistered != ok { ret unregistered }
     let (macos, macos_error) = str.concat(a, root, "/Contents/MacOS")
     if macos_error != ok { ret macos_error }
     let (link, link_error) = str.concat(a, macos, "/neper-app")
@@ -1876,7 +2014,7 @@ fn bundle_remove(a: *mem.Arena, name: str) -> err {
 }
 
 fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
-    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_identifier(program_id) { ret Invalid }
     let started = os.cocoa_start()
     if started != ok { ret started }
     let (bundle_id, id_error) = str.concat(a, "com.neper.assoc.", program_id)
@@ -1901,12 +2039,12 @@ fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: s
 }
 
 fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
-    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_identifier(program_id) { ret Invalid }
     ret bundle_remove(a, program_id)
 }
 
 fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
-    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    if !valid_scheme(scheme) { ret Invalid }
     let started = os.cocoa_start()
     if started != ok { ret started }
     let (name, name_error) = str.concat(a, "protocol-", scheme)
@@ -1928,7 +2066,7 @@ fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
 }
 
 fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
-    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    if !valid_scheme(scheme) { ret Invalid }
     let (name, name_error) = str.concat(a, "protocol-", scheme)
     if name_error != ok { ret name_error }
     ret bundle_remove(a, name)
@@ -1946,7 +2084,7 @@ fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
 }
 
 fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
-    if !valid_name(id) { ret Invalid }
+    if !valid_identifier(id) { ret Invalid }
     let (path, path_error) = autostart_path(a, id)
     if path_error != ok { ret path_error }
     if !enabled {
@@ -1957,15 +2095,19 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { ret exe_error }
     try fs.make_dirs(a, parent_of(path))
-    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>", id, "</string><key>ProgramArguments</key><array><string>")
+    let (plist_id, id_error) = plist_escape(a, id)
+    if id_error != ok { ret id_error }
+    let (plist_exe, plist_exe_error) = plist_escape(a, exe)
+    if plist_exe_error != ok { ret plist_exe_error }
+    let (head, head_error) = join3(a, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>", plist_id, "</string><key>ProgramArguments</key><array><string>")
     if head_error != ok { ret head_error }
-    let (content, content_error) = join3(a, head, exe, "</string></array><key>RunAtLoad</key><true/></dict></plist>\n")
+    let (content, content_error) = join3(a, head, plist_exe, "</string></array><key>RunAtLoad</key><true/></dict></plist>\n")
     if content_error != ok { ret content_error }
     ret fs.write_file(a, path, content)
 }
 
 fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
-    if !valid_name(id) { ret (false, Invalid) }
+    if !valid_identifier(id) { ret (false, Invalid) }
     let (path, path_error) = autostart_path(a, id)
     if path_error != ok { ret (false, path_error) }
     let (present, exists_error) = fs.exists(a, path)
@@ -2002,7 +2144,8 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
     address.port = instance_port(id)
     let (opened, open_error) = os.socket_open(.Ip4, .Datagram)
     if open_error != ok { ret (false, Failed) }
-    if os.socket_bind(opened, address) == ok {
+    let bind_error = os.socket_bind(opened, address)
+    if bind_error == ok {
         let (poller, poller_error) = os.poller_open(a)
         if poller_error != ok {
             let closed = os.socket_close(opened)
@@ -2021,21 +2164,39 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
         instance_storage = storage
         ret (true, ok)
     }
-    // Taken: hand the command line to whoever has it.
+    // Only an occupied address proves another instance owns this id.  Permission,
+    // descriptor and resource failures cannot receive the forwarded activation.
+    if bind_error != os.Exists {
+        let closed = os.socket_close(opened)
+        ret (false, bind_error)
+    }
+    // Taken: hand the complete command line to whoever has it.  Each argument
+    // is length-prefixed so embedded line feeds survive, and a command that
+    // cannot fit in one datagram is refused rather than silently shortened.
+    if args.len == 0usize || args.len > 65535usize {
+        let closed = os.socket_close(opened)
+        ret (false, Invalid)
+    }
     var packet: [4096]u8 = zero
-    var used = 0usize
+    var used = 2usize
+    packet[0usize] = u8(args.len % 256usize)
+    packet[1usize] = u8(args.len / 256usize)
     var arg = 0usize
     while arg < args.len {
-        if arg != 0usize && used < 4096usize {
-            packet[used] = 10u8
-            used += 1usize
+        let length = args[arg].len
+        if length > 65535usize || used > 4094usize || length > 4096usize - used - 2usize {
+            let closed = os.socket_close(opened)
+            ret (false, Invalid)
         }
+        packet[used] = u8(length % 256usize)
+        packet[used + 1usize] = u8(length / 256usize)
+        used += 2usize
         var byte = 0usize
-        while byte < args[arg].len && used < 4096usize {
-            packet[used] = args[arg][byte]
-            used += 1usize
+        while byte < length {
+            packet[used + byte] = args[arg][byte]
             byte += 1usize
         }
+        used += length
         arg += 1usize
     }
     let (sent, send_error) = os.socket_send_to(opened, address, packet[0usize..used])
@@ -2058,6 +2219,9 @@ fn activation_poll() -> (Activation, bool) {
         delivered.payload = act_payloads[slot]
         delivered.args = act_strs[2usize * slot..2usize * slot + 2usize]
         act_head = (act_head + 1usize) % ACTIVATIONS
+        // Once the queue is drained no live slot points into the shared text
+        // buffer, so the next delegate event can reuse its full capacity.
+        if act_head == act_tail { act_used = 0usize }
         ret (delivered, true)
     }
     if !instance_held { ret (none, false) }
@@ -2066,34 +2230,41 @@ fn activation_poll() -> (Activation, bool) {
     if wait_error != ok || ready == 0usize { ret (none, false) }
     var packet: [4096]u8 = zero
     let (got, from, receive_error) = os.socket_receive_from(instance_socket, packet[..])
-    if receive_error != ok || got == 0usize { ret (none, false) }
-    var lines = 1usize
-    var at = 0usize
-    while at < got {
-        if packet[at] == 10u8 { lines += 1usize }
-        at += 1usize
+    if receive_error != ok || got < 2usize { ret (none, false) }
+    let count = usize(packet[0usize]) + usize(packet[1usize]) * 256usize
+    if count == 0usize { ret (none, false) }
+    var at = 2usize
+    var arg = 0usize
+    while arg < count {
+        if at > got || got - at < 2usize { ret (none, false) }
+        let length = usize(packet[at]) + usize(packet[at + 1usize]) * 256usize
+        at += 2usize
+        if length > got - at { ret (none, false) }
+        at += length
+        arg += 1usize
     }
+    if at != got { ret (none, false) }
     let (text, text_error) = mem.alloc[u8](instance_storage, got)
     if text_error != ok { ret (none, false) }
-    at = 0usize
-    while at < got {
-        text[at] = packet[at]
-        at += 1usize
-    }
-    let (list, list_error) = mem.alloc[str](instance_storage, lines)
+    let (list, list_error) = mem.alloc[str](instance_storage, count)
     if list_error != ok { ret (none, false) }
-    var start = 0usize
-    var line = 0usize
-    at = 0usize
-    while at <= got {
-        if at == got || text[at] == 10u8 {
-            list[line] = text[start..at]
-            line += 1usize
-            start = at + 1usize
+    at = 2usize
+    arg = 0usize
+    var copied = 0usize
+    while arg < count {
+        let length = usize(packet[at]) + usize(packet[at + 1usize]) * 256usize
+        at += 2usize
+        list[arg] = text[copied..copied + length]
+        var byte = 0usize
+        while byte < length {
+            text[copied + byte] = packet[at + byte]
+            byte += 1usize
         }
-        at += 1usize
+        copied += length
+        at += length
+        arg += 1usize
     }
-    ret (activation_of(instance_storage, list[0usize..lines]), true)
+    ret (activation_of(instance_storage, list[0usize..count]), true)
 }
 // ------------------------------------------------- lifecycle and global input
 //
@@ -2259,11 +2430,29 @@ fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
     ret ok
 }
 
+fn power_release_error(kill_error: err, wait_error: err) -> err {
+    if kill_error != ok && kill_error != os.NotFound { ret kill_error }
+    if wait_error != ok && wait_error != os.NotFound { ret wait_error }
+    ret ok
+}
+
 fn power_release(a: *mem.Arena) -> err {
     if !inhibiting { ret NotFound }
     let killed = os.kill(inhibitor)
+    if killed != ok && killed != os.NotFound { ret killed }
     let (usage, wait_error) = os.wait_usage(inhibitor)
+    let release_error = power_release_error(killed, wait_error)
+    if release_error != ok { ret release_error }
     inhibiting = false
+    ret ok
+}
+
+@test
+fn power_release_reports_child_failures(a: *mem.Arena) -> err {
+    if power_release_error(os.Denied, ok) != os.Denied { ret Failed }
+    if power_release_error(ok, os.Failed) != os.Failed { ret Failed }
+    if power_release_error(os.NotFound, os.NotFound) != ok { ret Failed }
+    if power_release_error(ok, ok) != ok { ret Failed }
     ret ok
 }
 
@@ -2407,7 +2596,16 @@ fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
     let pool = os.objc_pool_push()
     let count = usize(page.width) * usize(page.height)
     let data = os.cf_data_create(0usize, mem.address_of(&page.pixels[0usize]), count * 4usize)
+    if data == 0usize {
+        os.objc_pool_pop(pool)
+        ret Failed
+    }
     let provider = os.cg_provider_with_data(data)
+    if provider == 0usize {
+        os.cf_release(data)
+        os.objc_pool_pop(pool)
+        ret Failed
+    }
     let space = os.cg_color_space()
     let picture = os.cg_image_create(usize(page.width), usize(page.height), 8usize, 32usize, usize(page.width) * 4usize, space, 8194u32, provider, 0usize, 0i32, 0i32)
     var result = ok
@@ -2902,16 +3100,21 @@ fn screen_capture(a: *mem.Arena) -> (Icon, err) {
 // Biometrics (D5220): LocalAuthentication's `canEvaluatePolicy:` for Touch ID is asked every time, so the capability is true
 // only on a Mac that has it enrolled; `biometric_verify` shows the system sheet through `evaluatePolicy:localizedReason:reply:`,
 // whose reply is a block (built by hand like the permission block, a global one), and waits up to a minute for the person.
-var bio_words: [8]u64 = zero
-var bio_done: bool = zero
-var bio_ok: bool = zero
+var bio_locks: [1]sync.Mutex = zero
+// The framework retains its completion block until it calls it.  Its ABI
+// storage therefore lives for the process, not in `biometric_verify`'s caller
+// arena.  `result` is 0 while pending, 1 when rejected and 2 when granted.
+type BioState = struct { words: [8]u64, block: Atomic[usize], result: Atomic[u32] }
+var bio_state: BioState = zero
 
 type BioInvoke = union { function: fn(usize, usize, usize), bits: usize }
 
 @cc(c)
 fn bio_replied(block: usize, success: usize, failure: usize) {
-    bio_ok = success & 255usize != 0usize
-    bio_done = true
+    if block != atomic.load(&bio_state.block, .Acquire) { ret }
+    var result = 1u32
+    if success & 255usize != 0usize { result = 2u32 }
+    atomic.store(&bio_state.result, result, .Release)
 }
 
 fn biometric_context() -> usize {
@@ -2937,31 +3140,71 @@ fn biometric_available() -> bool {
 
 fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
     if !biometric_available() { ret (.Unavailable, Unsupported) }
+    // LocalAuthentication invokes its reply asynchronously on its own queue.
+    // Keep a timed-out request alive through `invalidate`'s cancellation reply
+    // before this process-lifetime block can be reused.
+    sync.mutex_lock(&bio_locks[0usize])
     let pool = os.objc_pool_push()
     let context = biometric_context()
+    if context == 0usize {
+        os.objc_pool_pop(pool)
+        sync.mutex_unlock(&bio_locks[0usize])
+        ret (.Unavailable, Failed)
+    }
     var invoke: BioInvoke = zero
     invoke.function = bio_replied
     let symbol = "_NSConcreteGlobalBlock\x00"
-    bio_words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
-    bio_words[1usize] = 268435456u64
-    bio_words[2usize] = u64(invoke.bits)
-    bio_words[3usize] = u64(mem.address_of(&bio_words[4usize]))
-    bio_words[4usize] = 0u64
-    bio_words[5usize] = 32u64
-    bio_done = false
+    bio_state.words[0usize] = u64(os.raw_dlsym(18446744073709551614usize, mem.address_of(&symbol[0usize])))
+    bio_state.words[1usize] = 268435456u64
+    bio_state.words[2usize] = u64(invoke.bits)
+    bio_state.words[3usize] = u64(mem.address_of(&bio_state.words[4usize]))
+    bio_state.words[4usize] = 0u64
+    bio_state.words[5usize] = 32u64
+    let block = mem.address_of(&bio_state.words[0usize])
+    atomic.store(&bio_state.result, 0u32, .Release)
+    atomic.store(&bio_state.block, block, .Release)
     let why = os.cocoa_text(reason)
-    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, mem.address_of(&bio_words[0usize]), 0usize)
+    let asked = os.msg4(context, os.cocoa_sel("evaluatePolicy:localizedReason:reply:\x00"), 1usize, why, block, 0usize)
     var waited = 0usize
-    while !bio_done && waited < 600usize {
+    while atomic.load(&bio_state.result, .Acquire) == 0u32 && waited < 600usize {
         os.cocoa_pump(100000000i64)
         waited += 1usize
+    }
+    let timed_out = atomic.load(&bio_state.result, .Acquire) == 0u32
+    if timed_out {
+        // Apple documents that this stops the pending evaluation and delivers
+        // its cancellation through the reply.  Do not release the block until
+        // that reply has stopped referring to it.
+        let invalidated = os.msg0(context, os.cocoa_sel("invalidate\x00"))
+        while atomic.load(&bio_state.result, .Acquire) == 0u32 {
+            os.cocoa_pump(100000000i64)
+        }
     }
     os.cf_release(why)
     let released = os.msg0(context, os.cocoa_sel("release\x00"))
     os.objc_pool_pop(pool)
-    if !bio_done { ret (.Unavailable, Failed) }
-    if bio_ok { ret (.Granted, ok) }
+    let result = atomic.load(&bio_state.result, .Acquire)
+    atomic.store(&bio_state.block, 0usize, .Release)
+    sync.mutex_unlock(&bio_locks[0usize])
+    if timed_out { ret (.Unavailable, Failed) }
+    if result == 2u32 { ret (.Granted, ok) }
     ret (.Denied, ok)
+}
+
+@test
+fn biometric_reply_ignores_foreign_block(a: *mem.Arena) -> err {
+    atomic.store(&bio_state.block, 17usize, .Release)
+    atomic.store(&bio_state.result, 0u32, .Release)
+    bio_replied(18usize, 1usize, 0usize)
+    if atomic.load(&bio_state.result, .Acquire) != 0u32 {
+        atomic.store(&bio_state.block, 0usize, .Release)
+        ret Invalid
+    }
+    bio_replied(17usize, 1usize, 0usize)
+    let good = atomic.load(&bio_state.result, .Acquire) == 2u32
+    atomic.store(&bio_state.block, 0usize, .Release)
+    if !good { ret Invalid }
+    ret ok
 }
 
 // The photo picker is the open panel narrowed to the image types the system reads, as `file_dialog`'s Open with several

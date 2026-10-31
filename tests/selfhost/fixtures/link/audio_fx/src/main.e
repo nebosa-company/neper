@@ -57,6 +57,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var noise: [2048]f64 = zero
     var x: [2048]f64 = zero
     var out: [2048]f64 = zero
+    let nan = 0.0f64 / 0.0f64
+    let infinity = 1.0f64 / 0.0f64
     var state = 7u64
     var i = 0usize
     while i < 2048usize {
@@ -84,6 +86,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if fx.compressor(x[..], -20.0f64, 4.0f64, 0.005f64, 0.05f64, 6.0f64, 3.0f64, sr, out[..]) != ok || !near(digest(out[..]), -0.08600932288545753f64, 1.0e-9f64) { os.exit(1i32) }
     if fx.compressor(x[..], -20.0f64, 0.0f64, 0.005f64, 0.05f64, 6.0f64, 3.0f64, sr, out[..]) != fx.Invalid { os.exit(1i32) }
+    if fx.compressor(x[..], -20.0f64, nan, 0.005f64, 0.05f64, 6.0f64, 3.0f64, sr, out[..]) != fx.Invalid { os.exit(1i32) }
+    if fx.compressor(x[..], -20.0f64, 4.0f64, infinity, 0.05f64, 6.0f64, 3.0f64, sr, out[..]) != fx.Invalid { os.exit(1i32) }
 
     // 2: the limiter never exceeds its ceiling; the gate.
     var loud: [2048]f64 = zero
@@ -99,6 +103,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if fx.gate(x[..], -20.0f64, 0.001f64, 0.01f64, sr, out[..]) != ok || !near(digest(out[..]), 0.26121090303668937f64, 1.0e-9f64) { os.exit(2i32) }
+    if fx.limiter(loud[..], infinity, 16usize, 0.01f64, sr, out[..]) != fx.Invalid { os.exit(2i32) }
+    if fx.gate(x[..], nan, 0.001f64, 0.01f64, sr, out[..]) != fx.Invalid { os.exit(2i32) }
 
     // 3: the equaliser.
     var bands: [6]f64 = zero
@@ -111,6 +117,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fx.equalizer(noise[..], bands[..], sr, out[..], scratch) != ok || !near(digest(out[..]), -0.14129681897485383f64, 1.0e-9f64) { os.exit(3i32) }
     if fx.equalizer(noise[..], bands[..5usize], sr, out[..], scratch) != fx.Invalid { os.exit(3i32) }
     if fx.equalizer(noise[..], bands[..], sr, out[..], scratch[..2000usize]) != fx.TooSmall { os.exit(3i32) }
+    bands[1usize] = infinity
+    if fx.equalizer(noise[..], bands[..], sr, out[..], scratch) != fx.Invalid { os.exit(3i32) }
+    bands[1usize] = 6.0f64
 
     // 4: echo cancellation of a four-tap echo path.
     var path: [4]f64 = zero
@@ -122,6 +131,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if echo_error != ok || echo_len != 2051usize { os.exit(4i32) }
     var w: [8]f64 = zero
     if fx.echo_cancel(big[..2048usize], noise[..], 0.5f64, w[..], out[..]) != ok || !near(digest(out[..]), 0.00500058919880445f64, 1.0e-9f64) { os.exit(4i32) }
+    if fx.echo_cancel(big[..2048usize], noise[..], nan, w[..], out[..]) != fx.Invalid { os.exit(4i32) }
     var echo_energy = 0.0f64
     var residual_energy = 0.0f64
     i = 1024usize
@@ -150,6 +160,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (conv_len, conv_error) = fx.reverb_convolution(noise[..64usize], noise[..8usize], out[..])
     if conv_error != ok || conv_len != 71usize || !near(digest(out[..71usize]), -15.575576712381912f64, 1.0e-9f64) { os.exit(5i32) }
     if fx.reverb_schroeder(impulse[..], 1.0f64, 0.2f64, big, scratch) != fx.Invalid { os.exit(5i32) }
+    if fx.reverb_schroeder(impulse[..], nan, 0.2f64, big, scratch) != fx.Invalid { os.exit(5i32) }
+    if fx.reverb_fdn(impulse[..], delays[..], nan, big, scratch) != fx.Invalid { os.exit(5i32) }
 
     // 6: phase vocoder time stretch and pitch shift of a 440 Hz tone.
     var tone: [4096]f64 = zero
@@ -159,6 +171,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if fx.time_stretch_len(4096usize, 1.5f64, 512usize, 128usize) != 5888usize || fx.time_stretch_scratch(4096usize, 1.5f64, 512usize, 128usize) != 38144usize { os.exit(6i32) }
+    if fx.synthesis_hop(128usize, nan) != 0usize || fx.time_stretch_len(4096usize, nan, 512usize, 128usize) != 0usize || fx.time_stretch_scratch(4096usize, infinity, 512usize, 128usize) != 0usize { os.exit(6i32) }
     let (stretched, stretch_error) = fx.time_stretch(tone[..], 1.5f64, 512usize, 128usize, big, scratch)
     if stretch_error != ok || stretched != 5888usize || !near(digest(big[..5888usize]), -1.2413258465343076f64, 1.0e-6f64) { os.exit(6i32) }
     if peak_bin(big[1024usize..5120usize], 2048usize, scratch[..4096usize], scratch[4096usize..8192usize]) != 220usize { os.exit(6i32) }
@@ -167,6 +180,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if peak_bin(shifted[..], 2048usize, scratch[..4096usize], scratch[4096usize..8192usize]) != 330usize { os.exit(6i32) }
     let (_, stretch_room) = fx.time_stretch(tone[..], 1.5f64, 512usize, 128usize, big, scratch[..1000usize])
     if stretch_room != fx.TooSmall { os.exit(6i32) }
+    let (_, nonfinite_stretch) = fx.time_stretch(tone[..], nan, 512usize, 128usize, big, scratch)
+    if nonfinite_stretch != fx.Invalid || fx.pitch_shift(tone[..], infinity, 512usize, 128usize, shifted[..], scratch) != fx.Invalid { os.exit(6i32) }
 
     // 7: TD-PSOLA of a period-80 pulse train by 1.5.
     var pulses: [4096]f64 = zero
@@ -180,6 +195,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fx.psola(pulses[..], marks[..], 1.5f64, big) != ok || !near(digest(big[..4096usize]), -1.0064309788619994f64, 1.0e-9f64) { os.exit(7i32) }
     if peak_bin(big[..4096usize], 150usize, scratch[..4096usize], scratch[4096usize..8192usize]) != 77usize { os.exit(7i32) }
     if fx.psola(pulses[..], marks[..1usize], 1.5f64, big) != fx.Invalid { os.exit(7i32) }
+    if fx.psola(pulses[..], marks[..], nan, big) != fx.Invalid { os.exit(7i32) }
 
     try io.print("audio fx ok\n")
     ret ok

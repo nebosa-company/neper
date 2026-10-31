@@ -783,6 +783,11 @@ math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$math_written" = 'executable written' ]
 chmod +x "$test_build/math-exact-selfhost"
 "$test_build/math-exact-selfhost"
+# f16 and bf16 use the same bit helpers as f32/f64.  This is a NIR check rather than a
+# runtime fixture because the host narrow-float backend is covered independently by
+# narrow_float; it pins the generic lowering that used to reject these instances.
+math_narrow=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/link/math_narrow/src/main.e" "$repo" x64 linux)
+[ "$math_narrow" = 'module nir ok' ]
 # `exp`, `exp2`, `log`, `log2` and `log10` against mpmath at 200 bits: within 1 ULP of the correctly rounded answer at every input, the reductions and the subnormal results included.
 math_exp_log_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_exp_log/src/main.e" "$repo" x64 linux "$test_build/math-exp-log-selfhost")
 [ "$math_exp_log_written" = 'executable written' ]
@@ -810,6 +815,51 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
+# call reach its explicit contract trap, while an equal-lane conversion remains valid.
+for simd_convert_build in debug release; do
+    simd_convert_path="$test_build/simd-convert-lanes-$simd_convert_build"
+    if [ "$simd_convert_build" = release ]; then
+        simd_convert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_convert_lanes/src/main.e" "$repo" x64 linux "$simd_convert_path" --release)
+    else
+        simd_convert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_convert_lanes/src/main.e" "$repo" x64 linux "$simd_convert_path")
+    fi
+    [ "$simd_convert_written" = 'executable written' ]
+    chmod +x "$simd_convert_path"
+    for simd_convert_case in expand narrow; do
+        simd_convert_status=0
+        simd_convert_output=$("$simd_convert_path" "$simd_convert_case" 2>&1) || simd_convert_status=$?
+        [ "$simd_convert_status" -eq 134 ]
+        case "$simd_convert_output" in
+            *'trap[unreachable]: simd.convert requires equal lane counts'*) ;;
+            *) printf '%s\n' "the SIMD conversion $simd_convert_case case did not reject unequal lanes ($simd_convert_build): $simd_convert_output" >&2; exit 1 ;;
+        esac
+    done
+    "$simd_convert_path" same
+done
+# Masked SIMD lanes at an overflowing logical offset must retain the always-on bounds
+# check in both build modes. A disabled lane at that same offset is deliberately quiet.
+for simd_masked_build in debug release; do
+    simd_masked_path="$test_build/simd-masked-bounds-$simd_masked_build"
+    if [ "$simd_masked_build" = release ]; then
+        simd_masked_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_masked_bounds/src/main.e" "$repo" x64 linux "$simd_masked_path" --release)
+    else
+        simd_masked_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_masked_bounds/src/main.e" "$repo" x64 linux "$simd_masked_path")
+    fi
+    [ "$simd_masked_written" = 'executable written' ]
+    chmod +x "$simd_masked_path"
+    for simd_masked_case in load store; do
+        simd_masked_status=0
+        simd_masked_output=$("$simd_masked_path" "$simd_masked_case" 2>&1) || simd_masked_status=$?
+        [ "$simd_masked_status" -eq 134 ]
+        case "$simd_masked_output" in
+            *'trap[bounds]'*) ;;
+            *) printf '%s\n' "the masked SIMD $simd_masked_case case did not trap ($simd_masked_build): $simd_masked_output" >&2; exit 1 ;;
+        esac
+    done
+    simd_masked_quiet=$("$simd_masked_path" quiet 2>&1)
+    [ "$simd_masked_quiet" = '' ]
+done
 # The same fixture under --cpu x64-v3 (D765): one AVX2 instruction per thirty-two-byte vector, debug and release.
 for avx_mode in "debug" "release --release"; do
     set -- $avx_mode
@@ -1194,6 +1244,11 @@ fmt_xlsx_book_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$fmt_xlsx_book_written" = 'executable written' ]
 chmod +x "$test_build/fmt-xlsx-book-selfhost"
 "$test_build/fmt-xlsx-book-selfhost"
+# `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
+fmt_xlsx_book_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx_book_utf8/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-book-utf8-selfhost")
+[ "$fmt_xlsx_book_utf8_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-book-utf8-selfhost"
+"$test_build/fmt-xlsx-book-utf8-selfhost"
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ooxml/src/main.e" "$repo" x64 linux "$test_build/fmt-ooxml-selfhost")
 [ "$fmt_ooxml_written" = 'executable written' ]
@@ -1329,6 +1384,11 @@ net_cookie_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$net_cookie_written" = 'executable written' ]
 chmod +x "$test_build/net-cookie-selfhost"
 "$test_build/net-cookie-selfhost"
+# `e.net.fetch`: caller credentials are filtered case-insensitively on cross-origin redirects (issue #1103).
+net_fetch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_fetch/src/main.e" "$repo" x64 linux "$test_build/net-fetch-selfhost")
+[ "$net_fetch_written" = 'executable written' ]
+chmod +x "$test_build/net-fetch-selfhost"
+"$test_build/net-fetch-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]
@@ -1492,6 +1552,11 @@ fmt_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fmt_graph_written" = 'executable written' ]
 chmod +x "$test_build/fmt-graph-selfhost"
 "$test_build/fmt-graph-selfhost"
+# `e.async.init`: a failed poller setup returns the caller's tiny arena to its entry mark.
+async_init_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async_init/src/main.e" "$repo" x64 linux "$test_build/async-init-selfhost")
+[ "$async_init_written" = 'executable written' ]
+chmod +x "$test_build/async-init-selfhost"
+"$test_build/async-init-selfhost"
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async/src/main.e" "$repo" x64 linux "$test_build/async-selfhost")
 [ "$async_written" = 'executable written' ]
@@ -2332,10 +2397,11 @@ chmod +x "$test_build/css-paint-selfhost"
 ui_html_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_html_view/src/main.e" "$repo" x64 linux "$test_build/ui-html-view-selfhost")
 [ "$ui_html_view_written" = 'executable written' ]
 chmod +x "$test_build/ui-html-view-selfhost"
-# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters; the whole WPT corpus (896 + 278 cases) runs in tests/browser/url/run.sh (tracker 1.5).
+# `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters. Run the whole compiler-only WPT corpus (896 + 278 cases) with the self-hosted compiler too (tracker 1.5).
 fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
 [ "$fmt_url_written" = 'executable written' ]
 chmod +x "$test_build/fmt-url-selfhost"
+NEPER_COMPILER="$test_build/neper-self" NEPER_URL_WPT_EXE="$test_build/url-wpt-selfhost" "$repo/tests/browser/url/run.sh" --all
 # `e.text.charset`, `e.text.charset_cjk`, `e.fmt.html.encoding`: Encoding Standard labels, single-byte and multi-byte decoders (windows-1252, ISO-8859-2, KOI8-R, Shift_JIS, EUC-JP, Big5, GBK, GB18030, EUC-KR, ISO-2022-JP), BOM override and the HTML meta prescan (tracker 1.4).
 text_encoding_std_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_encoding_std/src/main.e" "$repo" x64 linux "$test_build/text-encoding-std-selfhost")
 [ "$text_encoding_std_written" = 'executable written' ]
@@ -2351,6 +2417,11 @@ chmod +x "$test_build/text-encoding-std-selfhost"
 "$test_build/css-style-selfhost"
 "$test_build/fmt-dom-selfhost"
 "$test_build/fmt-css-selfhost"
+# `e.fmt.css`: a matching selector cannot mask an invalid later selector-list arm.
+fmt_css_selector_validation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_css_selector_validation/src/main.e" "$repo" x64 linux "$test_build/fmt-css-selector-validation-selfhost")
+[ "$fmt_css_selector_validation_written" = 'executable written' ]
+chmod +x "$test_build/fmt-css-selector-validation-selfhost"
+"$test_build/fmt-css-selector-validation-selfhost"
 # `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
 dist_consensus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_consensus/src/main.e" "$repo" x64 linux "$test_build/dist-consensus-selfhost")
 [ "$dist_consensus_written" = 'executable written' ]
@@ -2640,6 +2711,12 @@ fmt_arrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fmt_arrow_written" = 'executable written' ]
 chmod +x "$test_build/fmt-arrow-selfhost"
 "$test_build/fmt-arrow-selfhost"
+# `e.fmt.mermaid`: quoted YAML titles, escaped HTML-bearing labels, and exhausted builders return errors.
+fmt_mermaid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mermaid/src/main.e" "$repo" x64 linux "$test_build/fmt-mermaid-selfhost")
+[ "$fmt_mermaid_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mermaid-selfhost"
+fmt_mermaid_output=$("$test_build/fmt-mermaid-selfhost")
+[ "$fmt_mermaid_output" = 'fmt mermaid ok' ]
 # `e.net.balance`: the `aabacaa` sequence, P2C picks equal to a PCG replica, a 65537-slot Maglev table equal to the replica with one backend's removal moving a fifth of the slots (D876).
 net_balance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_balance/src/main.e" "$repo" x64 linux "$test_build/net-balance-selfhost")
 [ "$net_balance_written" = 'executable written' ]
@@ -2776,6 +2853,25 @@ crypto_noise_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$crypto_noise_written" = 'executable written' ]
 chmod +x "$test_build/crypto-noise-selfhost"
 "$test_build/crypto-noise-selfhost"
+# BLAKE2s constructor bounds are always-on traps, not debug-only bounds checks.
+for crypto_noise_mode in blake2s-output-0 blake2s-output-33; do
+    crypto_noise_status=0
+    crypto_noise_output=$("$test_build/crypto-noise-selfhost" "$crypto_noise_mode" 2>&1) || crypto_noise_status=$?
+    [ "$crypto_noise_status" -eq 134 ]
+    case "$crypto_noise_output" in
+        *'trap[unreachable]: blake2s output length must be 1..32'*) ;;
+        *) printf '%s\n' "crypto_noise did not reject $crypto_noise_mode: $crypto_noise_output" >&2; exit 1 ;;
+    esac
+done
+for crypto_noise_mode in blake2s-key-33 blake2s-key-65; do
+    crypto_noise_status=0
+    crypto_noise_output=$("$test_build/crypto-noise-selfhost" "$crypto_noise_mode" 2>&1) || crypto_noise_status=$?
+    [ "$crypto_noise_status" -eq 134 ]
+    case "$crypto_noise_output" in
+        *'trap[unreachable]: blake2s key length must be at most 32'*) ;;
+        *) printf '%s\n' "crypto_noise did not reject $crypto_noise_mode: $crypto_noise_output" >&2; exit 1 ;;
+    esac
+done
 # `e.fmt.brotli`: streams from the brotli package at qualities 0 to 11 including 29 dictionary references and multi-block texts decoded exactly; truncation, trailing bytes and short buffers reported (D878).
 fmt_brotli_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_brotli/src/main.e" "$repo" x64 linux "$test_build/fmt-brotli-selfhost")
 [ "$fmt_brotli_written" = 'executable written' ]
@@ -3194,6 +3290,111 @@ sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$sqlite_written" = 'executable written' ]
 chmod +x "$test_build/x-sqlite-selfhost"
 TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
+# `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
+# table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
+python3 "$repo/scripts/gen_khronos_gl.py" --check
+khronos_load_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_load/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-load-selfhost")
+[ "$khronos_load_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-load-selfhost"
+"$test_build/x-khronos-gl-load-selfhost"
+# The EGL mock fixture checks pbuffer config compatibility and shared display lifetime without a driver.
+khronos_egl_mock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_egl_context_mock/src/main.e" "$repo" x64 linux "$test_build/x-khronos-egl-context-mock-selfhost")
+[ "$khronos_egl_mock_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-egl-context-mock-selfhost"
+"$test_build/x-khronos-egl-context-mock-selfhost"
+# `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 and GLES 3.0/3.1 on Mesa's surfaceless
+# EGL, drawn, read back (llvmpipe's whole image against its golden hash) and computed on; then a
+# context on an os window through a second Xlib connection; then examples/gl_triangle for 3
+# frames when a display is there. A host without EGL prints what it skipped.
+khronos_headless_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_headless/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-headless-selfhost")
+[ "$khronos_headless_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-headless-selfhost"
+"$test_build/x-khronos-gl-headless-selfhost"
+khronos_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_window/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-window-selfhost")
+[ "$khronos_window_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-window-selfhost"
+"$test_build/x-khronos-gl-window-selfhost"
+# The barrier fixture holds a fake Xlib initializer open until the second caller is in the wait path.
+xlib_loader_race_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_xlib_loader_race/src/main.e" "$repo" x64 linux "$test_build/x-khronos-xlib-loader-race-selfhost")
+[ "$xlib_loader_race_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-xlib-loader-race-selfhost"
+"$test_build/x-khronos-xlib-loader-race-selfhost"
+# (D5899) Twelve resizes from outside, each frame drawn and read back at its new size.
+khronos_resize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_resize/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-resize-selfhost")
+[ "$khronos_resize_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-resize-selfhost"
+"$test_build/x-khronos-gl-resize-selfhost"
+# (D5911) WM_DPICHANGED: the window takes the suggested rectangle and GL draws at the new size (Windows; here it says so).
+khronos_dpi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_dpi/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-dpi-selfhost")
+[ "$khronos_dpi_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-dpi-selfhost"
+"$test_build/x-khronos-gl-dpi-selfhost"
+# `x.khronos.present` (D5887): BGRA frames at the physical sizes of scales 1.0, 1.5 and 2.0 come
+# back from the window's back buffer bit for bit, through GL 3.3 and GLES 3.0.
+khronos_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_present/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-present-selfhost")
+[ "$khronos_present_written" = 'executable written' ]
+chmod +x "$test_build/x-khronos-gl-present-selfhost"
+"$test_build/x-khronos-gl-present-selfhost"
+# e.gpu's `.Gl` backend (D5888, D5889): built with `--gpu glsl`, x.khronos.compute installed, and every word of saxpy (ftz
+# where the driver flushes denormals), racing u8/i16 stores, signed division by negatives and a 2-D grid equal to the CPU
+# backend's; a checked overrun comes back as a Bounds fault.
+gpu_gl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-selfhost" --gpu glsl)
+[ "$gpu_gl_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-selfhost"
+"$test_build/gpu-gl-selfhost"
+# (D5904) Again with Mesa answering as an ES 3.1 driver: the ES pass takes 3.1's header with GL_OES_gpu_shader5's `precise`.
+MESA_GLES_VERSION_OVERRIDE=3.1 "$test_build/gpu-gl-selfhost"
+# (D5908) A shared library: `@export`ed `@cc` functions found and called through dlopen by a C host.
+shared_library_written=$($test_build/neper-self emit-shared-library "$repo/tests/selfhost/fixtures/link/shared_library/src/main.e" "$repo" x64 linux "$test_build/libshared-library-selfhost.so")
+[ "$shared_library_written" = 'executable written' ]
+cc -o "$test_build/shared-library-host" "$repo/tests/selfhost/fixtures/link/shared_library/host.c" -ldl
+"$test_build/shared-library-host" "$test_build/libshared-library-selfhost.so"
+# (D5943) 65,536 f32 quotients and square roots through the GLSL emitter's exact integer sequences, word-equal to the CPU.
+gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_exact/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-exact-selfhost" --gpu glsl)
+[ "$gpu_gl_exact_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-exact-selfhost"
+"$test_build/gpu-gl-exact-selfhost"
+# (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
+gpu_gl_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_subgroup/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-subgroup-selfhost" --gpu glsl)
+[ "$gpu_gl_subgroup_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-subgroup-selfhost"
+"$test_build/gpu-gl-subgroup-selfhost"
+# (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
+gpu_gl_limits_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_limits/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-limits-selfhost" --gpu glsl)
+[ "$gpu_gl_limits_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-limits-selfhost"
+"$test_build/gpu-gl-limits-selfhost"
+# (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
+gpu_gl_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_f64/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-f64-selfhost" --gpu glsl)
+[ "$gpu_gl_f64_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-f64-selfhost"
+"$test_build/gpu-gl-f64-selfhost"
+# (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
+gpu_gl_narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_narrow/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-narrow-selfhost" --gpu glsl)
+[ "$gpu_gl_narrow_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-narrow-selfhost"
+"$test_build/gpu-gl-narrow-selfhost"
+# (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
+gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
+[ "$gpu_gl_threads_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-threads-selfhost"
+"$test_build/gpu-gl-threads-selfhost"
+# (D5898) A reopened GL device takes its kernel from the program-binary cache.
+gpu_gl_cache_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_cache/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-cache-selfhost" --gpu glsl)
+[ "$gpu_gl_cache_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gl-cache-selfhost"
+"$test_build/gpu-gl-cache-selfhost"
+# (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
+saxpy_glsl_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-glsl-selfhost" --gpu glsl)
+[ "$saxpy_glsl_written" = 'executable written' ]
+python3 "$repo/scripts/dump_glsl.py" "$test_build/saxpy-glsl-selfhost" --check "$repo/tests/conformance/glsl/saxpy.glsl"
+loop_glsl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_loop/src/main.e" "$repo" x64 linux "$test_build/loop-glsl-selfhost" --gpu glsl)
+[ "$loop_glsl_written" = 'executable written' ]
+python3 "$repo/scripts/dump_glsl.py" "$test_build/loop-glsl-selfhost" --check "$repo/tests/conformance/glsl/loops.glsl"
+gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
+[ "$gl_triangle_written" = 'executable written' ]
+chmod +x "$test_build/gl-triangle-selfhost"
+if [ -n "${DISPLAY:-}" ]; then "$test_build/gl-triangle-selfhost" --frames 3; fi
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_db_units/src/main.e" "$repo" x64 linux "$test_build/x-db-units-selfhost")
@@ -4106,6 +4307,12 @@ fmt_woff_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/fmt-woff-selfhost"
 fmt_woff_output=$("$test_build/fmt-woff-selfhost")
 [ "$fmt_woff_output" = 'fmt woff ok' ]
+# `e.fmt.woff2`: declared lengths and optional metadata/private ranges stay inside the container.
+fmt_woff2_bounds_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_woff2_bounds/src/main.e" "$repo" x64 linux "$test_build/fmt-woff2-bounds-selfhost")
+[ "$fmt_woff2_bounds_written" = 'executable written' ]
+chmod +x "$test_build/fmt-woff2-bounds-selfhost"
+fmt_woff2_bounds_output=$("$test_build/fmt-woff2-bounds-selfhost")
+[ "$fmt_woff2_bounds_output" = 'fmt woff2 bounds ok' ]
 # e.fmt.xlsx and x.migrate.typemaps against Appdor's xlsx.js and importer maps (700 cases, D2347).
 fmt_xlsx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-selfhost" -j 2)
 [ "$fmt_xlsx_written" = 'executable written' ]
@@ -4334,6 +4541,12 @@ proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/proc-sys-selfhost"
 proc_sys_output=$("$test_build/proc-sys-selfhost")
 [ "$proc_sys_output" = 'proc sys ok' ]
+# Linux i386 has its own getpid/statfs syscall table and a four-byte `struct statfs` layout.
+proc_sys_x86_path="$test_build/proc-sys-x86-selfhost"
+proc_sys_x86_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_sys_x86_linux/src/main.e" "$repo" x86 linux "$proc_sys_x86_path" -j 2)
+[ "$proc_sys_x86_written" = 'executable written' ]
+chmod +x "$proc_sys_x86_path"
+"$proc_sys_x86_path"
 # e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
 metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics_export/src/main.e" "$repo" x64 linux "$test_build/metrics-export-selfhost" -j 2)
 [ "$metrics_export_written" = 'executable written' ]
@@ -5270,7 +5483,12 @@ if [ -n "$previous_gpu_cache" ]; then export NEPER_GPU_CACHE=$previous_gpu_cache
 float_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/float.e" "$repo" spv none "$test_build/float.spv")
 [ "$float_spirv_written" = 'spir-v written' ]
 cmp "$test_build/float.spv" "$repo/tests/conformance/spirv/float.spv"
-gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost")
+# (#1311) f16 and bf16 remain distinct raw u16 formats in SPIR-V. The
+# corpus covers scalar arithmetic, comparisons, casts and vector simd.fma lanes.
+narrow_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/narrow.e" "$repo" spv none "$test_build/narrow.spv")
+[ "$narrow_spirv_written" = 'spir-v written' ]
+cmp "$test_build/narrow.spv" "$repo/tests/conformance/spirv/narrow.spv"
+gpu_vulkan_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_vulkan_float/src/main.e" "$repo" x64 linux "$test_build/gpu-vulkan-float-selfhost" --gpu glsl)
 [ "$gpu_vulkan_float_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-float-selfhost"
 gpu_vulkan_float_output=$("$test_build/gpu-vulkan-float-selfhost")
@@ -5314,7 +5532,7 @@ case "$gpu_staging_output" in
     *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
 esac
 for float_mode in '' '--release'; do
-    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode)
+    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode --gpu glsl)
     [ "$gpu_float_modes_written" = 'executable written' ]
     chmod +x "$test_build/gpu-float-modes-selfhost"
     gpu_float_modes_output=$("$test_build/gpu-float-modes-selfhost")
@@ -6309,6 +6527,20 @@ float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$float_written" = 'executable written' ]
 chmod +x "$test_build/float-scalar-selfhost"
 "$test_build/float-scalar-selfhost"
+# f16 and bf16 (D5913): widen to f32, operate, round once to nearest-even, in integer
+# instructions on x64 and with FCVT (f16) or the same integer rounding (bf16) on aarch64;
+# every operation and conversion folds thousands of operands into a hash that
+# scripts/narrow_float_vectors.py computes with numpy and exact rational rounding.
+narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/narrow_float/src/main.e" "$repo" x64 linux "$test_build/narrow-float-selfhost")
+[ "$narrow_written" = 'executable written' ]
+chmod +x "$test_build/narrow-float-selfhost"
+"$test_build/narrow-float-selfhost"
+narrow_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/narrow_float/src/main.e" "$repo" aarch64 linux "$test_build/narrow-float-a64")
+[ "$narrow_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1; then
+    chmod +x "$test_build/narrow-float-a64"
+    qemu-aarch64 "$test_build/narrow-float-a64"
+fi
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty
@@ -8068,6 +8300,14 @@ for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_valu
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# `resource` is permitted only before struct and union bodies (D5921).
+resource_prefix_actual="$test_build/conformance-reject-resource_prefix.jsonl"
+resource_prefix_stderr="$test_build/conformance-reject-resource_prefix.stderr"
+resource_prefix_status=0
+$test_build/neper-self check-file "$conformance_root/reject/resource_prefix.e" "$repo" x64 linux --json > "$resource_prefix_actual" 2> "$resource_prefix_stderr" || resource_prefix_status=$?
+[ "$resource_prefix_status" -eq 1 ]
+[ ! -s "$resource_prefix_stderr" ]
+cmp -s "$resource_prefix_actual" "$conformance_root/reject/resource_prefix.expected.jsonl" || { printf '%s\n' 'check-file --json on reject/resource_prefix.e differs from the conformance corpus' >&2; exit 1; }
 # D672-D715: alias-aware region/thread identity and deferred-reset timing.
 for conformance_case in 'reject regions_pointer_chain 1' 'reject regions_arena_alias 1' 'reject safety_thread_context_alias 1' 'accept regions_deferred_after_alloc 0' 'reject regions_deferred_escape 1' 'reject regions_cast 1' 'accept regions_cast_valid 0' 'reject regions_freeze_grow 1' 'reject regions_freeze_forgotten 1' 'accept pins_last_use 0' 'reject regions_container_retain 1' 'accept regions_container_valid 0' 'reject regions_retained_argument 1' 'accept regions_retained_argument_valid 0' 'reject regions_noescape_store 1' 'reject owning_forgotten 1' 'reject owning_put_back_ignored 1' 'reject regions_arena_pointer_copy 1' 'reject regions_mark_copy 1' 'reject regions_accessor_alias 1' 'reject safety_thread_slice_context 1' 'reject regions_deferred_slice_escape 1' 'reject regions_deferred_pointer_escape 1' 'reject regions_deferred_pointer_alias_escape 1' 'reject regions_deferred_aggregate_escape 1' 'reject regions_deferred_aggregate_copy_escape 1' 'reject regions_deferred_aggregate_assignment_escape 1' 'reject safety_thread_aggregate_field_context 1' 'reject regions_aggregate_field_mutation 1' 'reject regions_aggregate_field_accessor 1' 'reject regions_deferred_nested_aggregate_escape 1' 'reject regions_deferred_nested_field_assignment_escape 1' 'reject regions_second_aggregate_field_alias 1' 'reject regions_deferred_second_aggregate_escape 1' 'reject regions_deferred_second_aggregate_copy_escape 1' 'reject regions_deferred_second_field_assignment_escape 1' 'reject safety_thread_second_aggregate_field_context 1' 'reject regions_third_aggregate_field_alias 1' 'reject regions_deferred_third_aggregate_escape 1' 'reject regions_deferred_third_aggregate_copy_escape 1' 'reject regions_deferred_third_field_assignment_escape 1' 'reject safety_thread_third_aggregate_field_context 1' 'reject regions_nested_second_field_alias 1' 'reject regions_deferred_nested_second_escape 1' 'reject regions_deferred_nested_second_copy_escape 1' 'reject regions_deferred_nested_pointer_assignment_escape 1' 'reject safety_thread_nested_second_field_context 1' 'reject regions_array_second_element_alias 1' 'reject regions_deferred_array_escape 1' 'reject regions_deferred_array_copy_escape 1' 'reject regions_deferred_array_element_assignment_escape 1' 'reject safety_thread_array_element_context 1' 'reject regions_dynamic_array_element_alias 1' 'reject regions_deferred_dynamic_array_element_escape 1' 'reject regions_dynamic_array_element_mutation 1' 'reject safety_thread_dynamic_array_element_context 1' 'reject regions_nested_dynamic_array_element_alias 1'; do
     set -- $conformance_case
@@ -8809,6 +9049,21 @@ $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest_uns
 cmp -s "$test_build/conformance-tools-manifest-unsafe.jsonl" "$conformance_root/tools/manifest_unsafe.x64-linux.expected.jsonl" || { echo "the unsafe inventory differs from the conformance corpus" >&2; exit 1; }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
+window_helpers_status=0
+$test_build/neper-self test-file "$repo/lib/e/os/window_helpers.e" "$repo" x64 linux "$test_build" --json > "$test_build/window-helpers-test.jsonl" || window_helpers_status=$?
+[ "$window_helpers_status" -eq 0 ]
+grep -q '"passed":2,"failed":0' "$test_build/window-helpers-test.jsonl"
+# The Vulkan constructor fakes its creation/destruction edge, so this rollback check needs
+# neither a loader nor a physical device.
+vulkan_buffer_status=0
+$test_build/neper-self test-file "$repo/lib/e/gpu/vulkan.e" "$repo" x64 linux "$test_build" --json > "$test_build/vulkan-buffer-test.jsonl" || vulkan_buffer_status=$?
+[ "$vulkan_buffer_status" -eq 0 ]
+grep -q '"passed":2,"failed":0' "$test_build/vulkan-buffer-test.jsonl"
+# The workgroup-size guard is pure arithmetic, so it runs without a GPU loader.
+gpu_workgroup_status=0
+$test_build/neper-self test-file "$repo/lib/e/gpu.e" "$repo" x64 linux "$test_build" --json > "$test_build/gpu-workgroup-test.jsonl" || gpu_workgroup_status=$?
+[ "$gpu_workgroup_status" -eq 0 ]
+grep -q '"passed":1,"failed":0' "$test_build/gpu-workgroup-test.jsonl"
 test_actual="$test_build/conformance-tools-test.jsonl"
 test_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?
@@ -10738,7 +10993,7 @@ if command -v node >/dev/null 2>&1; then
     wasm_plain_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.wasm")
     [ "$wasm_plain_output" = "$(printf 'threads 0\nthread.id 0\nspawn -1\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0')" ] || { printf '%s\n' "the plain module's thread instructions answered: $wasm_plain_output" >&2; exit 1; }
     wasm_threads_output=$(cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/thread_ops.threads.wasm")
-    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
+    [ "$wasm_threads_output" = "$(printf 'threads 1\nthread.id 0\nspawn null -6\nspawn unaligned -6\nspawn past end -6\npoll valid 0\npoll subscription 21\npoll event 21\npoll taken 21\npoll count 21\nload 7\ncas hit 7\nload 4000000000\ncas miss 4000000000\nload 4000000000\nnotify 0\nwait different 1\nwait timeout 2')" ] || { printf '%s\n' "the threaded module's thread instructions answered: $wasm_threads_output" >&2; exit 1; }
     # (D5832) A directory watch past the first event is polled snapshots on wasm32-wasi; the fixture is wasm-only (a native
     # inotify watch hands events over differently).
     "$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/wasm/os_watch_modify/src/main.e" "$repo" wasm32 wasi "$wasm_build/os_watch_modify.wasm" > /dev/null
@@ -10752,6 +11007,11 @@ if command -v node >/dev/null 2>&1; then
     wasm_status=0
     (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/wasm_threads.threads.wasm" exit > /dev/null) || wasm_status=$?
     [ "$wasm_status" -eq 7 ] || { printf '%s\n' "wasm_threads exit answered $wasm_status, not 7" >&2; exit 1; }
+    # A capped thread host makes a fresh 64 KiB stack's memory.grow fail. The fixture also pins
+    # the near-4 GiB stack bound and checks that the failed growth did not advance a reservation.
+    wasm_fixture=wasm_thread_reservation
+    [ "$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$wasm_fixture/src/main.e" "$repo" wasm32 wasi "$wasm_build/$wasm_fixture.threads.wasm" --threads)" = 'executable written' ] || { printf '%s\n' "$wasm_fixture did not emit as a threaded WebAssembly module" >&2; exit 1; }
+    (cd "$repo" && NEPER_WASM_MAX_PAGES=initial node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.threads.wasm") || { printf '%s\n' 'wasm_thread_reservation failed under a capped threaded host' >&2; exit 1; }
     # (D5750, C204) Host pipes and the server threads of the net fixtures: pipes between threads under the thread host, and a live
     # STARTTLS session against a server thread over two pipes (net_pop3), each built with --threads.
     for wasm_fixture in os_pipe_threads net_pop3; do
@@ -10826,7 +11086,13 @@ if command -v node >/dev/null 2>&1; then
     [ "$(wc -c < "$wasm_build/release.wasm")" -lt "$(wc -c < "$wasm_build/release-debug.wasm")" ]
     # (D5678) what a page passes to lib/wasm/neper-host.js and gets back: arguments, environment, files, output, status.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/host_files/src/main.e" "$repo" wasm32 wasi "$wasm_build/host_files.wasm")" = 'executable written' ]
-    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm" "$wasm_build/thread_ops.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_proc_cleanup.mjs) || { printf '%s\n' 'the WASM process-host cleanup check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_proc_preopen.mjs) || { printf '%s\n' 'the WASM process-host preopen boundary check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_preopen_symlink.mjs) || { printf '%s\n' 'the WASM preopen symlink boundary check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_sys_disk_precision.mjs) || { printf '%s\n' 'the WASM sys_disk precision check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_import_ranges.mjs) || { printf '%s\n' 'the WASM host-import guest-range check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/window_ranges.mjs) || { printf '%s\n' 'the WASM window guest-range check failed' >&2; exit 1; }
     # (C208, D5680) the window of lib/wasm/window.js: an e.ui program (tests/wasm/browser/ui_counter) in a canvas shim, plain and threaded.
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.wasm")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/tests/wasm/browser/ui_counter/src/main.e" "$repo" wasm32 wasi "$wasm_build/ui_counter.threads.wasm" --threads)" = 'executable written' ]
@@ -10998,7 +11264,7 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     dd if=/dev/zero of="$fs_disk" bs=1M count=1 status=none
     neperos_fswrite=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fswrite" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_fswrite" in
-        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'fs client canonical /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS filesystem write boot wrong: $neperos_fswrite" >&2; exit 1 ;;
     esac
     case "$neperos_fswrite" in *'fs denied'*) ;; *) printf '%s\n' "the capability gate did not refuse the uncapped client: $neperos_fswrite" >&2; exit 1 ;; esac
@@ -11159,6 +11425,18 @@ greeting"
         *'hello from e.io on neperos'*'e.io writer runs at EL0'*'io roundtrip ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.io did not run the portable surface and buffer round-trip: $neperos_io" >&2; exit 1 ;;
     esac
+    # window_present must reject a source shorter than width * height before it reads the source or
+    # signals the compositor. This stand-alone program has neither mapping nor endpoint, so a
+    # successful result proves the guard ran before either side effect.
+    window_present_test_img="$test_build/window_present_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/window_present_test.e" "$repo" aarch64 neperos "$window_present_test_img")" = 'executable written' ]
+    window_present_archive="$test_build/window-present-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$window_present_archive" "$window_present_test_img"
+    neperos_window_present=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$window_present_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_window_present" in
+        *'window present short frame refused'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS window_present read a short frame: $neperos_window_present" >&2; exit 1 ;;
+    esac
     # (D4704, C107) e.data.map and os.args on NeperOS: map_test hashes u64 and str keys through the
     # program runtime's `neper_hash_bytes` and reads `os.args` through `neper_os_args`, both new.
     map_test_img="$test_build/map_test.img"
@@ -11224,6 +11502,34 @@ greeting"
         *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
     esac
     case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # A NeperOS file cursor is bounded by its 512-byte client-side buffer. Negative seeks from
+    # every origin, over-capacity seeks and both signed extremes must fail without moving it.
+    fs_seek_test_img="$test_build/fs_seek_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_seek_test.e" "$repo" aarch64 neperos "$fs_seek_test_img")" = 'executable written' ]
+    fs_seek_archive="$test_build/fs-seek-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fs_seek_archive" "$fs_server_img" "$fs_seek_test_img" "$fs_denied_img"
+    fs_seek_disk="$test_build/fs-seek-disk.img"
+    dd if=/dev/zero of="$fs_seek_disk" bs=1M count=1 status=none
+    neperos_fs_seek=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_seek_archive" -append "fsserver fswrite" -drive "file=$fs_seek_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fs_seek" in
+        *'fs seek bounds ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS seek did not reject invalid client cursors: $neperos_fs_seek" >&2; exit 1 ;;
+    esac
+    case "$neperos_fs_seek" in *'fs seek bounds failed'*) printf '%s\n' "NeperOS seek accepted an invalid client cursor: $neperos_fs_seek" >&2; exit 1 ;; esac
+    # A buffered e.os write reaches the server on close. Its missing parent makes that flush fail
+    # after the local write succeeded, so close must return Failed rather than hide the reply.
+    fs_close_error_test_img="$test_build/fs_close_error_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_close_error_test.e" "$repo" aarch64 neperos "$fs_close_error_test_img")" = 'executable written' ]
+    fs_close_error_archive="$test_build/fs-close-error-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fs_close_error_archive" "$fs_server_img" "$fs_close_error_test_img" "$fs_denied_img"
+    fs_close_error_disk="$test_build/fs-close-error-disk.img"
+    dd if=/dev/zero of="$fs_close_error_disk" bs=1M count=1 status=none
+    neperos_fs_close_error=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_close_error_archive" -append "fsserver fswrite" -drive "file=$fs_close_error_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fs_close_error" in
+        *'fs close error propagated'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS close discarded a filesystem write error: $neperos_fs_close_error" >&2; exit 1 ;;
+    esac
+    case "$neperos_fs_close_error" in *'fs close error discarded'*) printf '%s\n' "NeperOS close hid a filesystem write error: $neperos_fs_close_error" >&2; exit 1 ;; esac
     # (D2248) A driver server's aux page must not alias its image: aux_test, padded with 0xA5 to 300,000 bytes
     # (past the old 262,080-byte aux location), checks that the padding there is untouched and the page filled.
     aux_test_img="$test_build/aux_test.img"

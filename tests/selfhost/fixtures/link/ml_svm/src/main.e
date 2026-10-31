@@ -124,6 +124,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, room) = svm.smo(x[..], y[..], 8usize, 2usize, linear, 1.0f64, 0.001f64, 10u32, 500u32, &r, alphas[..4usize])
     if room != svm.TooSmall { os.exit(3i32) }
 
+    // 4: SMO rejects one sample before selecting its random partner, while two remain valid.
+    var pair_x: [2]f64 = zero
+    pair_x[1usize] = 1.0f64
+    var pair_y: [2]f64 = zero
+    pair_y[0usize] = 0.0f64 - 1.0f64
+    pair_y[1usize] = 1.0f64
+    var pair_alphas: [2]f64 = zero
+    let (_, pair_sweeps, pair_error) = svm.smo(pair_x[..], pair_y[..], 2usize, 1usize, linear, 1.0f64, 0.001f64, 10u32, 100u32, &r, pair_alphas[..])
+    if pair_error != ok || pair_sweeps == 0u32 { os.exit(4i32) }
+    var one_alpha: [1]f64 = zero
+    let (_, _, one_sample) = svm.smo(x[..2usize], y[..1usize], 1usize, 2usize, linear, 1.0f64, 0.001f64, 10u32, 100u32, &r, one_alpha[..])
+    if one_sample != svm.Invalid { os.exit(4i32) }
+
     try io.print("ml svm ok\n")
     ret ok
 }

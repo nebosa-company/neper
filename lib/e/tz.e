@@ -26,13 +26,20 @@ error TooLarge
 
 const NANOS: i64 = 1000000000i64
 const DAY: i64 = 86400i64
+const TIMESTAMP_MAX: i64 = 9223372036854775807i64
+const TIMESTAMP_MIN: i64 = -9223372036854775807i64 - 1i64
+const TIMESTAMP_EDGE_SECONDS: i64 = 9223372036i64
 
 type Rule = struct { has_dst: bool, std_offset: i32, dst_offset: i32, std_name: str, dst_name: str, start_month: i64, start_week: i64, start_day: i64, start_time: i64, end_month: i64, end_week: i64, end_day: i64, end_time: i64 }
 type ZoneData = struct { name: str, transitions: []i64, type_of: []u8, offsets: []i32, daylight: []bool, abbreviations: []str, rule: Rule, has_rule: bool }
 type State = struct { version: str, zones: []ZoneData, zone_names: []str }
 
+fn be32_u(data: []const u8, at: usize) -> u32 {
+    ret (u32(data[at]) << 24u32) | (u32(data[at + 1usize]) << 16u32) | (u32(data[at + 2usize]) << 8u32) | u32(data[at + 3usize])
+}
+
 fn be32(data: []const u8, at: usize) -> i64 {
-    let raw = (u32(data[at]) << 24u32) | (u32(data[at + 1usize]) << 16u32) | (u32(data[at + 2usize]) << 8u32) | u32(data[at + 3usize])
+    let raw = be32_u(data, at)
     if raw >= 2147483648u32 { ret i64(raw) - 4294967296i64 }
     ret i64(raw)
 }
@@ -66,8 +73,23 @@ fn rule_name(text: str, at: usize) -> (str, usize, bool) {
     ret (text[at..stop], stop, true)
 }
 
+// An unsigned, bounded decimal field. Checking before multiplication makes long
+// untrusted TZif footer fields invalid instead of overflowing i64.
+fn rule_number(text: str, at: usize, maximum: i64) -> (i64, usize, bool) {
+    var cursor = at
+    var value = 0i64
+    while cursor < text.len && str.is_ascii_digit(text[cursor]) {
+        let digit = i64(text[cursor] - 48u8)
+        if digit > maximum || value > (maximum - digit) / 10i64 { ret (0i64, at, false) }
+        value = value * 10i64 + digit
+        cursor += 1usize
+    }
+    if cursor == at { ret (0i64, at, false) }
+    ret (value, cursor, true)
+}
+
 // `[+-]h[:m[:s]]` in seconds; POSIX offsets are west-positive, so the caller negates.
-fn rule_time(text: str, at: usize) -> (i64, usize, bool) {
+fn rule_time(text: str, at: usize, maximum_hours: i64) -> (i64, usize, bool) {
     var cursor = at
     var sign = 1i64
     if cursor < text.len && (text[cursor] == 43u8 || text[cursor] == 45u8) {
@@ -75,15 +97,11 @@ fn rule_time(text: str, at: usize) -> (i64, usize, bool) {
         cursor += 1usize
     }
     var parts: [3]i64 = zero
+    let maximum: [3]i64 = [3]i64{ maximum_hours, 59i64, 59i64 }
     var index = 0usize
     while index < 3usize {
-        var digits = cursor
-        var value = 0i64
-        while digits < text.len && str.is_ascii_digit(text[digits]) {
-            value = value * 10i64 + i64(text[digits] - 48u8)
-            digits += 1usize
-        }
-        if digits == cursor { ret (0i64, at, false) }
+        let (value, digits, good) = rule_number(text, cursor, maximum[index])
+        if !good { ret (0i64, at, false) }
         parts[index] = value
         cursor = digits
         index += 1usize
@@ -98,15 +116,11 @@ fn rule_date(text: str, at: usize) -> (i64, i64, i64, i64, usize, bool) {
     if at >= text.len || text[at] != 77u8 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
     var cursor = at + 1usize
     var fields: [3]i64 = zero
+    let maximum: [3]i64 = [3]i64{ 12i64, 5i64, 6i64 }
     var index = 0usize
     while index < 3usize {
-        var digits = cursor
-        var value = 0i64
-        while digits < text.len && str.is_ascii_digit(text[digits]) {
-            value = value * 10i64 + i64(text[digits] - 48u8)
-            digits += 1usize
-        }
-        if digits == cursor { ret (0i64, 0i64, 0i64, 0i64, at, false) }
+        let (value, digits, good) = rule_number(text, cursor, maximum[index])
+        if !good { ret (0i64, 0i64, 0i64, 0i64, at, false) }
         fields[index] = value
         cursor = digits
         index += 1usize
@@ -115,10 +129,10 @@ fn rule_date(text: str, at: usize) -> (i64, i64, i64, i64, usize, bool) {
             cursor += 1usize
         }
     }
-    if fields[0] < 1i64 || fields[0] > 12i64 || fields[1] < 1i64 || fields[1] > 5i64 || fields[2] > 6i64 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
+    if fields[0] < 1i64 || fields[1] < 1i64 { ret (0i64, 0i64, 0i64, 0i64, at, false) }
     var at_time = 7200i64
     if cursor < text.len && text[cursor] == 47u8 {
-        let (parsed, after, good) = rule_time(text, cursor + 1usize)
+        let (parsed, after, good) = rule_time(text, cursor + 1usize, 167i64)
         if !good { ret (0i64, 0i64, 0i64, 0i64, at, false) }
         at_time = parsed
         cursor = after
@@ -130,7 +144,7 @@ fn parse_rule(text: str) -> (Rule, bool) {
     var rule: Rule = zero
     let (std_name, after_std, std_good) = rule_name(text, 0usize)
     if !std_good { ret (rule, false) }
-    let (std_west, after_offset, offset_good) = rule_time(text, after_std)
+    let (std_west, after_offset, offset_good) = rule_time(text, after_std, 24i64)
     if !offset_good { ret (rule, false) }
     rule.std_name = std_name
     rule.std_offset = i32(0i64 - std_west)
@@ -142,7 +156,7 @@ fn parse_rule(text: str) -> (Rule, bool) {
     rule.dst_offset = rule.std_offset + 3600i32
     var cursor = after_dst
     if cursor < text.len && text[cursor] != 44u8 {
-        let (dst_west, after_dst_offset, dst_offset_good) = rule_time(text, cursor)
+        let (dst_west, after_dst_offset, dst_offset_good) = rule_time(text, cursor, 24i64)
         if !dst_offset_good { ret (rule, false) }
         rule.dst_offset = i32(0i64 - dst_west)
         cursor = after_dst_offset
@@ -197,6 +211,32 @@ fn rule_offset(rule: Rule, seconds: i64) -> Offset {
 
 // --- TZif.
 
+// Adds `count * width` to a TZif block size without wrapping or passing its
+// enclosing byte limit.
+fn tzif_part(total: usize, count: usize, width: usize, limit: usize) -> (usize, bool) {
+    if total > limit || count > (limit - total) / width { ret (0usize, false) }
+    ret (total + count * width, true)
+}
+
+// The payload after one TZif header. Bound each component before combining it
+// so hostile 32-bit header counts cannot wrap an intermediate product or sum.
+fn tzif_block_size(timecnt: usize, typecnt: usize, charcnt: usize, leap: usize, isstd: usize, isut: usize, time_width: usize, leap_width: usize, limit: usize) -> (usize, bool) {
+    let (after_times, times_good) = tzif_part(0usize, timecnt, time_width, limit)
+    if !times_good { ret (0usize, false) }
+    let (after_indices, indices_good) = tzif_part(after_times, timecnt, 1usize, limit)
+    if !indices_good { ret (0usize, false) }
+    let (after_types, types_good) = tzif_part(after_indices, typecnt, 6usize, limit)
+    if !types_good { ret (0usize, false) }
+    let (after_chars, chars_good) = tzif_part(after_types, charcnt, 1usize, limit)
+    if !chars_good { ret (0usize, false) }
+    let (after_leaps, leaps_good) = tzif_part(after_chars, leap, leap_width, limit)
+    if !leaps_good { ret (0usize, false) }
+    let (after_standard, standard_good) = tzif_part(after_leaps, isstd, 1usize, limit)
+    if !standard_good { ret (0usize, false) }
+    let (final_size, final_good) = tzif_part(after_standard, isut, 1usize, limit)
+    ret (final_size, final_good)
+}
+
 fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
     var zone_data: ZoneData = zero
     zone_data.name = name
@@ -206,24 +246,27 @@ fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
     var wide = false
     if tzif_version >= 50u8 {
         // Skip the 32-bit block to the second header.
-        let v1_time = usize(be32(data, 32usize))
-        let v1_type = usize(be32(data, 36usize))
-        let v1_char = usize(be32(data, 40usize))
-        let v1_leap = usize(be32(data, 28usize))
-        let v1_isstd = usize(be32(data, 24usize))
-        let v1_isut = usize(be32(data, 20usize))
-        header = 44usize + v1_time * 5usize + v1_type * 6usize + v1_char + v1_leap * 8usize + v1_isstd + v1_isut
-        if header + 44usize > data.len { ret (zone_data, InvalidData) }
+        if data.len < 88usize { ret (zone_data, InvalidData) }
+        let v1_time = usize(be32_u(data, 32usize))
+        let v1_type = usize(be32_u(data, 36usize))
+        let v1_char = usize(be32_u(data, 40usize))
+        let v1_leap = usize(be32_u(data, 28usize))
+        let v1_isstd = usize(be32_u(data, 24usize))
+        let v1_isut = usize(be32_u(data, 20usize))
+        if v1_time > 100000usize || v1_type == 0usize || v1_type > 256usize { ret (zone_data, InvalidData) }
+        let (v1_block, v1_good) = tzif_block_size(v1_time, v1_type, v1_char, v1_leap, v1_isstd, v1_isut, 4usize, 8usize, data.len - 44usize)
+        if !v1_good || v1_block > data.len - 88usize { ret (zone_data, InvalidData) }
+        header = 44usize + v1_block
         if data[header] != 84u8 || data[header + 1usize] != 90u8 { ret (zone_data, InvalidData) }
         wide = true
     }
-    let isut = usize(be32(data, header + 20usize))
-    let isstd = usize(be32(data, header + 24usize))
-    let leap = usize(be32(data, header + 28usize))
-    let timecnt = usize(be32(data, header + 32usize))
-    let typecnt = usize(be32(data, header + 36usize))
-    let charcnt = usize(be32(data, header + 40usize))
-    if typecnt == 0usize || timecnt > 100000usize { ret (zone_data, InvalidData) }
+    let isut = usize(be32_u(data, header + 20usize))
+    let isstd = usize(be32_u(data, header + 24usize))
+    let leap = usize(be32_u(data, header + 28usize))
+    let timecnt = usize(be32_u(data, header + 32usize))
+    let typecnt = usize(be32_u(data, header + 36usize))
+    let charcnt = usize(be32_u(data, header + 40usize))
+    if typecnt == 0usize || typecnt > 256usize || timecnt > 100000usize { ret (zone_data, InvalidData) }
     var time_width = 4usize
     var leap_width = 8usize
     if wide {
@@ -231,14 +274,15 @@ fn parse_tzif(a: *mem.Arena, name: str, data: []const u8) -> (ZoneData, err) {
         leap_width = 12usize
     }
     let data_start = header + 44usize
+    let (block, block_good) = tzif_block_size(timecnt, typecnt, charcnt, leap, isstd, isut, time_width, leap_width, data.len - data_start)
+    if !block_good { ret (zone_data, InvalidData) }
     var at = data_start
-    let block = timecnt * time_width + timecnt + typecnt * 6usize + charcnt + leap * leap_width + isstd + isut
-    if at + block > data.len { ret (zone_data, InvalidData) }
     let (transitions, transitions_error) = mem.alloc[i64](a, timecnt)
     if transitions_error != ok { ret (zone_data, transitions_error) }
     var i = 0usize
     while i < timecnt {
         if wide { transitions[i] = be64(data, at + i * 8usize) } else { transitions[i] = be32(data, at + i * 4usize) }
+        if i > 0usize && transitions[i] <= transitions[i - 1usize] { ret (zone_data, InvalidData) }
         i += 1usize
     }
     at += timecnt * time_width
@@ -299,31 +343,60 @@ fn load(a: *mem.Arena, source: []const u8) -> (Database, err) {
     let count = le32(source, at)
     at += 4usize
     if count > 65536usize { ret (zero, TooLarge) }
+    // Every record needs at least its two-byte name length and four-byte data
+    // length. Reject an impossible top-level count before it can size an arena
+    // allocation from malformed input.
+    if count > (source.len - at) / 6usize { ret (zero, InvalidData) }
+    let start = mem.mark(a)
     let (zones, zones_error) = mem.alloc[ZoneData](a, count)
-    if zones_error != ok { ret (zero, zones_error) }
+    if zones_error != ok {
+        mem.reset(a, start)
+        ret (zero, zones_error)
+    }
     let (zone_names, names_error) = mem.alloc[str](a, count)
-    if names_error != ok { ret (zero, names_error) }
+    if names_error != ok {
+        mem.reset(a, start)
+        ret (zero, names_error)
+    }
     var i = 0usize
     while i < count {
-        if at + 2usize > source.len { ret (zero, InvalidData) }
+        if at + 2usize > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let name_len = le16(source, at)
         at += 2usize
-        if at + name_len + 4usize > source.len { ret (zero, InvalidData) }
+        if at + name_len + 4usize > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let name = source[at..at + name_len]
         at += name_len
         let data_len = le32(source, at)
         at += 4usize
-        if data_len > 1048576usize { ret (zero, TooLarge) }
-        if at + data_len > source.len { ret (zero, InvalidData) }
+        if data_len > 1048576usize {
+            mem.reset(a, start)
+            ret (zero, TooLarge)
+        }
+        if at + data_len > source.len {
+            mem.reset(a, start)
+            ret (zero, InvalidData)
+        }
         let (parsed, parse_error) = parse_tzif(a, name, source[at..at + data_len])
-        if parse_error != ok { ret (zero, parse_error) }
+        if parse_error != ok {
+            mem.reset(a, start)
+            ret (zero, parse_error)
+        }
         zones[i] = parsed
         zone_names[i] = name
         at += data_len
         i += 1usize
     }
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
-    if storage_error != ok { ret (zero, storage_error) }
+    if storage_error != ok {
+        mem.reset(a, start)
+        ret (zero, storage_error)
+    }
     storage[0].version = release
     storage[0].zones = zones
     storage[0].zone_names = zone_names
@@ -379,10 +452,30 @@ fn offset_at(selected_zone: Zone, instant: time.Timestamp) -> Offset {
     ret offset_at_seconds(z, floor_div(instant.nanos, NANOS))
 }
 
+// Applying an offset beyond Timestamp's signed nanosecond range saturates at
+// that endpoint; the returned Local reflects the endpoint instead of wrapping.
 fn to_local(selected_zone: Zone, instant: time.Timestamp) -> Local {
     let offset = offset_at(selected_zone, instant)
-    let shifted = time.Timestamp { nanos: instant.nanos + i64(offset.seconds) * NANOS }
+    let shift = time.Duration { nanos: i64(offset.seconds) * NANOS }
+    let shifted = time.timestamp_add(instant, shift)
     ret Local { date: time.to_date(shifted), time: time.to_time(shifted) }
+}
+
+// Civil values are interpreted as UTC only to discover which offsets might
+// apply. Turning one back into an instant must report an out-of-range result,
+// rather than wrapping it or inheriting timestamp_add's saturating semantics.
+fn local_candidate(as_utc: time.Timestamp, offset: i64) -> (time.Timestamp, err) {
+    let shift = offset * NANOS
+    if shift > 0i64 && as_utc.nanos < TIMESTAMP_MIN + shift { ret (zero, time.Invalid) }
+    if shift < 0i64 && as_utc.nanos > TIMESTAMP_MAX + shift { ret (zero, time.Invalid) }
+    ret (time.Timestamp { nanos: as_utc.nanos - shift }, ok)
+}
+
+// A missing-time edge is exactly on a whole second. This narrower range makes
+// both that value and its preceding nanosecond representable.
+fn timestamp_edge(seconds: i64) -> (time.Timestamp, err) {
+    if seconds < -TIMESTAMP_EDGE_SECONDS || seconds > TIMESTAMP_EDGE_SECONDS { ret (zero, time.Invalid) }
+    ret (time.Timestamp { nanos: seconds * NANOS }, ok)
 }
 
 fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
@@ -392,13 +485,23 @@ fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
     let wall = floor_div(as_utc.nanos, NANOS)
     let before = i64(offset_at_seconds(z, wall - DAY).seconds)
     let after = i64(offset_at_seconds(z, wall + DAY).seconds)
-    let first = time.Timestamp { nanos: as_utc.nanos - before * NANOS }
-    let second = time.Timestamp { nanos: as_utc.nanos - after * NANOS }
     let first_holds = i64(offset_at_seconds(z, wall - before).seconds) == before
     let second_holds = i64(offset_at_seconds(z, wall - after).seconds) == after
-    if before == after || (first_holds && !second_holds) { ret (Resolve{ Unique: first }, ok) }
-    if second_holds && !first_holds { ret (Resolve{ Unique: second }, ok) }
+    if before == after || (first_holds && !second_holds) {
+        let (first, first_error) = local_candidate(as_utc, before)
+        if first_error != ok { ret (zero, first_error) }
+        ret (Resolve{ Unique: first }, ok)
+    }
+    if second_holds && !first_holds {
+        let (second, second_error) = local_candidate(as_utc, after)
+        if second_error != ok { ret (zero, second_error) }
+        ret (Resolve{ Unique: second }, ok)
+    }
     if first_holds && second_holds {
+        let (first, first_error) = local_candidate(as_utc, before)
+        if first_error != ok { ret (zero, first_error) }
+        let (second, second_error) = local_candidate(as_utc, after)
+        if second_error != ok { ret (zero, second_error) }
         var pair: [2]time.Timestamp = zero
         if first.nanos < second.nanos {
             pair[0] = first
@@ -423,8 +526,10 @@ fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err) {
         if offset_at_seconds(z, mid).seconds == low_offset { low = mid } else { high = mid }
     }
     var edges: [2]time.Timestamp = zero
-    edges[0] = time.Timestamp { nanos: high * NANOS - 1i64 }
-    edges[1] = time.Timestamp { nanos: high * NANOS }
+    let (edge, edge_error) = timestamp_edge(high)
+    if edge_error != ok { ret (zero, edge_error) }
+    edges[0] = time.Timestamp { nanos: edge.nanos - 1i64 }
+    edges[1] = edge
     ret (Resolve{ Missing: edges }, ok)
 }
 

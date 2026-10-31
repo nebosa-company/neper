@@ -7,6 +7,7 @@ use e.crypto.noise as noise
 use e.io
 use e.mem
 use e.os
+use e.str
 
 fn fold(bytes: []const u8) -> u64 {
     var x = 14695981039346656037u64
@@ -35,6 +36,27 @@ fn key(seed: u64) -> [32]u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var none: [0]u8 = zero
+    let mode = args[args.len - 1usize]
+    // Expected-trap modes: run.sh invokes these separately from the ordinary vector path.
+    if str.eq(mode, "blake2s-output-0") {
+        let _ = noise.blake2s_init(0usize, none[0..])
+        ret ok
+    }
+    if str.eq(mode, "blake2s-output-33") {
+        let _ = noise.blake2s_init(33usize, none[0..])
+        ret ok
+    }
+    if str.eq(mode, "blake2s-key-33") {
+        var key33: [33]u8 = zero
+        let _ = noise.blake2s_keyed(key33[0..], none[0..])
+        ret ok
+    }
+    if str.eq(mode, "blake2s-key-65") {
+        var key65: [65]u8 = zero
+        let _ = noise.blake2s_init(32usize, key65[0..])
+        ret ok
+    }
     // 1: BLAKE2s plain, keyed, HMAC and HKDF against hashlib.
     var buf: [200]u8 = zero
     fill(buf[0..], 1u64)
@@ -62,7 +84,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let psk = key(15u64)
     let r_s_pub = noise.public_key(r_s)
     if fold(r_s_pub[0..]) != fold_expected_rs_pub() { os.exit(9i32) }
-    var none: [0]u8 = zero
     var ini = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, none[0..])
     var res = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), none[0..])
     var m1: [128]u8 = zero

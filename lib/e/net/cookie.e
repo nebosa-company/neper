@@ -270,16 +270,18 @@ fn keep(jar: *Jar, s: str) -> (str, bool) {
     ret (out, true)
 }
 
-// Put every live cookie's strings at the front of the jar's text again, dropping what replaced or removed entries left.
-fn compact(jar: *Jar, scratch: []u8) -> bool {
+// Put every live cookie's strings at the front of the jar's text again, replacing
+// `replace_at` when it names an entry. `replace_at == jar.count` means no replacement.
+fn compact(jar: *Jar, scratch: []u8, replace_at: usize, replacement: Cookie) -> bool {
     // The strings are copied through `scratch` (as big as the text) so overlapping moves are safe.
     if scratch.len < jar.used { ret false }
     var i = 0usize
     var at = 0usize
     while i < jar.count {
-        let c = jar.cookies[i]
+        var c = jar.cookies[i]
+        if i == replace_at { c = replacement }
         let total = c.name.len + c.value.len + c.domain.len + c.path.len
-        if at + total > scratch.len { ret false }
+        if total > jar.text.len - at || total > scratch.len - at { ret false }
         var parts: [4]str = [4]str{ c.name, c.value, c.domain, c.path }
         var p = 0usize
         while p < 4usize {
@@ -303,6 +305,7 @@ fn compact(jar: *Jar, scratch: []u8) -> bool {
     i = 0usize
     while i < jar.count {
         var c = jar.cookies[i]
+        if i == replace_at { c = replacement }
         let name_len = c.name.len
         let value_len = c.value.len
         let domain_len = c.domain.len
@@ -324,11 +327,15 @@ fn compact(jar: *Jar, scratch: []u8) -> bool {
 // Copy the cookie's strings into the jar's text: the cookie pointing at the copies, and whether they fitted.
 fn own(jar: *Jar, c: Cookie) -> (Cookie, bool) {
     var out = c
+    let text_start = jar.used
     let (name, name_ok) = keep(jar, c.name)
     let (value, value_ok) = keep(jar, c.value)
     let (domain, domain_ok) = keep(jar, c.domain)
     let (path, path_ok) = keep(jar, c.path)
-    if !name_ok || !value_ok || !domain_ok || !path_ok { ret (c, false) }
+    if !name_ok || !value_ok || !domain_ok || !path_ok {
+        jar.used = text_start
+        ret (c, false)
+    }
     out.name = name
     out.value = value
     out.domain = domain
@@ -352,17 +359,13 @@ fn store(jar: *Jar, c: Cookie, now: i64) -> err {
             }
             var replacement = c
             replacement.created = o.created
-            var (owned, fitted) = own(jar, replacement)
-            if !fitted {
+            if jar.text.len <= 4096usize {
                 var scratch: [4096]u8 = zero
-                if jar.text.len <= 4096usize && compact(jar, scratch[0..]) {
-                    let (again, again_fitted) = own(jar, replacement)
-                    owned = again
-                    fitted = again_fitted
-                }
+                if compact(jar, scratch[0..], i, replacement) { ret ok }
+                ret JarFull
             }
+            let (owned, fitted) = own(jar, replacement)
             if !fitted { ret JarFull }
-            // `own` ran after compaction may have moved `o`: the entry is by index, so it is written there.
             jar.cookies[i] = owned
             ret ok
         }
@@ -386,7 +389,7 @@ fn store(jar: *Jar, c: Cookie, now: i64) -> err {
     var (owned, fitted) = own(jar, c)
     if !fitted {
         var scratch: [4096]u8 = zero
-        if jar.text.len <= 4096usize && compact(jar, scratch[0..]) {
+        if jar.text.len <= 4096usize && compact(jar, scratch[0..], jar.count, c) {
             let (again, again_fitted) = own(jar, c)
             owned = again
             fitted = again_fitted

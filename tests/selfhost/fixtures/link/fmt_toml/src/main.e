@@ -212,8 +212,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (borrowed, borrowed_error) = only_value("a = 'abcdef'\n", small[..])
     if borrowed_error != ok || !str.eq(borrowed.text, "abcdef") { os.exit(16i32) }
 
-    // 17-19: datetime spellings are kept as written -- the `Z`, the space delimiter, the
-    // lowercase `t` -- since the caller is the one with a calendar.
+    // 17-19: valid datetime spellings retain their original delimiter and offset form.
     var room: [64]u8 = zero
     let (zulu, zulu_error) = only_value("a = 1979-05-27T07:32:00Z\n", room[..])
     if zulu_error != ok || zulu.kind != .Datetime || !str.eq(zulu.text, "1979-05-27T07:32:00Z") { os.exit(17i32) }
@@ -247,6 +246,73 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // 27: the top-level statement after a container must still end its line.
     if outcome("a = [1] b = 2\n") != toml.Invalid { os.exit(27i32) }
+
+    // 28-32: invalid UTF-8 is rejected by the first parse, before a raw string or an
+    // otherwise-valid prefix can be exposed to the caller.
+    let (_, raw_basic_error) = only_value("a = \"\xFF\"\n", room[..])
+    if raw_basic_error != toml.Invalid { os.exit(28i32) }
+    let (_, raw_literal_error) = only_value("a = '\xFF'\n", room[..])
+    if raw_literal_error != toml.Invalid { os.exit(29i32) }
+    let (_, raw_multi_basic_error) = only_value("a = \"\"\"\xFF\"\"\"\n", room[..])
+    if raw_multi_basic_error != toml.Invalid { os.exit(30i32) }
+    let (_, raw_multi_literal_error) = only_value("a = '''\xFF'''\n", room[..])
+    if raw_multi_literal_error != toml.Invalid { os.exit(31i32) }
+    let (_, comment_error) = only_value("a = 1 # \xFF\n", room[..])
+    if comment_error != toml.Invalid { os.exit(32i32) }
+
+    // 33: valid raw UTF-8 still passes; the full-document comparison above retains escaped
+    // Unicode coverage.
+    let (raw_utf8, raw_utf8_error) = only_value("a = \"é😀\"\n", room[..])
+    if raw_utf8_error != ok || !str.eq(raw_utf8.text, "é😀") { os.exit(33i32) }
+
+    // 34-39: leading zeroes remain invalid when an underscore hides the next decimal digit;
+    // ordinary zero and a non-decimal spelling retain their own valid forms.
+    let (plain_zero, zero_error) = only_value("a = 0\n", room[..])
+    if zero_error != ok || plain_zero.kind != .Integer || plain_zero.integer != 0i64 { os.exit(34i32) }
+    let (radix, radix_error) = only_value("a = 0x0_1\n", room[..])
+    if radix_error != ok || radix.kind != .Integer || radix.integer != 1i64 { os.exit(35i32) }
+    if outcome("a = 0_1\n") != toml.Invalid { os.exit(36i32) }
+    if outcome("a = 0_1.0\n") != toml.Invalid { os.exit(37i32) }
+    if outcome("a = -0_1\n") != toml.Invalid { os.exit(38i32) }
+    if outcome("a = +0_1.0\n") != toml.Invalid { os.exit(39i32) }
+
+    // 40-44: quoted TOML strings must not carry raw control bytes other than the
+    // line breaks allowed by the multi-line forms and tab.
+    let (_, basic_control) = only_value("a = \"\x00\"\n", room[..])
+    if basic_control != toml.Invalid { os.exit(40i32) }
+    let (_, literal_control) = only_value("a = '\x01'\n", room[..])
+    if literal_control != toml.Invalid { os.exit(41i32) }
+    let (_, multi_basic_control) = only_value("a = \"\"\"\x0B\"\"\"\n", room[..])
+    if multi_basic_control != toml.Invalid { os.exit(42i32) }
+    let (_, multi_literal_control) = only_value("a = '''\x7F'''\n", room[..])
+    if multi_literal_control != toml.Invalid { os.exit(43i32) }
+    let (raw_tab, raw_tab_error) = only_value("a = \"\t\"\n", room[..])
+    if raw_tab_error != ok || raw_tab.text.len != 1usize || raw_tab.text[0usize] != 9u8 { os.exit(44i32) }
+
+    // 45-53: numeric separators stay between actual radix digits, signed zero retains
+    // its IEEE sign bit, and datetime values have a complete valid calendar shape.
+    let (negative_zero, negative_zero_error) = only_value("a = -0.0\n", room[..])
+    if negative_zero_error != ok || negative_zero.kind != .Float || mem.bitcast[u64](negative_zero.float) != 9223372036854775808u64 { os.exit(45i32) }
+    if outcome("a = 1_e5\n") != toml.Invalid { os.exit(46i32) }
+    if outcome("a = 1e_5\n") != toml.Invalid { os.exit(47i32) }
+    let (leap_day, leap_day_error) = only_value("a = 2000-02-29\n", room[..])
+    if leap_day_error != ok || leap_day.kind != .Datetime { os.exit(48i32) }
+    if outcome("a = 2023-02-29\n") != toml.Invalid { os.exit(49i32) }
+    if outcome("a = 0000-00-00\n") != toml.Invalid { os.exit(50i32) }
+    if outcome("a = 99:99:99\n") != toml.Invalid { os.exit(51i32) }
+    if outcome("a = 12:30:::\n") != toml.Invalid { os.exit(52i32) }
+    if outcome("a = 1979-05-27T07:32:00+99:00\n") != toml.Invalid { os.exit(53i32) }
+
+    // 54-57: only CRLF and LF are line endings, and comments may contain no raw
+    // control byte other than a tab.  A bare CR must not be quietly treated as
+    // whitespace or as a multi-line-string continuation.
+    if outcome("a = 1 # \x01\n") != toml.Invalid { os.exit(54i32) }
+    if outcome("a = [1\r, 2]\n") != toml.Invalid { os.exit(55i32) }
+    if outcome("a = \"\"\"x\ry\"\"\"\n") != toml.Invalid { os.exit(56i32) }
+    if outcome("a = \"\"\"x\\\ry\"\"\"\n") != toml.Invalid { os.exit(57i32) }
+
+    // 58: the corresponding CRLF forms remain valid.
+    if outcome("a = [\r\n  1,\r\n  2\r\n]\r\n") != ok { os.exit(58i32) }
 
     try io.print("fmt toml ok\n")
     ret ok

@@ -65,11 +65,15 @@ fn search[T: type, Ctx: type](t: *const BkTree[T], query: T, radius: u32, ctx: *
             on_hit(ctx, t.items[usize(node)], d)
             hits += 1usize
         }
-        // Children whose edge lies within [d - radius, d + radius] may hold hits.
+        // Children whose edge is within `radius` of `d` may hold hits. Compare
+        // the difference directly so the conceptual `d + radius` bound never
+        // overflows at the end of the u32 metric domain.
         var child = t.first_child[usize(node)]
         while child != NONE {
             let e = t.edge[usize(child)]
-            if e + radius >= d && e <= d + radius {
+            var gap = 0u32
+            if e < d { gap = d - e } else { gap = e - d }
+            if gap <= radius {
                 if top >= stack.len { ret (hits, TooSmall) }
                 stack[top] = child
                 top += 1usize

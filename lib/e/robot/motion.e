@@ -35,6 +35,17 @@ fn sign_of(x: f64) -> f64 {
 
 // A trapezoidal velocity profile over `distance` (the triangle when `v_max` is not reached).
 fn trapezoid_profile(distance: f64, v_max: f64, a_max: f64) -> Profile {
+    if v_max <= 0.0f64 || a_max <= 0.0f64 {
+        ret Profile {
+            distance: 0.0f64,
+            sign: 0.0f64,
+            v_peak: 0.0f64,
+            a_max: 0.0f64,
+            t_acc: 0.0f64,
+            t_flat: 0.0f64,
+            total: 0.0f64,
+        }
+    }
     let d = math.abs[f64](distance)
     let d_acc = v_max * v_max / (2.0f64 * a_max)
     var v_peak = v_max
@@ -65,6 +76,19 @@ fn trapezoid_at(p: Profile, t: f64) -> (f64, f64) {
 // `j_max`, acceleration capped at `a_max`, speed at `v_max`; the constant-
 // acceleration and cruise segments vanish when they cannot be reached.
 fn s_curve_profile(distance: f64, v_max: f64, a_max: f64, j_max: f64) -> SCurve {
+    if v_max <= 0.0f64 || a_max <= 0.0f64 || j_max <= 0.0f64 {
+        ret SCurve {
+            distance: 0.0f64,
+            sign: 0.0f64,
+            v_peak: 0.0f64,
+            a_peak: 0.0f64,
+            j_max: 0.0f64,
+            tj: 0.0f64,
+            ta: 0.0f64,
+            tv: 0.0f64,
+            total: 0.0f64,
+        }
+    }
     let d = math.abs[f64](distance)
     var v_peak = v_max
     var a_peak = a_max
@@ -126,6 +150,7 @@ fn s_curve_at(p: SCurve, t: f64) -> (f64, f64, f64) {
 
 // Minimum-jerk point-to-point motion: (position, velocity, acceleration) at `t`.
 fn min_jerk(start: f64, end: f64, duration: f64, t: f64) -> (f64, f64, f64) {
+    if duration <= 0.0f64 { ret (start, 0.0f64, 0.0f64) }
     let tau = math.min[f64](math.max[f64](t / duration, 0.0f64), 1.0f64)
     let span = end - start
     let t2 = tau * tau
@@ -527,6 +552,7 @@ fn lp3(lines: []const f64, count: usize, begin: usize, radius: f64, result: []f6
 // `scratch.len >= 8 * agents.len`.
 fn orca(agents: []const Agent, i: usize, tau: f64, time_step: f64, out: []f64, scratch: []f64) -> err {
     if i >= agents.len { ret Invalid }
+    if !(tau > 0.0f64) || tau == math.inf64() || !(time_step > 0.0f64) || time_step == math.inf64() { ret Invalid }
     if out.len < 2usize || scratch.len < 8usize * agents.len { ret TooSmall }
     let me = agents[i]
     var lines = scratch[..4usize * agents.len]
@@ -581,8 +607,16 @@ fn orca(agents: []const Agent, i: usize, tau: f64, time_step: f64, out: []f64, s
             let wx = vx - inv_step * rx
             let wy = vy - inv_step * ry
             let w_len = math.sqrt[f64](wx * wx + wy * wy)
-            let unit_x = wx / w_len
-            let unit_y = wy / w_len
+            var unit_x = 1.0f64
+            var unit_y = 0.0f64
+            if w_len > 0.0f64 {
+                unit_x = wx / w_len
+                unit_y = wy / w_len
+            } else if i > j {
+                // Coincident agents with equal velocities have no geometric
+                // direction; index order gives the pair opposite directions.
+                unit_x = 0.0f64 - 1.0f64
+            }
             dx = unit_y
             dy = 0.0f64 - unit_x
             ux = (radius * inv_step - w_len) * unit_x

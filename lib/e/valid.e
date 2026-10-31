@@ -9,8 +9,9 @@ error Invalid
 fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
 fn is_separator(c: u8) -> bool { ret c == 32u8 || c == 45u8 }
 
-// The digits of `s` without separators into `out`; answers the count, or
-// `out.len + 1` on a non-digit or when `out` is full.
+// The digits of `s` without separators into `out`; a space or hyphen must sit
+// directly between two digits. Answers the count, or `out.len + 1` on an
+// invalid character, separator placement, or full output.
 fn digits(s: str, out: []u8) -> usize {
     var n = 0usize
     var i = 0usize
@@ -20,7 +21,7 @@ fn digits(s: str, out: []u8) -> usize {
             if n >= out.len { ret out.len + 1usize }
             out[n] = c - 48u8
             n += 1usize
-        } else if !is_separator(c) {
+        } else if !is_separator(c) || i == 0usize || i + 1usize >= s.len || !is_digit(s[i - 1usize]) || !is_digit(s[i + 1usize]) {
             ret out.len + 1usize
         }
         i += 1usize
@@ -54,11 +55,12 @@ fn luhn_sum(d: []const u8, shifted: bool) -> u32 {
     ret total
 }
 
-// The digit that appended to `s` makes it pass `luhn`; `Invalid` on a stray character.
+// The digit that appended to `s` makes it pass `luhn`; `Invalid` on a malformed
+// source or one whose completed number would not fit the validator's 64-digit limit.
 fn luhn_check_digit(s: str) -> (u8, err) {
     var d: [64]u8 = zero
     let n = digits(s, d[..])
-    if n > 64usize { ret (0u8, Invalid) }
+    if n == 0usize || n >= 64usize { ret (0u8, Invalid) }
     ret (u8((10u32 - luhn_sum(d[..n], true) % 10u32) % 10u32), ok)
 }
 
@@ -90,7 +92,10 @@ fn isbn10(s: str) -> bool {
     while i < s.len {
         let c = s[i]
         i += 1usize
-        if is_separator(c) { continue }
+        if is_separator(c) {
+            if i <= 1usize || i >= s.len || !is_digit(s[i - 2usize]) || !(is_digit(s[i]) || s[i] == 88u8) { ret false }
+            continue
+        }
         if seen >= 10usize { ret false }
         var v = 0u32
         if is_digit(c) {
@@ -313,7 +318,11 @@ fn card_expiry(month: u32, year: u32, now_month: u32, now_year: u32) -> bool {
     if month < 1u32 || month > 12u32 { ret false }
     var full = year
     if year < 100u32 { full = 2000u32 + year }
-    if full < now_year || full > now_year + 20u32 { ret false }
+    // The current year is a four-digit calendar year. Reject an out-of-range
+    // value before the subtraction-based future bound, so malformed u32 input
+    // cannot make an upper-bound addition overflow.
+    if now_year > 9999u32 || full < now_year { ret false }
+    if full - now_year > 20u32 { ret false }
     if full == now_year && month < now_month { ret false }
     ret true
 }

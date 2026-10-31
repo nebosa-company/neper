@@ -829,6 +829,9 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     if n.kind != .Element { ret }
     let s = &l.styles[usize(node)]
     if s.display == .None { ret }
+    // A run-in is generated only when its target block is visited below; do
+    // not mutate counter state during this deferred traversal.
+    if s.display == .RunIn && run_in_target(l, node) != NONE { ret }
     if s.display == .ListItem && l.d.nodes[usize(node)].parent != html.NONE && css_resets_list_item(l, l.d.nodes[usize(node)].parent) {
         // A list the counter rules count: an item without its own step adds one, ahead of its `counter-set`.
         let (sincr, has_sincr) = extra_text(s, "counter-increment")
@@ -903,7 +906,6 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
         gen_pseudo(l, node, parent_box, 1usize)
         ret
     }
-    if s.display == .RunIn && run_in_target(l, node) != NONE { ret }
     if n.namespace == .Html && str.eq(n.name, "br") {
         let b = new_box(l, .Break, true, false, node, node)
         append(l, parent_box, b)
@@ -1628,7 +1630,7 @@ fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64 {
 
 // --- Text: pieces of an inline formatting context.
 
-type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
+type PieceKind = enum u8 { Text, Tab, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
 
 // `w` is the advance of the piece without its trailing collapsible space, `trail` that space's advance. `soft` says a
 // line may end after the piece. Text pieces point into the processed text of their box.
@@ -1659,6 +1661,16 @@ fn spacing_extra(s: *const style.Style, text: str) -> f64 {
 fn text_advance(l: *const Layout, s: *const style.Style, text: str) -> f64 {
     if text.len == 0usize { ret 0.0f64 }
     ret l.measure.width(l.measure.ctx, s, text) + spacing_extra(s, text)
+}
+
+// A preserved tab advances from its current inline position to the next tab
+// stop. `tab-size` is measured in the advance of a space for the current font.
+fn tab_advance(l: *const Layout, s: *const style.Style, x: f64) -> f64 {
+    let space = text_advance(l, s, " ")
+    let step = space * maxf(1.0f64, s.tab_size)
+    if step <= 0.0f64 { ret space }
+    let prior = usize(x / step)
+    ret f64(prior + 1usize) * step - x
 }
 
 fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
@@ -1698,15 +1710,9 @@ fn apply_transform(l: *const Layout, s: *const style.Style, text: str) -> str {
 fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
     let s = bstyle(l, b)
     let raw = apply_transform(l, s, l.boxes.items[usize(b)].text)
-    // Each tab may expand to `tab-size` spaces.
-    var tabs = 0usize
-    var tk = 0usize
-    while tk < raw.len {
-        if raw[tk] == 9u8 { tabs += 1usize }
-        tk += 1usize
-    }
-    let tab_cells = usize(maxf(1.0f64, s.tab_size))
-    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize + tabs * tab_cells)
+    // Keep preserved tabs for the inline formatter, where their position is
+    // known. Replacing them here would lose the distance to the next stop.
+    let (out, e) = mem.alloc[u8](l.a, raw.len * 2usize + 8usize)
     if e != ok { ret "" }
     var n = 0usize
     var i = 0usize
@@ -1719,13 +1725,9 @@ fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
                 continue
             }
             if c == 9u8 {
-                var t = 0usize
-                let stops = usize(maxf(1.0f64, s.tab_size))
-                while t < stops {
-                    out[n] = 32u8
-                    n += 1usize
-                    t += 1usize
-                }
+                out[n] = c
+                n += 1usize
+                ends_space.v = false
                 i += 1usize
                 continue
             }
@@ -1867,6 +1869,28 @@ fn emit_text_pieces(bd: *Builder, b: u32, ends_space: *Flag) {
     let (lbv, has_lbv) = extra_text(s, "line-break")
     let lb_anywhere = has_lbv && str.eq(cv.lower(l.a, cv.trim_ws(lbv)), "anywhere")
     while k <= n {
+        // Keep a tab as its own piece. Its advance depends on where the line
+        // formatter places it, so it cannot be measured with the surrounding
+        // text run yet.
+        if scal[k - 1usize] == 9u32 {
+            if seg < k - 1usize {
+                let seg_text = text[offs[seg]..offs[k - 1usize]]
+                var content_end = seg_text.len
+                if !preserve || s.white_space == .PreWrap {
+                    while content_end > 0usize && seg_text[content_end - 1usize] == 32u8 { content_end -= 1usize }
+                }
+                let content = seg_text[..content_end]
+                let trail_text = seg_text[content_end..]
+                var w = text_advance(l, s, content)
+                if content.len >= 2usize && content[content.len - 2usize] == 194u8 && content[content.len - 1usize] == 173u8 { w += text_advance(l, s, "-") }
+                let tr = text_advance(l, s, trail_text)
+                push_piece(bd, Piece { kind: .Text, box: b, text: seg_text, w: w, trail: tr, soft: false, ink: content_end > 0usize || preserve, start: offs[seg], clen: content_end })
+            }
+            push_piece(bd, Piece { kind: .Tab, box: b, text: "", w: 0.0f64, trail: 0.0f64, soft: wrap, ink: true, start: offs[k - 1usize], clen: 0usize })
+            seg = k
+            k += 1usize
+            continue
+        }
         // break-all adds a break between any two letters, never before a space.
         // break-spaces: every preserved space can end a line.
         // `anywhere` and `word-break: break-word` count in the intrinsic (min-content) sizes too; `break-word` only when needed.
@@ -2182,14 +2206,39 @@ fn line_align_x(s: *const style.Style, base: style.TextAlign, last_line: bool, e
     ret left
 }
 
+// The containing block owns the logical inline axis. In a vertical writing mode the
+// active layout frame is transposed, so its left/right sides still follow this direction.
+fn inline_start_is_left(l: *const Layout, parent: u32) -> bool {
+    ret bstyle(l, parent).direction != .Rtl
+}
+
+fn clear_on_side(l: *const Layout, parent: u32, value: style.Clear, left_side: bool) -> bool {
+    if value == .Both { ret true }
+    if left_side && value == .Left { ret true }
+    if !left_side && value == .Right { ret true }
+    let start_left = inline_start_is_left(l, parent)
+    if value == .InlineStart { ret start_left == left_side }
+    if value == .InlineEnd { ret start_left != left_side }
+    ret false
+}
+
+fn float_on_left(l: *const Layout, parent: u32, value: style.Float) -> bool {
+    if value == .Left { ret true }
+    if value == .Right { ret false }
+    let start_left = inline_start_is_left(l, parent)
+    if value == .InlineStart { ret start_left }
+    if value == .InlineEnd { ret !start_left }
+    ret true
+}
+
 fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, parent: u32) {
     let fb = bx(l, f)
     let s = bstyle(l, f)
     let outer_w = fb.w + fb.margin[1usize] + fb.margin[3usize]
     let outer_h = fb.h + fb.margin[0usize] + fb.margin[2usize]
     var y = maxf(y_min, float_top_floor(l, fc.base, fc.oy))
-    if s.clear == .Left || s.clear == .Both || s.clear == .InlineStart { y = maxf(y, float_bottom(l, fc.base, 0u32, y)) }
-    if s.clear == .Right || s.clear == .Both || s.clear == .InlineEnd { y = maxf(y, float_bottom(l, fc.base, 1u32, y)) }
+    if clear_on_side(l, parent, s.clear, true) { y = maxf(y, float_bottom(l, fc.base, 0u32, y)) }
+    if clear_on_side(l, parent, s.clear, false) { y = maxf(y, float_bottom(l, fc.base, 1u32, y)) }
     var guard = 0usize
     while guard < 256usize {
         guard += 1usize
@@ -2202,7 +2251,7 @@ fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, pa
     }
     let lx = float_edge_left(l, fc.base, y, y + outer_h, cbx)
     let rx = float_edge_right(l, fc.base, y, y + outer_h, cbx + cbw)
-    var left_side = s.floating == .Left || s.floating == .InlineStart
+    let left_side = float_on_left(l, parent, s.floating)
     var x = lx
     if !left_side { x = rx - outer_w }
     let pushed = list.push[FloatRec](&l.floats, FloatRec { box: f, x: x, y: y, w: outer_w, h: outer_h, left: left_side, root: 0u32 })
@@ -2337,6 +2386,8 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         var needed = p.w
         if p.kind == .Marker {
             needed = text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
+        } else if p.kind == .Tab {
+            needed = tab_advance(l, bstyle(l, p.box), pos)
         }
         // Preserved spaces at the end of a pre-wrap line hang: they never make the line overflow.
         var hangs = false
@@ -2369,7 +2420,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         } else if pos + needed > out.avail + 0.01f64 && !has_content && p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
             if split_piece(x, j, out.avail) { continue }
         }
-        has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker
+        has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker || p.kind == .Tab
         if hangs { pos += p.w } else { pos += needed }
         if p.soft { last_soft = u32(j) }
         pos += p.trail
@@ -2795,7 +2846,7 @@ fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> (bool, usize) {
     var j = lead
     while j < tail {
         let p = x.bd.pieces.items[j]
-        if p.kind == .Marker { ret (false, tail) }
+        if p.kind == .Marker || p.kind == .Tab { ret (false, tail) }
         if p.kind == .Text { cap += p.text.len + 1usize } else { cap += 4usize }
         j += 1usize
     }
@@ -3150,7 +3201,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
             }
         } else if p.kind == .Close {
             if sim > 0usize { sim -= 1usize }
-        } else if (p.kind == .Text && k < trim_end) || p.kind == .Marker {
+        } else if (p.kind == .Text && k < trim_end) || p.kind == .Marker || p.kind == .Tab {
             if p.ink { any_content = true }
             let (ta, td) = font_ad(l, bstyle(l, p.box))
             var sh = 0.0f64
@@ -3209,6 +3260,8 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
         let p = x.bd.pieces.items[k]
         if p.kind == .Marker {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
+        } else if p.kind == .Tab {
+            used_w += tab_advance(l, bstyle(l, p.box), used_w)
         } else {
             used_w += p.w
             if k < last_content || (tail_keep && p.trail > 0.0f64) { used_w -= shy_hyphen_w(l, p) }
@@ -3237,8 +3290,12 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 ab.x = nx
             }
         } else if k < trim_end {
-            abs_off += ap.w
-            if k < last_content || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+            if ap.kind == .Tab {
+                abs_off += tab_advance(l, bstyle(l, ap.box), abs_off)
+            } else {
+                abs_off += ap.w
+                if k < last_content || (tail_keep && ap.trail > 0.0f64) { abs_off += ap.trail }
+            }
         }
         k += 1usize
     }
@@ -3312,6 +3369,10 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 tf_shift = cur_shift
             }
             cx += this_w
+        } else if p.kind == .Tab {
+            if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
+            tf_box = NONE
+            cx += tab_advance(l, bstyle(l, p.box), cx - ax)
         } else if p.kind == .Marker {
             if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
             tf_box = NONE
@@ -3628,6 +3689,10 @@ fn inline_widths(l: *Layout, cont: u32) -> (f64, f64) {
         if p.kind == .Float || p.kind == .Abs { continue }
         var w = p.w
         var minw = p.w
+        if p.kind == .Tab {
+            w = tab_advance(l, bstyle(l, p.box), line)
+            minw = w
+        }
         if p.kind == .Atomic { minw = p.trail }
         line += w + (if_trail(p))
         if p.kind == .Text { tail_trail = p.trail } else if p.kind == .Atomic { tail_trail = 0.0f64 }
@@ -4473,8 +4538,8 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         var clear_to = y_top
         let fbot_l = float_bottom(l, fc.base, 0u32, -1000000.0f64) - fc.oy
         let fbot_r = float_bottom(l, fc.base, 1u32, -1000000.0f64) - fc.oy
-        if s.clear == .Left || s.clear == .Both || s.clear == .InlineStart { clear_to = maxf(clear_to, fbot_l) }
-        if s.clear == .Right || s.clear == .Both || s.clear == .InlineEnd { clear_to = maxf(clear_to, fbot_r) }
+        if clear_on_side(l, p, s.clear, true) { clear_to = maxf(clear_to, fbot_l) }
+        if clear_on_side(l, p, s.clear, false) { clear_to = maxf(clear_to, fbot_r) }
         if clear_to > y_top {
             y_top = clear_to
             total = no_margin()
@@ -5092,7 +5157,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
             if info.cs == 1usize {
                 cmin[info.col] = maxf(cmin[info.col], info.min)
                 cmax[info.col] = maxf(cmax[info.col], info.max)
-                if info.spec >= 0.0f64 { cspec[info.col] = maxf(cspec[info.col], info.spec) }
+                if info.spec >= 0.0f64 && (ts.table_layout != .Fixed || info.row == 0usize) { cspec[info.col] = maxf(cspec[info.col], info.spec) }
                 if info.pct >= 0.0f64 { cpct[info.col] = maxf(cpct[info.col], info.pct) }
             } else {
                 var smin = sh * f64(info.cs - 1usize)
@@ -5185,8 +5250,25 @@ fn put_edge(arr: []Edge, at: usize, e: Edge) {
     if edge_wins(e, arr[at]) { arr[at] = e }
 }
 
+// The collapsed-edge arrays are physical left-to-right. Cell and column indices remain
+// logical so width distribution and source order do not depend on table direction.
+fn table_left_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize {
+    if rtl { ret ncols - end }
+    ret start
+}
+
+fn table_right_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize {
+    if rtl { ret ncols - start }
+    ret end
+}
+
+fn table_column_index(ncols: usize, logical: usize, rtl: bool) -> usize {
+    if rtl { ret ncols - logical - 1usize }
+    ret logical
+}
+
 // Resolves the collapsed edges of table `t` (grid `ncols` x `nrows`, `rows[r]` the row boxes) into `hedge` ((nrows + 1) x ncols,
-// the line above row r) and `vedge` (nrows x (ncols + 1), the line left of column c), and gives every cell, row, group and the
+// the line above row r) and `vedge` (nrows x (ncols + 1), the physical vertical lines), and gives every cell, row, group and the
 // table the half of each edge that lies inside it.
 fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: []const u32, nrows: usize, ncols: usize) -> ([]Edge, []Edge) {
     let none = Edge { w: 0.0f64, bs: .None, color: 0u32, prio: 0u8, set: false }
@@ -5200,6 +5282,7 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
         k += 1usize
     }
     let hw = ncols + 1usize
+    let rtl = bstyle(l, t).direction == .Rtl
     // The table itself.
     var c = 0usize
     while c < ncols {
@@ -5233,16 +5316,19 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
             }
             var prio = 2u8
             if kb.inner == .ColumnGroup { prio = 1u8 }
+            var gend = gstart + gcols
+            if gend > ncols { gend = ncols }
             var j = 0usize
             while j < gcols && gstart + j < ncols {
                 var rr = 0usize
                 while rr < nrows {
-                    if j == 0usize { put_edge(vedge, rr * hw + gstart, edge_of(l, kid, 3usize, prio)) }
-                    if j + 1usize == gcols { put_edge(vedge, rr * hw + gstart + j + 1usize, edge_of(l, kid, 1usize, prio)) }
+                    if j == 0usize { put_edge(vedge, rr * hw + table_left_line(ncols, gstart, gend, rtl), edge_of(l, kid, 3usize, prio)) }
+                    if gstart + j + 1usize == gend { put_edge(vedge, rr * hw + table_right_line(ncols, gstart, gend, rtl), edge_of(l, kid, 1usize, prio)) }
                     rr += 1usize
                 }
-                put_edge(hedge, gstart + j, edge_of(l, kid, 0usize, prio))
-                put_edge(hedge, nrows * hw + gstart + j, edge_of(l, kid, 2usize, prio))
+                let physical_col = table_column_index(ncols, gstart + j, rtl)
+                put_edge(hedge, physical_col, edge_of(l, kid, 0usize, prio))
+                put_edge(hedge, nrows * hw + physical_col, edge_of(l, kid, 2usize, prio))
                 j += 1usize
             }
             if kb.inner == .ColumnGroup {
@@ -5252,16 +5338,19 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
                 while cc2 != NONE {
                     if l.boxes.items[usize(cc2)].inner == .Column {
                         let sp = span_attr(l, l.boxes.items[usize(cc2)].node, "span")
+                        var cend = cj + sp
+                        if cend > ncols { cend = ncols }
                         var q = 0usize
                         while q < sp && cj + q < ncols {
                             var rr2 = 0usize
                             while rr2 < nrows {
-                                if q == 0usize { put_edge(vedge, rr2 * hw + cj, edge_of(l, cc2, 3usize, 2u8)) }
-                                if q + 1usize == sp { put_edge(vedge, rr2 * hw + cj + q + 1usize, edge_of(l, cc2, 1usize, 2u8)) }
+                                if q == 0usize { put_edge(vedge, rr2 * hw + table_left_line(ncols, cj, cend, rtl), edge_of(l, cc2, 3usize, 2u8)) }
+                                if cj + q + 1usize == cend { put_edge(vedge, rr2 * hw + table_right_line(ncols, cj, cend, rtl), edge_of(l, cc2, 1usize, 2u8)) }
                                 rr2 += 1usize
                             }
-                            put_edge(hedge, cj + q, edge_of(l, cc2, 0usize, 2u8))
-                            put_edge(hedge, nrows * hw + cj + q, edge_of(l, cc2, 2usize, 2u8))
+                            let physical_col2 = table_column_index(ncols, cj + q, rtl)
+                            put_edge(hedge, physical_col2, edge_of(l, cc2, 0usize, 2u8))
+                            put_edge(hedge, nrows * hw + physical_col2, edge_of(l, cc2, 2usize, 2u8))
                             q += 1usize
                         }
                         cj += sp
@@ -5313,14 +5402,17 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
         ci += 1usize
         var j2 = 0usize
         while j2 < info.cs && info.col + j2 < ncols {
-            put_edge(hedge, info.row * hw + info.col + j2, edge_of(l, info.box, 0usize, 5u8))
-            put_edge(hedge, (info.row + info.rs) * hw + info.col + j2, edge_of(l, info.box, 2usize, 5u8))
+            let physical_col3 = table_column_index(ncols, info.col + j2, rtl)
+            put_edge(hedge, info.row * hw + physical_col3, edge_of(l, info.box, 0usize, 5u8))
+            put_edge(hedge, (info.row + info.rs) * hw + physical_col3, edge_of(l, info.box, 2usize, 5u8))
             j2 += 1usize
         }
+        let left_line = table_left_line(ncols, info.col, info.col + info.cs, rtl)
+        let right_line = table_right_line(ncols, info.col, info.col + info.cs, rtl)
         var i2 = 0usize
         while i2 < info.rs && info.row + i2 < nrows {
-            put_edge(vedge, (info.row + i2) * hw + info.col, edge_of(l, info.box, 3usize, 5u8))
-            put_edge(vedge, (info.row + i2) * hw + info.col + info.cs, edge_of(l, info.box, 1usize, 5u8))
+            put_edge(vedge, (info.row + i2) * hw + left_line, edge_of(l, info.box, 3usize, 5u8))
+            put_edge(vedge, (info.row + i2) * hw + right_line, edge_of(l, info.box, 1usize, 5u8))
             i2 += 1usize
         }
     }
@@ -5335,16 +5427,19 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
         var right = 0.0f64
         var j3 = 0usize
         while j3 < info2.cs && info2.col + j3 < ncols {
-            let a = hedge[info2.row * hw + info2.col + j3]
-            let b2 = hedge[(info2.row + info2.rs) * hw + info2.col + j3]
+            let physical_col4 = table_column_index(ncols, info2.col + j3, rtl)
+            let a = hedge[info2.row * hw + physical_col4]
+            let b2 = hedge[(info2.row + info2.rs) * hw + physical_col4]
             if a.set && a.bs != .Hidden && a.bs != .None { top = maxf(top, a.w) }
             if b2.set && b2.bs != .Hidden && b2.bs != .None { bottom = maxf(bottom, b2.w) }
             j3 += 1usize
         }
+        let left_line2 = table_left_line(ncols, info2.col, info2.col + info2.cs, rtl)
+        let right_line2 = table_right_line(ncols, info2.col, info2.col + info2.cs, rtl)
         var i3 = 0usize
         while i3 < info2.rs && info2.row + i3 < nrows {
-            let a2 = vedge[(info2.row + i3) * hw + info2.col]
-            let b3 = vedge[(info2.row + i3) * hw + info2.col + info2.cs]
+            let a2 = vedge[(info2.row + i3) * hw + left_line2]
+            let b3 = vedge[(info2.row + i3) * hw + right_line2]
             if a2.set && a2.bs != .Hidden && a2.bs != .None { left = maxf(left, a2.w) }
             if b3.set && b3.bs != .Hidden && b3.bs != .None { right = maxf(right, b3.w) }
             i3 += 1usize
@@ -5368,13 +5463,13 @@ fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: [
         if b4.set && b4.bs != .Hidden && b4.bs != .None { tb = maxf(tb, b4.w) }
         c += 1usize
     }
-    r = 0usize
-    while r < nrows {
-        let a4 = vedge[r * hw]
-        let b5 = vedge[r * hw + ncols]
-        if a4.set && a4.bs != .Hidden && a4.bs != .None { tl = maxf(tl, a4.w) }
-        if b5.set && b5.bs != .Hidden && b5.bs != .None { tr = maxf(tr, b5.w) }
-        r += 1usize
+    // The table box takes its side borders from the outer cells in the first row.
+    // Wider side edges on later rows remain painted as overflow beyond this border box.
+    if nrows > 0usize {
+        let a4 = vedge[0usize]
+        let b5 = vedge[ncols]
+        if a4.set && a4.bs != .Hidden && a4.bs != .None { tl = a4.w }
+        if b5.set && b5.bs != .Hidden && b5.bs != .None { tr = b5.w }
     }
     let tbx = &l.boxes.items[usize(t)]
     tbx.coll = true
@@ -5570,17 +5665,17 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
         let cb2 = bx(l, c)
         cell_h[ci] = content_h + vertical_extras(cb2)
         cell_up[ci] = -1.0f64
-        if info.rs == 1usize {
-            if is_baseline_valign(cs.vertical_align) {
-                let (found, by) = first_baseline(l, c)
-                var up = cb2.border[0usize] + cb2.padding[0usize]
-                if found { up = by }
-                cell_up[ci] = up
-                td.row_above[info.row] = maxf(td.row_above[info.row], up)
-                td.row_below[info.row] = maxf(td.row_below[info.row], cell_h[ci] - up)
-            } else {
-                td.row_h[info.row] = maxf(td.row_h[info.row], cell_h[ci])
-            }
+        if is_baseline_valign(cs.vertical_align) {
+            let (found, by) = first_baseline(l, c)
+            var up = cb2.border[0usize] + cb2.padding[0usize]
+            if found { up = by }
+            cell_up[ci] = up
+            // A spanning cell shares the first row's baseline, but its below-baseline
+            // height is distributed by the spanning pass rather than forcing row one.
+            td.row_above[info.row] = maxf(td.row_above[info.row], up)
+            if info.rs == 1usize { td.row_below[info.row] = maxf(td.row_below[info.row], cell_h[ci] - up) }
+        } else if info.rs == 1usize {
+            td.row_h[info.row] = maxf(td.row_h[info.row], cell_h[ci])
         }
         ci += 1usize
     }
@@ -5703,7 +5798,7 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
             q += 1usize
         }
         var dy = 0.0f64
-        if info.rs == 1usize && cell_up[ci] >= 0.0f64 {
+        if cell_up[ci] >= 0.0f64 {
             dy = td.row_above[info.row] - cell_up[ci]
         } else if cs.vertical_align == .Middle {
             dy = (span_h - cell_h[ci]) / 2.0f64
@@ -5712,6 +5807,7 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
         }
         let cb = bx(l, c)
         cb.x = cx[info.col]
+        if ts.direction == .Rtl { cb.x = grid_w - cx[info.col] - cb.w }
         cb.y = 0.0f64
         cb.h = span_h
         if dy > 0.5f64 {
@@ -6820,14 +6916,14 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
         if pass == 1usize {
             if end { want = cv.cat(a, spec.name, "-end") } else { want = cv.cat(a, spec.name, "-start") }
         }
-        var count = 0i32
+        var count = 0i64
         var found = 0i32
         var k = 0usize
         if spec.n > 0i32 {
             while k < names.len {
                 if str.eq(names.items[k].name, want) {
-                    count += 1i32
-                    if count == spec.n { found = names.items[k].line }
+                    count += 1i64
+                    if count == i64(spec.n) { found = names.items[k].line }
                 }
                 k += 1usize
             }
@@ -6836,8 +6932,8 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
             while k > 0usize {
                 k -= 1usize
                 if str.eq(names.items[k].name, want) {
-                    count += 1i32
-                    if count == -spec.n { found = names.items[k].line }
+                    count += 1i64
+                    if count == -i64(spec.n) { found = names.items[k].line }
                 }
             }
         }
@@ -9866,16 +9962,24 @@ fn clear_widths(l: *Layout, b: u32) {
 // The content block size of `b` from its own `height`, else its `max-height`, raised by `min-height`; negative when it has neither.
 fn fixed_block_size(l: *const Layout, b: u32) -> f64 {
     let s = bstyle(l, b)
+    var cbh = -1.0f64
+    if s.height.pct != 0.0f64 || s.max_height.pct != 0.0f64 || s.min_height.pct != 0.0f64 {
+        let parent_id = l.boxes.items[usize(b)].parent
+        if parent_id != NONE {
+            let parent_style = bstyle(l, parent_id)
+            if parent_style.height.kind == .Px { cbh = fixed_block_size(l, parent_id) }
+        }
+    }
     var h = -1.0f64
-    let (hv, has_h) = resolve_len(s.height, -1.0f64)
-    let (mv, has_m) = resolve_len(s.max_height, -1.0f64)
+    let (hv, has_h) = resolve_len(s.height, cbh)
+    let (mv, has_m) = resolve_len(s.max_height, cbh)
     if s.height.kind == .Px && has_h {
         h = to_content_h(l, b, hv)
     } else if s.max_height.kind == .Px && has_m {
         h = to_content_h(l, b, mv)
     }
     if h < 0.0f64 { ret h }
-    ret clamp_height(l, b, h, -1.0f64)
+    ret clamp_height(l, b, h, cbh)
 }
 
 // The block space an orthogonal flow sizes its inline axis against (Writing Modes 3 7.3, WPT available-size-*): the containing

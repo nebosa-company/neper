@@ -64,6 +64,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tenths = [2]f32{ 0.1, 0.3 }
     let (tenth_digits, tenth_error) = chart_locale.tick_decimals(ticks(tenths[..], tick_storage[..]))
     if digits_error != ok || digits != 0u8 || tenth_error != ok || tenth_digits != 1u8 { ret chart.Invalid }
+    // Small but meaningful fractions must not collapse to one zero-decimal label.
+    let close = [2]f32{ 1.0005, 1.0006 }
+    var close_out: [2]str = zero
+    let close_ticks = ticks(close[..], tick_storage[..])
+    let (close_digits, close_digits_error) = chart_locale.tick_decimals(close_ticks)
+    let (close_labels, close_error) = chart_locale.format_ticks_in(a, en, close_ticks, close_out[..])
+    let close_want = [2]str{ "1.0005", "1.0006" }
+    if close_digits_error != ok || close_digits != 4u8 || close_error != ok || !all(close_labels, close_want[..]) { ret chart.Invalid }
     // Month ticks in each locale's own abbreviations.
     var date_storage: [4]chart.DateTick = zero
     let (quarter_ticks, quarter_error) = chart.date_ticks(time.Date { year: 2024i32, month: 1u8, day: 1u8 }, time.Date { year: 2024i32, month: 12u8, day: 31u8 }, 3usize, date_storage[..])

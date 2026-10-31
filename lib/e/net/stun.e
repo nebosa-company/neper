@@ -214,12 +214,15 @@ fn decode(src: []const u8) -> (Header, err) {
 // The attribute at `*pos` (start at 20): its type, value, whether another
 // follows, and `Malformed` when the value overruns the message.
 fn attribute_next(src: []const u8, pos: *usize) -> (u16, []const u8, bool, err) {
+    let (_, header_error) = decode(src)
+    if header_error != ok { ret (0u16, src[0..0usize], false, Malformed) }
     let end = 20usize + usize(load16(src, 2usize))
     let at = *pos
-    if at + 4usize > end || end > src.len { ret (0u16, src[0..0usize], false, Malformed) }
+    if at < 20usize || at > end || end - at < 4usize { ret (0u16, src[0..0usize], false, Malformed) }
     let kind = load16(src, at)
     let length = usize(load16(src, at + 2usize))
-    if at + 4usize + length > end { ret (0u16, src[0..0usize], false, Malformed) }
+    let room = end - at - 4usize
+    if length > room || padded(length) > room { ret (0u16, src[0..0usize], false, Malformed) }
     *pos = at + 4usize + padded(length)
     ret (kind, src[at + 4usize..at + 4usize + length], *pos < end, ok)
 }
@@ -394,21 +397,22 @@ fn gather_candidates(locals: []const Address, components: u8, out: []Candidate) 
     var i = 0usize
     while i < locals.len {
         if i > 65535usize { ret (count, Invalid) }
-        var component = 1u8
-        while component <= components {
+        var component = 1usize
+        while component <= usize(components) {
+            let component_id = u8(component)
             var duplicate = false
             var j = 0usize
             while j < count {
-                if out[j].component == component && address_equal(out[j].address, locals[i]) { duplicate = true }
+                if out[j].component == component_id && address_equal(out[j].address, locals[i]) { duplicate = true }
                 j += 1usize
             }
             if !duplicate {
                 if count >= out.len { ret (count, TooSmall) }
                 let server: Address = zero
-                out[count] = Candidate { kind: HOST, address: locals[i], base: locals[i], priority: priority(HOST, u16(65535usize - i), component), foundation: foundation(HOST, locals[i], server), component: component }
+                out[count] = Candidate { kind: HOST, address: locals[i], base: locals[i], priority: priority(HOST, u16(65535usize - i), component_id), foundation: foundation(HOST, locals[i], server), component: component_id }
                 count += 1usize
             }
-            component += 1u8
+            component += 1usize
         }
         i += 1usize
     }

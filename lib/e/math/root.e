@@ -12,6 +12,64 @@ use e.math
 
 type Result = struct { x: f64, iterations: u32, converged: bool }
 
+// Same-sign endpoints can use their finite difference. Across zero, halve
+// before combining them so midpoint and width remain finite at f64 extremes.
+fn opposite_sign(a: f64, b: f64) -> bool { ret (a < 0.0f64) != (b < 0.0f64) }
+fn bracket_midpoint(a: f64, b: f64) -> f64 {
+    if !opposite_sign(a, b) { ret a + (b - a) / 2.0f64 }
+    ret a / 2.0f64 + b / 2.0f64
+}
+fn bracket_half_width(a: f64, b: f64) -> f64 {
+    if !opposite_sign(a, b) { ret math.abs[f64](b - a) / 2.0f64 }
+    ret math.abs[f64](a / 2.0f64 - b / 2.0f64)
+}
+fn bracket_quarter(a: f64, b: f64) -> f64 {
+    if !opposite_sign(a, b) { ret a + (b - a) / 4.0f64 }
+    ret a * 0.75f64 + b * 0.25f64
+}
+
+// The secant intercept is a weighted point in the bracket. Scaling function
+// magnitudes first avoids forming either endpoint or function differences.
+fn bracket_secant(a: f64, fa: f64, b: f64, fb: f64) -> f64 {
+    let af = math.abs[f64](fa)
+    let bf = math.abs[f64](fb)
+    var scale = af
+    if bf > scale { scale = bf }
+    if scale == 0.0f64 { ret bracket_midpoint(a, b) }
+    let a_weight = bf / scale
+    let b_weight = af / scale
+    let total = a_weight + b_weight
+    let b_fraction = b_weight / total
+    if !opposite_sign(a, b) { ret a + (b - a) * b_fraction }
+    ret a * (a_weight / total) + b * b_fraction
+}
+
+// Scale both coordinate and function domains before inverse quadratic
+// interpolation. A degenerate interpolation falls back to the safe secant
+// point, where the caller can still choose bisection.
+fn bracket_iqi(a: f64, fa: f64, b: f64, fb: f64, c: f64, fc: f64) -> f64 {
+    var coordinate_scale = math.abs[f64](a)
+    if math.abs[f64](b) > coordinate_scale { coordinate_scale = math.abs[f64](b) }
+    if math.abs[f64](c) > coordinate_scale { coordinate_scale = math.abs[f64](c) }
+    if coordinate_scale == 0.0f64 { ret bracket_secant(a, fa, b, fb) }
+    var function_scale = math.abs[f64](fa)
+    if math.abs[f64](fb) > function_scale { function_scale = math.abs[f64](fb) }
+    if math.abs[f64](fc) > function_scale { function_scale = math.abs[f64](fc) }
+    if function_scale == 0.0f64 { ret bracket_secant(a, fa, b, fb) }
+    let na = a / coordinate_scale
+    let nb = b / coordinate_scale
+    let nc = c / coordinate_scale
+    let nfa = fa / function_scale
+    let nfb = fb / function_scale
+    let nfc = fc / function_scale
+    let wa = nfb * nfc / ((nfa - nfb) * (nfa - nfc))
+    let wb = nfa * nfc / ((nfb - nfa) * (nfb - nfc))
+    let wc = nfa * nfb / ((nfc - nfa) * (nfc - nfb))
+    let s = na * wa + nb * wb + nc * wc
+    if s != s || s < -1.0f64 || s > 1.0f64 { ret bracket_secant(a, fa, b, fb) }
+    ret s * coordinate_scale
+}
+
 fn bisect[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tolerance: f64, max_iterations: u32) -> Result {
     var a = low
     var b = high
@@ -22,10 +80,10 @@ fn bisect[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, to
     if (fa < 0.0f64) == (fb < 0.0f64) { ret Result { x: a, iterations: 0u32, converged: false } }
     var i = 0u32
     while i < max_iterations {
-        let middle = a + (b - a) / 2.0f64
+        let middle = bracket_midpoint(a, b)
         let fm = f(ctx, middle)
         i += 1u32
-        if fm == 0.0f64 || math.abs[f64](b - a) / 2.0f64 <= tolerance {
+        if fm == 0.0f64 || bracket_half_width(a, b) <= tolerance {
             ret Result { x: middle, iterations: i, converged: true }
         }
         if (fm < 0.0f64) == (fa < 0.0f64) {
@@ -36,7 +94,7 @@ fn bisect[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, to
             fb = fm
         }
     }
-    ret Result { x: a + (b - a) / 2.0f64, iterations: i, converged: false }
+    ret Result { x: bracket_midpoint(a, b), iterations: i, converged: false }
 }
 
 fn newton[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, df: fn(*Ctx, f64) -> f64, start: f64, tolerance: f64, max_iterations: u32) -> Result {
@@ -115,31 +173,29 @@ fn brent[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tol
     }
     var c = a
     var fc = fa
-    var d = b - a
+    var d = a
     var bisected = true
     var i = 0u32
     while i < max_iterations {
         var s = 0.0f64
         if fa != fc && fb != fc {
-            s = a * fb * fc / ((fa - fb) * (fa - fc)) + b * fa * fc / ((fb - fa) * (fb - fc)) + c * fa * fb / ((fc - fa) * (fc - fb))
-        } else {
-            s = b - fb * (b - a) / (fb - fa)
-        }
+            s = bracket_iqi(a, fa, b, fb, c, fc)
+        } else { s = bracket_secant(a, fa, b, fb) }
         // Reject the interpolated step unless it is inside the inner three quarters
         // of the bracket and shrinks faster than bisection would.
-        let quarter = (3.0f64 * a + b) / 4.0f64
+        let quarter = bracket_quarter(a, b)
         var between = false
         if quarter < b { between = s > quarter && s < b } else { between = s > b && s < quarter }
         var use_bisection = !between
         if !use_bisection {
             if bisected {
-                if math.abs[f64](s - b) >= math.abs[f64](b - c) / 2.0f64 || math.abs[f64](b - c) < tolerance { use_bisection = true }
+                if bracket_half_width(s, b) >= bracket_half_width(b, c) / 2.0f64 || bracket_half_width(b, c) < tolerance / 2.0f64 { use_bisection = true }
             } else {
-                if math.abs[f64](s - b) >= math.abs[f64](c - d) / 2.0f64 || math.abs[f64](c - d) < tolerance { use_bisection = true }
+                if bracket_half_width(s, b) >= bracket_half_width(c, d) / 2.0f64 || bracket_half_width(c, d) < tolerance / 2.0f64 { use_bisection = true }
             }
         }
         if use_bisection {
-            s = (a + b) / 2.0f64
+            s = bracket_midpoint(a, b)
             bisected = true
         } else {
             bisected = false
@@ -164,7 +220,7 @@ fn brent[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tol
             fa = fb
             fb = swap_f
         }
-        if fb == 0.0f64 || math.abs[f64](b - a) <= tolerance { ret Result { x: b, iterations: i, converged: true } }
+        if fb == 0.0f64 || bracket_half_width(b, a) <= tolerance / 2.0f64 { ret Result { x: b, iterations: i, converged: true } }
     }
     ret Result { x: b, iterations: i, converged: false }
 }

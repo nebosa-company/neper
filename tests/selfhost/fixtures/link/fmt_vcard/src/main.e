@@ -97,6 +97,29 @@ fn write_case(a: *mem.Arena, text_in: str, expected: str) -> usize {
     ret 0usize
 }
 
+// A vCard fold may not cut the two octets of UTF-8 `é` apart. `FN:` plus 71
+// ASCII octets puts its first byte at column 75, exercising that boundary.
+fn utf8_fold_case() -> usize {
+    var card: vcard.Card = zero
+    var name: [73]u8 = zero
+    var i = 0usize
+    while i < 71usize {
+        name[i] = 97u8
+        i += 1usize
+    }
+    name[71usize] = 195u8
+    name[72usize] = 169u8
+    card.name = name[..]
+    var cards: [1]vcard.Card = zero
+    cards[0usize] = card
+    var output: [256]u8 = zero
+    let (written, write_error) = vcard.write(cards[..], output[..])
+    if write_error != ok { ret 1usize }
+    if written != 126usize { ret 2usize }
+    if output[100usize] != 13u8 || output[101usize] != 10u8 || output[102usize] != 32u8 || output[103usize] != 195u8 || output[104usize] != 169u8 { ret 3usize }
+    ret 0usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var r = 0usize
     var cards: [4]vcard.Card = zero
@@ -112,7 +135,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r != 0usize { os.exit(40 + i32(r)) }
     r = write_case(a, "\x42\x45\x47\x49\x4e\x3a\x56\x43\x41\x52\x44\x0d\x0a\x56\x45\x52\x53\x49\x4f\x4e\x3a\x33\x2e\x30\x0d\x0a\x46\x4e\x3a\x45\x6d\x70\x74\x79\x20\x50\x68\x6f\x6e\x65\x0d\x0a\x4e\x3a\x50\x68\x6f\x6e\x65\x3b\x45\x6d\x70\x74\x79\x3b\x3b\x3b\x0d\x0a\x45\x4e\x44\x3a\x56\x43\x41\x52\x44\x0d\x0a", "\x42\x45\x47\x49\x4e\x3a\x56\x43\x41\x52\x44\x0d\x0a\x56\x45\x52\x53\x49\x4f\x4e\x3a\x33\x2e\x30\x0d\x0a\x46\x4e\x3a\x45\x6d\x70\x74\x79\x20\x50\x68\x6f\x6e\x65\x0d\x0a\x4e\x3a\x50\x68\x6f\x6e\x65\x3b\x45\x6d\x70\x74\x79\x3b\x3b\x3b\x0d\x0a\x45\x4e\x44\x3a\x56\x43\x41\x52\x44\x0d\x0a")
     if r != 0usize { os.exit(48 + i32(r)) }
+    r = utf8_fold_case()
+    if r != 0usize { os.exit(60 + i32(r)) }
+    // vCard 2.1 quoted-printable fields decode before structured field splitting.
+    r = parse_case(a, "BEGIN:VCARD\nVERSION:2.1\nFN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E7=8E=8B=E5=B0=8F=E6=98=8E=\n=E5=90=8C\nN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E7=8E=8B=3B=E5=B0=8F\nORG;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E5=85=AC=E5=8F=B8=3Bignored\nNOTE;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:one=0Atwo\nTEL;TYPE=CELL;ENCODING=QUOTED-PRINTABLE:=2B=31=32=33\nEND:VCARD\n", "\xE7\x8E\x8B\xE5\xB0\x8F\xE6\x98\x8E\xE5\x90\x8C|\xE7\x8E\x8B|\xE5\xB0\x8F|\xE5\x85\xAC\xE5\x8F\xB8|one~two|+123:cell|")
+    if r != 0usize { os.exit(64 + i32(r)) }
+    // An ordinary property ending in '=' is not a quoted-printable continuation.
+    r = parse_case(a, "BEGIN:VCARD\nNOTE:=\nFN:Plain\nEND:VCARD\n", "Plain||||=||")
+    if r != 0usize { os.exit(72 + i32(r)) }
+    // CHARSET applies after quoted-printable byte decoding.
+    r = parse_case(a, "BEGIN:VCARD\nFN;CHARSET=ISO-8859-1;ENCODING=QUOTED-PRINTABLE:Andr=E9\nEND:VCARD\n", "Andr\xC3\xA9||||||")
+    if r != 0usize { os.exit(76 + i32(r)) }
+    let (_, bad_qp_error) = vcard.parse(a, "BEGIN:VCARD\nFN;ENCODING=QUOTED-PRINTABLE:=XZ\nEND:VCARD\n", cards[0usize..4usize])
+    if bad_qp_error != vcard.Malformed { os.exit(80i32) }
+    let (_, bad_charset_error) = vcard.parse(a, "BEGIN:VCARD\nFN;CHARSET=unknown;ENCODING=QUOTED-PRINTABLE:=41\nEND:VCARD\n", cards[0usize..4usize])
+    if bad_charset_error != vcard.Malformed { os.exit(81i32) }
     let (none_count, none_error) = vcard.parse(a, "just text", cards[0usize..4usize])
     if none_error != vcard.Malformed { os.exit(56) }
+    var malformed_cards: [1]vcard.Card = zero
+    var malformed_output: [512]u8 = zero
+    malformed_cards[0usize].tel_count = 5usize
+    let (_, tel_error) = vcard.write(malformed_cards[..], malformed_output[..])
+    if tel_error != vcard.Malformed { os.exit(56i32) }
+    malformed_cards[0usize].tel_count = 0usize
+    malformed_cards[0usize].email_count = 3usize
+    let (_, email_error) = vcard.write(malformed_cards[..], malformed_output[..])
+    if email_error != vcard.Malformed { os.exit(57i32) }
     ret ok
 }

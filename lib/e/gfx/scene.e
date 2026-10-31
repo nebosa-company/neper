@@ -70,7 +70,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -3435,6 +3435,30 @@ fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Si
 
 // `render` under a device scale: `size` is logical, the frame is `size * scale`
 // pixels, and every command is drawn through that scale (D913).
+fn widen_changed(s: *RendererState, x0: usize, y0: usize, x1: usize, y1: usize) {
+    if x0 < s.changed_x0 { s.changed_x0 = x0 }
+    if y0 < s.changed_y0 { s.changed_y0 = y0 }
+    if x1 > s.changed_x1 { s.changed_x1 = x1 }
+    if y1 > s.changed_y1 { s.changed_y1 = y1 }
+}
+
+// The pixel box `[x0, x1) x [y0, y1)` the last render changed in its frame; an empty box when it changed nothing.
+fn changed_box(r: *Renderer) -> (usize, usize, usize, usize) {
+    let (s, state_error) = renderer_state(r)
+    if state_error != ok { ret (0usize, 0usize, 0usize, 0usize) }
+    ret (s.changed_x0, s.changed_y0, s.changed_x1, s.changed_y1)
+}
+
+fn commit_render(s: *RendererState, slot: usize, width: usize, height: usize, scale: f32) {
+    if s.has_last && s.retiring && s.last_scene != slot { s.scenes[s.last_scene].live = false }
+    s.retiring = false
+    s.has_last = true
+    s.last_scene = slot
+    s.last_width = width
+    s.last_height = height
+    s.last_scale = scale
+}
+
 fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size, scale: f32) -> err {
     let (s, state_error) = renderer_state(r)
     if state_error != ok { ret state_error }
@@ -3472,6 +3496,25 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     let coverage = s.coverage
     let full = damage_of(s, &s.scenes[slot])
     let changed = s.box_count > 0usize
+    // (L178, D5905) The pixels this frame changed, as one box, for a presenter that uploads only those.
+    s.changed_x0 = 0usize
+    s.changed_y0 = 0usize
+    s.changed_x1 = 0usize
+    s.changed_y1 = 0usize
+    if changed {
+        s.changed_x0 = width
+        s.changed_y0 = height
+        var box_at = 0usize
+        while box_at < s.box_count {
+            let (cx0, cy0, cx1, cy1) = scissor_bounds(s, s.boxes[box_at])
+            widen_changed(s, cx0, cy0, cx1, cy1)
+            box_at += 1usize
+        }
+        if s.has_shift { widen_changed(s, s.shift_x0, s.shift_y0, s.shift_x1, s.shift_y1) }
+        if full { widen_changed(s, 0usize, 0usize, width, height) }
+        if s.changed_x1 > width { s.changed_x1 = width }
+        if s.changed_y1 > height { s.changed_y1 = height }
+    }
     if changed && s.has_shift { shift_pixels(s, s.shift_x0, s.shift_y0, s.shift_x1, s.shift_y1, s.shift_dx, s.shift_dy) }
     var k = 0usize
     while k < s.box_count {
@@ -3484,15 +3527,10 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
         }
         k += 1usize
     }
-    // The last rendered scene has been compared against; this one takes its place.
-    if s.has_last && s.retiring && s.last_scene != slot { s.scenes[s.last_scene].live = false }
-    s.retiring = false
-    s.has_last = true
-    s.last_scene = slot
-    s.last_width = width
-    s.last_height = height
-    s.last_scale = scale
-    if !changed { ret ok }
+    if !changed {
+        commit_render(s, slot, width, height, scale)
+        ret ok
+    }
     let (frame, acquire_error) = gpu.acquire(target_state.target)
     if acquire_error != ok { ret from_gpu(acquire_error) }
     // Each box of the canvas as packed pixels in the frame's channel order.
@@ -3532,11 +3570,17 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     }
     if wy1 > height { wy1 = height }
     let write_error = gpu.write_image(s.queue, frame.image, 0u32, u32(wy0), u32(width), u32(wy1 - wy0), s.pixels[wy0 * width..wy1 * width])
-    if write_error != ok { ret from_gpu(write_error) }
+    if write_error != ok {
+        let abandon_error = gpu.abandon(target_state.target, frame)
+        if abandon_error != ok { ret from_gpu(abandon_error) }
+        ret from_gpu(write_error)
+    }
     s.wrote_y0 = wy0
     s.wrote_y1 = wy1
     let (shown, present_error) = gpu.present(s.queue, target_state.target, frame)
     if present_error != ok { ret from_gpu(present_error) }
+    // Keep the previous scene comparison until its pixels have actually presented.
+    commit_render(s, slot, width, height, scale)
     ret ok
 }
 

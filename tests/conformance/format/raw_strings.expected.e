@@ -8,3 +8,20 @@ fn texts() -> []const u8 {
     let empty = r""
     ret plain
 }
+
+fn multiline() -> []const u8 {
+    let value = r"first
+
+
+fn data
+
+}
+else
+@zeta
+@alpha
+use z
+use a
+// preserve this comment
+"
+    ret value
+}

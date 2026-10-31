@@ -115,7 +115,7 @@ fn hex_value(c: i32) -> i32 {
 
 // `a` holds the token list; `keep` holds what a token's text outlives it for (names with escapes, strings, urls), so a caller can
 // give `a` a short life.
-type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token], failure: err }
 
 fn cp(s: *const Scan, at: usize) -> i32 {
     if at < s.n { ret i32(s.src[at]) }
@@ -128,8 +128,14 @@ fn plain(kind: Kind, start: usize, end: usize) -> Token {
     ret Token { kind: kind, start: start, end: end, value: "", number: 0.0f64, unit: "", integer: false, hash_id: false }
 }
 
+fn fail(s: *Scan, e: err) {
+    if s.failure == ok && e != ok { s.failure = e }
+}
+
 fn add(s: *Scan, t: Token) {
+    if s.failure != ok { ret }
     let e = list.push[Token](&s.out, t)
+    fail(s, e)
 }
 
 fn add_plain(s: *Scan, kind: Kind, start: usize) {
@@ -259,7 +265,12 @@ fn consume_name(s: *Scan) -> str {
         ret plain_name
     }
     let (b, e) = str.builder(s.keep, 16usize)
-    if e != ok { ret "" }
+    if e != ok {
+        // In particular, consume_ident_like must never retry this leading escape.
+        fail(s, e)
+        s.i = s.n
+        ret ""
+    }
     var out = b
     var more = true
     while more && s.i < s.n {
@@ -666,9 +677,11 @@ fn tokenize(a: *mem.Arena, input: str) -> ([]const Token, err) {
 fn tokenize_with(a: *mem.Arena, keep: *mem.Arena, input: str) -> ([]const Token, err) {
     let (out, e) = list.init[Token](a, 64usize)
     if e != ok { ret (zero, e) }
-    var s = Scan { a: a, keep: keep, src: input, n: input.len, i: 0usize, out: out }
-    while s.i < s.n { consume_token(&s) }
+    var s = Scan { a: a, keep: keep, src: input, n: input.len, i: 0usize, out: out, failure: ok }
+    while s.i < s.n && s.failure == ok { consume_token(&s) }
+    if s.failure != ok { ret (zero, s.failure) }
     add(&s, plain(.Eof, s.n, s.n))
+    if s.failure != ok { ret (zero, s.failure) }
     ret (list.slice_const[Token](&s.out), ok)
 }
 
@@ -899,28 +912,72 @@ fn parse_declarations(a: *mem.Arena, tokens: []const Token) -> ([]const Declarat
 }
 
 // The source text of a token range (the empty text for none).
-// The source text of `tokens` with escaped identifiers decoded (`7 reen` reads `green`); strings, urls and everything else stay as written.
+// The source text of `tokens` with escaped names decoded. One builder claim avoids retaining a growing concatenation
+// for every token; the spare byte per escape covers CSS's only UTF-8 expansion case.
 fn decoded_text(a: *mem.Arena, source: str, tokens: []const Token) -> str {
     let raw = raw_text(source, tokens)
     var has_escape = false
+    var cap = raw.len
     var i = 0usize
     while i < raw.len {
-        if raw[i] == 92u8 { has_escape = true }
+        if raw[i] == 92u8 {
+            has_escape = true
+            let next_cap = cap + 1usize
+            if next_cap < cap { ret raw }
+            cap = next_cap
+        }
         i += 1usize
     }
     if !has_escape { ret raw }
-    var out = ""
+    let (made, make_error) = str.builder(a, cap)
+    if make_error != ok { ret raw }
+    var out = made
     var k = 0usize
     while k < tokens.len {
         let t = tokens[k]
         var piece = source[t.start..t.end]
-        if t.kind == .Ident { piece = t.value }
-        let (joined, je) = str.concat(a, out, piece)
-        if je != ok { ret raw }
-        out = joined
+        var before = ""
+        var after = ""
+        if t.kind == .Ident {
+            piece = t.value
+        } else if t.kind == .Function {
+            piece = t.value
+            after = "("
+        } else if t.kind == .AtKeyword {
+            piece = t.value
+            before = "@"
+        } else if t.kind == .Hash {
+            piece = t.value
+            before = "#"
+        } else if t.kind == .Dimension {
+            var number_end = t.start
+            if number_end < t.end && (source[number_end] == 43u8 || source[number_end] == 45u8) { number_end += 1usize }
+            while number_end < t.end && source[number_end] >= 48u8 && source[number_end] <= 57u8 { number_end += 1usize }
+            if number_end + 1usize < t.end && source[number_end] == 46u8 && source[number_end + 1usize] >= 48u8 && source[number_end + 1usize] <= 57u8 {
+                number_end += 1usize
+                while number_end < t.end && source[number_end] >= 48u8 && source[number_end] <= 57u8 { number_end += 1usize }
+            }
+            var exponent = number_end
+            if exponent < t.end && (source[exponent] == 69u8 || source[exponent] == 101u8) {
+                exponent += 1usize
+                if exponent < t.end && (source[exponent] == 43u8 || source[exponent] == 45u8) { exponent += 1usize }
+                if exponent < t.end && source[exponent] >= 48u8 && source[exponent] <= 57u8 {
+                    number_end = exponent + 1usize
+                    while number_end < t.end && source[number_end] >= 48u8 && source[number_end] <= 57u8 { number_end += 1usize }
+                }
+            }
+            piece = source[t.start..number_end]
+            after = t.unit
+        }
+        let before_error = str.push(&out, before)
+        if before_error != ok { ret raw }
+        let piece_error = str.push(&out, piece)
+        if piece_error != ok { ret raw }
+        let after_error = str.push(&out, after)
+        if after_error != ok { ret raw }
         k += 1usize
     }
-    ret out
+    ret str.done(&out)
 }
 
 fn raw_text(source: str, tokens: []const Token) -> str {

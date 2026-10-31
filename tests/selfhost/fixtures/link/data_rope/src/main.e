@@ -143,6 +143,65 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, no_node) = rope.concat(&tiny, t1, t2)
     if no_node != rope.TooSmall { os.exit(5i32) }
 
+    // 6: a failed multi-step edit leaves its old root and pools intact.
+    var failed_text: [16]u8 = zero
+    var failed_weight: [4]u32 = zero
+    var failed_left: [4]u32 = zero
+    var failed_right: [4]u32 = zero
+    var failed_start: [4]u32 = zero
+    var failed_rope = rope.rope(failed_text[..], failed_weight[..], failed_left[..], failed_right[..], failed_start[..])
+    let (failed_root, failed_make_error) = rope.from_text(&failed_rope, "abcd")
+    let (unchanged_root, failed_insert) = rope.insert(&failed_rope, failed_root, 2usize, "xy")
+    var failed_out: [8]u8 = zero
+    let (failed_count, failed_report_error) = rope.report(&failed_rope, failed_root, failed_out[..])
+    if failed_make_error != ok || failed_insert != rope.TooSmall || unchanged_root != failed_root || failed_rope.used != 4usize || failed_rope.nodes != 1usize || failed_text[4usize] != 0u8 || failed_text[5usize] != 0u8 || failed_weight[1usize] != 0u32 || failed_left[1usize] != 0u32 || failed_right[1usize] != 0u32 || failed_start[1usize] != 0u32 || failed_report_error != ok || failed_count != 4usize || failed_out[0usize] != 97u8 || failed_out[1usize] != 98u8 || failed_out[2usize] != 99u8 || failed_out[3usize] != 100u8 { os.exit(6i32) }
+    let (retry_root, retry_error) = rope.insert(&failed_rope, failed_root, 4usize, "z")
+    let (retry_count, retry_report_error) = rope.report(&failed_rope, retry_root, failed_out[..])
+    if retry_error != ok || retry_report_error != ok || retry_count != 5usize || failed_out[4usize] != 122u8 { os.exit(6i32) }
+
+    // A failed leaf allocation does not consume text-pool bytes either.
+    var leaf_text: [8]u8 = zero
+    var leaf_weight: [1]u32 = zero
+    var leaf_left: [1]u32 = zero
+    var leaf_right: [1]u32 = zero
+    var leaf_start: [1]u32 = zero
+    var leaf_rope = rope.rope(leaf_text[..], leaf_weight[..], leaf_left[..], leaf_right[..], leaf_start[..])
+    let (leaf_root, leaf_make_error) = rope.from_text(&leaf_rope, "a")
+    let (_, leaf_full_error) = rope.from_text(&leaf_rope, "b")
+    if leaf_make_error != ok || leaf_root == rope.NONE || leaf_full_error != rope.TooSmall || leaf_rope.used != 1usize || leaf_rope.nodes != 1usize { os.exit(6i32) }
+
+    // Removing through two leaf cuts, direct builds and rebalancing are transactional too.
+    var remove_text: [16]u8 = zero
+    var remove_weight: [2]u32 = zero
+    var remove_left: [2]u32 = zero
+    var remove_right: [2]u32 = zero
+    var remove_start: [2]u32 = zero
+    var remove_rope = rope.rope(remove_text[..], remove_weight[..], remove_left[..], remove_right[..], remove_start[..])
+    let (remove_root, remove_make_error) = rope.from_text(&remove_rope, "abcd")
+    let (unchanged_remove_root, failed_remove) = rope.remove(&remove_rope, remove_root, 1usize, 2usize)
+    let (remove_count, remove_report_error) = rope.report(&remove_rope, remove_root, failed_out[..])
+    if remove_make_error != ok || failed_remove != rope.TooSmall || unchanged_remove_root != remove_root || remove_rope.used != 4usize || remove_rope.nodes != 1usize || remove_report_error != ok || remove_count != 4usize || failed_out[0usize] != 97u8 || failed_out[1usize] != 98u8 || failed_out[2usize] != 99u8 || failed_out[3usize] != 100u8 { os.exit(6i32) }
+
+    var build_text: [128]u8 = zero
+    var build_weight: [2]u32 = zero
+    var build_left: [2]u32 = zero
+    var build_right: [2]u32 = zero
+    var build_start: [2]u32 = zero
+    var build_rope = rope.rope(build_text[..], build_weight[..], build_left[..], build_right[..], build_start[..])
+    let (_, build_error) = rope.build(&build_rope, 0usize, 65usize)
+    if build_error != rope.TooSmall || build_rope.used != 0usize || build_rope.nodes != 0usize || build_weight[0usize] != 0u32 { os.exit(6i32) }
+
+    var rebalance_text: [16]u8 = zero
+    var rebalance_weight: [1]u32 = zero
+    var rebalance_left: [1]u32 = zero
+    var rebalance_right: [1]u32 = zero
+    var rebalance_start: [1]u32 = zero
+    var rebalance_rope = rope.rope(rebalance_text[..], rebalance_weight[..], rebalance_left[..], rebalance_right[..], rebalance_start[..])
+    let (rebalance_root, rebalance_make_error) = rope.from_text(&rebalance_rope, "abcd")
+    let (unchanged_rebalance_root, rebalance_error) = rope.rebalance(&rebalance_rope, rebalance_root)
+    let (rebalance_count, rebalance_report_error) = rope.report(&rebalance_rope, rebalance_root, failed_out[..])
+    if rebalance_make_error != ok || rebalance_error != rope.TooSmall || unchanged_rebalance_root != rebalance_root || rebalance_rope.used != 4usize || rebalance_rope.nodes != 1usize || rebalance_report_error != ok || rebalance_count != 4usize || failed_out[0usize] != 97u8 || failed_out[1usize] != 98u8 || failed_out[2usize] != 99u8 || failed_out[3usize] != 100u8 { os.exit(6i32) }
+
     try io.print("data rope ok\n")
     ret ok
 }

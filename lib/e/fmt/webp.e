@@ -76,18 +76,36 @@ const TAG_ALPH: u32 = 1213221953u32
 const TAG_ANMF: u32 = 1179471425u32
 
 // The first frame's bitstream and alpha, and what the headers say about the file.
-fn parse_container(d: []const u8) -> (Container, err) {
+// A bounded header scan may end before the RIFF container; a complete source may not.
+fn parse_container(d: []const u8, bounded: bool) -> (Container, err) {
     var c: Container = zero
     c.frames = 1u32
     if d.len < 20usize || tag(d, 0usize) != TAG_RIFF || tag(d, 8usize) != TAG_WEBP { ret (zero, Invalid) }
-    var end = usize(le32(d, 4usize)) + 8usize
-    if end > d.len { end = d.len }
+    let riff_size = usize(le32(d, 4usize))
+    var end = d.len
+    var shortened = false
+    if riff_size < d.len - 8usize || (bounded && riff_size == d.len - 8usize) { ret (zero, Invalid) }
+    if riff_size > d.len - 8usize {
+        if !bounded { ret (zero, Invalid) }
+        shortened = true
+    }
     var at = 12usize
     var frames = 0u32
     while at + 8usize <= end {
         let kind = tag(d, at)
         let size = usize(le32(d, at + 4usize))
-        if at + 8usize + size > end { ret (zero, Invalid) }
+        let available = end - at - 8usize
+        if size > available {
+            if !shortened { ret (zero, Invalid) }
+            let body = d[at + 8usize..end]
+            if kind == TAG_ALPH && !c.has_bitstream { c.alpha = body }
+            if (kind == TAG_VP8 || kind == TAG_VP8L) && !c.has_bitstream {
+                c.bitstream = body
+                c.lossless = kind == TAG_VP8L
+                c.has_bitstream = true
+            }
+            break
+        }
         let body = d[at + 8usize..at + 8usize + size]
         if kind == TAG_VP8X {
             if size < 10usize { ret (zero, Invalid) }
@@ -119,16 +137,27 @@ fn parse_container(d: []const u8) -> (Container, err) {
                 c.has_bitstream = true
             }
         }
-        at += 8usize + size + (size & 1usize)
+        let padded = size + (size & 1usize)
+        if padded > end - at - 8usize {
+            if !shortened { ret (zero, Invalid) }
+            break
+        }
+        at += 8usize + padded
     }
-    if !c.has_bitstream { ret (zero, Invalid) }
+    if !shortened && at != end { ret (zero, Invalid) }
+    if !c.has_bitstream {
+        if shortened && c.width != 0u32 && c.height != 0u32 { ret (c, ok) }
+        ret (zero, Invalid)
+    }
     if frames > 1u32 { c.frames = frames }
+    let (w, h, alpha_hint, dims_error) = bitstream_dimensions(c.bitstream, c.lossless)
+    if dims_error != ok { ret (zero, dims_error) }
     if c.width == 0u32 {
-        let (w, h, alpha_hint, dims_error) = bitstream_dimensions(c.bitstream, c.lossless)
-        if dims_error != ok { ret (zero, dims_error) }
         c.width = w
         c.height = h
         if c.lossless && alpha_hint { c.has_alpha = true }
+    } else if !c.animated && (c.width != w || c.height != h) {
+        ret (zero, Invalid)
     }
     if c.alpha.len > 0usize { c.has_alpha = true }
     ret (c, ok)
@@ -141,8 +170,12 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
     while at + 8usize <= d.len {
         let kind = tag(d, at)
         let size = usize(le32(d, at + 4usize))
-        if at + 8usize + size > d.len { ret (zero, Invalid) }
-        let body = d[at + 8usize..at + 8usize + size]
+        let available = d.len - at - 8usize
+        if size > available { ret (zero, Invalid) }
+        let padding = size & 1usize
+        if padding > available - size { ret (zero, Invalid) }
+        let body_at = at + 8usize
+        let body = d[body_at..body_at + size]
         if kind == TAG_ALPH { c.alpha = body }
         if (kind == TAG_VP8 || kind == TAG_VP8L) && !c.has_bitstream {
             c.bitstream = body
@@ -153,7 +186,7 @@ fn first_bitstream(d: []const u8) -> (Container, err) {
             c.width = w
             c.height = h
         }
-        at += 8usize + size + (size & 1usize)
+        at = body_at + size + padding
     }
     ret (c, ok)
 }
@@ -187,16 +220,25 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
     var r = source
     var head: [65536]u8 = zero
     var filled = 0usize
+    var complete = false
     while filled < head.len {
         let (got, read_error) = io.read(&r, head[filled..])
-        if read_error == io.End { break }
-        if read_error != ok { ret (zero, read_error) }
         filled += got
+        if read_error == io.End {
+            complete = true
+            break
+        }
+        if read_error != ok { ret (zero, read_error) }
+    }
+    if filled == head.len {
+        var tail: [1]u8 = zero
+        let (tail_count, tail_error) = io.read(&r, tail[..])
+        if tail_error == io.End && tail_count == 0usize { complete = true }
+        if tail_error != ok && tail_error != io.End { ret (zero, tail_error) }
     }
     var data = head[..filled]
     if data.len >= 12usize {
-        // Only the headers are needed: cap the RIFF size at what was read.
-        let (c, c_error) = parse_container(data)
+        let (c, c_error) = parse_container(data, !complete)
         if c_error != ok { ret (zero, c_error) }
         ret (info_of(c), ok)
     }
@@ -2036,7 +2078,7 @@ fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Im
     var r = source
     let (data, read_error) = io.read_all(a, &r, READ_LIMIT)
     if read_error != ok { ret (zero, read_error) }
-    let (c, c_error) = parse_container(data)
+    let (c, c_error) = parse_container(data, false)
     if c_error != ok { ret (zero, c_error) }
     if c.animated && c.frames > 1u32 && !options.first_frame_only { ret (zero, Unsupported) }
     let (w, h, _, dims_error) = bitstream_dimensions(c.bitstream, c.lossless)

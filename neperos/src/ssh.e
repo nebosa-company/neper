@@ -903,7 +903,13 @@ fn live_start(a: *mem.Arena, s: *State) {
         }
         s.have_seed = false
     }
-    if s.sftp_mode { sshc.set_subsystem(&s.session, "sftp") }
+    if s.sftp_mode {
+        let subsystem_error = sshc.set_subsystem(&s.session, "sftp")
+        if subsystem_error != ok {
+            live_end(s, "Could not start the session")
+            ret
+        }
+    }
     s.pw_len = 0usize
     s.announced = false
     if !live_flush(s) {

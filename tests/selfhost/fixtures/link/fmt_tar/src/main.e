@@ -7,6 +7,7 @@ use e.os
 use e.mem
 use e.io
 use e.fmt.tar as tar
+use e.test.support
 
 fn text_equal(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
@@ -23,11 +24,86 @@ fn read_content(r: *tar.Reader, dst: []u8) -> (usize, err) {
     var total = 0usize
     while total < dst.len {
         let (count, read_error) = io.read(&source, dst[total..])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { ret (total, read_error) }
-        total += count
     }
     ret (total, ok)
+}
+
+fn clear_bytes(dst: []u8) {
+    var clear_at = 0usize
+    while clear_at < dst.len {
+        dst[clear_at] = 0u8
+        clear_at += 1usize
+    }
+}
+
+fn write_octal(field: []u8, value: u64) {
+    var fill_at = 0usize
+    while fill_at < field.len {
+        field[fill_at] = 48u8
+        fill_at += 1usize
+    }
+    if field.len > 0usize {
+        field[field.len - 1usize] = 0u8
+        var digit_at = field.len - 1usize
+        var remaining_value = value
+        while digit_at > 0usize {
+            digit_at -= 1usize
+            field[digit_at] = u8(48u64 + remaining_value % 8u64)
+            remaining_value = remaining_value / 8u64
+        }
+    }
+}
+
+fn write_base256(field: []u8, value: u64) {
+    clear_bytes(field)
+    if field.len > 0usize {
+        field[0usize] = 128u8
+        var byte_at = field.len
+        var remaining_value = value
+        while byte_at > 1usize {
+            byte_at -= 1usize
+            field[byte_at] = u8(remaining_value & 255u64)
+            remaining_value = remaining_value >> 8u32
+        }
+    }
+}
+
+fn finish_tar_header(header_bytes: []u8) {
+    var space_at = 148usize
+    while space_at < 156usize {
+        header_bytes[space_at] = 32u8
+        space_at += 1usize
+    }
+    var checksum = 0u64
+    var sum_at = 0usize
+    while sum_at < 512usize {
+        checksum += u64(header_bytes[sum_at])
+        sum_at += 1usize
+    }
+    var digit_at = 155usize
+    while digit_at > 148usize {
+        digit_at -= 1usize
+        header_bytes[digit_at] = u8(48u64 + checksum % 8u64)
+        checksum = checksum / 8u64
+    }
+    header_bytes[155usize] = 32u8
+}
+
+fn make_tar_header(header_bytes: []u8, name: str, kind: u8, size: u64) {
+    clear_bytes(header_bytes)
+    var name_at = 0usize
+    while name_at < name.len && name_at < 100usize {
+        header_bytes[name_at] = name[name_at]
+        name_at += 1usize
+    }
+    write_octal(header_bytes[100usize..108usize], 420u64)
+    write_octal(header_bytes[124usize..136usize], size)
+    write_octal(header_bytes[136usize..148usize], 0u64)
+    header_bytes[156usize] = kind
+    finish_tar_header(header_bytes)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -101,6 +177,168 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tar.name_allowed("/absolute") || tar.name_allowed("\\absolute") { os.exit(18) }
     if tar.name_allowed("C:\\escape") || tar.name_allowed("dir/C:\\escape") { os.exit(19) }
     if !tar.name_allowed("dir/file") || !tar.name_allowed("dir\\file") { os.exit(20) }
+    // A full terminal header must not be mistaken for an empty archive.
+    let ended_header_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: archive[1024usize..1536usize], failure: io.End } }
+    var (ended_header_script, ended_header_script_error) = support.scripted_reader(a, ended_header_steps[..])
+    if ended_header_script_error != ok { os.exit(21) }
+    let (ended_header_reader0, ended_header_reader_error) = tar.reader(a, support.reader(&ended_header_script), 16usize, 1048576u64)
+    if ended_header_reader_error != ok { os.exit(22) }
+    var ended_header_reader = ended_header_reader0
+    let (ended_header, has_ended_header, ended_header_error) = tar.next(&ended_header_reader)
+    if ended_header_error != ok || !has_ended_header || !text_equal(ended_header.name, "dir/") || ended_header.size != 0u64 { os.exit(23) }
+    // A partial header that ends with bytes remains invalid rather than a clean EOF.
+    let partial_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: archive[..511usize], failure: io.End } }
+    var (partial_script, partial_script_error) = support.scripted_reader(a, partial_steps[..])
+    if partial_script_error != ok { os.exit(24) }
+    let (partial_reader0, partial_reader_error) = tar.reader(a, support.reader(&partial_script), 16usize, 1048576u64)
+    if partial_reader_error != ok { os.exit(25) }
+    var partial_reader = partial_reader0
+    let (_, _, partial_error) = tar.next(&partial_reader)
+    if partial_error != tar.Invalid { os.exit(26) }
+    // The last full content block may arrive with End and still advances archive state.
+    var ended_entry: [1024]u8 = zero
+    mem.copy[u8](ended_entry[..512usize], archive[..512usize])
+    var size_at = 124usize
+    while size_at < 135usize {
+        ended_entry[size_at] = 48u8
+        size_at += 1usize
+    }
+    ended_entry[131usize] = 49u8
+    ended_entry[135usize] = 0u8
+    var checksum_at = 148usize
+    while checksum_at < 156usize {
+        ended_entry[checksum_at] = 32u8
+        checksum_at += 1usize
+    }
+    var header_sum = 0u64
+    var header_at = 0usize
+    while header_at < 512usize {
+        header_sum += u64(ended_entry[header_at])
+        header_at += 1usize
+    }
+    var checksum_digits = header_sum
+    var digit_at = 155usize
+    while digit_at > 148usize {
+        digit_at -= 1usize
+        ended_entry[digit_at] = u8(48u64 + checksum_digits % 8u64)
+        checksum_digits = checksum_digits / 8u64
+    }
+    ended_entry[155usize] = 32u8
+    let ended_content_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: ended_entry[..], failure: io.End } }
+    var (ended_content_script, ended_content_script_error) = support.scripted_reader(a, ended_content_steps[..])
+    if ended_content_script_error != ok { os.exit(27) }
+    let (ended_content_reader0, ended_content_reader_error) = tar.reader(a, support.reader(&ended_content_script), 16usize, 1048576u64)
+    if ended_content_reader_error != ok { os.exit(28) }
+    var ended_content_reader = ended_content_reader0
+    let (ended_file, has_ended_file, ended_file_error) = tar.next(&ended_content_reader)
+    if ended_file_error != ok || !has_ended_file || ended_file.size != 512u64 || !text_equal(ended_file.name, "hello.txt") { os.exit(29) }
+    var ended_content: [512]u8 = zero
+    let (ended_content_count, ended_content_error) = read_content(&ended_content_reader, ended_content[..])
+    if ended_content_error != ok || ended_content_count != 512usize { os.exit(30) }
+    let (_, has_ended_more, ended_more_error) = tar.next(&ended_content_reader)
+    if ended_more_error != ok || has_ended_more { os.exit(31) }
+
+    // PAX records are length-prefixed: a second maximal length must be rejected without
+    // adding it to its nonzero record offset.
+    let pax_overflow_record = "6 a=b\n18446744073709551615 x=\n"
+    var pax_overflow_archive: [1536]u8 = zero
+    make_tar_header(pax_overflow_archive[..512usize], "PaxHeader", 120u8, u64(pax_overflow_record.len))
+    mem.copy[u8](pax_overflow_archive[512usize..512usize + pax_overflow_record.len], pax_overflow_record)
+    var pax_overflow_state: io.SliceReader = zero
+    pax_overflow_state.data = pax_overflow_archive[..]
+    let (pax_overflow0, pax_overflow_reader_error) = tar.reader(a, io.slice_reader(&pax_overflow_state), 16usize, 1048576u64)
+    if pax_overflow_reader_error != ok { os.exit(32) }
+    var pax_overflow_reader = pax_overflow0
+    let (_, _, pax_overflow_error) = tar.next(&pax_overflow_reader)
+    if pax_overflow_error != tar.Invalid { os.exit(33) }
+
+    // PAX headers consume both entry and byte budgets, even if no visible file follows.
+    let pax_limit_record = "6 a=b\n"
+    var pax_limit_archive: [1536]u8 = zero
+    make_tar_header(pax_limit_archive[..512usize], "PaxHeader", 120u8, u64(pax_limit_record.len))
+    mem.copy[u8](pax_limit_archive[512usize..512usize + pax_limit_record.len], pax_limit_record)
+    var pax_entry_limit_state: io.SliceReader = zero
+    pax_entry_limit_state.data = pax_limit_archive[..]
+    let (pax_entry_limit0, pax_entry_limit_reader_error) = tar.reader(a, io.slice_reader(&pax_entry_limit_state), 0usize, 1048576u64)
+    if pax_entry_limit_reader_error != ok { os.exit(34) }
+    var pax_entry_limit_reader = pax_entry_limit0
+    let (_, _, pax_entry_limit_error) = tar.next(&pax_entry_limit_reader)
+    if pax_entry_limit_error != tar.TooLarge { os.exit(35) }
+    var pax_byte_limit_state: io.SliceReader = zero
+    pax_byte_limit_state.data = pax_limit_archive[..]
+    let (pax_byte_limit0, pax_byte_limit_reader_error) = tar.reader(a, io.slice_reader(&pax_byte_limit_state), 16usize, 0u64)
+    if pax_byte_limit_reader_error != ok { os.exit(36) }
+    var pax_byte_limit_reader = pax_byte_limit0
+    let (_, _, pax_byte_limit_error) = tar.next(&pax_byte_limit_reader)
+    if pax_byte_limit_error != tar.TooLarge { os.exit(37) }
+
+    // PAX path values are names, so their embedded NULs cannot bypass path validation.
+    let pax_nul_record = "14 path=x/..\0\n"
+    var pax_nul_archive: [2048]u8 = zero
+    make_tar_header(pax_nul_archive[..512usize], "PaxHeader", 120u8, u64(pax_nul_record.len))
+    mem.copy[u8](pax_nul_archive[512usize..512usize + pax_nul_record.len], pax_nul_record)
+    make_tar_header(pax_nul_archive[1024usize..1536usize], "safe", 48u8, 0u64)
+    var pax_nul_state: io.SliceReader = zero
+    pax_nul_state.data = pax_nul_archive[..]
+    let (pax_nul0, pax_nul_reader_error) = tar.reader(a, io.slice_reader(&pax_nul_state), 16usize, 1048576u64)
+    if pax_nul_reader_error != ok { os.exit(38) }
+    var pax_nul_reader = pax_nul0
+    let (_, _, pax_nul_error) = tar.next(&pax_nul_reader)
+    if pax_nul_error != tar.Invalid { os.exit(39) }
+
+    // Base-256 header values above their destination types must return Invalid, not trap.
+    var wide_mode_archive: [1024]u8 = zero
+    make_tar_header(wide_mode_archive[..512usize], "mode", 48u8, 0u64)
+    write_base256(wide_mode_archive[100usize..108usize], 4294967296u64)
+    finish_tar_header(wide_mode_archive[..512usize])
+    var wide_mode_state: io.SliceReader = zero
+    wide_mode_state.data = wide_mode_archive[..]
+    let (wide_mode0, wide_mode_reader_error) = tar.reader(a, io.slice_reader(&wide_mode_state), 16usize, 1048576u64)
+    if wide_mode_reader_error != ok { os.exit(40) }
+    var wide_mode_reader = wide_mode0
+    let (_, _, wide_mode_error) = tar.next(&wide_mode_reader)
+    if wide_mode_error != tar.Invalid { os.exit(41) }
+    var wide_modified_archive: [1024]u8 = zero
+    make_tar_header(wide_modified_archive[..512usize], "modified", 48u8, 0u64)
+    write_base256(wide_modified_archive[136usize..148usize], 9223372036854775808u64)
+    finish_tar_header(wide_modified_archive[..512usize])
+    var wide_modified_state: io.SliceReader = zero
+    wide_modified_state.data = wide_modified_archive[..]
+    let (wide_modified0, wide_modified_reader_error) = tar.reader(a, io.slice_reader(&wide_modified_state), 16usize, 1048576u64)
+    if wide_modified_reader_error != ok { os.exit(42) }
+    var wide_modified_reader = wide_modified0
+    let (_, _, wide_modified_error) = tar.next(&wide_modified_reader)
+    if wide_modified_error != tar.Invalid { os.exit(43) }
+
+    // Size accounting and skip remain defined when a base-256 size reaches u64's limit.
+    var huge_size_archive: [2048]u8 = zero
+    make_tar_header(huge_size_archive[..512usize], "small", 48u8, 1u64)
+    huge_size_archive[512usize] = 65u8
+    make_tar_header(huge_size_archive[1024usize..1536usize], "huge", 48u8, 0u64)
+    write_base256(huge_size_archive[1024usize + 124usize..1024usize + 136usize], 18446744073709551615u64)
+    finish_tar_header(huge_size_archive[1024usize..1536usize])
+    var huge_limit_state: io.SliceReader = zero
+    huge_limit_state.data = huge_size_archive[..]
+    let (huge_limit0, huge_limit_reader_error) = tar.reader(a, io.slice_reader(&huge_limit_state), 16usize, 1099511627776u64)
+    if huge_limit_reader_error != ok { os.exit(44) }
+    var huge_limit_reader = huge_limit0
+    let (_, huge_limit_has_first, huge_limit_first_error) = tar.next(&huge_limit_reader)
+    if huge_limit_first_error != ok || !huge_limit_has_first { os.exit(45) }
+    if tar.skip(&huge_limit_reader) != ok { os.exit(46) }
+    let (_, _, huge_limit_error) = tar.next(&huge_limit_reader)
+    if huge_limit_error != tar.TooLarge { os.exit(47) }
+    var huge_skip_archive: [1024]u8 = zero
+    make_tar_header(huge_skip_archive[..512usize], "huge", 48u8, 0u64)
+    write_base256(huge_skip_archive[124usize..136usize], 18446744073709551615u64)
+    finish_tar_header(huge_skip_archive[..512usize])
+    var huge_skip_state: io.SliceReader = zero
+    huge_skip_state.data = huge_skip_archive[..]
+    let (huge_skip0, huge_skip_reader_error) = tar.reader(a, io.slice_reader(&huge_skip_state), 16usize, 18446744073709551615u64)
+    if huge_skip_reader_error != ok { os.exit(48) }
+    var huge_skip_reader = huge_skip0
+    let (_, huge_skip_has_entry, huge_skip_next_error) = tar.next(&huge_skip_reader)
+    if huge_skip_next_error != ok || !huge_skip_has_entry { os.exit(49) }
+    if tar.skip(&huge_skip_reader) != io.End { os.exit(50) }
     os.exit(0)
     ret ok
 }

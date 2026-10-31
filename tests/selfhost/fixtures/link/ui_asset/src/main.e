@@ -82,28 +82,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (c, cache_error) = ui_asset.cache(a, &renderer, 2usize)
     if cache_error != ok { os.exit(18i32) }
     var cache = c
+    let (cache_scratch_storage, cache_scratch_error) = mem.alloc[u8](a, 1024usize)
+    if cache_scratch_error != ok { os.exit(50i32) }
+    var cache_scratch = mem.arena_from(cache_scratch_storage)
     let decoder = ui_asset.ImageDecoder { ctx: zero, decode: decode_raw }
-    let (first, first_error) = ui_asset.texture(&cache, a, "images/logo", plain, decoder)
+    let (first, first_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", plain, decoder)
     if first_error != ok { os.exit(19i32) }
     // The same selection with the same decoder is the same texture; another
     // variant is another entry; a third is Full; a failing decoder is Decode.
-    let (again, again_error) = ui_asset.texture(&cache, a, "images/logo", plain, decoder)
+    let (again, again_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", plain, decoder)
     if again_error != ok || again.slot != first.slot || again.generation != first.generation { os.exit(20i32) }
-    let (second, second_error) = ui_asset.texture(&cache, a, "images/logo", ui_asset.Request { scale: 2.0, locale: "", theme: .Dark }, decoder)
+    let (second, second_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", ui_asset.Request { scale: 2.0, locale: "", theme: .Dark }, decoder)
     if second_error != ok || second.slot == first.slot { os.exit(21i32) }
-    let (_, full_error) = ui_asset.texture(&cache, a, "images/logo", ui_asset.Request { scale: 1.0, locale: "es-ES", theme: .Any }, decoder)
+    let (_, full_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", ui_asset.Request { scale: 1.0, locale: "es-ES", theme: .Any }, decoder)
     if full_error != ui_asset.Full { os.exit(22i32) }
     if ui_asset.evict(&cache, &renderer, "images/logo") != ok { os.exit(23i32) }
     if ui_asset.evict(&cache, &renderer, "images/logo") != ui_asset.Missing { os.exit(24i32) }
     if scene.update_image(&renderer, first, zero) != scene.Invalid { os.exit(25i32) }
     let never = ui_asset.ImageDecoder { ctx: zero, decode: decode_never }
-    let (_, decode_error) = ui_asset.texture(&cache, a, "images/logo", plain, never)
+    let (_, decode_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", plain, never)
     if decode_error != ui_asset.Decode { os.exit(26i32) }
-    let (third, third_error) = ui_asset.texture(&cache, a, "images/logo", plain, decoder)
+    let (third, third_error) = ui_asset.texture(&cache, &cache_scratch, "images/logo", plain, decoder)
     if third_error != ok { os.exit(27i32) }
     if ui_asset.clear(&cache, &renderer) != ok || scene.release_image(&renderer, third) != scene.Invalid { os.exit(28i32) }
     if ui_asset.close(&cache, &renderer) != ok || ui_asset.close(&cache, &renderer) != ui_asset.Full { os.exit(29i32) }
-    if scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(30i32) }
+    // A failed release must leave cache entries live so a release through the
+    // correct renderer can be retried. This also keeps clear and close retryable.
+    let (retry_raw, retry_cache_error) = ui_asset.cache(a, &renderer, 1usize)
+    if retry_cache_error != ok { os.exit(30i32) }
+    var retry_cache = retry_raw
+    let (other_raw, other_error) = scene.renderer(a, device, q, 2u32, 3u32)
+    if other_error != ok { os.exit(31i32) }
+    var other = other_raw
+    let (_, retry_texture_error) = ui_asset.texture(&retry_cache, &cache_scratch, "images/logo", plain, decoder)
+    if retry_texture_error != ok || ui_asset.evict(&retry_cache, &other, "images/logo") != scene.Invalid || ui_asset.evict(&retry_cache, &renderer, "images/logo") != ok { os.exit(32i32) }
+    let (_, retry_clear_error) = ui_asset.texture(&retry_cache, &cache_scratch, "images/logo", plain, decoder)
+    if retry_clear_error != ok || ui_asset.clear(&retry_cache, &other) != scene.Invalid || ui_asset.clear(&retry_cache, &renderer) != ok { os.exit(33i32) }
+    let (_, retry_close_error) = ui_asset.texture(&retry_cache, &cache_scratch, "images/logo", plain, decoder)
+    if retry_close_error != ok || ui_asset.close(&retry_cache, &other) != scene.Invalid || ui_asset.close(&retry_cache, &renderer) != ok { os.exit(34i32) }
+    if scene.close(&other) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui asset ok\n")
     ret ok
 }

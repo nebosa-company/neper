@@ -157,6 +157,9 @@ fn run_live(a: *mem.Arena, server_read: *os.File, server_write: *os.File, client
 }
 
 fn main(a: *mem.Arena) -> err {
+    let (wrapped_size, wrapped_ok) = imap.literal_size(12usize, "{4294967296}")
+    if wrapped_ok || wrapped_size != 0usize { ret fail(40i32) }
+
     var scene: Scene = zero
     scene.writer = io.SliceWriter { data: scene.sent[0..], off: 0usize }
     let replies = "* OK [CAPABILITY IMAP4rev1] IMAP4rev1 Service Ready\r\n* CAPABILITY IMAP4rev1 STARTTLS AUTH=PLAIN SASL-IR UIDPLUS IDLE\r\nA1 OK CAPABILITY completed\r\nA2 OK LOGIN completed\r\n* 3 EXISTS\r\n* 1 RECENT\r\n* OK [UNSEEN 2] first unseen\r\n* OK [UIDVALIDITY 3857529045] UIDs valid\r\n* OK [UIDNEXT 4392] predicted next UID\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n* OK [PERMANENTFLAGS (\\Deleted \\Seen \\*)] limited\r\nA3 OK [READ-WRITE] SELECT completed\r\n* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\Noselect \\HasChildren) \"/\" {7}\r\nArchive\r\n* LIST () NIL Sent\r\nA4 OK LIST completed\r\n* SEARCH 2 5 9\r\nA5 OK SEARCH completed\r\n* SEARCH 4391\r\nA6 OK SEARCH completed\r\n* 1 FETCH (UID 4388 FLAGS (\\Seen) RFC822.SIZE 26 INTERNALDATE \"17-Jul-1996 02:44:25 -0700\" BODY[] {26}\r\nSubject: hi\r\n\r\nbody line\r\n)\r\n* 2 FETCH (UID 4389 FLAGS () BODY[] NIL)\r\n* 3 FETCH (BODY[HEADER.FIELDS (From To)] {9}\r\nFrom: a\r\n ENVELOPE (\"Mon\" \"Subj \\\"q\\\"\" NIL) UID 77)\r\nA7 OK FETCH completed\r\nA8 OK STORE completed\r\n* 1 EXPUNGE\r\n* 2 EXPUNGE\r\nA9 OK EXPUNGE completed\r\nA10 OK NOOP completed\r\nA11 OK CLOSE completed\r\n* BYE logging out\r\nA12 OK LOGOUT completed\r\n"
@@ -219,6 +222,19 @@ fn main(a: *mem.Arena) -> err {
     if two.writer.off != wrote { ret fail(31i32) }
     let want2 = "A1 LOGIN \"u\" \"wrong\"\r\nA2 NOOP\r\nA3 CAPABILITY\r\nA4 AUTHENTICATE PLAIN\r\nAGFsaWNlAHNlY3JldA==\r\n"
     if !same(two.sent[..wrote], want2) { ret fail(32i32) }
+
+    // A successful STARTTLS response followed by a failed TLS setup must make
+    // the raw session unusable; a later login cannot write credentials.
+    var failed_tls: Scene = zero
+    failed_tls.writer = io.SliceWriter { data: failed_tls.sent[0..], off: 0usize }
+    failed_tls.reader = io.SliceReader { data: "* OK ready\r\nA1 OK Begin TLS negotiation now\r\n", off: 0usize }
+    let (ft0, ft_connect_error) = imap.connect(a, io.slice_reader(&failed_tls.reader), io.slice_writer(&failed_tls.writer), 65536usize)
+    var ft = ft0
+    var empty_tls_config: tls.ClientConfig = zero
+    let tls_error = imap.starttls(&ft, empty_tls_config)
+    if ft_connect_error != ok || tls_error == ok || !ft.poisoned { ret fail(37i32) }
+    let before_login = failed_tls.writer.off
+    if imap.login(&ft, "alice", "secret") != imap.Closed || failed_tls.writer.off != before_login { ret fail(38i32) }
 
     // greeting refusal, an oversized response, a cut connection, an unexpected continuation
     var three: Scene = zero

@@ -5,8 +5,10 @@
 // package that is diffed, signed or checked in wants. Nothing is compressed: Office
 // readers accept stored parts, and the DEFLATE encoder belongs to a later slice.
 //
-// Limits are the classic (non-ZIP64) ones: 65535 parts, 4 GiB - 1 in total, a 65535-byte
-// name. A name `e.fmt.zip` would refuse (absolute, `..`, backslash, drive) is `BadName`.
+// Limits are the classic (non-ZIP64) ones: 65534 parts (65535 is the ZIP64 sentinel),
+// 4 GiB - 1 in total, and a 65535-byte name. A name `e.fmt.zip` would refuse
+// (malformed UTF-8, a control byte, absolute, `..`, backslash or drive) is `BadName`.
+// Non-ASCII UTF-8 names carry the UTF-8 flag in both headers.
 //
 // Memory: the whole package is one allocation from the arena passed in.
 use e.mem
@@ -18,7 +20,7 @@ error TooLarge
 
 type Part = struct { name: str, data: []const u8 }
 
-const MAX_PARTS: usize = 65535usize
+const MAX_PARTS: usize = 65534usize
 const MAX_TOTAL: usize = 4294967295usize
 
 fn put16(out: []u8, at: usize, v: u32) {
@@ -39,23 +41,41 @@ fn put_bytes(out: []u8, at: usize, src: []const u8) {
     }
 }
 
+fn utf8_flags(name: str) -> u32 {
+    var at = 0usize
+    while at < name.len {
+        if name[at] >= 128u8 { ret 2048u32 }
+        at += 1usize
+    }
+    ret 0u32
+}
+
 // The package holding `parts` in order, every one stored.
 fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
-    if parts.len == 0usize || parts.len > MAX_PARTS { ret (zero, TooLarge) }
+    if parts.len > MAX_PARTS { ret (zero, TooLarge) }
     var total = 22usize
     var i = 0usize
     while i < parts.len {
         let p = parts[i]
         if !zip.name_legal(p.name) || p.name.len > 65535usize { ret (zero, BadName) }
         if p.data.len > MAX_TOTAL { ret (zero, TooLarge) }
-        total += 30usize + p.name.len + p.data.len + 46usize + p.name.len
-        if total > MAX_TOTAL { ret (zero, TooLarge) }
+        let overhead = 76usize + p.name.len + p.name.len
+        if total > MAX_TOTAL - overhead { ret (zero, TooLarge) }
+        if p.data.len > MAX_TOTAL - total - overhead { ret (zero, TooLarge) }
+        total += overhead + p.data.len
         i += 1usize
     }
     let (out, out_error) = mem.alloc[u8](a, total)
     if out_error != ok { ret (zero, out_error) }
-    let (offsets, offsets_error) = mem.alloc[u32](a, parts.len)
-    if offsets_error != ok { ret (zero, offsets_error) }
+    // An empty archive has no offsets table but is still a valid 22-byte ZIP.
+    // Avoid asking the arena for a zero-length allocation, which is not a
+    // meaningful resource allocation on every target.
+    var offsets: []u32 = zero
+    if parts.len > 0usize {
+        let (made, offsets_error) = mem.alloc[u32](a, parts.len)
+        if offsets_error != ok { ret (zero, offsets_error) }
+        offsets = made
+    }
     var at = 0usize
     i = 0usize
     while i < parts.len {
@@ -63,7 +83,7 @@ fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
         offsets[i] = u32(at)
         put32(out, at, 67324752u32)
         put16(out, at + 4usize, 20u32)
-        put16(out, at + 6usize, 0u32)
+        put16(out, at + 6usize, utf8_flags(p.name))
         put16(out, at + 8usize, 0u32)
         put16(out, at + 10usize, 0u32)
         put16(out, at + 12usize, 33u32)
@@ -84,7 +104,7 @@ fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err) {
         put32(out, at, 33639248u32)
         put16(out, at + 4usize, 20u32)
         put16(out, at + 6usize, 20u32)
-        put16(out, at + 8usize, 0u32)
+        put16(out, at + 8usize, utf8_flags(p.name))
         put16(out, at + 10usize, 0u32)
         put16(out, at + 12usize, 0u32)
         put16(out, at + 14usize, 33u32)

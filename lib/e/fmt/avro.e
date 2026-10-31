@@ -13,6 +13,7 @@
 // name and size. `resolve` is the same test without data.
 use e.mem
 use e.str
+use e.text.utf8
 
 type Kind = enum u8 { Null, Boolean, Int, Long, Float, Double, Bytes, String, Record, Enum, Array, Map, Union, Fixed }
 type Schema = struct { kind: []Kind, name: []str, child_start: []usize, child_count: []usize, children: []u32, size: []usize, fallback: []str }
@@ -72,6 +73,15 @@ fn read_raw(d: *Decoder, n: usize) -> ([]const u8, err) {
     ret (d.data[start..d.pos], ok)
 }
 
+// A decoded byte count must fit the target width and the unread input before it
+// becomes a slice length.  Checking the remaining input first keeps wasm32 from
+// narrowing a valid i64 count such as 2^32 to zero.
+fn byte_count(d: *const Decoder, n: i64) -> (usize, err) {
+    if n < 0i64 || d.pos > d.data.len { ret (0usize, Malformed) }
+    if u64(n) > u64(d.data.len - d.pos) { ret (0usize, Malformed) }
+    ret (usize(n), ok)
+}
+
 fn skip_raw(d: *Decoder, n: usize) -> err {
     let (taken, taken_error) = read_raw(d, n)
     ret taken_error
@@ -111,14 +121,17 @@ fn read_double(d: *Decoder) -> (f64, err) {
 fn read_bytes(d: *Decoder) -> ([]const u8, err) {
     let (n, n_error) = read_long(d)
     if n_error != ok { ret (zero, n_error) }
-    if n < 0i64 { ret (zero, Malformed) }
-    let (raw, raw_error) = read_raw(d, usize(n))
+    let (count, count_error) = byte_count(d, n)
+    if count_error != ok { ret (zero, count_error) }
+    let (raw, raw_error) = read_raw(d, count)
     ret (raw, raw_error)
 }
 
 fn read_string(d: *Decoder) -> (str, err) {
     let (raw, raw_error) = read_bytes(d)
-    ret (raw, raw_error)
+    if raw_error != ok { ret (zero, raw_error) }
+    if !utf8.validate(raw) { ret (zero, Malformed) }
+    ret (raw, ok)
 }
 
 fn write_raw(o: *Sink, data: []const u8) -> err {
@@ -195,8 +208,15 @@ fn read_index(d: *Decoder, s: *const Schema, node: u32) -> (usize, err) {
 fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
     let k = s.kind[usize(node)]
     if k == .Null { ret ok }
-    if k == .Boolean { ret skip_raw(d, 1usize) }
-    if k == .Int || k == .Long || k == .Enum {
+    if k == .Boolean {
+        let (_, boolean_error) = read_boolean(d)
+        ret boolean_error
+    }
+    if k == .Enum {
+        let (_, index_error) = read_index(d, s, node)
+        ret index_error
+    }
+    if k == .Int || k == .Long {
         let (v, v_error) = read_varint(d)
         ret v_error
     }
@@ -228,8 +248,9 @@ fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
         if n < 0i64 {
             let (block_bytes, block_error) = read_long(d)
             if block_error != ok { ret block_error }
-            if block_bytes < 0i64 { ret Malformed }
-            try skip_raw(d, usize(block_bytes))
+            let (count, count_error) = byte_count(d, block_bytes)
+            if count_error != ok { ret count_error }
+            try skip_raw(d, count)
         } else {
             var i = 0i64
             while i < n {
@@ -237,7 +258,12 @@ fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
                     let (key, key_error) = read_bytes(d)
                     if key_error != ok { ret key_error }
                 }
+                // A Null or empty-record array item can consume no bytes.  Its
+                // next occurrence has exactly the same result, so one success
+                // proves the rest of this positive block without looping n times.
+                let before = d.pos
                 try skip(s, child(s, node, 0usize), d)
+                if k == .Array && d.pos == before { break }
                 i += 1i64
             }
         }
@@ -269,18 +295,18 @@ fn first_branch(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> (usize,
 }
 
 // `Mismatch` unless every value of the writer type resolves to the reader type
-// (a union is fine when any branch does, an enum when every symbol is known or a
-// default stands, a record when every reader field is written or defaulted).
+// (every writer-union branch must resolve, an enum when every symbol is known or
+// a default stands, a record when every reader field is written or defaulted).
 fn resolve(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> err {
     let wk = w.kind[usize(wn)]
     let rk = r.kind[usize(rn)]
     if wk == .Union {
         var i = 0usize
         while i < w.child_count[usize(wn)] {
-            if resolve(w, child(w, wn, i), r, rn) == ok { ret ok }
+            if resolve(w, child(w, wn, i), r, rn) != ok { ret Mismatch }
             i += 1usize
         }
-        ret Mismatch
+        ret ok
     }
     if rk == .Union {
         let (branch, found) = first_branch(w, wn, r, rn)
@@ -410,9 +436,15 @@ fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *D
     if first_error != ok { ret first_error }
     var n = first
     while n != 0i64 {
+        var block_end = 0usize
+        var has_block_end = false
         if n < 0i64 {
             let (block_bytes, block_error) = read_long(d)
             if block_error != ok { ret block_error }
+            if block_bytes < 0i64 || u64(block_bytes) > u64(d.data.len - d.pos) { ret Malformed }
+            block_end = d.pos + usize(block_bytes)
+            has_block_end = true
+            if n == 0i64 - 9223372036854775807i64 - 1i64 { ret Malformed }
             n = 0i64 - n
         }
         try write_long(o, n)
@@ -423,9 +455,16 @@ fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *D
                 if key_error != ok { ret key_error }
                 try write_bytes(o, key)
             }
+            // Both positions stay fixed only for an item that is a no-op in
+            // this writer/reader pair.  Repeating it cannot affect the decoder
+            // or sink, so avoid an attacker-controlled count-length loop.
+            let input_before = d.pos
+            let output_before = o.used
             try decode_resolved(w, witem, r, ritem, d, o)
+            if wk == .Array && d.pos == input_before && o.used == output_before { break }
             i += 1i64
         }
+        if has_block_end && d.pos != block_end { ret Malformed }
         let (again, again_error) = read_long(d)
         if again_error != ok { ret again_error }
         n = again

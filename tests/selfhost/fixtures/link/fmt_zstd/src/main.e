@@ -9,7 +9,33 @@ use e.os
 use e.mem
 use e.io
 use e.str
+use e.test.support
 use e.fmt.zstd as zstd
+
+error SinkFailed
+
+type FailingSink = struct { data: []u8, off: usize, writes: usize, fail_write: usize, fail_flush: bool }
+
+fn failing_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let sink = mem.cast[*FailingSink](ctx)
+    sink.writes += 1usize
+    var count = src.len
+    if sink.fail_write != 0usize && sink.writes == sink.fail_write {
+        if count > 1usize { count = 1usize }
+        if count > 0usize { mem.copy[u8](sink.data[sink.off..sink.off + count], src[..count]) }
+        sink.off += count
+        ret (count, SinkFailed)
+    }
+    mem.copy[u8](sink.data[sink.off..sink.off + count], src)
+    sink.off += count
+    ret (count, ok)
+}
+
+fn failing_flush(ctx: *void) -> err {
+    let sink = mem.cast[*FailingSink](ctx)
+    if sink.fail_flush { ret SinkFailed }
+    ret ok
+}
 
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
     let words = bytes / 8usize + 1usize
@@ -18,9 +44,8 @@ fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
     ret (mem.view(a, a.off - words * 8usize, words * 8usize), ok)
 }
 
-fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64) -> (usize, err) {
-    var source_state = io.SliceReader { data: packed, off: 0usize }
-    let (r0, reader_error) = zstd.reader(storage, io.slice_reader(&source_state), limit)
+fn inflate_from(storage: []u8, source: io.Reader, out: []u8, pull: usize, limit: u64) -> (usize, err) {
+    let (r0, reader_error) = zstd.reader(storage, source, limit)
     if reader_error != ok { ret (0usize, reader_error) }
     var r = r0
     var total = 0usize
@@ -28,12 +53,19 @@ fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64
         var stop = total + pull
         if stop > out.len { stop = out.len }
         let (count, read_error) = zstd.read(&r, out[total..stop])
+        total += count
         if read_error == io.End { break }
         if read_error != ok { ret (total, read_error) }
-        total += count
         if total == out.len { ret (total, io.TooSmall) }
     }
     ret (total, ok)
+}
+
+fn inflate(storage: []u8, packed: []const u8, out: []u8, pull: usize, limit: u64) -> (usize, err) {
+    var source_state = io.SliceReader { data: packed, off: 0usize }
+    let source = io.slice_reader(&source_state)
+    let (count, inflate_error) = inflate_from(storage, source, out, pull, limit)
+    ret (count, inflate_error)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -59,6 +91,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e6 != ok || !str.eq(out[..n19], text) { os.exit(7) }
     let (n4, e7) = inflate(storage, small, out, 5usize, 10000000u64)
     if e7 != ok || !str.eq(out[..n4], small_text) { os.exit(8) }
+    let final_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: small, failure: io.End } }
+    var (final_script, final_script_error) = support.scripted_reader(a, final_steps[..])
+    if final_script_error != ok { os.exit(27) }
+    let final_source = support.reader(&final_script)
+    let (final_count, final_error) = inflate_from(storage, final_source, out, 5usize, 10000000u64)
+    if final_error != ok || final_count != small_text.len || !str.eq(out[..final_count], small_text) { os.exit(27) }
     let (n5, e8) = inflate(storage, runs, out, 4096usize, 10000000u64)
     if e8 != ok || n5 != 10003usize || out[0] != 97u8 || out[5000] != 98u8 || out[10002] != 97u8 { os.exit(9) }
     // The writer, read back.
@@ -97,7 +135,136 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e18 != zstd.Unsupported { os.exit(24) }
     let (n12, e19) = inflate(storage, level3, out, 9000usize, 1000u64)
     if e19 != zstd.Invalid { os.exit(25) }
+
+    // A forward FSE description must not consume virtual zero bytes past its input.
+    var fse_counts: [64]i32 = zero
+    let (_, _, _, fse_error) = zstd.fse_read_counts("\xb0\x01", fse_counts[..], 13usize, 6u32)
+    if fse_error != zstd.Invalid { os.exit(28) }
+    // An all-low-probability distribution fills every cell without underflowing the
+    // final high-cell cursor in either the decoder or encoder table builder.
+    var low_counts: [32]i32 = zero
+    var low_at = 0usize
+    while low_at < low_counts.len {
+        low_counts[low_at] = -1i32
+        low_at += 1usize
+    }
+    var low_table: [128]u8 = zero
+    if zstd.fse_build(low_table[..], low_counts[..], 32usize, 5u32) != ok { os.exit(29) }
+    var enc_states: [512]u32 = zero
+    var enc_bits: [64]i64 = zero
+    var enc_find: [64]i64 = zero
+    var encoder = zstd.FseEncoder { next_state: enc_states[..], delta_bits: enc_bits[..], delta_find: enc_find[..], accuracy: 0u32 }
+    zstd.fse_encoder_build(&encoder, low_counts[..], 32usize, 5u32)
+
+    // Frame history cannot cross a concatenation boundary. The second frame has one
+    // offset-four match and no literals, so it would otherwise reproduce `abcd`.
+    let cross_frame = "\x28\xb5\x2f\xfd\x20\x04\x21\x00\x00abcd\x28\xb5\x2f\xfd\x20\x04\x3d\x00\x00\x00\x01\x54\x00\x02\x01\x07"
+    let (_, cross_frame_error) = inflate(storage, cross_frame, out, 9000usize, 10000000u64)
+    if cross_frame_error != zstd.Invalid { os.exit(30) }
+
+    // A sequence may not expand a compressed block beyond 128 KiB before the caller
+    // receives its failure. The first 65539-byte match is retained; the second is
+    // rejected before it can be copied.
+    let (amp_history, amp_history_error) = mem.alloc[u8](a, 262144usize)
+    if amp_history_error != ok { os.exit(31) }
+    var amp: zstd.State = zero
+    amp.history = amp_history
+    amp.history[0usize] = 65u8
+    amp.hist_len = 1usize
+    amp.ll.rle = true
+    amp.ll.rle_symbol = 0u32
+    amp.of.rle = true
+    amp.of.rle_symbol = 2u32
+    amp.ml.rle = true
+    amp.ml.rle_symbol = 52u32
+    let amp_error = zstd.run_sequences(&amp, "\x03\x54\x00\x02\x34\x00\x00\x00\x00\x00\x00\x40", 0usize)
+    if amp_error != zstd.Invalid || amp.hist_len != 65540usize { os.exit(32) }
+
+    // The whole-buffer convenience decoder grows its retained history past one raw
+    // block when its output budget permits the frame's 131073-byte single segment.
+    let (wide_frame, wide_frame_error) = mem.alloc[u8](a, 131088usize)
+    if wide_frame_error != ok { os.exit(33) }
+    wide_frame[0usize] = 40u8
+    wide_frame[1usize] = 181u8
+    wide_frame[2usize] = 47u8
+    wide_frame[3usize] = 253u8
+    wide_frame[4usize] = 160u8
+    wide_frame[5usize] = 1u8
+    wide_frame[6usize] = 0u8
+    wide_frame[7usize] = 2u8
+    wide_frame[8usize] = 0u8
+    wide_frame[9usize] = 0u8
+    wide_frame[10usize] = 0u8
+    wide_frame[11usize] = 16u8
+    var wide_at = 0usize
+    while wide_at < 131072usize {
+        wide_frame[12usize + wide_at] = u8(wide_at & 255usize)
+        wide_at += 1usize
+    }
+    wide_frame[131084usize] = 9u8
+    wide_frame[131085usize] = 0u8
+    wide_frame[131086usize] = 0u8
+    wide_frame[131087usize] = 42u8
+    let (wide_out, wide_error) = zstd.decode(a, wide_frame, 200000u64)
+    if wide_error != ok || wide_out.len != 131073usize || wide_out[0usize] != 0u8 || wide_out[131071usize] != 255u8 || wide_out[131072usize] != 42u8 { os.exit(34) }
+
+    // A non-single-segment frame can declare a larger window than its immediate
+    // payload. Whole-buffer decoding derives enough retained history from its cap.
+    let large_window_frame = "\x28\xb5\x2f\xfd\x00\x58\x09\x00\x00A"
+    let (large_window_out, large_window_error) = zstd.decode(a, large_window_frame, 2097152u64)
+    if large_window_error != ok || large_window_out.len != 1usize || large_window_out[0usize] != 65u8 { os.exit(35) }
+
     let (none, e20) = zstd.reader_storage(0usize)
     if e20 != zstd.Invalid { os.exit(26) }
+
+    // A short raw-block write plus an error has consumed the writer's input,
+    // so the writer must become terminal rather than emit a second frame later.
+    let (failure_input, failure_input_error) = mem.alloc[u8](a, 131072usize)
+    if failure_input_error != ok { os.exit(36) }
+    var failure_at = 0usize
+    while failure_at < failure_input.len {
+        failure_input[failure_at] = 65u8
+        failure_at += 1usize
+    }
+    let (failure_bytes, failure_bytes_error) = mem.alloc[u8](a, 4096usize)
+    if failure_bytes_error != ok { os.exit(37) }
+    var failed_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 3usize, fail_flush: false }
+    let (failed_storage, failed_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if failed_storage_error != ok { os.exit(38) }
+    let (failed_writer0, failed_writer_error) = zstd.writer(failed_storage, io.Writer { ctx: mem.cast[*void](&failed_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if failed_writer_error != ok { os.exit(39) }
+    var failed_writer = failed_writer0
+    let (_, failed_write_error) = zstd.write(&failed_writer, failure_input)
+    if failed_write_error != SinkFailed { os.exit(40) }
+    let failed_off = failed_sink.off
+    let (retry_count, retry_error) = zstd.write(&failed_writer, "retry")
+    if retry_count != 0usize || retry_error != zstd.Invalid || zstd.finish(&failed_writer) != zstd.Invalid || failed_sink.off != failed_off { os.exit(41) }
+
+    // A short checksum write is also terminal: a later finish cannot append it.
+    var trailer_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 4usize, fail_flush: false }
+    let (trailer_storage, trailer_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if trailer_storage_error != ok { os.exit(42) }
+    let (trailer_writer0, trailer_writer_error) = zstd.writer(trailer_storage, io.Writer { ctx: mem.cast[*void](&trailer_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if trailer_writer_error != ok { os.exit(43) }
+    var trailer_writer = trailer_writer0
+    let (_, trailer_write_error) = zstd.write(&trailer_writer, "trailer")
+    if trailer_write_error != ok || zstd.finish(&trailer_writer) != SinkFailed || trailer_sink.writes != 4usize { os.exit(44) }
+    let trailer_off = trailer_sink.off
+    let (after_trailer_count, after_trailer_error) = zstd.write(&trailer_writer, "retry")
+    if after_trailer_count != 0usize || after_trailer_error != zstd.Invalid || zstd.finish(&trailer_writer) != zstd.Invalid || trailer_sink.off != trailer_off { os.exit(45) }
+
+    // A flush failure happens after the frame checksum was written; it still may
+    // not make a later finish look successful or append a second checksum.
+    var flush_sink = FailingSink { data: failure_bytes, off: 0usize, writes: 0usize, fail_write: 0usize, fail_flush: true }
+    let (flush_storage, flush_storage_error) = aligned(a, zstd.writer_storage(.Balanced))
+    if flush_storage_error != ok { os.exit(46) }
+    let (flush_writer0, flush_writer_error) = zstd.writer(flush_storage, io.Writer { ctx: mem.cast[*void](&flush_sink), write: failing_write, flush: failing_flush }, .Balanced)
+    if flush_writer_error != ok { os.exit(47) }
+    var flush_writer = flush_writer0
+    let (_, flush_write_error) = zstd.write(&flush_writer, "flush")
+    if flush_write_error != ok || zstd.finish(&flush_writer) != SinkFailed { os.exit(48) }
+    let flush_off = flush_sink.off
+    let (after_flush_count, after_flush_error) = zstd.write(&flush_writer, "retry")
+    if after_flush_count != 0usize || after_flush_error != zstd.Invalid || zstd.finish(&flush_writer) != zstd.Invalid || flush_sink.off != flush_off { os.exit(49) }
     ret ok
 }

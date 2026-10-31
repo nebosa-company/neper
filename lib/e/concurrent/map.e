@@ -2,11 +2,17 @@
 // table of its own under its own mutex, so operations on different shards never
 // wait on each other and one on the same shard is linearizable by the lock. A key's
 // shard is the top bits of `K.hash`; its slot is the low bits, probed linearly.
-// Capacity is split evenly across the shards and a new key into a full shard is
-// `Full` -- the map is fixed, and "full" is the shard's fullness, which is what a
-// caller sizing `capacity` should expect. `len` sums the shards one after another.
-// After `close` every operation is `Closed`. Zero capacity or shards is `Invalid`.
+// Capacity is apportioned exactly across the active shards. When more shards than
+// capacity are requested, the active shard count is reduced so every shard has room
+// for a key. A new key into a full shard is `Full` -- the map is fixed, and "full"
+// is the shard's fullness, which is what a caller sizing `capacity` should expect.
+// `len` sums the shards one after another. A short admission gate counts operations
+// before they take their shard lock; `close` shuts that gate and waits for those
+// operations, so after it returns every operation is `Closed`. Zero capacity or shards
+// is `Invalid`.
+use e.atomic
 use e.mem
+use e.os
 use e.sync
 
 type Map[K: type, V: type] = struct { state: *void }
@@ -16,23 +22,59 @@ error Invalid
 
 const EMPTY: u8 = 0u8
 const FULL_MARK: u8 = 1u8
-const DEAD: u8 = 2u8
+const CLOSING: u32 = 2147483648u32
+const ACTIVE_MASK: u32 = 2147483647u32
 
-type Shard[K: type, V: type] = struct { lock: sync.Mutex, keys: []K, values: []V, marks: []u8, count: usize, used: usize }
-type State[K: type, V: type] = struct { shards: []Shard[K, V], closed: bool, slots_per_shard: usize }
+type Shard[K: type, V: type] = struct { lock: sync.Mutex, keys: []K, values: []V, marks: []u8, count: usize, used: usize, limit: usize }
+type State[K: type, V: type] = struct { shards: []Shard[K, V], admission: Atomic[u32] }
+
+// The smallest power-of-two table that can retain `limit` entries below three
+// quarters full. The comparison and doubling are deliberately overflow-safe so
+// init can reject an unrepresentable capacity before it reserves arena space.
+fn table_slots(limit: usize) -> (usize, err) {
+    let maximum = 0usize -% 1usize
+    var slots = 4usize
+    while slots - slots / 4usize < limit {
+        if slots > maximum / 2usize { ret (0usize, mem.Exhausted) }
+        slots *= 2usize
+    }
+    ret (slots, ok)
+}
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K, V], err) {
     if capacity == 0usize || shards == 0u16 { ret (zero, Invalid) }
+    var active = usize(shards)
+    if active > capacity { active = capacity }
+    // Give the first remainder shards one extra key, so the limits sum exactly
+    // to capacity while each table remains below a three-quarter load. Compute
+    // both possible table sizes before any allocation, including the failing
+    // usize-max case.
+    let base = capacity / active
+    let extra = capacity % active
+    let (base_slots, base_slots_error) = table_slots(base)
+    if base_slots_error != ok { ret (zero, base_slots_error) }
+    var extra_limit = base
+    var extra_slots = base_slots
+    if extra != 0usize {
+        let maximum = 0usize -% 1usize
+        if base == maximum { ret (zero, mem.Exhausted) }
+        extra_limit = base + 1usize
+        let (larger_slots, larger_slots_error) = table_slots(extra_limit)
+        if larger_slots_error != ok { ret (zero, larger_slots_error) }
+        extra_slots = larger_slots
+    }
     let (storage, storage_error) = mem.alloc[State[K, V]](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
-    let (table, table_error) = mem.alloc[Shard[K, V]](a, usize(shards))
+    let (table, table_error) = mem.alloc[Shard[K, V]](a, active)
     if table_error != ok { ret (zero, table_error) }
-    // Each shard holds its share of the capacity at a load under three quarters.
-    var per_shard = (capacity + usize(shards) - 1usize) / usize(shards)
-    var slots = 4usize
-    while slots * 3usize < per_shard * 4usize { slots = slots * 2usize }
     var i = 0usize
-    while i < usize(shards) {
+    while i < active {
+        var limit = base
+        var slots = base_slots
+        if i < extra {
+            limit = extra_limit
+            slots = extra_slots
+        }
         let (keys, keys_error) = mem.alloc[K](a, slots)
         if keys_error != ok { ret (zero, keys_error) }
         let (values, values_error) = mem.alloc[V](a, slots)
@@ -50,11 +92,11 @@ fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K
         table[i].marks = marks
         table[i].count = 0usize
         table[i].used = 0usize
+        table[i].limit = limit
         i += 1usize
     }
     storage[0].shards = table
-    storage[0].closed = false
-    storage[0].slots_per_shard = per_shard
+    storage[0].admission = atomic.init(0u32)
     var m: Map[K, V] = zero
     m.state = mem.cast[*void](&storage[0])
     ret (m, ok)
@@ -72,32 +114,38 @@ fn locate[K: type, V: type](s: *State[K, V], key: K) -> (usize, usize) {
 fn probe[K: type, V: type](shard: *Shard[K, V], start: usize, key: K) -> (usize, bool) {
     let mask = shard.marks.len - 1usize
     var at = start
-    var hole = 0usize
-    var has_hole = false
     var walked = 0usize
     while walked < shard.marks.len {
         let mark = shard.marks[at]
-        if mark == EMPTY {
-            if has_hole { ret (hole, false) }
-            ret (at, false)
-        }
-        if mark == FULL_MARK {
-            if K.eq(shard.keys[at], key) { ret (at, true) }
-        } else {
-            if !has_hole {
-                hole = at
-                has_hole = true
-            }
-        }
+        if mark == EMPTY { ret (at, false) }
+        if K.eq(shard.keys[at], key) { ret (at, true) }
         at = (at + 1usize) & mask
         walked += 1usize
     }
-    ret (hole, false)
+    ret (start, false)
+}
+
+// The high bit closes admission; the remaining bits count operations that joined before
+// it. This lets different shards stay independent while close waits for that count.
+fn enter[K: type, V: type](s: *State[K, V]) -> err {
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if (seen & CLOSING) != 0u32 { ret Closed }
+        if (seen & ACTIVE_MASK) == ACTIVE_MASK { ret Full }
+        let (won, current) = atomic.cas(&s.admission, seen, seen + 1u32, .Acquire, .Relaxed)
+        if won { ret ok }
+    }
+}
+
+fn leave[K: type, V: type](s: *State[K, V]) {
+    let previous = atomic.sub(&s.admission, 1u32, .Release)
+    if previous == (CLOSING | 1u32) { os.wake_all_u32(&s.admission) }
 }
 
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (zero, false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (zero, false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -105,13 +153,15 @@ fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err) {
     var value: V = zero
     if found { value = shard.values[slot] }
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (value, found, ok)
 }
 
 // True when the key was new; a present key takes the value and answers false.
 fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -119,10 +169,13 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     if found {
         shard.values[slot] = value
         sync.mutex_unlock(&shard.lock)
+        leave[K, V](s)
         ret (false, ok)
     }
-    if shard.count >= s.slots_per_shard || shard.used + 1usize > shard.marks.len * 3usize / 4usize {
+    let load_limit = (shard.marks.len / 4usize) * 3usize
+    if shard.count >= shard.limit || shard.used >= load_limit {
         sync.mutex_unlock(&shard.lock)
+        leave[K, V](s)
         ret (false, Full)
     }
     if shard.marks[slot] == EMPTY { shard.used += 1usize }
@@ -131,12 +184,36 @@ fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     shard.marks[slot] = FULL_MARK
     shard.count += 1usize
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (true, ok)
+}
+
+// Delete one slot without leaving a tombstone. Every shifted entry's probe path
+// crosses `hole`, so lookups still reach it after the final hole becomes EMPTY.
+fn close_hole[K: type, V: type](shard: *Shard[K, V], removed: usize) {
+    let mask = shard.marks.len - 1usize
+    var hole = removed
+    var at = (hole + 1usize) & mask
+    while shard.marks[at] != EMPTY {
+        let digest: u64 = K.hash(shard.keys[at])
+        let home = usize(digest & 4294967295u64) & mask
+        let current_distance = (at -% home) & mask
+        let hole_distance = (hole -% home) & mask
+        if hole_distance < current_distance {
+            shard.keys[hole] = shard.keys[at]
+            shard.values[hole] = shard.values[at]
+            shard.marks[hole] = FULL_MARK
+            hole = at
+        }
+        at = (at + 1usize) & mask
+    }
+    shard.marks[hole] = EMPTY
 }
 
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (zero, false, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (zero, false, enter_error) }
     let (index, start) = locate[K, V](s, key)
     let shard = &s.shards[index]
     sync.mutex_lock(&shard.lock)
@@ -144,16 +221,19 @@ fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err) {
     var value: V = zero
     if found {
         value = shard.values[slot]
-        shard.marks[slot] = DEAD
+        close_hole[K, V](shard, slot)
         shard.count -= 1usize
+        shard.used -= 1usize
     }
     sync.mutex_unlock(&shard.lock)
+    leave[K, V](s)
     ret (value, found, ok)
 }
 
 fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err) {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret (0usize, Closed) }
+    let enter_error = enter[K, V](s)
+    if enter_error != ok { ret (0usize, enter_error) }
     var total = 0usize
     var i = 0usize
     while i < s.shards.len {
@@ -163,12 +243,21 @@ fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err) {
         sync.mutex_unlock(&shard.lock)
         i += 1usize
     }
+    leave[K, V](s)
     ret (total, ok)
 }
 
 fn close[K: type, V: type](m: *Map[K, V]) -> err {
     let s = mem.cast[*State[K, V]](m.state)
-    if s.closed { ret Closed }
-    s.closed = true
-    ret ok
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if (seen & CLOSING) != 0u32 { ret Closed }
+        let (won, current) = atomic.cas(&s.admission, seen, seen | CLOSING, .AcqRel, .Acquire)
+        if won { break }
+    }
+    while true {
+        let seen = atomic.load(&s.admission, .Acquire)
+        if seen == CLOSING { ret ok }
+        let ignored = os.wait_u32(&s.admission, seen, -1i64)
+    }
 }

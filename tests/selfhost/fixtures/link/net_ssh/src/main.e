@@ -5,20 +5,52 @@
 // SFTP packets of e.net.sftp ride the channel: version, realpath, a directory listing, a file read, a file written,
 // stat) and a `direct-tcpip` forward to a TCP echo server on the SSH server's side (drive.py), a refused forward
 // reported as a channel failure.
-// Arguments: mode (password, key, badpass, badhost, gcm256, gcm128, rekey, sftp, forward, forward_refused), port, the
+// Arguments: mode (unit, password, key, badpass, badhost, gcm256, gcm128, rekey, sftp, forward, forward_refused), port, the
 // host key as 64 hex digits, and for the forward modes the target port.
 // Every stage has its own exit code.
 use e.io
+use e.crypto.hash as hash
 use e.mem
 use e.net
 use e.os
 use e.str
 use e.net.ssh as ssh
 use e.net.sftp as sftp
+use e.crypto.kx as kx
 
 fn hex_value(c: u8) -> u8 {
     if c >= 48u8 && c <= 57u8 { ret c - 48u8 }
     ret c - 87u8
+}
+
+fn parse_hex_32(text: str) -> [32]u8 {
+    var bytes: [32]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        bytes[i] = hex_value(text[2usize * i]) * 16u8 + hex_value(text[2usize * i + 1usize])
+        i += 1usize
+    }
+    ret bytes
+}
+
+fn password_is_zero(s: *ssh.Session) -> bool {
+    if s.password_len != 0usize { ret false }
+    var i = 0usize
+    while i < s.password.len {
+        if s.password[i] != 0u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn command_is_zero(s: *ssh.Session) -> bool {
+    if s.command_len != 0usize { ret false }
+    var i = 0usize
+    while i < s.command.len {
+        if s.command[i] != 0u8 { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn parse_port(text: str) -> u16 {
@@ -262,11 +294,59 @@ fn forward_session(sock: net.Socket, s: *ssh.Session) -> i32 {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len < 4usize { os.exit(90i32) }
+    // RFC 7748's Alice/Bob vector checks the raw little-endian primitive and SSH's mpint conversion.
+    let alice = parse_hex_32("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+    let bob = parse_hex_32("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+    let raw_expected = parse_hex_32("4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742")
+    let (shared_key, shared_error) = kx.x25519_exchange(kx.X25519SecretKey { bytes: alice }, kx.X25519PublicKey { bytes: bob })
+    if shared_error != ok { os.exit(92i32) }
+    var i = 0usize
+    while i < 32usize {
+        if shared_key.bytes[i] != raw_expected[i] { os.exit(93i32) }
+        i += 1usize
+    }
+    var key_test: ssh.Session = zero
+    key_test.kex_k = shared_key.bytes
+    var derived: [64]u8 = zero
+    ssh.derive_key(&key_test, 65u8, derived[..])
+    var big: [32]u8 = zero
+    i = 0usize
+    while i < 32usize {
+        big[i] = raw_expected[31usize - i]
+        i += 1usize
+    }
+    var encoded: [40]u8 = zero
+    var writer = ssh.Writer { buf: encoded[0usize..40usize], len: 0usize, over: false }
+    ssh.w_mpint(&writer, big[..])
+    if writer.over || writer.len != 36usize || encoded[0usize] != 0u8 || encoded[1usize] != 0u8 || encoded[2usize] != 0u8 || encoded[3usize] != 32u8 { os.exit(94i32) }
+    i = 0usize
+    while i < 32usize {
+        if encoded[4usize + i] != raw_expected[31usize - i] { os.exit(95i32) }
+        i += 1usize
+    }
+    var letter: [1]u8 = zero
+    letter[0usize] = 65u8
+    var first_hash = hash.sha256_init()
+    hash.sha256_update(&first_hash, encoded[0usize..writer.len])
+    hash.sha256_update(&first_hash, key_test.exchange_hash[0usize..32usize])
+    hash.sha256_update(&first_hash, letter[0usize..1usize])
+    hash.sha256_update(&first_hash, key_test.session_id[0usize..32usize])
+    let first_key = hash.sha256_done(&first_hash)
+    var second_hash = hash.sha256_init()
+    hash.sha256_update(&second_hash, encoded[0usize..writer.len])
+    hash.sha256_update(&second_hash, key_test.exchange_hash[0usize..32usize])
+    hash.sha256_update(&second_hash, first_key[0usize..32usize])
+    let second_key = hash.sha256_done(&second_hash)
+    i = 0usize
+    while i < 32usize {
+        if derived[i] != first_key[i] || derived[32usize + i] != second_key[i] { os.exit(95i32) }
+        i += 1usize
+    }
     let mode = args[1]
     let port = parse_port(args[2])
     let hex = args[3]
     var expected: [32]u8 = zero
-    var i = 0usize
+    i = 0usize
     while i < 32usize {
         expected[i] = hex_value(hex[2usize * i]) * 16u8 + hex_value(hex[2usize * i + 1usize])
         i += 1usize
@@ -282,10 +362,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (s_value, open_error) = ssh.open(a, random[0usize..64usize], "neper", password, 80u32, 24u32)
     if open_error != ok { os.exit(1i32) }
     var s = s_value
-    if str.eq(mode, "sftp") { ssh.set_subsystem(&s, "sftp") }
+    if s.window_in != u32(s.chan_in.len) { os.exit(96i32) }
+    let too_long = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    if ssh.set_command(&s, too_long) != ssh.TooLong || !command_is_zero(&s) { os.exit(97i32) }
+    if ssh.set_subsystem(&s, too_long) != ssh.TooLong || !command_is_zero(&s) || s.channel_kind != 0u32 { os.exit(98i32) }
+    if ssh.set_forward(&s, too_long, 65535u32) != ssh.TooLong || !command_is_zero(&s) || s.channel_kind != 0u32 || s.fwd_port != 0u32 { os.exit(99i32) }
+    if str.eq(mode, "unit") {
+        ssh.send_userauth(&s)
+        if !password_is_zero(&s) || !contains(s.outbuf[0usize..s.out_len], "secret") { os.exit(104i32) }
+        let (key_value, key_error) = ssh.open(a, random[0usize..64usize], "neper", password, 80u32, 24u32)
+        if key_error != ok { os.exit(105i32) }
+        var key_s = key_value
+        var seed: [32]u8 = zero
+        i = 0usize
+        while i < 32usize {
+            seed[i] = u8(i + 1usize)
+            i += 1usize
+        }
+        ssh.use_key(&key_s, seed)
+        ssh.send_userauth(&key_s)
+        if !password_is_zero(&key_s) { os.exit(106i32) }
+        ret ok
+    }
+    if str.eq(mode, "sftp") {
+        let subsystem_error = ssh.set_subsystem(&s, "sftp")
+        if subsystem_error != ok { os.exit(100i32) }
+    }
     if str.eq(mode, "forward") || str.eq(mode, "forward_refused") {
         if args.len < 5usize { os.exit(91i32) }
-        ssh.set_forward(&s, "127.0.0.1", u32(parse_port(args[4])))
+        let forward_error = ssh.set_forward(&s, "127.0.0.1", u32(parse_port(args[4])))
+        if forward_error != ok { os.exit(101i32) }
     }
     if str.eq(mode, "key") {
         var seed: [32]u8 = zero
@@ -349,6 +455,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !pump(sock, &s) { break }
         rounds += 1usize
     }
+    if !password_is_zero(&s) { os.exit(102i32) }
     if str.eq(mode, "badpass") {
         if ssh.status(&s) != ssh.FAILED || s.failure != ssh.FAIL_AUTH { os.exit(8i32) }
         ret ok

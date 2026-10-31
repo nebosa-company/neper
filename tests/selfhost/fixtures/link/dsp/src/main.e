@@ -59,12 +59,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.biquad_lowpass(0.2f64, 0.707f64, section[..]) != ok || dsp.biquad(x[..], section[..], out[..], scratch[..2usize]) != ok { os.exit(2i32) }
     if !near(digest(out[..64usize]), 0.20164901440908806f64, 1.0e-9f64) { os.exit(2i32) }
     if dsp.biquad_peak(0.5f64, 1.0f64, 6.0f64, section[..]) != ok || !near(digest(section[..]), 0.42686390851238154f64, 1.0e-9f64) { os.exit(2i32) }
+    section[0usize] = 77.0f64
+    if dsp.biquad_lowpass(0.5f64, 0.0f64, section[..]) != dsp.Invalid || dsp.biquad_highpass(0.5f64, 0.0f64, section[..]) != dsp.Invalid || dsp.biquad_peak(0.5f64, 0.0f64, 6.0f64, section[..]) != dsp.Invalid || section[0usize] != 77.0f64 { os.exit(2i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    if dsp.biquad_lowpass(nan, 1.0f64, section[..]) != dsp.Invalid || dsp.biquad_peak(0.5f64, 1.0f64, nan, section[..]) != dsp.Invalid { os.exit(2i32) }
+    if dsp.biquad_lowpass(0.5f64, 1.0f64, section[..]) != ok { os.exit(2i32) }
+    var section_i = 0usize
+    while section_i < section.len {
+        if section[section_i] != section[section_i] || section[section_i] - section[section_i] != 0.0f64 { os.exit(2i32) }
+        section_i += 1usize
+    }
 
     // 3: windows and the windowed sinc.
     if dsp.window(.Hann, 8usize, out[..]) != ok || !near(digest(out[..8usize]), -1.36076155786124f64, 1.0e-9f64) { os.exit(3i32) }
     if dsp.window(.Hamming, 9usize, out[..]) != ok || !near(digest(out[..9usize]), -0.6247710818366455f64, 1.0e-9f64) { os.exit(3i32) }
     if dsp.window(.Blackman, 7usize, out[..]) != ok || !near(digest(out[..7usize]), -1.556845100896143f64, 1.0e-9f64) { os.exit(3i32) }
     if dsp.design_windowed_sinc(11usize, 0.3f64, .Hamming, out[..]) != ok || !near(digest(out[..11usize]), 0.1305567399543801f64, 1.0e-9f64) { os.exit(3i32) }
+    var singleton: [1]f64 = zero
+    if dsp.window(.Hann, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.window(.Hamming, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.window(.Blackman, 1usize, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    if dsp.design_windowed_sinc(1usize, 0.3f64, .Hann, singleton[..]) != ok || singleton[0usize] != 1.0f64 { os.exit(3i32) }
+    var zero_sum: [2]f64 = zero
+    if dsp.design_windowed_sinc(2usize, 0.3f64, .Hann, zero_sum[..]) != dsp.Invalid { os.exit(3i32) }
 
     // 4: Butterworth and the IIR run.
     var b: [8]f64 = zero
@@ -72,6 +89,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.design_butterworth(4usize, 0.3f64, b[..], den[..], scratch[..]) != ok { os.exit(4i32) }
     if !near(digest(b[..5usize]), -0.07331062690594391f64, 1.0e-9f64) || !near(digest(den[..5usize]), 0.05041740446820749f64, 1.0e-9f64) { os.exit(4i32) }
     if dsp.iir(x[..], b[..5usize], den[..5usize], out[..], scratch[..4usize]) != ok || !near(digest(out[..64usize]), 0.4778193074124202f64, 1.0e-9f64) { os.exit(4i32) }
+    var unit_numerator: [1]f64 = zero
+    unit_numerator[0usize] = 1.0f64
+    var no_denominator: [0]f64 = zero
+    var no_iir_state: [0]f64 = zero
+    if dsp.iir(x[..1usize], unit_numerator[..], no_denominator[..], out[..1usize], no_iir_state[..]) != dsp.Invalid { os.exit(4i32) }
     if dsp.design_butterworth(4usize, 1.5f64, b[..], den[..], scratch[..]) != dsp.Invalid { os.exit(4i32) }
 
     // 5: Chebyshev I.
@@ -91,6 +113,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(digest(b[..4usize]), 0.034550698720958256f64, 1.0e-9f64) || !near(digest(den[..4usize]), 0.4992808001741553f64, 1.0e-9f64) { os.exit(7i32) }
     if dsp.design_elliptic(1usize, 1.0f64, 40.0f64, 0.3f64, b[..], den[..], scratch[..]) != ok { os.exit(7i32) }
     if !near(digest(b[..2usize]), 0.7706641291416458f64, 1.0e-9f64) || !near(digest(den[..2usize]), 1.0003598802997995f64, 1.0e-9f64) { os.exit(7i32) }
+    let infinity = math.inf64()
+    if dsp.design_windowed_sinc(11usize, nan, .Hamming, out[..]) != dsp.Invalid || dsp.design_butterworth(4usize, infinity, b[..], den[..], scratch[..]) != dsp.Invalid { os.exit(7i32) }
+    if dsp.design_chebyshev(4usize, nan, 0.3f64, b[..], den[..], scratch[..]) != dsp.Invalid || dsp.design_chebyshev(4usize, 1.0f64, infinity, b[..], den[..], scratch[..]) != dsp.Invalid { os.exit(7i32) }
+    if dsp.design_bessel(5usize, nan, b[..], den[..], scratch[..]) != dsp.Invalid || dsp.design_elliptic(4usize, 1.0f64, nan, 0.3f64, b[..], den[..], scratch[..]) != dsp.Invalid { os.exit(7i32) }
 
     // 8: Parks-McClellan against remez.
     var big: [1200]f64 = zero
@@ -150,6 +176,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 10: MFCC and CQT.
     let (mel_frames, mfcc_error) = dsp.mfcc(x[..], 8000.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
     if mfcc_error != ok || mel_frames != 3usize || !near(digest(out[..12usize]), 5.153441009829327f64, 1.0e-6f64) { os.exit(10i32) }
+    let quiet_nan = mem.bitcast[f64](9221120237041090560u64)
+    let positive_inf = mem.bitcast[f64](9218868437227405312u64)
+    let (_, zero_rate_error) = dsp.mfcc(x[..], 0.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if zero_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, negative_rate_error) = dsp.mfcc(x[..], 0.0f64 - 8000.0f64, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if negative_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, nan_rate_error) = dsp.mfcc(x[..], quiet_nan, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if nan_rate_error != dsp.Invalid { os.exit(10i32) }
+    let (_, infinite_rate_error) = dsp.mfcc(x[..], positive_inf, 32usize, 16usize, 6usize, 4usize, out[..], big[..])
+    if infinite_rate_error != dsp.Invalid { os.exit(10i32) }
     if dsp.cqt(x[..], 8000.0f64, 800.0f64, 4usize, 6usize, re[..], im[..]) != ok { os.exit(10i32) }
     if !near(digest(re[..6usize]), -0.05881112089956119f64, 1.0e-9f64) || !near(digest(im[..6usize]), -0.015473974604131234f64, 1.0e-9f64) { os.exit(10i32) }
     if dsp.cqt(x[..], 8000.0f64, 100.0f64, 4usize, 1usize, re[..], im[..]) != dsp.Invalid { os.exit(10i32) }
@@ -157,6 +193,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 11: LPC and DTW.
     let (power, lpc_error) = dsp.lpc(x[..], 4usize, out[..], scratch[..])
     if lpc_error != ok || !near(digest(out[..5usize]), 1.0704717452651376f64, 1.0e-9f64) || !near(power, 23.09862265617159f64, 1.0e-8f64) { os.exit(11i32) }
+    var singular_r: [3]f64 = zero
+    singular_r[0usize] = 1.0f64
+    singular_r[1usize] = 1.0f64
+    singular_r[2usize] = 1.0f64
+    var singular_out: [3]f64 = zero
+    var singular_scratch: [3]f64 = zero
+    let (singular_power, singular_error) = dsp.levinson_durbin(singular_r[..], 2usize, singular_out[..], singular_scratch[..])
+    if singular_error != dsp.Invalid || singular_power != 0.0f64 { os.exit(11i32) }
     let (distance, dtw_error) = dsp.dtw(x[..10usize], x[10usize..22usize], big[..])
     if dtw_error != ok || !near(distance, 5.803094143047929f64, 1.0e-9f64) { os.exit(11i32) }
     var path_a: [24]usize = zero
@@ -169,6 +213,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if !near(digest(out[..14usize]), 769.8108431449775f64, 1.0e-9f64) || path_a[0usize] != 0usize || path_b[13usize] != 11usize { os.exit(11i32) }
+    let maximum = 0usize -% 1usize
+    let half = maximum / 2usize + 1usize
+    let (_, path_overflow_error) = dsp.dtw_path(x[..0usize], half, half + 2usize, path_a[..1usize], path_b[..1usize])
+    if path_overflow_error != dsp.Invalid { os.exit(11i32) }
 
     // 12: adaptive filters and resampling.
     var d: [64]f64 = zero
@@ -195,7 +243,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dsp.design_windowed_sinc(15usize, 1.0f64 / 3.0f64, .Hamming, taps15[..]) != ok || !near(digest(taps15[..]), 0.41915786647357584f64, 1.0e-9f64) { os.exit(12i32) }
     let (resampled, poly_error) = dsp.resample_polyphase(x[..], 3usize, 2usize, taps15[..], out[..])
     if poly_error != ok || resampled != 96usize || !near(digest(out[..96usize]), 1.3415902801838204f64, 1.0e-9f64) { os.exit(12i32) }
+    // The final `+ down - 1` in a naive ceiling formula overflows here even
+    // though the product itself fits. A real output would be enormous, so this
+    // must be the ordinary capacity error, not a debug trap or release success.
+    let max_up = 18446744073709551615usize
+    let (oversized, oversized_error) = dsp.resample_polyphase(x[..1usize], max_up, 2usize, taps15[..], out[..0usize])
+    if oversized != 0usize || oversized_error != dsp.TooSmall { os.exit(12i32) }
     if dsp.resample_sinc(x[..], 1.5f64, 4usize, out[..96usize]) != ok || !near(digest(out[..96usize]), 1.417640258162624f64, 1.0e-9f64) { os.exit(12i32) }
+    if dsp.resample_sinc(x[..1usize], 1.0f64, maximum, out[..1usize]) != dsp.Invalid { os.exit(12i32) }
 
     try io.print("dsp ok\n")
     ret ok

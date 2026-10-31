@@ -15,9 +15,11 @@ type Tree = struct { nodes: []u8, n: usize }
 error TooSmall
 error Invalid
 
-// Bytes `build` needs for `n` leaves.
+// Bytes `build` needs for `n` leaves. An unrepresentable count saturates so a
+// caller cannot mistake an overflow for a small allocation.
 fn nodes_required(n: usize) -> usize {
     if n == 0usize { ret 0usize }
+    if n > 288230376151711744usize { ret 18446744073709551615usize }
     ret (2usize * n - 1usize) * 32usize
 }
 
@@ -40,8 +42,9 @@ fn inner_hash(left: []const u8, right: []const u8) -> [32]u8 {
 
 // The largest power of two strictly below `n` (n >= 2).
 fn split_point(n: usize) -> usize {
+    if n < 2usize { ret 1usize }
     var k = 1usize
-    while k * 2usize < n { k *= 2usize }
+    while k < n - k { k *= 2usize }
     ret k
 }
 
@@ -72,7 +75,7 @@ fn build_range(leaves: []const []const u8, nodes: []u8, lo: usize, hi: usize, ba
 // Build the tree over `leaves` into `nodes` (at least `nodes_required(leaves.len)` bytes).
 fn build(leaves: []const []const u8, nodes: []u8) -> (Tree, err) {
     let need = nodes_required(leaves.len)
-    if nodes.len < need { ret (Tree { nodes: nodes, n: 0usize }, TooSmall) }
+    if need == 18446744073709551615usize || nodes.len < need { ret (Tree { nodes: nodes, n: 0usize }, TooSmall) }
     if leaves.len > 0usize { build_range(leaves, nodes, 0usize, leaves.len, 0usize) }
     ret (Tree { nodes: nodes[..need], n: leaves.len }, ok)
 }

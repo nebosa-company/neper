@@ -72,7 +72,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let invalid = time.Date { year: 2023i32, month: 2u8, day: 29u8 }
     let (_, invalid_error) = chart.date_axis_line(dates[..], values[..], invalid, dates[3usize], 0.0f64, 40.0f64, bounds, points[..], segments[..])
     let (_, order_error) = chart.date_axis_line(dates[..], values[..], dates[3usize], dates[0usize], 0.0f64, 40.0f64, bounds, points[..], segments[..])
-    if short_error != chart.TooLarge || tick_short_error != chart.TooLarge || label_short_error != chart.TooLarge || invalid_error != chart.Invalid || order_error != chart.Invalid {
+    let wide_values = [4]f64{ 1.0e100f64, 1.25e100f64, 1.5e100f64, 2.0e100f64 }
+    let (_, wide_domain_error) = chart.date_axis_line(dates[..], wide_values[..], dates[0usize], dates[3usize], 1.0e100f64, 2.0e100f64, bounds, points[..], segments[..])
+    if short_error != chart.TooLarge || tick_short_error != chart.TooLarge || label_short_error != chart.TooLarge || invalid_error != chart.Invalid || order_error != chart.Invalid || wide_domain_error != chart.Invalid {
         try io.print("refusal fail\n")
         ret chart.Invalid
     }

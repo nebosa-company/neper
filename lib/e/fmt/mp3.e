@@ -8,8 +8,9 @@
 // overlap and the reservoir are warm when the target's samples are delivered. A frame
 // whose reservoir reaches before the start (the first frames after `open` or a seek)
 // decodes as silence rather than being dropped, so `granule` always counts one PCM
-// frame per stream frame and `frames` is the exact total. ID3v2 at the front and ID3v1
-// at the back are skipped; a damaged header resynchronises on the next valid one.
+// frame per audio frame and `frames` is the exact total. ID3v2 at the front, ID3v1 at
+// the back, and a first Xing/Info/VBRI metadata frame are skipped; a damaged header
+// resynchronises on the next valid one.
 //
 // `decode_into` fills the caller's buffer -- whose rate and channel count must match
 // `format` -- from `granule` on and answers the frames written, 0 at the end. Samples
@@ -128,7 +129,9 @@ fn hdr_not_mpeg25(h: []const u8) -> bool { ret (u32(h[1]) & 16u32) != 0u32 }
 fn hdr_mono(h: []const u8) -> bool { ret (u32(h[3]) & 192u32) == 192u32 }
 fn hdr_ms_stereo(h: []const u8) -> bool { ret (u32(h[3]) & 224u32) == 96u32 }
 fn hdr_test_ms(h: []const u8) -> bool { ret (u32(h[3]) & 32u32) != 0u32 }
-fn hdr_test_intensity(h: []const u8) -> bool { ret (u32(h[3]) & 16u32) != 0u32 }
+// The mode-extension bits have meaning only for joint stereo. A mono frame can carry
+// the same unused bit pattern without enabling intensity stereo.
+fn hdr_test_intensity(h: []const u8) -> bool { ret (u32(h[3]) & 192u32) == 64u32 && (u32(h[3]) & 16u32) != 0u32 }
 fn hdr_crc(h: []const u8) -> bool { ret (u32(h[1]) & 1u32) == 0u32 }
 fn hdr_padding(h: []const u8) -> usize {
     if (u32(h[2]) & 2u32) != 0u32 { ret 1usize }
@@ -212,6 +215,33 @@ fn find_frame(d: []const u8, from: usize) -> (usize, usize) {
         i += 1usize
     }
     ret (d.len, 0usize)
+}
+
+fn tag_at(data: []const u8, offset: usize, tag: str) -> bool {
+    if offset > data.len || tag.len > data.len - offset { ret false }
+    var i = 0usize
+    while i < tag.len {
+        if data[offset + i] != tag[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Xing and Info follow the frame side information. VBRI has its fixed offset 32 bytes
+// after the MPEG header. These headers describe the stream; they are not audio frames.
+fn frame_has_vbr_header(frame: []const u8) -> bool {
+    if frame.len < 4usize { ret false }
+    var side_info = 17usize
+    if hdr_mpeg1(frame) {
+        if hdr_mono(frame) { side_info = 17usize } else { side_info = 32usize }
+    } else {
+        if hdr_mono(frame) { side_info = 9usize } else { side_info = 17usize }
+    }
+    var xing_at = 4usize
+    if hdr_crc(frame) { xing_at += 2usize }
+    xing_at += side_info
+    if tag_at(frame, xing_at, "Xing") || tag_at(frame, xing_at, "Info") { ret true }
+    ret tag_at(frame, 36usize, "VBRI")
 }
 
 // ------------------------------------------------------------------ bit reading
@@ -564,6 +594,8 @@ fn huffman(st: *State, dst: []f32, bs: *Bits, g: usize, limit: usize) {
     var count1 = huff_tab32()
     if gr.count1_table != 0u32 { count1 = huff_tab33() }
     while true {
+        // Count-1 leaves expand to four spectral values; the caller owns 576 slots.
+        if out > dst.len || dst.len - out < 4usize { break }
         var leaf = i32(tb(count1, usize(peek(&c, 4u32))))
         if (leaf & 8i32) == 0i32 {
             let extra = u32(leaf & 3i32)
@@ -1267,15 +1299,32 @@ fn open(a: *mem.Arena, source_bytes: []const u8) -> (Decoder, err) {
     if end >= start + 128usize && source_bytes[end - 128usize] == 84u8 && source_bytes[end - 127usize] == 65u8 && source_bytes[end - 126usize] == 71u8 { end -= 128usize }
     if start > end { ret (zero, Invalid) }
     let data = source_bytes[..end]
+    // Free-format headers are structurally valid but their frame length is not encoded,
+    // so this decoder deliberately declines them instead of scanning through the stream
+    // and reporting a misleading malformed-input error.
+    var first_candidate = start
+    while first_candidate + 4usize <= data.len {
+        if hdr_valid(data[first_candidate..]) {
+            if hdr_bitrate_index(data[first_candidate..]) == 0u32 { ret (zero, Unsupported) }
+            break
+        }
+        first_candidate += 1usize
+    }
     let (first, first_size) = find_frame(data, start)
     if first_size == 0usize { ret (zero, Invalid) }
-    let h = data[first..first + 4usize]
+    var audio_first = first
+    if frame_has_vbr_header(data[first..first + first_size]) {
+        let (next, next_size) = find_frame(data, first + first_size)
+        if next_size == 0usize { ret (zero, Invalid) }
+        audio_first = next
+    }
+    let h = data[audio_first..audio_first + 4usize]
     if hdr_layer(h) != 1u32 { ret (zero, Unsupported) }
     var nch = 2usize
     if hdr_mono(h) { nch = 1usize }
     let fmt = audio.Format { rate: hdr_sample_rate_hz(h), channels: u8(nch), sample: .I16 }
     var frames = 0usize
-    var at = first
+    var at = audio_first
     while true {
         let (here, size) = find_frame(data, at)
         if size == 0usize { break }
@@ -1329,8 +1378,8 @@ fn open(a: *mem.Arena, source_bytes: []const u8) -> (Decoder, err) {
         gr[i] = blank
         i += 1usize
     }
-    states[0usize] = State { hdr: hdr, reserv: 0usize, reserv_buf: reserv_buf, maindata: maindata, overlap: overlap, qmf: qmf, grbuf: grbuf, scf: scf, syn: syn, ist_pos: ist_pos, iscf: iscf, gr: gr, pow43: pow43, pcm: pcm, pcm_count: 0usize, pcm_read: 0usize, start: first, end: end }
-    var d = Decoder { bytes: source_bytes, at: first, format: fmt, frames: frames, granule: 0usize, state: mem.cast[*void](&states[0usize]) }
+    states[0usize] = State { hdr: hdr, reserv: 0usize, reserv_buf: reserv_buf, maindata: maindata, overlap: overlap, qmf: qmf, grbuf: grbuf, scf: scf, syn: syn, ist_pos: ist_pos, iscf: iscf, gr: gr, pow43: pow43, pcm: pcm, pcm_count: 0usize, pcm_read: 0usize, start: audio_first, end: end }
+    var d = Decoder { bytes: source_bytes, at: audio_first, format: fmt, frames: frames, granule: 0usize, state: mem.cast[*void](&states[0usize]) }
     reset(&states[0usize])
     ret (d, ok)
 }

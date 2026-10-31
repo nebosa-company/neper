@@ -17,6 +17,7 @@
 // rejected rather than folded.
 
 use e.text.bidi
+use e.mem
 use e.text.normalize
 use e.text.unicode
 use e.text.utf8
@@ -440,7 +441,9 @@ fn points_are_nfc(points: []const u32) -> bool {
         used += usize(width)
         j += 1usize
     }
-    let (yes, check_error) = normalize.is_normalized(text[..used], .Nfc)
+    var normalize_storage: [16384]u8 = zero
+    var normalize_arena = mem.arena_from(normalize_storage[..])
+    let (yes, check_error) = normalize.is_normalized(&normalize_arena, text[..used], .Nfc)
     ret check_error == ok && yes
 }
 

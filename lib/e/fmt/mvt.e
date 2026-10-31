@@ -28,10 +28,13 @@ const VALUE_SINT: u8 = 6u8
 const VALUE_BOOL: u8 = 7u8
 const MAX_POINTS: usize = 65536usize
 
-type Value = struct { kind: u8, text: str, number: f64, integer: i64 }
+// `integer` holds values represented by the signed MVT fields (and small uints for
+// compatibility); `unsigned` preserves the full protobuf uint_value range.
+type Value = struct { kind: u8, text: str, number: f64, integer: i64, unsigned: u64 }
 type Point = struct { x: i32, y: i32 }
 type Feature = struct { id: u64, has_id: bool, kind: u8, tags: []u32, points: []Point, parts: []usize }
 type Layer = struct { name: str, version: u32, extent: u32, keys: []str, values: []Value, features: []Feature }
+type GeometryState = enum u8 { Start, PointDone, LineNeedLine, LineDone, PolygonNeedLine, PolygonNeedClose, PolygonDone }
 
 // The packed varints of `payload` as u32s into the arena.
 fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
@@ -40,6 +43,7 @@ fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
     while bytes.remaining_reader(&r.input) > 0usize {
         let (v, e) = pb.read_u64(&r)
         if e != ok { ret (zero, Invalid) }
+        if v > 4294967295u64 { ret (zero, Invalid) }
         count += 1usize
     }
     let (out, out_error) = mem.alloc[u32](a, count + 1usize)
@@ -49,7 +53,7 @@ fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err) {
     while i < count {
         let (v, e) = pb.read_u64(&r2)
         if e != ok { ret (zero, Invalid) }
-        out[i] = u32(v & 4294967295u64)
+        out[i] = u32(v)
         i += 1usize
     }
     ret (out[0usize..count], ok)
@@ -64,31 +68,66 @@ fn unzig(v: u32) -> i32 {
 // The geometry commands into points and part ends.
 fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, []usize, err) {
     // First pass: how many points and parts.
+    if commands.len > 0usize && kind != KIND_POINT && kind != KIND_LINE && kind != KIND_POLYGON { ret (zero, zero, Invalid) }
     var point_total = 0usize
     var part_total = 0usize
+    var state: GeometryState = .Start
     var i = 0usize
     while i < commands.len {
         let command = commands[i] & 7u32
         let count = usize(commands[i] / 8u32)
         i += 1usize
-        if command == 1u32 || command == 2u32 {
-            if i + count * 2usize > commands.len { ret (zero, zero, Invalid) }
+        if command == 1u32 {
+            if count == 0usize || count > (commands.len - i) / 2usize { ret (zero, zero, Invalid) }
+            if count > MAX_POINTS - point_total { ret (zero, zero, TooMany) }
+            if kind == KIND_POINT {
+                if state != .Start { ret (zero, zero, Invalid) }
+                state = .PointDone
+            } else if kind == KIND_LINE {
+                if count != 1usize || (state != .Start && state != .LineDone) { ret (zero, zero, Invalid) }
+                state = .LineNeedLine
+                part_total += 1usize
+            } else {
+                if count != 1usize || (state != .Start && state != .PolygonDone) { ret (zero, zero, Invalid) }
+                state = .PolygonNeedLine
+                part_total += 1usize
+            }
             point_total += count
-            if command == 1u32 && kind != KIND_POINT { part_total += count }
+            i += count * 2usize
+        } else if command == 2u32 {
+            if count == 0usize || count > (commands.len - i) / 2usize { ret (zero, zero, Invalid) }
+            if count > MAX_POINTS - point_total { ret (zero, zero, TooMany) }
+            if kind == KIND_LINE {
+                if state != .LineNeedLine { ret (zero, zero, Invalid) }
+                state = .LineDone
+            } else if kind == KIND_POLYGON {
+                if count < 2usize || state != .PolygonNeedLine { ret (zero, zero, Invalid) }
+                state = .PolygonNeedClose
+            } else {
+                ret (zero, zero, Invalid)
+            }
+            point_total += count
             i += count * 2usize
         } else if command == 7u32 {
-            // ClosePath takes no parameters.
+            if kind != KIND_POLYGON || count != 1usize || state != .PolygonNeedClose { ret (zero, zero, Invalid) }
+            state = .PolygonDone
         } else {
             ret (zero, zero, Invalid)
         }
-        if point_total > MAX_POINTS { ret (zero, zero, TooMany) }
+    }
+    if commands.len > 0usize {
+        if kind == KIND_POINT && state != .PointDone { ret (zero, zero, Invalid) }
+        if kind == KIND_LINE && state != .LineDone { ret (zero, zero, Invalid) }
+        if kind == KIND_POLYGON && state != .PolygonDone { ret (zero, zero, Invalid) }
     }
     let (points, points_error) = mem.alloc[Point](a, point_total + 1usize)
     if points_error != ok { ret (zero, zero, points_error) }
     let (parts, parts_error) = mem.alloc[usize](a, part_total + 2usize)
     if parts_error != ok { ret (zero, zero, parts_error) }
-    var x = 0i32
-    var y = 0i32
+    // MVT deltas are i32, but a sequence of valid deltas can leave the coordinate range.
+    // Keep the running position wide until each point is checked before narrowing it.
+    var x = 0i64
+    var y = 0i64
     var n = 0usize
     var p = 0usize
     i = 0usize
@@ -106,9 +145,10 @@ fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, 
                     parts[p] = n
                     p += 1usize
                 }
-                x = x + unzig(commands[i])
-                y = y + unzig(commands[i + 1usize])
-                points[n] = Point { x: x, y: y }
+                x = x + i64(unzig(commands[i]))
+                y = y + i64(unzig(commands[i + 1usize]))
+                if x < 0i64 - 2147483648i64 || x > 2147483647i64 || y < 0i64 - 2147483648i64 || y > 2147483647i64 { ret (zero, zero, Invalid) }
+                points[n] = Point { x: i32(x), y: i32(y) }
                 n += 1usize
                 i += 2usize
                 k += 1usize
@@ -202,7 +242,10 @@ fn parse_value(payload: []const u8) -> (Value, err) {
             let (w, e) = pb.read_u64(&r)
             if e != ok { ret (v, Invalid) }
             v.kind = VALUE_UINT
-            if w > 9223372036854775807u64 { v.integer = 9223372036854775807i64 } else { v.integer = i64(w) }
+            v.unsigned = w
+            // Existing callers read small unsigned values through `integer`; a value
+            // outside i64 is available exactly through `unsigned`, never saturated.
+            if w <= 9223372036854775807u64 { v.integer = i64(w) }
         } else if key.number == 6u32 && key.wire == .Varint {
             let (w, e) = pb.read_sint64(&r)
             if e != ok { ret (v, Invalid) }

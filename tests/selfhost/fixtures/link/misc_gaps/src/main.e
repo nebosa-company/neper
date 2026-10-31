@@ -135,6 +135,10 @@ fn check_pad(a: *mem.Arena) -> i32 {
     if centre_error != ok || !str.eq(centre, "0ab00") { ret 3i32 }
     let (_, empty_error) = str.pad(a, "ab", 5usize, .Left, "")
     if empty_error != str.InvalidSeparator { ret 3i32 }
+    let (_, multiple_fill_error) = str.pad(a, "a", 3usize, .Right, "xy")
+    if multiple_fill_error != str.InvalidSeparator { ret 3i32 }
+    let (_, invalid_fill_error) = str.pad(a, "a", 3usize, .Right, "\xc0\x80")
+    if invalid_fill_error != str.InvalidSeparator { ret 3i32 }
     ret 0i32
 }
 
@@ -331,6 +335,27 @@ fn check_demangle() -> i32 {
     if plain_error != ok || !str.eq(plain, "e.io.print") { ret 10i32 }
     let (_, short_error) = debug.demangle("_Z3fooi", dst[..5usize])
     if short_error != debug.TooSmall { ret 10i32 }
+    let (_, long_length_error) = debug.demangle("_Z99999999999999999999x", dst[..])
+    if long_length_error != debug.Malformed { ret 10i32 }
+    let (_, empty_nested_error) = debug.demangle("_ZNE", dst[0..])
+    if empty_nested_error != debug.Malformed { ret 10i32 }
+    let (_, invalid_ctor_error) = debug.demangle("_ZN3FooC9Ev", dst[0..])
+    if invalid_ctor_error != debug.Malformed { ret 10i32 }
+    let (_, invalid_dtor_error) = debug.demangle("_ZN3FooD3Ev", dst[0..])
+    if invalid_dtor_error != debug.Malformed { ret 10i32 }
+    var deep_type: [69]u8 = zero
+    deep_type[0usize] = 95u8
+    deep_type[1usize] = 90u8
+    deep_type[2usize] = 49u8
+    deep_type[3usize] = 102u8
+    var deep_at = 4usize
+    while deep_at < 68usize {
+        deep_type[deep_at] = 80u8
+        deep_at += 1usize
+    }
+    deep_type[68usize] = 105u8
+    let (_, deep_type_error) = debug.demangle(deep_type[..], dst[0..])
+    if deep_type_error != debug.Unsupported { ret 10i32 }
     ret 0i32
 }
 

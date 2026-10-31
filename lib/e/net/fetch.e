@@ -6,7 +6,7 @@
 // What it does: refuses the Fetch Standard's blocked ports and non-HTTP schemes (`data:` URLs are answered directly),
 // sends Host, User-Agent, Accept, Accept-Language, Accept-Encoding, Referer, Cookie (per `credentials`) and the caller's
 // headers; stores `Set-Cookie`; follows 301, 302, 303, 307 and 308 (a POST becomes a GET on 301/302/303 as the Standard
-// says, and `Authorization` is dropped when the origin changes) up to `max_redirects`; decodes `Content-Encoding` in
+// says, and caller credentials are dropped when the origin changes) up to `max_redirects`; decodes `Content-Encoding` in
 // reverse order with a cap on the decoded size.
 //
 // What it does not do yet: connection reuse (every request is `Connection: close`), HTTP/2 multiplexing (each request has its own
@@ -413,6 +413,14 @@ fn same_origin(a: *mem.Arena, x: *const url.Url, y: *const url.Url) -> bool {
     ret str.eq(url.origin(a, x), url.origin(a, y))
 }
 
+// Raw credentials belong only to the origin that supplied the request. Cookies from
+// the client's jar are added separately below according to `Credentials`.
+fn drop_redirect_header(name: str, cross_origin: bool) -> bool {
+    if eq_fold(name, "host") { ret true }
+    if !cross_origin { ret false }
+    ret eq_fold(name, "authorization") || eq_fold(name, "cookie") || eq_fold(name, "proxy-authorization")
+}
+
 fn known_h1(c: *Client, host: str) -> bool {
     var i = 0usize
     while i < c.h1_count {
@@ -537,6 +545,8 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
             }
         }
         // Request headers.
+        var cross_origin = false
+        if redirects > 0usize { cross_origin = !same_origin(c.a, &cur, &origin_url) }
         let (hm, hme) = list_of_headers(c.a, 12usize + req.headers.len)
         if hme != ok { ret (zero, hme) }
         var hs = hm
@@ -551,10 +561,8 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
             if eq_fold(req.headers[hi].name, "accept") { has_accept = true }
             if eq_fold(req.headers[hi].name, "accept-language") { has_lang = true }
             if eq_fold(req.headers[hi].name, "accept-encoding") { has_enc = true }
-            // Credentials and host-specific headers do not follow a cross-origin redirect.
-            var drop = false
-            if eq_fold(req.headers[hi].name, "host") { drop = true }
-            if eq_fold(req.headers[hi].name, "authorization") && !same_origin(c.a, &cur, &origin_url) { drop = true }
+            // Host is regenerated per hop; raw credentials never follow a cross-origin redirect.
+            let drop = drop_redirect_header(req.headers[hi].name, cross_origin)
             if !drop { push_header(&hs, req.headers[hi].name, req.headers[hi].value) }
             hi += 1usize
         }

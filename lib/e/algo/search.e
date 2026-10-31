@@ -85,17 +85,33 @@ fn exponential[T: type](items: []const T, key: T) -> (usize, bool) {
     ret (low + at, found)
 }
 
+// The unsigned distance between ordered signed endpoints. A range across zero
+// can be one bit wider than i64, so never subtract those signed endpoints.
+fn i64_distance(upper: i64, lower: i64) -> u64 {
+    if lower >= 0i64 || upper < 0i64 { ret u64(upper - lower) }
+    let lower_magnitude = u64(0i64 - (lower + 1i64)) + 1u64
+    ret lower_magnitude + u64(upper)
+}
+
 // Probes where a uniformly distributed key would sit; expected `O(log log n)`.
 fn interpolation(items: []const i64, key: i64) -> (usize, bool) {
     if items.len == 0usize { ret (0usize, false) }
     var low = 0usize
     var high = items.len - 1usize
     while low <= high && key >= items[low] && key <= items[high] {
-        let span = items[high] - items[low]
+        let span = i64_distance(items[high], items[low])
         var at = low
-        if span != 0i64 {
-            let fraction = (key - items[low]) * i64(high - low)
-            at = low + usize(fraction / span)
+        let width = u64(high - low)
+        if span != 0u64 && width != 0u64 {
+            let key_distance = i64_distance(key, items[low])
+            let maximum = 0u64 -% 1u64
+            // Preserve exact arithmetic where it fits. When the product is
+            // wider than u64, a midpoint retains binary-search correctness.
+            if key_distance <= maximum / width {
+                at = low + usize((key_distance * width) / span)
+            } else {
+                at = low + usize(width / 2u64)
+            }
         }
         if items[at] == key { ret (at, true) }
         if items[at] < key { low = at + 1usize } else {
@@ -111,16 +127,17 @@ fn interpolation(items: []const i64, key: i64) -> (usize, bool) {
 fn ternary_max[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64 {
     var lo = low
     var hi = high
-    while hi - lo > 2i64 {
-        let third = (hi - lo) / 3i64
+    while lo < hi && i64_distance(hi, lo) > 2u64 {
+        let third = i64(i64_distance(hi, lo) / 3u64)
         let m1 = lo + third
         let m2 = hi - third
         if f(ctx, m1) < f(ctx, m2) { lo = m1 + 1i64 } else { hi = m2 - 1i64 }
     }
     var best = lo
-    var at = lo + 1i64
+    var at = lo
     while at <= hi {
         if f(ctx, at) > f(ctx, best) { best = at }
+        if at == hi { break }
         at += 1i64
     }
     ret best
@@ -315,16 +332,17 @@ fn cycle_brent[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> 
 fn ternary_min_i64[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64 {
     var lo = low
     var hi = high
-    while hi - lo > 2i64 {
-        let third = (hi - lo) / 3i64
+    while lo < hi && i64_distance(hi, lo) > 2u64 {
+        let third = i64(i64_distance(hi, lo) / 3u64)
         let m1 = lo + third
         let m2 = hi - third
         if f(ctx, m1) > f(ctx, m2) { lo = m1 + 1i64 } else { hi = m2 - 1i64 }
     }
     var best = lo
-    var at = lo + 1i64
+    var at = lo
     while at <= hi {
         if f(ctx, at) < f(ctx, best) { best = at }
+        if at == hi { break }
         at += 1i64
     }
     ret best

@@ -10,6 +10,29 @@ use e.str
 
 error Failed
 
+// Every inbound frame to a server is masked. This small builder keeps the Close
+// validation cases below readable while exercising the decoder's unmasking path.
+fn append_masked_frame(out: []u8, at: usize, opcode: u8, payload: []const u8) -> usize {
+    var mask: [4]u8 = zero
+    mask[0usize] = 1u8
+    mask[1usize] = 2u8
+    mask[2usize] = 3u8
+    mask[3usize] = 4u8
+    out[at] = 128u8 | opcode
+    out[at + 1usize] = 128u8 | u8(payload.len)
+    var mask_at = 0usize
+    while mask_at < mask.len {
+        out[at + 2usize + mask_at] = mask[mask_at]
+        mask_at += 1usize
+    }
+    var payload_at = 0usize
+    while payload_at < payload.len {
+        out[at + 6usize + payload_at] = payload[payload_at] ^ mask[payload_at % mask.len]
+        payload_at += 1usize
+    }
+    ret at + 6usize + payload.len
+}
+
 fn main(a: *mem.Arena) -> err {
     var entropy: [16]u8 = zero
     let source = "the sample nonce"
@@ -128,5 +151,47 @@ fn main(a: *mem.Arena) -> err {
     if server_capture.off != 4usize || server_bytes[0usize] != 138u8 || server_bytes[1usize] != 2u8 || server_bytes[2usize] != 111u8 || server_bytes[3usize] != 107u8 { os.exit(30i32) }
     let (large_frame, large_error) = ws.receive(a, &server, 1usize)
     if large_error != ws.TooLarge { os.exit(31i32) }
+
+    // A malformed Close must not transition the connection to closed: after each
+    // rejected frame the next valid text frame remains readable. Test all three
+    // Close-specific wire rules: a one-byte payload, a reserved status code, and
+    // a non-UTF-8 reason after an otherwise valid code.
+    var malformed: [45]u8 = zero
+    var malformed_at = 0usize
+    var one_byte_close: [1]u8 = zero
+    one_byte_close[0usize] = 0u8
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 8u8, one_byte_close[0..])
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 1u8, "a")
+    var reserved_close: [2]u8 = zero
+    reserved_close[0usize] = 3u8
+    reserved_close[1usize] = 237u8
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 8u8, reserved_close[0..])
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 1u8, "b")
+    var invalid_reason: [3]u8 = zero
+    invalid_reason[0usize] = 3u8
+    invalid_reason[1usize] = 232u8
+    invalid_reason[2usize] = 128u8
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 8u8, invalid_reason[0..])
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 1u8, "c")
+    var close_source = io.SliceReader { data: malformed[0usize..malformed_at], off: 0usize }
+    let close_reader = io.slice_reader(&close_source)
+    var close_bytes: [512]u8 = zero
+    var close_capture = io.SliceWriter { data: close_bytes[0..], off: 0usize }
+    let close_sink = io.slice_writer(&close_capture)
+    let (close_connection, close_connection_error) = ws.server_upgrade(a, close_reader, close_sink, &server_request)
+    if close_connection_error != ok || close_connection.state == nil { os.exit(32i32) }
+    var close_checked = close_connection
+    let (_, one_byte_error) = ws.receive(a, &close_checked, 16usize)
+    if one_byte_error != ws.InvalidFrame { os.exit(33i32) }
+    let (after_one, after_one_error) = ws.receive(a, &close_checked, 16usize)
+    if after_one_error != ok || after_one.opcode != .Text || !str.eq(after_one.payload, "a") { os.exit(34i32) }
+    let (_, reserved_error) = ws.receive(a, &close_checked, 16usize)
+    if reserved_error != ws.InvalidFrame { os.exit(35i32) }
+    let (after_reserved, after_reserved_error) = ws.receive(a, &close_checked, 16usize)
+    if after_reserved_error != ok || after_reserved.opcode != .Text || !str.eq(after_reserved.payload, "b") { os.exit(36i32) }
+    let (_, reason_error) = ws.receive(a, &close_checked, 16usize)
+    if reason_error != ws.InvalidFrame { os.exit(37i32) }
+    let (after_reason, after_reason_error) = ws.receive(a, &close_checked, 16usize)
+    if after_reason_error != ok || after_reason.opcode != .Text || !str.eq(after_reason.payload, "c") { os.exit(38i32) }
     ret ok
 }

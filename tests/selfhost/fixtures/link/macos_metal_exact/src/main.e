@@ -1,7 +1,7 @@
 // The MSL emitter's division, square root and loops against the CPU (C193, D5838): float.e and loop.e of tests/conformance/spirv
 // written as MSL by `emit-executable ... msl none` are compiled by Metal with fast math off and run over one heap buffer. Division
 // and square root must match the CPU's correctly rounded f32 bit for bit (a NaN matches any NaN); the loop kernel's sums must match
-// the same loops run here. A machine with no Metal device says so and passes. macOS only.
+// the same loops run here. A machine with no Metal device reports a distinct skip. macOS only.
 use e.mem
 use e.os
 use e.math
@@ -84,9 +84,14 @@ fn expected(id: u32) -> u32 {
     ret sum
 }
 
+fn skip_no_metal() {
+    let (written, write_error) = os.write(os.stderr(), "NEPER_SKIP_NO_METAL\n")
+    os.exit(95i32)
+}
+
 fn main(a: *mem.Arena) -> err {
     if !mtl.available() {
-        os.exit(0i32)
+        skip_no_metal()
     }
     let (context, open_error) = mtl.open(a)
     if open_error != ok { os.exit(2i32) }

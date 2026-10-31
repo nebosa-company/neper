@@ -229,7 +229,11 @@ fn graphemes(s: str) -> Graphemes {
 }
 
 fn is_extend(scalar: u32) -> bool {
-    if scalar == 8205u32 { ret true }
+    // These are GCB=Extend rather than mark-category code points in Unicode 15.
+    if scalar == 8204u32 || scalar == 8205u32 { ret true }
+    if scalar >= 65438u32 && scalar <= 65439u32 { ret true }
+    if scalar >= 127995u32 && scalar <= 127999u32 { ret true }
+    if scalar >= 917536u32 && scalar <= 917631u32 { ret true }
     if scalar >= 65024u32 && scalar <= 65039u32 { ret true }
     if scalar >= 917760u32 && scalar <= 917999u32 { ret true }
     let c = category(scalar)

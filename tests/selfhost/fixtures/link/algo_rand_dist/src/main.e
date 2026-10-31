@@ -280,6 +280,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var zero_weights: [2]f64 = zero
     let (_, bad_table) = dist.alias_build(zero_weights[..], probability[..], alias[..], alias_scratch[..])
     if bad_table != dist.Invalid { os.exit(4i32) }
+    var nonfinite_weights: [2]f64 = zero
+    nonfinite_weights[1usize] = 1.0f64
+    nonfinite_weights[0usize] = 0.0f64 / 0.0f64
+    let (_, nan_dist_error) = dist.alias_build(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    let nan_rand_error = rand.alias_table(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    if nan_dist_error != dist.Invalid || nan_rand_error != rand.Invalid { os.exit(4i32) }
+    nonfinite_weights[0usize] = 1.0f64 / 0.0f64
+    let (_, positive_inf_dist_error) = dist.alias_build(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    let positive_inf_rand_error = rand.alias_table(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    if positive_inf_dist_error != dist.Invalid || positive_inf_rand_error != rand.Invalid { os.exit(4i32) }
+    nonfinite_weights[0usize] = -1.0f64 / 0.0f64
+    let (_, negative_inf_dist_error) = dist.alias_build(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    let negative_inf_rand_error = rand.alias_table(nonfinite_weights[..], probability[..], alias[..], alias_scratch[..])
+    if negative_inf_dist_error != dist.Invalid || negative_inf_rand_error != rand.Invalid { os.exit(4i32) }
     var picks: [1]u64 = zero
     var keys: [1]f64 = zero
     var heavy_wins = 0usize

@@ -5,6 +5,7 @@ use e.io
 use e.math
 use e.mem
 use e.os
+use x.khronos.compute
 
 fn supports(caps: []const gpu.Cap, wanted: gpu.Cap) -> bool {
     for capability in caps {
@@ -86,30 +87,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     inputs(numerators, denominators)
     try run(a, .Cpu, 0u32, numerators, denominators, cpu)
     if digest(cpu) != 6270548297220908228u64 { os.exit(2i32) }
-    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
-    if found_error == gpu.NoDevice || found_error == gpu.Unsupported {
-        try io.print("gpu float cpu only\n")
-        ret ok
-    }
-    if found_error != ok { ret found_error }
+    // (D5946) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`, that keeps denormals.
+    compute.install()
     var ran = 0usize
-    var device_at = 0usize
-    while device_at < found.len {
-        if found[device_at].supported && supports(found[device_at].capabilities, .DenormPreserve) {
-            let (answer, answer_error) = mem.alloc[f32](a, COUNT * 2usize)
-            if answer_error != ok { ret answer_error }
-            try run(a, .Vulkan, u32(device_at), numerators, denominators, answer)
-            var at = 0usize
-            while at < cpu.len {
-                if mem.bitcast[u32](answer[at]) != mem.bitcast[u32](cpu[at]) {
-                    try io.printf["gpu float mismatch {} numerator {} denominator {} cpu {} device {}\n"](at, mem.bitcast[u32](numerators[at / 2usize]), mem.bitcast[u32](denominators[at / 2usize]), mem.bitcast[u32](cpu[at]), mem.bitcast[u32](answer[at]))
-                    os.exit(i32(10usize + at % 100usize))
+    for backend in [_]gpu.Backend{ .Vulkan, .Gl } {
+        let (found, found_error) = gpu.devices(a, backend, 16usize)
+        if found_error != ok && found_error != gpu.NoDevice && found_error != gpu.Unsupported { ret found_error }
+        var device_at = 0usize
+        while found_error == ok && device_at < found.len {
+            if found[device_at].supported && supports(found[device_at].capabilities, .DenormPreserve) {
+                let (answer, answer_error) = mem.alloc[f32](a, COUNT * 2usize)
+                if answer_error != ok { ret answer_error }
+                try run(a, backend, u32(device_at), numerators, denominators, answer)
+                var at = 0usize
+                while at < cpu.len {
+                    if mem.bitcast[u32](answer[at]) != mem.bitcast[u32](cpu[at]) {
+                        try io.printf["gpu float mismatch {} numerator {} denominator {} cpu {} device {}\n"](at, mem.bitcast[u32](numerators[at / 2usize]), mem.bitcast[u32](denominators[at / 2usize]), mem.bitcast[u32](cpu[at]), mem.bitcast[u32](answer[at]))
+                        os.exit(i32(10usize + at % 100usize))
+                    }
+                    at += 1usize
                 }
-                at += 1usize
+                ran += 1usize
             }
-            ran += 1usize
+            device_at += 1usize
         }
-        device_at += 1usize
     }
     if ran == 0usize {
         try io.print("gpu float cpu only\n")

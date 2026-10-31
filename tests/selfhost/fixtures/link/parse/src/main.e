@@ -44,6 +44,22 @@ fn close(x: f64, y: f64) -> bool {
     ret d < 0.000000001f64
 }
 
+// Every grammar parser must reject the shared table representation before it
+// reads a rule offset.
+fn malformed_grammar_rejected(g: *const parse.Grammar, chart: []u64, items: []parse.Item, sets: []usize, answers: []u32) -> bool {
+    let (_, cyk_problem) = parse.cyk(g, 0u32, answers[..0usize], chart)
+    if cyk_problem != parse.Invalid { ret false }
+    let (_, _, earley_problem) = parse.earley(g, 0u32, answers[..0usize], items, sets)
+    if earley_problem != parse.Invalid { ret false }
+    let (_, next_problem) = parse.next_terminals(g, 0u32, answers[..0usize], answers, items, sets)
+    ret next_problem == parse.Invalid
+}
+
+fn malformed_peg_rejected(p: *const parse.Peg, memo: []i64) -> bool {
+    let (_, _, problem) = parse.peg(p, 0usize, "", memo)
+    ret problem == parse.Invalid
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var tokens: [64]parse.Token = zero
 
@@ -57,6 +73,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if unterminated != parse.Invalid { os.exit(1i32) }
     let (_, room) = parse.lex(program, operators[..], tokens[..3usize])
     if room != parse.TooSmall { os.exit(1i32) }
+    let max_offset = 0usize -% 1usize
+    if parse.starts_at("a", max_offset, "a") { os.exit(1i32) }
 
     // 2: the off-side rule.
     let indent_text = "a\n  b\n\n    c\n    d\n  e\n      f\ng\n  h"
@@ -114,6 +132,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_rd) = parse.recursive_descent(tokens[..bad_n], "(1 + 2", &t2)
     if bad_rd != parse.Invalid { os.exit(5i32) }
     if parse.ast_child(&t2, 1u32, 0usize) != 0u32 { os.exit(4i32) }
+    var zero_right_ops: [1]parse.Op = zero
+    zero_right_ops[0usize] = parse.Op { text: "^", kind: parse.INFIX, prec: 0u8, right: true }
+    let (zero_right_n, zero_right_lex_error) = parse.lex("1 ^ 2", operators[..0usize], tokens[..])
+    if zero_right_lex_error != ok { os.exit(156i32) }
+    var zero_right_ast = parse.ast(kind[..], left[..], right[..], tok[..])
+    let (_, zero_right_error) = parse.pratt(tokens[..zero_right_n], "1 ^ 2", zero_right_ops[..], &zero_right_ast)
+    if zero_right_error != parse.Invalid { os.exit(157i32) }
 
     // 6: CYK on the toy grammar and on parenthesis strings.
     let toy_lhs = [8]u32 { 5u32, 6u32, 7u32, 8u32, 8u32, 9u32, 9u32, 10u32 }
@@ -207,7 +232,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
-    // 9: packrat PEG over a JSON-ish subset.
+    // 9: every parsing entry point rejects malformed rule-offset tables.
+    let malformed_lhs_one = [1]u32 { 1u32 }
+    let malformed_rhs_one = [1]u32 { 0u32 }
+    let malformed_start_empty = [1]usize { 0usize }
+    let malformed_start_short = [1]usize { 0usize }
+    let malformed_start_nonzero = [2]usize { 1usize, 1usize }
+    let malformed_start_trailing = [2]usize { 0usize, 0usize }
+    let malformed_lhs_two = [2]u32 { 1u32, 1u32 }
+    let malformed_start_outside = [3]usize { 0usize, 2usize, 1usize }
+    let malformed_lhs_three = [3]u32 { 1u32, 1u32, 1u32 }
+    let malformed_rhs_two = [2]u32 { 0u32, 0u32 }
+    let malformed_start_backwards = [4]usize { 0usize, 2usize, 1usize, 2usize }
+    let malformed_empty = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_empty[..0usize], 1u32)
+    let malformed_short = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_short[..], 1u32)
+    let malformed_nonzero = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_nonzero[..], 1u32)
+    let malformed_trailing = parse.grammar(malformed_lhs_one[..], malformed_rhs_one[..], malformed_start_trailing[..], 1u32)
+    let malformed_outside = parse.grammar(malformed_lhs_two[..], malformed_rhs_one[..], malformed_start_outside[..], 1u32)
+    let malformed_backwards = parse.grammar(malformed_lhs_three[..], malformed_rhs_two[..], malformed_start_backwards[..], 1u32)
+    if !malformed_grammar_rejected(&malformed_empty, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_short, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_nonzero, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_trailing, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_outside, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+    if !malformed_grammar_rejected(&malformed_backwards, chart[..], items[..], sets[..], allowed[..]) { os.exit(10i32) }
+
+    // 10: packrat PEG over a JSON-ish subset.
     let peg_op = [96]u8 { 1u8, 1u8, 5u8, 6u8, 2u8, 1u8, 8u8, 7u8, 1u8, 7u8, 4u8, 8u8, 4u8, 4u8, 1u8, 3u8, 4u8, 1u8, 9u8, 3u8, 4u8, 5u8, 1u8, 6u8, 1u8, 4u8, 4u8, 11u8, 11u8, 11u8, 4u8, 4u8, 1u8, 11u8, 1u8, 4u8, 6u8, 4u8, 8u8, 1u8, 4u8, 4u8, 4u8, 11u8, 11u8, 11u8, 1u8, 4u8, 4u8, 4u8, 4u8, 1u8, 4u8, 6u8, 4u8, 1u8, 11u8, 11u8, 8u8, 1u8, 4u8, 4u8, 4u8, 11u8, 11u8, 11u8, 11u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 1u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 4u8, 1u8, 1u8, 1u8, 1u8, 4u8, 4u8, 4u8, 5u8, 5u8, 5u8, 5u8, 5u8, 5u8 }
     let peg_a = [96]u32 { 32u32, 10u32, 0u32, 2u32, 48u32, 45u32, 5u32, 4u32, 46u32, 4u32, 8u32, 10u32, 7u32, 6u32, 92u32, 0u32, 14u32, 34u32, 17u32, 0u32, 18u32, 16u32, 34u32, 21u32, 34u32, 23u32, 22u32, 0u32, 1u32, 1u32, 27u32, 28u32, 91u32, 1u32, 44u32, 34u32, 35u32, 31u32, 37u32, 93u32, 38u32, 33u32, 32u32, 1u32, 3u32, 1u32, 58u32, 46u32, 45u32, 44u32, 43u32, 44u32, 51u32, 52u32, 50u32, 123u32, 1u32, 6u32, 57u32, 125u32, 58u32, 56u32, 55u32, 5u32, 4u32, 3u32, 2u32, 116u32, 114u32, 117u32, 101u32, 69u32, 68u32, 67u32, 102u32, 97u32, 108u32, 115u32, 101u32, 77u32, 76u32, 75u32, 74u32, 110u32, 117u32, 108u32, 108u32, 85u32, 84u32, 83u32, 82u32, 73u32, 66u32, 65u32, 64u32, 63u32 }
     let peg_b = [96]u32 { 0u32, 0u32, 1u32, 0u32, 57u32, 0u32, 0u32, 0u32, 0u32, 0u32, 9u32, 0u32, 11u32, 12u32, 0u32, 0u32, 15u32, 0u32, 0u32, 0u32, 19u32, 20u32, 0u32, 0u32, 0u32, 24u32, 25u32, 0u32, 0u32, 0u32, 29u32, 30u32, 0u32, 0u32, 0u32, 31u32, 0u32, 36u32, 0u32, 0u32, 39u32, 40u32, 41u32, 0u32, 0u32, 0u32, 0u32, 31u32, 47u32, 48u32, 49u32, 0u32, 50u32, 0u32, 53u32, 0u32, 0u32, 0u32, 0u32, 0u32, 59u32, 60u32, 61u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 70u32, 71u32, 72u32, 0u32, 0u32, 0u32, 0u32, 0u32, 78u32, 79u32, 80u32, 81u32, 0u32, 0u32, 0u32, 0u32, 86u32, 87u32, 88u32, 89u32, 90u32, 91u32, 92u32, 93u32, 94u32 }
@@ -227,6 +277,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let (_, _, peg_room) = parse.peg(&json_peg, 0usize, jsons[0usize], memo[..16usize])
     if peg_room != parse.TooSmall { os.exit(9i32) }
+
+    // 11: public PEG tables reject mismatched arrays, invalid references, and
+    // direct or indirect left recursion before matching can trap or recurse.
+    let malformed_peg_op = [1]u8 { 1u8 }
+    let malformed_peg_zero = [1]u32 { 0u32 }
+    var malformed_peg_empty: [0]u32 = zero
+    let malformed_peg_root = [1]u32 { 0u32 }
+    let malformed_peg_shape = parse.Peg { op: malformed_peg_op[..], a: malformed_peg_empty[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let invalid_child_op = [1]u8 { 4u8 }
+    let invalid_child_a = [1]u32 { 1u32 }
+    let invalid_child = parse.Peg { op: invalid_child_op[..], a: invalid_child_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let invalid_rule_op = [1]u8 { 11u8 }
+    let invalid_rule_a = [1]u32 { 1u32 }
+    let invalid_rule = parse.Peg { op: invalid_rule_op[..], a: invalid_rule_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let direct_rule_a = [1]u32 { 0u32 }
+    let direct_left = parse.Peg { op: invalid_rule_op[..], a: direct_rule_a[..], b: malformed_peg_zero[..], rules: malformed_peg_root[..] }
+    let indirect_op = [2]u8 { 11u8, 11u8 }
+    let indirect_a = [2]u32 { 1u32, 0u32 }
+    let indirect_b = [2]u32 { 0u32, 0u32 }
+    let indirect_rules = [2]u32 { 0u32, 1u32 }
+    let indirect_left = parse.Peg { op: indirect_op[..], a: indirect_a[..], b: indirect_b[..], rules: indirect_rules[..] }
+    if !malformed_peg_rejected(&malformed_peg_shape, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&invalid_child, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&invalid_rule, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&direct_left, memo[..]) { os.exit(11i32) }
+    if !malformed_peg_rejected(&indirect_left, memo[..]) { os.exit(11i32) }
 
     try io.print("parse ok\n")
     ret ok

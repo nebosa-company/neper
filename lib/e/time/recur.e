@@ -213,12 +213,30 @@ fn freq_code(s: str) -> i64 {
     ret -1i64
 }
 
+fn rule_part_bit(key: str) -> u16 {
+    if upper_eq(key, "FREQ") { ret 1u16 }
+    if upper_eq(key, "INTERVAL") { ret 2u16 }
+    if upper_eq(key, "COUNT") { ret 4u16 }
+    if upper_eq(key, "UNTIL") { ret 8u16 }
+    if upper_eq(key, "WKST") { ret 16u16 }
+    if upper_eq(key, "BYMONTH") { ret 32u16 }
+    if upper_eq(key, "BYMONTHDAY") { ret 64u16 }
+    if upper_eq(key, "BYDAY") { ret 128u16 }
+    if upper_eq(key, "BYHOUR") { ret 256u16 }
+    if upper_eq(key, "BYMINUTE") { ret 512u16 }
+    if upper_eq(key, "BYSECOND") { ret 1024u16 }
+    if upper_eq(key, "BYYEARDAY") { ret 2048u16 }
+    if upper_eq(key, "BYSETPOS") { ret 4096u16 }
+    ret 0u16
+}
+
 fn parse_rule(text: str) -> (Rule, err) {
     var r: Rule = zero
     r.interval = 1i64
     var body = text
     if body.len > 6usize && upper_eq(body[0usize..6usize], "RRULE:") { body = body[6usize..body.len] }
     var seen_freq = false
+    var seen_parts = 0u16
     var at = 0usize
     while at <= body.len {
         var end = at
@@ -230,6 +248,9 @@ fn parse_rule(text: str) -> (Rule, err) {
             if eq_at == part.len || eq_at + 1usize == part.len { ret (zero, Invalid) }
             let key = part[0usize..eq_at]
             let value = part[eq_at + 1usize..part.len]
+            let bit = rule_part_bit(key)
+            if bit == 0u16 || (seen_parts & bit) != 0u16 { ret (zero, Invalid) }
+            seen_parts = seen_parts | bit
             if upper_eq(key, "FREQ") {
                 seen_freq = true
                 let code = freq_code(value)
@@ -565,6 +586,7 @@ fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, ou
             if r.count > 0i64 && emitted >= r.count { ret (written, ok) }
             emitted += 1i64
             if calendar.compare(stamp, from) >= 0i32 {
+                if written == out.len { ret (written, ok) }
                 out[written] = stamp
                 written += 1usize
                 if written == out.len { ret (written, ok) }

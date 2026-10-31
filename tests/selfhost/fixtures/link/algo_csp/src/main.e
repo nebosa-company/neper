@@ -350,6 +350,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     three_pairs[5usize] = 2usize
     let (three, three_error) = csp.solve[Nothing](domains[..], 3usize, 3usize, three_pairs[..], &nothing, queens, assignment[..], saved[..], queue[..], queued[..])
     if three_error != ok || three { os.exit(2i32) }
+    // An isolated empty domain is unsatisfiable rather than a spurious MAC
+    // solution with an out-of-range assignment.
+    var empty_domain: [3]u8 = zero
+    var no_pairs: [0]usize = zero
+    var empty_assignment: [1]usize = zero
+    var empty_saved: [3]u8 = zero
+    var empty_queue: [0]usize = zero
+    var empty_queued: [0]u8 = zero
+    let (empty_solved, empty_error) = csp.solve[Nothing](empty_domain[..], 1usize, 3usize, no_pairs[..], &nothing, queens, empty_assignment[..], empty_saved[..], empty_queue[..], empty_queued[..])
+    if empty_error != ok || empty_solved { os.exit(2i32) }
     set_all(domains[..], 4usize, 4usize)
     let (found, discrepancies, lds_error) = csp.limited_discrepancy[Nothing](domains[..], 4usize, 4usize, all_pairs[..], &nothing, queens, 6usize, assignment[..])
     if lds_error != ok || !found || discrepancies == 0usize { os.exit(2i32) }
@@ -370,6 +380,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if domains[6usize] != 0u8 || domains[7usize] != 0u8 || domains[8usize] != 1u8 || domains[0usize] != 1u8 || domains[1usize] != 1u8 { os.exit(3i32) }
     domains[8usize] = 0u8
     if csp.all_different(domains[..], 3usize, vars[..], match_value[..], seen[..]) != csp.Unsatisfiable { os.exit(3i32) }
+    // The same Hall set must prune through a caller-sized value universe well
+    // beyond the old fixed 64-byte restore capacity.
+    var large_domains: [195]u8 = zero
+    set_all(large_domains[..], 3usize, 65usize)
+    var restricted = 2usize
+    while restricted < 65usize {
+        large_domains[restricted] = 0u8
+        large_domains[65usize + restricted] = 0u8
+        restricted += 1usize
+    }
+    var large_vars: [3]usize = zero
+    large_vars[1usize] = 1usize
+    large_vars[2usize] = 2usize
+    var large_match: [65]usize = zero
+    var large_seen: [65]u8 = zero
+    if csp.all_different(large_domains[..], 65usize, large_vars[..], large_match[..], large_seen[..]) != ok { os.exit(3i32) }
+    if large_domains[130usize] != 0u8 || large_domains[131usize] != 0u8 || large_domains[132usize] != 1u8 { os.exit(3i32) }
 
     // 4: element, table, cumulative.
     set_all(domains[..], 2usize, 4usize)
@@ -420,6 +447,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     demand[1usize] = 2usize
     domains[9usize] = 1u8
     if csp.cumulative(domains[..], 5usize, starts_vars[..], duration[..], demand[..], 1usize, 8usize, profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
+
+    // A duration that wraps `start + duration` cannot fit this horizon and must
+    // be rejected before either compulsory-profile or placement endpoint math.
+    var huge_domain: [2]u8 = zero
+    huge_domain[1usize] = 1u8
+    var huge_start: [1]usize = zero
+    var huge_duration: [1]usize = zero
+    huge_duration[0usize] = 18446744073709551615usize
+    var huge_demand: [1]usize = zero
+    huge_demand[0usize] = 1usize
+    if csp.cumulative(huge_domain[..], 2usize, huge_start[..], huge_duration[..], huge_demand[..], 1usize, 8usize, profile[..]) != csp.Invalid { os.exit(4i32) }
+
+    // A compulsory maximum demand followed by one more unit cannot wrap back
+    // below maximum capacity, on either usize width.
+    var overflow_domain: [2]u8 = zero
+    overflow_domain[0usize] = 1u8
+    overflow_domain[1usize] = 1u8
+    var overflow_starts: [2]usize = zero
+    overflow_starts[1usize] = 1usize
+    var overflow_duration: [2]usize = zero
+    overflow_duration[0usize] = 1usize
+    overflow_duration[1usize] = 1usize
+    var overflow_demand: [2]usize = zero
+    let maximum = 0usize -% 1usize
+    overflow_demand[0usize] = maximum
+    overflow_demand[1usize] = 1usize
+    var overflow_profile: [1]usize = zero
+    if csp.cumulative(overflow_domain[..], 1usize, overflow_starts[..], overflow_duration[..], overflow_demand[..], maximum, 1usize, overflow_profile[..]) != csp.Unsatisfiable { os.exit(4i32) }
 
     // 5..10: AC-2001 against AC-3.
     let ac2001_code = check_ac2001()

@@ -12,6 +12,22 @@ type BoxStyle = enum u8 { Ascii, Square, Rounded, HeavyHead }
 type Column = struct { header: str, align: Align }
 error BadShape
 error BadMarkup
+error BadElapsed
+
+// `u64(seconds)` accepts every representable f64 strictly below 2^64. At 2^64 the
+// conversion is out of range, so keep interval formatting on the safe side of that boundary.
+fn interval_limit() -> f64 { ret 1.8446744073709552e19f64 }
+
+fn finite(value: f64) -> bool {
+    if value != value { ret false }
+    // Infinity minus itself is NaN; every finite value subtracts to zero.
+    ret value - value == 0.0f64
+}
+
+fn valid_interval(seconds: f64) -> bool {
+    if !finite(seconds) || seconds < 0.0f64 { ret false }
+    ret seconds < interval_limit()
+}
 
 fn display_width(s: str) -> usize {
     var count = 0usize
@@ -59,6 +75,7 @@ fn round_half_even(x: f64) -> u64 {
 
 // `[H:]MM:SS` from whole seconds, as tqdm's `format_interval`.
 fn push_interval(b: *str.Builder, seconds: f64) -> err {
+    if !valid_interval(seconds) { ret BadElapsed }
     let total = u64(seconds)
     let s = total % 60u64
     let mins = total / 60u64
@@ -102,7 +119,9 @@ fn push_fixed2(b: *str.Builder, v: f64) -> err {
 fn push_rate(b: *str.Builder, n: u64, elapsed: f64, unit: str) -> err {
     if elapsed > 0.0f64 && n > 0u64 {
         let rate = f64(n) / elapsed
+        if !finite(rate) || rate <= 0.0f64 { ret BadElapsed }
         let inv = 1.0f64 / rate
+        if !finite(inv) { ret BadElapsed }
         if inv > 1.0f64 {
             try push_fixed2(b, inv)
             try str.push(b, "s/")
@@ -156,6 +175,7 @@ fn trim_columns(s: str, columns: usize) -> str {
 // rate]` -- or, with `total == 0`, `prefix: n unit [elapsed, rate]`. `ncols` is the
 // whole line's width and trims it; 0 gives a ten-column bar and no trim. `ascii` picks the ` 123456789#` bar.
 fn meter_line(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, prefix: str, unit: str, ascii: bool) -> (str, err) {
+    if !valid_interval(elapsed) { ret ("", BadElapsed) }
     let (b0, e0) = str.builder(a, 256usize)
     if e0 != ok { ret ("", e0) }
     var b = b0
@@ -198,7 +218,10 @@ fn meter_line(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, pre
     try push_rate(&r, n, elapsed, unit)
     try str.push_byte(&r, 93u8)
     let right = str.done(&r)
-    let frac = f64(n) / f64(total)
+    // The bar already caps an over-complete update at 100%; use that same bounded fraction for
+    // the displayed percentage so round_half_even never narrows an arbitrarily large ratio.
+    var frac = f64(n) / f64(total)
+    if frac > 1.0f64 { frac = 1.0f64 }
     let pct = round_half_even(frac * 100.0f64)
     let (o0, e2) = str.builder(a, left.len + right.len + ncols * 4usize + 32usize)
     if e2 != ok { ret ("", e2) }

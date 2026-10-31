@@ -12,8 +12,14 @@ build_one() {
   n=$1; arch=$2
   dir=$out/$arch; mkdir -p "$dir"
   msg=$(timeout 300 "$compiler" emit-executable "$root/tests/selfhost/fixtures/link/$n/src/main.e" "$root" "$arch" macos "$dir/$n" $(cat "$root/tests/selfhost/fixtures/link/$n/emit-flags" 2>/dev/null) 2>&1 | tail -3 | tr '\n\t' '  ' | cut -c1-200)
-  if [ -f "$dir/$n" ] && echo "$msg" | grep -q "executable written"; then st=ok; else st=fail; rm -f "$dir/$n"; fi
+  if [ -f "$dir/$n" ] && echo "$msg" | grep -q "executable written"; then
+    st=ok
+  else
+    st=fail
+    rm -f "$dir/$n"
+  fi
   printf '%s\t%s\t%s\t%s\n' "$n" "$arch" "$st" "$msg"
+  [ "$st" = ok ]
 }
 export -f build_one; export compiler root out
 archs=${CORPUS_ARCHS:-aarch64 x64}

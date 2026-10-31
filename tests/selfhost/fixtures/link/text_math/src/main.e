@@ -1130,6 +1130,14 @@ fn check_extra(a: *mem.Arena, items: []math.Item, plain: shape.Font, math_font: 
     if refused_3 != math.Invalid { ret 217i32 }
     let (_, refused_4) = math.typeset_mathml(a, "<math><mi>a</mi></math>trailing", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
     if refused_4 != math.Invalid { ret 218i32 }
+    // Numeric character references must not encode surrogates or values above
+    // the Unicode scalar limit, including values that would overflow parsing.
+    let (_, refused_5) = math.typeset_mathml(a, "<math><mi>&#xD800;</mi></math>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
+    if refused_5 != math.Invalid { ret 219i32 }
+    let (_, refused_6) = math.typeset_mathml(a, "<math><mi>&#x110000;</mi></math>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
+    if refused_6 != math.Invalid { ret 220i32 }
+    let (_, refused_7) = math.typeset_mathml(a, "<math><mi>&#999999999999999999999999;</mi></math>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
+    if refused_7 != math.Invalid { ret 221i32 }
     // The scene draws the equation.
     failed = check_draw(a, plain, items)
     if failed != 0i32 { ret failed }

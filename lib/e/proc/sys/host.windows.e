@@ -8,16 +8,20 @@
 use e.mem
 use e.os
 use e.proc.sys.format as format
+use e.proc.sys.win_heap as win_heap
 use e.text.utf8 as utf8
 
 type SystemTimes = struct { idle: u64, kernel: u64, user: u64 }
 type MemoryStatus = struct { length: u32, load: u32, total_phys: u64, avail_phys: u64, total_page: u64, avail_page: u64, total_virtual: u64, avail_virtual: u64, avail_extended: u64 }
-type ProcessEntry = struct { size: u32, usage: u32, pid: u32, pad0: u32, heap: usize, module: u32, threads: u32, parent: u32, priority: i32, flags: u32, exe: [260]u16, tail: u32 }
-type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: usize, working_set: usize, quota_peak_paged: usize, quota_paged: usize, quota_peak_nonpaged: usize, quota_nonpaged: usize, pagefile: usize, peak_pagefile: usize }
+// `heap` is ULONG_PTR. Neper's pointers and `usize` stay 64 bits on x86, so the
+// architecture variant supplies this field's Windows ABI width explicitly. SIZE_T
+// has the same target-specific width, including in PROCESS_MEMORY_COUNTERS.
+type ProcessEntry = struct { size: u32, usage: u32, pid: u32, heap: win_heap.Heap, module: u32, threads: u32, parent: u32, priority: i32, flags: u32, exe: [260]u16 }
+type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: win_heap.Heap, working_set: win_heap.Heap, quota_peak_paged: win_heap.Heap, quota_paged: win_heap.Heap, quota_peak_nonpaged: win_heap.Heap, quota_nonpaged: win_heap.Heap, pagefile: win_heap.Heap, peak_pagefile: win_heap.Heap }
 
 const SNAPSHOT_PROCESSES: u32 = 2u32
 const ALL_GROUPS: u16 = 65535u16
-const ENTRY_SIZE: u32 = 568u32
+const ERROR_NO_MORE_FILES: u32 = 18u32
 
 @import("kernel32.dll", "GetActiveProcessorCount")
 extern fn raw_processor_count(group: u16) -> u32
@@ -46,6 +50,9 @@ extern fn raw_process_memory(process: usize, counters: *MemoryCounters, size: u3
 @import("kernel32.dll", "CreateToolhelp32Snapshot")
 extern fn raw_snapshot(flags: u32, pid: u32) -> usize
 
+@import("kernel32.dll", "GetLastError")
+extern fn raw_last_error() -> u32
+
 @import("kernel32.dll", "Process32FirstW")
 extern fn raw_first(snapshot: usize, entry: *ProcessEntry) -> i32
 
@@ -54,6 +61,13 @@ extern fn raw_next(snapshot: usize, entry: *ProcessEntry) -> i32
 
 @import("kernel32.dll", "CloseHandle")
 extern fn raw_close_handle(handle: usize) -> i32
+
+// Toolhelp reports the normal end of an enumeration as a false return with
+// ERROR_NO_MORE_FILES. Any other false return is an operation failure rather
+// than an empty process table.
+fn toolhelp_finished(result: i32, last_error: u32) -> bool {
+    ret result != 0i32 || last_error == ERROR_NO_MORE_FILES
+}
 
 fn cpu_count(a: *mem.Arena) -> (u32, err) {
     let n = raw_processor_count(ALL_GROUPS)
@@ -134,8 +148,9 @@ fn process_id() -> u32 {
 
 fn self_memory(a: *mem.Arena) -> (u64, err) {
     var c: MemoryCounters = zero
-    c.size = 72u32
-    if raw_process_memory(raw_current_process(), &c, 72u32) == 0i32 { ret (0u64, os.Failed) }
+    let counter_size = u32(mem.size_of[MemoryCounters]())
+    c.size = counter_size
+    if raw_process_memory(raw_current_process(), &c, counter_size) == 0i32 { ret (0u64, os.Failed) }
     ret (u64(c.working_set), ok)
 }
 
@@ -166,14 +181,24 @@ fn narrow(a: *mem.Arena, units: []const u16) -> (str, err) {
 
 // Up to `limit` running processes, the parent and thread counts the snapshot carries.
 fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
-    let (out, oe) = mem.alloc[format.ProcessInfo](a, limit + 1usize)
+    if limit == 18446744073709551615usize { ret (zero, os.OutOfMemory) }
+    let capacity = limit + 1usize
+    if capacity > 18446744073709551615usize / mem.size_of[format.ProcessInfo]() { ret (zero, os.OutOfMemory) }
+    let (out, oe) = mem.alloc[format.ProcessInfo](a, capacity)
     if oe != ok { ret (out, oe) }
     let snap = raw_snapshot(SNAPSHOT_PROCESSES, 0u32)
     if snap == 0usize || snap == ~0usize { ret (out[0usize..0usize], os.Failed) }
     var entry: ProcessEntry = zero
-    entry.size = ENTRY_SIZE
+    entry.size = u32(mem.size_of[ProcessEntry]())
     var n = 0usize
     var more = raw_first(snap, &entry)
+    if more == 0i32 {
+        let first_error = raw_last_error()
+        if !toolhelp_finished(more, first_error) {
+            let closed = raw_close_handle(snap)
+            ret (out[0usize..0usize], os.Failed)
+        }
+    }
     while more != 0i32 && n < limit {
         let (name, ne) = narrow(a, entry.exe[0usize..260usize])
         if ne != ok {
@@ -189,6 +214,13 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
         out[n] = p
         n += 1usize
         more = raw_next(snap, &entry)
+        if more == 0i32 {
+            let next_error = raw_last_error()
+            if !toolhelp_finished(more, next_error) {
+                let closed = raw_close_handle(snap)
+                ret (out[0usize..n], os.Failed)
+            }
+        }
     }
     let closed = raw_close_handle(snap)
     ret (out[0usize..n], ok)

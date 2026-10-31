@@ -1,11 +1,12 @@
 #!/bin/bash
 # usage: run-corpus.sh DIR [runner...]
 # Runs every executable in DIR from CORPUS_CWD (default: a scratch directory), each bounded at sixty
-# seconds, and prints one line per program: PASS, FAIL or INFO, its exit status and its seconds, then
+# seconds, and prints one line per program: PASS, FAIL, SKIP or INFO, its exit status and its seconds, then
 # the first lines it wrote to stderr when it failed. A pass is the exit status the fixture is built
 # to give: 0 unless it is listed below.
 dir=$1; shift
 runner=("$@")
+no_metal_marker=NEPER_SKIP_NO_METAL
 
 # Fixtures that end in a trap by design (134), and those whose exit status is the answer they
 # compute (the real suite compares it; here it is reported, not judged).
@@ -66,7 +67,9 @@ for file in "$dir"/*; do
   code=$?
   seconds=$(( $(date +%s) - start ))
   want=$(expected "$name")
-  if [ "$want" = "skip" ]; then
+  if [ "$code" -eq 95 ] && grep -qx "$no_metal_marker" "$scratch/.err"; then
+    skipped=$((skipped+1)); echo "SKIP $name no-metal ${seconds}s"
+  elif [ "$want" = "skip" ]; then
     skipped=$((skipped+1)); echo "SKIP $name $code ${seconds}s"
   elif [ "$want" = "any" ]; then
     info=$((info+1)); echo "INFO $name $code ${seconds}s"
@@ -81,3 +84,4 @@ for file in "$dir"/*; do
   rm -rf "$scratch"
 done
 echo "TOTAL pass=$pass fail=$fail info=$info skip=$skipped"
+if [ "$fail" -ne 0 ]; then exit 1; fi

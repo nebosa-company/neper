@@ -1,9 +1,9 @@
 // `e.fmt.protobuf`: a Python-built message with a varint, a length-delimited field,
-// a zigzag sint64, both fixed widths, a negative int64 in its ten-byte form and the
-// highest field number, read field by field with one skipped, then written back byte
-// for byte with the sizes agreeing; refusals for an eleven-byte varint, wire type 3,
-// field number 0 and a truncated length-delimited field. Every check has its own
-// exit code.
+// a zigzag sint64, both fixed widths, negative int64 values (including i64::MIN) in
+// their ten-byte form and the highest field number, read field by field with one
+// skipped, then written back byte for byte with the sizes agreeing; refusals for an
+// eleven-byte varint, wire type 3, field number 0 and a truncated length-delimited
+// field. Every check has its own exit code.
 use e.os
 use e.mem
 use e.io
@@ -73,6 +73,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bs, e17) = pb.size_bytes(7usize)
     if e17 != ok || bs != 8usize { os.exit(27) }
     if pb.write_key(&w, 0u32, .Varint) != pb.Invalid { os.exit(28) }
+
+    // Negating i64::MIN first traps. Its two's-complement varint has one high bit,
+    // while ZigZag maps it to all one bits.
+    let min_i64 = -9223372036854775808i64
+    let min_i64_wire: [10]u8 = [10]u8{ 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 1u8 }
+    let min_sint_wire: [10]u8 = [10]u8{ 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 1u8 }
+    var min_i64_buffer: [16]u8 = zero
+    var min_i64_state = io.SliceWriter { data: min_i64_buffer[..], off: 0usize }
+    var min_i64_writer = io.slice_writer(&min_i64_state)
+    if pb.write_i64(&min_i64_writer, min_i64) != ok || !same(min_i64_buffer[..min_i64_state.off], min_i64_wire[..]) { os.exit(34) }
+    var min_i64_reader = pb.reader(min_i64_wire[..])
+    let (min_i64_roundtrip, min_i64_error) = pb.read_i64(&min_i64_reader)
+    if min_i64_error != ok || min_i64_roundtrip != min_i64 { os.exit(35) }
+    var min_sint_buffer: [16]u8 = zero
+    var min_sint_state = io.SliceWriter { data: min_sint_buffer[..], off: 0usize }
+    var min_sint_writer = io.slice_writer(&min_sint_state)
+    if pb.write_sint64(&min_sint_writer, min_i64) != ok || !same(min_sint_buffer[..min_sint_state.off], min_sint_wire[..]) { os.exit(36) }
+    if pb.encode_zigzag(min_i64) != 18446744073709551615u64 { os.exit(37) }
+    var min_sint_reader = pb.reader(min_sint_wire[..])
+    let (min_sint_roundtrip, min_sint_error) = pb.read_sint64(&min_sint_reader)
+    if min_sint_error != ok || min_sint_roundtrip != min_i64 { os.exit(38) }
+
     // Refusals.
     let long_varint: [11]u8 = [11]u8{ 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1 }
     var r2 = pb.reader(long_varint[0..])

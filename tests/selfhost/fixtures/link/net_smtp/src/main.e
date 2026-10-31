@@ -188,6 +188,23 @@ fn main(a: *mem.Arena) -> err {
     let want = "EHLO client.test\r\nAUTH PLAIN AGFsaWNlAHNlY3JldA==\r\nMAIL FROM:<a@x.test> SIZE=31\r\nRCPT TO:<b@x.test>\r\nRCPT TO:<c@x.test>\r\nDATA\r\nSubject: hi\r\n\r\n..dot\r\nbare\r\ncr\r\nlast\r\n.\r\nQUIT\r\n"
     if !same(scene.sent[..scene.writer.off], want) { ret fail(9i32) }
 
+    // A body ending in a bare CR is already a complete line after its LF is
+    // supplied; send must not add a second CRLF before the SMTP terminator.
+    var trailing: Scene = zero
+    trailing.writer = io.SliceWriter { data: trailing.sent[0..], off: 0usize }
+    trailing.reader = io.SliceReader { data: "220 tail.example\r\n250 tail.example\r\n250 ok\r\n250 ok\r\n354 end with dot\r\n250 queued\r\n221 bye\r\n", off: 0usize }
+    let (tail0, tail_connect_error) = smtp.connect(a, io.slice_reader(&trailing.reader), io.slice_writer(&trailing.writer), "client.test")
+    if tail_connect_error != ok { ret fail(40i32) }
+    var tail_session = tail0
+    if smtp.ehlo(&tail_session) != ok { ret fail(41i32) }
+    var trailing_body = io.SliceReader { data: "tail\r", off: 0usize }
+    let tail_rcpts = [1]str{ "b@x.test" }
+    let (_, tail_send_error) = smtp.send(&tail_session, "a@x.test", tail_rcpts[0..], io.slice_reader(&trailing_body), 0u64)
+    if tail_send_error != ok { ret fail(42i32) }
+    if smtp.quit(&tail_session) != ok { ret fail(43i32) }
+    let tail_want = "EHLO client.test\r\nMAIL FROM:<a@x.test>\r\nRCPT TO:<b@x.test>\r\nDATA\r\ntail\r\n.\r\nQUIT\r\n"
+    if !same(trailing.sent[..trailing.writer.off], tail_want) { ret fail(44i32) }
+
     // ---- HELO fallback, LOGIN, a rejected recipient list, and the refusals that never touch the wire ----
     var two: Scene = zero
     two.writer = io.SliceWriter { data: two.sent[0..], off: 0usize }
@@ -260,6 +277,14 @@ fn main(a: *mem.Arena) -> err {
     let (z0, z_error) = smtp.connect(a, io.slice_reader(&nine.reader), io.slice_writer(&nine.writer), "client.test")
     var z = z0
     if z_error != ok || smtp.ehlo(&z) != smtp.Closed { ret fail(26i32) }
+
+    // An oversized peer SIZE capability is ignored rather than overflowing while parsing.
+    var oversized: Scene = zero
+    oversized.writer = io.SliceWriter { data: oversized.sent[0..], off: 0usize }
+    oversized.reader = io.SliceReader { data: "220 a\r\n250-a\r\n250 SIZE 18446744073709551616\r\n", off: 0usize }
+    let (oversized0, oversized_error) = smtp.connect(a, io.slice_reader(&oversized.reader), io.slice_writer(&oversized.writer), "client.test")
+    var oversized_session = oversized0
+    if oversized_error != ok || smtp.ehlo(&oversized_session) != ok || oversized_session.caps.size != 0u64 { ret fail(28i32) }
 
     // ---- dot-stuffing and line ends, chunk by chunk (the state crosses chunk edges) ----
     var st = smtp.Stuffer { line_start: true, after_cr: false, wrote: 0usize }

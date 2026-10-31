@@ -36,6 +36,51 @@ function canon(v) {
 const WORDS = ['orders', 'Orders', 'customers', 'invoice items', 'a', 'B', 'list 2', 'list 10', 'items.v2', 'Users', 'users', 'zeta', 'alpha', 'Alpha', 'x1', 'x10', 'ab', 'aB', 'a b'];
 const COLS = ['id', 'name', 'qty', 'tag', 'note'];
 const VALUES = ['a', 1, 2.5, true, null, '', { k: [1, 2] }, [3]];
+const pathSegment = (value) => Array.from(new TextEncoder().encode(value), (byte) => {
+  const unreserved = (byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte === 45 || byte === 46 || byte === 95 || byte === 126;
+  const subDelim = byte === 33 || byte === 36 || byte === 38 || byte === 39 || byte === 40 || byte === 41 || byte === 42 || byte === 43 || byte === 44 || byte === 59 || byte === 61;
+  if (unreserved || subDelim || byte === 58 || byte === 64) return String.fromCharCode(byte);
+  return '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+}).join('');
+
+function valueAtPath(value, path) {
+  if (!path) return value;
+  let cursor = value;
+  for (const part of path.split('.')) {
+    if (!cursor || Array.isArray(cursor) || typeof cursor !== 'object' || !(part in cursor)) return undefined;
+    cursor = cursor[part];
+  }
+  return cursor;
+}
+
+function sourceNames(channel, body) {
+  const browse = channel.browse;
+  if (!browse || !browse.path) return [];
+  const found = valueAtPath(body, browse.resultPath || '');
+  if (Array.isArray(found)) {
+    return found.flatMap((element) => {
+      if (typeof element === 'string') return [element];
+      const name = browse.namePath ? valueAtPath(element, browse.namePath) : undefined;
+      return typeof name === 'string' && name.length > 0 ? [name] : [];
+    });
+  }
+  if (found && typeof found === 'object') return Object.keys(found).filter((name) => name.length > 0);
+  return [];
+}
+
+// Appdor's reference returns raw entity paths. The Neper surface intentionally
+// differs here: source names inserted into a template are RFC 3986 path segments.
+function secureEntitiesFromBody(channel, body) {
+  const entities = eb.entitiesFromBody(channel, body);
+  const template = channel.browse && channel.browse.pathTemplate || '/{name}';
+  const paths = new Map();
+  for (const raw of sourceNames(channel, body)) {
+    const path = raw.startsWith('/') ? raw : template.replace('{name}', raw);
+    if (path === '/' || path.startsWith('/rpc/') || paths.has(path)) continue;
+    paths.set(path, raw.startsWith('/') ? raw.split('/').map(pathSegment).join('/') : template.replace('{name}', pathSegment(raw)));
+  }
+  return entities.map((entity) => ({ ...entity, path: paths.get(entity.path) || entity.path }));
+}
 const genRecord = () => {
   const r = {};
   for (const c of COLS) if (chance(0.55)) r[c] = pick(VALUES);
@@ -95,7 +140,7 @@ function execute(op) {
     case 'plan': return cs.planStreamChange({ binding: op.binding, op: op.planOp, record: op.record, existing: op.existing });
     case 'counts': return cs.streamPlanCounts(op.plan);
     case 'static': return { entities: eb.staticEntities(op.channel), browse: eb.canBrowse(op.channel) };
-    case 'entities': return eb.entitiesFromBody(op.channel, op.body);
+    case 'entities': return secureEntitiesFromBody(op.channel, op.body);
     case 'merge': return eb.mergeEntities(op.source, op.catalog);
     default: throw new Error(op.op);
   }
@@ -103,11 +148,22 @@ function execute(op) {
 
 const cases = [];
 const kinds = {};
+const securityChannel = { actions: {}, browse: { path: '/index', pathTemplate: '/tables/{name}/rows' } };
+const securityCases = [
+  { op: 'entities', channel: securityChannel, body: ['orders'] },
+  { op: 'entities', channel: securityChannel, body: ['orders?limit=1'] },
+  { op: 'entities', channel: securityChannel, body: ['orders#latest'] },
+  { op: 'entities', channel: securityChannel, body: ['orders/2026'] },
+  { op: 'entities', channel: securityChannel, body: ['orders%2F2026'] },
+  { op: 'entities', channel: securityChannel, body: ['/records/current'] },
+  { op: 'entities', channel: securityChannel, body: ['/records?limit=1'] },
+];
 for (let i = 0; i < 700; i++) {
   const op = genOp();
   kinds[op.op] = (kinds[op.op] || 0) + 1;
   cases.push(JSON.stringify({ op, e: canon(execute(op)) }));
 }
+for (const op of securityCases) cases.push(JSON.stringify({ op, e: canon(execute(op)) }));
 
 const chunks = [];
 const size = 20;

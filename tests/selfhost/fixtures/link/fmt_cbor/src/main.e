@@ -330,6 +330,58 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_simple = cbor.decoder(raw[..bad_simple_len])
     let (bad_item, bad_simple_error) = cbor.decode_head(&bad_simple)
     if bad_simple_error != cbor.Invalid { os.exit(55i32) }
+    let huge_map_len = unhex("bb8000000000000000f6", raw[..])
+    var huge_map = cbor.decoder(raw[..huge_map_len])
+    if cbor.skip(&huge_map) != cbor.Truncated { os.exit(57i32) }
+    // CBOR's 64-bit container count must not wrap to zero when `usize` is wasm32.
+    if mem.size_of[usize]() == 4usize {
+        let wide_array_len = unhex("9b0000000100000000", raw[..])
+        var wide_array = cbor.decoder(raw[..wide_array_len])
+        let (wide_array_count, wide_array_indefinite, wide_array_error) = cbor.decode_array_len(&wide_array)
+        if wide_array_error != cbor.Invalid || wide_array_indefinite || wide_array_count != 0usize { os.exit(62i32) }
+        var wide_array_value = cbor.decoder(raw[..wide_array_len])
+        let (wide_array_decoded, wide_array_decoded_error) = cbor.decode(a, &wide_array_value, 128u16)
+        if wide_array_decoded_error != cbor.Invalid { os.exit(63i32) }
+        let wide_map_len = unhex("bb0000000100000000", raw[..])
+        var wide_map = cbor.decoder(raw[..wide_map_len])
+        let (wide_map_count, wide_map_indefinite, wide_map_error) = cbor.decode_map_len(&wide_map)
+        if wide_map_error != cbor.Invalid || wide_map_indefinite || wide_map_count != 0usize { os.exit(64i32) }
+        var wide_map_value = cbor.decoder(raw[..wide_map_len])
+        let (wide_map_decoded, wide_map_decoded_error) = cbor.decode(a, &wide_map_value, 128u16)
+        if wide_map_decoded_error != cbor.Invalid { os.exit(65i32) }
+    }
+    // An indefinite map cannot end after only its key. `decode` already
+    // rejects this; `skip` must agree rather than treating it as a valid item.
+    let dangling_map_len = unhex("bf6161ff", raw[..])
+    var dangling_map = cbor.decoder(raw[..dangling_map_len])
+    if cbor.skip(&dangling_map) != cbor.Invalid { os.exit(58i32) }
+
+    // A CBOR text string is UTF-8, not arbitrary bytes. Both directions must
+    // reject a malformed sequence rather than laundering it through `str`.
+    let invalid_text_len = unhex("6180", raw[..])
+    var invalid_text = cbor.decoder(raw[..invalid_text_len])
+    let (invalid_text_value, invalid_text_error) = cbor.decode_text(&invalid_text)
+    if invalid_text_error != cbor.Invalid { os.exit(59i32) }
+    var invalid_text_out: [4]u8 = zero
+    var invalid_text_encoder = cbor.encoder(invalid_text_out[..])
+    if cbor.encode_text(&invalid_text_encoder, "\x80") != cbor.Invalid { os.exit(60i32) }
+
+    // Break closes an indefinite container; by itself it is not a CBOR item.
+    let stray_break_len = unhex("ff", raw[..])
+    var stray_break = cbor.decoder(raw[..stray_break_len])
+    if cbor.skip(&stray_break) != cbor.Invalid { os.exit(61i32) }
+
+    // RFC 8949 core deterministic ordering compares encoded keys bytewise, not
+    // by the RFC 7049 length-first ordering. `0x18 0x64` must precede `0x20`.
+    var order_pairs: [2]cbor.Pair = zero
+    order_pairs[0usize] = cbor.Pair { key: cbor.Value{ Int: -1i64 }, value: cbor.Value{ Uint: 0u64 } }
+    order_pairs[1usize] = cbor.Pair { key: cbor.Value{ Uint: 100u64 }, value: cbor.Value{ Uint: 0u64 } }
+    let order_map = cbor.Value{ Map: order_pairs[0usize..] }
+    var order_storage: [8]u8 = zero
+    var order_encoder = cbor.encoder(order_storage[..])
+    if cbor.encode(&order_encoder, &order_map) != ok { os.exit(66i32) }
+    let ordered = cbor.encoded(&order_encoder)
+    if ordered.len != 6usize || ordered[0usize] != 162u8 || ordered[1usize] != 24u8 || ordered[2usize] != 100u8 || ordered[3usize] != 0u8 || ordered[4usize] != 32u8 || ordered[5usize] != 0u8 { os.exit(67i32) }
 
     try io.print("fmt cbor ok\n")
     ret ok

@@ -245,6 +245,11 @@ fn medoid_cost(x: []const f64, n: usize, d: usize, medoids: []const usize, k: us
 fn kmedoids(x: []const f64, n: usize, d: usize, k: usize, medoids: []usize, labels: []usize, max_iterations: u32) -> (u32, err) {
     if x.len < n * d || medoids.len < k || labels.len < n { ret (0u32, TooSmall) }
     if k == 0usize || n == 0usize { ret (0u32, Invalid) }
+    var initial = 0usize
+    while initial < k {
+        if medoids[initial] >= n { ret (0u32, Invalid) }
+        initial += 1usize
+    }
     var cost = medoid_cost(x, n, d, medoids, k)
     var iteration = 0u32
     var improved = true
@@ -612,8 +617,13 @@ fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order
 // open cluster. Answers the count.
 fn optics_cut(order: []const usize, reachability: []const f64, core: []const f64, n: usize, eps: f64, labels: []usize) -> (usize, err) {
     if order.len < n || reachability.len < n || core.len < n || labels.len < n { ret (0usize, TooSmall) }
-    var clusters = 0usize
     var i = 0usize
+    while i < n {
+        if order[i] >= n { ret (0usize, Invalid) }
+        i += 1usize
+    }
+    var clusters = 0usize
+    i = 0usize
     while i < n {
         let s = order[i]
         if reachability[s] > eps && core[s] <= eps { clusters += 1usize }
@@ -665,7 +675,13 @@ type Birch = struct { child: []u32, child_count: []u32, height: []u32, cf_n: []f
 // absorbs a point while its radius stays within `threshold`.
 fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64) -> (Birch, err) {
     if room < 2usize || d == 0usize || branching < 2usize || threshold < 0.0f64 || room > 4000000000usize { ret (zero, Invalid) }
-    let (child, child_error) = mem.alloc[u32](a, room * (branching + 1usize))
+    let maximum = 18446744073709551615usize
+    if branching == maximum { ret (zero, Invalid) }
+    let stride = branching + 1usize
+    if room > maximum / stride || room > maximum / d { ret (zero, Invalid) }
+    let child_slots = room * stride
+    let linear_slots = room * d
+    let (child, child_error) = mem.alloc[u32](a, child_slots)
     if child_error != ok { ret (zero, child_error) }
     let (child_count, count_error) = mem.alloc[u32](a, room)
     if count_error != ok { ret (zero, count_error) }
@@ -673,7 +689,7 @@ fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64)
     if height_error != ok { ret (zero, height_error) }
     let (cf_n, n_error) = mem.alloc[f64](a, room)
     if n_error != ok { ret (zero, n_error) }
-    let (cf_ls, ls_error) = mem.alloc[f64](a, room * d)
+    let (cf_ls, ls_error) = mem.alloc[f64](a, linear_slots)
     if ls_error != ok { ret (zero, ls_error) }
     let (cf_ss, ss_error) = mem.alloc[f64](a, room)
     if ss_error != ok { ret (zero, ss_error) }

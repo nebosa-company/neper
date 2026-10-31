@@ -57,6 +57,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     check(e2 != ok, 23i32)
     let (r3, e3) = hcl.parse(a, "block 5 {\n}\n")
     check(e3 != ok, 24i32)
+    let (r4, e4) = hcl.parse(a, "a = 1 /* never closed")
+    check(e4 != ok, 25i32)
     try io.print("fmt hcl ok")
     ret ok
 }

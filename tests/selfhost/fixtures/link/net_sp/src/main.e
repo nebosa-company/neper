@@ -555,6 +555,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if rp_p_2 != 0u8 { os.exit(i32(rp_p_2) + 20i32) }
     let pr = patterns()
     if pr != 0u32 { os.exit(i32(pr)) }
+    var handshake_bytes: [8]u8 = zero
+    let (_, handshake_error) = sp.encode_handshake(handshake_bytes[..], .Pair)
+    if handshake_error != ok { os.exit(160i32) }
+    handshake_bytes[6usize] = 1u8
+    let (_, suffix_error_a) = sp.decode_handshake(handshake_bytes[..])
+    if suffix_error_a != sp.Malformed { os.exit(161i32) }
+    handshake_bytes[6usize] = 0u8
+    handshake_bytes[7usize] = 1u8
+    let (_, suffix_error_b) = sp.decode_handshake(handshake_bytes[..])
+    if suffix_error_b != sp.Malformed { os.exit(162i32) }
+    var frame: [16]u8 = zero
+    let (invalid_id_size, invalid_id_error) = sp.encode_message(frame[..], true, 1u32, frame[0usize..0usize])
+    if invalid_id_size != 0usize || invalid_id_error != sp.NoId { os.exit(170i32) }
+    let (valid_id_size, valid_id_error) = sp.encode_message(frame[..], true, 2147483648u32, frame[0usize..0usize])
+    if valid_id_error != ok || valid_id_size != 12usize { os.exit(171i32) }
+    let (valid_body, valid_used, valid_decode_error) = sp.decode_message(frame[0usize..valid_id_size])
+    if valid_decode_error != ok || valid_used != valid_id_size { os.exit(172i32) }
+    let (_, _, valid_split_error) = sp.split_id(valid_body)
+    if valid_split_error != ok { os.exit(173i32) }
+    let (max_body, max_error) = sp.message_body_length(true, 2147483648u32, 1073741820usize)
+    if max_error != ok || max_body != 1073741824usize { os.exit(174i32) }
+    let (over_body, over_error) = sp.message_body_length(true, 2147483648u32, 1073741821usize)
+    if over_body != 0usize || over_error != sp.TooLarge { os.exit(175i32) }
     try io.print("net sp ok")
     ret ok
 }

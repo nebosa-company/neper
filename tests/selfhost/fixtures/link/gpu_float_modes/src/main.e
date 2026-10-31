@@ -14,6 +14,7 @@ use e.io
 use e.math
 use e.mem
 use e.os
+use x.khronos.compute
 
 const N: usize = 16usize
 
@@ -319,17 +320,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fill(ta, tx, ty, td)
     if bits(unfused(ta[0usize], tx[0usize], ty[0usize])) == bits(math.fma[f32](ta[0usize], tx[0usize], ty[0usize])) { os.exit(1i32) }
     try check_device(a, .Cpu, 0u32, 10i32)
-    let (found, found_error) = gpu.devices(a, .Vulkan, 16usize)
-    if found_error == ok {
-        var at = 0usize
-        var ran = 0usize
-        while at < found.len {
-            if found[at].supported {
-                try check_device(a, .Vulkan, u32(at), 10i32)
-                ran += 1usize
+    // (D5946) Every Vulkan device, and every OpenGL one when built with `--gpu glsl`.
+    compute.install()
+    var ran = 0usize
+    var any = false
+    for backend in [_]gpu.Backend{ .Vulkan, .Gl } {
+        let (found, found_error) = gpu.devices(a, backend, 16usize)
+        if found_error == ok {
+            any = true
+            var at = 0usize
+            while at < found.len {
+                if found[at].supported {
+                    try check_device(a, backend, u32(at), 10i32)
+                    ran += 1usize
+                }
+                at += 1usize
             }
-            at += 1usize
         }
+    }
+    if any {
         try io.printf["gpu float modes ok on cpu and {} devices\n"](ran)
         ret ok
     }

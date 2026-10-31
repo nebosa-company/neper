@@ -10,13 +10,14 @@
 use e.io
 use e.mem
 use e.str
+use e.text.utf8
 
 type Attribute = struct { name: str, value: str }
 type Event = union enum u8 { Start: StartElement, End: str, Text: str, Comment: str, Processing: Processing }
 type StartElement = struct { name: str, attributes: []const Attribute, empty: bool }
 type Processing = struct { target: str, data: str }
 type Reader = struct { state: *void }
-type Writer = struct { sink: io.Writer, depth: u16 }
+type Writer = struct { sink: io.Writer, depth: u16, open_names: [256]str }
 type Options = struct { max_depth: u16, preserve_comments: bool }
 error Invalid
 error TooDeep
@@ -24,9 +25,12 @@ error Unsupported
 error TooLarge
 
 const DEFAULT_MAX_BYTES: usize = 16777216usize
+const DEFAULT_MAX_DEPTH: u16 = 256u16
+const MAX_ATTRIBUTES_PER_ELEMENT: usize = 64usize
+const MAX_WRITER_DEPTH: usize = 256usize
 
 // Open element names are kept on a stack of at most `max_depth` entries.
-type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool }
+type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool, xml_decl_allowed: bool }
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err) {
     let (contents, read_error) = slurp_with_limit(a, source, DEFAULT_MAX_BYTES)
@@ -62,15 +66,91 @@ fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: 
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
 
-fn is_name_byte(c: u8) -> bool {
-    ret str.is_ascii_alnum(c) || c == 95u8 || c == 45u8 || c == 46u8 || c == 58u8 || c >= 128u8
+// XML 1.0 (5th edition) Char. The broader ranges deliberately include the
+// discouraged characters, which XML permits but recommends avoiding.
+fn is_xml_char(scalar: u32) -> bool {
+    if scalar == 9u32 || scalar == 10u32 || scalar == 13u32 { ret true }
+    if scalar >= 32u32 && scalar <= 55295u32 { ret true }
+    if scalar >= 57344u32 && scalar <= 65533u32 { ret true }
+    ret scalar >= 65536u32 && scalar <= 1114111u32
+}
+
+// XML is encoded as UTF-8 here, so reject malformed UTF-8 and disallowed XML
+// characters before any parser path can borrow raw input as an event value.
+fn valid_xml_characters(source: []const u8) -> bool {
+    var at = 0usize
+    while at < source.len {
+        let (decoded, decode_error) = utf8.decode(source, at)
+        if decode_error != ok || !is_xml_char(decoded.scalar) { ret false }
+        at += usize(decoded.width)
+    }
+    ret true
+}
+
+// XML processors normalize CRLF and lone CR before parsing any markup or data.
+fn normalize_line_ends(a: *mem.Arena, source: []const u8) -> ([]const u8, err) {
+    var scan = 0usize
+    var has_cr = false
+    while scan < source.len {
+        if source[scan] == 13u8 {
+            has_cr = true
+            break
+        }
+        scan += 1usize
+    }
+    if !has_cr { ret (source, ok) }
+    let (out, out_error) = mem.alloc[u8](a, source.len)
+    if out_error != ok { ret (zero, out_error) }
+    var at = 0usize
+    var used = 0usize
+    while at < source.len {
+        if source[at] == 13u8 {
+            out[used] = 10u8
+            used += 1usize
+            at += 1usize
+            if at < source.len && source[at] == 10u8 { at += 1usize }
+        } else {
+            out[used] = source[at]
+            used += 1usize
+            at += 1usize
+        }
+    }
+    ret (out[..used], ok)
+}
+
+// XML 1.0 (5th edition) NameStartChar and NameChar.
+fn is_name_start(scalar: u32) -> bool {
+    if scalar == 58u32 || (scalar >= 65u32 && scalar <= 90u32) || scalar == 95u32 || (scalar >= 97u32 && scalar <= 122u32) { ret true }
+    if (scalar >= 192u32 && scalar <= 214u32) || (scalar >= 216u32 && scalar <= 246u32) || (scalar >= 248u32 && scalar <= 767u32) { ret true }
+    if (scalar >= 880u32 && scalar <= 893u32) || (scalar >= 895u32 && scalar <= 8191u32) || scalar == 8204u32 || scalar == 8205u32 { ret true }
+    if (scalar >= 8304u32 && scalar <= 8591u32) || (scalar >= 11264u32 && scalar <= 12271u32) || (scalar >= 12289u32 && scalar <= 55295u32) { ret true }
+    if (scalar >= 63744u32 && scalar <= 64975u32) || (scalar >= 65008u32 && scalar <= 65533u32) { ret true }
+    ret scalar >= 65536u32 && scalar <= 983039u32
+}
+
+fn is_name_char(scalar: u32) -> bool {
+    if is_name_start(scalar) || scalar == 45u32 || scalar == 46u32 || (scalar >= 48u32 && scalar <= 57u32) || scalar == 183u32 { ret true }
+    ret (scalar >= 768u32 && scalar <= 879u32) || scalar == 8255u32 || scalar == 8256u32
 }
 
 fn name_end(source: []const u8, at: usize) -> usize {
     var stop = at
-    while stop < source.len && is_name_byte(source[stop]) { stop += 1usize }
+    var first = true
+    while stop < source.len {
+        let (decoded, decode_error) = utf8.decode(source, stop)
+        if decode_error != ok { break }
+        if first {
+            if !is_name_start(decoded.scalar) { break }
+        } else if !is_name_char(decoded.scalar) {
+            break
+        }
+        first = false
+        stop += usize(decoded.width)
+    }
     ret stop
 }
+
+fn is_name(name: str) -> bool { ret name.len > 0usize && name_end(name, 0usize) == name.len }
 
 fn skip_space(source: []const u8, at: usize) -> usize {
     var stop = at
@@ -103,18 +183,32 @@ fn push_scalar(out: []u8, at: usize, scalar: u32) -> usize {
 }
 
 // Decodes the references in `raw`; borrowed back when it holds none.
-fn decode(a: *mem.Arena, raw: []const u8) -> (str, err) {
-    let (amp, has_amp) = str.find(raw, "&")
-    if !has_amp { ret (raw, ok) }
+fn decode(a: *mem.Arena, raw: []const u8, in_attribute: bool) -> (str, err) {
+    var scan = 0usize
+    var needs_copy = false
+    while scan < raw.len {
+        let c = raw[scan]
+        if c == 38u8 || (in_attribute && (c == 9u8 || c == 10u8 || c == 13u8)) || (!in_attribute && c == 13u8) {
+            needs_copy = true
+            break
+        }
+        scan += 1usize
+    }
+    if !needs_copy { ret (raw, ok) }
     let (out, out_error) = mem.alloc[u8](a, raw.len)
     if out_error != ok { ret ("", out_error) }
     var at = 0usize
     var used = 0usize
     while at < raw.len {
         if raw[at] != 38u8 {
-            out[used] = raw[at]
+            let c = raw[at]
+            var normalized = c
+            if in_attribute && (c == 9u8 || c == 10u8 || c == 13u8) { normalized = 32u8 }
+            if !in_attribute && c == 13u8 { normalized = 10u8 }
+            out[used] = normalized
             used += 1usize
             at += 1usize
+            if c == 13u8 && at < raw.len && raw[at] == 10u8 { at += 1usize }
             continue
         }
         let (semi, has_semi) = str.find_from(raw, ";", at)
@@ -152,7 +246,8 @@ fn decode(a: *mem.Arena, raw: []const u8) -> (str, err) {
                 scalar = dec
                 parse_error = dec_error
             }
-            if parse_error != ok || scalar > 1114111u64 || scalar == 0u64 || (scalar >= 55296u64 && scalar <= 57343u64) { ret ("", Invalid) }
+            if parse_error != ok || scalar > 1114111u64 { ret ("", Invalid) }
+            if !is_xml_char(u32(scalar)) { ret ("", Invalid) }
             used = push_scalar(out, used, u32(scalar))
         } else {
             ret ("", Unsupported)
@@ -165,6 +260,77 @@ fn decode(a: *mem.Arena, raw: []const u8) -> (str, err) {
         at = semi + 1usize
     }
     ret (out[..used], ok)
+}
+
+fn is_xml_target(name: str) -> bool {
+    if name.len != 3usize { ret false }
+    let first = name[0]
+    let second = name[1]
+    let third = name[2]
+    ret (first == 88u8 || first == 120u8) && (second == 77u8 || second == 109u8) && (third == 76u8 || third == 108u8)
+}
+
+fn is_ascii_letter(c: u8) -> bool {
+    ret (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+}
+
+fn is_encoding_name(value: str) -> bool {
+    if value.len == 0usize || !is_ascii_letter(value[0]) { ret false }
+    var at = 1usize
+    while at < value.len {
+        let c = value[at]
+        if !is_ascii_letter(c) && !(c >= 48u8 && c <= 57u8) && c != 46u8 && c != 95u8 && c != 45u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Reads one XML declaration pseudo-attribute at the given position.
+fn xml_decl_field(source: []const u8, at: usize, close: usize, name: str, kind: u8) -> (usize, bool) {
+    if at + name.len > close || !str.eq(source[at..at + name.len], name) { ret (at, false) }
+    var eq = skip_space(source, at + name.len)
+    if eq >= close || source[eq] != 61u8 { ret (at, false) }
+    eq = skip_space(source, eq + 1usize)
+    if eq >= close || (source[eq] != 34u8 && source[eq] != 39u8) { ret (at, false) }
+    let quote = source[eq]
+    var value_end = eq + 1usize
+    while value_end < close && source[value_end] != quote { value_end += 1usize }
+    if value_end >= close { ret (at, false) }
+    let value = source[eq + 1usize..value_end]
+    if kind == 0u8 && !str.eq(value, "1.0") { ret (at, false) }
+    if kind == 1u8 && !is_encoding_name(value) { ret (at, false) }
+    if kind == 2u8 && !str.eq(value, "yes") && !str.eq(value, "no") { ret (at, false) }
+    ret (value_end + 1usize, true)
+}
+
+// XML 1.0 declaration order and values: version, optional encoding, optional standalone.
+fn valid_xml_declaration(source: []const u8, target_end: usize, close: usize) -> bool {
+    var at = skip_space(source, target_end)
+    if at == target_end { ret false }
+    let (after_version, version_ok) = xml_decl_field(source, at, close, "version", 0u8)
+    if !version_ok { ret false }
+    at = skip_space(source, after_version)
+    if at == close { ret true }
+    if at == after_version { ret false }
+    var after_field = after_version
+    if str.starts_with(source[at..close], "encoding") {
+        let (next, field_ok) = xml_decl_field(source, at, close, "encoding", 1u8)
+        if !field_ok { ret false }
+        after_field = next
+    } else if str.starts_with(source[at..close], "standalone") {
+        let (next, field_ok) = xml_decl_field(source, at, close, "standalone", 2u8)
+        if !field_ok { ret false }
+        after_field = next
+    } else {
+        ret false
+    }
+    at = skip_space(source, after_field)
+    if at == close { ret true }
+    if at == after_field { ret false }
+    if !str.starts_with(source[at..close], "standalone") { ret false }
+    let (last, standalone_ok) = xml_decl_field(source, at, close, "standalone", 2u8)
+    if !standalone_ok { ret false }
+    ret skip_space(source, last) == close
 }
 
 fn reader_next_err(r: *Reader) -> (Event, bool, err) {
@@ -187,11 +353,13 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             if has_lt { stop = lt }
             let raw = source[s.at..stop]
             s.at = stop
+            s.xml_decl_allowed = false
             if s.depth == 0usize {
                 if str.trim(raw).len != 0usize { ret (zero, false, Invalid) }
                 continue
             }
-            let (decoded, decode_error) = decode(s.a, raw)
+            if str.contains(raw, "]]>") { ret (zero, false, Invalid) }
+            let (decoded, decode_error) = decode(s.a, raw, false)
             if decode_error != ok { ret (zero, false, decode_error) }
             ret (Event{ Text: decoded }, true, ok)
         }
@@ -199,8 +367,14 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             let (close, has_close) = str.find_from(source, "-->", s.at + 4usize)
             if !has_close { ret (zero, false, Invalid) }
             let body = source[s.at + 4usize..close]
+            if str.contains(body, "--") || (body.len > 0usize && body[body.len - 1usize] == 45u8) { ret (zero, false, Invalid) }
+            s.xml_decl_allowed = false
             s.at = close + 3usize
-            if s.options.preserve_comments { ret (Event{ Comment: body }, true, ok) }
+            if s.options.preserve_comments {
+                let (normalized_body, normalize_error) = normalize_line_ends(s.a, body)
+                if normalize_error != ok { ret (zero, false, normalize_error) }
+                ret (Event{ Comment: normalized_body }, true, ok)
+            }
             continue
         }
         if str.starts_with(source[s.at..], "<![CDATA[") {
@@ -208,8 +382,11 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             let (close, has_close) = str.find_from(source, "]]>", s.at + 9usize)
             if !has_close { ret (zero, false, Invalid) }
             let body = source[s.at + 9usize..close]
+            s.xml_decl_allowed = false
             s.at = close + 3usize
-            ret (Event{ Text: body }, true, ok)
+            let (normalized_body, normalize_error) = normalize_line_ends(s.a, body)
+            if normalize_error != ok { ret (zero, false, normalize_error) }
+            ret (Event{ Text: normalized_body }, true, ok)
         }
         if str.starts_with(source[s.at..], "<!") { ret (zero, false, Unsupported) }
         if str.starts_with(source[s.at..], "<?") {
@@ -218,9 +395,19 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             let target_end = name_end(source, s.at + 2usize)
             if target_end == s.at + 2usize { ret (zero, false, Invalid) }
             let target_name = source[s.at + 2usize..target_end]
-            let data = str.trim(source[target_end..close])
+            if is_xml_target(target_name) {
+                if !str.eq(target_name, "xml") || !s.xml_decl_allowed || s.started || s.depth != 0usize { ret (zero, false, Invalid) }
+                if !valid_xml_declaration(source, target_end, close) { ret (zero, false, Invalid) }
+                s.xml_decl_allowed = false
+                s.at = close + 2usize
+                continue
+            }
+            if target_end < close && !is_space(source[target_end]) { ret (zero, false, Invalid) }
+            let (normalized_data, normalize_error) = normalize_line_ends(s.a, source[target_end..close])
+            if normalize_error != ok { ret (zero, false, normalize_error) }
+            let data = str.trim(normalized_data)
+            s.xml_decl_allowed = false
             s.at = close + 2usize
-            if str.eq(target_name, "xml") { continue }
             ret (Event{ Processing: Processing { target: target_name, data: data } }, true, ok)
         }
         if str.starts_with(source[s.at..], "</") {
@@ -256,6 +443,7 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             var value_end = eq + 1usize
             while value_end < source.len && source[value_end] != quote && source[value_end] != 60u8 { value_end += 1usize }
             if value_end >= source.len || source[value_end] != quote { ret (zero, false, Invalid) }
+            if count >= MAX_ATTRIBUTES_PER_ELEMENT { ret (zero, false, TooLarge) }
             count += 1usize
             probe = value_end + 1usize
         }
@@ -270,7 +458,7 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             let quote = source[eq]
             var value_end = eq + 1usize
             while source[value_end] != quote { value_end += 1usize }
-            let (value, value_error) = decode(s.a, source[eq + 1usize..value_end])
+            let (value, value_error) = decode(s.a, source[eq + 1usize..value_end], true)
             if value_error != ok { ret (zero, false, value_error) }
             attributes[index].name = source[at..attribute_end]
             attributes[index].value = value
@@ -291,6 +479,7 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
         }
         s.at = at + 1usize
         s.started = true
+        s.xml_decl_allowed = false
         if empty {
             s.pending_end = name
             s.has_pending = true
@@ -304,10 +493,11 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
 }
 
 fn writer(sink: io.Writer) -> Writer {
-    ret Writer { sink: sink, depth: 0u16 }
+    ret Writer { sink: sink, depth: 0u16, open_names: zero }
 }
 
 fn write_escaped(sink: *io.Writer, value: str, in_attribute: bool) -> err {
+    if !valid_xml_characters(value) { ret Invalid }
     var at = 0usize
     var from = 0usize
     while at < value.len {
@@ -317,6 +507,9 @@ fn write_escaped(sink: *io.Writer, value: str, in_attribute: bool) -> err {
         if c == 62u8 { replacement = "&gt;" }
         if c == 38u8 { replacement = "&amp;" }
         if in_attribute && c == 34u8 { replacement = "&quot;" }
+        if in_attribute && c == 9u8 { replacement = "&#9;" }
+        if in_attribute && c == 10u8 { replacement = "&#10;" }
+        if c == 13u8 { replacement = "&#13;" }
         if replacement.len > 0usize {
             try io.write_all(sink, value[from..at])
             try io.write_all(sink, replacement)
@@ -328,10 +521,17 @@ fn write_escaped(sink: *io.Writer, value: str, in_attribute: bool) -> err {
 }
 
 fn start(w: *Writer, name: str, attributes: []const Attribute) -> err {
-    if name.len == 0usize { ret Invalid }
+    if !is_name(name) { ret Invalid }
+    if usize(w.depth) >= MAX_WRITER_DEPTH { ret TooDeep }
+    var i = 0usize
+    while i < attributes.len {
+        if !is_name(attributes[i].name) || !valid_xml_characters(attributes[i].value) { ret Invalid }
+        i += 1usize
+    }
+    if attributes.len > MAX_ATTRIBUTES_PER_ELEMENT { ret TooLarge }
     try io.write_all(&w.sink, "<")
     try io.write_all(&w.sink, name)
-    var i = 0usize
+    i = 0usize
     while i < attributes.len {
         try io.write_all(&w.sink, " ")
         try io.write_all(&w.sink, attributes[i].name)
@@ -341,7 +541,7 @@ fn start(w: *Writer, name: str, attributes: []const Attribute) -> err {
         i += 1usize
     }
     try io.write_all(&w.sink, ">")
-    if w.depth == 65535u16 { ret TooDeep }
+    w.open_names[usize(w.depth)] = name
     w.depth += 1u16
     ret ok
 }
@@ -351,14 +551,15 @@ fn text(w: *Writer, value: str) -> err {
 }
 
 fn comment(w: *Writer, value: str) -> err {
-    if str.contains(value, "--") { ret Invalid }
+    if !valid_xml_characters(value) || str.contains(value, "--") || (value.len > 0usize && value[value.len - 1usize] == 45u8) { ret Invalid }
     try io.write_all(&w.sink, "<!--")
     try io.write_all(&w.sink, value)
     ret io.write_all(&w.sink, "-->")
 }
 
 fn end(w: *Writer, name: str) -> err {
-    if w.depth == 0u16 { ret Invalid }
+    if w.depth == 0u16 || !is_name(name) { ret Invalid }
+    if !str.eq(w.open_names[usize(w.depth - 1u16)], name) { ret Invalid }
     try io.write_all(&w.sink, "</")
     try io.write_all(&w.sink, name)
     try io.write_all(&w.sink, ">")
@@ -378,20 +579,25 @@ type Document = struct { nodes: []const Node, root: NodeId }
 
 // A pull reader straight over `source`, no `io.Reader` in between.
 fn stream(a: *mem.Arena, source: []const u8, options: Options) -> (Reader, err) {
+    if !valid_xml_characters(source) { ret (zero, Invalid) }
+    var effective_options = options
+    if effective_options.max_depth == 0u16 { effective_options.max_depth = DEFAULT_MAX_DEPTH }
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
-    let (stack, stack_error) = mem.alloc[str](a, usize(options.max_depth) + 1usize)
+    let (stack, stack_error) = mem.alloc[str](a, usize(effective_options.max_depth) + 1usize)
     if stack_error != ok { ret (zero, stack_error) }
     let s = &storage[0]
     s.a = a
     s.source = source
     s.at = 0usize
-    s.options = options
+    if source.len >= 3usize && source[0] == 239u8 && source[1] == 187u8 && source[2] == 191u8 { s.at = 3usize }
+    s.options = effective_options
     s.stack = stack
     s.depth = 0usize
     s.has_pending = false
     s.started = false
     s.finished = false
+    s.xml_decl_allowed = true
     var r: Reader = zero
     r.state = mem.cast[*void](s)
     ret (r, ok)
@@ -494,9 +700,13 @@ fn namespaces_push(ns: *Namespaces, attributes: []const Attribute) -> err {
             if attributes[i].value.len == 0usize || str.eq(prefix, "xmlns") { ret Invalid }
         }
         if declares {
+            let uri = attributes[i].value
+            if str.eq(prefix, "xml") && !str.eq(uri, "http://www.w3.org/XML/1998/namespace") { ret Invalid }
+            if !str.eq(prefix, "xml") && str.eq(uri, "http://www.w3.org/XML/1998/namespace") { ret Invalid }
+            if str.eq(uri, "http://www.w3.org/2000/xmlns/") { ret Invalid }
             if ns.count >= ns.prefixes.len { ret TooDeep }
             ns.prefixes[ns.count] = prefix
-            ns.uris[ns.count] = attributes[i].value
+            ns.uris[ns.count] = uri
             ns.count += 1usize
         }
         i += 1usize

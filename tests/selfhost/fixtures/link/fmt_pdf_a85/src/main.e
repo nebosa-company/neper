@@ -22,5 +22,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (p4, e4) = pdf.pages(a, spaced[0..])
     if e4 != ok || p4.len != 1usize { os.exit(6) }
     if !str.contains(p4[0], "Hello ASCII85 world") { os.exit(7) }
+    // Four zero groups need sixteen decoded bytes, not the four encoded bytes.
+    let zero_groups = [4]u8{ 122u8, 122u8, 122u8, 122u8 }
+    let (zero_decoded, zero_error) = pdf.ascii85(a, zero_groups[0..])
+    if zero_error != ok || zero_decoded.len != 16usize { os.exit(8) }
+    // Five high ASCII85 digits would exceed a 32-bit group and must not wrap.
+    let overflowing_group = [5]u8{ 117u8, 117u8, 117u8, 117u8, 117u8 }
+    let (_, overflowing_error) = pdf.ascii85(a, overflowing_group[0..])
+    if overflowing_error != pdf.InvalidAscii85 { os.exit(9) }
     ret ok
 }

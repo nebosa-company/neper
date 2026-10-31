@@ -9,6 +9,18 @@ use e.algo.graph as algo
 
 fn weight_of(ctx: *u8, e: graph.Edge[f64]) -> f64 { ret e.value }
 
+type FixedWeight = struct { value: f64 }
+
+fn fixed_weight(ctx: *FixedWeight, e: graph.Edge[f64]) -> f64 { ret ctx.value }
+
+fn rejects_non_finite(a: *mem.Arena, g: *const graph.Graph[f64], supplied: f64) -> bool {
+    var fixed = FixedWeight { value: supplied }
+    let (_, bellman_error) = algo.bellman_ford[f64, FixedWeight](a, g, 0u32, &fixed, fixed_weight)
+    let (_, floyd_error) = algo.floyd_warshall[f64, FixedWeight](a, g, &fixed, fixed_weight)
+    let (_, johnson_error) = algo.johnson[f64, FixedWeight](a, g, &fixed, fixed_weight)
+    ret bellman_error == algo.InvalidWeight && floyd_error == algo.InvalidWeight && johnson_error == algo.InvalidWeight
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (b0, _) = graph.builder[f64](a, 0usize, 8usize)
     var b = b0
@@ -46,6 +58,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (bad, _) = graph.finish[f64](a, &b)
     let (_, bad_weight) = algo.dijkstra[f64, u8](a, &bad, 0u32, &ctx, weight_of)
     if bad_weight != algo.InvalidWeight { os.exit(13) }
+
+    // A connected finite edge remains a path; NaN and both infinities must not silently
+    // become unreachable edges in Bellman-Ford, Floyd-Warshall, or Johnson.
+    let (small0, small_error) = graph.builder[f64](a, 2usize, 1usize)
+    if small_error != ok { os.exit(14) }
+    var small = small0
+    if graph.add_directed[f64](&small, 0u32, 1u32, 1.0f64) != ok { os.exit(14) }
+    let (connected, connected_error) = graph.finish[f64](a, &small)
+    if connected_error != ok { os.exit(14) }
+    var fixed = FixedWeight { value: 7.0f64 }
+    let (bellman, bellman_error) = algo.bellman_ford[f64, FixedWeight](a, &connected, 0u32, &fixed, fixed_weight)
+    let (floyd, floyd_error) = algo.floyd_warshall[f64, FixedWeight](a, &connected, &fixed, fixed_weight)
+    let (johnson, johnson_error) = algo.johnson[f64, FixedWeight](a, &connected, &fixed, fixed_weight)
+    if bellman_error != ok || floyd_error != ok || johnson_error != ok || bellman.distance[1usize] != 7.0f64 || floyd[1usize] != 7.0f64 || johnson[1usize] != 7.0f64 { os.exit(14) }
+    let nan_weight = mem.bitcast[f64](9221120237041090560u64)
+    let positive_infinity = mem.bitcast[f64](9218868437227405312u64)
+    let negative_infinity = 0.0f64 - positive_infinity
+    if !rejects_non_finite(a, &connected, nan_weight) { os.exit(15) }
+    if !rejects_non_finite(a, &connected, positive_infinity) { os.exit(16) }
+    if !rejects_non_finite(a, &connected, negative_infinity) { os.exit(17) }
     os.exit(0)
     ret ok
 }

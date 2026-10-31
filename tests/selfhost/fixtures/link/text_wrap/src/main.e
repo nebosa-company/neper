@@ -50,6 +50,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let long = "word longerthanwidth ok"
     let (o3, o3_error) = wrap.optimal(long, 6usize, lines[..], scratch[..])
     if o3_error != ok || o3 != 3usize || !same(line(long, lines[..], 1usize), "longerthanwidth") { os.exit(2i32) }
+    // A valid maximum width makes the first non-final slack unrepresentable.
+    let (o_max, o_max_error) = wrap.optimal("a b", 0usize -% 1usize, lines[..], scratch[..])
+    if o_max_error != ok || o_max != 1usize || !same(line("a b", lines[..], 0usize), "a b") { os.exit(2i32) }
     let (_, o_room) = wrap.optimal(fox, 10usize, lines[..], scratch[..20usize])
     if o_room != wrap.TooSmall { os.exit(2i32) }
     let (_, o_lines) = wrap.optimal(fox, 10usize, lines[..6usize], scratch[..])

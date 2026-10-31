@@ -1,6 +1,6 @@
 // The SQL contract: a connection, statement, row reader and transaction are each a
 // driver context and the driver's function table, and every call here dispatches to
-// the table. A handle whose context is `nil` -- after its close, commit or rollback --
+// the table. A handle whose context is `nil` -- after a successful close, commit or rollback --
 // answers `Closed` without reaching the driver. A handle a driver hands back carries
 // only its context; the table is filled in here from the handle it came from.
 // Nothing is discovered or pooled; a driver package fills the table and hands out
@@ -25,7 +25,7 @@ error Unsupported
 fn close(connection: *Connection) -> err {
     if connection.ctx == nil { ret Closed }
     let close_error = connection.driver.close(connection.ctx)
-    connection.ctx = nil
+    if close_error == ok { connection.ctx = nil }
     ret close_error
 }
 
@@ -54,7 +54,7 @@ fn query(connection: *Connection, sql: str, params: []const Parameter) -> (Rows,
 fn close_statement(statement: *Statement) -> err {
     if statement.ctx == nil { ret Closed }
     let close_error = statement.driver.statement_close(statement.ctx)
-    statement.ctx = nil
+    if close_error == ok { statement.ctx = nil }
     ret close_error
 }
 
@@ -96,7 +96,7 @@ fn reader_next_borrowed(rows: *Rows, dst: []Value) -> (bool, err) {
 fn close_rows(rows: *Rows) -> err {
     if rows.ctx == nil { ret Closed }
     let close_error = rows.driver.rows_close(rows.ctx)
-    rows.ctx = nil
+    if close_error == ok { rows.ctx = nil }
     ret close_error
 }
 
@@ -125,13 +125,13 @@ fn query_transaction(transaction: *Transaction, sql: str, params: []const Parame
 fn commit(transaction: *Transaction) -> err {
     if transaction.ctx == nil { ret Closed }
     let commit_error = transaction.driver.transaction_commit(transaction.ctx)
-    transaction.ctx = nil
+    if commit_error == ok { transaction.ctx = nil }
     ret commit_error
 }
 
 fn rollback(transaction: *Transaction) -> err {
     if transaction.ctx == nil { ret Closed }
     let rollback_error = transaction.driver.transaction_rollback(transaction.ctx)
-    transaction.ctx = nil
+    if rollback_error == ok { transaction.ctx = nil }
     ret rollback_error
 }

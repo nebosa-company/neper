@@ -304,20 +304,52 @@ fn scrypt_ro_mix(scratch: []u8, b: usize, v: usize, x: usize, y: usize, n: usize
     }
 }
 
-fn scrypt_scratch_required(n: usize, r: usize, p: usize) -> usize { ret 128usize * r * p + 128usize * r * n + 256usize * r }
+// A KDF scratch region is capped below four GiB. This keeps its offsets
+// representable on wasm32 and prevents impractical caller-controlled costs on hosts.
+fn scratch_maximum() -> usize {
+    ret 4294967295usize
+}
+
+// The exact scratch layout, or false when this target cannot represent it.
+fn scrypt_scratch_checked(n: usize, r: usize, p: usize) -> (usize, bool) {
+    if r == 0usize { ret (0usize, true) }
+    let maximum = scratch_maximum()
+    if r > maximum / 128usize { ret (0usize, false) }
+    let block = 128usize * r
+    if p > maximum / block || n > maximum / block { ret (0usize, false) }
+    let b_len = block * p
+    let v_len = block * n
+    if b_len > maximum - v_len { ret (0usize, false) }
+    let after_v = b_len + v_len
+    if after_v > maximum - block { ret (0usize, false) }
+    let after_x = after_v + block
+    if after_x > maximum - block { ret (0usize, false) }
+    ret (after_x + block, true)
+}
+
+// Bytes `scrypt` needs. An unrepresentable layout saturates at the KDF scratch
+// limit instead of wrapping to a buffer size that would be unsafe to use.
+fn scrypt_scratch_required(n: usize, r: usize, p: usize) -> usize {
+    let (needed, valid) = scrypt_scratch_checked(n, r, p)
+    if !valid { ret scratch_maximum() }
+    ret needed
+}
 
 // `n` is a power of two above 1; `scratch` holds at least `scrypt_scratch_required`.
 fn scrypt(password: []const u8, salt: []const u8, n: usize, r: usize, p: usize, out: []u8, scratch: []u8) -> err {
     if n < 2usize || (n & (n - 1usize)) != 0usize || r == 0usize || p == 0usize { ret Invalid }
-    if scratch.len < scrypt_scratch_required(n, r, p) { ret TooSmall }
-    let b_len = 128usize * r * p
+    let (needed, layout_valid) = scrypt_scratch_checked(n, r, p)
+    if !layout_valid { ret TooLarge }
+    if scratch.len < needed { ret TooSmall }
+    let block = 128usize * r
+    let b_len = block * p
     let v = b_len
-    let x = v + 128usize * r * n
-    let y = x + 128usize * r
+    let x = v + block * n
+    let y = x + block
     if pbkdf2_sha256(password, salt, 1u32, scratch[..b_len]) != ok { ret Invalid }
     var lane = 0usize
     while lane < p {
-        scrypt_ro_mix(scratch, lane * 128usize * r, v, x, y, n, r)
+        scrypt_ro_mix(scratch, lane * block, v, x, y, n, r)
         lane += 1usize
     }
     ret pbkdf2_sha256(password, scratch[..b_len], 1u32, out)
@@ -584,7 +616,19 @@ fn bcrypt_verify(password: []const u8, hash_text: []const u8) -> bool {
 // words; the compression G works on two 128-word arrays so the address blocks of the
 // data-independent slices never touch `memory`.
 
-fn argon2_memory_required(m_kib: u32) -> usize { ret usize(m_kib) * 1024usize }
+fn argon2_memory_checked(m_kib: u32) -> (usize, bool) {
+    let maximum = scratch_maximum()
+    if usize(m_kib) > maximum / 1024usize { ret (0usize, false) }
+    ret (usize(m_kib) * 1024usize, true)
+}
+
+// Bytes Argon2 needs. An unrepresentable byte count saturates at the KDF scratch
+// limit instead of wrapping, so callers cannot accidentally allocate a tiny buffer.
+fn argon2_memory_required(m_kib: u32) -> usize {
+    let (needed, valid) = argon2_memory_checked(m_kib)
+    if !valid { ret scratch_maximum() }
+    ret needed
+}
 
 fn argon2_gb(v: []u64, a: usize, b: usize, c: usize, d: usize) {
     v[a] = v[a] +% v[b] +% 2u64 *% (v[a] & 4294967295u64) *% (v[b] & 4294967295u64)
@@ -763,7 +807,9 @@ fn argon2_type_word(kind: Argon2Kind) -> u32 {
 fn argon2_run(kind: Argon2Kind, version: u32, password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err {
     if version != 16u32 && version != 19u32 { ret Invalid }
     if t == 0u32 || p == 0u32 || p > 16777215u32 || m_kib < 8u32 * p || out.len < 4usize || salt.len < 8usize { ret Invalid }
-    if memory.len < argon2_memory_required(m_kib) { ret TooSmall }
+    let (required_memory, memory_valid) = argon2_memory_checked(m_kib)
+    if !memory_valid { ret TooLarge }
+    if memory.len < required_memory { ret TooSmall }
     let none: [0]u8 = zero
     var h = hash.blake2b_init(64usize, none[0..])
     argon2_update_le32(&h, p)
@@ -1169,7 +1215,7 @@ fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool,
     let (after_dollar, dollar_ok) = phc_expect(phc, after_p_number, "$")
     if !dollar_ok { ret (false, Invalid) }
     if ln == 0u32 || r == 0u32 || p == 0u32 { ret (false, Invalid) }
-    if ln > 32u32 || r > 1024u32 || p > 1024u32 { ret (false, TooLarge) }
+    if ln >= 32u32 || r > 1024u32 || p > 1024u32 { ret (false, TooLarge) }
     let salt_end = phc_segment_end(phc, after_dollar)
     if salt_end >= phc.len { ret (false, Invalid) }
     if salt_end - after_dollar > 86usize { ret (false, TooLarge) }

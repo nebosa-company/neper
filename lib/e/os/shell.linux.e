@@ -23,7 +23,7 @@ error Cancelled
 type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss, Overflow }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
 // pixels, bytes under a MIME name the other side registers the same way, or a
@@ -47,7 +47,7 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 // host answers for background work; the lifecycle events a session sends.
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable, NotDetermined }
-type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume, Overflow }
 // A printer opened for a job, the page a printer draws in device pixels, a
 // page setup in hundredths of a millimetre, and a job in progress.
 type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
@@ -530,12 +530,14 @@ fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
     if args.len < 2usize { ret activation }
     let first = args[1usize]
     if first.len == 0usize { ret activation }
+    let first_letter = (first[0usize] >= 97u8 && first[0usize] <= 122u8) || (first[0usize] >= 65u8 && first[0usize] <= 90u8)
+    if !first_letter { ret activation }
     var at = 0usize
     var scheme = false
     while at < first.len {
         let c = first[at]
         if c == 58u8 {
-            scheme = at > 1usize && at + 1usize < first.len
+            scheme = at > 0usize && at + 1usize < first.len
             break
         }
         let letter = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 45u8 || c == 46u8
@@ -613,6 +615,56 @@ fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
     ret (path, path_error)
 }
 
+// Quote one executable path for an Exec string. The Desktop Entry string parser
+// runs before its command-line parser: a command-line backslash therefore takes
+// four backslashes in the file, while quote, dollar and backtick take two before
+// the character. `%%` keeps a literal percent from becoming a field code.
+fn desktop_exec(a: *mem.Arena, exe: str) -> (str, err) {
+    let (out, allocation_error) = mem.alloc[u8](a, exe.len * 4usize + 2usize)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var at = 0usize
+    out[at] = 34u8
+    at += 1usize
+    var i = 0usize
+    while i < exe.len {
+        let c = exe[i]
+        if c == 92u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = 92u8
+            out[at + 3usize] = 92u8
+            at += 4usize
+        } else if c == 34u8 || c == 36u8 || c == 96u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = c
+            at += 3usize
+        } else if c == 37u8 {
+            out[at] = 37u8
+            out[at + 1usize] = 37u8
+            at += 2usize
+        } else if c == 10u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 110u8
+            at += 2usize
+        } else if c == 9u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 116u8
+            at += 2usize
+        } else if c == 13u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 114u8
+            at += 2usize
+        } else {
+            out[at] = c
+            at += 1usize
+        }
+        i += 1usize
+    }
+    out[at] = 34u8
+    ret (out[0usize..at + 1usize], ok)
+}
+
 fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     if !valid_name(id) { ret Invalid }
     let (path, path_error) = autostart_path(a, id)
@@ -624,10 +676,12 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     }
     let (exe, exe_error) = fs.executable_path(a)
     if exe_error != ok { ret exe_error }
+    let (exec, exec_error) = desktop_exec(a, exe)
+    if exec_error != ok { ret exec_error }
     try fs.make_dirs(a, parent_of(path))
     let (head, head_error) = join3(a, "[Desktop Entry]\nType=Application\nName=", id, "\nExec=")
     if head_error != ok { ret head_error }
-    let (content, content_error) = join3(a, head, exe, "\nX-GNOME-Autostart-enabled=true\n")
+    let (content, content_error) = join3(a, head, exec, "\nX-GNOME-Autostart-enabled=true\n")
     if content_error != ok { ret content_error }
     ret fs.write_file(a, path, content)
 }

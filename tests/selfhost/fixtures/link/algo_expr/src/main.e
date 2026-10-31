@@ -164,6 +164,12 @@ fn world_function(ctx: *void, a: *mem.Arena, name: str, args: []const expr.Value
             ret (none, expr.Type)
         }
     }
+    if text_is(name, "hit") {
+        if args.len != 0usize { ret (none, expr.Type) }
+        let count = mem.cast[*u32](ctx)
+        *count += 1u32
+        ret (expr.Value { Int: 0i64 }, ok)
+    }
     ret (none, expr.Denied)
 }
 
@@ -172,6 +178,12 @@ fn world_host() -> expr.Host {
     h.get = world_get
     h.call = world_call
     h.function = world_function
+    ret h
+}
+
+fn world_host_with_counter(counter: *u32) -> expr.Host {
+    var h = world_host()
+    h.ctx = mem.cast[*void](counter)
     ret h
 }
 
@@ -529,6 +541,61 @@ fn run_vectors() -> u8 {
     ret 0u8
 }
 
+// #1087: safe postfixes return before evaluating argument or index child nodes.
+fn run_null_safe_regression(a: *mem.Arena) -> u8 {
+    var values: [1]expr.Value = zero
+    values[0usize] = expr.Value { Int: 42i64 }
+    var none: expr.Value = .Null
+    var scope: [3]expr.Binding = zero
+    scope[0usize] = expr.Binding { name: "n", value: none }
+    scope[1usize] = expr.Binding { name: "items", value: expr.Value { List: values[0usize..1usize] } }
+    scope[2usize] = expr.Binding { name: "user", value: expr.Value { Object: 1u32 } }
+    var effects = 0u32
+    let host = world_host_with_counter(&effects)
+    let limits = expr.default_limits()
+
+    let (safe_method, safe_method_error) = expr.evaluate(a, "n?.ignored(hit())", scope[0usize..3usize], host, limits)
+    if safe_method_error != ok || effects != 0u32 { ret 1u8 }
+    var safe_method_null = false
+    switch safe_method {
+    case .Null:
+        safe_method_null = true
+    default:
+        safe_method_null = false
+    }
+    if !safe_method_null { ret 2u8 }
+
+    let (safe_index, safe_index_error) = expr.evaluate(a, "n?[hit()]", scope[0usize..3usize], host, limits)
+    if safe_index_error != ok || effects != 0u32 { ret 3u8 }
+    var safe_index_null = false
+    switch safe_index {
+    case .Null:
+        safe_index_null = true
+    default:
+        safe_index_null = false
+    }
+    if !safe_index_null { ret 4u8 }
+
+    let (normal_index, normal_index_error) = expr.evaluate(a, "items[hit()]", scope[0usize..3usize], host, limits)
+    if normal_index_error != ok || effects != 1u32 { ret 5u8 }
+    switch normal_index {
+    case .Int as v:
+        if v != 42i64 { ret 6u8 }
+    default:
+        ret 7u8
+    }
+
+    let (normal_method, normal_method_error) = expr.evaluate(a, "user.greet(hit())", scope[0usize..3usize], host, limits)
+    if normal_method_error != ok || effects != 2u32 { ret 8u8 }
+    switch normal_method {
+    case .Str as text:
+        if !text_is(text, "Hello, 0!") { ret 9u8 }
+    default:
+        ret 10u8
+    }
+    ret 0u8
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // compile once, run against two scopes
     var limits = expr.default_limits()
@@ -554,6 +621,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     default:
         os.exit(107i32)
     }
+    let null_safe = run_null_safe_regression(a)
+    if null_safe != 0u8 { os.exit(108i32 + i32(null_safe)) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
     try io.print("algo expr ok")

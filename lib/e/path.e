@@ -58,6 +58,17 @@ fn is_absolute(path: str, style: Style) -> bool {
     ret is_separator(path[root - 1usize], style)
 }
 
+fn is_drive_relative(path: str, style: Style) -> bool {
+    if style != .Windows || path.len < 2usize { ret false }
+    if !is_drive_letter(path[0usize]) || path[1usize] != 58u8 { ret false }
+    ret !is_absolute(path, style)
+}
+
+fn is_drive_root(path: str, style: Style) -> bool {
+    if style != .Windows || path.len != 2usize { ret false }
+    ret is_drive_letter(path[0usize]) && path[1usize] == 58u8
+}
+
 fn split(path: str, style: Style) -> Parts {
     let root = root_length(path, style)
     // Trailing separators are not part of the name: `a/b/` names `b`.
@@ -118,13 +129,14 @@ fn copy_into(destination: []u8, at: usize, text: str) -> usize {
     ret at + text.len
 }
 
-// An absolute part discards everything before it, which is what makes `join` usable for
-// resolving a possibly-absolute argument against a base.
+// An absolute part, or a Windows drive-relative part, discards everything before it,
+// which makes `join` usable for resolving an argument against a base without embedding
+// a later drive inside an earlier component.
 fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err) {
     var first = 0usize
     var at = 0usize
     while at < parts.len {
-        if is_absolute(parts[at], style) { first = at }
+        if is_absolute(parts[at], style) || is_drive_relative(parts[at], style) { first = at }
         at += 1usize
     }
     var total = 0usize
@@ -141,7 +153,7 @@ fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err) {
     while at < parts.len {
         let part = parts[at]
         if part.len != 0usize {
-            if written != 0usize && !is_separator(buffer[written - 1usize], style) {
+            if written != 0usize && !is_separator(buffer[written - 1usize], style) && !is_drive_root(buffer[0usize..written], style) {
                 buffer[written] = separator(style)
                 written += 1usize
             }
@@ -195,7 +207,7 @@ fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
                     continue
                 }
             }
-            if written > body_start || (root != 0usize && !absolute) {
+            if written > body_start {
                 buffer[written] = separator(style)
                 written += 1usize
             }
@@ -219,7 +231,7 @@ fn relative(a: *mem.Arena, base: str, target_path: str, style: Style) -> (str, e
     let from_root = root_length(from_text, style)
     let to_root = root_length(to_text, style)
     if from_root != to_root { ret ("", Invalid) }
-    if !same_text(from_text[0usize..from_root], to_text[0usize..to_root]) { ret ("", Invalid) }
+    if !same_path_text(from_text[0usize..from_root], to_text[0usize..to_root], style) { ret ("", Invalid) }
     // Skip the components the two share.
     var from_at = from_root
     var to_at = to_root
@@ -227,7 +239,7 @@ fn relative(a: *mem.Arena, base: str, target_path: str, style: Style) -> (str, e
         let (from_component, from_next) = next_component(from_text, from_at, style)
         let (to_component, to_next) = next_component(to_text, to_at, style)
         if from_component.len == 0usize || to_component.len == 0usize { break }
-        if !same_text(from_component, to_component) { break }
+        if !same_path_text(from_component, to_component, style) { break }
         from_at = from_next
         to_at = to_next
     }
@@ -301,6 +313,28 @@ fn same_text(left: str, right: str) -> bool {
     var at = 0usize
     while at < left.len {
         if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Windows path identity folds ASCII case and accepts either spelling of a
+// separator; Posix retains byte-exact component identity.
+fn same_path_text(left: str, right: str, style: Style) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        let a = left[at]
+        let b = right[at]
+        if style == .Windows {
+            if is_separator(a, style) && is_separator(b, style) {
+                at += 1usize
+                continue
+            }
+            if fold_byte(a) != fold_byte(b) { ret false }
+        } else if a != b {
+            ret false
+        }
         at += 1usize
     }
     ret true
@@ -463,18 +497,21 @@ fn match_component(m: *Matcher, pattern: str, name: str) -> bool {
 // directory the relative path is already relative to.
 fn glob_next(text: str, from: usize, style: Style) -> (str, usize, bool) {
     var start = from
-    while start < text.len {
-        if !is_separator(text[start], style) { break }
-        start += 1usize
+    // A user-controlled run of `./` used to recurse once per component here. This helper is
+    // called before matching charges its work budget, so keep the skip iterative as well.
+    while true {
+        while start < text.len {
+            if !is_separator(text[start], style) { break }
+            start += 1usize
+        }
+        if start >= text.len { ret ("", text.len, false) }
+        var end = start
+        while end < text.len && !is_separator(text[end], style) { end += 1usize }
+        if end - start != 1usize || text[start] != 46u8 {
+            ret (text[start..end], end, true)
+        }
+        start = end
     }
-    if start >= text.len { ret ("", text.len, false) }
-    var end = start
-    while end < text.len && !is_separator(text[end], style) { end += 1usize }
-    if end - start == 1usize && text[start] == 46u8 {
-        let (skipped, after, found) = glob_next(text, end, style)
-        ret (skipped, after, found)
-    }
-    ret (text[start..end], end, true)
 }
 
 fn is_parent(component: str) -> bool {

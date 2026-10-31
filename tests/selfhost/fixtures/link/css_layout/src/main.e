@@ -120,6 +120,19 @@ fn box_of(pg: *const Page, id: str) -> u32 {
     ret u32(pg.lay.boxes.len)
 }
 
+// The ordinal stored on the list marker for the element with `id`.
+fn marker_ordinal(pg: *const Page, id: str) -> (u32, bool) {
+    let node = dom.get_element_by_id(&pg.tree, pg.tree.root, id)
+    if node == html.NONE { ret (0u32, false) }
+    var i = 0usize
+    while i < pg.lay.boxes.len {
+        let b = &pg.lay.boxes.items[i]
+        if b.inner == layout.Inner.Marker && b.node == node { ret (b.aux, true) }
+        i += 1usize
+    }
+    ret (0u32, false)
+}
+
 fn is_rect(r: Rect, x: f64, y: f64, w: f64, h: f64) -> bool {
     ret r.found && near(r.x, x) && near(r.y, y) && near(r.w, w) && near(r.h, h)
 }
@@ -146,6 +159,119 @@ fn all_text(a: *mem.Arena, pg: *const Page) -> str {
         i += 1usize
     }
     ret out
+}
+
+fn css_issue_regressions(a: *mem.Arena) {
+    let table_css = "table { border-spacing: 0; font-size: 10px; } td { padding: 0; }"
+
+    // #1193: the baseline of a row-spanning cell belongs to its first row.
+    let (p1193, ok1193) = build(a, "<table><tr><td id=a rowspan=2 style=\"vertical-align:baseline\">a</td><td id=b style=\"vertical-align:baseline;font-size:20px\">b</td></tr><tr><td>c</td></tr></table>", table_css)
+    if !ok1193 { os.exit(203) }
+    let (found1193a, baseline1193a) = layout.first_baseline(&p1193.lay, box_of(p1193, "a"))
+    let (found1193b, baseline1193b) = layout.first_baseline(&p1193.lay, box_of(p1193, "b"))
+    if !found1193a || !found1193b || !near(baseline1193a, baseline1193b) { os.exit(204) }
+
+    // #1194: only the fixed table's first row contributes cell width hints.
+    let (p1194, ok1194) = build(a, "<table style=\"table-layout:fixed;width:200px\"><tr><td id=a>a</td><td id=b>b</td></tr><tr><td style=\"width:150px\">c</td><td>d</td></tr></table>", table_css)
+    if !ok1194 || !near(rect_of(p1194, "a").w, 100.0f64) || !near(rect_of(p1194, "b").w, 100.0f64) { os.exit(205) }
+
+    // #1195: table column order follows direction, including the HTML dir hint.
+    let (p1195, ok1195) = build(a, "<table dir=rtl><tr><td id=a style=\"width:40px\">a</td><td id=b style=\"width:20px\">b</td></tr></table>", table_css)
+    if !ok1195 || !near(rect_of(p1195, "a").x, 20.0f64) || !near(rect_of(p1195, "b").x, 0.0f64) { os.exit(206) }
+    let (p1195_edges, ok1195_edges) = build(a, "<table id=t dir=rtl style=\"border-collapse:collapse\"><tr><td style=\"border-right:10px solid;width:20px\">a</td><td style=\"border-left:4px solid;width:20px\">b</td></tr></table>", table_css)
+    if !ok1195_edges { os.exit(212) }
+    let table1195_edges = &p1195_edges.lay.boxes.items[usize(box_of(p1195_edges, "t"))]
+    if !near(table1195_edges.border[3usize], 2.0f64) || !near(table1195_edges.border[1usize], 5.0f64) { os.exit(213) }
+    let (p1195_ltr_edges, ok1195_ltr_edges) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:4px solid;width:20px\">a</td><td style=\"border-right:10px solid;width:20px\">b</td></tr></table>", table_css)
+    if !ok1195_ltr_edges { os.exit(214) }
+    let table1195_ltr_edges = &p1195_ltr_edges.lay.boxes.items[usize(box_of(p1195_ltr_edges, "t"))]
+    if !near(table1195_ltr_edges.border[3usize], 2.0f64) || !near(table1195_ltr_edges.border[1usize], 5.0f64) { os.exit(215) }
+
+    // #1196: collapsed table side borders come from the first row, not later rows.
+    let (p1196, ok1196) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:2px solid;border-right:2px solid;width:10px\"></td></tr><tr><td style=\"border-left:20px solid;border-right:20px solid;width:10px\"></td></tr></table>", table_css)
+    if !ok1196 { os.exit(207) }
+    let table1196 = &p1196.lay.boxes.items[usize(box_of(p1196, "t"))]
+    if !near(table1196.border[3usize], 1.0f64) || !near(table1196.border[1usize], 1.0f64) { os.exit(208) }
+
+    // #1197: inline-start floats and clearance resolve against the containing block direction.
+    let (p1197_start, ok1197_start) = build(a, "<div style=\"direction:rtl;width:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
+    if !ok1197_start || !near(rect_of(p1197_start, "f").x, 80.0f64) { os.exit(209) }
+    let (p1197_clear, ok1197_clear) = build(a, "<div style=\"direction:rtl;width:100px\"><div style=\"float:right;width:20px;height:20px\"></div><div id=c style=\"clear:inline-start;height:10px\"></div></div>", "")
+    if !ok1197_clear || !near(rect_of(p1197_clear, "c").y, 20.0f64) { os.exit(210) }
+    let (p1197_vertical, ok1197_vertical) = build(a, "<div style=\"writing-mode:vertical-rl;direction:rtl;width:100px;height:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
+    if !ok1197_vertical || !near(rect_of(p1197_vertical, "f").y, 80.0f64) { os.exit(211) }
+
+    // #1198: an inline span keeps its segment ownership while its surrounding
+    // RTL line is put into visual rather than source order.
+    let (p1198, ok1198) = build(a, "<p dir=rtl style=\"font-size:10px\">\xd7\x90\xd7\x91\xd7\x92 <span id=s>123</span> \xd7\x93\xd7\x94\xd7\x95</p>", "")
+    if !ok1198 { os.exit(216) }
+    let span1198 = box_of(p1198, "s")
+    var first1198 = 0.0f64
+    var middle1198 = 0.0f64
+    var last1198 = 0.0f64
+    var got_first1198 = false
+    var got_middle1198 = false
+    var got_last1198 = false
+    var got_segment1198 = false
+    var fi1198 = 0usize
+    while fi1198 < p1198.lay.frags.len {
+        let f = p1198.lay.frags.items[fi1198]
+        if f.kind == layout.FragKind.Text && (str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92 ") || str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92")) {
+            first1198 = f.x
+            got_first1198 = true
+        }
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "123") {
+            middle1198 = f.x
+            got_middle1198 = true
+        }
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "\xd7\x93\xd7\x94\xd7\x95") {
+            last1198 = f.x
+            got_last1198 = true
+        }
+        if f.kind == layout.FragKind.Segment && f.box == span1198 { got_segment1198 = true }
+        fi1198 += 1usize
+    }
+    if !got_first1198 || !got_middle1198 || !got_last1198 || !got_segment1198 || !(last1198 < middle1198 && middle1198 < first1198) { os.exit(217) }
+
+    // #1199: a tab reaches the next stop, so its width depends on the current
+    // inline advance rather than always adding four spaces.
+    let (p1199, ok1199) = build(a, "<div style=\"white-space:pre;tab-size:4;font-size:10px\">a\tb</div><div style=\"white-space:pre;tab-size:4;font-size:10px\">aaaa\tb</div>", "")
+    if !ok1199 { os.exit(218) }
+    var tabs1199 = 0usize
+    var first_tab1199 = 0.0f64
+    var second_tab1199 = 0.0f64
+    var fi1199 = 0usize
+    while fi1199 < p1199.lay.frags.len {
+        let f = p1199.lay.frags.items[fi1199]
+        if f.kind == layout.FragKind.Text && str.eq(f.text, "b") {
+            if tabs1199 == 0usize {
+                first_tab1199 = f.x
+            } else if tabs1199 == 1usize {
+                second_tab1199 = f.x
+            }
+            tabs1199 += 1usize
+        }
+        fi1199 += 1usize
+    }
+    if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(219) }
+
+    // #1190: a deferred run-in applies its counters exactly once when it is
+    // inserted into the following block.
+    let (p1190, ok1190) = build(a, "<div class=run>heading</div><div>body</div>", "body { counter-reset:n; } .run { display:run-in; font-size:10px; counter-increment:n; } .run::before { content:counter(n) \". \"; }")
+    if !ok1190 || !frag_has(p1190, "1. ") { os.exit(221) }
+
+    // #1192: the minimum signed named-line occurrence is unresolvable, not a
+    // signed-negation overflow during grid placement.
+    let (p1192, ok1192) = build(a, "<div style=\"display:grid;grid-template-columns:[foo] 50px [foo] 50px [foo]\"><div id=a style=\"grid-column:foo -2147483648;height:10px\"></div></div>", "")
+    if !ok1192 || !is_rect(rect_of(p1192, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(220) }
+
+    // #540: a preceding explicit list-item value resets the following marker.
+    let (p540, ok540) = build(a, "<ol><li value=5>first</li><li id=next>second</li></ol>", "")
+    let (ordinal540, found540) = marker_ordinal(p540, "next")
+    if !ok540 || !found540 || ordinal540 != 6u32 { os.exit(222) }
+    let (p540_reversed, ok540_reversed) = build(a, "<ol reversed start=10><li value=5>first</li><li id=next>second</li></ol>", "")
+    let (ordinal540_reversed, found540_reversed) = marker_ordinal(p540_reversed, "next")
+    if !ok540_reversed || !found540_reversed || ordinal540_reversed != 4u32 { os.exit(223) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -422,6 +548,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 75. An escaped identifier in a value is decoded (`\31 00px` is `100px`).
     let (p75, ok75) = build(a, "<div id=a></div>", "#a { width: \\31 00px; height: 10px; }")
     if !ok75 || !near(rect_of(p75, "a").w, 100.0f64) { os.exit(112) }
+    // 75a. Escaped function names and dimension units are decoded before CSS values are parsed.
+    let (p75x, ok75x) = build(a, "<div id=a></div>", "#a { width: \\63 alc(50px); height: 10\\70 x; }")
+    if !ok75x || !near(rect_of(p75x, "a").w, 50.0f64) || !near(rect_of(p75x, "a").h, 10.0f64) { os.exit(152) }
     // 76. A block-level image with an auto height takes its intrinsic height.
     let (p76, ok76) = build(a, "<div><img id=a width=15 height=12 style=\"display:block\"></div>", "")
     if !ok76 || !is_rect(rect_of(p76, "a"), 0.0f64, 0.0f64, 15.0f64, 12.0f64) { os.exit(113) }
@@ -439,6 +568,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 80. :lang() matches the language of the element or its nearest ancestor with one, by prefix.
     let (p80, ok80) = build(a, "<div lang=\"en-US\"><p id=a>x</p></div><p id=b>y</p>", "p:lang(en) { width: 50px; }")
     if !ok80 || !near(rect_of(p80, "a").w, 50.0f64) || near(rect_of(p80, "b").w, 50.0f64) { os.exit(117) }
+    // 80a. :lang() uses RFC 4647 extended filtering, including escaped wildcards and the untagged-language range.
+    let (p80x, ok80x) = build(a, "<div lang=\"DE-lAtN-de\"><p id=a>x</p></div><p lang=\"de-CH\" id=b>x</p><p lang=\"fr-CH\" id=c>x</p><p id=d>x</p><p lang=\"\" id=e>x</p>", "p:lang(de-DE) { width: 51px; } p:lang(\\*-CH) { width: 52px; } p:lang(\"\") { width: 53px; } p:lang(de--DE) { height: 99px; }")
+    if !ok80x || !near(rect_of(p80x, "a").w, 51.0f64) || !near(rect_of(p80x, "b").w, 52.0f64) || !near(rect_of(p80x, "c").w, 52.0f64) || !near(rect_of(p80x, "d").w, 53.0f64) || !near(rect_of(p80x, "e").w, 53.0f64) || near(rect_of(p80x, "a").h, 99.0f64) { os.exit(151) }
     // 81. An absolute box with auto left and right in a right-to-left container ends at the static right edge.
     let (p81, ok81) = build(a, "<div style=\"direction:rtl;position:relative;width:200px;height:50px\"><div id=a style=\"position:absolute;width:30px;height:10px\"></div></div>", "")
     if !ok81 || !near(rect_of(p81, "a").x, 170.0f64) { os.exit(118) }
@@ -602,5 +734,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !ok134 || !near(rect_of(p134, "a").w, 100.0f64) { os.exit(175) }
     if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
     if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
+    // 135. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
+    let (p135, ok135) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
+    if !ok135 || !near(rect_of(p135, "o").h, 50.0f64) { os.exit(176) }
+    css_issue_regressions(a)
     ret ok
 }

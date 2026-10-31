@@ -9,6 +9,46 @@ use e.io
 use e.mem
 use e.os
 
+const SKEW_COUNT: usize = 250000usize
+
+// Ordered accesses make an otherwise balanced splay tree tall.  Keep the node
+// storage in the arena so this checks collect's traversal stack, not the host stack.
+fn check_skew(a: *mem.Arena) -> i32 {
+    let (node_values, node_values_error) = mem.alloc[i64](a, SKEW_COUNT + 1usize)
+    let (node_left, node_left_error) = mem.alloc[u32](a, SKEW_COUNT + 1usize)
+    let (node_right, node_right_error) = mem.alloc[u32](a, SKEW_COUNT + 1usize)
+    let (node_parent, node_parent_error) = mem.alloc[u32](a, SKEW_COUNT + 1usize)
+    let (node_sizes, node_sizes_error) = mem.alloc[u32](a, SKEW_COUNT + 1usize)
+    let (node_reversed, node_reversed_error) = mem.alloc[bool](a, SKEW_COUNT + 1usize)
+    let (source_items, source_items_error) = mem.alloc[i64](a, SKEW_COUNT)
+    let (ordered_out, ordered_out_error) = mem.alloc[i64](a, SKEW_COUNT)
+    if node_values_error != ok || node_left_error != ok || node_right_error != ok || node_parent_error != ok || node_sizes_error != ok || node_reversed_error != ok || source_items_error != ok || ordered_out_error != ok { ret 1i32 }
+    var order = 0usize
+    while order < SKEW_COUNT {
+        source_items[order] = i64(order)
+        order += 1usize
+    }
+    var tree = splay.splay_tree[i64](node_values, node_left, node_right, node_parent, node_sizes, node_reversed)
+    let (initial_root, build_error) = splay.build[i64](&tree, source_items)
+    if build_error != ok { ret 2i32 }
+    var root = initial_root
+    order = 0usize
+    while order < SKEW_COUNT {
+        let (value, next_root, at_error) = splay.at[i64](&tree, root, order)
+        if at_error != ok || value != i64(order) { ret 3i32 }
+        root = next_root
+        order += 1usize
+    }
+    let (count, collect_error) = splay.collect[i64](&tree, root, ordered_out)
+    if collect_error != ok || count != SKEW_COUNT { ret 4i32 }
+    order = 0usize
+    while order < SKEW_COUNT {
+        if ordered_out[order] != i64(order) { ret 5i32 }
+        order += 1usize
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var values: [128]i64 = zero
     var left: [128]u32 = zero
@@ -33,6 +73,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if collect_error != ok || n != 64usize { os.exit(1i32) }
     i = 0usize
     while i < 64usize {
+        if out[i] != i64(i) { os.exit(1i32) }
+        i += 1usize
+    }
+    // `collect` keeps its historical subtree behavior instead of climbing
+    // through parent links into the enclosing tree.
+    let left_subtree = t.left[usize(root0)]
+    let (left_count, left_error) = splay.collect[i64](&t, left_subtree, out[..])
+    if left_error != ok || left_count != 32usize { os.exit(1i32) }
+    i = 0usize
+    while i < left_count {
         if out[i] != i64(i) { os.exit(1i32) }
         i += 1usize
     }
@@ -111,6 +161,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_range != splay.Invalid { os.exit(3i32) }
     let (_, backwards) = splay.reverse_range[i64](&t, root, 20usize, 10usize)
     if backwards != splay.Invalid { os.exit(3i32) }
+    if check_skew(a) != 0i32 { os.exit(4i32) }
 
     try io.print("data splay ok\n")
     ret ok

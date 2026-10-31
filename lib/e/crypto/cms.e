@@ -36,6 +36,8 @@ error NoCertificate
 error TooSmall
 
 const DEPTH: u16 = 16u16
+const UTC_TIME_FIRST: i64 = -631152000i64
+const UTC_TIME_AFTER_LAST: i64 = 2524608000i64
 
 // ---- OIDs, as their content bytes ----
 
@@ -363,44 +365,56 @@ fn digest(bits: u16, content: []const u8, out: []u8) -> usize {
     ret 64usize
 }
 
-// Walks the signed attributes (the encoded `[0]`) for `want`; returns its single value's bytes.
-fn attribute_value(encoded: []const u8, want: []const u8) -> ([]const u8, bool) {
+// Walks the signed attributes (the encoded `[0]`) for one mandatory OID.  CMS
+// requires each of contentType and messageDigest exactly once, with one value of
+// its prescribed ASN.1 type; accepting a first duplicate would make the signed
+// meaning ambiguous between verifiers.
+fn attribute_value(encoded: []const u8, want: []const u8, value_tag: u32) -> ([]const u8, bool) {
     var top = asn1.reader(encoded, DEPTH)
     let (outer, outer_error) = next(&top)
-    if outer_error != ok { ret (zero, false) }
+    if outer_error != ok || outer.tag.class != .Context || outer.tag.number != 0u32 || !outer.tag.constructed { ret (zero, false) }
+    let (_, has_top_tail, top_tail_error) = asn1.reader_next_err(&top)
+    if top_tail_error != ok || has_top_tail { ret (zero, false) }
     let (kids, kids_error) = children(outer)
     if kids_error != ok { ret (zero, false) }
     var r = kids
+    var found = false
+    var found_value: []const u8 = zero
     while true {
         let (attr, present, attr_error) = asn1.reader_next_err(&r)
-        if attr_error != ok || !present { break }
+        if attr_error != ok { ret (zero, false) }
+        if !present { break }
+        if attr.tag.class != .Universal || attr.tag.number != 16u32 || !attr.tag.constructed { ret (zero, false) }
         let (parts, parts_error) = children(attr)
         if parts_error != ok { ret (zero, false) }
         var pr = parts
         let (oid, oid_error) = oid_of(&pr)
         if oid_error != ok { ret (zero, false) }
+        let (values, values_error) = universal(&pr, 17u32, true)
+        if values_error != ok { ret (zero, false) }
+        let (_, has_attribute_tail, attribute_tail_error) = asn1.reader_next_err(&pr)
+        if attribute_tail_error != ok || has_attribute_tail { ret (zero, false) }
         if same(oid, want) {
-            let (values, values_error) = universal(&pr, 17u32, true)
-            if values_error != ok { ret (zero, false) }
+            if found { ret (zero, false) }
             let (vk, vk_error) = children(values)
             if vk_error != ok { ret (zero, false) }
             var vr = vk
             let (first, first_error) = next(&vr)
             if first_error != ok { ret (zero, false) }
-            ret (first.content, true)
+            if first.tag.class != .Universal || first.tag.number != value_tag || first.tag.constructed { ret (zero, false) }
+            let (_, has_value_tail, value_tail_error) = asn1.reader_next_err(&vr)
+            if value_tail_error != ok || has_value_tail { ret (zero, false) }
+            found_value = first.content
+            found = true
         }
     }
-    ret (zero, false)
+    ret (found_value, found)
 }
 
-// Verifies signer `index` against `content` (the attached content when `detached` is empty
-// and the SignedData has one). `a` is scratch for the RSA arithmetic.
-fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+// Verifies signer `index` against already-selected `content`. `a` is scratch for the RSA arithmetic.
+fn verify_signer_content(a: *mem.Arena, sd: *const SignedData, index: usize, content: []const u8) -> err {
     if index >= sd.signers.len { ret Invalid }
     let signer = sd.signers[index]
-    var content = detached
-    if detached.len == 0usize && sd.has_content { content = sd.content }
-    if detached.len == 0usize && !sd.has_content { ret Invalid }
     let (cert, found) = find_certificate(sd, index)
     if !found { ret NoCertificate }
     let bits = hash_bits(signer.digest_oid)
@@ -411,10 +425,10 @@ fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: [
         let n = digest(bits, content, computed[0usize..64usize])
         let md_oid = oid_message_digest()
         let ct_oid = oid_content_type()
-        let (md, has_md) = attribute_value(signer.attributes, md_oid[0usize..9usize])
+        let (md, has_md) = attribute_value(signer.attributes, md_oid[0usize..9usize], 4u32)
         if !has_md || !same(md, computed[0usize..n]) { ret BadDigest }
-        let (ct, has_ct) = attribute_value(signer.attributes, ct_oid[0usize..9usize])
-        if has_ct && !same(ct, sd.content_type) { ret BadDigest }
+        let (ct, has_ct) = attribute_value(signer.attributes, ct_oid[0usize..9usize], 6u32)
+        if !has_ct || !same(ct, sd.content_type) { ret BadDigest }
         // RFC 5652 5.4: the signature covers the DER of the attributes with the SET OF tag
         let (copy, copy_error) = mem.alloc[u8](a, signer.attributes.len)
         if copy_error != ok { ret copy_error }
@@ -471,6 +485,21 @@ fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: [
     ret Unsupported
 }
 
+// Verifies with attached content when no nonempty detached content is supplied. Use
+// `verify_signer_detached` when an empty detached content value is intentional.
+fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+    if detached.len == 0usize {
+        if !sd.has_content { ret Invalid }
+        ret verify_signer_content(a, sd, index, sd.content)
+    }
+    ret verify_signer_content(a, sd, index, detached)
+}
+
+// Verifies signer `index` against supplied detached content, including a valid empty value.
+fn verify_signer_detached(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err {
+    ret verify_signer_content(a, sd, index, detached)
+}
+
 // Every signer must verify; at least one is required.
 fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err {
     if sd.signers.len == 0usize { ret Invalid }
@@ -482,17 +511,26 @@ fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err {
     ret ok
 }
 
+// Every signer must verify against explicitly supplied detached content, including an empty body.
+fn verify_detached(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err {
+    if sd.signers.len == 0usize { ret Invalid }
+    var i = 0usize
+    while i < sd.signers.len {
+        try verify_signer_detached(a, sd, i, detached)
+        i += 1usize
+    }
+    ret ok
+}
+
 // ---- writing ----
 
 // A DER header for `total` content bytes at `at`; `TooSmall` when header and content do not fit.
 fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err) {
-    var header = 2usize
-    if total >= 128usize {
-        header = 3usize
-        if total >= 256usize { header = 4usize }
-        if total >= 65536usize { header = 5usize }
-    }
-    if at + header + total > dst.len { ret (at, TooSmall) }
+    let header = 1usize + asn1.length_len(total)
+    if at > dst.len { ret (at, TooSmall) }
+    let remaining = dst.len - at
+    if header > remaining { ret (at, TooSmall) }
+    if total > remaining - header { ret (at, TooSmall) }
     ret (asn1.put_header(dst, at, tag, total), ok)
 }
 
@@ -591,6 +629,7 @@ fn utc_time(seconds: i64, dst: []u8) -> str {
 // signed attributes with `signing_time` (Unix seconds, years 1950..2049). Detached unless
 // `attached`. The DER is written into `out`; its length is returned.
 fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret: sign.Ed25519SecretKey, attached: bool, signing_time: i64, out: []u8) -> (usize, err) {
+    if signing_time < UTC_TIME_FIRST || signing_time >= UTC_TIME_AFTER_LAST { ret (0usize, Invalid) }
     let mark = mem.mark(a)
     let (issuer, serial, cert_error) = issuer_and_serial(cert_der)
     if cert_error != ok { ret (0usize, cert_error) }

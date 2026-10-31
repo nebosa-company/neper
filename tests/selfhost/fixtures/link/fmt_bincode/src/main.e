@@ -377,6 +377,13 @@ fn run_vectors() -> u8 {
 fn main(a: *mem.Arena, args: []str) -> err {
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
+    // Bincode strings are UTF-8 but byte runs are deliberately transparent.
+    let malformed_text: [2]u8 = [2]u8{ 1u8, 128u8 }
+    var text_reader = bincode.reader(malformed_text[..], bincode.standard())
+    if bincode.get_str(&text_reader).len != 0usize || !text_reader.bad { os.exit(19) }
+    var byte_reader = bincode.reader(malformed_text[..], bincode.standard())
+    let raw = bincode.get_bytes(&byte_reader)
+    if byte_reader.bad || raw.len != 1usize || raw[0usize] != 128u8 { os.exit(20) }
     try io.print("fmt bincode ok")
     ret ok
 }

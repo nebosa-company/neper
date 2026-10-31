@@ -8,6 +8,11 @@ use e.os
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg_marked(receiver: usize, selector: usize, string: usize, a: usize, b: usize, c: usize, d: usize) -> usize
 
+type CocoaRange = struct { location: usize, length: usize }
+
+@import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
+extern fn msg_marked_range(receiver: usize, selector: usize) -> CocoaRange
+
 fn next(code: i32) -> os.WindowEvent {
     var tries = 0usize
     while tries < 40usize {
@@ -49,16 +54,22 @@ fn main(a: *mem.Arena) -> err {
     var event = next(10i32)
     if event.kind != .Text || event.codepoint != 233u32 { os.exit(11i32) }
     // A composition: marked, not committed.
-    let kana = os.cocoa_text("\xE3\x81\x82")
-    let marked = msg_marked(view, os.cocoa_sel("setMarkedText:selectedRange:replacementRange:\x00"), kana, 0usize, 1usize, not_found, 0usize)
+    let marked_text = os.cocoa_text("ab")
+    let marked = msg_marked(view, os.cocoa_sel("setMarkedText:selectedRange:replacementRange:\x00"), marked_text, 1usize, 1usize, not_found, 0usize)
+    os.cf_release(marked_text)
     quiet(20i32)
     if os.msg_bool_ret(view, os.cocoa_sel("hasMarkedText\x00")) == 0u8 { os.exit(21i32) }
+    let marked_range = msg_marked_range(view, os.cocoa_sel("markedRange\x00"))
+    if marked_range.location != 0usize || marked_range.length != 2usize { os.exit(22i32) }
     // Committed: the text arrives and the mark is gone.
+    let kana = os.cocoa_text("\xE3\x81\x82")
     let committed = os.msg4(view, os.cocoa_sel("insertText:replacementRange:\x00"), kana, not_found, 0usize, 0usize)
     os.cf_release(kana)
     event = next(30i32)
     if event.kind != .Text || event.codepoint != 12354u32 { os.exit(31i32) }
     if os.msg_bool_ret(view, os.cocoa_sel("hasMarkedText\x00")) != 0u8 { os.exit(32i32) }
+    let unmarked_range = msg_marked_range(view, os.cocoa_sel("markedRange\x00"))
+    if unmarked_range.location != not_found || unmarked_range.length != 0usize { os.exit(33i32) }
     if os.window_close(window) != ok { os.exit(40i32) }
     ret ok
 }

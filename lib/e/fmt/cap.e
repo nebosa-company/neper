@@ -2,8 +2,8 @@
 // `parse` reads an `<alert>` document over e.fmt.xml and gives the message (identifier, sender, sent time, status,
 // message type, scope) and each `<info>` block (language, category, event, urgency, severity, certainty, effective,
 // onset, expires, sender name, headline, description, instruction, web) with its first `<area>`'s description and the
-// counts of areas. Element names are matched without a namespace prefix and the text of an element is the
-// concatenation of its character data, trimmed. Not here: polygons, geocodes, resources, signatures and updates
+// counts of areas. CAP element names are resolved against namespace declarations and must use the CAP 1.2 namespace;
+// the text of an element is the concatenation of its character data, trimmed. Not here: polygons, geocodes, resources, signatures and updates
 // (a message that references another is returned as written); a document whose root is not `alert` is `NotCap`.
 //
 // Memory: everything lives in the arena passed in.
@@ -37,13 +37,56 @@ type Info = struct {
 
 type Alert = struct { identifier: str, sender: str, sent: str, status: str, message_type: str, scope: str, infos: []Info }
 
-fn local(name: str) -> str {
-    var i = name.len
-    while i > 0usize {
-        if name[i - 1usize] == 58u8 { ret name[i..name.len] }
-        i -= 1usize
+fn cap_namespace() -> str { ret "urn:oasis:names:tc:emergency:cap:1.2" }
+
+fn qname(name: str) -> (str, str, bool) {
+    var colon = name.len
+    var i = 0usize
+    while i < name.len {
+        if name[i] == 58u8 {
+            if colon != name.len { ret ("", "", false) }
+            colon = i
+        }
+        i += 1usize
     }
-    ret name
+    if colon == name.len { ret ("", name, name.len > 0usize) }
+    if colon == 0usize || colon + 1usize >= name.len { ret ("", "", false) }
+    ret (name[..colon], name[colon + 1usize..], true)
+}
+
+fn namespace_declaration(name: str, prefix: str) -> bool {
+    if prefix.len == 0usize { ret str.eq(name, "xmlns") }
+    if name.len != prefix.len + 6usize || !str.starts_with(name, "xmlns:") { ret false }
+    ret str.eq(name[6usize..], prefix)
+}
+
+// The namespace binding visible on element `at`. XML's DOM preserves the
+// namespace declarations as ordinary attributes, so walking ancestors from the
+// element outward finds the nearest binding.
+fn namespace_of(nodes: []const xml.Node, at: usize, prefix: str) -> (str, bool) {
+    var node = at
+    while node < nodes.len {
+        var i = 0usize
+        while i < nodes[node].attributes.len {
+            let attribute = nodes[node].attributes[i]
+            if namespace_declaration(attribute.name, prefix) { ret (attribute.value, true) }
+            i += 1usize
+        }
+        node = usize(nodes[node].parent)
+    }
+    if str.eq(prefix, "xml") { ret ("http://www.w3.org/XML/1998/namespace", true) }
+    if prefix.len == 0usize { ret ("", true) }
+    ret ("", false)
+}
+
+// A CAP element's local name, or false when its QName is malformed, unbound,
+// or bound to a foreign namespace.
+fn cap_name(nodes: []const xml.Node, at: usize) -> (str, bool) {
+    let (prefix, name, valid) = qname(nodes[at].name)
+    if !valid { ret ("", false) }
+    let (uri, bound) = namespace_of(nodes, at, prefix)
+    if !bound || !str.eq(uri, cap_namespace()) { ret ("", false) }
+    ret (name, true)
 }
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
@@ -128,25 +171,28 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err) {
             }
         }
     }
-    if root >= nodes.len || nodes[root].kind != .Element || !str.eq(local(nodes[root].name), "alert") { ret (alert, NotCap) }
+    if root >= nodes.len || nodes[root].kind != .Element { ret (alert, NotCap) }
+    let (root_name, root_is_cap) = cap_name(nodes, root)
+    if !root_is_cap || !str.eq(root_name, "alert") { ret (alert, NotCap) }
     var infos: [16]Info = zero
     var info_count = 0usize
     var child = usize(nodes[root].first_child)
     while child < nodes.len && child != 0usize {
         if nodes[child].kind == .Element {
-            let name = local(nodes[child].name)
-            if str.eq(name, "info") {
+            let (name, is_cap) = cap_name(nodes, child)
+            if is_cap && str.eq(name, "info") {
                 if info_count >= MAX_INFOS { ret (alert, TooMany) }
                 var field = usize(nodes[child].first_child)
                 while field < nodes.len && field != 0usize {
                     if nodes[field].kind == .Element {
-                        let field_name = local(nodes[field].name)
-                        if str.eq(field_name, "area") {
+                        let (field_name, field_is_cap) = cap_name(nodes, field)
+                        if field_is_cap && str.eq(field_name, "area") {
                             infos[info_count].areas += 1usize
                             if infos[info_count].areas == 1usize {
                                 var part = usize(nodes[field].first_child)
                                 while part < nodes.len && part != 0usize {
-                                    if nodes[part].kind == .Element && str.eq(local(nodes[part].name), "areaDesc") {
+                                    let (part_name, part_is_cap) = cap_name(nodes, part)
+                                    if nodes[part].kind == .Element && part_is_cap && str.eq(part_name, "areaDesc") {
                                         let (desc, desc_error) = text_under(a, nodes, part)
                                         if desc_error != ok { ret (alert, desc_error) }
                                         infos[info_count].area_description = desc
@@ -154,7 +200,7 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err) {
                                     part = usize(nodes[part].next_sibling)
                                 }
                             }
-                        } else {
+                        } else if field_is_cap {
                             let (value, value_error) = text_under(a, nodes, field)
                             if value_error != ok { ret (alert, value_error) }
                             set_field(&infos[info_count], field_name, value)
@@ -163,7 +209,7 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err) {
                     field = usize(nodes[field].next_sibling)
                 }
                 info_count += 1usize
-            } else {
+            } else if is_cap {
                 let (value, value_error) = text_under(a, nodes, child)
                 if value_error != ok { ret (alert, value_error) }
                 if str.eq(name, "identifier") { alert.identifier = value }

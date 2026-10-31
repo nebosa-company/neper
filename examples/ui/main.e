@@ -40,6 +40,8 @@ use e.ui.overlay
 use e.ui.style
 use e.ui.widget
 use e.ui.window
+use x.khronos.context as glcontext
+use x.khronos.present
 
 const TABS: usize = 15usize
 const SHELL_TAB: usize = 14usize
@@ -2501,6 +2503,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var running = application
     let (host, host_error) = app.host_window(&running)
     if host_error != ok { os.exit(2i32) }
+    // `--gl` or `--gles` among the arguments shows the frames through OpenGL (x.khronos.present).
+    var arg_at = 1usize
+    while arg_at < args.len {
+        var wanted: glcontext.Options = zero
+        var asked = false
+        if str.eq(args[arg_at], "--gl") {
+            wanted = glcontext.Options { api: .Gl, major: 3u32, minor: 3u32 }
+            asked = true
+        }
+        if str.eq(args[arg_at], "--gles") {
+            wanted = glcontext.Options { api: .Gles, major: 3u32, minor: 0u32 }
+            asked = true
+        }
+        if asked {
+            let (gallery_window, gallery_window_error) = app.window_of(&running)
+            if gallery_window_error != ok || present.attach(a, gallery_window, wanted) != ok { try io.print("no OpenGL presenter; frames stay on the software path\n") }
+        }
+        arg_at += 1usize
+    }
     let (scratch_bytes, scratch_error) = mem.alloc[u8](a, 1048576usize)
     if scratch_error != ok { os.exit(1i32) }
     let (drop_bytes, drop_bytes_error) = mem.alloc[u8](a, 4194304usize)

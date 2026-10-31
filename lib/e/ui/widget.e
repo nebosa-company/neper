@@ -148,6 +148,19 @@ type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32
 // content is painted, not pressed: a press on it pans.
 type ZoomState = struct { scale: f32, offset: geometry.Point }
 type Zoom = struct { state: ZoomState, min_scale: f32, max_scale: f32, change: Change[ZoomState] }
+
+// A zoom scale is both a scene-transform operand and a denominator while
+// preserving the pointer's content position. Reject non-finite or nonpositive
+// values before they can enter the retained element state.
+fn zoom_values_valid(value: ZoomState, min_scale: f32, max_scale: f32) -> bool {
+    if value.scale - value.scale != 0.0 || value.offset.x - value.offset.x != 0.0 || value.offset.y - value.offset.y != 0.0 { ret false }
+    if min_scale - min_scale != 0.0 || max_scale - max_scale != 0.0 { ret false }
+    ret value.scale > 0.0 && min_scale > 0.0 && max_scale >= min_scale
+}
+
+fn zoom_valid(z: Zoom) -> bool {
+    ret zoom_values_valid(z.state, z.min_scale, z.max_scale)
+}
 // A paint-only transform about the node's centre. Layout and hit bounds stay put.
 type VisualTransform = struct { scale: f32, rotation: f32, offset: geometry.Point }
 // A drop (D844): what a drag begun with `begin_drag` carried, released over a region
@@ -192,6 +205,7 @@ const HISTORY_BYTES: usize = 1024usize
 const MAX_COMPOSE: usize = 64usize
 const MAX_CLIP: usize = 256usize
 const EDIT_SCRATCH: usize = 65536usize
+const STATE_STORAGE_PADDING: usize = 16usize
 // Six navigation keys plus digits 0..9 for one focused Rating (D1169).
 const MAX_SHORTCUTS: usize = 16usize
 const GESTURE_TAP: u8 = 1u8
@@ -709,6 +723,7 @@ fn fire_gesture(a: GestureAction, g: Gesture) -> err {
 fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime, err) {
     if limits.max_elements == 0usize || limits.max_states == 0usize || limits.state_bytes == 0usize || limits.max_depth == 0u16 || limits.max_commands == 0usize { ret (zero, TooLarge) }
     if limits.max_elements > 65535usize || limits.max_states > 65535usize { ret (zero, TooLarge) }
+    if limits.state_bytes > 18446744073709551615usize - STATE_STORAGE_PADDING { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok { ret (zero, TooLarge) }
     let (elements, elements_error) = mem.alloc[Element](a, limits.max_elements)
@@ -717,7 +732,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     if focus_order_error != ok { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[Cell](a, limits.max_states)
     if cells_error != ok { ret (zero, TooLarge) }
-    let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + 16usize)
+    let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + STATE_STORAGE_PADDING)
     if storage_error != ok { ret (zero, TooLarge) }
     let (scratch, scratch_error) = mem.alloc[u8](a, EDIT_SCRATCH)
     if scratch_error != ok { ret (zero, TooLarge) }
@@ -907,8 +922,10 @@ fn take_cell(s: *State, size: usize, align: usize, owner: u32) -> (usize, err) {
     i = 0usize
     while i < s.cells.len && s.cells[i].generation != 0u32 { i += 1usize }
     if i >= s.cells.len { ret (0usize, TooLarge) }
+    if align != 0usize && s.storage_used > 18446744073709551615usize - (align - 1usize) { ret (0usize, TooLarge) }
     let start = align_up(s.storage_used, align)
-    if start + size > s.limits.state_bytes { ret (0usize, TooLarge) }
+    if start > s.limits.state_bytes || size > s.limits.state_bytes - start { ret (0usize, TooLarge) }
+    if start > s.storage.len || size > s.storage.len - start { ret (0usize, TooLarge) }
     s.storage_used = start + size
     s.cells[i] = Cell { live: true, generation: 1u32, offset: start, size: size, align: align, owner: owner }
     ret (i, ok)
@@ -1322,9 +1339,17 @@ fn owner_of(s: *State, key: usize) -> (usize, bool) {
     ret (0usize, false)
 }
 
-fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
+fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, scratch: []u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
+    var zoom_is_valid = true
+    switch node.kind {
+    case .Zoom as z:
+        zoom_is_valid = zoom_valid(z)
+    default:
+        zoom_is_valid = true
+    }
+    if !zoom_is_valid { ret (0usize, InvalidTree) }
     let (index, match_error) = match_element(s, parent, has_parent, node, position, old_siblings)
     if match_error != ok { ret (0usize, match_error) }
     let e = &s.elements[index]
@@ -1499,14 +1524,14 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     let previous_has = e.has_child
     // The old children are gathered and unvisited before the new list is threaded
     // over the same links, so the ones left unmatched can still be found.
-    var old_children: [64]u32 = zero
+    let old_children = scratch
     var old_count = 0usize
     var at = previous_first
     var has = previous_has
     while has {
         let old = &s.elements[usize(at)]
         old.visited = false
-        if old_count >= 64usize { ret (0usize, TooLarge) }
+        if old_count >= old_children.len { ret (0usize, TooLarge) }
         old_children[old_count] = at
         old_count += 1usize
         has = old.has_sibling
@@ -1522,7 +1547,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     var static_subtree = own_static
     i = 0usize
     while i < node.children.len {
-        let (child, child_error) = reconcile_node(s, &node.children[i], index, true, i, old_children[0usize..old_count], depth + 1usize)
+        let (child, child_error) = reconcile_node(s, &node.children[i], index, true, i, old_children[0usize..old_count], scratch[old_count..], depth + 1usize)
         if child_error != ok { ret (0usize, child_error) }
         subtree_hash = hash_u64(subtree_hash, s.elements[child].subtree_hash)
         if !s.elements[child].static_subtree { static_subtree = false }
@@ -2475,6 +2500,14 @@ fn descends_from(s: *State, index: usize, top: usize) -> bool {
     ret false
 }
 
+// A focus kept behind a focusless modal must not receive any keyboard or text
+// route. The modal may deliberately have no focusable descendant, so clearing
+// focus would lose the element to restore when it closes.
+fn modal_blocks_focus(s: *State) -> bool {
+    let (modal, has_modal) = topmost_modal(s)
+    ret has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal))
+}
+
 // The first live scope in the subtree of `top`, if any.
 fn scope_under(s: *State, top: usize) -> (usize, bool) {
     var i = 0usize
@@ -3127,6 +3160,7 @@ fn hit_zoom(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
 // then bounded and reported.
 fn zoom_by(s: *State, element: usize, factor: f32, p: geometry.Point) -> err {
     let e = &s.elements[element]
+    if !zoom_values_valid(ZoomState { scale: e.zoom_scale, offset: e.zoom_offset }, e.zoom_min, e.zoom_max) { ret InvalidTree }
     var next = e.zoom_scale * factor
     if next < e.zoom_min { next = e.zoom_min }
     if next > e.zoom_max { next = e.zoom_max }
@@ -3217,7 +3251,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let old_has = s.has_root
     s.measure_stamp += 1u32
     if s.measure_stamp == 0u32 { s.measure_stamp = 1u32 }
-    let (root_index, reconcile_error) = reconcile_node(s, &root, 0usize, false, 0usize, old_roots[0usize..old_root_count], 1usize)
+    let (root_index, reconcile_error) = reconcile_node(s, &root, 0usize, false, 0usize, old_roots[0usize..old_root_count], s.focus_order, 1usize)
     if reconcile_error != ok { ret (zero, reconcile_error) }
     if old_has && usize(old_root) != root_index { retire_element(s, usize(old_root)) }
     s.root = u32(root_index)
@@ -3743,9 +3777,11 @@ fn collect_focusable(s: *State, index: usize, out: []u32, count: usize) -> usize
     ret n
 }
 
-// Where Tab walks: the trapping scope or modal overlay the focus sits in, or the tree.
+// Where Tab walks: the topmost modal overlay, the trapping scope, or the tree.
 fn focus_root(s: *State) -> usize {
     var root = usize(s.root)
+    let (modal, has_modal) = topmost_modal(s)
+    if has_modal { ret modal }
     if s.has_focus {
         let (found_scope, has_scope) = scope_of(s, usize(s.focus))
         if has_scope && s.elements[found_scope].traps_focus { root = found_scope }
@@ -5030,26 +5066,32 @@ fn has_scoped_shortcut(s: *State, from: usize, code: u32, held: input.Modifiers)
 // most-recently-used switch.
 fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     let code = key_code(k.key.physical)
-    let (barred, bar_error) = menu_bar_key(s, code, k)
-    if barred || bar_error != ok { ret (true, bar_error) }
-    let (editor, has_editor) = focused_edit(s)
-    if has_editor {
-        let (edited, edit_error) = edit_key(s, editor, k)
-        if edited || edit_error != ok { ret (true, edit_error) }
-    }
-    if menu_key(s, code, k) { ret (true, ok) }
-    if collection_typeahead_key(s, code, k) { ret (true, ok) }
-    if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
-        let (slid, slide_error) = slider_key(s, usize(s.focus), code)
-        if slid || slide_error != ok { ret (true, slide_error) }
+    let (modal, has_modal) = topmost_modal(s)
+    let focus_in_modal = has_modal && s.has_focus && descends_from(s, usize(s.focus), modal)
+    // Background focus cannot reach any of these focus-sensitive handlers while a
+    // modal is open. An inner modal scope is handled by the walk below instead.
+    if !has_modal || focus_in_modal {
+        let (barred, bar_error) = menu_bar_key(s, code, k)
+        if barred || bar_error != ok { ret (true, bar_error) }
+        let (editor, has_editor) = focused_edit(s)
+        if has_editor {
+            let (edited, edit_error) = edit_key(s, editor, k)
+            if edited || edit_error != ok { ret (true, edit_error) }
+        }
+        if menu_key(s, code, k) { ret (true, ok) }
+        if collection_typeahead_key(s, code, k) { ret (true, ok) }
+        if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
+            let (slid, slide_error) = slider_key(s, usize(s.focus), code)
+            if slid || slide_error != ok { ret (true, slide_error) }
+        }
     }
     var at = usize(s.root)
     if s.has_focus { at = usize(s.focus) }
     // A modal overlay bounds the keyboard to itself: with nothing focused under it
     // (its content may not be focusable), or the focus left outside it, the walk
-    // starts at its scope, so its Escape still dismisses it (D841).
-    let (modal, has_modal) = topmost_modal(s)
-    if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+    // starts at the overlay or an inner scope. It never reaches a background scope.
+    if has_modal && !focus_in_modal {
+        at = modal
         let (inner, has_inner) = scope_under(s, modal)
         if has_inner { at = inner }
     }
@@ -5079,8 +5121,17 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
                 ret (true, fired)
             }
         }
+        if has_modal && at == modal { break }
         if !e.has_parent { break }
         at = usize(e.parent)
+    }
+    if has_modal {
+        if code == 27u32 { ret (true, fire_submit(s.elements[modal].dismiss)) }
+        if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
+            move_focus(s, k.modifiers.shift)
+            ret (true, reveal_focus(s))
+        }
+        if !focus_in_modal { ret (true, ok) }
     }
     if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
         move_focus(s, k.modifiers.shift)
@@ -5446,14 +5497,22 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         s.long_press_fired = false
         s.has_tooltip_touch = false
         s.has_rich_tooltip = false
+        // Wheel input follows the same topmost-overlay rule as a press: a modal
+        // miss is consumed, while an inside wheel searches only its subtree.
+        var from = usize(s.root)
+        let (over, inside, has_over) = overlay_at(s, p.position)
+        if has_over {
+            if !inside { ret ok }
+            from = over
+        }
         // A region that takes the wheel (D2114) has it before any zoom or scroll view.
         // ponytail: even one nested inside it; compare depths if a wheel region ever
         // holds a scroll view.
-        let (wheeled, has_wheeled) = hit_region(s, usize(s.root), p.position, GESTURE_WHEEL)
+        let (wheeled, has_wheeled) = hit_region(s, from, p.position, GESTURE_WHEEL)
         if has_wheeled {
             ret fire_gesture(s.elements[wheeled].gesture, Gesture { Wheel: Wheel { position: p.position, notches: f32(mem.bitcast[i32](p.device)) / 120.0 } })
         }
-        let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
+        let (zoomed, has_zoomed) = hit_zoom(s, from, p.position)
         if has_zoomed {
             // A notch scales by a tenth either way.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
@@ -5462,7 +5521,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             if notches < 0.0 { factor = 1.0 / 1.1 }
             ret zoom_by(s, zoomed, factor, p.position)
         }
-        let (found, has_found) = hit_scroll(s, usize(s.root), p.position)
+        let (found, has_found) = hit_scroll(s, from, p.position)
         if has_found {
             // The notch count rides in `device` as its bits (D797); a notch is 40 px.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
@@ -5474,6 +5533,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         // Enter or Space on a focused tap region is a tap at its centre.
         let code = key_code(k.key.physical)
         hold_modifier(s, code, true)
+        if modal_blocks_focus(s) {
+            let (_, modal_key_error) = dispatch_key(s, k)
+            ret modal_key_error
+        }
         if code == 27u32 && s.has_rich_tooltip {
             s.rich_dismissed_key = s.rich_anchor_key
             s.has_rich_dismissed = true
@@ -5526,6 +5589,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .KeyUp as k:
         let code = key_code(k.key.physical)
         hold_modifier(s, code, false)
+        if modal_blocks_focus(s) { ret ok }
         if menu_alt_key(code) {
             let enter = s.menu_alt_down && !s.menu_alt_used
             s.menu_alt_down = false
@@ -5543,6 +5607,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Text as t:
+        if modal_blocks_focus(s) { ret ok }
         let (editor, has_editor) = focused_edit(s)
         if has_editor { ret edit_text_input(s, editor, t.text) }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
@@ -5550,6 +5615,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Composition as c:
+        if modal_blocks_focus(s) { ret ok }
         let (editor, has_editor) = focused_edit(s)
         if has_editor { edit_compose(s, editor, c.text) }
         ret ok

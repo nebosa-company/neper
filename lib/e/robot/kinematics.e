@@ -136,7 +136,7 @@ fn forward(params: []const Dh, joints: []const f64, out_pose: []f64, scratch: []
 // Jacobian (3 x n, row-major) into `jac`; `scratch.len >= 48 + n`.
 fn jacobian(params: []const Dh, joints: []f64, goal: []const f64, jac: []f64, err_out: []f64, scratch: []f64) -> err {
     let n = params.len
-    if scratch.len < 48usize + n || jac.len < 3usize * n || err_out.len < 3usize || goal.len < 3usize { ret TooSmall }
+    if joints.len < n || scratch.len < 48usize + n || jac.len < 3usize * n || err_out.len < 3usize || goal.len < 3usize { ret TooSmall }
     let h = 1.0e-6f64
     try forward(params, joints, scratch[..16usize], scratch[16usize..48usize])
     err_out[0usize] = goal[0usize] - scratch[3usize]

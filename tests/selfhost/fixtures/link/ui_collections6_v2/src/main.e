@@ -540,6 +540,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (empty_cell, has_empty_cell) = collection.grid_paste_cell(pasted, 1usize, 1usize, paste_room)
     let (_, has_missing_cell) = collection.grid_paste_cell(pasted, 2usize, 0usize, paste_room)
     if !has_empty_cell || empty_cell.len != 0usize || has_missing_cell { os.exit(138i32) }
+    let trailing_tab = "a\t"
+    let (tab_rows, tab_columns) = collection.grid_paste_size(trailing_tab)
+    let (tab_empty, has_tab_empty) = collection.grid_paste_cell(trailing_tab, 0usize, 1usize, paste_room)
+    if tab_rows != 1usize || tab_columns != 2usize || !has_tab_empty || tab_empty.len != 0usize { os.exit(905i32) }
+    let trailing_tab_lf = "a\t\n"
+    let (tab_lf_rows, tab_lf_columns) = collection.grid_paste_size(trailing_tab_lf)
+    let (tab_lf_empty, has_tab_lf_empty) = collection.grid_paste_cell(trailing_tab_lf, 0usize, 1usize, paste_room)
+    let (_, has_tab_lf_row) = collection.grid_paste_cell(trailing_tab_lf, 1usize, 0usize, paste_room)
+    if tab_lf_rows != 1usize || tab_lf_columns != 2usize || !has_tab_lf_empty || tab_lf_empty.len != 0usize || has_tab_lf_row { os.exit(906i32) }
     // (D1402) On touch a tapped row asks to be edited in a sheet; the sheet lays
     // out a field per column and Save.
     let sheet_tokens = style.adapt(&tokens, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })

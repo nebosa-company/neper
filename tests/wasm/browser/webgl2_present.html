@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>webgl2_present</title>
+<pre id="out">running</pre>
+<script type="module">
+  // lib/wasm/window.js's WebGL2 presentation (L179, D5895), checked in a real browser: random RGBA frames at three sizes
+  // are drawn through webgl2() and read back with readPixels, and every byte must be the frame's (rows bottom-up in GL).
+  // Prints "webgl2 present ok", or which size differed, or that this browser has no WebGL2.
+  import { webgl2 } from '../../../lib/wasm/window.js'
+  const out = document.getElementById('out')
+  const lines = []
+  for (const [w, h] of [[64, 48], [97, 61], [480, 320]]) {
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const presenter = webgl2(canvas)
+    if (!presenter) { lines.push('no WebGL2 in this browser; nothing checked'); break }
+    const rgba = new Uint8ClampedArray(w * h * 4)
+    let state = 12345
+    for (let i = 0; i < rgba.length; i++) { state = (state * 1103515245 + 12345) >>> 0; rgba[i] = state >>> 24 }
+    for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255
+    presenter.draw(rgba, w, h)
+    const back = new Uint8Array(w * h * 4)
+    presenter.gl.readPixels(0, 0, w, h, presenter.gl.RGBA, presenter.gl.UNSIGNED_BYTE, back)
+    let differing = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w * 4; x++) if (back[(h - 1 - y) * w * 4 + x] !== rgba[y * w * 4 + x]) differing++
+    if (differing) lines.push(`${w}x${h}: ${differing} bytes differ`)
+  }
+  out.textContent = lines.length ? lines.join('\n') : 'webgl2 present ok'
+</script>

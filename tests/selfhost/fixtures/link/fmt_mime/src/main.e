@@ -4,6 +4,7 @@
 use e.os
 use e.mem
 use e.io
+use e.test.support
 use e.fmt.mime as mime
 
 fn text_equal(a: str, b: str) -> bool {
@@ -29,7 +30,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_param) = mime.parse_media_type(a, "text/plain; charset", 4usize)
     let (_, too_many) = mime.parse_media_type(a, "text/plain; a=1; b=2", 1usize)
     let (_, unterminated) = mime.parse_media_type(a, "text/plain; a=\"open", 4usize)
-    if no_slash != mime.Invalid || bad_param != mime.Invalid || too_many != mime.TooLarge || unterminated != mime.Invalid { os.exit(6) }
+    let (_, raw_cr_parameter) = mime.parse_media_type(a, "text/plain; x=\"a\rb\"", 4usize)
+    let (_, raw_lf_parameter) = mime.parse_media_type(a, "text/plain; x=\"a\nb\"", 4usize)
+    if no_slash != mime.Invalid || bad_param != mime.Invalid || too_many != mime.TooLarge || unterminated != mime.Invalid || raw_cr_parameter != mime.Invalid || raw_lf_parameter != mime.Invalid { os.exit(6) }
     let (html, known) = mime.extension_type("HTML")
     let (unknown, is_known) = mime.extension_type("xyz")
     if !known || !text_equal(html, "text/html") || is_known || !text_equal(unknown, "application/octet-stream") { os.exit(7) }
@@ -43,6 +46,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (empty, has_empty) = mime.header(headers, "x-empty")
     let (_, has_none) = mime.header(headers, "accept")
     if !has_host || !text_equal(host, "example.com") || !has_kind || !text_equal(kind, "text/plain") || !has_empty || empty.len != 0usize || has_none { os.exit(9) }
+    // Header parsing stops at the empty line and must leave the message body on
+    // the supplied reader for its caller.
+    var body_reader = io.slice_reader(&source_state)
+    var body: [8]u8 = zero
+    let (body_count, body_error) = io.read(&body_reader, body[..])
+    if body_error != ok || !text_equal(body[..body_count], "body") { os.exit(14) }
     var folded_state: io.SliceReader = zero
     folded_state.data = "A: one\r\n two\r\n\r\n"
     let (_, folded) = mime.parse_headers(a, io.slice_reader(&folded_state), 256usize, 8usize)
@@ -58,6 +67,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     lf_state.data = "A: 1\nB: 2\n\nrest"
     let (lf_headers, e5) = mime.parse_headers(a, io.slice_reader(&lf_state), 256usize, 8usize)
     if e5 != ok || lf_headers.len != 2usize || !text_equal(lf_headers[1].value, "2") { os.exit(12) }
+    var bare_cr_state: io.SliceReader = zero
+    bare_cr_state.data = "X: ok\rInjected: yes\n\n"
+    let (_, bare_cr) = mime.parse_headers(a, io.slice_reader(&bare_cr_state), 64usize, 8usize)
+    var nul_state: io.SliceReader = zero
+    nul_state.data = "X: a\0b\n\n"
+    let (_, nul_value) = mime.parse_headers(a, io.slice_reader(&nul_state), 64usize, 8usize)
+    var del_state: io.SliceReader = zero
+    del_state.data = "X: a\x7fb\n\n"
+    let (_, del_value) = mime.parse_headers(a, io.slice_reader(&del_state), 64usize, 8usize)
+    var tab_state: io.SliceReader = zero
+    tab_state.data = "X: \tallowed\t\n\n"
+    let (tab_headers, tab_error) = mime.parse_headers(a, io.slice_reader(&tab_state), 64usize, 8usize)
+    if bare_cr != mime.Invalid || nul_value != mime.Invalid || del_value != mime.Invalid || tab_error != ok || tab_headers.len != 1usize || !text_equal(tab_headers[0usize].value, "allowed") { os.exit(13) }
+    // EOF may accompany the last byte of a valid header block without dropping it.
+    let ended_steps: [1]support.ReadStep = [1]support.ReadStep{ support.ReadStep { bytes: "X-End: complete", failure: io.End } }
+    var (ended_script, ended_script_error) = support.scripted_reader(a, ended_steps[..])
+    if ended_script_error != ok { os.exit(15) }
+    let ended_source = support.reader(&ended_script)
+    let (ended_headers, ended_error) = mime.parse_headers(a, ended_source, 64usize, 8usize)
+    if ended_error != ok || ended_headers.len != 1usize || !text_equal(ended_headers[0usize].value, "complete") { os.exit(16) }
     os.exit(0)
     ret ok
 }

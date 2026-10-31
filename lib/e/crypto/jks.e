@@ -361,24 +361,48 @@ fn put_utf(dst: []u8, at: usize, s: str) -> usize {
 // A keystore from `entries` (keys already protected, e.g. by `protect_key`), with the
 // integrity digest for `password`. Returns the length written to `out`.
 fn encode(a: *mem.Arena, entries: []const Entry, password: str, out: []u8) -> (usize, err) {
-    var need = 12usize + 20usize
+    // Reject wire-width overflow before sizing the output or writing any bytes.
+    if entries.len > 4294967295usize { ret (0usize, Invalid) }
     var i = 0usize
     while i < entries.len {
-        need += 4usize + 2usize + entries[i].alias.len + 8usize
-        if entries[i].is_key {
-            need += 4usize + entries[i].protected.len + 4usize
-            var c = 0usize
-            while c < entries[i].chain.len {
-                need += 2usize + 5usize + 4usize + entries[i].chain[c].len
-                c += 1usize
-            }
+        let entry = entries[i]
+        if entry.alias.len > 65535usize { ret (0usize, Invalid) }
+        if entry.is_key {
+            if entry.protected.len > 4294967295usize || entry.chain.len > 4294967295usize { ret (0usize, Invalid) }
         } else {
-            if entries[i].chain.len != 1usize { ret (0usize, Invalid) }
-            need += 2usize + 5usize + 4usize + entries[i].chain[0usize].len
+            if entry.chain.len != 1usize { ret (0usize, Invalid) }
+        }
+        var c = 0usize
+        while c < entry.chain.len {
+            if entry.chain[c].len > 4294967295usize { ret (0usize, Invalid) }
+            c += 1usize
         }
         i += 1usize
     }
-    if out.len < need { ret (0usize, TooSmall) }
+
+    // Bound every addition by out.len so sizing cannot wrap on a 32-bit target.
+    var need = 32usize
+    if need > out.len { ret (0usize, TooSmall) }
+    i = 0usize
+    while i < entries.len {
+        let entry = entries[i]
+        let alias_need = 14usize + entry.alias.len
+        if alias_need > out.len - need { ret (0usize, TooSmall) }
+        need += alias_need
+        if entry.is_key {
+            let remaining = out.len - need
+            if remaining < 8usize || entry.protected.len > remaining - 8usize { ret (0usize, TooSmall) }
+            need += 8usize + entry.protected.len
+        }
+        var c = 0usize
+        while c < entry.chain.len {
+            let remaining = out.len - need
+            if remaining < 11usize || entry.chain[c].len > remaining - 11usize { ret (0usize, TooSmall) }
+            need += 11usize + entry.chain[c].len
+            c += 1usize
+        }
+        i += 1usize
+    }
     put_be32(out, 0usize, 4277010157usize)
     put_be32(out, 4usize, 2usize)
     put_be32(out, 8usize, entries.len)

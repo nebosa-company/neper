@@ -531,6 +531,39 @@ fn run_vectors() -> u8 {
     ret 0u8
 }
 
+fn check_boundary_regressions() -> bool {
+    var transfer: tftp.Transfer = zero
+    var data: [1]u8 = zero
+    var packet: [5]u8 = zero
+    var request: [64]u8 = zero
+    let (_, start_error) = tftp.read_start(&transfer, "wrap", "octet", 0u16, data[..], request[..])
+    if start_error != ok { ret false }
+    transfer.block = 65535u16
+    let (stale_len, stale_data_error) = tftp.encode_data(65534u16, data[..], packet[..])
+    if stale_data_error != ok { ret false }
+    let (stale_step, stale_error) = tftp.read_step(&transfer, packet[0usize..stale_len], request[..])
+    if stale_error != ok || stale_step.reply_len != 0usize || transfer.written != 0usize { ret false }
+    let (packet_len, data_error) = tftp.encode_data(0u16, data[..], packet[..])
+    if data_error != ok { ret false }
+    let (_, wrap_error) = tftp.read_step(&transfer, packet[0usize..packet_len], request[..])
+    if wrap_error != tftp.TooLong || transfer.block != 65535u16 || transfer.written != 0usize { ret false }
+
+    var option_names: [1]str = zero
+    var option_values: [1]str = zero
+    option_names[0usize] = "blksize"
+    option_values[0usize] = "512"
+    request[0usize] = 77u8
+    let (short_values_len, short_values_error) = tftp.encode_request(false, "x", "octet", option_names[..], option_values[0usize..0usize], request[..])
+    if short_values_error != tftp.Malformed || short_values_len != 0usize || request[0usize] != 77u8 { ret false }
+    request[0usize] = 88u8
+    let (extra_values_len, extra_values_error) = tftp.encode_request(false, "x", "octet", option_names[0usize..0usize], option_values[..], request[..])
+    if extra_values_error != tftp.Malformed || extra_values_len != 0usize || request[0usize] != 88u8 { ret false }
+    request[0usize] = 99u8
+    let (oack_len, oack_error) = tftp.encode_oack(option_names[..], option_values[0usize..0usize], request[..])
+    if oack_error != tftp.Malformed || oack_len != 0usize || request[0usize] != 99u8 { ret false }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var file: [3000]u8 = zero
     pattern(file[0usize..3000usize], 3000usize)
@@ -633,6 +666,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var req: [64]u8 = zero
     let (_, small) = tftp.read_start(&t, "x", "octet", 4u16, out[0usize..16usize], req[0usize..64usize])
     if small != tftp.Protocol { os.exit(125i32) }
+    if !check_boundary_regressions() { os.exit(126i32) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
     try io.print("net tftp ok")

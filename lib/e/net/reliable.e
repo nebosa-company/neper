@@ -29,6 +29,8 @@ fn seq_mask(bits: u32) -> u64 {
     ret (1u64 << bits) - 1u64
 }
 
+fn valid_bits(bits: u32) -> bool { ret bits >= 1u32 && bits <= 63u32 }
+
 // `seq` reduced to `bits` on-wire bits.
 fn seq_wrap(seq: u64, bits: u32) -> u64 { ret seq & seq_mask(bits) }
 
@@ -46,8 +48,10 @@ fn seq_less(a: u64, b: u64, bits: u32) -> bool {
 // ---- Go-Back-N ------------------------------------------------------------
 
 // A Go-Back-N sender; `sent_at` needs at least `window` slots (fewer caps the window).
-fn sender(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender {
-    ret Sender { base: 0u64, next_seq: 0u64, window: window, timeout: timeout, sent_at: sent_at, bits: bits }
+fn sender(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> (Sender, err) {
+    let s = Sender { base: 0u64, next_seq: 0u64, window: window, timeout: timeout, sent_at: sent_at, bits: bits }
+    if !valid_bits(bits) { ret (s, Invalid) }
+    ret (s, ok)
 }
 
 fn sender_in_flight(s: *const Sender) -> usize { ret usize(s.next_seq - s.base) }
@@ -84,8 +88,8 @@ fn sender_timeouts(s: *Sender, now: u64, out: []u64) -> usize {
     var n = 0usize
     var seq = s.base
     while seq < s.next_seq {
-        s.sent_at[usize(seq % u64(s.sent_at.len))] = now
         if n < out.len {
+            s.sent_at[usize(seq % u64(s.sent_at.len))] = now
             out[n] = seq_wrap(seq, s.bits)
             n += 1usize
         }
@@ -116,7 +120,7 @@ fn half_space_ok(window: usize, bits: u32) -> bool {
 // exceeds half the sequence space, `TooSmall` when the slots are fewer than it.
 fn sr_sender(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err) {
     let s = SrSender { base: 0u64, next_seq: 0u64, window: window, timeout: timeout, sent_at: sent_at, acked: acked, bits: bits }
-    if window == 0usize || !half_space_ok(window, bits) { ret (s, Invalid) }
+    if !valid_bits(bits) || window == 0usize || !half_space_ok(window, bits) { ret (s, Invalid) }
     if sent_at.len < window || acked.len < window { ret (s, TooSmall) }
     ret (s, ok)
 }
@@ -153,8 +157,8 @@ fn sr_timeouts(s: *SrSender, now: u64, out: []u64) -> usize {
     while seq < s.next_seq {
         let slot = usize(seq % u64(s.sent_at.len))
         if s.acked[slot] == 0u8 && now - s.sent_at[slot] >= s.timeout {
-            s.sent_at[slot] = now
             if n < out.len {
+                s.sent_at[slot] = now
                 out[n] = seq_wrap(seq, s.bits)
                 n += 1usize
             }
@@ -167,7 +171,7 @@ fn sr_timeouts(s: *SrSender, now: u64, out: []u64) -> usize {
 // An SR receiver: `present` marks buffered packets (at least `window` slots, zeroed).
 fn sr_receiver(window: usize, present: []u8, bits: u32) -> (SrReceiver, err) {
     let r = SrReceiver { rcv_base: 0u64, window: window, present: present, bits: bits }
-    if window == 0usize || !half_space_ok(window, bits) { ret (r, Invalid) }
+    if !valid_bits(bits) || window == 0usize || !half_space_ok(window, bits) { ret (r, Invalid) }
     if present.len < window { ret (r, TooSmall) }
     ret (r, ok)
 }
@@ -268,7 +272,10 @@ fn aimd_loss(cwnd: u64, mss: u64, timeout: bool) -> (u64, u64) {
 // ---- planned names --------------------------------------------------------
 
 // The sliding-window (Go-Back-N) sender: `sender` under its planned name.
-fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender { ret sender(window, timeout, sent_at, bits) }
+fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> (Sender, err) {
+    let (s, e) = sender(window, timeout, sent_at, bits)
+    ret (s, e)
+}
 
 // The Selective Repeat sender: `sr_sender` under its planned name.
 fn selective_repeat(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err) {

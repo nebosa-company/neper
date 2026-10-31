@@ -62,6 +62,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_width != window.Invalid { os.exit(1i32) }
     let (_, small) = window.monotonic_queue(values[..], positions[..], 20usize, true)
     if small != window.TooSmall { os.exit(1i32) }
+    // Exact-width storage must still distinguish a full queue from an empty one.
+    var exact_values: [3]i64 = zero
+    var exact_positions: [3]u64 = zero
+    let (exact0, exact_error) = window.monotonic_queue(exact_values[..], exact_positions[..], 3usize, true)
+    if exact_error != ok { os.exit(1i32) }
+    var exact_queue = exact0
+    window.monotonic_push(&exact_queue, 1i64)
+    window.monotonic_push(&exact_queue, 2i64)
+    window.monotonic_push(&exact_queue, 3i64)
+    let (full_minimum, full_error) = window.monotonic_extreme(&exact_queue)
+    if full_error != ok || full_minimum != 1i64 { os.exit(1i32) }
+    window.monotonic_push(&exact_queue, 4i64)
+    let (advanced_minimum, advanced_error) = window.monotonic_extreme(&exact_queue)
+    if advanced_error != ok || advanced_minimum != 2i64 { os.exit(1i32) }
+    var exact_max_values: [3]i64 = zero
+    var exact_max_positions: [3]u64 = zero
+    let (exact_max0, exact_max_error) = window.monotonic_queue(exact_max_values[..], exact_max_positions[..], 3usize, false)
+    if exact_max_error != ok { os.exit(1i32) }
+    var exact_max = exact_max0
+    window.monotonic_push(&exact_max, 3i64)
+    window.monotonic_push(&exact_max, 2i64)
+    window.monotonic_push(&exact_max, 1i64)
+    let (full_maximum, full_max_error) = window.monotonic_extreme(&exact_max)
+    if full_max_error != ok || full_maximum != 3i64 { os.exit(1i32) }
+    window.monotonic_push(&exact_max, 0i64)
+    let (advanced_maximum, advanced_max_error) = window.monotonic_extreme(&exact_max)
+    if advanced_max_error != ok || advanced_maximum != 2i64 { os.exit(1i32) }
 
     // 2: the two-stack window over the maximum with a moving width.
     var nothing = Nothing { unused: 0u8 }
@@ -127,6 +154,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_k != window.Invalid { os.exit(3i32) }
     let (_, few_buckets) = window.exponential_histogram(sizes[..10usize], stamps[..10usize], 100u64, 4usize)
     if few_buckets != window.TooSmall { os.exit(3i32) }
+    var no_sizes: [0]u64 = zero
+    var no_stamps: [0]u64 = zero
+    let (_, impossible_k) = window.exponential_histogram(no_sizes[..], no_stamps[..], 1u64, 0usize -% 1usize)
+    if impossible_k != window.TooSmall { os.exit(3i32) }
+    let (_, impossible_product) = window.exponential_histogram(no_sizes[..], no_stamps[..], 1u64, (0usize -% 1usize) / 2usize)
+    if impossible_product != window.TooSmall { os.exit(3i32) }
 
     try io.print("data window ok\n")
     ret ok

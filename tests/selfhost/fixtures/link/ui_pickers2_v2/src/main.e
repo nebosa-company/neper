@@ -171,10 +171,15 @@ fn reads(text: str, secs: i64) -> bool {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     // The typed forms: read, then written with units.
-    if !reads("90m", 5400i64) || !reads("90 min", 5400i64) || !reads("1h30", 5400i64) || !reads("1.5h", 5400i64) || !reads("1:30", 5400i64) || !reads("1:30:00", 5400i64) || !reads("2 hours", 7200i64) || !reads("45 s", 45i64) || !reads("45", 2700i64) { os.exit(40i32) }
+    if !reads("90m", 5400i64) || !reads("90 min", 5400i64) || !reads("1h30", 5400i64) || !reads("1.5h", 5400i64) || !reads("1:30", 5400i64) || !reads("1:30:00", 5400i64) || !reads("2 hours", 7200i64) || !reads("2 hrs", 7200i64) || !reads("45 s", 45i64) || !reads("45 seconds", 45i64) || !reads("45", 2700i64) { os.exit(40i32) }
     let (junk_value, junk) = overlay.read_duration("soon")
     let (empty_value, empty) = overlay.read_duration("")
-    if junk || empty { os.exit(41i32) }
+    let (bad_hours_value, bad_hours) = overlay.read_duration("1hgarbage")
+    let (bad_minutes_value, bad_minutes) = overlay.read_duration("2 minutely")
+    let (bad_seconds_value, bad_seconds) = overlay.read_duration("4 sfoo")
+    let (bad_colon_minute_value, bad_colon_minute) = overlay.read_duration("1:99")
+    let (bad_colon_second_value, bad_colon_second) = overlay.read_duration("1:30:99")
+    if junk || empty || bad_hours || bad_minutes || bad_seconds || bad_colon_minute || bad_colon_second { os.exit(41i32) }
     var written: [32]u8 = zero
     let n1 = overlay.write_duration(written[0usize..32usize], time.Duration { nanos: 5400000000000i64 })
     if !same(written[0usize..n1], "1 h 30 min") { os.exit(42i32) }

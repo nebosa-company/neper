@@ -8,6 +8,7 @@
 // on the way out and `indefinite` on the `Item` plus `at_break` on the way in.
 
 use e.mem
+use e.text.utf8
 
 type Encoder = struct { out: []u8, len: usize }
 
@@ -118,6 +119,7 @@ fn encode_bytes(e: *Encoder, data: []const u8) -> err {
 }
 
 fn encode_text(e: *Encoder, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     try encode_head(e, MAJOR_TEXT, u64(text.len))
     ret put_all(e, text)
 }
@@ -287,7 +289,15 @@ fn decode_bytes(d: *Decoder) -> ([]const u8, err) {
 
 fn decode_text(d: *Decoder) -> (str, err) {
     let (out, payload_error) = payload(d, MAJOR_TEXT)
-    ret (out, payload_error)
+    if payload_error != ok { ret (zero, payload_error) }
+    if !utf8.validate(out) { ret (zero, Invalid) }
+    ret (out, ok)
+}
+
+// Array and map counts are stored as u64 in CBOR but become usize for callers and arena storage.
+fn container_count(value: u64) -> (usize, err) {
+    if mem.size_of[usize]() == 4usize && value > 4294967295u64 { ret (0usize, Invalid) }
+    ret (usize(value), ok)
 }
 
 // The item count, and whether the array is indefinite (then the count is 0 and the caller reads
@@ -295,14 +305,18 @@ fn decode_text(d: *Decoder) -> (str, err) {
 fn decode_array_len(d: *Decoder) -> (usize, bool, err) {
     let (item, head_error) = expect(d, MAJOR_ARRAY)
     if head_error != ok { ret (0usize, false, head_error) }
-    ret (usize(item.value), item.indefinite, ok)
+    let (count, count_error) = container_count(item.value)
+    if count_error != ok { ret (0usize, false, count_error) }
+    ret (count, item.indefinite, ok)
 }
 
 // The pair count, likewise.
 fn decode_map_len(d: *Decoder) -> (usize, bool, err) {
     let (item, head_error) = expect(d, MAJOR_MAP)
     if head_error != ok { ret (0usize, false, head_error) }
-    ret (usize(item.value), item.indefinite, ok)
+    let (count, count_error) = container_count(item.value)
+    if count_error != ok { ret (0usize, false, count_error) }
+    ret (count, item.indefinite, ok)
 }
 
 fn decode_tag(d: *Decoder) -> (u64, err) {
@@ -366,6 +380,9 @@ fn decode_f64(d: *Decoder) -> (f64, err) {
 fn skip_depth(d: *Decoder, depth: u16) -> err {
     let (item, head_error) = decode_head(d)
     if head_error != ok { ret head_error }
+    // `break` is only legal as the terminator handled by an enclosing
+    // indefinite-length container, never as an item to skip itself.
+    if item.major == MAJOR_SIMPLE && item.info == INFO_INDEFINITE { ret Invalid }
     if item.major == MAJOR_BYTES || item.major == MAJOR_TEXT {
         if !item.indefinite {
             if u64(d.data.len - d.at) < item.value { ret Truncated }
@@ -385,12 +402,26 @@ fn skip_depth(d: *Decoder, depth: u16) -> err {
     if item.major == MAJOR_ARRAY || item.major == MAJOR_MAP {
         if depth == 0u16 { ret Invalid }
         if item.indefinite {
-            while !at_break(d) { try skip_depth(d, depth - 1u16) }
+            var items = 0usize
+            while !at_break(d) {
+                try skip_depth(d, depth - 1u16)
+                items += 1usize
+            }
+            // An indefinite map still has key/value pairs. Do not accept a
+            // break after a dangling key merely because every item itself was
+            // valid.
+            if item.major == MAJOR_MAP && items % 2usize != 0usize { ret Invalid }
             d.at += 1usize
             ret ok
         }
         var count = item.value
-        if item.major == MAJOR_MAP { count = count * 2u64 }
+        if item.major == MAJOR_MAP {
+            // Every pair contains at least two item heads. Bound before doubling so a
+            // hostile pair count cannot overflow and turn an incomplete map into an
+            // apparently empty one in release builds.
+            if count > u64(remaining(d) / 2usize) { ret Truncated }
+            count = count * 2u64
+        }
         var at = 0u64
         while at < count {
             try skip_depth(d, depth - 1u16)
@@ -411,8 +442,8 @@ fn skip(d: *Decoder) -> err { ret skip_depth(d, 128u16) }
 //
 // `Value` is one item with its nesting. `encode` writes it in the preferred serialization of
 // RFC 8949 section 4.2: shortest heads, the shortest float that reads back exactly, no
-// indefinite lengths, and map keys in the order of their encodings (shorter first, then
-// bytewise). `decode` reads one back through the typed helpers above; its arrays, maps and
+// indefinite lengths, and map keys in bytewise lexicographic order of their encodings.
+// `decode` reads one back through the typed helpers above; its arrays, maps and
 // tagged items live in the arena, its strings borrow from the input.
 
 type Pair = struct { key: Value, value: Value }
@@ -458,13 +489,12 @@ fn encode_float_shortest(e: *Encoder, value: f64) -> err {
 }
 
 fn key_less(x: []const u8, y: []const u8) -> bool {
-    if x.len != y.len { ret x.len < y.len }
     var i = 0usize
-    while i < x.len {
+    while i < x.len && i < y.len {
         if x[i] != y[i] { ret x[i] < y[i] }
         i += 1usize
     }
-    ret false
+    ret x.len < y.len
 }
 
 fn reverse_bytes(dst: []u8, lo: usize, hi: usize) {
@@ -609,7 +639,9 @@ fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err) {
     if major == MAJOR_ARRAY || major == MAJOR_MAP {
         let (item, head_error) = decode_head(d)
         if head_error != ok { ret (none, head_error) }
-        var count = usize(item.value)
+        let (declared, declared_error) = container_count(item.value)
+        if declared_error != ok { ret (none, declared_error) }
+        var count = declared
         if item.indefinite {
             let (counted, count_error) = count_until_break(d)
             if count_error != ok { ret (none, count_error) }

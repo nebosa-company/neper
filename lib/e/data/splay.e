@@ -150,14 +150,41 @@ fn reverse_range[T: type](t: *Splay[T], root: u32, low: usize, high: usize) -> (
     ret (r, ok)
 }
 
-// The sequence in order into `out`; answers the count.
+// The sequence in order into `out`; answers the count. Parent links make this an
+// O(1)-scratch traversal, so a legal skewed tree never consumes the call stack.
 fn collect[T: type](t: *Splay[T], root: u32, out: []T) -> (usize, err) {
-    if root == 0u32 { ret (0usize, ok) }
-    push[T](t, root)
-    let (before, left_error) = collect[T](t, t.left[usize(root)], out)
-    if left_error != ok { ret (before, left_error) }
-    if before >= out.len { ret (before, TooSmall) }
-    out[before] = t.values[usize(root)]
-    let (after, right_error) = collect[T](t, t.right[usize(root)], out[before + 1usize..])
-    ret (before + 1usize + after, right_error)
+    var current = root
+    var previous = 0u32
+    if root != 0u32 { previous = t.parent[usize(root)] }
+    var written = 0usize
+    while current != 0u32 {
+        push[T](t, current)
+        let parent_node = t.parent[usize(current)]
+        let left_node = t.left[usize(current)]
+        let right_node = t.right[usize(current)]
+        var next_node = parent_node
+        var visit = false
+        if previous == parent_node {
+            if left_node != 0u32 {
+                next_node = left_node
+            } else {
+                visit = true
+                if right_node != 0u32 { next_node = right_node }
+            }
+        } else if previous == left_node {
+            visit = true
+            if right_node != 0u32 { next_node = right_node }
+        }
+        if visit {
+            if written >= out.len { ret (written, TooSmall) }
+            out[written] = t.values[usize(current)]
+            written += 1usize
+        }
+        // `collect` is also valid for a subtree.  Once its root has no more
+        // child to visit, do not climb into the caller's enclosing tree.
+        if current == root && next_node == parent_node { ret (written, ok) }
+        previous = current
+        current = next_node
+    }
+    ret (written, ok)
 }

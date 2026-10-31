@@ -49,6 +49,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var scratch: [256]f64 = zero
     var visited: [40]u32 = zero
+    let maximum = 0usize -% 1usize
+    let (_, maximum_m_error) = ann.graph_build(a, cloud[..1usize], 1usize, 1usize, maximum, 1usize, scratch[..5usize], visited[..1usize])
+    if maximum_m_error != ann.Invalid { os.exit(2i32) }
+    let (_, maximum_ef_error) = ann.graph_build(a, cloud[..1usize], 1usize, 1usize, 1usize, maximum, scratch[..0usize], visited[..1usize])
+    if maximum_ef_error != ann.Invalid { os.exit(2i32) }
     let (g, build_error) = ann.graph_build(a, cloud[..], 40usize, 2usize, 5usize, 12usize, scratch[..], visited[..])
     if build_error != ok || g.n != 40usize { os.exit(2i32) }
     var ids: [12]f64 = zero
@@ -130,8 +135,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if all_error != ok || all != 4usize { os.exit(3i32) }
     let (_, probe_invalid) = ann.ivf_pq_search(&index, qv[..], 4usize, 4usize, found_ids[..], found_dists[..], qs[..])
     if probe_invalid != ann.Invalid { os.exit(3i32) }
+    let nan = mem.bitcast[f64](9221120237041090560u64)
+    let positive_infinity = mem.bitcast[f64](9218868437227405312u64)
+    qv[0usize] = nan
+    let (_, nan_query_error) = ann.ivf_pq_search(&index, qv[..], 1usize, 4usize, found_ids[..], found_dists[..], qs[..])
+    if nan_query_error != ann.Invalid { os.exit(3i32) }
+    qv[0usize] = positive_infinity
+    let (_, positive_infinity_query_error) = ann.ivf_pq_search(&index, qv[..], 1usize, 4usize, found_ids[..], found_dists[..], qs[..])
+    if positive_infinity_query_error != ann.Invalid { os.exit(3i32) }
+    qv[0usize] = 0.0f64 - positive_infinity
+    let (_, negative_infinity_query_error) = ann.ivf_pq_search(&index, qv[..], 1usize, 4usize, found_ids[..], found_dists[..], qs[..])
+    if negative_infinity_query_error != ann.Invalid { os.exit(3i32) }
     let (_, train_invalid) = ann.ivf_pq_train(a, points[..], 48usize, 4usize, 3usize, 3usize, 4usize, &r, big, labels[..], marks[..])
     if train_invalid != ann.Invalid { os.exit(3i32) }
+
+    // 4: constructor geometry must fail before any overflow or allocation.
+    let (_, maximum_level_error) = ann.hnsw(a, 1usize, 1usize, 1usize, maximum)
+    if maximum_level_error != ann.Invalid { os.exit(4i32) }
+    let (_, near_maximum_level_error) = ann.hnsw(a, 1usize, 1usize, 1usize, maximum - 1usize)
+    if near_maximum_level_error != ann.Invalid { os.exit(4i32) }
+    let (_, levels_product_error) = ann.hnsw(a, 2usize, 1usize, 1usize, 9223372036854775807usize)
+    if levels_product_error != ann.Invalid { os.exit(4i32) }
+    let (_, point_product_error) = ann.hnsw(a, 2usize, 9223372036854775808usize, 1usize, 0usize)
+    if point_product_error != ann.Invalid { os.exit(4i32) }
+    let (_, links_product_error) = ann.hnsw(a, 3usize, 1usize, 3074457345618258603usize, 0usize)
+    if links_product_error != ann.Invalid { os.exit(4i32) }
 
     try io.print("ml ann ok\n")
     ret ok

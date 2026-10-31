@@ -46,6 +46,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok || up != app { os.exit(11) }
     let (_, bad) = dom.query_selector(a, &tree, app, "p[")
     if bad != dom.SyntaxError { os.exit(12) }
+    let (_, pseudo_query_error) = dom.query_selector(a, &tree, app, "p::before")
+    let (_, pseudo_all_error) = dom.query_selector_all(a, &tree, tree.root, "p::before", found[0..])
+    let (_, pseudo_matches_error) = dom.matches(a, &tree, hit, "p::before")
+    let (_, pseudo_closest_error) = dom.closest(a, &tree, hit, "p::before")
+    if pseudo_query_error != dom.SyntaxError || pseudo_all_error != dom.SyntaxError || pseudo_matches_error != dom.SyntaxError || pseudo_closest_error != dom.SyntaxError { os.exit(53) }
 
     // Creation, insertion, a live collection.
     let version = tree.version
@@ -90,6 +95,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dom.class_remove(&tree, app, "b") != ok || !same(attr(&tree, app, "class"), "a c") { os.exit(35) }
     let (present, e8) = dom.class_toggle(&tree, app, "a")
     if e8 != ok || present || !same(attr(&tree, app, "class"), "c") { os.exit(36) }
+    if dom.class_add(&tree, app, "") != dom.SyntaxError || dom.class_add(&tree, app, "c d") != dom.InvalidCharacter { os.exit(54) }
+    if dom.class_remove(&tree, app, "") != dom.SyntaxError || dom.class_remove(&tree, app, "\t") != dom.InvalidCharacter { os.exit(55) }
+    let (invalid_present, invalid_toggle_error) = dom.class_toggle(&tree, app, " ")
+    if invalid_present || invalid_toggle_error != dom.InvalidCharacter || !same(attr(&tree, app, "class"), "c") { os.exit(56) }
     var spans: [4]dom.NodeId = zero
     if dom.elements_by_tag(&tree, app, "span", spans[0..]) != 1usize { os.exit(37) }
     let (foo, has_foo, e9) = dom.dataset_get(a, &tree, spans[0usize], "fooBar")
@@ -103,6 +112,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dom.set_text_content(&tree, spans[0usize], "x<y") != ok { os.exit(42) }
     let (outer, e11) = dom.outer_html(a, &tree, spans[0usize])
     if e11 != ok || !same(outer, "<span data-baz-qux=\"2\">x&lt;y</span>") { os.exit(43) }
+    let root_version = tree.version
+    let root_first = dom.first_child(&tree, tree.root)
+    let root_children = dom.child_count(&tree, tree.root)
+    if dom.set_text_content(&tree, tree.root, "must not replace the document") != ok { os.exit(57) }
+    if tree.version != root_version || dom.first_child(&tree, tree.root) != root_first || dom.child_count(&tree, tree.root) != root_children { os.exit(58) }
     if dom.set_inner_html(&tree, spans[0usize], "<b>k</b>m", options()) != ok { os.exit(44) }
     let (inner, e12) = dom.inner_html(a, &tree, spans[0usize])
     if e12 != ok || !same(inner, "<b>k</b>m") { os.exit(45) }
@@ -130,5 +144,71 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var w2 = dom.walker(app, dom.ShowElement)
     let kid = dom.walker_child(&tree, &w2, false)
     if kid != fresh || dom.walker_sibling(&tree, &w2, false) != first_p { os.exit(52) }
+
+    // Root-document insertions must preserve the DOM child sequence atomically.
+    var doctype = dom.NONE
+    var scan = 0usize
+    while scan < tree.used {
+        let id = u32(scan)
+        if dom.kind_of(&tree, id) == .Doctype { doctype = id }
+        scan += 1usize
+    }
+    if doctype == dom.NONE { os.exit(59) }
+    let doctype_version = tree.version
+    let doctype_first = dom.first_child(&tree, tree.root)
+    if dom.append_child(&tree, tree.root, doctype) != dom.HierarchyRequest { os.exit(60) }
+    if tree.version != doctype_version || dom.first_child(&tree, tree.root) != doctype_first || dom.parent_of(&tree, doctype) != tree.root { os.exit(61) }
+    let root_element = dom.first_element_child(&tree, tree.root)
+    if root_element == dom.NONE { os.exit(79) }
+    let reorder_version = tree.version
+    if dom.insert_before(&tree, tree.root, root_element, doctype) != dom.HierarchyRequest { os.exit(80) }
+    if tree.version != reorder_version || dom.first_child(&tree, tree.root) != doctype { os.exit(81) }
+    let (second_doctype, second_doctype_error) = dom.clone_node(&tree, doctype, false)
+    if second_doctype_error != ok { os.exit(62) }
+    let second_doctype_version = tree.version
+    if dom.insert_before(&tree, tree.root, second_doctype, doctype) != dom.HierarchyRequest { os.exit(63) }
+    if tree.version != second_doctype_version || dom.parent_of(&tree, second_doctype) != dom.NONE { os.exit(64) }
+
+    let (made, made_error) = dom.new_document(a, 16usize)
+    if made_error != ok { os.exit(65) }
+    var single = made
+    let (one_root, one_root_error) = dom.create_element(&single, "one")
+    let (two_root, two_root_error) = dom.create_element(&single, "two")
+    if one_root_error != ok || two_root_error != ok || dom.append_child(&single, single.root, one_root) != ok { os.exit(66) }
+    let single_version = single.version
+    if dom.append_child(&single, single.root, two_root) != dom.HierarchyRequest { os.exit(67) }
+    if single.version != single_version || dom.first_child(&single, single.root) != one_root || dom.parent_of(&single, two_root) != dom.NONE { os.exit(68) }
+
+    let (fragment_made, fragment_made_error) = dom.new_document(a, 16usize)
+    if fragment_made_error != ok { os.exit(69) }
+    var fragment_doc = fragment_made
+    let (two_roots, two_roots_error) = dom.create_fragment(&fragment_doc)
+    let (fragment_one, fragment_one_error) = dom.create_element(&fragment_doc, "one")
+    let (fragment_two, fragment_two_error) = dom.create_element(&fragment_doc, "two")
+    if two_roots_error != ok || fragment_one_error != ok || fragment_two_error != ok || dom.append_child(&fragment_doc, two_roots, fragment_one) != ok || dom.append_child(&fragment_doc, two_roots, fragment_two) != ok { os.exit(70) }
+    let fragment_version = fragment_doc.version
+    if dom.append_child(&fragment_doc, fragment_doc.root, two_roots) != dom.HierarchyRequest { os.exit(71) }
+    if fragment_doc.version != fragment_version || dom.child_count(&fragment_doc, two_roots) != 2usize || dom.parent_of(&fragment_doc, fragment_one) != two_roots { os.exit(72) }
+    let (text_fragment, text_fragment_error) = dom.create_fragment(&fragment_doc)
+    let (fragment_text, fragment_text_error) = dom.create_text(&fragment_doc, "not a document child")
+    if text_fragment_error != ok || fragment_text_error != ok || dom.append_child(&fragment_doc, text_fragment, fragment_text) != ok { os.exit(82) }
+    let text_fragment_version = fragment_doc.version
+    if dom.append_child(&fragment_doc, fragment_doc.root, text_fragment) != dom.HierarchyRequest { os.exit(83) }
+    if fragment_doc.version != text_fragment_version || dom.first_child(&fragment_doc, text_fragment) != fragment_text { os.exit(84) }
+
+    let (replacement_made, replacement_made_error) = dom.new_document(a, 16usize)
+    if replacement_made_error != ok { os.exit(73) }
+    var replacement_doc = replacement_made
+    let (old_root, old_root_error) = dom.create_element(&replacement_doc, "old")
+    let (new_root, new_root_error) = dom.create_element(&replacement_doc, "new")
+    if old_root_error != ok || new_root_error != ok || dom.append_child(&replacement_doc, replacement_doc.root, old_root) != ok { os.exit(74) }
+    if dom.replace_child(&replacement_doc, replacement_doc.root, new_root, old_root) != ok || dom.first_child(&replacement_doc, replacement_doc.root) != new_root || dom.parent_of(&replacement_doc, old_root) != dom.NONE { os.exit(75) }
+    let (replacement_fragment, replacement_fragment_error) = dom.create_fragment(&replacement_doc)
+    let (replacement_one, replacement_one_error) = dom.create_element(&replacement_doc, "one")
+    let (replacement_two, replacement_two_error) = dom.create_element(&replacement_doc, "two")
+    if replacement_fragment_error != ok || replacement_one_error != ok || replacement_two_error != ok || dom.append_child(&replacement_doc, replacement_fragment, replacement_one) != ok || dom.append_child(&replacement_doc, replacement_fragment, replacement_two) != ok { os.exit(76) }
+    let replacement_version = replacement_doc.version
+    if dom.replace_child(&replacement_doc, replacement_doc.root, replacement_fragment, new_root) != dom.HierarchyRequest { os.exit(77) }
+    if replacement_doc.version != replacement_version || dom.first_child(&replacement_doc, replacement_doc.root) != new_root || dom.child_count(&replacement_doc, replacement_fragment) != 2usize { os.exit(78) }
     ret ok
 }

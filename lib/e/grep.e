@@ -32,30 +32,42 @@ fn occurrences(bytes: []const u8, pattern: str) -> usize {
     ret count
 }
 
-fn build_index(a: *mem.Arena, root: str) -> (Index, err) {
+// The only durable index metadata is this bounded count.  It is deliberately
+// recomputed by indexed search, so a changed tree whose trigram metadata differs
+// does not masquerade as the frozen snapshot.
+fn snapshot(a: *mem.Arena, root: str) -> (u32, err) {
     let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
     let (created, walk_error) = fs.walk(a, root, options)
-    if walk_error != ok { ret (zero, Invalid) }
+    if walk_error != ok { ret (zero, walk_error) }
     var walker = created
     var trigrams = 0u64
     while true {
         let (entry, present, next_error) = fs.walk_next_err(&walker)
         if next_error != ok {
             let ignored = fs.walk_close(&walker)
-            ret (zero, Invalid)
+            ret (zero, next_error)
         }
         if !present { break }
         if entry.kind == .File && entry.size >= 3u64 {
-            trigrams += entry.size - 2u64
-            if trigrams > 4294967295u64 {
+            let added = entry.size - 2u64
+            if added > 4294967295u64 - trigrams {
                 let ignored = fs.walk_close(&walker)
                 ret (zero, Invalid)
             }
+            trigrams += added
         }
     }
     let close_error = fs.walk_close(&walker)
-    if close_error != ok { ret (zero, Invalid) }
-    ret (Index { root: root, trigrams: u32(trigrams) }, ok)
+    if close_error != ok { ret (zero, close_error) }
+    ret (u32(trigrams), ok)
+}
+
+fn build_index(a: *mem.Arena, root: str) -> (Index, err) {
+    let scan_mark = mem.mark(a)
+    let (trigrams, snapshot_error) = snapshot(a, root)
+    mem.reset(a, scan_mark)
+    if snapshot_error != ok { ret (zero, snapshot_error) }
+    ret (Index { root: root, trigrams: trigrams }, ok)
 }
 
 fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
@@ -63,8 +75,12 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
     if pattern.len == 0usize { ret (none, Invalid) }
     let call_mark = mem.mark(a)
     let options = fs.WalkOptions { recursive: true, follow_symlinks: false }
+    let first_scan_mark = mem.mark(a)
     let (created, walk_error) = fs.walk(a, root, options)
-    if walk_error != ok { ret (none, Invalid) }
+    if walk_error != ok {
+        mem.reset(a, call_mark)
+        ret (none, walk_error)
+    }
     var walker = created
     var total = 0usize
     while true {
@@ -72,16 +88,20 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
         if next_error != ok {
             let ignored = fs.walk_close(&walker)
             mem.reset(a, call_mark)
-            ret (none, Invalid)
+            ret (none, next_error)
         }
         if !present { break }
         if entry.kind == .File {
             let file_mark = mem.mark(a)
             let (bytes, read_error) = fs.read_file(a, entry.path, 0usize)
             if read_error != ok {
+                if read_error == fs.NotFound || read_error == fs.Denied {
+                    mem.reset(a, file_mark)
+                    continue
+                }
                 let ignored = fs.walk_close(&walker)
                 mem.reset(a, call_mark)
-                ret (none, Invalid)
+                ret (none, read_error)
             }
             total += occurrences(bytes, pattern)
             mem.reset(a, file_mark)
@@ -90,8 +110,11 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
     let close_error = fs.walk_close(&walker)
     if close_error != ok {
         mem.reset(a, call_mark)
-        ret (none, Invalid)
+        ret (none, close_error)
     }
+    // The count pass retains only `total`; its walk allocations must not displace
+    // returned matches and their second-pass paths and file contents.
+    mem.reset(a, first_scan_mark)
     let (matches, allocation_error) = mem.alloc[Match](a, total)
     if allocation_error != ok {
         mem.reset(a, call_mark)
@@ -100,7 +123,7 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
     let (created_again, again_error) = fs.walk(a, root, options)
     if again_error != ok {
         mem.reset(a, call_mark)
-        ret (none, Invalid)
+        ret (none, again_error)
     }
     walker = created_again
     var used = 0usize
@@ -109,16 +132,20 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
         if next_error != ok {
             let ignored = fs.walk_close(&walker)
             mem.reset(a, call_mark)
-            ret (none, Invalid)
+            ret (none, next_error)
         }
         if !present { break }
         if entry.kind == .File {
             let file_mark = mem.mark(a)
             let (bytes, read_error) = fs.read_file(a, entry.path, 0usize)
             if read_error != ok {
+                if read_error == fs.NotFound || read_error == fs.Denied {
+                    mem.reset(a, file_mark)
+                    continue
+                }
                 let ignored = fs.walk_close(&walker)
                 mem.reset(a, call_mark)
-                ret (none, Invalid)
+                ret (none, read_error)
             }
             let before = used
             var offset = 0usize
@@ -126,13 +153,21 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
             var line_start = 0usize
             while offset + pattern.len <= bytes.len {
                 if at(bytes, pattern, offset) {
+                    if used >= matches.len {
+                        let ignored = fs.walk_close(&walker)
+                        mem.reset(a, call_mark)
+                        ret (none, Invalid)
+                    }
                     var line_end = offset
                     while line_end < bytes.len && bytes[line_end] != 10u8 && bytes[line_end] != 13u8 { line_end += 1usize }
                     matches[used] = Match { path: entry.path, line: line, column: u32(offset - line_start + 1usize), text: bytes[line_start..line_end] }
                     used += 1usize
                 }
-                if bytes[offset] == 10u8 {
+                if bytes[offset] == 13u8 {
                     line += 1u32
+                    line_start = offset + 1usize
+                } else if bytes[offset] == 10u8 {
+                    if offset == 0usize || bytes[offset - 1usize] != 13u8 { line += 1u32 }
                     line_start = offset + 1usize
                 }
                 offset += 1usize
@@ -143,13 +178,40 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err) {
     let final_close = fs.walk_close(&walker)
     if final_close != ok {
         mem.reset(a, call_mark)
-        ret (none, Invalid)
+        ret (none, final_close)
     }
     ret (matches[0usize..used], ok)
 }
 
 fn search_index(a: *mem.Arena, ix: Index, pattern: str) -> ([]Match, err) {
     if ix.root.len == 0usize { ret (zero, Invalid) }
+    let call_mark = mem.mark(a)
+    let first_scan_mark = mem.mark(a)
+    let (before, before_error) = snapshot(a, ix.root)
+    mem.reset(a, first_scan_mark)
+    if before_error != ok {
+        mem.reset(a, call_mark)
+        ret (zero, before_error)
+    }
+    if before != ix.trigrams {
+        mem.reset(a, call_mark)
+        ret (zero, Invalid)
+    }
     let (matches, search_error) = search(a, ix.root, pattern)
-    ret (matches, search_error)
+    if search_error != ok {
+        mem.reset(a, call_mark)
+        ret (zero, search_error)
+    }
+    let final_scan_mark = mem.mark(a)
+    let (after, after_error) = snapshot(a, ix.root)
+    mem.reset(a, final_scan_mark)
+    if after_error != ok {
+        mem.reset(a, call_mark)
+        ret (zero, after_error)
+    }
+    if after != ix.trigrams {
+        mem.reset(a, call_mark)
+        ret (zero, Invalid)
+    }
+    ret (matches, ok)
 }

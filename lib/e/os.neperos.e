@@ -12,6 +12,7 @@
 // e.thread) lands in later C107 increments.
 
 use e.mem
+use e.path as path_api
 
 // The separator this target's paths are written with (e.path asks the host nothing, so a portable
 // module learns the convention only from the per-target os file). NeperOS uses '/'.
@@ -33,8 +34,9 @@ type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const 
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 // The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
-// compile unchanged. NeperOS fills only what its server reports (kind and size).
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+// compile unchanged. NeperOS fills only what its server reports (kind and size), so its
+// file identity remains zero and callers can decline an identity-dependent operation.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 type Dir = resource(dir_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
@@ -82,7 +84,7 @@ const OP_CLOSE: usize = 6usize
 const OP_REMOVE: usize = 7usize
 const FS_RESULT_OK: usize = 0usize
 
-type FsHandle = struct { used: bool, name: [64]u8, name_len: usize, offset: usize, size: usize, loaded: bool, dirty: bool, data: [512]u8 }
+type FsHandle = struct { used: bool, name: [64]u8, name_len: usize, offset: usize, size: usize, loaded: bool, dirty: bool, append: bool, data: [512]u8 }
 var fs_handles: [8]FsHandle = zero
 
 fn fs_send_word(word: usize) {
@@ -129,6 +131,18 @@ fn fs_name_str(slot: usize) -> str {
     ret fs_handles[slot].name[0usize..fs_handles[slot].name_len]
 }
 
+fn fs_load(slot: usize) -> err {
+    if fs_handles[slot].loaded { ret ok }
+    fs_send_word(OP_READ)
+    fs_send_str(fs_name_str(slot))
+    let result = fs_recv_word()
+    let count = fs_recv_handle_data(slot)
+    if result != FS_RESULT_OK { ret NotFound }
+    fs_handles[slot].size = count
+    fs_handles[slot].loaded = true
+    ret ok
+}
+
 fn write(f: File, buf: str) -> (usize, err) {
     if f.raw < FILE_BASE {
         if f.raw <= 2usize { ret (console_write(buf), ok) }
@@ -136,30 +150,43 @@ fn write(f: File, buf: str) -> (usize, err) {
     }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
+    var start = fs_handles[slot].offset
+    if fs_handles[slot].append { start = fs_handles[slot].size }
     var n = 0usize
-    while n < buf.len && fs_handles[slot].offset + n < FS_BLOCK {
-        fs_handles[slot].data[fs_handles[slot].offset + n] = buf[n]
+    while n < buf.len && start + n < FS_BLOCK {
+        fs_handles[slot].data[start + n] = buf[n]
         n += 1usize
     }
-    fs_handles[slot].offset += n
+    fs_handles[slot].offset = start + n
     if fs_handles[slot].offset > fs_handles[slot].size { fs_handles[slot].size = fs_handles[slot].offset }
     fs_handles[slot].dirty = true
     ret (n, ok)
+}
+
+@test
+fn append_write_uses_current_end(a: *mem.Arena) -> err {
+    var handle: FsHandle = zero
+    handle.used = true
+    handle.loaded = true
+    handle.append = true
+    handle.size = 3usize
+    handle.data[0usize] = 97u8
+    handle.data[1usize] = 98u8
+    handle.data[2usize] = 99u8
+    fs_handles[0usize] = handle
+    let (position, seek_error) = seek(File { raw: FILE_BASE }, 0i64, SeekWhence.Start)
+    let (written, write_error) = write(File { raw: FILE_BASE }, "!")
+    if seek_error != ok || position != 0u64 || write_error != ok || written != 1usize || fs_handles[0usize].data[3usize] != 33u8 || fs_handles[0usize].size != 4usize { ret Failed }
+    fs_handles[0usize].used = false
+    ret ok
 }
 
 fn read(f: File, buffer: []u8) -> (usize, err) {
     if f.raw < FILE_BASE { ret (0usize, ok) }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
-    if !fs_handles[slot].loaded {
-        fs_send_word(OP_READ)
-        fs_send_str(fs_name_str(slot))
-        let result = fs_recv_word()
-        let count = fs_recv_handle_data(slot)
-        if result != FS_RESULT_OK { ret (0usize, NotFound) }
-        fs_handles[slot].size = count
-        fs_handles[slot].loaded = true
-    }
+    let load_error = fs_load(slot)
+    if load_error != ok { ret (0usize, load_error) }
     var n = 0usize
     while n < buffer.len && fs_handles[slot].offset + n < fs_handles[slot].size {
         buffer[n] = fs_handles[slot].data[fs_handles[slot].offset + n]
@@ -193,10 +220,25 @@ fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err) {
     fs_handles[slot].size = 0usize
     fs_handles[slot].loaded = false
     fs_handles[slot].dirty = false
-    // Opened to write: start from an empty, dirty buffer, so a truncating create writes even nothing.
+    fs_handles[slot].append = flags.append
     if flags.write {
-        fs_handles[slot].loaded = true
-        fs_handles[slot].dirty = true
+        let load_error = fs_load(slot)
+        if load_error != ok {
+            if !flags.create {
+                fs_handles[slot].used = false
+                ret (File { raw: 0usize }, load_error)
+            }
+            fs_handles[slot].loaded = true
+            fs_handles[slot].size = 0usize
+            fs_handles[slot].offset = 0usize
+            fs_handles[slot].dirty = true
+        } else if flags.truncate {
+            fs_handles[slot].size = 0usize
+            fs_handles[slot].offset = 0usize
+            fs_handles[slot].dirty = true
+        } else if flags.append {
+            fs_handles[slot].offset = fs_handles[slot].size
+        }
     }
     ret (File { raw: FILE_BASE + slot }, ok)
 }
@@ -210,6 +252,9 @@ fn close(f: File) -> err {
         fs_send_str(fs_name_str(slot))
         fs_send_handle_data(slot, fs_handles[slot].size)
         let result = fs_recv_word()
+        fs_handles[slot].used = false
+        if result != FS_RESULT_OK { ret Failed }
+        ret ok
     }
     fs_handles[slot].used = false
     ret ok
@@ -219,11 +264,22 @@ fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err) {
     if f.raw < FILE_BASE { ret (0u64, Unsupported) }
     let slot = f.raw - FILE_BASE
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0u64, Unsupported) }
-    var pos = fs_handles[slot].offset
-    if whence == SeekWhence.Start {
-        pos = usize(off)
+    var pos = 0usize
+    if whence == SeekWhence.Current {
+        pos = fs_handles[slot].offset
+    } else if whence == SeekWhence.End {
+        pos = fs_handles[slot].size
+    }
+    // The client-side file buffer is fixed-size. Validate the signed offset before
+    // converting it to usize or adding it to the cursor.
+    if pos > FS_BLOCK { ret (0u64, Failed) }
+    if off < 0i64 {
+        // Compare before negating so i64::MIN is refused without overflowing.
+        if off < 0i64 - i64(pos) { ret (0u64, Failed) }
+        pos = pos - usize(0i64 - off)
     } else {
-        if whence == SeekWhence.Current { pos = fs_handles[slot].offset + usize(off) } else { pos = fs_handles[slot].size + usize(off) }
+        if off > i64(FS_BLOCK - pos) { ret (0u64, Failed) }
+        pos = pos + usize(off)
     }
     fs_handles[slot].offset = pos
     ret (u64(pos), ok)
@@ -322,8 +378,37 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
 fn rename(a: *mem.Arena, src: str, dst: str) -> err { ret Unsupported }
 fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err { ret Unsupported }
 fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
-fn canonical(a: *mem.Arena, path: str) -> (str, err) { ret (path, ok) }
-fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret (path, ok) }
+// NeperOS has one root and no links. Resolve relative names from that root,
+// normalize their lexical components, then ask the file server whether the
+// resulting object exists before claiming it is canonical.
+fn canonical(a: *mem.Arena, path_text: str) -> (str, err) {
+    if path_text.len == 0usize { ret ("", NotFound) }
+    let checkpoint = mem.mark(a)
+    var parts: [2]str = zero
+    parts[0usize] = "/"
+    parts[1usize] = path_text
+    let (joined, join_error) = path_api.join(a, parts[..], .Posix)
+    if join_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", join_error)
+    }
+    let (normalized, normalize_error) = path_api.normalize(a, joined, .Posix)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", normalize_error)
+    }
+    let (_, stat_error) = stat(a, normalized)
+    if stat_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", stat_error)
+    }
+    ret (normalized, ok)
+}
+fn canonical_detail(a: *mem.Arena, path_text: str, detail: *ErrorDetail) -> (str, err) {
+    let (resolved, canonical_error) = canonical(a, path_text)
+    if canonical_error != ok { *detail = last_error_detail("canonical", path_text) }
+    ret (resolved, canonical_error)
+}
 fn read_link(a: *mem.Arena, path: str) -> (str, err) { ret ("", Unsupported) }
 fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret ("", Unsupported) }
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err { ret Unsupported }
@@ -394,11 +479,17 @@ fn window_cursor(w: Window, shape: CursorShape) -> err { ret ok }
 // Blit the rendered pixels (Bgra8 packed into u32) into the shared surface at the surface stride, then
 // signal the compositor that the frame is ready. A pixel outside the surface is dropped.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    let columns = usize(width)
+    let rows = usize(height)
+    // Clipping the destination does not make a partial source frame safe: each logical row must
+    // still be addressable before the blit indexes it.
+    if columns == 0usize || rows == 0usize { ret Unsupported }
+    if rows > pixels.len / columns { ret Unsupported }
     var y = 0usize
-    while y < usize(height) && y < SURFACE_H {
+    while y < rows && y < SURFACE_H {
         var x = 0usize
-        while x < usize(width) && x < SURFACE_W {
-            store32(SHARED_FRAME_VA + (y * SURFACE_W + x) * 4usize, u32(pixels[y * usize(width) + x]))
+        while x < columns && x < SURFACE_W {
+            store32(SHARED_FRAME_VA + (y * SURFACE_W + x) * 4usize, u32(pixels[y * columns + x]))
             x += 1usize
         }
         y += 1usize
@@ -478,6 +569,9 @@ fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail.operation, ok) }
 // Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
 fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
+
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
 
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 

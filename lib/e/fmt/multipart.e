@@ -102,15 +102,17 @@ fn refill(s: *ReaderState) -> (bool, err) {
     }
     if s.len == s.window.len { ret (false, TooLarge) }
     let (count, read_error) = io.read(&s.source, s.window[s.len..])
-    if read_error == io.End || (read_error == ok && count == 0usize) {
+    if count > 0usize {
+        s.len += count
+        s.consumed += u64(count)
+        if s.consumed > s.byte_limit { ret (false, TooLarge) }
+    }
+    if read_error == io.End {
         s.source_ended = true
-        ret (false, ok)
+        ret (count > 0usize, ok)
     }
     if read_error != ok { ret (false, read_error) }
-    s.len += count
-    s.consumed += u64(count)
-    if s.consumed > s.byte_limit { ret (false, TooLarge) }
-    ret (true, ok)
+    ret (count > 0usize, ok)
 }
 
 // The position of `needle` in the unread window, filling as needed; (0, false) when
@@ -119,6 +121,34 @@ fn find_in_window(s: *ReaderState, needle: str) -> (usize, bool, err) {
     while true {
         let (found_at, found) = str.find(s.window[s.at..s.len], needle)
         if found { ret (s.at + found_at, true, ok) }
+        let (more, refill_error) = refill(s)
+        if refill_error != ok { ret (0usize, false, refill_error) }
+        if !more { ret (0usize, false, ok) }
+    }
+}
+
+// Finds the first boundary delimiter line.  A boundary-like substring in a
+// preamble is not a delimiter unless it is at the start of the stream or
+// immediately follows CRLF.  Keep enough suffix bytes while refilling to
+// recognize a delimiter and its preceding CRLF across a window boundary.
+fn find_initial_boundary(s: *ReaderState, needle: str) -> (usize, bool, err) {
+    while true {
+        let (found_at, found) = str.find(s.window[s.at..s.len], needle)
+        if found {
+            let candidate = s.at + found_at
+            let stream_at = s.consumed - u64(s.len - s.at) + u64(found_at)
+            if stream_at == 0u64 || (candidate >= 2usize && s.window[candidate - 2usize] == 13u8 && s.window[candidate - 1usize] == 10u8) {
+                ret (candidate, true, ok)
+            }
+            // The next candidate can overlap this one, so retain all but its
+            // first byte for the next search.
+            s.at = candidate + 1usize
+            continue
+        }
+        let unread = s.len - s.at
+        if unread > needle.len + 1usize {
+            s.at = s.len - needle.len - 1usize
+        }
         let (more, refill_error) = refill(s)
         if refill_error != ok { ret (0usize, false, refill_error) }
         if !more { ret (0usize, false, ok) }
@@ -170,7 +200,7 @@ fn reader_next_err(source_reader: *Reader) -> (Part, bool, err) {
         opener[0] = 45u8
         opener[1] = 45u8
         mem.copy[u8](opener[2usize..2usize + s.boundary.len], s.boundary)
-        let (found_at, found, find_error) = find_in_window(s, opener[..2usize + s.boundary.len])
+        let (found_at, found, find_error) = find_initial_boundary(s, opener[..2usize + s.boundary.len])
         if find_error != ok { ret (zero, false, find_error) }
         if !found { ret (zero, false, Invalid) }
         s.at = found_at + 2usize + s.boundary.len
@@ -210,6 +240,47 @@ fn body_reader(s: *ReaderState) -> io.Reader {
     ret io.Reader { ctx: mem.cast[*void](s), read: body_read }
 }
 
+// Checks and consumes a complete body delimiter line at `s.at`.  A byte match alone
+// is not a delimiter: the boundary must be followed by CRLF, or by `--`, with
+// optional transport padding before the line end.  Keep `s.at` at the candidate
+// until it is proved so a boundary-like body line can be returned to the caller.
+fn body_boundary(s: *ReaderState, needle_len: usize) -> (bool, err) {
+    var tail = needle_len
+    var closing = false
+    let initial_error = ensure(s, tail + 1usize)
+    if initial_error != ok { ret (false, initial_error) }
+    if s.len - s.at <= tail { ret (false, ok) }
+    if s.window[s.at + tail] == 45u8 {
+        let close_error = ensure(s, tail + 2usize)
+        if close_error != ok { ret (false, close_error) }
+        if s.len - s.at < tail + 2usize || s.window[s.at + tail + 1usize] != 45u8 { ret (false, ok) }
+        closing = true
+        tail += 2usize
+    }
+    while true {
+        let padding_error = ensure(s, tail + 1usize)
+        if padding_error != ok { ret (false, padding_error) }
+        if s.len - s.at <= tail {
+            if !closing { ret (false, ok) }
+            s.at += tail
+            s.closed = true
+            ret (true, ok)
+        }
+        let c = s.window[s.at + tail]
+        if c == 32u8 || c == 9u8 {
+            tail += 1usize
+            continue
+        }
+        if c != 13u8 { ret (false, ok) }
+        let line_error = ensure(s, tail + 2usize)
+        if line_error != ok { ret (false, line_error) }
+        if s.len - s.at < tail + 2usize || s.window[s.at + tail + 1usize] != 10u8 { ret (false, ok) }
+        s.at += tail + 2usize
+        if closing { s.closed = true }
+        ret (true, ok)
+    }
+}
+
 fn body_read(ctx: *void, dst: []u8) -> (usize, err) {
     let s = mem.cast[*ReaderState](ctx)
     if !s.in_body { ret (0usize, io.End) }
@@ -231,11 +302,17 @@ fn body_read(ctx: *void, dst: []u8) -> (usize, err) {
                 s.at += take
                 ret (take, ok)
             }
-            s.at += needle.len
-            s.in_body = false
-            let after_error = after_boundary(s)
-            if after_error != ok { ret (0usize, after_error) }
-            ret (0usize, io.End)
+            let (valid, boundary_error) = body_boundary(s, needle.len)
+            if boundary_error != ok { ret (0usize, boundary_error) }
+            if valid {
+                s.in_body = false
+                ret (0usize, io.End)
+            }
+            // This is ordinary body data whose prefix resembles a boundary. Return
+            // one byte so the next scan cannot rediscover the same candidate.
+            mem.copy[u8](dst[..1usize], s.window[s.at..s.at + 1usize])
+            s.at += 1usize
+            ret (1usize, ok)
         }
         // Without a delimiter, all but a possible prefix of one at the end is safe.
         let unread = s.len - s.at

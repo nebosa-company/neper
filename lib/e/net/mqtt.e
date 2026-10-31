@@ -11,6 +11,7 @@
 
 use e.mem
 use e.str
+use e.text.utf8 as utf8
 
 type Publish = struct { topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16 }
 type Connect = struct { client_id: str, keep_alive: u16, clean_session: bool, has_username: bool, username: str, has_password: bool, password: []const u8, has_will: bool, will_topic: str, will_payload: []const u8, will_qos: u8, will_retain: bool }
@@ -99,6 +100,7 @@ fn body(src: []const u8, expect_type: u8) -> ([]const u8, u8, err) {
     if e != ok { ret (src[..0usize], 0u8, e) }
     if src[0] >> 4u32 != expect_type { ret (src[..0usize], 0u8, Invalid) }
     if head + n > src.len { ret (src[..0usize], 0u8, TooSmall) }
+    if head + n != src.len { ret (src[..0usize], 0u8, Malformed) }
     ret (src[head..head + n], src[0], ok)
 }
 
@@ -127,11 +129,22 @@ fn get_u16(src: []const u8, at: usize) -> (u16, err) {
 // A length-prefixed UTF-8 string (at most 65535 bytes); answers bytes written.
 fn utf8_string(dst: []u8, s: []const u8) -> (usize, err) {
     if s.len > 65535usize { ret (0usize, Invalid) }
+    if !utf8_valid(s) { ret (0usize, Invalid) }
     if dst.len < 2usize + s.len { ret (0usize, TooSmall) }
     let e = put_u16(dst, 0usize, u16(s.len))
     if e != ok { ret (0usize, e) }
     mem.copy[u8](dst[2usize..], s)
     ret (2usize + s.len, ok)
+}
+
+// Length-prefixed binary data (at most 65535 bytes); answers bytes written.
+fn binary_data(dst: []u8, data: []const u8) -> (usize, err) {
+    if data.len > 65535usize { ret (0usize, Invalid) }
+    if dst.len < 2usize + data.len { ret (0usize, TooSmall) }
+    let e = put_u16(dst, 0usize, u16(data.len))
+    if e != ok { ret (0usize, e) }
+    mem.copy[u8](dst[2usize..], data)
+    ret (2usize + data.len, ok)
 }
 
 // The length-prefixed string at `src`; answers (bytes, bytes consumed).
@@ -140,13 +153,33 @@ fn decode_utf8_string(src: []const u8) -> ([]const u8, usize, err) {
     if e != ok { ret (src[..0usize], 0usize, Malformed) }
     let end = 2usize + usize(n)
     if end > src.len { ret (src[..0usize], 0usize, Malformed) }
-    ret (src[2usize..end], end, ok)
+    let value = src[2usize..end]
+    if !utf8_valid(value) { ret (src[..0usize], 0usize, Malformed) }
+    ret (value, end, ok)
+}
+
+fn utf8_valid(s: []const u8) -> bool {
+    if !utf8.validate(s) { ret false }
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 0u8 { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 // A length-prefixed string appended at `*at`, which moves past it.
 fn put_string(dst: []u8, at: *usize, s: []const u8) -> err {
     if *at > dst.len { ret TooSmall }
     let (n, e) = utf8_string(dst[*at..], s)
+    *at += n
+    ret e
+}
+
+// Binary data appended at `*at`, which moves past it.
+fn put_binary(dst: []u8, at: *usize, data: []const u8) -> err {
+    if *at > dst.len { ret TooSmall }
+    let (n, e) = binary_data(dst[*at..], data)
     *at += n
     ret e
 }
@@ -196,7 +229,7 @@ fn encode_connect(dst: []u8, c: *const Connect) -> (usize, err) {
     if c.has_will {
         let e2 = put_string(dst, &at, c.will_topic)
         if e2 != ok { ret (0usize, e2) }
-        let e3 = put_string(dst, &at, c.will_payload)
+        let e3 = put_binary(dst, &at, c.will_payload)
         if e3 != ok { ret (0usize, e3) }
     }
     if c.has_username {
@@ -204,7 +237,7 @@ fn encode_connect(dst: []u8, c: *const Connect) -> (usize, err) {
         if e4 != ok { ret (0usize, e4) }
     }
     if c.has_password {
-        let e5 = put_string(dst, &at, c.password)
+        let e5 = put_binary(dst, &at, c.password)
         if e5 != ok { ret (0usize, e5) }
     }
     let (n, fe) = finish(dst, CONNECT << 4u32, at - 5usize)
@@ -216,6 +249,7 @@ fn decode_connack(src: []const u8) -> (bool, u8, err) {
     let (b, _, e) = body(src, CONNACK)
     if e != ok { ret (false, 0u8, e) }
     if b.len != 2usize || (b[0] & 254u8) != 0u8 { ret (false, 0u8, Malformed) }
+    if b[1] > 5u8 || (b[1] != 0u8 && (b[0] & 1u8) != 0u8) { ret (false, 0u8, Malformed) }
     ret ((b[0] & 1u8) == 1u8, b[1], ok)
 }
 
@@ -231,8 +265,18 @@ fn encode_connack(dst: []u8, session_present: bool, return_code: u8) -> (usize, 
 
 // ---- PUBLISH and acks -----------------------------------------------------
 
+fn valid_topic_name(topic: str) -> bool {
+    if topic.len == 0usize { ret false }
+    var i = 0usize
+    while i < topic.len {
+        if topic[i] == 43u8 || topic[i] == 35u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn encode_publish(dst: []u8, topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16) -> (usize, err) {
-    if qos > 2u8 || (qos > 0u8 && packet_id == 0u16) { ret (0usize, Invalid) }
+    if !valid_topic_name(topic) || qos > 2u8 || (qos > 0u8 && packet_id == 0u16) { ret (0usize, Invalid) }
     if dst.len < 5usize { ret (0usize, TooSmall) }
     var first = (PUBLISH << 4u32) | (qos << 1u32)
     if retain { first = first | 1u8 }
@@ -262,6 +306,7 @@ fn decode_publish(src: []const u8) -> (Publish, err) {
     p.dup = (first & 8u8) == 8u8
     let (topic, used, te) = decode_utf8_string(b)
     if te != ok { ret (p, te) }
+    if !valid_topic_name(topic) { ret (p, Malformed) }
     p.topic = topic
     var at = used
     if p.qos > 0u8 {
@@ -276,6 +321,7 @@ fn decode_publish(src: []const u8) -> (Publish, err) {
 
 // A two-byte-body ack: PUBACK, PUBREC, PUBREL (flags 2), PUBCOMP, UNSUBACK.
 fn encode_ack(dst: []u8, kind: u8, packet_id: u16) -> (usize, err) {
+    if packet_id == 0u16 { ret (0usize, Invalid) }
     if dst.len < 4usize { ret (0usize, TooSmall) }
     dst[0] = kind << 4u32
     if kind == PUBREL { dst[0] = dst[0] | 2u8 }
@@ -321,6 +367,7 @@ fn decode_ack(src: []const u8) -> (u8, u16, err) {
     if t == PUBREL { want_flags = 2u8 }
     if b.len != 2usize || (first & 15u8) != want_flags { ret (0u8, 0u16, Malformed) }
     let (id, _) = get_u16(b, 0usize)
+    if id == 0u16 { ret (0u8, 0u16, Malformed) }
     ret (t, id, ok)
 }
 
@@ -328,12 +375,16 @@ fn decode_ack(src: []const u8) -> (u8, u16, err) {
 
 fn encode_subscribe(dst: []u8, packet_id: u16, topics: []const str, qoss: []const u8) -> (usize, err) {
     if packet_id == 0u16 || topics.len == 0usize || topics.len != qoss.len { ret (0usize, Invalid) }
+    var i = 0usize
+    while i < topics.len {
+        if !valid_filter(topics[i]) || qoss[i] > 2u8 { ret (0usize, Invalid) }
+        i += 1usize
+    }
     if dst.len < 7usize { ret (0usize, TooSmall) }
     let _ = put_u16(dst, 5usize, packet_id)
     var at = 7usize
-    var i = 0usize
+    i = 0usize
     while i < topics.len {
-        if qoss[i] > 2u8 { ret (0usize, Invalid) }
         let e = put_string(dst, &at, topics[i])
         if e != ok { ret (0usize, e) }
         if at >= dst.len { ret (0usize, TooSmall) }

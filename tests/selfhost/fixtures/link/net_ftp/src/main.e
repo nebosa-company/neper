@@ -338,7 +338,7 @@ fn client_run(a: *mem.Arena, port: u16, secure: bool, config: tls.ClientConfig) 
     var c = c0
     if c.greeting.code != 220u16 || c.greeting.lines != 2usize || !same(c.greeting.text, "Welcome\nneper test ftpd ready") { ret 43i32 }
     if secure {
-        if ftp.auth_tls(&c, config) != ok || !c.secured || !c.protected { ret 44i32 }
+        if ftp.auth_tls(&c, config) != ok || !c.secured || !c.protected || c.broken { ret 44i32 }
     }
     if ftp.login(&c, "alice", "secret") != ok { ret 45i32 }
     if ftp.binary(&c) != ok { ret 46i32 }
@@ -486,6 +486,17 @@ fn main(a: *mem.Arena) -> err {
     if ftp.cwd(&s, "a\r\nDELE b") != ftp.Invalid || ftp.mkd(&s, "x\x00y") != ftp.Invalid || ftp.store(&s, "", io.slice_reader(&upload_none)) != ftp.Invalid { ret fail(17i32) }
     if scene.writer.off != wrote { ret fail(18i32) }
     if !same(scene.sent[..wrote], "USER u\r\nPASS bad\r\nUSER u\r\nCWD x\r\nPWD\r\nSIZE f\r\nDELE g\r\nNOOP\r\n") { ret fail(19i32) }
+
+    // Once AUTH TLS is accepted, a failed handshake must poison the session so
+    // callers cannot fall back to sending credentials over plaintext.
+    var tls_scene: Scene = zero
+    tls_scene.writer = io.SliceWriter { data: tls_scene.sent[0..], off: 0usize }
+    tls_scene.reader = io.SliceReader { data: "220 ready\r\n234 Proceed with negotiation\r\n", off: 0usize }
+    let (tls_s0, tls_connect_error) = ftp.connect(a, io.slice_reader(&tls_scene.reader), io.slice_writer(&tls_scene.writer), loopback)
+    if tls_connect_error != ok { ret fail(20i32) }
+    var tls_session = tls_s0
+    let tls_error = ftp.auth_tls(&tls_session, zero)
+    if tls_error == ok || !tls_session.broken || ftp.login(&tls_session, "u", "p") != ftp.Closed { ret fail(21i32) }
 
     // ---- live sessions ----
     let mid_der = "0\x82\x01\x130\x81\xc6\xa0\x03\x02\x01\x02\x02\x01\x020\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x819w\x0e\xa8}\x17_V\xa3Tf\xc3L~\xcc\xcb\x8d\x8a\x91\xb4\xee7\xa2]\xf6\x0f[\x8f\xc9\xb3\x94\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00R^\x187\xb39[\xa4N\xc4\x83\x10\xde\xfc\x7f\xa0\xbfF[\xa8^\x04S\xa1\xb2\xf8\xbcM\xc7\xfb\xf1t\x89\xa0\x0e\x07\xcc\xbf\x8f6R\x16\x15\xab\x99\x0e\xdd\xc1,\x8d\x8f*\xd4\xaf\x97\xaae\x8b\xab\xe5\x0d\x8e'\x08"

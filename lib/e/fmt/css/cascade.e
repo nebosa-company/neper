@@ -64,10 +64,24 @@ const END: usize = 18446744073709551615usize
 
 fn beats(x: Declared, y: Declared) -> bool {
     if x.declaration.important != y.declaration.important { ret x.declaration.important }
-    if x.author != y.author { ret x.author }
-    if x.hint != y.hint { ret x.hint }
-    if x.has_layer != y.has_layer { ret !x.has_layer }
-    if x.has_layer && x.layer != y.layer { ret x.layer > y.layer }
+    // Normal declarations prefer author origin; important declarations reverse
+    // that origin order (the non-author/UA bucket wins over author here).
+    if x.author != y.author {
+        if x.declaration.important { ret !x.author }
+        ret x.author
+    }
+    if x.hint != y.hint {
+        if x.declaration.important { ret !x.hint }
+        ret x.hint
+    }
+    if x.has_layer != y.has_layer {
+        if x.declaration.important { ret x.has_layer }
+        ret !x.has_layer
+    }
+    if x.has_layer && x.layer != y.layer {
+        if x.declaration.important { ret x.layer < y.layer }
+        ret x.layer > y.layer
+    }
     if x.specificity != y.specificity { ret x.specificity > y.specificity }
     if x.proximity != y.proximity { ret x.proximity < y.proximity }
     ret x.source >= y.source
@@ -83,15 +97,15 @@ fn find_property(best: *const list.List[Declared], property: str) -> i64 {
 }
 
 // The declaration that wins each property, in the order the properties first appeared.
-fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner {
+fn rank(a: *mem.Arena, declared: []const Declared) -> ([]const Winner, err) {
     let (made, e) = list.init[Declared](a, declared.len + 1usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var best = made
     var at = 0usize
     while at < declared.len {
         let found = find_property(&best, declared[at].declaration.property)
         if found < 0i64 {
-            let pushed = list.push[Declared](&best, declared[at])
+            try list.push[Declared](&best, declared[at])
         } else if beats(declared[at], best.items[usize(found)]) {
             best.items[usize(found)] = declared[at]
         }
@@ -101,14 +115,14 @@ fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner {
     drop_outranked_longhands(&best, "text-decoration", "text-decoration-line", "")
     drop_outranked_longhands(&best, "font", "font-size", "font-family")
     let (wmade, we) = list.init[Winner](a, best.len + 1usize)
-    if we != ok { ret zero }
+    if we != ok { ret (zero, we) }
     var out = wmade
     var i = 0usize
     while i < best.len {
-        let pushed = list.push[Winner](&out, Winner { property: best.items[i].declaration.property, value: best.items[i].declaration.value })
+        try list.push[Winner](&out, Winner { property: best.items[i].declaration.property, value: best.items[i].declaration.value })
         i += 1usize
     }
-    ret list.slice_const[Winner](&out)
+    ret (list.slice_const[Winner](&out), ok)
 }
 
 // A winning shorthand that outranks a longhand drops it, so the reader re-derives the longhand from the shorthand.
@@ -125,23 +139,27 @@ fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: s
 
 // --- the rule index --------------------------------------------------------------------------------------------------
 
-fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) {
+fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) -> err {
     let (slot, found) = map.get[str, usize](m, key)
     if found {
         idx.next[idx.tail[slot]] = at
         idx.tail[slot] = at
+        ret ok
     } else {
         let s = idx.slots
+        let (replaced, put_error) = map.put[str, usize](m, key, s)
+        if put_error != ok { ret put_error }
         idx.slots += 1usize
         idx.head[s] = at
         idx.tail[s] = at
-        let (replaced, put_error) = map.put[str, usize](m, key, s)
     }
+    ret ok
 }
 
-// `pseudo` selects the rules that style a pseudo-element (the others are left out), so an element's own pass and each pseudo-element
-// pass visit only their rules.
-fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
+// Builds the long-lived index for one rule set. `pseudo` selects the rules that
+// style a pseudo-element (the others are left out), so an element's own pass
+// and each pseudo-element pass visit only their rules.
+fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> (Index, err) {
     var idx: Index = zero
     idx.rules = rules
     idx.universal_head = END
@@ -152,7 +170,12 @@ fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
     let (head, e4) = mem.alloc[usize](a, rules.len + 1usize)
     let (tail, e5) = mem.alloc[usize](a, rules.len + 1usize)
     let (next, e6) = mem.alloc[usize](a, rules.len + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret idx }
+    if e1 != ok { ret (idx, e1) }
+    if e2 != ok { ret (idx, e2) }
+    if e3 != ok { ret (idx, e3) }
+    if e4 != ok { ret (idx, e4) }
+    if e5 != ok { ret (idx, e5) }
+    if e6 != ok { ret (idx, e6) }
     idx.ids = ids
     idx.classes = classes
     idx.tags = tags
@@ -204,23 +227,30 @@ fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index {
                 key = tag_name
             }
         }
-        if kind == 1u8 { chain_add(&idx.ids, &idx, key, at) } else if kind == 2u8 { chain_add(&idx.classes, &idx, key, at) } else if kind == 3u8 { chain_add(&idx.tags, &idx, key, at) } else {
+        if kind == 1u8 {
+            try chain_add(&idx.ids, &idx, key, at)
+        } else if kind == 2u8 {
+            try chain_add(&idx.classes, &idx, key, at)
+        } else if kind == 3u8 {
+            try chain_add(&idx.tags, &idx, key, at)
+        } else {
             if idx.universal_head == END { idx.universal_head = at } else { idx.next[idx.universal_tail] = at }
             idx.universal_tail = at
         }
         at += 1usize
     }
-    ret idx
+    ret (idx, ok)
 }
 
-fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) {
+fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) -> err {
     let (slot, found) = map.get[str, usize](m, key)
-    if !found { ret }
+    if !found { ret ok }
     var at = idx.head[slot]
     while at != END {
-        let pushed = list.push[usize](out, at)
+        try list.push[usize](out, at)
         at = idx.next[at]
     }
+    ret ok
 }
 
 fn is_blank_byte(c: u8) -> bool { ret c == 32u8 || (c >= 9u8 && c <= 13u8) }
@@ -239,12 +269,12 @@ fn class_seen(classes: str, end: usize, name: str) -> bool {
     ret false
 }
 // The indices of the rules an element could match, in the order the resolver visits them.
-fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize {
+fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> ([]const usize, err) {
     let (made, e) = list.init[usize](m.a, 8usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var out = made
     let element_id = match.element_id(m, el)
-    if element_id.len > 0usize { push_chain(&out, idx, &idx.ids, element_id) }
+    if element_id.len > 0usize { try push_chain(&out, idx, &idx.ids, element_id) }
     let (classes, have_classes) = match.attr(m, el, "class")
     if have_classes {
         var start = 0usize
@@ -254,7 +284,7 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
                 if i > start {
                     let name = classes[start..i]
                     let seen = class_seen(classes, start, name)
-                    if !seen { push_chain(&out, idx, &idx.classes, name) }
+                    if !seen { try push_chain(&out, idx, &idx.classes, name) }
                 }
                 start = i + 1usize
             }
@@ -262,13 +292,13 @@ fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []
         }
     }
     let tag = match.local_name(m, el)
-    if tag.len > 0usize { push_chain(&out, idx, &idx.tags, tag) }
+    if tag.len > 0usize { try push_chain(&out, idx, &idx.tags, tag) }
     var u = idx.universal_head
     while u != END {
-        let pushed = list.push[usize](&out, u)
+        try list.push[usize](&out, u)
         u = idx.next[u]
     }
-    ret list.slice_const[usize](&out)
+    ret (list.slice_const[usize](&out), ok)
 }
 
 // --- @container ------------------------------------------------------------------------------------------------------
@@ -478,33 +508,33 @@ fn ancestor_named(m: *const match.Matcher, el: html.NodeId, name: str) -> html.N
     ret p
 }
 
-fn push_hint(out: *list.List[Declaration], property: str, value: str) {
-    let pushed = list.push[Declaration](out, hint(property, value))
+fn push_hint(out: *list.List[Declaration], property: str, value: str) -> err {
+    ret list.push[Declaration](out, hint(property, value))
 }
 
-fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Declaration {
+fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> ([]const Declaration, err) {
     let a = m.a
     let (made, e) = list.init[Declaration](a, 8usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var out = made
     let tag = match.lower(a, match.local_name(m, el))
-    if tag.len == 0usize { ret zero }
+    if tag.len == 0usize { ret (zero, ok) }
     let (dir_raw, have_dir) = trimmed_attr(m, el, "dir")
     if have_dir {
         let dir = match.lower(a, dir_raw)
-        if str.eq(dir, "rtl") || str.eq(dir, "ltr") { push_hint(&out, "direction", dir) }
+        if str.eq(dir, "rtl") || str.eq(dir, "ltr") { try push_hint(&out, "direction", dir) }
     }
     if one_of(tag, "body", "table", "tr", "td", "th", "thead", "tbody", "tfoot") {
         let (bg, have_bg) = trimmed_attr(m, el, "bgcolor")
-        if have_bg { push_hint(&out, "background-color", bg) }
+        if have_bg { try push_hint(&out, "background-color", bg) }
     }
     if str.eq(tag, "body") || str.eq(tag, "font") {
         let (c, have_c) = trimmed_attr(m, el, "color")
         if have_c {
-            push_hint(&out, "color", c)
+            try push_hint(&out, "color", c)
         } else {
             let (t, have_t) = trimmed_attr(m, el, "text")
-            if have_t { push_hint(&out, "color", t) }
+            if have_t { try push_hint(&out, "color", t) }
         }
     }
     if str.eq(tag, "a") && match.has_attr(m, el, "href") {
@@ -512,52 +542,52 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
         if body != html.NONE {
             let (link, have_link) = match.attr(m, body, "link")
             let l = str.trim(link)
-            if have_link && l.len > 0usize { push_hint(&out, "color", l) }
+            if have_link && l.len > 0usize { try push_hint(&out, "color", l) }
         }
     }
     if str.eq(tag, "font") {
         let (face, have_face) = trimmed_attr(m, el, "face")
-        if have_face { push_hint(&out, "font-family", face) }
+        if have_face { try push_hint(&out, "font-family", face) }
         let (size, have_size) = trimmed_attr(m, el, "size")
         if have_size {
             let (px, good) = legacy_font_size(size)
-            if good { push_hint(&out, "font-size", px) }
+            if good { try push_hint(&out, "font-size", px) }
         }
     }
     if one_of(tag, "table", "td", "th", "img", "col", "colgroup", "hr", "canvas") || one_of(tag, "object", "svg", "iframe", "embed", "", "", "", "") {
         let (w, have_w) = trimmed_attr(m, el, "width")
-        if have_w { push_hint(&out, "width", length_hint(a, w)) }
+        if have_w { try push_hint(&out, "width", length_hint(a, w)) }
         let (h, have_h) = trimmed_attr(m, el, "height")
-        if have_h { push_hint(&out, "height", length_hint(a, h)) }
+        if have_h { try push_hint(&out, "height", length_hint(a, h)) }
     }
     if str.eq(tag, "hr") {
         let (sz, have_sz) = trimmed_attr(m, el, "size")
-        if have_sz { push_hint(&out, "height", length_hint(a, sz)) }
+        if have_sz { try push_hint(&out, "height", length_hint(a, sz)) }
     }
     if str.eq(tag, "img") {
         let (b, have_b) = trimmed_attr(m, el, "border")
         if have_b {
             let (bn, good) = try_int(b)
-            if good && bn > 0i64 { push_hint(&out, "border", join3(a, int_text(a, bn), "px solid gray", "")) }
+            if good && bn > 0i64 { try push_hint(&out, "border", join3(a, int_text(a, bn), "px solid gray", "")) }
         }
         let (al, have_al) = trimmed_attr(m, el, "align")
         if have_al {
             let align = match.lower(a, al)
-            if str.eq(align, "left") { push_hint(&out, "float", "left") }
-            if str.eq(align, "right") { push_hint(&out, "float", "right") }
-            if str.eq(align, "top") || str.eq(align, "texttop") { push_hint(&out, "vertical-align", "top") }
-            if str.eq(align, "middle") || str.eq(align, "absmiddle") { push_hint(&out, "vertical-align", "middle") }
-            if str.eq(align, "bottom") || str.eq(align, "absbottom") { push_hint(&out, "vertical-align", "bottom") }
+            if str.eq(align, "left") { try push_hint(&out, "float", "left") }
+            if str.eq(align, "right") { try push_hint(&out, "float", "right") }
+            if str.eq(align, "top") || str.eq(align, "texttop") { try push_hint(&out, "vertical-align", "top") }
+            if str.eq(align, "middle") || str.eq(align, "absmiddle") { try push_hint(&out, "vertical-align", "middle") }
+            if str.eq(align, "bottom") || str.eq(align, "absbottom") { try push_hint(&out, "vertical-align", "bottom") }
         }
     }
     if (str.eq(tag, "td") || str.eq(tag, "th")) && match.has_attr(m, el, "nowrap") {
-        push_hint(&out, "white-space", "nowrap")
+        try push_hint(&out, "white-space", "nowrap")
     }
     if str.eq(tag, "td") || str.eq(tag, "th") || str.eq(tag, "tr") {
         let (v, have_v) = trimmed_attr(m, el, "valign")
         if have_v {
             let va = match.lower(a, v)
-            if str.eq(va, "top") || str.eq(va, "middle") || str.eq(va, "bottom") { push_hint(&out, "vertical-align", va) }
+            if str.eq(va, "top") || str.eq(va, "middle") || str.eq(va, "bottom") { try push_hint(&out, "vertical-align", va) }
         }
     }
     if one_of(tag, "td", "th", "tr", "p", "div", "caption", "col", "") {
@@ -567,9 +597,9 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
             if str.eq(align, "left") || str.eq(align, "right") || str.eq(align, "center") || str.eq(align, "justify") {
                 let table_internal = one_of(tag, "td", "th", "tr", "caption", "col", "", "", "")
                 if str.eq(align, "center") && !table_internal {
-                    push_hint(&out, "text-align", "-webkit-center")
+                    try push_hint(&out, "text-align", "-webkit-center")
                 } else {
-                    push_hint(&out, "text-align", align)
+                    try push_hint(&out, "text-align", align)
                 }
             }
         }
@@ -579,16 +609,16 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
         if have_al {
             let align = match.lower(a, al)
             if str.eq(align, "center") {
-                push_hint(&out, "margin-left", "auto")
-                push_hint(&out, "margin-right", "auto")
+                try push_hint(&out, "margin-left", "auto")
+                try push_hint(&out, "margin-right", "auto")
             }
-            if str.eq(align, "left") { push_hint(&out, "float", "left") }
-            if str.eq(align, "right") { push_hint(&out, "float", "right") }
+            if str.eq(align, "left") { try push_hint(&out, "float", "left") }
+            if str.eq(align, "right") { try push_hint(&out, "float", "right") }
         }
         let (csraw, have_cs) = match.attr(m, el, "cellspacing")
         if have_cs {
             let (cs, good) = try_int(str.trim(csraw))
-            if good && cs >= 0i64 { push_hint(&out, "border-spacing", join3(a, int_text(a, cs), "px", "")) }
+            if good && cs >= 0i64 { try push_hint(&out, "border-spacing", join3(a, int_text(a, cs), "px", "")) }
         }
         let (braw, have_b) = match.attr(m, el, "border")
         let bv = str.trim(braw)
@@ -596,7 +626,7 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
             var n = 1i64
             let (parsed, good) = try_int(bv)
             if good { n = parsed }
-            if n > 0i64 { push_hint(&out, "border", join3(a, int_text(a, n), "px solid gray", "")) }
+            if n > 0i64 { try push_hint(&out, "border", join3(a, int_text(a, n), "px solid gray", "")) }
         }
     }
     if str.eq(tag, "td") || str.eq(tag, "th") {
@@ -604,39 +634,39 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Dec
         if table != html.NONE {
             let (tbraw, have_tb) = match.attr(m, table, "border")
             let tb = str.trim(tbraw)
-            if have_tb && !str.eq(tb, "0") { push_hint(&out, "border", "1px solid gray") }
+            if have_tb && !str.eq(tb, "0") { try push_hint(&out, "border", "1px solid gray") }
             let (cpraw, have_cp) = match.attr(m, table, "cellpadding")
             if have_cp {
                 let (cp, good) = try_int(str.trim(cpraw))
-                if good && cp >= 0i64 { push_hint(&out, "padding", join3(a, int_text(a, cp), "px", "")) }
+                if good && cp >= 0i64 { try push_hint(&out, "padding", join3(a, int_text(a, cp), "px", "")) }
             }
         }
     }
     if str.eq(tag, "ol") || str.eq(tag, "li") {
         let (tv, have_t) = trimmed_attr(m, el, "type")
         if have_t {
-            if str.eq(tv, "1") { push_hint(&out, "list-style-type", "decimal") }
-            if str.eq(tv, "a") { push_hint(&out, "list-style-type", "lower-alpha") }
-            if str.eq(tv, "A") { push_hint(&out, "list-style-type", "upper-alpha") }
-            if str.eq(tv, "i") { push_hint(&out, "list-style-type", "lower-roman") }
-            if str.eq(tv, "I") { push_hint(&out, "list-style-type", "upper-roman") }
+            if str.eq(tv, "1") { try push_hint(&out, "list-style-type", "decimal") }
+            if str.eq(tv, "a") { try push_hint(&out, "list-style-type", "lower-alpha") }
+            if str.eq(tv, "A") { try push_hint(&out, "list-style-type", "upper-alpha") }
+            if str.eq(tv, "i") { try push_hint(&out, "list-style-type", "lower-roman") }
+            if str.eq(tv, "I") { try push_hint(&out, "list-style-type", "upper-roman") }
         }
     }
-    ret list.slice_const[Declaration](&out)
+    ret (list.slice_const[Declaration](&out), ok)
 }
 
 // --- the cascade -----------------------------------------------------------------------------------------------------
 
 // The declarations of a `style` attribute: a property name lowercased (a custom property keeps its case), its value text
 // trimmed, and a declaration with an empty name or value dropped.
-fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration {
-    if str.trim(source).len == 0usize { ret zero }
+fn inline_declarations(a: *mem.Arena, source: str) -> ([]const Declaration, err) {
+    if str.trim(source).len == 0usize { ret (zero, ok) }
     let (tokens, te) = syntax.tokenize(a, source)
-    if te != ok { ret zero }
+    if te != ok { ret (zero, te) }
     let (parsed, pe) = syntax.parse_declarations(a, tokens)
-    if pe != ok { ret zero }
+    if pe != ok { ret (zero, pe) }
     let (made, e) = list.init[Declaration](a, parsed.len + 1usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var out = made
     var at = 0usize
     while at < parsed.len {
@@ -644,19 +674,19 @@ fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration {
         if !str.starts_with(name, "--") { name = match.lower(a, name) }
         let value = str.trim(syntax.raw_text(source, parsed[at].value))
         if name.len > 0usize && value.len > 0usize {
-            let pushed = list.push[Declaration](&out, Declaration { property: name, value: value, important: parsed[at].important })
+            try list.push[Declaration](&out, Declaration { property: name, value: value, important: parsed[at].important })
         }
         at += 1usize
     }
-    ret list.slice_const[Declaration](&out)
+    ret (list.slice_const[Declaration](&out), ok)
 }
 
-fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox) {
-    let idx = build_index(m.a, rules, false)
-    let visit = candidates(m, &idx, el)
+fn collect(m: *const match.Matcher, out: *list.List[Declared], idx: *const Index, author: bool, el: html.NodeId, stack: []const ContainerBox) -> err {
+    let (visit, candidate_error) = candidates(m, idx, el)
+    if candidate_error != ok { ret candidate_error }
     var v = 0usize
     while v < visit.len {
-        let rule = rules[visit[v]]
+        let rule = idx.rules[visit[v]]
         v += 1usize
         if !containers_match(stack, rule.containers) { continue }
         var proximity = UNSCOPED
@@ -671,29 +701,35 @@ fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Ru
         var d = 0usize
         while d < rule.declarations.len {
             let pushed = list.push[Declared](out, Declared { declaration: rule.declarations[d], author: author, hint: false, specificity: spec, source: rule.source, has_layer: rule.has_layer, layer: rule.layer, proximity: proximity })
+            if pushed != ok { ret pushed }
             d += 1usize
         }
     }
+    ret ok
 }
 
-// The winning declaration of every property for `el`: hints, user-agent rules, author rules, then `inline` (the parsed
-// `style` attribute, which outranks any selector and ranks by position).
-fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner {
+// The winning declaration of every property for `el`: hints, user-agent rules,
+// author rules, then `inline` (the parsed `style` attribute, which outranks any
+// selector and ranks by position). Callers retain and reuse the prebuilt origin
+// indexes for every element in their sheet.
+fn resolve(m: *const match.Matcher, ua: *const Index, author: *const Index, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> ([]const Winner, err) {
     let (made, e) = list.init[Declared](m.a, 16usize)
-    if e != ok { ret zero }
+    if e != ok { ret (zero, e) }
     var declared = made
-    let hints = presentational_hints(m, el)
+    let (hints, hints_error) = presentational_hints(m, el)
+    if hints_error != ok { ret (zero, hints_error) }
     var h = 0usize
     while h < hints.len {
-        let pushed = list.push[Declared](&declared, Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: UNSCOPED })
+        try list.push[Declared](&declared, Declared { declaration: hints[h], author: false, hint: true, specificity: 0i64, source: -1i64, has_layer: false, layer: 0i64, proximity: UNSCOPED })
         h += 1usize
     }
-    collect(m, &declared, ua, false, el, stack)
-    collect(m, &declared, author, true, el, stack)
+    try collect(m, &declared, ua, false, el, stack)
+    try collect(m, &declared, author, true, el, stack)
     var i = 0usize
     while i < inline.len {
-        let pushed = list.push[Declared](&declared, Declared { declaration: inline[i], author: true, hint: false, specificity: INLINE_SPECIFICITY, source: i64(i), has_layer: false, layer: 0i64, proximity: UNSCOPED })
+        try list.push[Declared](&declared, Declared { declaration: inline[i], author: true, hint: false, specificity: INLINE_SPECIFICITY, source: i64(i), has_layer: false, layer: 0i64, proximity: UNSCOPED })
         i += 1usize
     }
-    ret rank(m.a, list.slice_const[Declared](&declared))
+    let (winners, rank_error) = rank(m.a, list.slice_const[Declared](&declared))
+    ret (winners, rank_error)
 }

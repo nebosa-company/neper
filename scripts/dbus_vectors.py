@@ -403,7 +403,7 @@ add('H', 'match', hx(match))
 for uid in ('0', '1000', '65534', '4294967294'):
     add('A', uid, hx(b'\0AUTH EXTERNAL ' + uid.encode().hex().encode() + b'\r\n'))
 add('Aa', hx(b'\0AUTH ANONYMOUS\r\n'))
-for line, want in [('OK 1234deadbeef', 'begin'), ('REJECTED EXTERNAL ANONYMOUS', 'Rejected'), ('ERROR "bad"', 'Rejected'), ('DATA 00', 'continue'), ('AGREE_UNIX_FD', 'continue')]:
+for line, want in [('OK 0123456789ABCDEF0123456789abcdef', 'begin'), ('REJECTED EXTERNAL ANONYMOUS', 'Rejected'), ('ERROR "bad"', 'Rejected'), ('DATA 00', 'continue'), ('AGREE_UNIX_FD', 'continue')]:
     add('Ar', hx(line), want)
 
 # ---- match rules (specification)

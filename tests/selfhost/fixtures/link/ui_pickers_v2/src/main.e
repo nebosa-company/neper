@@ -274,9 +274,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 6usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
     // (D1229) The theme's language picks the week's first day: in "en-US" the 1st of
     // March 2026 (a Sunday) opens the first column under "Su", the 8th right below
-    // it; in "ar-EG" (Saturday first) the same Sunday stands one column further in.
+    // it; in mixed-case "ar-eG" (Saturday first) the same Sunday stands one column
+    // further in.
     let us_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "en-US", runtime: &runtime }
-    let eg_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "ar-EG", runtime: &runtime }
+    let eg_theme = control.Theme { tokens: &tokens, fonts: fonts, language: "ar-eG", runtime: &runtime }
     let first_of_march = time.Date { year: 2026i32, month: 3u8, day: 1u8 }
     let no_dates: widget.Change[time.Date] = zero
     var us_first_x: f32 = 0.0
@@ -456,9 +457,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // (D1388) In German the calendar says "März 2026" over "Mo Di Mi ..."; in
     // French "mars 2026".
     var german_theme = us_theme
-    german_theme.language = "de-DE"
+    german_theme.language = "DE-de"
     var french_theme = us_theme
-    french_theme.language = "fr-FR"
+    french_theme.language = "Fr-fR"
     var no_german_marks: overlay.CalendarMarks = zero
     f = mem.arena_from(frame_storage)
     let (german_month, german_month_error) = overlay.calendar_with(&f, 3100u64, &german_theme, "Termin", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, no_german_marks)
@@ -486,6 +487,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bounded_page[0usize] = bounded
     if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), bounded_page[0usize..1usize]), time.Instant { nanos: 3370000000i64 }) != ok { os.exit(154i32) }
     if testing.by_label(&harness, "Choose a date from September 8, 2026").count == 0usize { os.exit(155i32) }
+    var no_bound_pick: time.Date = zero
+    stores[0usize].last_date = no_bound_pick
+    if widget.focus(&runtime, testing.by_key(&harness, 3300u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.day != 0u8 { os.exit(200i32) }
+    // (D1395) Enter cannot bypass either side of a date-entry range.
+    let (late_bytes, late_bytes_error) = mem.alloc[u8](a, 16usize)
+    if late_bytes_error != ok { os.exit(201i32) }
+    let late_text = "9/25/2026"
+    var late_at = 0usize
+    while late_at < late_text.len {
+        late_bytes[late_at] = late_text[late_at]
+        late_at += 1usize
+    }
+    f = mem.arena_from(frame_storage)
+    let (latest_bounded, latest_bounded_error) = overlay.date_entry_within(&f, 3302u64, &us_theme, "End", late_bytes, late_text.len, zero, picked_dates, typed_today, 280.0, no_latest, time.Date { year: 2026i32, month: 9u8, day: 20u8 })
+    let (latest_page, latest_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if latest_bounded_error != ok || latest_page_error != ok { os.exit(202i32) }
+    latest_page[0usize] = latest_bounded
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), latest_page[0usize..1usize]), time.Instant { nanos: 3370000001i64 }) != ok { os.exit(203i32) }
+    if testing.by_label(&harness, "Choose a date up to September 20, 2026").count == 0usize { os.exit(204i32) }
+    stores[0usize].last_date = no_bound_pick
+    if widget.focus(&runtime, testing.by_key(&harness, 3302u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || stores[0usize].last_date.day != 0u8 { os.exit(205i32) }
     // (D1277) With the week of the 16th to the 22nd unavailable, Down from the
     // 11th goes to the 25th.
     var closed_week: [7]time.Date = zero
@@ -742,7 +764,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let after_midnight = time.Time { hour: 0u8, minute: 5u8, second: 0u8, nanos: 0u32 }
     var clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "en-US")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "2:30 PM") { os.exit(51i32) }
-    clock_len = overlay.write_clock_in(clock_bytes, after_midnight, "en-US")
+    clock_len = overlay.write_clock_in(clock_bytes, after_midnight, "en-us")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "12:05 AM") { os.exit(52i32) }
     clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "de-DE")
     if !mem.eq[u8](clock_bytes[0usize..clock_len], "14:30") { os.exit(53i32) }
@@ -776,8 +798,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (date_bytes, date_bytes_error) = mem.alloc[u8](a, 24usize)
     if date_bytes_error != ok { os.exit(72i32) }
     let release = time.Date { year: 2026i32, month: 9u8, day: 5u8 }
-    var date_len = overlay.write_date_in(date_bytes, release, "en-US")
-    if !mem.eq[u8](date_bytes[0usize..date_len], "9/5/2026") || !mem.eq[u8](overlay.date_format_hint("en-US"), "mm/dd/yyyy") { os.exit(73i32) }
+    var date_len = overlay.write_date_in(date_bytes, release, "eN-uS")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "9/5/2026") || !mem.eq[u8](overlay.date_format_hint("eN-uS"), "mm/dd/yyyy") || overlay.date_order_of("EN-us") != 0u8 { os.exit(73i32) }
     date_len = overlay.write_date_in(date_bytes, release, "de-DE")
     if !mem.eq[u8](date_bytes[0usize..date_len], "05.09.2026") || !mem.eq[u8](overlay.date_format_hint("de-DE"), "dd.mm.yyyy") { os.exit(74i32) }
     date_len = overlay.write_date_in(date_bytes, release, "en-GB")
@@ -786,6 +808,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !mem.eq[u8](date_bytes[0usize..date_len], "2026/09/05") { os.exit(76i32) }
     date_len = overlay.write_date_in(date_bytes, release, "")
     if !mem.eq[u8](date_bytes[0usize..date_len], "2026-09-05") { os.exit(77i32) }
+    let year_one = time.Date { year: 1i32, month: 1u8, day: 2u8 }
+    let year_ninety_nine = time.Date { year: 99i32, month: 1u8, day: 2u8 }
+    let year_nine_ninety_nine = time.Date { year: 999i32, month: 1u8, day: 2u8 }
+    let year_thousand = time.Date { year: 1000i32, month: 1u8, day: 2u8 }
+    date_len = overlay.write_date(date_bytes, year_one)
+    if !mem.eq[u8](date_bytes[0usize..date_len], "0001-01-02") { os.exit(901i32) }
+    date_len = overlay.write_date_in(date_bytes, year_ninety_nine, "en-US")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "1/2/0099") { os.exit(902i32) }
+    date_len = overlay.write_date_in(date_bytes, year_nine_ninety_nine, "de-DE")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "02.01.0999") { os.exit(903i32) }
+    date_len = overlay.write_date_in(date_bytes, year_thousand, "ja-JP")
+    if !mem.eq[u8](date_bytes[0usize..date_len], "1000/01/02") { os.exit(904i32) }
     let today_date = time.Date { year: 2026i32, month: 9u8, day: 25u8 }
     let (us_date, us_ok) = overlay.parse_date("9/5/2026", "en-US", today_date)
     let (gb_date, gb_ok) = overlay.parse_date("5/9/2026", "en-GB", today_date)

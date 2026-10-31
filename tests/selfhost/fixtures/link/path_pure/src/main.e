@@ -100,6 +100,19 @@ fn main(a: *mem.Arena) -> err {
     two[0usize] = "/base"
     two[1usize] = "rel"
     try check_join(a, two[..], .Posix, "/base/rel", 4i32)
+    // A drive-relative part names its own drive and cannot be nested under the prior one.
+    two[0usize] = "D:\\base"
+    two[1usize] = "C:foo"
+    try check_join(a, two[..], .Windows, "C:foo", 5i32)
+    two[0usize] = "C:"
+    two[1usize] = "foo"
+    try check_join(a, two[..], .Windows, "C:foo", 6i32)
+    two[0usize] = "C:foo"
+    two[1usize] = "bar"
+    try check_join(a, two[..], .Windows, "C:foo\\bar", 7i32)
+    two[0usize] = "D:\\base"
+    two[1usize] = "C:\\foo"
+    try check_join(a, two[..], .Windows, "C:\\foo", 8i32)
 
     // Normalising.
     try check_normalize(a, "a/./b", .Posix, "a/b")
@@ -111,12 +124,21 @@ fn main(a: *mem.Arena) -> err {
     try check_normalize(a, ".", .Posix, ".")
     try check_normalize(a, "/", .Posix, "/")
     try check_normalize(a, "C:\\a\\..\\b", .Windows, "C:\\b")
+    try check_normalize(a, "C:foo", .Windows, "C:foo")
+    try check_normalize(a, "C:foo\\.\\bar", .Windows, "C:foo\\bar")
+    try check_normalize(a, "C:foo\\..\\bar", .Windows, "C:bar")
+    try check_normalize(a, "C:..\\bar", .Windows, "C:..\\bar")
 
     // Relating.
     try check_relative(a, "/a/b", "/a/b/c", .Posix, "c")
     try check_relative(a, "/a/b/c", "/a/b", .Posix, "..")
     try check_relative(a, "/a/b", "/a/x/y", .Posix, "../x/y")
     try check_relative(a, "/a/b", "/a/b", .Posix, ".")
+    // Windows path identity is case-insensitive and accepts both separators.
+    try check_relative(a, "C:\\Users\\Alice", "c:\\users\\alice\\Docs", .Windows, "Docs")
+    try check_relative(a, "C:\\work\\base", "C:/work/target", .Windows, "..\\target")
+    // Posix remains byte-sensitive.
+    try check_relative(a, "/a/Case", "/a/case/file", .Posix, "../case/file")
     let (_, mixed_error) = path.relative(a, "/a", "b", .Posix)
     if mixed_error != path.Invalid { os.exit(70i32) }
 

@@ -173,8 +173,10 @@ fn fnv1a64_basis(data: []const u8, basis: u64) -> u64 {
     ret h
 }
 
-// The backend for `key_hash`: `table[key_hash mod table.len]`.
+// The backend for `key_hash`: `table[key_hash mod table.len]`, or 0 when no
+// table has been built. This matches the module's other empty-input pickers.
 fn maglev_lookup(table: []const u32, key_hash: u64) -> u32 {
+    if table.len == 0usize { ret 0u32 }
     ret table[usize(key_hash % u64(table.len))]
 }
 

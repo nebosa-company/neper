@@ -6,7 +6,8 @@
 // the caller's limit (at most 76, RFC's maximum).
 //
 // Both keep a `State` in the first bytes of their storage; the rest of the storage is
-// the reader's input buffer or the writer's pending line.
+// the reader's input buffer or the writer's pending line. The writer state also holds
+// a CR until the next write decides whether it begins a hard CRLF.
 
 use e.io
 use e.mem
@@ -15,8 +16,8 @@ type Reader = struct { state: *void }
 type Writer = struct { state: *void }
 error Invalid
 
-type ReaderState = struct { source: io.Reader, buffer: []u8, start: usize, end: usize, ended: bool }
-type WriterState = struct { sink: io.Writer, line: []u8, used: usize, limit: usize }
+type ReaderState = struct { source: io.Reader, buffer: []u8, start: usize, end: usize, ended: bool, pending_error: err }
+type WriterState = struct { sink: io.Writer, line: []u8, used: usize, limit: usize, pending_cr: u8 }
 
 fn is_hex_upper(c: u8) -> bool {
     let digit = c >= 48u8 && c <= 57u8
@@ -46,6 +47,7 @@ fn reader(storage: []u8, source: io.Reader) -> Reader {
     state.start = 0usize
     state.end = 0usize
     state.ended = false
+    state.pending_error = ok
     r.state = mem.cast[*void](state)
     ret r
 }
@@ -64,12 +66,11 @@ fn refill(s: *ReaderState) -> err {
     }
     if s.end == s.buffer.len { ret ok }
     let (count, read_error) = io.read(&s.source, s.buffer[s.end..])
-    if read_error == io.End {
-        s.ended = true
-        ret ok
-    }
-    if read_error != ok { ret read_error }
     s.end += count
+    if read_error != ok {
+        s.ended = true
+        s.pending_error = read_error
+    }
     ret ok
 }
 
@@ -79,11 +80,12 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
     var written = 0usize
     while written < dst.len {
         // Three bytes in hand decide every case; fewer only at the very end.
-        if s.end - s.start < 3usize && !s.ended {
+        while s.end - s.start < 3usize && !s.ended {
             let refill_error = refill(s)
             if refill_error != ok { ret (written, refill_error) }
         }
         if s.start >= s.end {
+            if s.pending_error != ok { ret (written, s.pending_error) }
             if written == 0usize { ret (0usize, io.End) }
             ret (written, ok)
         }
@@ -132,6 +134,7 @@ fn writer(storage: []u8, sink: io.Writer, line_limit: u8) -> (Writer, err) {
     state.line = storage[state_size..]
     state.used = 0usize
     state.limit = usize(line_limit)
+    state.pending_cr = 0u8
     w.state = mem.cast[*void](state)
     ret (w, ok)
 }
@@ -159,30 +162,52 @@ fn put(s: *WriterState, bytes: []const u8) -> err {
     ret ok
 }
 
+// Finish one physical line with a hard CRLF. A space or tab immediately before it
+// is encoded because transport agents may otherwise strip it.
+fn hard_break(s: *WriterState) -> err {
+    if s.used > 0usize && (s.line[s.used - 1usize] == 32u8 || s.line[s.used - 1usize] == 9u8) {
+        let last = s.line[s.used - 1usize]
+        s.used -= 1usize
+        var escaped: [3]u8 = zero
+        escaped[0] = 61u8
+        escaped[1] = hex_digit(last >> 4u8)
+        escaped[2] = hex_digit(last & 15u8)
+        try put(s, escaped[0..])
+    }
+    s.line[s.used] = 13u8
+    s.line[s.used + 1usize] = 10u8
+    try io.write_all(&s.sink, s.line[..s.used + 2usize])
+    s.used = 0usize
+    ret ok
+}
+
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
     if sink_writer.state == nil { ret (0usize, Invalid) }
     let s = mem.cast[*WriterState](sink_writer.state)
     var at = 0usize
+    // CRLF is one hard break even when its bytes reach separate stream writes.
+    if s.pending_cr != 0u8 && src.len > 0usize {
+        if src[0usize] == 10u8 {
+            let break_error = hard_break(s)
+            if break_error != ok { ret (0usize, break_error) }
+            at = 1usize
+        } else {
+            let pending = [3]u8 { 61u8, 48u8, 68u8 }
+            let pending_error = put(s, pending[0usize..])
+            if pending_error != ok { ret (0usize, pending_error) }
+        }
+        s.pending_cr = 0u8
+    }
     while at < src.len {
         let c = src[at]
         var escaped: [3]u8 = zero
         if c == 13u8 && at + 1usize < src.len && src[at + 1usize] == 10u8 {
-            // A hard break: the line so far, with any trailing white space escaped, then CRLF.
-            if s.used > 0usize && (s.line[s.used - 1usize] == 32u8 || s.line[s.used - 1usize] == 9u8) {
-                let last = s.line[s.used - 1usize]
-                s.used -= 1usize
-                escaped[0] = 61u8
-                escaped[1] = hex_digit(last >> 4u8)
-                escaped[2] = hex_digit(last & 15u8)
-                let put_error = put(s, escaped[0..])
-                if put_error != ok { ret (at, put_error) }
-            }
-            s.line[s.used] = 13u8
-            s.line[s.used + 1usize] = 10u8
-            let write_error = io.write_all(&s.sink, s.line[..s.used + 2usize])
-            if write_error != ok { ret (at, write_error) }
-            s.used = 0usize
+            let break_error = hard_break(s)
+            if break_error != ok { ret (at, break_error) }
             at += 2usize
+        } else if c == 13u8 && at + 1usize == src.len {
+            s.pending_cr = 1u8
+            at += 1usize
         } else {
             let printable = c >= 33u8 && c <= 126u8 && c != 61u8
             let literal = printable || c == 32u8 || c == 9u8
@@ -208,6 +233,11 @@ fn write(sink_writer: *Writer, src: []const u8) -> (usize, err) {
 fn finish(sink_writer: *Writer) -> err {
     if sink_writer.state == nil { ret Invalid }
     let s = mem.cast[*WriterState](sink_writer.state)
+    if s.pending_cr != 0u8 {
+        let pending = [3]u8 { 61u8, 48u8, 68u8 }
+        try put(s, pending[0usize..])
+        s.pending_cr = 0u8
+    }
     if s.used > 0usize && (s.line[s.used - 1usize] == 32u8 || s.line[s.used - 1usize] == 9u8) {
         let last = s.line[s.used - 1usize]
         s.used -= 1usize

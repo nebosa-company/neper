@@ -40,6 +40,13 @@ fn main() -> i64 {
     }
     if fired != 4usize { ret 12i64 }
 
+    // One long simulation step reports one event and carries every skipped period
+    // into the next positive deadline, rather than leaving the timer permanently due.
+    var catch_up = loop.timer(65536i32, true)
+    if !loop.tick(&catch_up, 196608i32) { ret 120i64 }
+    if catch_up.remaining != 65536i32 { ret 121i64 }
+    if !loop.tick(&catch_up, 65536i32) { ret 122i64 }
+
     var once = loop.timer(65536i32, false)
     if loop.tick(&once, 65536i32) != true { ret 13i64 }
     if loop.tick(&once, 65536i32) != false { ret 14i64 }

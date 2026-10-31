@@ -56,6 +56,17 @@ fn fits(data: []const u8, offset: u64, length: u64) -> bool {
     ret length <= n - offset
 }
 
+// Locate a fixed-width table entry without forming an unchecked file offset.
+fn entry_offset(data: []const u8, base: u64, index: usize, width: usize) -> (u64, bool) {
+    let n = u64(data.len)
+    if base > n { ret (0u64, false) }
+    let span = u64(width)
+    if u64(index) > (n - base) / span { ret (0u64, false) }
+    let at = base + u64(index) * span
+    if !fits(data, at, span) { ret (0u64, false) }
+    ret (at, true)
+}
+
 // The ELF file header: the identification (`\x7fELF`, class 1 or 2, data 1 or 2) and the fixed fields.
 fn parse_header(data: []const u8) -> (Header, err) {
     var h: Header = zero
@@ -66,6 +77,7 @@ fn parse_header(data: []const u8) -> (Header, err) {
     if data[5] != 1u8 && data[5] != 2u8 { ret (h, Invalid) }
     h.little = data[5] == 1u8
     h.version = data[6]
+    if h.version != 1u8 { ret (h, Invalid) }
     h.osabi = data[7]
     h.abi_version = data[8]
     var size = 52usize
@@ -73,6 +85,7 @@ fn parse_header(data: []const u8) -> (Header, err) {
     if data.len < size { ret (h, Truncated) }
     h.kind = rd16(data, 16usize, h.little)
     h.machine = rd16(data, 18usize, h.little)
+    if rd32(data, 20usize, h.little) != 1u32 { ret (h, Invalid) }
     if h.class == 2u8 {
         h.entry = rd64(data, 24usize, h.little)
         h.phoff = rd64(data, 32usize, h.little)
@@ -106,8 +119,8 @@ fn segment(data: []const u8, h: Header, index: usize) -> (Segment, err) {
     if h.class == 2u8 { want = 56usize }
     if usize(h.phentsize) != want { ret (s, Invalid) }
     if index >= usize(h.phnum) { ret (s, Invalid) }
-    let at = h.phoff + u64(index) * u64(want)
-    if !fits(data, at, u64(want)) { ret (s, Truncated) }
+    let (at, found) = entry_offset(data, h.phoff, index, want)
+    if !found { ret (s, Truncated) }
     let p = usize(at)
     if h.class == 2u8 {
         s.kind = rd32(data, p, h.little)
@@ -138,8 +151,8 @@ fn section(data: []const u8, h: Header, index: usize) -> (Section, err) {
     if h.class == 2u8 { want = 64usize }
     if usize(h.shentsize) != want { ret (s, Invalid) }
     if index >= usize(h.shnum) { ret (s, Invalid) }
-    let at = h.shoff + u64(index) * u64(want)
-    if !fits(data, at, u64(want)) { ret (s, Truncated) }
+    let (at, found) = entry_offset(data, h.shoff, index, want)
+    if !found { ret (s, Truncated) }
     let p = usize(at)
     s.name_offset = rd32(data, p, h.little)
     s.kind = rd32(data, p + 4usize, h.little)
@@ -196,8 +209,8 @@ fn symbol(data: []const u8, h: Header, table: Section, index: usize) -> (Symbol,
     if h.class == 2u8 { want = 24usize }
     if table.entsize != u64(want) { ret (sym, Invalid) }
     if u64(index) >= table.size / u64(want) { ret (sym, Invalid) }
-    let at = table.offset + u64(index) * u64(want)
-    if !fits(data, at, u64(want)) { ret (sym, Truncated) }
+    let (at, found) = entry_offset(data, table.offset, index, want)
+    if !found { ret (sym, Truncated) }
     let p = usize(at)
     sym.name_offset = rd32(data, p, h.little)
     if h.class == 2u8 {
@@ -222,8 +235,8 @@ fn dynamic(data: []const u8, h: Header, table: Section, index: usize) -> (Dynami
     var want = 8usize
     if h.class == 2u8 { want = 16usize }
     if u64(index) >= table.size / u64(want) { ret (d, Invalid) }
-    let at = table.offset + u64(index) * u64(want)
-    if !fits(data, at, u64(want)) { ret (d, Truncated) }
+    let (at, found) = entry_offset(data, table.offset, index, want)
+    if !found { ret (d, Truncated) }
     let p = usize(at)
     if h.class == 2u8 {
         d.tag = rd64(data, p, h.little)

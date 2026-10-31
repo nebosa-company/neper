@@ -55,6 +55,35 @@ type State = struct {
     closed: bool,
     damage: geometry.Rect,
     damaged: bool,
+    presenter: Presenter,
+    has_presenter: bool,
+    changed: Changed,
+    has_changed: bool,
+}
+
+// The pixels of the next frame that differ from the last one shown: `[x0, x1) x [y0, y1)`, empty when none do (D5905).
+type Changed = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
+
+// Another way to show a finished frame than `os.window_present` (D5887): `x.khronos.present`
+// uploads it to a GL texture and swaps. `present(context, host, pixels, width, height, changed)`
+// takes the frame as `os.window_present` would, with the box that differs from the last frame
+// it was given (the whole frame unless the renderer said otherwise, D5905); any error hands
+// this and every later frame back to the software path. `release(context)` then releases the
+// presenter's context and every object it owns; the window calls it once on that fallback, a
+// replacement, or close.
+type Presenter = struct { context: usize, present: fn(usize, os.Window, []const u32, u32, u32, Changed) -> err, release: fn(usize) -> err }
+
+// (D5907) A presenter every window opened from now on gets: `x.khronos.present.install` sets one, so a program opts every
+// window (an `e.ui.app`'s too) into GL with one call. A window it cannot attach to stays on the software path. An
+// attachment that opens a presenter and then fails must release it before it returns.
+type PresenterFactory = struct { attach: fn(*mem.Arena, *Window) -> err }
+
+var default_presenter: PresenterFactory = zero
+var has_default_presenter: bool = false
+
+fn set_default_presenter(factory: PresenterFactory) {
+    default_presenter = factory
+    has_default_presenter = true
 }
 
 var slots: [16]*State = zero
@@ -93,24 +122,36 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     }
     let (drawable, drawable_error) = scene.target_of(a, frames)
     if drawable_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
     let (scratch, scratch_error) = mem.alloc[u32](a, usize(options.width) * usize(options.height))
     if scratch_error != ok {
+        let released = gpu.close_target(frames)
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false, changed: zero, has_changed: false }
+    let opened_state = &states[0usize]
     generations[slot] += 1u32
-    slots[slot] = &states[0usize]
+    slots[slot] = opened_state
     live[slot] = true
-    ret (Window { state: mem.cast[*void](&states[0usize]), id: Id { slot: u32(slot), generation: generations[slot] } }, ok)
+    var opened = Window { state: mem.cast[*void](opened_state), id: Id { slot: u32(slot), generation: generations[slot] } }
+    if has_default_presenter {
+        let attached = default_presenter.attach(a, &opened)
+        if attached != ok && opened_state.has_presenter {
+            opened_state.has_presenter = false
+            let released = opened_state.presenter.release(opened_state.presenter.context)
+        }
+    }
+    ret (opened, ok)
 }
 
 // The window a host handle names, for the input queue; `false` for a stranger.
@@ -157,6 +198,24 @@ fn take_frame_request() -> (Id, bool) {
     ret (zero, false)
 }
 
+// The App-facing input path must not consume another live window's frame
+// request merely because it is the next caller on the shared host thread.
+fn take_frame_request_for(id: Id) -> bool {
+    let (s, state_error) = state_by_id(id)
+    if state_error != ok || !s.frame_requested { ret false }
+    s.frame_requested = false
+    ret true
+}
+
+// Commit a target extent only after its replacement images exist. This keeps the
+// cached drawable extent aligned with the target if allocation or the device fails.
+fn commit_resized_extent(s: *State, width: u32, height: u32, resize_error: err) -> err {
+    if resize_error != ok { ret resize_error }
+    s.width = width
+    s.height = height
+    ret ok
+}
+
 fn metrics(window: *const Window) -> (Metrics, err) {
     var none: Metrics = zero
     let (s, state_error) = state_of(window)
@@ -167,12 +226,25 @@ fn metrics(window: *const Window) -> (Metrics, err) {
     if !(scale > 0.0) { scale = 1.0 }
     // The target follows the client area.
     if host.width != s.width || host.height != s.height {
-        if host.width != 0u32 && host.height != 0u32 && gpu.resize(s.frames, host.width, host.height) == ok {
-            s.width = host.width
-            s.height = host.height
+        if host.width != 0u32 && host.height != 0u32 {
+            let resize_error = gpu.resize(s.frames, host.width, host.height)
+            let committed_error = commit_resized_extent(s, host.width, host.height, resize_error)
+            if committed_error != ok { ret (none, committed_error) }
         }
     }
     ret (Metrics { logical_size: geometry.Size { width: f32(host.width) / scale, height: f32(host.height) / scale }, framebuffer_width: host.width, framebuffer_height: host.height, scale: scale, focused: host.focused, visible: host.visible }, ok)
+}
+
+@test
+fn failed_resize_keeps_cached_extent(a: *mem.Arena) -> err {
+    var state: State = zero
+    state.width = 320u32
+    state.height = 200u32
+    let failed = commit_resized_extent(&state, 640u32, 400u32, gpu.InvalidHandle)
+    if failed != gpu.InvalidHandle || state.width != 320u32 || state.height != 200u32 { ret Invalid }
+    if commit_resized_extent(&state, 640u32, 400u32, ok) != ok { ret Invalid }
+    if state.width != 640u32 || state.height != 400u32 { ret Invalid }
+    ret ok
 }
 
 fn draw_target(window: *const Window) -> (scene.Target, err) {
@@ -233,11 +305,54 @@ fn request_frame(window: *Window) -> err {
             s.scratch = scratch
         }
         if gpu.read_image(s.queue, shown, s.scratch[0usize..count]) != ok { ret Invalid }
-        if os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
+        var presented = false
+        if s.has_presenter {
+            var changed = Changed { x0: 0u32, y0: 0u32, x1: shown.width, y1: shown.height }
+            if s.has_changed { changed = s.changed }
+            presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height, changed) == ok
+            if !presented {
+                s.has_presenter = false
+                let released = s.presenter.release(s.presenter.context)
+            }
+        }
+        if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
     }
     s.frame_requested = true
     s.damaged = false
+    s.has_changed = false
     ret ok
+}
+
+// (D5905) The renderer's word on which pixels of the next frame differ from the last one: a presenter given it uploads only
+// those. Without it, the presenter takes the whole frame.
+fn report_changed(window: *Window, changed: Changed) -> err {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret state_error }
+    s.changed = changed
+    s.has_changed = true
+    ret ok
+}
+
+// Shows this window's frames through `presenter` from the next `request_frame` on, releasing any
+// presenter it replaces before it takes ownership of the new one.
+fn set_presenter(window: *Window, presenter: Presenter) -> err {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret state_error }
+    if s.has_presenter {
+        s.has_presenter = false
+        let released = s.presenter.release(s.presenter.context)
+        if released != ok { ret Invalid }
+    }
+    s.presenter = presenter
+    s.has_presenter = true
+    ret ok
+}
+
+// Whether frames still go through a presenter: false before `set_presenter`, and after one failed.
+fn presenting(window: *const Window) -> bool {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret false }
+    ret s.has_presenter
 }
 
 fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err) {
@@ -321,10 +436,15 @@ fn close(window: *Window) -> err {
     if state_error != ok { ret state_error }
     let slot = usize(window.id.slot)
     if slot < MAX_WINDOWS && live[slot] && generations[slot] == window.id.generation { live[slot] = false }
+    var presenter_closed = ok
+    if s.has_presenter {
+        s.has_presenter = false
+        presenter_closed = s.presenter.release(s.presenter.context)
+    }
     let target_closed = gpu.close_target(s.frames)
     let host_closed = os.window_close(s.handle)
     s.closed = true
-    if host_closed != ok { ret Invalid }
+    if presenter_closed != ok || target_closed != ok || host_closed != ok { ret Invalid }
     ret ok
 }
 

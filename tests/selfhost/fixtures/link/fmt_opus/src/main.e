@@ -528,6 +528,65 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let e_hy2x = lp_check(a, hy2x_p0(), hy2x_p1(), hy2x_p2(), hy2x_r(), 1usize, 48000u32, 1920usize, 1usize)
     try report("hybrid cfg15 code2 mono 48k", e_hy2x)
     if e_hy2x < 0i64 || e_hy2x > 30000i64 { os.exit(56i32) }
+
+    // 57: a high-energy CELT packet has finite output, and does not poison the
+    // next silence frame through decoder state.
+    let (attack_base, attack_open) = opus.decoder(a, 1usize)
+    if attack_open != ok { os.exit(57i32) }
+    var attack = attack_base
+    var hostile: [200]u8 = zero
+    hostile[0usize] = 0xf8u8
+    hostile[1usize] = 0x7fu8
+    hostile[2usize] = 0xfeu8
+    i = 3usize
+    while i < hostile.len {
+        hostile[i] = 0xffu8
+        i += 1usize
+    }
+    let (attack_n, attack_error) = opus.decode(&attack, hostile[..], 48000u32, sout)
+    if attack_n != 960usize || attack_error != ok { os.exit(57i32) }
+    i = 0usize
+    while i < attack_n {
+        let sample = sout[i]
+        if sample != sample || sample - sample != 0.0f32 { os.exit(57i32) }
+        i += 1usize
+    }
+
+    // 58: the following silence frame also stays finite.
+    let (silence_n, silence_error) = opus.decode(&attack, p_silence(), 48000u32, sout)
+    if silence_n != 960usize || silence_error != ok { os.exit(58i32) }
+    i = 0usize
+    while i < silence_n {
+        let sample = sout[i]
+        if sample != sample || sample - sample != 0.0f32 { os.exit(58i32) }
+        i += 1usize
+    }
+
+    // 59: synthetic zero fill can exceed a frame's entropy budget; CELT uses
+    // this same predicate before accepting the frame.
+    var overrun = opus.range_init("\x00")
+    let _ = opus.range_decode_raw_bits(&overrun, 24u32)
+    let frame_bits = i32(overrun.data.len) * 8i32
+    if opus.range_within(&overrun, frame_bits) { os.exit(59i32) }
+
+    // 60: SILK-only redundancy is unsupported, not silently ignored.
+    let silk_packet = p_silk()
+    var silk_redundancy: [80]u8 = zero
+    i = 0usize
+    while i < silk_packet.len {
+        silk_redundancy[i] = silk_packet[i]
+        i += 1usize
+    }
+    while i < silk_redundancy.len {
+        silk_redundancy[i] = 0u8
+        i += 1usize
+    }
+    let (redundant_base, redundant_open) = opus.decoder(a, 1usize)
+    if redundant_open != ok { os.exit(60i32) }
+    var redundant = redundant_base
+    let (redundant_n, redundant_error) = opus.decode(&redundant, silk_redundancy[..], 48000u32, sout)
+    if redundant_n != 0usize || redundant_error != opus.Unsupported { os.exit(60i32) }
+
     try io.print("worst max err 1e-9 * ")
     try print_num(worst)
     try io.print("\n")

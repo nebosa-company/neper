@@ -1,6 +1,6 @@
-// Row-major matrix views over caller storage: element (r, c) is `data[r * stride + c]`,
-// so a transpose is a view with the two dimensions swapped -- which is why a `Matrix`
-// carries its stride and why `transpose` costs nothing. `Shape` is any mismatch of
+// Row-major matrix views over caller storage: element (r, c) is
+// `data[r * stride + c * column_stride]`. Normal views have `column_stride` one;
+// transposed views swap the two physical strides, so `transpose` costs nothing. `Shape` is any mismatch of
 // dimensions or a view its data cannot hold; `Singular` is a pivot of zero.
 //
 // The factorizations below are on `f64` views: `lu`/`lu_factor` with `solve_lu`, `solve`
@@ -12,8 +12,8 @@
 use e.mem
 use e.math
 
-type Matrix[T: type] = struct { data: []T, rows: usize, cols: usize, stride: usize }
-type ConstMatrix[T: type] = struct { data: []const T, rows: usize, cols: usize, stride: usize }
+type Matrix[T: type] = struct { data: []T, rows: usize, cols: usize, stride: usize, column_stride: usize }
+type ConstMatrix[T: type] = struct { data: []const T, rows: usize, cols: usize, stride: usize, column_stride: usize }
 error Shape
 error Singular
 error NotPositiveDefinite
@@ -35,6 +35,7 @@ fn view[T: type](data: []T, rows: usize, cols: usize, stride: usize) -> (Matrix[
     m.rows = rows
     m.cols = cols
     m.stride = stride
+    m.column_stride = 1usize
     ret (m, ok)
 }
 
@@ -46,6 +47,7 @@ fn view_const[T: type](data: []const T, rows: usize, cols: usize, stride: usize)
     m.rows = rows
     m.cols = cols
     m.stride = stride
+    m.column_stride = 1usize
     ret (m, ok)
 }
 
@@ -55,12 +57,21 @@ fn as_const[T: type](m: Matrix[T]) -> ConstMatrix[T] {
     c.rows = m.rows
     c.cols = m.cols
     c.stride = m.stride
+    c.column_stride = m.column_stride
     ret c
+}
+
+fn matrix_offset[T: type](m: Matrix[T], row: usize, col: usize) -> usize {
+    ret row * m.stride + col * m.column_stride
+}
+
+fn const_matrix_offset[T: type](m: ConstMatrix[T], row: usize, col: usize) -> usize {
+    ret row * m.stride + col * m.column_stride
 }
 
 fn get[T: type](m: Matrix[T], row: usize, col: usize) -> T {
     if row >= m.rows || col >= m.cols { ret m.data[m.data.len] }
-    ret m.data[row * m.stride + col]
+    ret m.data[matrix_offset[T](m, row, col)]
 }
 
 fn set[T: type](m: Matrix[T], row: usize, col: usize, v: T) {
@@ -68,17 +79,17 @@ fn set[T: type](m: Matrix[T], row: usize, col: usize, v: T) {
         m.data[m.data.len] = v
         ret
     }
-    m.data[row * m.stride + col] = v
+    m.data[matrix_offset[T](m, row, col)] = v
 }
 
-// The same storage read column-first: a view, not a copy. A transposed view is only
-// itself transposable again; the other operations here read rows through the stride.
+// The same storage read with its physical strides swapped: a view, not a copy.
 fn transpose[T: type](m: Matrix[T]) -> Matrix[T] {
     var t: Matrix[T] = zero
     t.data = m.data
     t.rows = m.cols
     t.cols = m.rows
-    t.stride = m.stride
+    t.stride = m.column_stride
+    t.column_stride = m.stride
     ret t
 }
 
@@ -87,7 +98,7 @@ fn fill[T: type](m: Matrix[T], v: T) {
     while r < m.rows {
         var c = 0usize
         while c < m.cols {
-            m.data[r * m.stride + c] = v
+            m.data[matrix_offset[T](m, r, c)] = v
             c += 1usize
         }
         r += 1usize
@@ -100,7 +111,7 @@ fn copy[T: type](dst: Matrix[T], src: ConstMatrix[T]) -> err {
     while r < dst.rows {
         var c = 0usize
         while c < dst.cols {
-            dst.data[r * dst.stride + c] = src.data[r * src.stride + c]
+            dst.data[matrix_offset[T](dst, r, c)] = src.data[const_matrix_offset[T](src, r, c)]
             c += 1usize
         }
         r += 1usize
@@ -114,7 +125,7 @@ fn add[T: type](dst: Matrix[T], a: ConstMatrix[T], b: ConstMatrix[T]) -> err {
     while r < dst.rows {
         var c = 0usize
         while c < dst.cols {
-            dst.data[r * dst.stride + c] = a.data[r * a.stride + c] + b.data[r * b.stride + c]
+            dst.data[matrix_offset[T](dst, r, c)] = a.data[const_matrix_offset[T](a, r, c)] + b.data[const_matrix_offset[T](b, r, c)]
             c += 1usize
         }
         r += 1usize
@@ -132,10 +143,10 @@ fn multiply[T: type](dst: Matrix[T], a: ConstMatrix[T], b: ConstMatrix[T]) -> er
             var total: T = zero
             var k = 0usize
             while k < a.cols {
-                total = total + a.data[r * a.stride + k] * b.data[k * b.stride + c]
+                total = total + a.data[const_matrix_offset[T](a, r, k)] * b.data[const_matrix_offset[T](b, k, c)]
                 k += 1usize
             }
-            dst.data[r * dst.stride + c] = total
+            dst.data[matrix_offset[T](dst, r, c)] = total
             c += 1usize
         }
         r += 1usize
@@ -155,7 +166,7 @@ fn determinant_f64(a: *mem.Arena, m: ConstMatrix[f64]) -> (f64, err) {
     while r < n {
         var c = 0usize
         while c < n {
-            scratch[r * n + c] = m.data[r * m.stride + c]
+            scratch[r * n + c] = m.data[const_matrix_offset[f64](m, r, c)]
             c += 1usize
         }
         r += 1usize
@@ -188,7 +199,7 @@ fn inverse_f64(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err {
     while r < n {
         var c = 0usize
         while c < n {
-            scratch[r * width + c] = src.data[r * src.stride + c]
+            scratch[r * width + c] = src.data[const_matrix_offset[f64](src, r, c)]
             scratch[r * width + n + c] = 0.0
             c += 1usize
         }
@@ -226,7 +237,7 @@ fn inverse_f64(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err {
     while r < n {
         var c = 0usize
         while c < n {
-            dst.data[r * dst.stride + c] = scratch[r * width + n + c]
+            dst.data[matrix_offset[f64](dst, r, c)] = scratch[r * width + n + c]
             c += 1usize
         }
         r += 1usize
@@ -281,10 +292,11 @@ fn eliminate_below(scratch: []f64, n: usize, col: usize, lead: f64) {
 // A view of `m` from (`row`, `col`), `rows` x `cols`, sharing its storage.
 fn sub(m: Matrix[f64], row: usize, col: usize, rows: usize, cols: usize) -> Matrix[f64] {
     var s: Matrix[f64] = zero
-    s.data = m.data[row * m.stride + col..]
+    s.data = m.data[matrix_offset[f64](m, row, col)..]
     s.rows = rows
     s.cols = cols
     s.stride = m.stride
+    s.column_stride = m.column_stride
     ret s
 }
 
@@ -292,7 +304,7 @@ fn identity(m: Matrix[f64]) {
     fill[f64](m, 0.0)
     var i = 0usize
     while i < m.rows && i < m.cols {
-        m.data[i * m.stride + i] = 1.0
+        m.data[matrix_offset[f64](m, i, i)] = 1.0
         i += 1usize
     }
 }
@@ -300,9 +312,9 @@ fn identity(m: Matrix[f64]) {
 fn swap_view_rows(m: Matrix[f64], first: usize, second: usize) {
     var c = 0usize
     while c < m.cols {
-        let carried = m.data[first * m.stride + c]
-        m.data[first * m.stride + c] = m.data[second * m.stride + c]
-        m.data[second * m.stride + c] = carried
+        let carried = m.data[matrix_offset[f64](m, first, c)]
+        m.data[matrix_offset[f64](m, first, c)] = m.data[matrix_offset[f64](m, second, c)]
+        m.data[matrix_offset[f64](m, second, c)] = carried
         c += 1usize
     }
 }
@@ -325,10 +337,10 @@ fn lu_factor(factors: Matrix[f64], perm: []usize, src: ConstMatrix[f64]) -> (f64
     var col = 0usize
     while col < n {
         var best = col
-        var best_size = math.abs[f64](factors.data[col * factors.stride + col])
+        var best_size = math.abs[f64](factors.data[matrix_offset[f64](factors, col, col)])
         var r = col + 1usize
         while r < n {
-            let size = math.abs[f64](factors.data[r * factors.stride + col])
+            let size = math.abs[f64](factors.data[matrix_offset[f64](factors, r, col)])
             if size > best_size {
                 best = r
                 best_size = size
@@ -343,14 +355,14 @@ fn lu_factor(factors: Matrix[f64], perm: []usize, src: ConstMatrix[f64]) -> (f64
             perm[col] = carried
             sign = 0.0 - sign
         }
-        let lead = factors.data[col * factors.stride + col]
+        let lead = factors.data[matrix_offset[f64](factors, col, col)]
         r = col + 1usize
         while r < n {
-            let factor = factors.data[r * factors.stride + col] / lead
-            factors.data[r * factors.stride + col] = factor
+            let factor = factors.data[matrix_offset[f64](factors, r, col)] / lead
+            factors.data[matrix_offset[f64](factors, r, col)] = factor
             var c = col + 1usize
             while c < n {
-                factors.data[r * factors.stride + c] = factors.data[r * factors.stride + c] - factor * factors.data[col * factors.stride + c]
+                factors.data[matrix_offset[f64](factors, r, c)] = factors.data[matrix_offset[f64](factors, r, c)] - factor * factors.data[matrix_offset[f64](factors, col, c)]
                 c += 1usize
             }
             r += 1usize
@@ -371,11 +383,11 @@ fn lu(l: Matrix[f64], u: Matrix[f64], perm: []usize, src: ConstMatrix[f64]) -> (
         while c < u.cols {
             var lower: f64 = 0.0
             if c < r {
-                lower = u.data[r * u.stride + c]
-                u.data[r * u.stride + c] = 0.0
+                lower = u.data[matrix_offset[f64](u, r, c)]
+                u.data[matrix_offset[f64](u, r, c)] = 0.0
             }
             if c == r { lower = 1.0 }
-            l.data[r * l.stride + c] = lower
+            l.data[matrix_offset[f64](l, r, c)] = lower
             c += 1usize
         }
         r += 1usize
@@ -393,7 +405,7 @@ fn solve_lu(factors: ConstMatrix[f64], perm: []const usize, x: []f64, b: []const
         var total = b[perm[i]]
         var j = 0usize
         while j < i {
-            total = total - factors.data[i * factors.stride + j] * x[j]
+            total = total - factors.data[const_matrix_offset[f64](factors, i, j)] * x[j]
             j += 1usize
         }
         x[i] = total
@@ -405,10 +417,10 @@ fn solve_lu(factors: ConstMatrix[f64], perm: []const usize, x: []f64, b: []const
         var total = x[i]
         var j = i + 1usize
         while j < n {
-            total = total - factors.data[i * factors.stride + j] * x[j]
+            total = total - factors.data[const_matrix_offset[f64](factors, i, j)] * x[j]
             j += 1usize
         }
-        x[i] = total / factors.data[i * factors.stride + i]
+        x[i] = total / factors.data[const_matrix_offset[f64](factors, i, i)]
     }
     ret ok
 }
@@ -454,7 +466,7 @@ fn inverse(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err {
         if solve_error != ok { ret solve_error }
         i = 0usize
         while i < n {
-            dst.data[i * dst.stride + c] = column[i]
+            dst.data[matrix_offset[f64](dst, i, c)] = column[i]
             i += 1usize
         }
         c += 1usize
@@ -472,17 +484,17 @@ fn cholesky(l: Matrix[f64], src: ConstMatrix[f64]) -> err {
     while j < n {
         var i = j
         while i < n {
-            var total = src.data[i * src.stride + j]
+            var total = src.data[const_matrix_offset[f64](src, i, j)]
             var k = 0usize
             while k < j {
-                total = total - l.data[i * l.stride + k] * l.data[j * l.stride + k]
+                total = total - l.data[matrix_offset[f64](l, i, k)] * l.data[matrix_offset[f64](l, j, k)]
                 k += 1usize
             }
             if i == j {
                 if total <= 0.0 { ret NotPositiveDefinite }
-                l.data[j * l.stride + j] = math.sqrt[f64](total)
+                l.data[matrix_offset[f64](l, j, j)] = math.sqrt[f64](total)
             } else {
-                l.data[i * l.stride + j] = total / l.data[j * l.stride + j]
+                l.data[matrix_offset[f64](l, i, j)] = total / l.data[matrix_offset[f64](l, j, j)]
             }
             i += 1usize
         }
@@ -533,13 +545,13 @@ fn householder_apply_left(m: Matrix[f64], v: []const f64, beta: f64) -> err {
         var w: f64 = 0.0
         var k = 0usize
         while k < m.rows {
-            w = w + v[k] * m.data[k * m.stride + c]
+            w = w + v[k] * m.data[matrix_offset[f64](m, k, c)]
             k += 1usize
         }
         w = w * beta
         k = 0usize
         while k < m.rows {
-            m.data[k * m.stride + c] = m.data[k * m.stride + c] - w * v[k]
+            m.data[matrix_offset[f64](m, k, c)] = m.data[matrix_offset[f64](m, k, c)] - w * v[k]
             k += 1usize
         }
         c += 1usize
@@ -555,13 +567,13 @@ fn householder_apply_right(m: Matrix[f64], v: []const f64, beta: f64) -> err {
         var w: f64 = 0.0
         var k = 0usize
         while k < m.cols {
-            w = w + m.data[r * m.stride + k] * v[k]
+            w = w + m.data[matrix_offset[f64](m, r, k)] * v[k]
             k += 1usize
         }
         w = w * beta
         k = 0usize
         while k < m.cols {
-            m.data[r * m.stride + k] = m.data[r * m.stride + k] - w * v[k]
+            m.data[matrix_offset[f64](m, r, k)] = m.data[matrix_offset[f64](m, r, k)] - w * v[k]
             k += 1usize
         }
         r += 1usize
@@ -587,7 +599,7 @@ fn qr(q: Matrix[f64], r: Matrix[f64], src: ConstMatrix[f64], work: []f64) -> err
         let v = work[k..m]
         var i = k
         while i < m {
-            v[i - k] = r.data[i * r.stride + k]
+            v[i - k] = r.data[matrix_offset[f64](r, i, k)]
             i += 1usize
         }
         let (beta, vector_error) = householder_vector(v, v)
@@ -596,7 +608,7 @@ fn qr(q: Matrix[f64], r: Matrix[f64], src: ConstMatrix[f64], work: []f64) -> err
         if left_error != ok { ret left_error }
         i = k + 1usize
         while i < m {
-            r.data[i * r.stride + k] = 0.0
+            r.data[matrix_offset[f64](r, i, k)] = 0.0
             i += 1usize
         }
         let right_error = householder_apply_right(sub(q, 0usize, k, m, m - k), v, beta)
@@ -619,10 +631,10 @@ fn givens_apply(m: Matrix[f64], i: usize, k: usize, c: f64, s: f64) -> err {
     if i >= m.rows || k >= m.rows || i == k { ret Shape }
     var col = 0usize
     while col < m.cols {
-        let xi = m.data[i * m.stride + col]
-        let xk = m.data[k * m.stride + col]
-        m.data[i * m.stride + col] = c * xi + s * xk
-        m.data[k * m.stride + col] = c * xk - s * xi
+        let xi = m.data[matrix_offset[f64](m, i, col)]
+        let xk = m.data[matrix_offset[f64](m, k, col)]
+        m.data[matrix_offset[f64](m, i, col)] = c * xi + s * xk
+        m.data[matrix_offset[f64](m, k, col)] = c * xk - s * xi
         col += 1usize
     }
     ret ok
@@ -636,7 +648,7 @@ fn orthonormalize(m: Matrix[f64]) -> err {
         var norm: f64 = 0.0
         var i = 0usize
         while i < m.rows {
-            let x = m.data[i * m.stride + j]
+            let x = m.data[matrix_offset[f64](m, i, j)]
             norm = norm + x * x
             i += 1usize
         }
@@ -644,7 +656,7 @@ fn orthonormalize(m: Matrix[f64]) -> err {
         norm = math.sqrt[f64](norm)
         i = 0usize
         while i < m.rows {
-            m.data[i * m.stride + j] = m.data[i * m.stride + j] / norm
+            m.data[matrix_offset[f64](m, i, j)] = m.data[matrix_offset[f64](m, i, j)] / norm
             i += 1usize
         }
         var k = j + 1usize
@@ -652,12 +664,12 @@ fn orthonormalize(m: Matrix[f64]) -> err {
             var dot: f64 = 0.0
             i = 0usize
             while i < m.rows {
-                dot = dot + m.data[i * m.stride + j] * m.data[i * m.stride + k]
+                dot = dot + m.data[matrix_offset[f64](m, i, j)] * m.data[matrix_offset[f64](m, i, k)]
                 i += 1usize
             }
             i = 0usize
             while i < m.rows {
-                m.data[i * m.stride + k] = m.data[i * m.stride + k] - dot * m.data[i * m.stride + j]
+                m.data[matrix_offset[f64](m, i, k)] = m.data[matrix_offset[f64](m, i, k)] - dot * m.data[matrix_offset[f64](m, i, j)]
                 i += 1usize
             }
             k += 1usize
@@ -677,10 +689,10 @@ fn rref(m: Matrix[f64], pivots: []usize, eps: f64) -> (usize, err) {
     var col = 0usize
     while col < m.cols && rank < m.rows {
         var best = rank
-        var best_size = math.abs[f64](m.data[rank * m.stride + col])
+        var best_size = math.abs[f64](m.data[matrix_offset[f64](m, rank, col)])
         var r = rank + 1usize
         while r < m.rows {
-            let size = math.abs[f64](m.data[r * m.stride + col])
+            let size = math.abs[f64](m.data[matrix_offset[f64](m, r, col)])
             if size > best_size {
                 best = r
                 best_size = size
@@ -692,19 +704,19 @@ fn rref(m: Matrix[f64], pivots: []usize, eps: f64) -> (usize, err) {
             continue
         }
         if best != rank { swap_view_rows(m, best, rank) }
-        let lead = m.data[rank * m.stride + col]
+        let lead = m.data[matrix_offset[f64](m, rank, col)]
         var c = col
         while c < m.cols {
-            m.data[rank * m.stride + c] = m.data[rank * m.stride + c] / lead
+            m.data[matrix_offset[f64](m, rank, c)] = m.data[matrix_offset[f64](m, rank, c)] / lead
             c += 1usize
         }
         r = 0usize
         while r < m.rows {
-            let factor = m.data[r * m.stride + col]
+            let factor = m.data[matrix_offset[f64](m, r, col)]
             if r != rank && factor != 0.0 {
                 c = col
                 while c < m.cols {
-                    m.data[r * m.stride + c] = m.data[r * m.stride + c] - factor * m.data[rank * m.stride + c]
+                    m.data[matrix_offset[f64](m, r, c)] = m.data[matrix_offset[f64](m, r, c)] - factor * m.data[matrix_offset[f64](m, rank, c)]
                     c += 1usize
                 }
             }
@@ -768,7 +780,7 @@ fn power_iteration(m: ConstMatrix[f64], x: []f64, work: []f64, tolerance: f64, m
             var total: f64 = 0.0
             var j = 0usize
             while j < n {
-                total = total + m.data[i * m.stride + j] * x[j]
+                total = total + m.data[const_matrix_offset[f64](m, i, j)] * x[j]
                 j += 1usize
             }
             work[i] = total
@@ -812,7 +824,7 @@ fn eigen(a: *mem.Arena, values: []f64, vectors: Matrix[f64], src: ConstMatrix[f6
     while p < n {
         var q = p + 1usize
         while q < n {
-            if math.abs[f64](src.data[p * src.stride + q] - src.data[q * src.stride + p]) > tolerance { ret Unsupported }
+            if math.abs[f64](src.data[const_matrix_offset[f64](src, p, q)] - src.data[const_matrix_offset[f64](src, q, p)]) > tolerance { ret Unsupported }
             q += 1usize
         }
         p += 1usize
@@ -879,10 +891,10 @@ fn eigen(a: *mem.Arena, values: []f64, vectors: Matrix[f64], src: ConstMatrix[f6
 fn rotate_columns(m: Matrix[f64], p: usize, q: usize, c: f64, s: f64) {
     var k = 0usize
     while k < m.rows {
-        let vkp = m.data[k * m.stride + p]
-        let vkq = m.data[k * m.stride + q]
-        m.data[k * m.stride + p] = c * vkp - s * vkq
-        m.data[k * m.stride + q] = s * vkp + c * vkq
+        let vkp = m.data[matrix_offset[f64](m, k, p)]
+        let vkq = m.data[matrix_offset[f64](m, k, q)]
+        m.data[matrix_offset[f64](m, k, p)] = c * vkp - s * vkq
+        m.data[matrix_offset[f64](m, k, q)] = s * vkp + c * vkq
         k += 1usize
     }
 }
@@ -890,9 +902,9 @@ fn rotate_columns(m: Matrix[f64], p: usize, q: usize, c: f64, s: f64) {
 fn swap_columns(m: Matrix[f64], first: usize, second: usize) {
     var k = 0usize
     while k < m.rows {
-        let carried = m.data[k * m.stride + first]
-        m.data[k * m.stride + first] = m.data[k * m.stride + second]
-        m.data[k * m.stride + second] = carried
+        let carried = m.data[matrix_offset[f64](m, k, first)]
+        m.data[matrix_offset[f64](m, k, first)] = m.data[matrix_offset[f64](m, k, second)]
+        m.data[matrix_offset[f64](m, k, second)] = carried
         k += 1usize
     }
 }
@@ -940,7 +952,8 @@ fn svd(a: *mem.Arena, u: Matrix[f64], s: []f64, v: Matrix[f64], src: ConstMatrix
         flipped.data = src.data
         flipped.rows = n
         flipped.cols = m
-        flipped.stride = src.stride
+        flipped.stride = src.column_stride
+        flipped.column_stride = src.stride
         source = flipped
     }
     let rows = tall.rows
@@ -948,19 +961,7 @@ fn svd(a: *mem.Arena, u: Matrix[f64], s: []f64, v: Matrix[f64], src: ConstMatrix
     if scratch_error != ok { ret scratch_error }
     let (w, view_error) = view[f64](scratch, rows, k, k)
     if view_error != ok { ret view_error }
-    if m < n {
-        var r = 0usize
-        while r < rows {
-            var c = 0usize
-            while c < k {
-                scratch[r * k + c] = source.data[c * source.stride + r]
-                c += 1usize
-            }
-            r += 1usize
-        }
-    } else {
-        let _ = copy[f64](w, source)
-    }
+    let _ = copy[f64](w, source)
     identity(square)
     var sweep = 0u32
     var converged = false
@@ -1013,7 +1014,7 @@ fn svd(a: *mem.Arena, u: Matrix[f64], s: []f64, v: Matrix[f64], src: ConstMatrix
         while i < rows {
             var x = scratch[i * k + j]
             if norm != 0.0 { x = x / norm }
-            tall.data[i * tall.stride + j] = x
+            tall.data[matrix_offset[f64](tall, i, j)] = x
             i += 1usize
         }
         j += 1usize

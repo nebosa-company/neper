@@ -317,7 +317,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // 11: the two ARQ senders.
     var sent_at: [4]u64 = zero
-    var gbn = rel.sliding_window(4usize, 100u64, sent_at[..], 8u32)
+    let (gbn0, gbn_error) = rel.sliding_window(4usize, 100u64, sent_at[..], 8u32)
+    if gbn_error != ok { os.exit(11i32) }
+    var gbn = gbn0
     i = 0usize
     while i < 4usize {
         let (seq, e19) = rel.sender_send(&gbn, 10u64)

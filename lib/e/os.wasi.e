@@ -39,8 +39,8 @@ type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const 
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 // The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
-// compile unchanged. NeperOS fills only what its server reports (kind and size).
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+// compile unchanged. WASI `filestat` supplies the device and inode identity fields.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 type Dir = resource(dir_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
@@ -285,6 +285,9 @@ extern fn host_proc_kill(handle: u32) -> u32
 
 @import("neper_host", "proc_group_kill")
 extern fn host_proc_group_kill(handle: u32, force: u32) -> u32
+
+@import("neper_host", "proc_group_close")
+extern fn host_proc_group_close(handle: u32) -> u32
 
 @import("neper_host", "fs_mode")
 extern fn host_fs_mode(dirfd: u32, path: u32, path_len: u32, mode: u32) -> u32
@@ -768,18 +771,15 @@ fn neper_os_thread_create(result: *ThreadResult, entry: usize, context: usize, s
     result.failure = Failed
     var room = stack
     if room < 65536usize { room = 65536usize }
-    if room > MEMORY_END { ret }
+    if room > MEMORY_END - 64usize { ret }
     var size = (room + 64usize + 65535usize) / 65536usize * 65536usize
     var block = rt_block_take(size)
     if block != 0usize {
         size = rt_load64(block + 40usize)
     } else {
-        let (start, reserve_error) = neper_os_reserve(size)
-        if reserve_error != ok { ret }
-        block = mem.address_of(start)
+        block = rt_thread_reserve(size)
+        if block == 0usize { ret }
     }
-    // Only a fresh block can fail to grow (a free one was grown before); its addresses are lost.
-    if !rt_grow(block + size) { ret }
     var record: [7]u64 = zero
     record[0usize] = 1u64
     record[1usize] = u64(entry)
@@ -857,6 +857,25 @@ fn neper_os_reserve(n: usize) -> (*u8, err) {
     rt_reserve_top = start + (n + 65535usize) / 65536usize * 65536usize
     rt_release()
     ret (rt_pointer(start), ok)
+}
+
+// A new thread needs its reservation and memory growth to be one transaction: another
+// reservation may follow as soon as the lock is released, so rolling back afterwards could
+// leave a hole. A failed grow therefore publishes no reservation.
+fn rt_thread_reserve(n: usize) -> usize {
+    rt_acquire()
+    if rt_reserve_top == 0usize || rt_reserve_top >= MEMORY_END || n > MEMORY_END - rt_reserve_top {
+        rt_release()
+        ret 0usize
+    }
+    let start = rt_reserve_top
+    if !rt_grow(start + n) {
+        rt_release()
+        ret 0usize
+    }
+    rt_reserve_top = start + n
+    rt_release()
+    ret start
 }
 
 fn neper_os_commit(p: *u8, n: usize) -> err {
@@ -1250,6 +1269,7 @@ fn stat_path(path: str, follow: bool) -> (FileInfo, err) {
     info.modified_ns = i64(raw[6usize])
     info.created_ns = -1i64
     info.file_id = raw[1usize]
+    info.file_volume = raw[0usize]
     info.link_count = raw[3usize]
     info.mode = 420u32
     if info.kind == EntryKind.Dir { info.mode = 493u32 }
@@ -1707,6 +1727,47 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
     ret (beneath, beneath_error)
 }
 
+// Describe the final name itself after walking its parents without links, matching the
+// rooted operation's NoSymlinks contract on the native hosts.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(u32(dir.raw), relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    var raw: [8]u64 = zero
+    let status = wasi_path_filestat_get(parent, 0u32, address_of_str(name), u32(name.len), u32(mem.address_of(&raw[0usize])))
+    if status == 0u32 {
+        info.kind = kind_of_filetype(raw[2usize] & 255u64)
+        info.size = raw[4usize]
+        info.accessed_ns = i64(raw[5usize])
+        info.modified_ns = i64(raw[6usize])
+        info.created_ns = -1i64
+        info.file_id = raw[1usize]
+        info.file_volume = raw[0usize]
+        info.link_count = raw[3usize]
+        info.mode = 420u32
+        if info.kind == EntryKind.Dir { info.mode = 493u32 }
+        if info.kind == EntryKind.Symlink { info.mode = 511u32 }
+        if info.kind != EntryKind.Symlink {
+            var host_mode: [1]u32 = zero
+            if host_fs_mode(parent, address_of_str(name), u32(name.len), u32(mem.address_of(&host_mode[0usize]))) == 0u32 { info.mode = host_mode[0usize] }
+        }
+    }
+    if parent != u32(dir.raw) { let closed = wasi_fd_close(parent) }
+    if status != 0u32 { ret (info, wasi_error(status)) }
+    ret (info, ok)
+}
+
+// Create one final name beneath a parent reached without following links.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(u32(dir.raw), relative_path)
+    if parent_error != ok { ret parent_error }
+    let made = wasi_error(wasi_path_create_directory(parent, address_of_str(name), u32(name.len)))
+    if parent != u32(dir.raw) { let closed = wasi_fd_close(parent) }
+    ret made
+}
+
 // unlink never follows the last component, which is what makes removing a link remove the link.
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
     if !relative_path_ok(relative_path) { ret Denied }
@@ -2150,6 +2211,9 @@ fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) { ret (detail
 // Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
 fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
 
+// (D5910) Only the Linux variant takes another host's windows.
+fn window_hosted() -> bool { ret false }
+
 fn window_native(w: Window) -> (usize, usize, err) { ret (0usize, 0usize, Unsupported) }
 
 // Pipes (D5677's pipe, handle_read, handle_write and handle_close; the process calls are C205's): the
@@ -2272,7 +2336,9 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
     if force { flag = 1u32 }
     ret wasi_error(host_proc_group_kill(host_handle(group.raw), flag))
 }
-fn proc_group_close(group: own ProcGroup) -> err { ret ok }
+fn proc_group_close(group: own ProcGroup) -> err {
+    ret wasi_error(host_proc_group_close(host_handle(group.raw)))
+}
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) { ret (FileLock { raw: 0usize }, Unsupported) }
 fn file_unlock(lock: own FileLock) -> err { ret ok }
 // The file's bytes at `offset`, read in pieces and sent; the file's own position stays where it was.

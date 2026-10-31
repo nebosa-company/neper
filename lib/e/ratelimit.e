@@ -25,24 +25,38 @@ error Invalid
 // A bucket that starts full at `now`; `refill` tokens per `interval` ticks.
 fn token_bucket(capacity: u64, refill: u64, interval: u64, now: u64) -> (TokenBucket, err) {
     if interval == 0u64 { ret (TokenBucket { capacity: 0u64, refill: 0u64, interval: 1u64, level: 0u64, last: 0u64 }, Invalid) }
-    ret (TokenBucket { capacity: capacity, refill: refill, interval: interval, level: capacity *% interval, last: now }, ok)
+    if capacity > 18446744073709551615u64 / interval { ret (TokenBucket { capacity: 0u64, refill: 0u64, interval: 1u64, level: 0u64, last: 0u64 }, Invalid) }
+    ret (TokenBucket { capacity: capacity, refill: refill, interval: interval, level: capacity * interval, last: now }, ok)
 }
 
-// ponytail: `elapsed * rate` wraps past 2^64 (an idle limiter for ages at a huge
-// rate) and then under-refills; clamp elapsed first if that clock is possible.
+// Saturate before multiplying so a long idle period cannot wrap and under-refill.
 fn token_bucket_refill(b: *TokenBucket, now: u64) {
-    if now > b.last {
-        let gained = (now - b.last) *% b.refill
-        let full = b.capacity *% b.interval
-        if b.level +% gained < b.level || b.level +% gained > full { b.level = full } else { b.level += gained }
-        b.last = now
+    if now == b.last { ret }
+    let elapsed = now -% b.last
+    // A smaller timestamp is forward only when it is a short crossing of u64::MAX.
+    // Treat the other half of the serial-number space as an ordinary clock rollback.
+    if now < b.last && elapsed >= 9223372036854775808u64 { ret }
+    let full = b.capacity * b.interval
+    if b.level >= full {
+        b.level = full
+    } else if b.refill != 0u64 {
+        let room = full - b.level
+        let whole = room / b.refill
+        let remainder = room % b.refill
+        if elapsed > whole || (elapsed == whole && remainder == 0u64) {
+            b.level = full
+        } else {
+            b.level += elapsed * b.refill
+        }
     }
+    b.last = now
 }
 
 // Take `cost` tokens at `now` if held; a denied request takes nothing.
 fn token_bucket_allow(b: *TokenBucket, now: u64, cost: u64) -> bool {
     token_bucket_refill(b, now)
-    let need = cost *% b.interval
+    if cost > b.capacity { ret false }
+    let need = cost * b.interval
     if need > b.level { ret false }
     b.level -= need
     ret true
@@ -57,22 +71,33 @@ fn token_bucket_tokens(b: *TokenBucket, now: u64) -> u64 {
 // An empty bucket at `now` holding `capacity` units and leaking `leak` per `interval` ticks.
 fn leaky_bucket(capacity: u64, leak: u64, interval: u64, now: u64) -> (LeakyBucket, err) {
     if interval == 0u64 { ret (LeakyBucket { capacity: 0u64, leak: 0u64, interval: 1u64, water: 0u64, last: 0u64 }, Invalid) }
+    if capacity > 18446744073709551615u64 / interval { ret (LeakyBucket { capacity: 0u64, leak: 0u64, interval: 1u64, water: 0u64, last: 0u64 }, Invalid) }
     ret (LeakyBucket { capacity: capacity, leak: leak, interval: interval, water: 0u64, last: now }, ok)
 }
 
 fn leaky_bucket_drain(b: *LeakyBucket, now: u64) {
-    if now > b.last {
-        let gone = (now - b.last) *% b.leak
-        if gone >= b.water { b.water = 0u64 } else { b.water -= gone }
-        b.last = now
+    if now == b.last { ret }
+    let elapsed = now -% b.last
+    if now < b.last && elapsed >= 9223372036854775808u64 { ret }
+    if b.leak != 0u64 {
+        let whole = b.water / b.leak
+        let remainder = b.water % b.leak
+        if elapsed > whole || (elapsed == whole && remainder == 0u64) {
+            b.water = 0u64
+        } else {
+            b.water -= elapsed * b.leak
+        }
     }
+    b.last = now
 }
 
 // Pour `cost` units at `now` if they fit under `capacity`.
 fn leaky_bucket_allow(b: *LeakyBucket, now: u64, cost: u64) -> bool {
     leaky_bucket_drain(b, now)
-    let add = cost *% b.interval
-    if b.water +% add > b.capacity *% b.interval { ret false }
+    if cost > b.capacity { ret false }
+    let add = cost * b.interval
+    let full = b.capacity * b.interval
+    if b.water > full || add > full - b.water { ret false }
     b.water += add
     ret true
 }
@@ -95,7 +120,7 @@ fn fixed_window_allow(w: *FixedWindow, now: u64, cost: u64) -> bool {
         w.window = index
         w.count = 0u64
     }
-    if w.count +% cost > w.limit { ret false }
+    if w.count > w.limit || cost > w.limit - w.count { ret false }
     w.count += cost
     ret true
 }
@@ -108,7 +133,11 @@ fn sliding_log(limit: u64, width: u64, stamps: []u64) -> (SlidingLog, err) {
 }
 
 fn sliding_log_evict(l: *SlidingLog, now: u64) {
-    while l.len > 0usize && l.stamps[l.head] +% l.width <= now {
+    while l.len > 0usize {
+        let stamp = l.stamps[l.head]
+        // The caller's forward clock can cross u64::MAX. Its elapsed time is
+        // therefore the wrapping difference, not an ordered timestamp compare.
+        if now -% stamp < l.width { break }
         l.head = (l.head + 1usize) % l.stamps.len
         l.len -= 1usize
     }
@@ -130,27 +159,39 @@ fn sliding_log_count(l: *SlidingLog, now: u64) -> u64 {
 
 // `limit` units per trailing `width` ticks estimated from the current and
 // previous fixed windows: previous * (unelapsed part of the window) / width + current.
+// `window` is the aligned start tick of the current bucket, rather than its
+// quotient, so its phase survives a wrapping caller clock.
 fn sliding_window(limit: u64, width: u64) -> (SlidingWindow, err) {
     if width == 0u64 { ret (SlidingWindow { limit: 0u64, width: 1u64, window: 0u64, count: 0u64, previous: 0u64 }, Invalid) }
+    if limit > 18446744073709551615u64 / width { ret (SlidingWindow { limit: 0u64, width: 1u64, window: 0u64, count: 0u64, previous: 0u64 }, Invalid) }
     ret (SlidingWindow { limit: limit, width: width, window: 0u64, count: 0u64, previous: 0u64 }, ok)
 }
 
 fn sliding_window_roll(w: *SlidingWindow, now: u64) {
-    let index = now / w.width
-    if index == w.window { ret }
-    if index == w.window + 1u64 { w.previous = w.count } else { w.previous = 0u64 }
-    w.window = index
+    let elapsed = now -% w.window
+    if elapsed < w.width { ret }
+    let windows = elapsed / w.width
+    if windows == 1u64 { w.previous = w.count } else { w.previous = 0u64 }
+    // Keep the bucket phase relative to its prior start. `now / width` would
+    // lose that phase where 2^64 is not a multiple of width.
+    w.window = now -% (elapsed % w.width)
     w.count = 0u64
 }
 
 // The weighted count at `now`.
 fn sliding_window_count(w: *SlidingWindow, now: u64) -> u64 {
     sliding_window_roll(w, now)
-    ret w.previous *% (w.width - now % w.width) / w.width + w.count
+    if w.previous > w.limit { w.previous = w.limit }
+    if w.count > w.limit { w.count = w.limit }
+    let age = now -% w.window
+    let weighted = w.previous * (w.width - age) / w.width
+    if weighted > w.limit - w.count { ret w.limit }
+    ret weighted + w.count
 }
 
 fn sliding_window_allow(w: *SlidingWindow, now: u64, cost: u64) -> bool {
-    if sliding_window_count(w, now) +% cost > w.limit { ret false }
+    let held = sliding_window_count(w, now)
+    if cost > w.limit - held { ret false }
     w.count += cost
     ret true
 }

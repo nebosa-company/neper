@@ -4,10 +4,9 @@
 //
 // The format has no standard, so every choice here is one. Two shape the rest:
 //
-// A comment starts a line and nothing else. `;` and `#` are ordinary bytes anywhere after the
-// first, including inside an unquoted value and after a closing quote. The alternative -- a
-// trailing comment -- means a value silently loses everything past a `;` someone meant as data,
-// and no spelling of the value can be read back without knowing which rule was in force.
+// A comment starts a line and nothing else. `;` and `#` are ordinary bytes inside an unquoted
+// value, rather than trailing-comment markers that would silently lose data. A quoted value ends
+// at its closing quote, so only whitespace may follow it on that line.
 //
 // `case_sensitive: false` **folds** the section and the key as they are stored, rather than
 // comparing loosely later. `get` takes no options and a `Document` carries none, so identity has
@@ -99,6 +98,7 @@ type ReaderState = struct {
     seen_key: []str,
     seen_count: usize,
     ended: bool,
+    source_ended: bool,
 }
 
 fn is_space(byte: u8) -> bool {
@@ -367,11 +367,20 @@ fn get(document: *const Document, section: str, key: str) -> (str, bool) {
 
 fn take(s: *ReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
+        if s.source_ended { ret (0u8, false, ok) }
         let (count, read_error) = io.read(&s.source, s.input)
-        if read_error == io.End { ret (0u8, false, ok) }
-        if read_error != ok { ret (0u8, false, read_error) }
+        if count == 0usize {
+            if read_error == io.End {
+                s.source_ended = true
+                ret (0u8, false, ok)
+            }
+            if read_error != ok { ret (0u8, false, read_error) }
+            ret (0u8, false, io.NoProgress)
+        }
+        if read_error != ok && read_error != io.End { ret (0u8, false, read_error) }
         s.input_len = count
         s.input_at = 0usize
+        if read_error == io.End { s.source_ended = true }
     }
     let byte = s.input[s.input_at]
     s.input_at += 1usize
@@ -448,6 +457,7 @@ fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err) {
     state[0usize].section_len = 0usize
     state[0usize].seen_count = 0usize
     state[0usize].ended = false
+    state[0usize].source_ended = false
     // The table of what has been seen exists only to refuse a duplicate; a caller who allows
     // them pays nothing for the option.
     if !options.allow_duplicate_keys {
@@ -553,6 +563,28 @@ fn write_escaped(writer: *io.Writer, value: str) -> err {
     ret io.write_all(writer, "\"")
 }
 
+// These names are written as INI syntax, not as values, so quoting cannot make
+// them safe. Reject spellings that could create another line, section, or key.
+fn safe_key_name(name: str) -> bool {
+    if name.len == 0usize { ret false }
+    if name[0usize] == SEMI || name[0usize] == HASH || name[0usize] == LBRACKET { ret false }
+    var at = 0usize
+    while at < name.len {
+        if name[at] == 13u8 || name[at] == 10u8 || name[at] == 61u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn safe_section_name(name: str) -> bool {
+    var at = 0usize
+    while at < name.len {
+        if name[at] == 13u8 || name[at] == 10u8 || name[at] == 93u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // Entries in the order they are held, with a header wherever the section changes. An entry whose
 // section is empty belongs before any header, which is where `parse` puts one.
 fn write(writer: *io.Writer, document: *const Document) -> err {
@@ -561,6 +593,10 @@ fn write(writer: *io.Writer, document: *const Document) -> err {
     var at = 0usize
     while at < document.entries.len {
         let entry = document.entries[at]
+        if !safe_section_name(entry.section) || !safe_key_name(entry.key) { ret Invalid }
+        // The root section has no syntax that can switch back from a named
+        // section. Reject an order that would change the entry on round-trip.
+        if entry.section.len == 0usize && started && current.len != 0usize { ret Invalid }
         if !started || !same_text(entry.section, current) {
             if entry.section.len != 0usize {
                 try io.write_all(writer, "[")
@@ -621,6 +657,49 @@ fn field_entry(document: *const Document, name: str, case_sensitive: bool) -> (s
     ret ("", false)
 }
 
+// INI values arrive as text, so a field may be given either signed or unsigned
+// input. Check the field's exact range before converting: direct narrowing
+// traps in debug and truncates in release.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
+// A finite input cannot become infinity merely because the destination field
+// is narrower than `f64`.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
     var out: T = zero
     let (document, parse_error) = parse(a, source, options)
@@ -643,25 +722,27 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 }
             } else {
             if meta.kind[f.ty]() == .Int {
-                var slot: f.ty = zero
                 // Read through whichever of the two the text fits, so a `u64` past the signed
                 // maximum and a negative are both exact. Neither takes a floating-point detour.
                 if text.len != 0usize && text[0usize] == MINUS {
                     let (signed, signed_error) = str.parse_i64(text)
                     if signed_error != ok { ret (out, Invalid) }
-                    slot = f.ty(signed)
+                    let (slot, slot_error) = integer_into[f.ty](signed, 0u64, true)
+                    if slot_error != ok { ret (out, slot_error) }
+                    meta.set[f, T](&out, slot)
                 } else {
                     let (unsigned, unsigned_error) = str.parse_u64(text)
                     if unsigned_error != ok { ret (out, Invalid) }
-                    slot = f.ty(unsigned)
+                    let (slot, slot_error) = integer_into[f.ty](0i64, unsigned, false)
+                    if slot_error != ok { ret (out, slot_error) }
+                    meta.set[f, T](&out, slot)
                 }
-                meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
                 let (number, number_error) = str.parse_f64(text)
                 if number_error != ok { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)
@@ -676,6 +757,7 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
 
 fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
     for f in meta.fields[T]() {
+        if !safe_key_name(f.name) { ret Invalid }
         var slot: f.ty = zero
         slot = meta.get[f, T](value)
         // A buffer per field, and an arena over it, so `e.str` does the rendering and this

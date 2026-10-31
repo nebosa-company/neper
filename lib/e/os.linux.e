@@ -35,11 +35,11 @@ type DirEntry = struct { name: str, kind: EntryKind }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Handle = struct { raw: usize }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
-// `mode` is the POSIX permission bits as the kernel keeps them, and `file_id` is the
-// inode: unique with the device, which is what an `e.fs` caller compares two paths by.
+// `mode` is the POSIX permission bits as the kernel keeps them. `file_id` is the
+// inode and `file_volume` is st_dev; together they identify a file across mounts.
 // `created_ns` is `-1` here -- `struct stat` has no creation time, and reading one needs
 // `statx`, which is a primitive of its own rather than a field of this one.
-type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
 
 // The kernel's `struct stat` for x86-64, field for field. `newfstatat` writes 144
 // bytes at the address it is given, so this layout is the ABI rather than a choice --
@@ -234,6 +234,10 @@ const WAKE_TOKEN: usize = 18446744073709551615usize
 // is a frame local; a caller asking for more gets them across successive waits.
 const POLL_BATCH: usize = 64usize
 
+// `epoll_wait` accepts a signed C `int` timeout. Larger finite waits are retried by the
+// caller's deadline loop, rather than narrowing into a different timeout in the syscall.
+const EPOLL_TIMEOUT_MAX: isize = 2147483647isize
+
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
 
@@ -269,6 +273,12 @@ const FORMAT_SYMLINK: u32 = 40960u32
 // so every call that takes one copies it into the arena first. The caller marks the
 // arena and resets it, so the copy lasts exactly as long as the call.
 fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
+    var scan = 0usize
+    while scan < text.len {
+        // Passing an interior NUL would make the kernel act on only the prefix.
+        if text[scan] == 0u8 { ret (0usize, Unsupported) }
+        scan += 1usize
+    }
     let (bytes, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
     if allocation_error != ok { ret (0usize, OutOfMemory) }
     var at = 0usize
@@ -572,6 +582,7 @@ fn stat_with_flags(a: *mem.Arena, path: str, flags: usize) -> (FileInfo, err) {
     info.created_ns = -1i64
     info.mode = buffer.mode & PERMISSION_MASK
     info.file_id = buffer.inode
+    info.file_volume = buffer.device
     info.link_count = buffer.link_count
     ret (info, ok)
 }
@@ -1238,9 +1249,11 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
     if timeout_ns > 0i64 {
         milliseconds = isize(timeout_ns / 1000000i64)
         if milliseconds == 0isize { milliseconds = 1isize }
+        if milliseconds > EPOLL_TIMEOUT_MAX { milliseconds = EPOLL_TIMEOUT_MAX }
     }
     var raw: [64]RawPollEvent = zero
-    // The kernel reads the timeout as an int, so -1 crosses as all ones, not as a narrowing.
+    // The kernel reads the timeout as an int, so -1 crosses as all ones; finite values were
+    // bounded above before this register-width conversion.
     let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, mem.bitcast[usize](milliseconds), 0usize, 0usize)
     if ready < 0isize { ret (0usize, from_errno(ready)) }
     var produced = 0usize
@@ -1514,8 +1527,8 @@ fn become_child(plan: SpawnPlan, stdio: Stdio) {
         if moved < 0isize { let failed = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize) }
     }
     if stdio.stdin.raw != 0usize { let bound = syscall(SYS_DUP2, stdio.stdin.raw, 0usize, 0usize, 0usize, 0usize, 0usize) }
-    if stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
-    if stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stdout.raw != 0usize && stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stderr.raw != 0usize && stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
     let replaced = syscall(SYS_EXECVE, plan.program, plan.argv, plan.envp, 0usize, 0usize, 0usize)
     // `execve` only returns when it failed, and there is nothing to report it to.
     let gone = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize)
@@ -2606,6 +2619,55 @@ fn release_parent(parent: own Dir, dir: Dir) {
     }
 }
 
+// `fstatat` describes the final name without following it. Its parent came from
+// `openat2` with NoSymlinks+Beneath, so no component can redirect the lookup.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret (info, name_error)
+    }
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_NEWFSTATAT, parent.raw, name_address, mem.address_of(&buffer), AT_SYMLINK_NOFOLLOW, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    if result < 0isize { ret (info, from_errno(result)) }
+    info.kind = kind_from_mode(buffer.mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = -1i64
+    info.mode = buffer.mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.file_volume = buffer.device
+    info.link_count = buffer.link_count
+    ret (info, ok)
+}
+
+// `mkdirat` acts on one name in the securely opened parent, never on a path joined to root.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    let result = syscall(SYS_MKDIRAT, parent.raw, name_address, DIRECTORY_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
 // `unlinkat` never follows the final component, which is what makes removing a symbolic
 // link remove the link.
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
@@ -2803,6 +2865,29 @@ type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focus
 type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+
+// (L182, D5910) Another host's windows in place of X11's: Android's NativeActivity, whose window and input arrive through
+// callbacks `x.android.activity` turns into these. Installed, every `window_*` call goes to it; title, visibility, cursor
+// and capture mean nothing there and answer ok.
+type WindowHost = struct {
+    open: fn(*mem.Arena, WindowOptions) -> (Window, err),
+    close: fn(Window) -> err,
+    poll: fn(i64) -> (WindowEvent, bool, err),
+    metrics: fn(Window) -> (WindowMetrics, err),
+    present: fn(Window, []const u32, u32, u32) -> err,
+    native: fn(Window) -> (usize, usize, err),
+}
+
+var window_host: WindowHost = zero
+var has_window_host: bool = false
+
+fn set_window_host(host: WindowHost) {
+    window_host = host
+    has_window_host = true
+}
+
+// Whether the windows are another host's (D5910): its `window_native` answers that host's window, not an X11 id.
+fn window_hosted() -> bool { ret has_window_host }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
 
 const WINDOW_RING: usize = 256usize
@@ -3479,6 +3564,10 @@ fn x_work_area() -> (i32, i32, u32, u32, bool) {
 }
 
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.open(a, options)
+        ret (hosted, hosted_error)
+    }
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
     let connect_error = x_connect(a)
@@ -3550,6 +3639,7 @@ fn x_simple(opcode: u8, window: u32) -> err {
 }
 
 fn window_close(w: Window) -> err {
+    if has_window_host { ret window_host.close(w) }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     atspi_release(slot)
@@ -3572,6 +3662,10 @@ fn window_close(w: Window) -> err {
 }
 
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    if has_window_host {
+        let (hosted, any, hosted_error) = window_host.poll(timeout_ns)
+        ret (hosted, any, hosted_error)
+    }
     var none: WindowEvent = zero
     if !x_connected { ret (none, false, Unsupported) }
     if window_event_count == 0usize {
@@ -3591,6 +3685,10 @@ fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
 }
 
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.metrics(w)
+        ret (hosted, hosted_error)
+    }
     var metrics: WindowMetrics = zero
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret (metrics, NotFound) }
@@ -3605,6 +3703,7 @@ fn window_metrics(w: Window) -> (WindowMetrics, err) {
 }
 
 fn window_title(w: Window, value: str) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     if x_change_property(u32(w.raw), 39u32, 31u32, 8u32, value, value.len) != ok { ret Failed }
     atspi_set_title(window_slot(u32(w.raw)), value)
@@ -3612,6 +3711,7 @@ fn window_title(w: Window, value: str) -> err {
 }
 
 fn window_visible(w: Window, value: bool) -> err {
+    if has_window_host { ret ok }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     var opcode = 10u8
@@ -3622,11 +3722,13 @@ fn window_visible(w: Window, value: bool) -> err {
 }
 
 fn window_cursor(w: Window, shape: CursorShape) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     ret ok
 }
 
 fn window_capture(w: Window, on: bool) -> err {
+    if has_window_host { ret ok }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
     if !on {
         var ungrab: [8]u8 = zero
@@ -3652,6 +3754,7 @@ fn window_capture(w: Window, on: bool) -> err {
 
 // PutImage of BGRX rows in bands under the request-size ceiling.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if has_window_host { ret window_host.present(w, pixels, width, height) }
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
     if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
@@ -3697,6 +3800,10 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
 fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
 
 fn window_native(w: Window) -> (usize, usize, err) {
+    if has_window_host {
+        let (hosted, extra, hosted_error) = window_host.native(w)
+        ret (hosted, extra, hosted_error)
+    }
     if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
     ret (w.raw, x_socket, ok)
 }

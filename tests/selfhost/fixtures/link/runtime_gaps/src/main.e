@@ -54,8 +54,16 @@ fn write_whole(a: *mem.Arena, path: str, data: []const u8) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // Empty arenas remain usable and just report exhaustion.
+    var empty_bytes: [1]u8 = zero
+    var zero_arena = mem.arena_from(empty_bytes[0usize..0usize])
+    let (_, empty_error) = mem.alloc[u8](&zero_arena, 1usize)
+    if empty_error != mem.Exhausted { os.exit(7i32) }
+
     // ---- pool: 256 bytes, object 20 at align 8 -> ten 24-byte slots, low first.
     var pool_bytes: [256]u8 = zero
+    let (_, oversized_pool_error) = mem.pool(pool_bytes[..], 18446744073709551615usize, 8usize)
+    if oversized_pool_error != mem.Invalid { os.exit(8i32) }
     let (p0, pool_error) = mem.pool(pool_bytes[..], 20usize, 8usize)
     if pool_error != ok { os.exit(1i32) }
     var p = p0
@@ -71,6 +79,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if eleventh != mem.Full || mem.pool_free_count(&p) != 0usize { os.exit(4i32) }
     if mem.pool_free(&p, 72usize) != ok || mem.pool_free(&p, 168usize) != ok { os.exit(5i32) }
     if mem.pool_free(&p, 70usize) != mem.Invalid { os.exit(5i32) }
+    if mem.pool_free(&p, 18446744073709551608usize) != mem.Invalid { os.exit(5i32) }
     let (first_reuse, _) = mem.pool_alloc(&p)
     let (second_reuse, _) = mem.pool_alloc(&p)
     let (_, third_reuse) = mem.pool_alloc(&p)
@@ -79,6 +88,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // ---- slab: three 4096-byte pages.
     let (slab_bytes, slab_bytes_error) = mem.alloc[u8](a, 12288usize)
     if slab_bytes_error != ok { os.exit(10i32) }
+    let (_, unaligned_page_error) = mem.slab(slab_bytes, 5000usize)
+    if unaligned_page_error != mem.Invalid { os.exit(9i32) }
     let (s0, slab_error) = mem.slab(slab_bytes, 4096usize)
     if slab_error != ok { os.exit(11i32) }
     var s = s0

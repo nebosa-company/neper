@@ -27,7 +27,7 @@ from datetime import datetime
 
 AXES = {  # every judged column, by what it measures
     'Cost (tokens / USD)': ['cost/B', '$/KB', 'direct $/KB', 'script $/KB', 'outK/KB', 'tok/B', 'thk/B', 'direct tok/B', 'script tok/B'],
-    'Rework (iterations)': ['ed/fil', 'selfcor%', 'turns/ed', 'fix turns', '1-edit%'],
+    'Rework (iterations)': ['ed/fil', 'selfcor%', 'fix turns', '1-edit%'],
     'Correctness (right first time)': ['edit%', 'fail%', '1st-ok%', 'repeat%'],
     'Time': ['bld ms', 'cmp ms', 'p90 ms', 'mdl s/KB', 'tool s/KB'],
     'Context load': ['ctx Ktk', 'read/KB', 'diag B', 'cache%'],
@@ -368,7 +368,7 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
         tool_chars = sum(len(json.dumps(c.get('input'))) for c in msg['content'] if c.get('type') == 'tool_use')
         pending['prose'] += (out - think) * text_chars / max(text_chars + tool_chars, 1)  # visible tokens spent talking, not calling
         if msg['ts'] and msg['after']: pending['model_s'] += min(max(msg['ts'] - msg['after'], 0), 600)
-        edits = []
+        edits, kinds = [], set()  # kinds: what this reply did besides editing, for the per-reply split
         for t, es in turn[mid]:
             r = results.get(str(t.get('id')).split('#')[0]) or {}  # a Codex cell's calls share its result
             failed = r.get('failed', False)
@@ -418,6 +418,7 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
                 elif building and plumbing:
                     H['plumbing'] += 1  # the shell failed, not the language: no build, and the edits wait for one
                 elif building:  # a build or test run, or a script written outside these transcripts
+                    kinds.add('build')
                     H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
                     if ONLY_COMPILE.match(cmd): compile_s[hk].append(dur)
                     H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
@@ -434,7 +435,9 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
                         if repair is not None:
                             fix_t[hk].append(ti - repair[0]); H['fix_n'] += 1; H['fix_one'] += repair[1] == 1; repair = None
                 elif not ks and not es: pulled = True  # a shell command that only looked: cat, sed, tgrep, git, ls
-            if pulled: pending['read_b'] += len(r.get('text', ''))
+            if pulled: pending['read_b'] += len(r.get('text', '')); kinds.add('read')
+        # each reply is one turn, filed under its first kind: an edit, a build, a read, or nothing else (thinking, prose)
+        pending['turns_' + ('edit' if edits else 'build' if 'build' in kinds else 'read' if 'read' in kinds else 'other')] += 1
         if edits:  # the work leading up to an edit is charged to what it landed, by new bytes
             code = [(k, b) for k, b in edits if b]
             share = code or [((hk, 'helper'), 1)]
@@ -531,13 +534,16 @@ rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
     bs = sorted(build_s[L]) or [0]
+    applied = max(d['applied'] + s['applied'], 1)
     rows.append((L, (t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
-                     t['turns'] / max(d['applied'] + s['applied'], 1), 100 * h['fb_ok'] / max(h['fb_n'], 1),
+                     t['turns'] / applied, t['turns_read'] / applied, t['turns_build'] / applied, t['turns_other'] / applied,
+                     kb / applied, t['turns'] / kb * KB, 100 * h['fb_ok'] / max(h['fb_n'], 1),
                      statistics.median(bs) * 1000, statistics.median(compile_s[L]) * 1000 if compile_s[L] else None,
                      (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000, 100 * h['compile_err'] / max(h['build_fail'], 1),
                      t['model_s'] / kb * KB, t['tool_s'] / kb * KB)))
 table('\nPROCESS  (how the code got written)',
-      [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', 'low'), ('1st-ok%', 8, '%.1f', 'high'),
+      [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', None),
+       ('read/ed', 8, '%.1f', None), ('build/ed', 8, '%.1f', None), ('other/ed', 8, '%.1f', None), ('B/ed', 8, '%.0f', None), ('turns/KB', 9, '%.1f', None), ('1st-ok%', 8, '%.1f', 'high'),
        ('bld ms', 8, '%.0f', 'low'), ('cmp ms', 8, '%.0f', 'low'), ('p90 ms', 8, '%.0f', 'low'), ('cmpl%', 6, '%.1f', None), ('mdl s/KB', 9, '%.0f', 'low'), ('tool s/KB', 9, '%.0f', 'low')], rows)
 
 explain('''
@@ -547,7 +553,15 @@ ctx Ktk   median context size, in thousand tokens, of the turns that landed this
           (input + cache read + cache write): how much the model had loaded when it wrote
 read/KB   bytes of tool output the model pulled into context per byte of source landed: Read, Grep
           and Glob results plus shell commands that only looked (cat, sed, tgrep, git, ls)
-turns/ed  assistant replies per edit application: reading, thinking and testing turns between edits
+turns/ed  assistant replies per edit application. Each reply is filed under one kind, so turns/ed is the
+          sum of the next three plus the edit replies themselves (about one per edit)
+read/ed   replies that read (Read, Grep, Glob, looking shell commands) and did not edit, per edit
+build/ed  replies that ran a build or test and did not edit, per edit
+other/ed  replies that did neither: thinking or prose only, per edit
+B/ed      landed source bytes per edit application: the size each edit carries, so turns can be read against it
+turns/KB  all assistant replies per KB of landed source: turns/ed rescaled by edit size, so languages that
+          write bigger edits are not charged for it
+          (the columns from turns/ed to turns/KB are not judged: they describe the work's shape, not its quality)
 1st-ok%   edit applications whose first following build/test command passed
 bld ms    wall-clock milliseconds of a build/test command, median, from the tool call's timestamp to
           its result's (foreground commands only, capped at 1800 s): the whole command, including

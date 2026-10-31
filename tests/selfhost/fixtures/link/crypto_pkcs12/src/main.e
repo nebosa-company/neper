@@ -87,6 +87,31 @@ var cert_a: [1024]u8 = zero
 var cert_b: [1024]u8 = zero
 var blob_buf: [12288]u8 = zero
 
+// These are structurally sufficient PFXs whose MacData and PBES2 counts are
+// 2^31 - 1. Rejection must happen while parsing the count, before either KDF.
+fn reject_untrusted_iterations(a: *mem.Arena) -> u8 {
+    var mac_count: [49]u8 = [49]u8{
+        48, 47, 2, 1, 3, 48, 15, 6, 9, 42, 134, 72, 134, 247, 13, 1, 7, 1, 160, 2, 4, 0,
+        48, 25, 48, 15, 48, 11, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 4, 0, 4, 0,
+        2, 4, 127, 255, 255, 255
+    }
+    let (_, mac_error) = pkcs12.parse(a, mac_count[..], "")
+    if mac_error != pkcs12.Invalid { ret 19u8 }
+    var pbes2_count: [164]u8 = [164]u8{
+        48, 129, 161, 2, 1, 3, 48, 129, 155, 6, 9, 42, 134, 72, 134, 247, 13, 1, 7, 1, 160,
+        129, 141, 4, 129, 138, 48, 129, 135, 48, 129, 132, 6, 9, 42, 134, 72, 134, 247, 13,
+        1, 7, 6, 160, 119, 48, 117, 2, 1, 0, 48, 112, 6, 9, 42, 134, 72, 134, 247, 13, 1, 7,
+        1, 48, 81, 6, 9, 42, 134, 72, 134, 247, 13, 1, 5, 13, 48, 68, 48, 35, 6, 9, 42, 134,
+        72, 134, 247, 13, 1, 5, 12, 48, 22, 4, 0, 2, 4, 127, 255, 255, 255, 48, 12, 6, 8, 42,
+        134, 72, 134, 247, 13, 2, 9, 5, 0, 48, 29, 6, 9, 96, 134, 72, 1, 101, 3, 4, 1, 42,
+        4, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 16, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }
+    let (_, pbes2_error) = pkcs12.parse(a, pbes2_count[..], "")
+    if pbes2_error != pkcs12.Invalid { ret 20u8 }
+    ret 0u8
+}
+
 fn check_line(a: *mem.Arena, line: str) -> u8 {
     let (kind, p0) = tok(line, 0usize)
     if kind[0usize] == 79u8 {
@@ -114,6 +139,14 @@ fn check_line(a: *mem.Arena, line: str) -> u8 {
         }
         params.iterations = 2048u32
         var out: [12288]u8 = zero
+        var long_chain: [9][]const u8 = zero
+        i = 0usize
+        while i < long_chain.len {
+            long_chain[i] = c0[0usize..n0]
+            i += 1usize
+        }
+        let (_, long_chain_error) = pkcs12.encode(a, key_der[0usize..kn], long_chain[..], "neper test", "neper", params, out[0usize..12288usize])
+        if long_chain_error != pkcs12.Invalid { ret 7u8 }
         let (n, e) = pkcs12.encode(a, key_der[0usize..kn], chain[0usize..2usize], "neper test", "neper", params, out[0usize..12288usize])
         if e != ok { ret 1u8 }
         if !same_bytes(out[0usize..n], blob_buf[0usize..bn]) { ret 2u8 }
@@ -199,6 +232,8 @@ fn v_4() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    let iteration_result = reject_untrusted_iterations(a)
+    if iteration_result != 0u8 { os.exit(i32(iteration_result)) }
     let r_v_0 = run_chunk(a, v_0())
     if r_v_0 != 0u8 { os.exit(i32(r_v_0)) }
     let r_v_1 = run_chunk(a, v_1())

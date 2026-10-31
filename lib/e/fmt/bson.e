@@ -4,11 +4,12 @@
 // only. The element tags carried are double (0x01), string (0x02), document (0x03),
 // array (0x04), binary (0x05), bool (0x08), null (0x0A), int32 (0x10) and int64
 // (0x12); any other tag is `Invalid`, so JavaScript, regex and the deprecated tags
-// never reach the value model. Array keys are not checked against their positions
-// on the way in and are written as "0", "1", ... on the way out.
+// never reach the value model. Array keys must be the sequential decimal positions
+// "0", "1", ... both on the wire and when written back out.
 use e.io
 use e.mem
 use e.meta
+use e.text.utf8
 
 type Element = struct { key: str, value: Value }
 type Binary = struct { subtype: u8, data: []const u8 }
@@ -41,6 +42,18 @@ fn cstring_end(source: []const u8, at: usize, limit: usize) -> (usize, err) {
     ret (end, ok)
 }
 
+// BSON element names are C strings in the wire format, so a NUL would end the
+// encoded name before the bytes the caller supplied.
+fn valid_key(key: str) -> bool {
+    if !utf8.validate(key) { ret false }
+    var at = 0usize
+    while at < key.len {
+        if key[at] == 0u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // The elements of the document at `at`, whose span was already checked.
 fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, depth: u16, max_depth: u16) -> ([]const Element, err) {
     if depth >= max_depth { ret (zero, TooDeep) }
@@ -51,6 +64,7 @@ fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, d
     while cursor < limit {
         let (key_end, key_error) = cstring_end(source, cursor + 1usize, limit)
         if key_error != ok { ret (zero, key_error) }
+        if !valid_key(source[cursor + 1usize..key_end]) { ret (zero, Invalid) }
         let (span, span_error) = value_span(source, source[cursor], key_end + 1usize, limit)
         if span_error != ok { ret (zero, span_error) }
         cursor = key_end + 1usize + span
@@ -65,6 +79,7 @@ fn parse_document(a: *mem.Arena, source: []const u8, at: usize, length: usize, d
         let tag = source[cursor]
         let (key_end, key_error) = cstring_end(source, cursor + 1usize, limit)
         if key_error != ok { ret (zero, key_error) }
+        if !valid_key(source[cursor + 1usize..key_end]) { ret (zero, Invalid) }
         elements[index].key = source[cursor + 1usize..key_end]
         let (value, span, value_error) = parse_value(a, source, tag, key_end + 1usize, limit, depth, max_depth)
         if value_error != ok { ret (zero, value_error) }
@@ -122,19 +137,35 @@ fn parse_value(a: *mem.Arena, source: []const u8, tag: u8, at: usize, limit: usi
     if tag == 16u8 { ret (Value{ I32: mem.bitcast[i32](read_le32(source, at)) }, span, ok) }
     if tag == 8u8 { ret (Value{ Bool: source[at] == 1u8 }, span, ok) }
     if tag == 10u8 { ret (none, span, ok) }
-    if tag == 2u8 { ret (Value{ String: source[at + 4usize..at + span - 1usize] }, span, ok) }
+    if tag == 2u8 {
+        let text = source[at + 4usize..at + span - 1usize]
+        if !utf8.validate(text) { ret (none, 0usize, Invalid) }
+        ret (Value{ String: text }, span, ok)
+    }
     if tag == 5u8 {
         var binary: Binary = zero
         binary.subtype = source[at + 4usize]
-        binary.data = source[at + 5usize..at + span]
+        if binary.subtype == 2u8 {
+            if span < 9usize { ret (none, 0usize, Invalid) }
+            let embedded_length = usize(read_le32(source, at + 5usize))
+            if embedded_length != span - 9usize { ret (none, 0usize, Invalid) }
+            binary.data = source[at + 9usize..at + span]
+        } else {
+            binary.data = source[at + 5usize..at + span]
+        }
         ret (Value{ Binary: binary }, span, ok)
     }
     let (elements, elements_error) = parse_document(a, source, at, span, depth + 1u16, max_depth)
     if elements_error != ok { ret (none, 0usize, elements_error) }
     if tag == 3u8 { ret (Value{ Document: elements }, span, ok) }
+    var index = 0usize
+    while index < elements.len {
+        if !array_key_matches(elements[index].key, index) { ret (none, 0usize, Invalid) }
+        index += 1usize
+    }
     let (items, items_error) = mem.alloc[Value](a, elements.len)
     if items_error != ok { ret (none, 0usize, items_error) }
-    var index = 0usize
+    index = 0usize
     while index < elements.len {
         items[index] = elements[index].value
         index += 1usize
@@ -174,10 +205,23 @@ fn index_key(index: usize, out: []u8) -> []u8 {
     ret out[0usize..digits]
 }
 
+fn array_key_matches(key: str, index: usize) -> bool {
+    var scratch: [20]u8 = zero
+    let expected = index_key(index, scratch[..])
+    if key.len != expected.len { ret false }
+    var at = 0usize
+    while at < key.len {
+        if key[at] != expected[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn elements_size(elements: []const Element) -> (usize, err) {
     var total = 5usize
     var index = 0usize
     while index < elements.len {
+        if !valid_key(elements[index].key) { ret (0usize, Invalid) }
         let (inner, inner_error) = size(&elements[index].value)
         if inner_error != ok { ret (0usize, inner_error) }
         total += 2usize + elements[index].key.len + inner
@@ -200,9 +244,14 @@ fn size(value: *const Value) -> (usize, err) {
     case .Null:
         ret (0usize, ok)
     case .String as text:
+        if !utf8.validate(text) { ret (0usize, Invalid) }
         if text.len > 2147483646usize { ret (0usize, TooLarge) }
         ret (5usize + text.len, ok)
     case .Binary as binary:
+        if binary.subtype == 2u8 {
+            if binary.data.len > 2147483643usize { ret (0usize, TooLarge) }
+            ret (9usize + binary.data.len, ok)
+        }
         if binary.data.len > 2147483647usize { ret (0usize, TooLarge) }
         ret (5usize + binary.data.len, ok)
     case .Document as elements:
@@ -263,6 +312,7 @@ fn tag_of(value: *const Value) -> u8 {
 }
 
 fn write_element(writer: *io.Writer, key: []const u8, value: *const Value) -> err {
+    if !valid_key(key) { ret Invalid }
     try write_byte(writer, tag_of(value))
     try io.write_all(writer, key)
     try write_byte(writer, 0u8)
@@ -283,11 +333,19 @@ fn write(writer: *io.Writer, value: *const Value) -> err {
     case .Null:
         ret ok
     case .String as text:
+        if !utf8.validate(text) { ret Invalid }
         if text.len > 2147483646usize { ret TooLarge }
         try write_le(writer, u64(text.len + 1usize), 4usize)
         try io.write_all(writer, text)
         ret write_byte(writer, 0u8)
     case .Binary as binary:
+        if binary.subtype == 2u8 {
+            if binary.data.len > 2147483643usize { ret TooLarge }
+            try write_le(writer, u64(binary.data.len + 4usize), 4usize)
+            try write_byte(writer, binary.subtype)
+            try write_le(writer, u64(binary.data.len), 4usize)
+            ret io.write_all(writer, binary.data)
+        }
         if binary.data.len > 2147483647usize { ret TooLarge }
         try write_le(writer, u64(binary.data.len), 4usize)
         try write_byte(writer, binary.subtype)
@@ -347,6 +405,37 @@ fn integer_of(value: Value) -> (i64, bool) {
     }
 }
 
+// Decide the target range before narrowing an integer: direct casts trap in debug and wrap in
+// release. `signed` is used only when `is_signed` is true.
+fn integer_into[T: type](signed: i64, unsigned: u64, is_signed: bool) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if is_signed {
+        if meta.signed[T]() {
+            if bits < 64u64 {
+                let high = i64((1u64 << (bits - 1u64)) - 1u64)
+                if signed > high || signed < 0i64 - high - 1i64 { ret (out, Invalid) }
+            }
+        } else {
+            if signed < 0i64 { ret (out, Invalid) }
+            if bits < 64u64 && signed > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+        }
+        out = T(signed)
+        ret (out, ok)
+    }
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            if unsigned > (1u64 << (bits - 1u64)) - 1u64 { ret (out, Invalid) }
+        } else {
+            if unsigned > 9223372036854775807u64 { ret (out, Invalid) }
+        }
+    } else {
+        if bits < 64u64 && unsigned > (1u64 << bits) - 1u64 { ret (out, Invalid) }
+    }
+    out = T(unsigned)
+    ret (out, ok)
+}
+
 fn float_of(value: Value) -> (f64, bool) {
     switch value {
     case .Double as number:
@@ -358,6 +447,16 @@ fn float_of(value: Value) -> (f64, bool) {
     default:
         ret (0.0, false)
     }
+}
+
+// A finite BSON number cannot become infinity merely because the destination field is narrower.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
 }
 
 fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err) {
@@ -397,15 +496,15 @@ fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err
             if meta.kind[f.ty]() == .Int {
                 let (number, is_integer) = integer_of(found)
                 if !is_integer { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = integer_into[f.ty](number, 0u64, true)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
                 let (number, is_number) = float_of(found)
                 if !is_number { ret (out, Invalid) }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)
@@ -432,6 +531,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
             total += 1usize
         } else {
         if meta.kind[f.ty]() == .Int {
+            if !meta.signed[f.ty]() && u64(slot) > 9223372036854775807u64 { ret TooLarge }
             total += 8usize
         } else {
         if meta.kind[f.ty]() == .Float {

@@ -40,7 +40,7 @@ type Expr = struct { kind: Kind, text: str, flag: bool, items: []const Expr, key
 // An attribute (`value` has one expression) or a block (`labels` and `body`).
 type Item = struct { is_block: bool, name: str, labels: []const str, value: []const Expr, body: []const Item }
 
-type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize }
+type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool }
 
 fn blank(kind: Kind) -> Expr {
     ret Expr { kind: kind, text: "", flag: false, items: zero, keys: zero, ops: zero, parts: zero, names: zero }
@@ -86,6 +86,7 @@ fn skip(p: *Parser, newlines: bool) {
                     p.at += 1usize
                 }
             }
+            if !closed { p.invalid = true }
         } else {
             more = false
         }
@@ -387,9 +388,9 @@ fn parse_heredoc(p: *Parser) -> (Expr, bool) {
         i += 1usize
     }
     let text = bytes_text(&body)
-    var inner = Parser { a: p.a, src: text, at: 0usize, depth: p.depth, nest: 0usize }
+    var inner = Parser { a: p.a, src: text, at: 0usize, depth: p.depth, nest: 0usize, invalid: false }
     let t = parse_template(&inner, false)
-    if !t.good { ret (blank(.Null), false) }
+    if !t.good || inner.invalid { ret (blank(.Null), false) }
     ret (template_expr(t.parts), true)
 }
 
@@ -981,8 +982,8 @@ fn parse_body(p: *Parser, nested: bool) -> ([]const Item, bool) {
 
 // Parse HCL source into its top-level body; `Invalid` when the text is not valid.
 fn parse(a: *mem.Arena, source: str) -> ([]const Item, err) {
-    var p = Parser { a: a, src: source, at: 0usize, depth: 0usize, nest: 0usize }
+    var p = Parser { a: a, src: source, at: 0usize, depth: 0usize, nest: 0usize, invalid: false }
     let (body, good) = parse_body(&p, false)
-    if !good { ret (zero, Invalid) }
+    if !good || p.invalid { ret (zero, Invalid) }
     ret (body, ok)
 }

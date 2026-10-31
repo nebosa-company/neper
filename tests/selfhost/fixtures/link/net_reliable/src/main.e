@@ -21,7 +21,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // 1: Go-Back-N, window 4, timeout 3 ticks, packets 3 and 9 lost once.
     var sent_at: [8]u64 = zero
-    var s = rel.sender(4usize, 3u64, sent_at[..], bits)
+    let (s0, sender_error) = rel.sender(4usize, 3u64, sent_at[..], bits)
+    if sender_error != ok { os.exit(1i32) }
+    var s = s0
     var expected = 0u64
     var lost3 = false
     var lost9 = false
@@ -73,10 +75,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if h != 0x8147d110e43913cbu64 { os.exit(1i32) }
     var one_slot: [1]u64 = zero
-    var narrow = rel.sender(4usize, 3u64, one_slot[..], bits)
+    let (narrow0, narrow_error) = rel.sender(4usize, 3u64, one_slot[..], bits)
+    if narrow_error != ok { os.exit(1i32) }
+    var narrow = narrow0
     let (_, first_ok) = rel.sender_send(&narrow, now)
     let (_, full) = rel.sender_send(&narrow, now)
     if first_ok != ok || full != rel.Full || rel.sender_can_send(&narrow) { os.exit(1i32) }
+    var capped_sent: [2]u64 = zero
+    let (capped0, capped_error) = rel.sender(2usize, 3u64, capped_sent[..], bits)
+    if capped_error != ok { os.exit(1i32) }
+    var gbn_capped = capped0
+    let (_, capped_first) = rel.sender_send(&gbn_capped, 1u64)
+    let (_, capped_second) = rel.sender_send(&gbn_capped, 1u64)
+    var one_out: [1]u64 = zero
+    let capped_count = rel.sender_timeouts(&gbn_capped, 4u64, one_out[..])
+    if capped_first != ok || capped_second != ok || capped_count != 1usize || one_out[0usize] != 0u64 || capped_sent[0usize] != 4u64 || capped_sent[1usize] != 1u64 { os.exit(1i32) }
 
     // 2: Selective Repeat over the same losses.
     var sr_sent: [8]u64 = zero
@@ -136,6 +149,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dup_n != 0usize || !dup_ack { os.exit(2i32) }
     let (far_n, far_ack) = rel.sr_receive(&rcv, 100u64)
     if far_n != 0usize || far_ack { os.exit(2i32) }
+    var capped_sr_sent: [2]u64 = zero
+    var capped_sr_acked: [2]u8 = zero
+    let (capped_sr0, capped_sr_error) = rel.sr_sender(2usize, 3u64, capped_sr_sent[..], capped_sr_acked[..], bits)
+    if capped_sr_error != ok { os.exit(2i32) }
+    var capped_sr = capped_sr0
+    let (_, capped_sr_first) = rel.sr_send(&capped_sr, 1u64)
+    let (_, capped_sr_second) = rel.sr_send(&capped_sr, 1u64)
+    let capped_sr_count = rel.sr_timeouts(&capped_sr, 4u64, one_out[..])
+    if capped_sr_first != ok || capped_sr_second != ok || capped_sr_count != 1usize || one_out[0usize] != 0u64 || capped_sr_sent[0usize] != 4u64 || capped_sr_sent[1usize] != 1u64 { os.exit(2i32) }
 
     // 3: RFC 1982 around the 16-bit wrap; window over half the space refused.
     if !rel.seq_less(65535u64, 0u64, bits) || rel.seq_less(0u64, 65535u64, bits) { os.exit(3i32) }
@@ -150,6 +172,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if two_ok != ok { os.exit(3i32) }
     let (_, small_error) = rel.sr_receiver(8usize, present[..4usize], bits)
     if small_error != rel.TooSmall { os.exit(3i32) }
+    let (_, zero_sender) = rel.sender(1usize, 1u64, big_sent[..], 0u32)
+    let (_, wide_sender) = rel.sender(1usize, 1u64, big_sent[..], 64u32)
+    let (_, zero_sr_sender) = rel.sr_sender(1usize, 1u64, big_sent[..], big_acked[..], 0u32)
+    let (_, wide_sr_sender) = rel.sr_sender(1usize, 1u64, big_sent[..], big_acked[..], 64u32)
+    let (_, zero_receiver) = rel.sr_receiver(1usize, present[..], 0u32)
+    let (_, wide_receiver) = rel.sr_receiver(1usize, present[..], 64u32)
+    if zero_sender != rel.Invalid || wide_sender != rel.Invalid || zero_sr_sender != rel.Invalid || wide_sr_sender != rel.Invalid || zero_receiver != rel.Invalid || wide_receiver != rel.Invalid { os.exit(3i32) }
 
     // 4: Jacobson estimate over a fixed sample list; tiny samples clamp at min_rto.
     var e = rel.rtt(200000u64, 60000000u64)

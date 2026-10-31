@@ -36,8 +36,9 @@ type Page = struct { ctx: *void, build: fn(*void, *widget.BuildContext) -> (widg
 // and the bytes a frame's tree may take.
 type Options = struct { width: u32, height: u32, keyboard: bool, contrast: bool, max_stops: usize, frame_bytes: usize }
 // A run's totals: the findings written and those there was no room for, the
-// nodes of the tree, and the Tab stops walked.
-type Report = struct { count: usize, dropped: usize, nodes: usize, stops: usize }
+// nodes of the tree, and the Tab stops walked. `tab_truncated` means the stop
+// cap ended that walk before it could prove a cycle or no focused control.
+type Report = struct { count: usize, dropped: usize, nodes: usize, stops: usize, tab_truncated: bool }
 error TooLarge
 
 const TREE_BYTES: usize = 16777216usize
@@ -114,9 +115,10 @@ fn run(a: *mem.Arena, runtime: *widget.Runtime, page: Page, o: Options, out: []F
         // The walk starts from nothing focused, as a page does when it opens.
         let cleared = widget.clear_focus(runtime)
         if cleared != ok { ret (zero, cleared) }
-        let (stops, walk_error) = audit_keyboard(&r)
+        let (stops, tab_truncated, walk_error) = audit_keyboard(&r)
         if walk_error != ok { ret (zero, walk_error) }
         report.stops = stops
+        report.tab_truncated = tab_truncated
     }
     report.count = r.count
     report.dropped = r.dropped
@@ -510,38 +512,43 @@ fn tab_and_settle(r: *Run) -> err {
 // Tab through the page until the focus comes round: every stop must show and
 // stand in view, the focus must not fall to nothing nor stick, and every control
 // must be reached. The stops walked answered.
-fn audit_keyboard(r: *Run) -> (usize, err) {
+fn audit_keyboard(r: *Run) -> (usize, bool, err) {
     let (start, start_error) = tree_in(r, r.start_bytes)
-    if start_error != ok { ret (0usize, start_error) }
+    if start_error != ok { ret (0usize, false, start_error) }
     let (stops, stops_error) = mem.alloc[widget.ElementId](&r.text, r.max_stops)
-    if stops_error != ok { ret (0usize, TooLarge) }
+    if stops_error != ok { ret (0usize, false, TooLarge) }
     let (before, before_error) = shot_in(r, r.shot_a)
-    if before_error != ok { ret (0usize, before_error) }
+    if before_error != ok { ret (0usize, false, before_error) }
     var previous = before
     var use_b = true
     var count = 0usize
     var last: widget.ElementId = zero
+    var complete = false
     // The last stop's node, which a focus lost from it is reported against.
     var last_role: accessibility.Role = .Application
     var last_label = ""
     var last_bounds: geometry.Rect = zero
     while count < r.max_stops {
         let settled = tab_and_settle(r)
-        if settled != ok { ret (count, settled) }
+        if settled != ok { ret (count, false, settled) }
         var (focus, has_focus) = testing.focused(&r.h)
         if !has_focus {
             // The first Tab of a page with nothing focused may land anywhere; after
             // a stop, a Tab that leaves nothing focused has lost the focus.
             if count > 0usize { note(r, .FocusLost, last_role, last_label, last_bounds, f32(count)) }
             let resettled = tab_and_settle(r)
-            if resettled != ok { ret (count, resettled) }
+            if resettled != ok { ret (count, false, resettled) }
             let (again, again_has) = testing.focused(&r.h)
-            if !again_has { break }
+            if !again_has {
+                complete = true
+                break
+            }
             focus = again
         }
         let id = node_id(r, focus)
         if count > 0usize && id.slot == last.slot && id.generation == last.generation {
             note(r, .FocusTrap, last_role, last_label, last_bounds, f32(count))
+            complete = true
             break
         }
         var cycled = false
@@ -550,7 +557,10 @@ fn audit_keyboard(r: *Run) -> (usize, err) {
             if stops[k].slot == id.slot && stops[k].generation == id.generation { cycled = true }
             k += 1usize
         }
-        if cycled { break }
+        if cycled {
+            complete = true
+            break
+        }
         stops[count] = id
         count += 1usize
         last = id
@@ -558,9 +568,9 @@ fn audit_keyboard(r: *Run) -> (usize, err) {
         if use_b { bytes = r.shot_b }
         use_b = !use_b
         let (now_shot, now_error) = shot_in(r, bytes)
-        if now_error != ok { ret (count, now_error) }
+        if now_error != ok { ret (count, false, now_error) }
         let (t, t_error) = tree_in(r, r.tree_bytes)
-        if t_error != ok { ret (count, t_error) }
+        if t_error != ok { ret (count, false, t_error) }
         let (at, found) = find_node(&t, id)
         if found {
             let n = &t.nodes[at]
@@ -575,11 +585,13 @@ fn audit_keyboard(r: *Run) -> (usize, err) {
         }
         previous = now_shot
     }
-    var i = 0usize
-    while i < start.nodes.len {
-        let n = &start.nodes[i]
-        if interactive(n) && !disabled_here(&start, i) && !reached(&start, i, stops[0usize..count]) { note_node(r, .Reach, n, 0.0) }
-        i += 1usize
+    if complete {
+        var i = 0usize
+        while i < start.nodes.len {
+            let n = &start.nodes[i]
+            if interactive(n) && !disabled_here(&start, i) && !reached(&start, i, stops[0usize..count]) { note_node(r, .Reach, n, 0.0) }
+            i += 1usize
+        }
     }
-    ret (count, ok)
+    ret (count, !complete, ok)
 }

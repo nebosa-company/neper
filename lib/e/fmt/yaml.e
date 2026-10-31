@@ -10,16 +10,24 @@
 // writer emits block style, quoting a string that would otherwise read as another
 // type; the typed codec follows the other codecs, a struct being a mapping of its
 // fields.
+// Plain and quoted scalar continuations are Unsupported; flow collections are
+// single-line.
+// Block collections are limited to 256 entries and flow collections to 64; both
+// report TooLarge. A zero max_depth means 16, and larger requests are capped at 16
+// so the fixed parser frames stay within a bounded stack.
 use e.io
 use e.mem
 use e.meta
 use e.str
+use e.text.utf8 as utf8
 
 type Pair = struct { key: Value, value: Value }
 type Value = union enum u8 { Null, Bool: bool, Integer: i64, Float: f64, String: str, Sequence: []const Value, Mapping: []const Pair }
 type Options = struct { max_depth: u16, allow_duplicate_keys: bool }
+const MAX_DEPTH: u16 = 16u16
 error Invalid
 error TooDeep
+error TooLarge
 error DuplicateKey
 error Unsupported
 
@@ -37,20 +45,66 @@ fn is_blank(text: str) -> bool {
     ret true
 }
 
-// The content of a line up to a `#` that starts a comment: one preceded by a space
-// and outside quotes.
+// YAML permits both ASCII space and tab as inline separation. Tabs remain invalid
+// when they begin indentation; that is checked from the raw line separately.
+fn is_inline_space(byte: u8) -> bool {
+    ret byte == 32u8 || byte == 9u8
+}
+
+// The content of a line up to a `#` that starts a comment: one preceded by inline
+// separation and outside quotes.
 fn strip_comment(text: str) -> str {
     var quote = 0u8
+    var scalar_start = true
+    var flow_depth = 0usize
     var i = 0usize
     while i < text.len {
         let c = text[i]
         if quote != 0u8 {
-            if c == quote { quote = 0u8 }
+            // A backslash escapes the next byte only in a double-quoted scalar.
+            // Do not let an escaped quote expose a following # as a comment.
+            if quote == 34u8 && c == 92u8 && i + 1usize < text.len {
+                i += 1usize
+            } else {
+                if quote == 39u8 && c == 39u8 && i + 1usize < text.len && text[i + 1usize] == 39u8 {
+                    i += 1usize
+                } else {
+                    if c == quote {
+                        quote = 0u8
+                        scalar_start = false
+                    }
+                }
+            }
         } else {
-            if c == 34u8 || c == 39u8 {
+            if scalar_start && (c == 34u8 || c == 39u8) {
                 quote = c
             } else {
                 if c == 35u8 && (i == 0usize || text[i - 1usize] == 32u8 || text[i - 1usize] == 9u8) { ret str.trim_end(text[..i]) }
+                if scalar_start && (c == 91u8 || c == 123u8) {
+                    flow_depth += 1usize
+                    scalar_start = true
+                } else {
+                if flow_depth > 0usize && (c == 93u8 || c == 125u8) {
+                    flow_depth -= 1usize
+                    scalar_start = false
+                } else {
+                if flow_depth > 0usize && c == 44u8 {
+                    scalar_start = true
+                } else {
+                if c == 58u8 && ((i + 1usize == text.len || text[i + 1usize] == 32u8 || text[i + 1usize] == 9u8) || flow_depth > 0usize) {
+                    scalar_start = true
+                } else {
+                if scalar_start && c == 45u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8 || text[i + 1usize] == 9u8) {
+                    scalar_start = true
+                } else {
+                if c != 32u8 && c != 9u8 {
+                    scalar_start = false
+                }
+                }
+                }
+                }
+                }
+                }
             }
         }
         i += 1usize
@@ -58,11 +112,37 @@ fn strip_comment(text: str) -> str {
     ret str.trim_end(text)
 }
 
+// YAML's presentation stream is UTF-8, but valid UTF-8 is not enough: C0/DEL and
+// most C1 scalars must be escaped. Physical CR/LF line breaks remain legal here.
+fn is_yaml_printable(scalar: u32) -> bool {
+    if scalar == 9u32 || scalar == 10u32 || scalar == 13u32 { ret true }
+    if scalar >= 32u32 && scalar <= 126u32 { ret true }
+    if scalar == 133u32 { ret true }
+    if scalar >= 160u32 && scalar <= 55295u32 { ret true }
+    if scalar >= 57344u32 && scalar <= 65533u32 { ret true }
+    ret scalar >= 65536u32 && scalar <= 1114111u32
+}
+
+fn valid_yaml_presentation(text: str) -> bool {
+    var at = 0usize
+    while at < text.len {
+        let (decoded, decode_error) = utf8.decode(text, at)
+        if decode_error != ok || !is_yaml_printable(decoded.scalar) { ret false }
+        at += usize(decoded.width)
+    }
+    ret true
+}
+
 fn split_lines(a: *mem.Arena, source: str) -> ([]Line, err) {
     var count = 1usize
     var i = 0usize
     while i < source.len {
-        if source[i] == 10u8 { count += 1usize }
+        if source[i] == 10u8 { count += 1usize } else {
+            if source[i] == 13u8 {
+                count += 1usize
+                if i + 1usize < source.len && source[i + 1usize] == 10u8 { i += 1usize }
+            }
+        }
         i += 1usize
     }
     let (lines, lines_error) = mem.alloc[Line](a, count)
@@ -71,15 +151,15 @@ fn split_lines(a: *mem.Arena, source: str) -> ([]Line, err) {
     var at = 0usize
     while at <= source.len {
         var stop = at
-        while stop < source.len && source[stop] != 10u8 { stop += 1usize }
+        while stop < source.len && source[stop] != 10u8 && source[stop] != 13u8 { stop += 1usize }
         var raw = source[at..stop]
-        if raw.len > 0usize && raw[raw.len - 1usize] == 13u8 { raw = raw[..raw.len - 1usize] }
         var indent = 0usize
         while indent < raw.len && raw[indent] == 32u8 { indent += 1usize }
-        if indent < raw.len && raw[indent] == 9u8 { ret (zero, Invalid) }
         lines[used] = Line { indent: indent, text: strip_comment(raw[indent..]), raw: raw }
         used += 1usize
+        if stop >= source.len { break }
         at = stop + 1usize
+        if source[stop] == 13u8 && at < source.len && source[at] == 10u8 { at += 1usize }
     }
     ret (lines[..used], ok)
 }
@@ -96,8 +176,47 @@ fn all_digits(text: str, from: usize) -> bool {
     ret true
 }
 
+fn parse_plain_float(a: *mem.Arena, text: str, from: usize, has_point: bool, point_at: usize, exponent_at: usize) -> (f64, err) {
+    var normalize = text.len > 0usize && text[0] == 43u8
+    if has_point && (point_at == from || point_at + 1usize == exponent_at) { normalize = true }
+    if has_point && point_at + 1usize == text.len { normalize = true }
+    var probe = 0usize
+    while probe < text.len {
+        if text[probe] == 69u8 { normalize = true }
+        probe += 1usize
+    }
+    if !normalize {
+        let (number, number_error) = str.parse_f64(text)
+        ret (number, number_error)
+    }
+    let (out, out_error) = mem.alloc[u8](a, text.len + 2usize)
+    if out_error != ok { ret (0.0, out_error) }
+    var used = 0usize
+    var i = 0usize
+    while i < text.len {
+        if i == point_at && has_point && point_at == from {
+            out[used] = 48u8
+            used += 1usize
+        }
+        if i == 0usize && text[i] == 43u8 {
+            i += 1usize
+            continue
+        }
+        let c = text[i]
+        if c == 69u8 { out[used] = 101u8 } else { out[used] = c }
+        used += 1usize
+        if has_point && c == 46u8 && (i + 1usize == text.len || i + 1usize == exponent_at) {
+            out[used] = 48u8
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let (number, number_error) = str.parse_f64(out[..used])
+    ret (number, number_error)
+}
+
 // A plain scalar by the core schema: null, bool, integer, float, else a string.
-fn resolve_plain(text: str) -> (Value, err) {
+fn resolve_plain(a: *mem.Arena, text: str) -> (Value, err) {
     if text.len == 0usize || str.eq(text, "~") || str.eq(text, "null") || str.eq(text, "Null") || str.eq(text, "NULL") { ret (.Null, ok) }
     if str.eq(text, "true") || str.eq(text, "True") || str.eq(text, "TRUE") { ret (Value{ Bool: true }, ok) }
     if str.eq(text, "false") || str.eq(text, "False") || str.eq(text, "FALSE") { ret (Value{ Bool: false }, ok) }
@@ -113,8 +232,8 @@ fn resolve_plain(text: str) -> (Value, err) {
         if negative { inf = 0.0 - inf }
         ret (Value{ Float: inf }, ok)
     }
-    if str.eq(body, ".nan") || str.eq(body, ".NaN") || str.eq(body, ".NAN") { ret (Value{ Float: mem.bitcast[f64](9221120237041090560u64) }, ok) }
-    if body.len > 2usize && body[0] == 48u8 && (body[1] == 120u8 || body[1] == 111u8) {
+    if from == 0usize && (str.eq(body, ".nan") || str.eq(body, ".NaN") || str.eq(body, ".NAN")) { ret (Value{ Float: mem.bitcast[f64](9221120237041090560u64) }, ok) }
+    if from == 0usize && body.len > 2usize && body[0] == 48u8 && (body[1] == 120u8 || body[1] == 111u8) {
         var radix = 16u8
         if body[1] == 111u8 { radix = 8u8 }
         let (magnitude, radix_error) = str.parse_u64_radix(body[2usize..], radix)
@@ -126,28 +245,35 @@ fn resolve_plain(text: str) -> (Value, err) {
         ret (Value{ String: text }, ok)
     }
     if all_digits(body, 0usize) {
-        let (number, number_error) = str.parse_i64(text)
+        var decimal = text
+        if text[0] == 43u8 { decimal = body }
+        let (number, number_error) = str.parse_i64(decimal)
         if number_error == ok { ret (Value{ Integer: number }, ok) }
         ret (Value{ String: text }, ok)
     }
     // A float has digits with a point or an exponent and nothing else.
-    var digits = 0usize
+    var mantissa_digits = 0usize
+    var exponent_digits = 0usize
     var points = 0usize
     var exponents = 0usize
+    var point_at = 0usize
+    var exponent_at = text.len
     var shape_ok = body.len > 0usize
     var i = 0usize
     while i < body.len {
         let c = body[i]
         if str.is_ascii_digit(c) {
-            digits += 1usize
+            if exponents == 0usize { mantissa_digits += 1usize } else { exponent_digits += 1usize }
         } else {
         if c == 46u8 {
             points += 1usize
+            point_at = from + i
             if exponents > 0usize { shape_ok = false }
         } else {
         if c == 101u8 || c == 69u8 {
             exponents += 1usize
-            if digits == 0usize || i + 1usize >= body.len { shape_ok = false }
+            exponent_at = from + i
+            if mantissa_digits == 0usize || i + 1usize >= body.len { shape_ok = false }
             if i + 1usize < body.len && (body[i + 1usize] == 43u8 || body[i + 1usize] == 45u8) { i += 1usize }
         } else {
             shape_ok = false
@@ -156,9 +282,11 @@ fn resolve_plain(text: str) -> (Value, err) {
         }
         i += 1usize
     }
-    if shape_ok && digits > 0usize && points <= 1usize && exponents <= 1usize && (points == 1usize || exponents == 1usize) {
-        let (number, number_error) = str.parse_f64(text)
+    if exponents > 0usize && exponent_digits == 0usize { shape_ok = false }
+    if shape_ok && mantissa_digits > 0usize && points <= 1usize && exponents <= 1usize && (points == 1usize || exponents == 1usize) {
+        let (number, number_error) = parse_plain_float(a, text, from, points == 1usize, point_at, exponent_at)
         if number_error == ok { ret (Value{ Float: number }, ok) }
+        if number_error == mem.Exhausted { ret (zero, number_error) }
     }
     ret (Value{ String: text }, ok)
 }
@@ -197,7 +325,17 @@ fn push_utf8(out: []u8, at: usize, scalar: u32) -> usize {
 fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
     let (slash, has_slash) = str.find(body, "\\")
     if !has_slash { ret (body, ok) }
-    let (out, out_error) = mem.alloc[u8](a, body.len)
+    var capacity = body.len
+    var scan = 0usize
+    while scan + 1usize < body.len {
+        if body[scan] == 92u8 && (body[scan + 1usize] == 76u8 || body[scan + 1usize] == 80u8) {
+            capacity += 1usize
+            scan += 2usize
+        } else {
+            scan += 1usize
+        }
+    }
+    let (out, out_error) = mem.alloc[u8](a, capacity)
     if out_error != ok { ret ("", out_error) }
     var used = 0usize
     var i = 0usize
@@ -213,10 +351,31 @@ fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
         if i >= body.len { ret ("", Invalid) }
         let e = body[i]
         i += 1usize
+        if e == 97u8 { out[used] = 7u8 } else {
+        if e == 98u8 { out[used] = 8u8 } else {
+        if e == 102u8 { out[used] = 12u8 } else {
+        if e == 101u8 { out[used] = 27u8 } else {
+        if e == 118u8 { out[used] = 11u8 } else {
         if e == 110u8 { out[used] = 10u8 } else {
         if e == 116u8 { out[used] = 9u8 } else {
         if e == 114u8 { out[used] = 13u8 } else {
         if e == 48u8 { out[used] = 0u8 } else {
+        if e == 78u8 {
+            used = push_utf8(out, used, 133u32)
+            continue
+        } else {
+        if e == 95u8 {
+            used = push_utf8(out, used, 160u32)
+            continue
+        } else {
+        if e == 76u8 {
+            used = push_utf8(out, used, 8232u32)
+            continue
+        } else {
+        if e == 80u8 {
+            used = push_utf8(out, used, 8233u32)
+            continue
+        } else {
         if e == 34u8 || e == 92u8 || e == 47u8 || e == 32u8 { out[used] = e } else {
         if e == 120u8 || e == 117u8 || e == 85u8 {
             var width = 2usize
@@ -237,6 +396,15 @@ fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
             continue
         } else {
             ret ("", Invalid)
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
         }
         }
         }
@@ -291,7 +459,7 @@ fn scalar_end(text: str, at: usize, in_flow: bool) -> (usize, err) {
     while i < text.len {
         let c = text[i]
         if in_flow && (c == 44u8 || c == 93u8 || c == 125u8) { break }
-        if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { break }
+        if c == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { break }
         i += 1usize
     }
     ret (i, ok)
@@ -311,7 +479,7 @@ fn scalar_value(a: *mem.Arena, text: str) -> (Value, err) {
     }
     if trimmed.len > 0usize && (trimmed[0] == 38u8 || trimmed[0] == 42u8 || trimmed[0] == 33u8 || trimmed[0] == 37u8) { ret (zero, Unsupported) }
     if trimmed.len > 0usize && (trimmed[0] == 34u8 || trimmed[0] == 39u8) { ret (zero, Invalid) }
-    let (resolved, resolve_error) = resolve_plain(trimmed)
+    let (resolved, resolve_error) = resolve_plain(a, trimmed)
     ret (resolved, resolve_error)
 }
 
@@ -319,7 +487,7 @@ fn scalar_value(a: *mem.Arena, text: str) -> (Value, err) {
 
 fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usize, err) {
     var at = at_in
-    while at < text.len && text[at] == 32u8 { at += 1usize }
+    while at < text.len && is_inline_space(text[at]) { at += 1usize }
     if at >= text.len { ret (zero, at, Invalid) }
     if text[at] == 91u8 {
         if depth >= usize(p.options.max_depth) { ret (zero, at, TooDeep) }
@@ -327,19 +495,19 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
         var count = 0usize
         at += 1usize
         while true {
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at >= text.len { ret (zero, at, Invalid) }
             if text[at] == 93u8 {
                 at += 1usize
                 break
             }
-            if count == 64usize { ret (zero, at, Invalid) }
+            if count == 64usize { ret (zero, at, TooLarge) }
             let (item, after, item_error) = flow_value(p, text, at, depth + 1usize)
             if item_error != ok { ret (zero, at, item_error) }
             items[count] = item
             count += 1usize
             at = after
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at < text.len && text[at] == 44u8 { at += 1usize }
         }
         let (copy, copy_error) = mem.alloc[Value](p.a, count)
@@ -353,21 +521,21 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
         var count = 0usize
         at += 1usize
         while true {
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at >= text.len { ret (zero, at, Invalid) }
             if text[at] == 125u8 {
                 at += 1usize
                 break
             }
-            if count == 64usize { ret (zero, at, Invalid) }
+            if count == 64usize { ret (zero, at, TooLarge) }
             let (key, after_key, key_error) = flow_value(p, text, at, depth + 1usize)
             if key_error != ok { ret (zero, at, key_error) }
             at = after_key
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             var value: Value = .Null
             if at < text.len && text[at] == 58u8 {
                 at += 1usize
-                while at < text.len && text[at] == 32u8 { at += 1usize }
+                while at < text.len && is_inline_space(text[at]) { at += 1usize }
                 if at < text.len && text[at] != 44u8 && text[at] != 125u8 {
                     let (parsed, after_value, value_error) = flow_value(p, text, at, depth + 1usize)
                     if value_error != ok { ret (zero, at, value_error) }
@@ -378,7 +546,7 @@ fn flow_value(p: *Parser, text: str, at_in: usize, depth: usize) -> (Value, usiz
             if !p.options.allow_duplicate_keys && has_key(pairs[..count], key) { ret (zero, at, DuplicateKey) }
             pairs[count] = Pair { key: key, value: value }
             count += 1usize
-            while at < text.len && text[at] == 32u8 { at += 1usize }
+            while at < text.len && is_inline_space(text[at]) { at += 1usize }
             if at < text.len && text[at] == 44u8 { at += 1usize }
         }
         let (copy, copy_error) = mem.alloc[Pair](p.a, count)
@@ -416,9 +584,51 @@ fn same_key(a: Value, b: Value) -> bool {
         default:
             ret false
         }
+    case .Float as x:
+        switch b {
+        case .Float as y:
+            ret x == y || (x != x && y != y)
+        default:
+            ret false
+        }
     case .Null:
         switch b {
         case .Null:
+            ret true
+        default:
+            ret false
+        }
+    case .Sequence as x:
+        switch b {
+        case .Sequence as y:
+            if x.len != y.len { ret false }
+            var i = 0usize
+            while i < x.len {
+                if !same_key(x[i], y[i]) { ret false }
+                i += 1usize
+            }
+            ret true
+        default:
+            ret false
+        }
+    case .Mapping as x:
+        switch b {
+        case .Mapping as y:
+            if x.len != y.len { ret false }
+            var i = 0usize
+            while i < x.len {
+                var matched = false
+                var j = 0usize
+                while j < y.len {
+                    if same_key(x[i].key, y[j].key) && same_key(x[i].value, y[j].value) {
+                        matched = true
+                        break
+                    }
+                    j += 1usize
+                }
+                if !matched { ret false }
+                i += 1usize
+            }
             ret true
         default:
             ret false
@@ -438,6 +648,16 @@ fn has_key(pairs: []const Pair, key: Value) -> bool {
 }
 
 // --- Block structure.
+
+fn has_indent_tab(line: Line) -> bool {
+    ret line.indent < line.raw.len && line.raw[line.indent] == 9u8
+}
+
+fn has_indented_continuation(p: *Parser, parent_indent: usize) -> bool {
+    var probe = p.at
+    while probe < p.lines.len && is_blank(p.lines[probe].text) { probe += 1usize }
+    ret probe < p.lines.len && p.lines[probe].indent > parent_indent
+}
 
 // Skips blank lines; false at the end.
 fn skip_blank(p: *Parser) -> bool {
@@ -463,6 +683,10 @@ fn parse_inline_or_below(p: *Parser, rest: str, parent_indent: usize, depth: usi
             ret (flow, ok)
         }
         let (scalar, scalar_error) = scalar_value(p.a, trimmed)
+        if scalar_error == Invalid && (trimmed[0] == 34u8 || trimmed[0] == 39u8) && has_indented_continuation(p, parent_indent) {
+            ret (zero, Unsupported)
+        }
+        if scalar_error == ok && has_indented_continuation(p, parent_indent) { ret (zero, Unsupported) }
         ret (scalar, scalar_error)
     }
     p.at += 1usize
@@ -542,19 +766,21 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
     if depth > usize(p.options.max_depth) { ret (zero, TooDeep) }
     if !skip_blank(p) { ret (.Null, ok) }
     let first = p.lines[p.at]
+    if has_indent_tab(first) { ret (zero, Invalid) }
     if first.indent != indent { ret (zero, Invalid) }
-    if first.text.len > 0usize && first.text[0] == 45u8 && (first.text.len == 1usize || first.text[1] == 32u8) {
+    if first.text.len > 0usize && first.text[0] == 45u8 && (first.text.len == 1usize || is_inline_space(first.text[1])) {
         // A sequence at this indent.
         var items: [256]Value = zero
         var count = 0usize
-        while skip_blank(p) && p.lines[p.at].indent == indent && p.lines[p.at].text.len > 0usize && p.lines[p.at].text[0] == 45u8 && (p.lines[p.at].text.len == 1usize || p.lines[p.at].text[1] == 32u8) {
-            if count == 256usize { ret (zero, Invalid) }
+        while skip_blank(p) && p.lines[p.at].indent == indent && p.lines[p.at].text.len > 0usize && p.lines[p.at].text[0] == 45u8 && (p.lines[p.at].text.len == 1usize || is_inline_space(p.lines[p.at].text[1])) {
+            if has_indent_tab(p.lines[p.at]) { ret (zero, Invalid) }
+            if count == 256usize { ret (zero, TooLarge) }
             let text = p.lines[p.at].text
             var rest = ""
             if text.len > 1usize { rest = text[2usize..] }
             let trimmed = str.trim(rest)
-            let nested_sequence = trimmed.len > 0usize && trimmed[0] == 45u8 && (trimmed.len == 1usize || trimmed[1] == 32u8)
-            if trimmed.len > 0usize && trimmed[0] != 91u8 && trimmed[0] != 123u8 && trimmed[0] != 124u8 && trimmed[0] != 62u8 && trimmed[0] != 34u8 && trimmed[0] != 39u8 {
+            let nested_sequence = trimmed.len > 0usize && trimmed[0] == 45u8 && (trimmed.len == 1usize || is_inline_space(trimmed[1]))
+            if trimmed.len > 0usize && trimmed[0] != 91u8 && trimmed[0] != 123u8 && trimmed[0] != 124u8 && trimmed[0] != 62u8 {
                 let (colon, has_colon) = key_end(trimmed)
                 if has_colon || nested_sequence {
                     // The item is a mapping or sequence whose first entry sits on this line.
@@ -582,10 +808,11 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
         var pairs: [256]Pair = zero
         var count = 0usize
         while skip_blank(p) && p.lines[p.at].indent == indent {
+            if has_indent_tab(p.lines[p.at]) { ret (zero, Invalid) }
             let text = p.lines[p.at].text
             let (key_stop, is_entry) = key_end(text)
             if !is_entry { ret (zero, Invalid) }
-            if count == 256usize { ret (zero, Invalid) }
+            if count == 256usize { ret (zero, TooLarge) }
             let (key, key_error) = scalar_value(p.a, text[..key_stop])
             if key_error != ok { ret (zero, key_error) }
             var rest = ""
@@ -608,22 +835,26 @@ fn parse_node(p: *Parser, indent: usize, depth: usize) -> (Value, err) {
 }
 
 // The end of a mapping key on a line: the `:` that ends it, outside quotes and
-// followed by a space or the end.
+// followed by inline separation or the end.
 fn key_end(text: str) -> (usize, bool) {
     if text.len == 0usize { ret (0usize, false) }
     if text[0] == 91u8 || text[0] == 123u8 { ret (0usize, false) }
     let (stop, stop_error) = scalar_end(text, 0usize, false)
     if stop_error != ok { ret (0usize, false) }
     var i = stop
-    while i < text.len && text[i] == 32u8 { i += 1usize }
-    if i < text.len && text[i] == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret (i, true) }
+    while i < text.len && is_inline_space(text[i]) { i += 1usize }
+    if i < text.len && text[i] == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { ret (i, true) }
     ret (0usize, false)
 }
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err) {
+    if !utf8.validate(source) { ret (zero, Invalid) }
+    if !valid_yaml_presentation(source) { ret (zero, Invalid) }
     let (lines, lines_error) = split_lines(a, source)
     if lines_error != ok { ret (zero, lines_error) }
-    var p = Parser { a: a, lines: lines, at: 0usize, options: options }
+    var effective = options
+    if effective.max_depth == 0u16 || effective.max_depth > MAX_DEPTH { effective.max_depth = MAX_DEPTH }
+    var p = Parser { a: a, lines: lines, at: 0usize, options: effective }
     // Directives and a second document are beyond the subset; one `---` is allowed.
     var i = 0usize
     var markers = 0usize
@@ -636,7 +867,15 @@ fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err) {
                 if markers > 1usize || i > 0usize && has_content(lines[..i]) { ret (zero, Unsupported) }
                 lines[i] = Line { indent: 0usize, text: str.trim(text[3usize..]), raw: lines[i].raw }
             }
-            if str.eq(text, "...") { ret (zero, Unsupported) }
+            if str.eq(text, "...") {
+                var after = i + 1usize
+                while after < lines.len {
+                    if !is_blank(lines[after].text) { ret (zero, Unsupported) }
+                    after += 1usize
+                }
+                lines[i] = Line { indent: 0usize, text: "", raw: lines[i].raw }
+                break
+            }
         }
         i += 1usize
     }
@@ -660,7 +899,10 @@ fn has_content(lines: []const Line) -> bool {
 
 fn needs_quotes(text: str) -> bool {
     if text.len == 0usize { ret true }
-    let (resolved, resolve_error) = resolve_plain(text)
+    var scratch: [1024]u8 = zero
+    var arena = mem.arena_from(scratch[0..])
+    let (resolved, resolve_error) = resolve_plain(&arena, text)
+    if resolve_error != ok { ret true }
     var stays_text = false
     switch resolved {
     case .String as same:
@@ -669,27 +911,75 @@ fn needs_quotes(text: str) -> bool {
         stays_text = false
     }
     if !stays_text { ret true }
-    if text[0] == 32u8 || text[text.len - 1usize] == 32u8 { ret true }
+    if is_inline_space(text[0]) || is_inline_space(text[text.len - 1usize]) { ret true }
     let first = text[0]
     if first == 45u8 || first == 63u8 || first == 58u8 || first == 44u8 || first == 91u8 || first == 93u8 || first == 123u8 || first == 125u8 || first == 35u8 || first == 38u8 || first == 42u8 || first == 33u8 || first == 124u8 || first == 62u8 || first == 39u8 || first == 34u8 || first == 37u8 || first == 64u8 || first == 96u8 { ret true }
     var i = 0usize
     while i < text.len {
         let c = text[i]
-        if c < 32u8 || c == 34u8 || c == 92u8 { ret true }
-        if c == 58u8 && (i + 1usize == text.len || text[i + 1usize] == 32u8) { ret true }
-        if c == 35u8 && i > 0usize && text[i - 1usize] == 32u8 { ret true }
-        i += 1usize
+        let (decoded, decode_error) = utf8.decode(text, i)
+        if decode_error != ok || !is_yaml_printable(decoded.scalar) { ret true }
+        // Presentation characters are not all legal in a plain scalar. Preserve
+        // line breaks and tabs through the quoted escape path.
+        if c == 9u8 || c == 10u8 || c == 13u8 { ret true }
+        if c == 34u8 || c == 92u8 { ret true }
+        if c == 58u8 && (i + 1usize == text.len || is_inline_space(text[i + 1usize])) { ret true }
+        if c == 35u8 && i > 0usize && is_inline_space(text[i - 1usize]) { ret true }
+        i += usize(decoded.width)
     }
     ret false
 }
 
+fn write_hex_escape(writer: *io.Writer, byte: u8) -> err {
+    let digits = "0123456789abcdef"
+    var escaped: [4]u8 = zero
+    escaped[0usize] = 92u8
+    escaped[1usize] = 120u8
+    escaped[2usize] = digits[usize(byte) / 16usize]
+    escaped[3usize] = digits[usize(byte) % 16usize]
+    ret io.write_all(writer, escaped[..])
+}
+
+fn write_unicode_escape(writer: *io.Writer, scalar: u32) -> err {
+    if scalar <= 255u32 { ret write_hex_escape(writer, u8(scalar)) }
+    let digits = "0123456789abcdef"
+    if scalar <= 65535u32 {
+        var escaped: [6]u8 = zero
+        escaped[0usize] = 92u8
+        escaped[1usize] = 117u8
+        var at = 2usize
+        var shift = 12u32
+        while at < escaped.len {
+            escaped[at] = digits[usize((scalar >> shift) & 15u32)]
+            shift -= 4u32
+            at += 1usize
+        }
+        ret io.write_all(writer, escaped[..])
+    }
+    var escaped: [10]u8 = zero
+    escaped[0usize] = 92u8
+    escaped[1usize] = 85u8
+    var at = 2usize
+    var shift = 28u32
+    while at < escaped.len {
+        escaped[at] = digits[usize((scalar >> shift) & 15u32)]
+        shift -= 4u32
+        at += 1usize
+    }
+    ret io.write_all(writer, escaped[..])
+}
+
 fn write_string(writer: *io.Writer, text: str) -> err {
+    if !utf8.validate(text) { ret Invalid }
     if !needs_quotes(text) { ret io.write_all(writer, text) }
     try io.write_all(writer, "\"")
     var run = 0usize
     var i = 0usize
     while i < text.len {
         let c = text[i]
+        let (decoded, decode_error) = utf8.decode(text, i)
+        if decode_error != ok { ret Invalid }
+        let width = usize(decoded.width)
         var escape = ""
         if c == 34u8 { escape = "\\\"" }
         if c == 92u8 { escape = "\\\\" }
@@ -699,12 +989,28 @@ fn write_string(writer: *io.Writer, text: str) -> err {
         if escape.len > 0usize {
             try io.write_all(writer, text[run..i])
             try io.write_all(writer, escape)
-            run = i + 1usize
+            run = i + width
+        } else {
+            if !is_yaml_printable(decoded.scalar) {
+                try io.write_all(writer, text[run..i])
+                try write_unicode_escape(writer, decoded.scalar)
+                run = i + width
+            }
         }
-        i += 1usize
+        i += width
     }
     try io.write_all(writer, text[run..])
     ret io.write_all(writer, "\"")
+}
+
+fn write_u64(writer: *io.Writer, value: u64) -> err {
+    var scratch: [32]u8 = zero
+    var arena = mem.arena_from(scratch[0..])
+    let (builder0, builder_error) = str.builder(&arena, 20usize)
+    if builder_error != ok { ret builder_error }
+    var builder = builder0
+    try str.push_u64(&builder, value)
+    ret io.write_all(writer, str.done(&builder))
 }
 
 fn write_scalar(writer: *io.Writer, value: *const Value) -> err {
@@ -838,6 +1144,38 @@ fn pair_of(pairs: []const Pair, name: str) -> (Value, bool) {
     ret (.Null, false)
 }
 
+// The parser stores integers as `i64`, but a typed field can be narrower or
+// unsigned. Decide that conversion's range before making it: a direct narrowing
+// cast traps in debug and wraps in release.
+fn integer_into[T: type](number: i64) -> (T, err) {
+    var out: T = zero
+    let bits = u64(mem.size_of[T]() * 8usize)
+    if meta.signed[T]() {
+        if bits < 64u64 {
+            let high = i64((1u64 << (bits - 1u64)) - 1u64)
+            if number > high || number < 0i64 - high - 1i64 { ret (out, Invalid) }
+        }
+        out = T(number)
+        ret (out, ok)
+    }
+    if number < 0i64 { ret (out, Invalid) }
+    if bits < 64u64 && number > i64((1u64 << bits) - 1u64) { ret (out, Invalid) }
+    out = T(number)
+    ret (out, ok)
+}
+
+// A finite source must stay finite in the field. This still permits YAML's
+// explicit `.inf` and `.nan` scalars, while rejecting a finite `f64` that
+// overflows a narrower floating-point field.
+fn float_into[T: type](number: f64) -> (T, err) {
+    var out: T = zero
+    let input_finite = number == number && number - number == 0.0f64
+    out = T(number)
+    let widened = f64(out)
+    if input_finite && (widened != widened || widened - widened != 0.0f64) { ret (out, Invalid) }
+    ret (out, ok)
+}
+
 fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
     var out: T = zero
     let (root, parse_error) = parse(a, source, options)
@@ -880,8 +1218,8 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 default:
                     ret (out, Invalid)
                 }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = integer_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
             if meta.kind[f.ty]() == .Float {
@@ -894,8 +1232,8 @@ fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
                 default:
                     ret (out, Invalid)
                 }
-                var slot: f.ty = zero
-                slot = f.ty(number)
+                let (slot, slot_error) = float_into[f.ty](number)
+                if slot_error != ok { ret (out, slot_error) }
                 meta.set[f, T](&out, slot)
             } else {
                 ret (out, Invalid)
@@ -922,8 +1260,14 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
             try write_scalar(writer, &item)
         } else {
         if meta.kind[f.ty]() == .Int {
-            let item: Value = Value{ Integer: i64(slot) }
-            try write_scalar(writer, &item)
+            // `Value.Integer` is deliberately signed. Do not cast an unsigned
+            // field above that representation's range and turn it negative.
+            if meta.signed[f.ty]() {
+                let item: Value = Value{ Integer: i64(slot) }
+                try write_scalar(writer, &item)
+            } else {
+                try write_u64(writer, u64(slot))
+            }
         } else {
         if meta.kind[f.ty]() == .Float {
             let item: Value = Value{ Float: f64(slot) }

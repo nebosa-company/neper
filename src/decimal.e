@@ -176,9 +176,9 @@ fn parse(spelling: str, d: *Decimal) -> err {
 }
 
 // Returns the bit pattern of the literal in `width`-bit IEEE-754 form. `width` is 32
-// or 64; f16 and bf16 are in the type system but not here.
+// or 64, or 16 for f16 and 17 for bf16 (D5913), whose patterns are sixteen bits.
 fn literal_bits(spelling: str, width: usize) -> (usize, err) {
-    if width != 32usize && width != 64usize { ret (0usize, Malformed) }
+    if width != 32usize && width != 64usize && width != 16usize && width != 17usize { ret (0usize, Malformed) }
     var mantissa_bits = 24i64
     var bias = 127i64
     var max_biased = 254i64
@@ -187,6 +187,12 @@ fn literal_bits(spelling: str, width: usize) -> (usize, err) {
         bias = 1023i64
         max_biased = 2046i64
     }
+    if width == 16usize {
+        mantissa_bits = 11i64
+        bias = 15i64
+        max_biased = 30i64
+    }
+    if width == 17usize { mantissa_bits = 8i64 }
     var d: Decimal = zero
     let parse_error = parse(spelling, &d)
     if parse_error != ok { ret (0usize, parse_error) }
