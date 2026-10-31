@@ -7195,6 +7195,11 @@ fn exec_try(it: *Interp, f: *Frame, n: ast.Node) -> (Completion, err) {
         if cn.a != ast.NONE {
             let de = declare_pattern_names(it, f, cn.a, 0u8)
             if de != ok { pe = de } else { pe = bind_pattern(it, f, cn.a, caught, 6u8) }
+            // Annex B.3.4: a simple catch parameter may be redeclared by a `var` of a direct eval, so it is not a lexical binding for that check.
+            if pe == ok && f.prog.nodes[usize(cn.a)].kind == ast.N_IDENT {
+                let (cat, cfound) = env_index(f.env, f.prog.nodes[usize(cn.a)].text)
+                if cfound { f.env.vars.items[cat].flags = f.env.vars.items[cat].flags & (255u8 - B_LEX) }
+            }
         }
         if pe != ok {
             c = normal()
