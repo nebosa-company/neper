@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 69151)
+    var b = try str.builder(a, 69152)
     try str.push(&b, "// Built-ins written in JavaScript, evaluated into every new realm (generated into prelude.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// They only use intrinsics captured up front, so page scripts cannot change how they behave.\n")
     try str.push(&b, "(function (global) {\n")
@@ -1462,7 +1462,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    var arrayMethods = {\n")
     try str.push(&b, "      toLocaleString() {\n")
     try str.push(&b, "        if (this === undefined || this === null) throw new TypeErr('Array.prototype.toLocaleString called on null or undefined');\n")
-    try str.push(&b, "        var array = Object(this), length = array.length, args = arguments;\n")
+    try str.push(&b, "        var array = Object(this), length = +array.length, args = arguments;\n")
     try str.push(&b, "        length = length > 0 ? Math.min(Math.floor(length), 9007199254740991) : 0;\n")
     try str.push(&b, "        var out = '';\n")
     try str.push(&b, "        for (var k = 0; k < length; k++) {\n")
