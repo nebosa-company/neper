@@ -30,9 +30,9 @@ use e.web.shell as shell
 
 const MAX_SLOTS: usize = 16usize
 // The address field holds at most this many bytes. The renderer flattens one text into at most 65,536 edges (about 40 per
-// glyph), so a longer field would stop the window with "the scene was too large"; a longer address is shown clipped (Enter
+// glyph; measured: 700 bytes of "a" fit, 900 do not), so a longer field would stop the window with "the scene was too large"; a longer address is shown clipped (Enter
 // still uses the whole address) and a longer typed or pasted one is cut.
-const OMNI_BYTES: usize = 1024usize
+const OMNI_BYTES: usize = 512usize
 
 type FaceSpec = struct { file: str, family: str, weight: u32, italic: bool }
 type Slot = struct { model: *Model, index: usize }
@@ -267,6 +267,8 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     fo.placeholder = "Search or enter address"
     var field_style = style.defaults()
     field_style.width = style.Length { Flex: 1.0 }
+    field_style.min_width = style.Length { Px: 0.0 }
+    field_style.overflow = .Clip
     let (omni_field, oe) = control.text_field(f, 14u64, &theme, "Address", m.omni, m.omni_len, widget.Change[str] { ctx: mem.cast[*void](m), invoke: on_omni_change }, submit_of(m, on_omni_submit), fo)
     if oe != ok { ret (zero, oe) }
     let (wrap_nodes, we) = mem.alloc[widget.Node](f, 1usize)
