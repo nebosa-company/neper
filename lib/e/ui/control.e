@@ -15862,7 +15862,8 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
 // #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
-type SectionBar = struct { stops: [2]paint.Stop }
+// `whole` (Windows light with the group frames on whole pixels, `set_group_crisp`): the 1:1 captures put the border on the control's own pixels.
+type SectionBar = struct { stops: [2]paint.Stop, whole: bool }
 
 // v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
 // border over it. looks4: fitted to the live 100 % capture's border pixels (fill compositing included):
@@ -15871,10 +15872,16 @@ type SectionBar = struct { stops: [2]paint.Stop }
 // (a fill reaching the border's soft outer pixels would count twice), then the four border lines.
 fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*SectionBar](ctx)
-    let x0 = area.x + 0.15
-    let y0 = area.y + 0.34
-    let w = area.width + 0.35
-    let h = area.height + 0.01
+    var x0 = area.x + 0.15
+    var y0 = area.y + 0.34
+    var w = area.width + 0.35
+    var h = area.height + 0.01
+    if s.whole {
+        x0 = area.x
+        y0 = area.y
+        w = area.width
+        h = area.height
+    }
     let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x0, y: y0 }, end: geometry.Point { x: x0 + w, y: y0 }, stops: s.stops[0usize..2usize] } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x + 1.0, area.y + 1.0, area.width - 1.0, area.height - 1.0), brush: brush } })
     let edge = paint.Brush { Solid: s.stops[0usize].color }
@@ -15891,6 +15898,7 @@ fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
 fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize].whole = group_crisp && t.tokens.palette == .Light
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
     // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
@@ -18651,11 +18659,26 @@ fn windows_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 }
 
 // The frame's four lines (1 unit, #DCDCDC) on explicit outer extents relative to the group's top left.
-type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color }
+type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color, whole: bool }
+
+// Windows light, the true 1:1 captures: a group frame is four one pixel lines of #DCDCDC on whole rows and columns (the 6.35 and 0.65 of the
+// resampled captures are where the lines blurred to). Frames built while this is on take the line pixel that holds their fractional edge.
+var group_crisp: bool = false
+fn set_group_crisp(on: bool) { group_crisp = on }
 
 fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*GroupFrame](ctx)
     let brush = paint.Brush { Solid: g.color }
+    if g.whole {
+        let first_x = f32(i32(area.x + g.left + 0.001))
+        let first_y = f32(i32(area.y + g.top + 0.001))
+        let last_x = f32(i32(area.x + g.right - 1.0 + 0.001))
+        let last_y = f32(i32(area.y + g.bottom - 1.0 + 0.001))
+        try winpx.fill(b, first_x, first_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, last_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+        ret winpx.fill(b, last_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+    }
     let x = area.x + g.left
     let y = area.y + g.top
     let w = g.right - g.left
@@ -18684,7 +18707,7 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
-    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant) }
+    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant), whole: group_crisp && t.tokens.palette == .Light }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }

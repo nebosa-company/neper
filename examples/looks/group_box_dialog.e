@@ -50,6 +50,7 @@ fn format_buttons(a: *mem.Arena, t: *const control.Theme, out: []widget.Node) ->
     var i = 0usize
     while i < 12usize {
         var bo = control.button_options()
+        bo.crisp = true
         bo.width = 75.0
         bo.height = 23.0
         bo.shift_x = 0.01 + xs[i] * 0.000769
@@ -67,6 +68,7 @@ fn format_buttons(a: *mem.Arena, t: *const control.Theme, out: []widget.Node) ->
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    control.set_group_crisp(true)
     let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (0usize, parts_error) }
     let (fmt, fmt_error) = mem.alloc[widget.Node](a, 12usize)
