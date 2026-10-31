@@ -6720,6 +6720,11 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
             let (rv, re) = tail_eval(it, f, n.a, f.tail_ok && f.no_tail == 0u32 && !f.has_disp)
             if re != ok { ret (normal(), re) }
             v2 = rv
+            if f.has_gen && gen_state_of(f).kind == 2u8 {
+                let (awr, awre) = await_value(it, f, v2)
+                if awre != ok { ret (normal(), awre) }
+                v2 = awr
+            }
         }
         ret (Completion { kind: CK_RETURN, value: v2, label: "" }, ok)
     }
