@@ -3704,6 +3704,25 @@ fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> er
     ret ok
 }
 
+// `pixels` is a `width * height` rectangle of BGRA8 pixels, row-major and tightly packed, drawn with its top left corner at
+// the client position (x, y): the changed part of a frame, so the rest of the window is not touched.
+fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
+    if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    let dc = raw_get_dc(w.raw)
+    if dc == 0usize { ret from_last_error() }
+    var info: BitmapInfo = zero
+    info.size = 40u32
+    info.width = i32(width)
+    info.height = 0i32 - i32(height)
+    info.planes = 1u16
+    info.bit_count = 32u16
+    let lines = raw_set_dib_bits(dc, i32(x), i32(y), width, height, 0i32, 0i32, 0u32, height, mem.cast[*const u8](&pixels[0usize]), &info, 0u32)
+    let released = raw_release_dc(w.raw, dc)
+    if lines == 0i32 && raw_last_error() != 0u32 { ret from_last_error() }
+    ret ok
+}
+
 // The handle and its module, for a `gpu.Surface` of kind `.Win32`.
 // Calls `handler` with the new client size in physical pixels each time the window is resized, from the window procedure, so
 // from inside the system's sizing loop while an edge is dragged (D5856).

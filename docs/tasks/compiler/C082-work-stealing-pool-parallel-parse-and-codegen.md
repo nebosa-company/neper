@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Back end |
 | score | 0.75 of 1 |
-| queue position | 15 of 45 (only position 1 is eligible for the next session; see README) |
+| queue position | 31 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -24,14 +24,18 @@ tool-complete release gates below pass.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> the front end runs in waves of eight workers (D321); the modules are lowered, selected and written as artifacts on eight workers with checkers that share the declarations (D325); and the same workers check the bodies and build both inlining oracles first, each with a checker forked from the program's and importing the types of a body copied from another worker's oracle (D326). A two-million-line program builds cold in 7.6 s debug and 7.4 s release where it took 29 and 26, its body sweep 0.6 s where it took 1.9 (1.3 s where it took 5.7 in release), the settle nothing on a cold build and the lowering not re-checking what the sweep checked (D327), and the bootstrap runs a thread inline. The names are validated on the workers too (D328), the artifact writer copies bytes with one runtime call (D329), and the allocator, the digest and the lexer lost their last quadratic and per-byte costs (D330): a million-line program builds cold in 3.0 s on Windows and 3.4 s on Linux, warm in half a second; the link's per-artifact passes run on the workers too, with SHA-256 and CRC-32C in hardware where the CPU has them (D336): a million-line program builds warm in a quarter of a second, the compiler in 65 ms
+> the front end runs in waves of eight workers (D321); the modules are lowered, selected and written as artifacts on eight workers with checkers that share the declarations (D325); and the same workers check the bodies and build both inlining oracles first, each with a checker forked from the program's and importing the types of a body copied from another worker's oracle (D326). A two-million-line program builds cold in 7.6 s debug and 7.4 s release where it took 29 and 26, its body sweep 0.6 s where it took 1.9 (1.3 s where it took 5.7 in release), the settle nothing on a cold build and the lowering not re-checking what the sweep checked (D327), and the bootstrap runs a thread inline. The names are validated on the workers too (D328), the artifact writer copies bytes with one runtime call (D329), and the allocator, the digest and the lexer lost their last quadratic and per-byte costs (D330): a million-line program builds cold in 3.0 s on Windows and 3.4 s on Linux, warm in half a second; the link's per-artifact passes run on the workers too, with SHA-256 and CRC-32C in hardware where the CPU has them (D336): a million-line program builds warm in a quarter of a second, the compiler in 65 ms. Moved to the end of the queue by the user's decision (D1579): what is left needs the declaration tables redesigned -- per-module tables merged in module order with every index relocated -- for at most the 152 ms of a 2.16 s sc500k build the declarations take (resolve 74 ms, the link from artifacts 130 ms), or function-level stealing across the D326/D327 coupling.
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
 - [ ] collecting the declarations, reachability and layout
-- [ ] the work is assigned statically, not stolen
+- [ ] the work is assigned statically, not stolen Stealing modules through a shared counter was built and measured
+- [ ] reverted (D1578): the compiler's body phase is bound by its largest module (`check.e`)
+- [ ] which no worker can split
+- [ ] on sc500k the lowering lost the static schedule's balance (1.7-1.9 s against 1.3-1.5 s)
+- [ ] the lever left is stealing a module's functions, across the D326/D327 coupling of checks to lowering
 
 Notes:
 
@@ -49,6 +53,12 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D329` — `os.copy_bytes`: one runtime copy where a byte loop stood, and the failure report in value order (`docs/decisions.md:6877`)
 - `D330` — The last three leaves, a Linux arena past two gibibytes, and a promotion bug found by measuring (`docs/decisions.md:6905`)
 - `D336` — Two hashes in hardware, the warm build's readers, and the link on the workers (`docs/decisions.md:7108`)
+
+## Code anchors
+
+Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
+
+- `check.e`: `src/lower.e`×15‡, `src/main.e`×5‡, `benchmarks/baseline/results/context-linux-d948.json`×2†, `benchmarks/baseline/results/context-windows-d948.json`×2†, `scripts/lint_bootstrap.py`×1, `tests/conformance/tools/fmt_check.expected.jsonl`×1
 
 ## Verification
 

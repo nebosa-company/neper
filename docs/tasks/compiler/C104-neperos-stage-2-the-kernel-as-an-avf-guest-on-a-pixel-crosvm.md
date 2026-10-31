@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / NeperOS |
 | score | 0.75 of 1 |
-| queue position | 30 of 142 (only position 1 is eligible for the next session; see README) |
+| queue position | 1 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -20,12 +20,6 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 ## Remaining work
 
 - [ ] (no gap clause in the queue — see the notes below)
-
-## Code anchors
-
-Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
-
-- `compatible`: `lib/e/ml/fingerprint.e`×11, `scripts/units_reference.py`×4, `lib/e/math/units.e`×3, `lib/e/fmt/brotli.e`×2‡, `lib/e/os/shell.windows.e`×2‡, `lib/e/algo/collect.e`×1, `lib/e/text/edit.e`×1, `lib/e/ui/navigation.e`×1‡
 
 ## Verification
 

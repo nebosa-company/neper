@@ -23,6 +23,7 @@ const QUEUE_COMPUTE: u32 = 2u32
 const MEMORY_HOST_VISIBLE: u32 = 2u32
 const MEMORY_HOST_COHERENT: u32 = 4u32
 const MEMORY_DEVICE_LOCAL: u32 = 1u32
+const MEMORY_HOST_CACHED: u32 = 8u32
 // Storage, device-address, and both transfer directions.
 const BUFFER_USAGE: u32 = 131107u32
 
@@ -66,6 +67,11 @@ type Api = struct {
     cmd_dispatch: fn(usize, u32, u32, u32),
     queue_submit: fn(usize, u32, *u8, usize) -> i32,
     queue_wait_idle: fn(usize) -> i32,
+    create_fence: fn(usize, *u8, usize, *usize) -> i32,
+    destroy_fence: fn(usize, usize, usize),
+    wait_for_fences: fn(usize, u32, *usize, u32, u64) -> i32,
+    reset_fences: fn(usize, u32, *usize) -> i32,
+    reset_command_buffer: fn(usize, u32) -> i32,
 }
 
 // A kernel made ready to dispatch (D1611): its shader module, the layout of its one push
@@ -108,6 +114,26 @@ type Context = struct {
     queue: usize,
     family: u32,
     memory_type: u32,
+    // The memory type for buffers the HOST reads back or fills in bulk (frame images, staging):
+    // host-visible, coherent and host-CACHED when the driver has one, else `memory_type`.
+    // Measured on Intel Iris Xe, whose only device-local host-visible type (flags 7) is uncached
+    // write-combined: a CPU read of it ran at ~90 MB/s (a 6.4 MB frame readback 70 ms, the
+    // staging read of an upload 106 ms), the cached type (flags 15) at ~4 GB/s (1.5 ms and 3 ms).
+    // Kernel buffers keep `memory_type`: on a discrete GPU the cached type is system RAM and a
+    // kernel reading it would cross PCIe, so only host-transfer buffers use `host_type`.
+    host_type: u32,
+    // Persistent submission state (D5927): `dispatch` used to create a command pool, a command buffer and a
+    // 24-byte argument buffer (vkCreateBuffer + vkAllocateMemory + vkMapMemory) per launch and end in
+    // vkQueueWaitIdle: 0.85 ms (Intel) and 1.38 ms (RTX 3080) for a one-workgroup launch. It now records into
+    // one command buffer of a pool made at `open`, submits with a fence and waits on that fence.
+    pool: usize,
+    command: usize,
+    fence: usize,
+    // The argument block of the launch in flight (launches wait, so one block serves them all).
+    args: Buffer,
+    // VK_KHR_swapchain and VK_KHR_incremental_present were enabled on the device (D5928).
+    swapchain: bool,
+    incremental: bool,
 }
 
 // A buffer: its handle and memory, its device address, and its bytes mapped on the host.
@@ -124,6 +150,8 @@ var api: Api = zero
 var loader: os.Lib = zero
 var loaded: bool = zero
 var instance: usize = zero
+// The instance was made with VK_KHR_surface and VK_KHR_win32_surface (D5928).
+var surface_ready: bool = zero
 // Device enumeration can be called by several application threads.
 var loader_locks: [1]sync.Mutex = zero
 
@@ -220,12 +248,17 @@ fn load(a: *mem.Arena) -> err {
         let closed = os.dlclose(library)
         ret dispatch_error
     }
+    let sync_error = load_sync(a, library)
+    if sync_error != ok {
+        let closed = os.dlclose(library)
+        ret sync_error
+    }
     let cache_error = load_pipeline_cache(a, library)
     if cache_error != ok {
         let closed = os.dlclose(library)
         ret cache_error
     }
-    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, unmap_memory: p18, get_buffer_device_address: p19, device_wait_idle: p20, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle }
+    api = Api { create_instance: p1, destroy_instance: p2, enumerate_physical_devices: p3, get_physical_device_properties2: p4, get_physical_device_features2: p5, get_physical_device_memory_properties: p6, get_physical_device_queue_family_properties: p7, create_device: p8, destroy_device: p9, get_device_queue: p10, create_buffer: p11, destroy_buffer: p12, get_buffer_memory_requirements: p13, allocate_memory: p14, free_memory: p15, bind_buffer_memory: p16, map_memory: p17, unmap_memory: p18, get_buffer_device_address: p19, device_wait_idle: p20, create_shader_module: api.create_shader_module, destroy_shader_module: api.destroy_shader_module, create_pipeline_layout: api.create_pipeline_layout, destroy_pipeline_layout: api.destroy_pipeline_layout, create_pipeline_cache: api.create_pipeline_cache, get_pipeline_cache_data: api.get_pipeline_cache_data, destroy_pipeline_cache: api.destroy_pipeline_cache, create_compute_pipelines: api.create_compute_pipelines, destroy_pipeline: api.destroy_pipeline, create_command_pool: api.create_command_pool, destroy_command_pool: api.destroy_command_pool, allocate_command_buffers: api.allocate_command_buffers, begin_command_buffer: api.begin_command_buffer, end_command_buffer: api.end_command_buffer, cmd_bind_pipeline: api.cmd_bind_pipeline, cmd_push_constants: api.cmd_push_constants, cmd_dispatch: api.cmd_dispatch, queue_submit: api.queue_submit, queue_wait_idle: api.queue_wait_idle, create_fence: api.create_fence, destroy_fence: api.destroy_fence, wait_for_fences: api.wait_for_fences, reset_fences: api.reset_fences, reset_command_buffer: api.reset_command_buffer }
     // One instance for the process: the application record, then the instance's.
     let (application, application_error) = record(a, 48usize)
     if application_error != ok {
@@ -240,8 +273,19 @@ fn load(a: *mem.Arena) -> err {
     }
     put32(create, 0usize, 1usize)
     put_pointer(create, 24usize, application)
+    // VK_KHR_surface and the host's surface extension, when the loader lists both (D5928): a swapchain needs them at instance creation.
+    surface_ready = enable_surface_extensions(a, library, create)
     var made = 0usize
-    if api.create_instance(&create[0usize], 0usize, &made) != 0i32 {
+    var created = api.create_instance(&create[0usize], 0usize, &made)
+    if created != 0i32 && surface_ready {
+        // A loader that lists the surface extensions but refuses them: the compute-only instance of before.
+        surface_ready = false
+        put32(create, 48usize, 0usize)
+        put64(create, 56usize, 0usize)
+        made = 0usize
+        created = api.create_instance(&create[0usize], 0usize, &made)
+    }
+    if created != 0i32 {
         let closed = os.dlclose(library)
         ret NoLoader
     }
@@ -444,6 +488,9 @@ fn open(a: *mem.Arena, physical: Physical) -> (Context, err) {
     put_pointer(create, 8usize, features)
     put32(create, 20usize, 1usize)
     put_pointer(create, 24usize, queue_create)
+    let (swapchain_enabled, incremental_enabled) = enable_device_extensions(a, physical.handle, create)
+    context.swapchain = swapchain_enabled
+    context.incremental = incremental_enabled
     var device = 0usize
     if api.create_device(physical.handle, &create[0usize], 0usize, &device) != 0i32 { ret (context, Failed) }
     context.device = device
@@ -456,17 +503,26 @@ fn open(a: *mem.Arena, physical: Physical) -> (Context, err) {
     let wanted = usize(MEMORY_HOST_VISIBLE) | usize(MEMORY_HOST_COHERENT)
     let types = get32(memory, 0usize)
     var chosen = 32usize
+    var cached = 32usize
     var kind = 0usize
     while kind < types && kind < 32usize {
         let flags = get32(memory, 4usize + kind * 8usize)
         // A host-visible, coherent type, a device-local one first where there is one.
         if (flags & wanted) == wanted {
             if chosen == 32usize || ((flags & usize(MEMORY_DEVICE_LOCAL)) != 0usize && (get32(memory, 4usize + chosen * 8usize) & usize(MEMORY_DEVICE_LOCAL)) == 0usize) { chosen = kind }
+            if cached == 32usize && (flags & usize(MEMORY_HOST_CACHED)) != 0usize { cached = kind }
         }
         kind += 1usize
     }
     if chosen == 32usize { ret (context, Unsupported) }
     context.memory_type = u32(chosen)
+    context.host_type = u32(chosen)
+    if cached != 32usize { context.host_type = u32(cached) }
+    let submission_error = make_submission(a, &context)
+    if submission_error != ok {
+        close(context)
+        ret (context, submission_error)
+    }
     ret (context, ok)
 }
 
@@ -507,6 +563,22 @@ fn load_dispatch(a: *mem.Arena, library: os.Lib) -> err {
     api.cmd_dispatch = q14
     api.queue_submit = q15
     api.queue_wait_idle = q16
+    ret ok
+}
+
+// Fences and command-buffer reset, for the persistent submission of `dispatch` (D5927).
+fn load_sync(a: *mem.Arena, library: os.Lib) -> err {
+    let (f1, g1) = os.dlsym[fn(usize, *u8, usize, *usize) -> i32](a, library, "vkCreateFence")
+    let (f2, g2) = os.dlsym[fn(usize, usize, usize)](a, library, "vkDestroyFence")
+    let (f3, g3) = os.dlsym[fn(usize, u32, *usize, u32, u64) -> i32](a, library, "vkWaitForFences")
+    let (f4, g4) = os.dlsym[fn(usize, u32, *usize) -> i32](a, library, "vkResetFences")
+    let (f5, g5) = os.dlsym[fn(usize, u32) -> i32](a, library, "vkResetCommandBuffer")
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok { ret NoLoader }
+    api.create_fence = f1
+    api.destroy_fence = f2
+    api.wait_for_fences = f3
+    api.reset_fences = f4
+    api.reset_command_buffer = f5
     ret ok
 }
 
@@ -661,30 +733,15 @@ fn destroy(context: Context, made: Pipeline) {
     if made.module != 0usize { api.destroy_shader_module(context.device, made.module, 0usize) }
 }
 
-// One dispatch of `groups` workgroups with the argument block at `block`, waited for: a
-// command pool for the launch, one command buffer, and the queue idle before it returns.
-// ponytail: a pool and an idle wait per launch; a queue's own pool and a fence per launch
-// when launches overlap.
+// One dispatch of `groups` workgroups with the argument block at `block`, waited for: recorded into the context's one
+// command buffer, submitted with its fence, and waited on that fence (D5927). The records it builds are returned to
+// the arena on exit: a window launching once a frame would otherwise grow the application arena by ~700 bytes a frame.
 fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32, y: u32, z: u32) -> err {
-    let (pool_create, pool_create_error) = record(a, 24usize)
-    if pool_create_error != ok { ret pool_create_error }
-    put32(pool_create, 0usize, 39usize)
-    put32(pool_create, 20usize, usize(context.family))
-    var pool = 0usize
-    if api.create_command_pool(context.device, &pool_create[0usize], 0usize, &pool) != 0i32 { ret Failed }
-    let answer = record_and_submit(a, context, made, pool, block, x, y, z)
-    api.destroy_command_pool(context.device, pool, 0usize)
-    ret answer
-}
-
-fn record_and_submit(a: *mem.Arena, context: Context, made: Pipeline, pool: usize, block: u64, x: u32, y: u32, z: u32) -> err {
-    let (allocate, allocate_error) = record(a, 32usize)
-    if allocate_error != ok { ret allocate_error }
-    put32(allocate, 0usize, 40usize)
-    put64(allocate, 16usize, pool)
-    put32(allocate, 28usize, 1usize)
-    var command = 0usize
-    if api.allocate_command_buffers(context.device, &allocate[0usize], &command) != 0i32 { ret Failed }
+    let checkpoint = mem.mark(a)
+    defer mem.reset(a, checkpoint)
+    let command = context.command
+    if command == 0usize || context.fence == 0usize { ret Failed }
+    if api.reset_command_buffer(command, 0u32) != 0i32 { ret Failed }
     let (begin, begin_error) = record(a, 32usize)
     if begin_error != ok { ret begin_error }
     put32(begin, 0usize, 42usize)
@@ -697,6 +754,11 @@ fn record_and_submit(a: *mem.Arena, context: Context, made: Pipeline, pool: usiz
     api.cmd_push_constants(command, made.layout, 32u32, 0u32, 8u32, &address[0usize])
     api.cmd_dispatch(command, x, y, z)
     if api.end_command_buffer(command) != 0i32 { ret Failed }
+    ret submit_and_wait(a, context, command)
+}
+
+// `command` submitted on the context's queue with its fence, and waited for.
+fn submit_and_wait(a: *mem.Arena, context: Context, command: usize) -> err {
     let (commands, commands_error) = record(a, 8usize)
     if commands_error != ok { ret commands_error }
     put64(commands, 0usize, command)
@@ -705,20 +767,72 @@ fn record_and_submit(a: *mem.Arena, context: Context, made: Pipeline, pool: usiz
     put32(submit, 0usize, 4usize)
     put32(submit, 40usize, 1usize)
     put_pointer(submit, 48usize, commands)
-    if api.queue_submit(context.queue, 1u32, &submit[0usize], 0usize) != 0i32 { ret Failed }
-    if api.queue_wait_idle(context.queue) != 0i32 { ret Failed }
+    if api.queue_submit(context.queue, 1u32, &submit[0usize], context.fence) != 0i32 { ret Failed }
+    var fence = context.fence
+    if api.wait_for_fences(context.device, 1u32, &fence, 1u32, 18446744073709551615u64) != 0i32 { ret Failed }
+    if api.reset_fences(context.device, 1u32, &fence) != 0i32 { ret Failed }
     ret ok
 }
+
+// The pool, command buffer, fence and argument block a context keeps for its life.
+fn make_submission(a: *mem.Arena, context: *Context) -> err {
+    let (pool_create, pool_create_error) = record(a, 24usize)
+    if pool_create_error != ok { ret pool_create_error }
+    put32(pool_create, 0usize, 39usize)
+    // RESET_COMMAND_BUFFER: the one buffer is re-recorded for every launch.
+    put32(pool_create, 16usize, 2usize)
+    put32(pool_create, 20usize, usize(context.family))
+    var pool = 0usize
+    if api.create_command_pool(context.device, &pool_create[0usize], 0usize, &pool) != 0i32 { ret Failed }
+    context.pool = pool
+    let (allocate, allocate_error) = record(a, 32usize)
+    if allocate_error != ok { ret allocate_error }
+    put32(allocate, 0usize, 40usize)
+    put64(allocate, 16usize, pool)
+    put32(allocate, 28usize, 1usize)
+    var command = 0usize
+    if api.allocate_command_buffers(context.device, &allocate[0usize], &command) != 0i32 { ret Failed }
+    context.command = command
+    let (fence_create, fence_create_error) = record(a, 24usize)
+    if fence_create_error != ok { ret fence_create_error }
+    put32(fence_create, 0usize, 8usize)
+    var fence = 0usize
+    if api.create_fence(context.device, &fence_create[0usize], 0usize, &fence) != 0i32 { ret Failed }
+    context.fence = fence
+    let (block, block_error) = buffer(a, *context, ARGS_BYTES)
+    if block_error != ok { ret block_error }
+    context.args = block
+    ret ok
+}
+
+// Room for a launch's argument block: 24 bytes of header and 16 bytes a kernel parameter.
+const ARGS_BYTES: usize = 4096usize
 
 fn close(context: Context) {
     if context.device == 0usize { ret }
     let idle = api.device_wait_idle(context.device)
+    if context.args.handle != 0usize { free(context, context.args) }
+    if context.fence != 0usize { api.destroy_fence(context.device, context.fence, 0usize) }
+    if context.pool != 0usize { api.destroy_command_pool(context.device, context.pool, 0usize) }
     api.destroy_device(context.device, 0usize)
 }
 
 // A buffer of `size` bytes: storage and device-addressable, its memory host-visible and
 // mapped for as long as it lives, so an upload or a download is a copy.
 fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
+    let (made, made_error) = buffer_in(a, context, size, false)
+    ret (made, made_error)
+}
+
+// The same for a buffer the host reads or fills in bulk (a frame image, a staging block): see `Context.host_type`.
+fn host_buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
+    let (made, made_error) = buffer_in(a, context, size, true)
+    ret (made, made_error)
+}
+
+fn buffer_in(a: *mem.Arena, context: Context, size: usize, host: bool) -> (Buffer, err) {
+    var memory_type = context.memory_type
+    if host { memory_type = context.host_type }
     var made: Buffer = zero
     var bytes_size = size
     if bytes_size == 0usize { bytes_size = 4usize }
@@ -733,7 +847,9 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     let (requirements, requirements_error) = record(a, 24usize)
     if requirements_error != ok { ret (rollback_buffer(context, made), requirements_error) }
     api.get_buffer_memory_requirements(context.device, handle, &requirements[0usize])
-    if (get32(requirements, 16usize) & (1usize << usize(context.memory_type))) == 0usize {
+    // A host type the buffer cannot live in falls back to the default one.
+    if host && (get32(requirements, 16usize) & (1usize << usize(memory_type))) == 0usize { memory_type = context.memory_type }
+    if (get32(requirements, 16usize) & (1usize << usize(memory_type))) == 0usize {
         ret (rollback_buffer(context, made), Unsupported)
     }
     let (flags, flags_error) = record(a, 24usize)
@@ -745,7 +861,7 @@ fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err) {
     put32(allocate, 0usize, 5usize)
     put_pointer(allocate, 8usize, flags)
     put64(allocate, 16usize, get64(requirements, 0usize))
-    put32(allocate, 24usize, usize(context.memory_type))
+    put32(allocate, 24usize, usize(memory_type))
     var memory = 0usize
     if api.allocate_memory(context.device, &allocate[0usize], 0usize, &memory) != 0i32 {
         ret (rollback_buffer(context, made), OutOfMemory)
@@ -846,5 +962,621 @@ fn buffer_unmaps_before_memory_free(a: *mem.Arena) -> err {
     context.device = 1usize
     free(context, made)
     if buffer_test_release_step != 2usize { ret Failed }
+    ret ok
+}
+
+// Eight u32 words, to read a Vulkan record by offset in a fake entry point.
+type TestWords = struct { w0: u32, w1: u32, w2: u32, w3: u32, w4: u32, w5: u32, w6: u32, w7: u32 }
+
+var memory_test_type: usize = zero
+
+fn memory_test_create(device: usize, create: *u8, allocator: usize, out: *usize) -> i32 {
+    *out = 51usize
+    ret 0i32
+}
+
+fn memory_test_noop_destroy(device: usize, handle: usize, allocator: usize) {
+}
+
+// Requirements: 4096 bytes, usable in memory types 0 and 2 only (bits 0b101) -- type 1 is excluded.
+fn memory_test_requirements(device: usize, handle: usize, out: *u8) {
+    let words = mem.cast[*TestWords](out)
+    words.w4 = 5u32
+}
+
+fn memory_test_allocate(device: usize, info: *u8, allocator: usize, out: *usize) -> i32 {
+    let words = mem.cast[*TestWords](info)
+    memory_test_type = usize(words.w6)
+    *out = 52usize
+    ret 0i32
+}
+
+fn memory_test_bind(device: usize, handle: usize, memory: usize, offset: u64) -> i32 {
+    ret 0i32
+}
+
+// Fails the map so the buffer rolls back after the allocation we want to observe.
+fn memory_test_map(device: usize, memory: usize, offset: u64, size: u64, flags: u32, out: **u8) -> i32 {
+    ret 1i32
+}
+
+// A host-transfer buffer comes from the host-cached type (Context.host_type) and a kernel buffer from
+// memory_type; a host type the buffer's requirements exclude falls back to memory_type.
+@test
+fn host_buffer_prefers_cached_memory_type(a: *mem.Arena) -> err {
+    let saved_api = api
+    defer { api = saved_api }
+    var fake: Api = zero
+    fake.create_buffer = memory_test_create
+    fake.destroy_buffer = memory_test_noop_destroy
+    fake.get_buffer_memory_requirements = memory_test_requirements
+    fake.allocate_memory = memory_test_allocate
+    fake.free_memory = memory_test_noop_destroy
+    fake.bind_buffer_memory = memory_test_bind
+    fake.map_memory = memory_test_map
+    api = fake
+    var context: Context = zero
+    context.device = 1usize
+    context.memory_type = 0u32
+    context.host_type = 2u32
+    let mark = mem.mark(a)
+    memory_test_type = 99usize
+    let (_, plain_error) = buffer(a, context, 64usize)
+    if plain_error == ok || memory_test_type != 0usize { ret Failed }
+    memory_test_type = 99usize
+    let (_, host_error) = host_buffer(a, context, 64usize)
+    if host_error == ok || memory_test_type != 2usize { ret Failed }
+    context.host_type = 1u32
+    memory_test_type = 99usize
+    let (_, excluded_error) = host_buffer(a, context, 64usize)
+    if excluded_error == ok || memory_test_type != 0usize { ret Failed }
+    mem.reset(a, mark)
+    ret ok
+}
+
+// ------------------------------------------------------------------ window system integration (D5928)
+//
+// VK_KHR_surface + VK_KHR_win32_surface on the instance, VK_KHR_swapchain (and VK_KHR_incremental_present when listed) on
+// the device. A frame image (a host buffer) is copied into the acquired swapchain image by the queue and presented, so
+// no pixel returns to the CPU. Win32 only: elsewhere `surface_ready` stays false and every call answers Unsupported.
+
+type Wsi = struct {
+    enumerate_instance_extensions: fn(*u8, *u32, *u8) -> i32,
+    enumerate_device_extensions: fn(usize, *u8, *u32, *u8) -> i32,
+    create_win32_surface: fn(usize, *u8, usize, *usize) -> i32,
+    destroy_surface: fn(usize, usize, usize),
+    surface_support: fn(usize, u32, usize, *u32) -> i32,
+    surface_capabilities: fn(usize, usize, *u8) -> i32,
+    surface_formats: fn(usize, usize, *u32, *u8) -> i32,
+    surface_present_modes: fn(usize, usize, *u32, *u32) -> i32,
+    create_swapchain: fn(usize, *u8, usize, *usize) -> i32,
+    destroy_swapchain: fn(usize, usize, usize),
+    get_swapchain_images: fn(usize, usize, *u32, *usize) -> i32,
+    acquire_next_image: fn(usize, usize, u64, usize, usize, *u32) -> i32,
+    queue_present: fn(usize, *u8) -> i32,
+    create_semaphore: fn(usize, *u8, usize, *usize) -> i32,
+    destroy_semaphore: fn(usize, usize, usize),
+    cmd_pipeline_barrier: fn(usize, u32, u32, u32, u32, *u8, u32, *u8, u32, *u8),
+    cmd_copy_buffer_to_image: fn(usize, usize, usize, u32, u32, *u8),
+}
+
+var wsi: Wsi = zero
+var wsi_loaded: bool = zero
+
+const VK_SUCCESS: i32 = 0i32
+const VK_SUBOPTIMAL: i32 = 1000001003i32
+const VK_OUT_OF_DATE: i32 = -1000001004i32
+const VK_DEVICE_LOST: i32 = -4i32
+const VK_SURFACE_LOST: i32 = -1000000000i32
+
+// Whether the NUL-padded 256-byte name at `at` in a list of VkExtensionProperties (260 bytes each) is `name`.
+fn extension_named(props: []const u8, index: usize, name: str) -> bool {
+    let at = index * 260usize
+    var k = 0usize
+    while k < name.len {
+        if props[at + k] != name[k] { ret false }
+        k += 1usize
+    }
+    ret props[at + name.len] == 0u8
+}
+
+fn extension_listed(props: []const u8, count: usize, name: str) -> bool {
+    var i = 0usize
+    while i < count {
+        if extension_named(props, i, name) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn load_wsi(a: *mem.Arena, library: os.Lib) -> bool {
+    let (w1, h1) = os.dlsym[fn(*u8, *u32, *u8) -> i32](a, library, "vkEnumerateInstanceExtensionProperties")
+    let (w2, h2) = os.dlsym[fn(usize, *u8, *u32, *u8) -> i32](a, library, "vkEnumerateDeviceExtensionProperties")
+    if h1 != ok || h2 != ok { ret false }
+    wsi.enumerate_instance_extensions = w1
+    wsi.enumerate_device_extensions = w2
+    wsi_loaded = true
+    ret true
+}
+
+// The names of the instance extensions the loader lists, written into `create` (VkInstanceCreateInfo: enabledExtensionCount
+// at 48, ppEnabledExtensionNames at 56) when both surface extensions are there. False when not, `create` untouched.
+fn enable_surface_extensions(a: *mem.Arena, library: os.Lib, create: []u8) -> bool {
+    if os.NATIVE_SEPARATOR != 92u8 { ret false }
+    if !load_wsi(a, library) { ret false }
+    var count = 0u32
+    var no_layer: *u8 = zero
+    var no_props: *u8 = zero
+    if wsi.enumerate_instance_extensions(no_layer, &count, no_props) != 0i32 || count == 0u32 { ret false }
+    let (props, props_error) = record(a, usize(count) * 260usize)
+    if props_error != ok { ret false }
+    if wsi.enumerate_instance_extensions(no_layer, &count, &props[0usize]) != 0i32 { ret false }
+    if !extension_listed(props, usize(count), "VK_KHR_surface") || !extension_listed(props, usize(count), "VK_KHR_win32_surface") { ret false }
+    let (first, first_error) = c_string(a, "VK_KHR_surface")
+    if first_error != ok { ret false }
+    let (second, second_error) = c_string(a, "VK_KHR_win32_surface")
+    if second_error != ok { ret false }
+    let (names, names_error) = record(a, 16usize)
+    if names_error != ok { ret false }
+    put_pointer(names, 0usize, first)
+    put_pointer(names, 8usize, second)
+    put32(create, 48usize, 2usize)
+    put_pointer(create, 56usize, names)
+    // The surface functions are the loader's own exports; load them now so a missing one disables the feature, not the instance.
+    let (s1, t1) = os.dlsym[fn(usize, *u8, usize, *usize) -> i32](a, library, "vkCreateWin32SurfaceKHR")
+    let (s2, t2) = os.dlsym[fn(usize, usize, usize)](a, library, "vkDestroySurfaceKHR")
+    let (s3, t3) = os.dlsym[fn(usize, u32, usize, *u32) -> i32](a, library, "vkGetPhysicalDeviceSurfaceSupportKHR")
+    let (s4, t4) = os.dlsym[fn(usize, usize, *u8) -> i32](a, library, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")
+    let (s5, t5) = os.dlsym[fn(usize, usize, *u32, *u8) -> i32](a, library, "vkGetPhysicalDeviceSurfaceFormatsKHR")
+    let (s6, t6) = os.dlsym[fn(usize, usize, *u32, *u32) -> i32](a, library, "vkGetPhysicalDeviceSurfacePresentModesKHR")
+    if t1 != ok || t2 != ok || t3 != ok || t4 != ok || t5 != ok || t6 != ok { ret false }
+    wsi.create_win32_surface = s1
+    wsi.destroy_surface = s2
+    wsi.surface_support = s3
+    wsi.surface_capabilities = s4
+    wsi.surface_formats = s5
+    wsi.surface_present_modes = s6
+    let (d1, e1) = os.dlsym[fn(usize, *u8, usize, *usize) -> i32](a, library, "vkCreateSwapchainKHR")
+    let (d2, e2) = os.dlsym[fn(usize, usize, usize)](a, library, "vkDestroySwapchainKHR")
+    let (d3, e3) = os.dlsym[fn(usize, usize, *u32, *usize) -> i32](a, library, "vkGetSwapchainImagesKHR")
+    let (d4, e4) = os.dlsym[fn(usize, usize, u64, usize, usize, *u32) -> i32](a, library, "vkAcquireNextImageKHR")
+    let (d5, e5) = os.dlsym[fn(usize, *u8) -> i32](a, library, "vkQueuePresentKHR")
+    let (d6, e6) = os.dlsym[fn(usize, *u8, usize, *usize) -> i32](a, library, "vkCreateSemaphore")
+    let (d7, e7) = os.dlsym[fn(usize, usize, usize)](a, library, "vkDestroySemaphore")
+    let (d8, e8) = os.dlsym[fn(usize, u32, u32, u32, u32, *u8, u32, *u8, u32, *u8)](a, library, "vkCmdPipelineBarrier")
+    let (d9, e9) = os.dlsym[fn(usize, usize, usize, u32, u32, *u8)](a, library, "vkCmdCopyBufferToImage")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret false }
+    wsi.create_swapchain = d1
+    wsi.destroy_swapchain = d2
+    wsi.get_swapchain_images = d3
+    wsi.acquire_next_image = d4
+    wsi.queue_present = d5
+    wsi.create_semaphore = d6
+    wsi.destroy_semaphore = d7
+    wsi.cmd_pipeline_barrier = d8
+    wsi.cmd_copy_buffer_to_image = d9
+    ret true
+}
+
+// `text` and a NUL, as C reads a name.
+fn c_string(a: *mem.Arena, text: str) -> ([]u8, err) {
+    let (bytes, bytes_error) = record(a, text.len + 1usize)
+    if bytes_error != ok { ret (bytes, bytes_error) }
+    var at = 0usize
+    while at < text.len {
+        bytes[at] = text[at]
+        at += 1usize
+    }
+    ret (bytes, ok)
+}
+
+// VK_KHR_swapchain, and VK_KHR_incremental_present when the device lists it, into a VkDeviceCreateInfo record (enabledExtensionCount
+// at 48, ppEnabledExtensionNames at 56). (swapchain, incremental) as enabled.
+fn enable_device_extensions(a: *mem.Arena, physical: usize, create: []u8) -> (bool, bool) {
+    if !surface_ready { ret (false, false) }
+    var count = 0u32
+    var no_layer: *u8 = zero
+    var no_props: *u8 = zero
+    if wsi.enumerate_device_extensions(physical, no_layer, &count, no_props) != 0i32 || count == 0u32 { ret (false, false) }
+    let (props, props_error) = record(a, usize(count) * 260usize)
+    if props_error != ok { ret (false, false) }
+    if wsi.enumerate_device_extensions(physical, no_layer, &count, &props[0usize]) != 0i32 { ret (false, false) }
+    if !extension_listed(props, usize(count), "VK_KHR_swapchain") { ret (false, false) }
+    let incremental = extension_listed(props, usize(count), "VK_KHR_incremental_present")
+    let (names, names_error) = record(a, 16usize)
+    if names_error != ok { ret (false, false) }
+    let (first, first_error) = c_string(a, "VK_KHR_swapchain")
+    if first_error != ok { ret (false, false) }
+    put_pointer(names, 0usize, first)
+    var enabled = 1usize
+    if incremental {
+        let (second, second_error) = c_string(a, "VK_KHR_incremental_present")
+        if second_error != ok { ret (false, false) }
+        put_pointer(names, 8usize, second)
+        enabled = 2usize
+    }
+    put32(create, 48usize, enabled)
+    put_pointer(create, 56usize, names)
+    ret (true, incremental)
+}
+
+error Empty
+
+// A window surface and its swapchain. The surface outlives swapchains (a resize makes a new swapchain on the same surface).
+type Swapchain = struct {
+    surface: usize,
+    handle: usize,
+    format: u32,
+    width: u32,
+    height: u32,
+    count: u32,
+    mode: u32,
+    images: [8]usize,
+    render_sems: [8]usize,
+    // Whether image `i` has been presented before, so its layout is PRESENT_SRC and its pixels are kept (else UNDEFINED).
+    used: [8]bool,
+    acquire_sem: usize,
+    fence: usize,
+    fence_pending: bool,
+    command: usize,
+    incremental: bool,
+}
+
+// A Win32 surface for `hwnd` that this context's queue family can present to.
+fn surface_open(a: *mem.Arena, context: Context, hwnd: usize, hinstance: usize) -> (usize, err) {
+    if !surface_ready || !context.swapchain || hwnd == 0usize { ret (0usize, Unsupported) }
+    let (create, create_error) = record(a, 40usize)
+    if create_error != ok { ret (0usize, create_error) }
+    put32(create, 0usize, 1000009000usize)
+    put64(create, 24usize, hinstance)
+    put64(create, 32usize, hwnd)
+    var surface = 0usize
+    if wsi.create_win32_surface(instance, &create[0usize], 0usize, &surface) != 0i32 { ret (0usize, Failed) }
+    var supported = 0u32
+    if wsi.surface_support(context.physical, context.family, surface, &supported) != 0i32 || supported == 0u32 {
+        wsi.destroy_surface(instance, surface, 0usize)
+        ret (0usize, Unsupported)
+    }
+    ret (surface, ok)
+}
+
+fn surface_close(surface: usize) {
+    if surface != 0usize { wsi.destroy_surface(instance, surface, 0usize) }
+}
+
+// The present mode to use: `preferred` when the surface lists it, else the best of MAILBOX (1), IMMEDIATE (0), FIFO (2, which
+// every surface has) when `preferred` is 4294967295. Neither of the first two paces a 15 fps interface to the display's refresh.
+fn pick_present_mode(modes: []const u8, count: usize, preferred: u32) -> u32 {
+    if preferred != 4294967295u32 {
+        var i = 0usize
+        while i < count {
+            if u32(get32(modes, i * 4usize)) == preferred { ret preferred }
+            i += 1usize
+        }
+        ret 2u32
+    }
+    var mailbox = false
+    var immediate = false
+    var i = 0usize
+    while i < count {
+        let mode = get32(modes, i * 4usize)
+        if mode == 1usize { mailbox = true }
+        if mode == 0usize { immediate = true }
+        i += 1usize
+    }
+    if mailbox { ret 1u32 }
+    if immediate { ret 0u32 }
+    ret 2u32
+}
+
+// A swapchain on `surface` for a window of `want_w` x `want_h` (the surface's current extent wins when it has one), reusing
+// `old`'s command buffer, fence and acquire semaphore and chaining `old.handle` as oldSwapchain (the caller retires `old` after).
+// `Empty` when the window has no area (minimised); `Unsupported` when no B8G8R8A8_UNORM / TRANSFER_DST / opaque surface exists.
+fn swapchain_make(a: *mem.Arena, context: Context, surface: usize, want_w: u32, want_h: u32, mode: u32, old: Swapchain) -> (Swapchain, err) {
+    var made: Swapchain = zero
+    let checkpoint = mem.mark(a)
+    defer mem.reset(a, checkpoint)
+    let (caps, caps_error) = record(a, 64usize)
+    if caps_error != ok { ret (made, caps_error) }
+    if wsi.surface_capabilities(context.physical, surface, &caps[0usize]) != 0i32 { ret (made, Failed) }
+    var width = u32(get32(caps, 8usize))
+    var height = u32(get32(caps, 12usize))
+    if width == 4294967295u32 {
+        width = want_w
+        height = want_h
+    }
+    if width == 0u32 || height == 0u32 { ret (made, Empty) }
+    if (get32(caps, 48usize) & 2usize) == 0usize || (get32(caps, 44usize) & 1usize) == 0usize { ret (made, Unsupported) }
+    var min_images = u32(get32(caps, 0usize)) + 1u32
+    if min_images < 3u32 { min_images = 3u32 }
+    let max_images = u32(get32(caps, 4usize))
+    if max_images != 0u32 && min_images > max_images { min_images = max_images }
+    if min_images > 8u32 { min_images = 8u32 }
+    var format_count = 0u32
+    var no_formats: *u8 = zero
+    if wsi.surface_formats(context.physical, surface, &format_count, no_formats) != 0i32 || format_count == 0u32 { ret (made, Failed) }
+    let (formats, formats_error) = record(a, usize(format_count) * 8usize)
+    if formats_error != ok { ret (made, formats_error) }
+    if wsi.surface_formats(context.physical, surface, &format_count, &formats[0usize]) != 0i32 { ret (made, Failed) }
+    var format_found = false
+    var f = 0usize
+    while f < usize(format_count) {
+        if get32(formats, f * 8usize) == 44usize && get32(formats, f * 8usize + 4usize) == 0usize { format_found = true }
+        f += 1usize
+    }
+    if !format_found { ret (made, Unsupported) }
+    var mode_count = 0u32
+    var no_modes: *u32 = zero
+    if wsi.surface_present_modes(context.physical, surface, &mode_count, no_modes) != 0i32 || mode_count == 0u32 { ret (made, Failed) }
+    let (modes, modes_error) = record(a, usize(mode_count) * 4usize)
+    if modes_error != ok { ret (made, modes_error) }
+    if wsi.surface_present_modes(context.physical, surface, &mode_count, mem.cast[*u32](&modes[0usize])) != 0i32 { ret (made, Failed) }
+    let chosen_mode = pick_present_mode(modes, usize(mode_count), mode)
+    let (create, create_error) = record(a, 104usize)
+    if create_error != ok { ret (made, create_error) }
+    put32(create, 0usize, 1000001000usize)
+    put64(create, 24usize, surface)
+    put32(create, 32usize, usize(min_images))
+    put32(create, 36usize, 44usize)
+    put32(create, 40usize, 0usize)
+    put32(create, 44usize, usize(width))
+    put32(create, 48usize, usize(height))
+    put32(create, 52usize, 1usize)
+    // TRANSFER_DST: the frame is copied in.
+    put32(create, 56usize, 2usize)
+    // Exclusive sharing, identity transform (1), opaque (1), clipped.
+    put32(create, 80usize, 1usize)
+    put32(create, 84usize, 1usize)
+    put32(create, 88usize, usize(chosen_mode))
+    put32(create, 92usize, 1usize)
+    put64(create, 96usize, old.handle)
+    var handle = 0usize
+    let status = wsi.create_swapchain(context.device, &create[0usize], 0usize, &handle)
+    if status != 0i32 { ret (made, Failed) }
+    made.surface = surface
+    made.handle = handle
+    made.format = 44u32
+    made.width = width
+    made.height = height
+    made.mode = chosen_mode
+    made.incremental = context.incremental
+    var count = 0u32
+    var no_images: *usize = zero
+    if wsi.get_swapchain_images(context.device, handle, &count, no_images) != 0i32 || count == 0u32 || count > 8u32 {
+        wsi.destroy_swapchain(context.device, handle, 0usize)
+        ret (zero, Failed)
+    }
+    var images: [8]usize = zero
+    if wsi.get_swapchain_images(context.device, handle, &count, &images[0usize]) != 0i32 {
+        wsi.destroy_swapchain(context.device, handle, 0usize)
+        ret (zero, Failed)
+    }
+    made.count = count
+    made.images = images
+    var i = 0usize
+    while i < usize(count) {
+        let (semaphore_create, semaphore_create_error) = record(a, 24usize)
+        if semaphore_create_error != ok {
+            swapchain_retire(context, made)
+            ret (zero, semaphore_create_error)
+        }
+        put32(semaphore_create, 0usize, 9usize)
+        var semaphore = 0usize
+        if wsi.create_semaphore(context.device, &semaphore_create[0usize], 0usize, &semaphore) != 0i32 {
+            swapchain_retire(context, made)
+            ret (zero, Failed)
+        }
+        made.render_sems[i] = semaphore
+        i += 1usize
+    }
+    made.command = old.command
+    made.fence = old.fence
+    made.acquire_sem = old.acquire_sem
+    if made.command == 0usize {
+        let (allocate, allocate_error) = record(a, 32usize)
+        if allocate_error != ok {
+            swapchain_retire(context, made)
+            ret (zero, allocate_error)
+        }
+        put32(allocate, 0usize, 40usize)
+        put64(allocate, 16usize, context.pool)
+        put32(allocate, 28usize, 1usize)
+        var command = 0usize
+        if api.allocate_command_buffers(context.device, &allocate[0usize], &command) != 0i32 {
+            swapchain_retire(context, made)
+            ret (zero, Failed)
+        }
+        made.command = command
+        let (fence_create, fence_create_error) = record(a, 24usize)
+        if fence_create_error != ok {
+            swapchain_retire(context, made)
+            ret (zero, fence_create_error)
+        }
+        put32(fence_create, 0usize, 8usize)
+        var fence = 0usize
+        if api.create_fence(context.device, &fence_create[0usize], 0usize, &fence) != 0i32 {
+            swapchain_retire(context, made)
+            ret (zero, Failed)
+        }
+        made.fence = fence
+        let (acquire_create, acquire_create_error) = record(a, 24usize)
+        if acquire_create_error != ok {
+            swapchain_free(context, made)
+            ret (zero, acquire_create_error)
+        }
+        put32(acquire_create, 0usize, 9usize)
+        var acquire = 0usize
+        if wsi.create_semaphore(context.device, &acquire_create[0usize], 0usize, &acquire) != 0i32 {
+            swapchain_free(context, made)
+            ret (zero, Failed)
+        }
+        made.acquire_sem = acquire
+    }
+    ret (made, ok)
+}
+
+// An old swapchain's own objects (its handle and render semaphores), once the queue is idle; its command buffer, fence and
+// acquire semaphore belong to the new one (`swapchain_make` took them).
+fn swapchain_retire(context: Context, old: Swapchain) {
+    if old.handle == 0usize { ret }
+    let idle = api.device_wait_idle(context.device)
+    var i = 0usize
+    while i < usize(old.count) {
+        if old.render_sems[i] != 0usize { wsi.destroy_semaphore(context.device, old.render_sems[i], 0usize) }
+        i += 1usize
+    }
+    wsi.destroy_swapchain(context.device, old.handle, 0usize)
+}
+
+// Everything a swapchain owns, fence and acquire semaphore included: for a close, and a failed `swapchain_make`.
+fn swapchain_free(context: Context, sc: Swapchain) {
+    if sc.handle == 0usize { ret }
+    swapchain_retire(context, sc)
+    if sc.fence != 0usize { api.destroy_fence(context.device, sc.fence, 0usize) }
+    if sc.acquire_sem != 0usize { wsi.destroy_semaphore(context.device, sc.acquire_sem, 0usize) }
+}
+
+// Waits for the copy of the previous present, so its source frame is the CPU's again.
+fn swapchain_wait(context: Context, sc: *Swapchain) -> err {
+    if !sc.fence_pending { ret ok }
+    var fence = sc.fence
+    if api.wait_for_fences(context.device, 1u32, &fence, 1u32, 18446744073709551615u64) != 0i32 { ret Failed }
+    if api.reset_fences(context.device, 1u32, &fence) != 0i32 { ret Failed }
+    sc.fence_pending = false
+    ret ok
+}
+
+// The next image to draw into: (index, status) with the raw VkResult (0 ok, 1000001003 suboptimal, -1000001004 out of date,
+// 2 timeout, 1 not ready). Waits up to 250 ms, so a window that is not being shown does not hang the program.
+fn swapchain_acquire(context: Context, sc: *Swapchain) -> (u32, i32) {
+    var index = 0u32
+    let status = wsi.acquire_next_image(context.device, sc.handle, 250000000u64, sc.acquire_sem, 0usize, &index)
+    ret (index, status)
+}
+
+// Copies the rectangle (x, y, w, h) of `source` (a buffer of `source_width` pixel rows, B8G8R8A8) into acquired image `index`,
+// and presents it, telling the compositor the same rectangle when VK_KHR_incremental_present is on. The raw VkResult of the
+// present (VK_DEVICE_LOST when recording or the submit failed).
+fn swapchain_present(a: *mem.Arena, context: Context, sc: *Swapchain, index: u32, source: usize, source_width: u32, x: u32, y: u32, w: u32, h: u32) -> i32 {
+    let checkpoint = mem.mark(a)
+    defer mem.reset(a, checkpoint)
+    let image = sc.images[usize(index)]
+    let command = sc.command
+    if api.reset_command_buffer(command, 0u32) != 0i32 { ret VK_DEVICE_LOST }
+    let (begin, begin_error) = record(a, 32usize)
+    if begin_error != ok { ret VK_DEVICE_LOST }
+    put32(begin, 0usize, 42usize)
+    put32(begin, 16usize, 1usize)
+    if api.begin_command_buffer(command, &begin[0usize]) != 0i32 { ret VK_DEVICE_LOST }
+    let (barrier, barrier_error) = record(a, 72usize)
+    if barrier_error != ok { ret VK_DEVICE_LOST }
+    put32(barrier, 0usize, 45usize)
+    // Before the copy: nothing waits on the image but the copy; a presented image keeps its pixels (PRESENT_SRC), a new one has none.
+    put32(barrier, 20usize, 4096usize)
+    if sc.used[usize(index)] { put32(barrier, 24usize, 1000001002usize) } else { put32(barrier, 24usize, 0usize) }
+    put32(barrier, 28usize, 7usize)
+    put32(barrier, 32usize, 4294967295usize)
+    put32(barrier, 36usize, 4294967295usize)
+    put64(barrier, 40usize, image)
+    put32(barrier, 48usize, 1usize)
+    put32(barrier, 56usize, 1usize)
+    put32(barrier, 64usize, 1usize)
+    var no_barriers: *u8 = zero
+    wsi.cmd_pipeline_barrier(command, 1u32, 4096u32, 0u32, 0u32, no_barriers, 0u32, no_barriers, 1u32, &barrier[0usize])
+    let (region, region_error) = record(a, 56usize)
+    if region_error != ok { ret VK_DEVICE_LOST }
+    put64(region, 0usize, (usize(y) * usize(source_width) + usize(x)) * 4usize)
+    put32(region, 8usize, usize(source_width))
+    put32(region, 16usize, 1usize)
+    put32(region, 28usize, 1usize)
+    put32(region, 32usize, usize(x))
+    put32(region, 36usize, usize(y))
+    put32(region, 44usize, usize(w))
+    put32(region, 48usize, usize(h))
+    put32(region, 52usize, 1usize)
+    wsi.cmd_copy_buffer_to_image(command, source, image, 7u32, 1u32, &region[0usize])
+    // After it: the image becomes the presentation engine's.
+    put32(barrier, 16usize, 4096usize)
+    put32(barrier, 20usize, 0usize)
+    put32(barrier, 24usize, 7usize)
+    put32(barrier, 28usize, 1000001002usize)
+    wsi.cmd_pipeline_barrier(command, 4096u32, 8192u32, 0u32, 0u32, no_barriers, 0u32, no_barriers, 1u32, &barrier[0usize])
+    if api.end_command_buffer(command) != 0i32 { ret VK_DEVICE_LOST }
+    let (commands, commands_error) = record(a, 8usize)
+    if commands_error != ok { ret VK_DEVICE_LOST }
+    put64(commands, 0usize, command)
+    let (wait_semaphores, wait_error) = record(a, 8usize)
+    if wait_error != ok { ret VK_DEVICE_LOST }
+    put64(wait_semaphores, 0usize, sc.acquire_sem)
+    let (wait_stages, stages_error) = record(a, 4usize)
+    if stages_error != ok { ret VK_DEVICE_LOST }
+    put32(wait_stages, 0usize, 4096usize)
+    let (signal_semaphores, signal_error) = record(a, 8usize)
+    if signal_error != ok { ret VK_DEVICE_LOST }
+    put64(signal_semaphores, 0usize, sc.render_sems[usize(index)])
+    let (submit, submit_error) = record(a, 72usize)
+    if submit_error != ok { ret VK_DEVICE_LOST }
+    put32(submit, 0usize, 4usize)
+    put32(submit, 16usize, 1usize)
+    put_pointer(submit, 24usize, wait_semaphores)
+    put_pointer(submit, 32usize, wait_stages)
+    put32(submit, 40usize, 1usize)
+    put_pointer(submit, 48usize, commands)
+    put32(submit, 56usize, 1usize)
+    put_pointer(submit, 64usize, signal_semaphores)
+    if api.queue_submit(context.queue, 1u32, &submit[0usize], sc.fence) != 0i32 { ret VK_DEVICE_LOST }
+    sc.fence_pending = true
+    sc.used[usize(index)] = true
+    let (present, present_error) = record(a, 64usize)
+    if present_error != ok { ret VK_DEVICE_LOST }
+    put32(present, 0usize, 1000001001usize)
+    put32(present, 16usize, 1usize)
+    put_pointer(present, 24usize, signal_semaphores)
+    put32(present, 32usize, 1usize)
+    let (swapchains, swapchains_error) = record(a, 8usize)
+    if swapchains_error != ok { ret VK_DEVICE_LOST }
+    put64(swapchains, 0usize, sc.handle)
+    put_pointer(present, 40usize, swapchains)
+    let (indices, indices_error) = record(a, 4usize)
+    if indices_error != ok { ret VK_DEVICE_LOST }
+    put32(indices, 0usize, usize(index))
+    put_pointer(present, 48usize, indices)
+    if sc.incremental {
+        // VkPresentRegionsKHR { sType, pNext, swapchainCount, pRegions } -> VkPresentRegionKHR { rectangleCount, pRectangles } -> VkRectLayerKHR.
+        let (rectangle, rectangle_error) = record(a, 20usize)
+        if rectangle_error != ok { ret VK_DEVICE_LOST }
+        put32(rectangle, 0usize, usize(x))
+        put32(rectangle, 4usize, usize(y))
+        put32(rectangle, 8usize, usize(w))
+        put32(rectangle, 12usize, usize(h))
+        let (present_region, present_region_error) = record(a, 16usize)
+        if present_region_error != ok { ret VK_DEVICE_LOST }
+        put32(present_region, 0usize, 1usize)
+        put_pointer(present_region, 8usize, rectangle)
+        let (regions, regions_error) = record(a, 32usize)
+        if regions_error != ok { ret VK_DEVICE_LOST }
+        put32(regions, 0usize, 1000084000usize)
+        put32(regions, 16usize, 1usize)
+        put_pointer(regions, 24usize, present_region)
+        put_pointer(present, 8usize, regions)
+    }
+    ret wsi.queue_present(context.queue, &present[0usize])
+}
+
+// The present mode picked from what the surface lists (D5928): MAILBOX, then IMMEDIATE, then FIFO; a named mode when listed.
+@test
+fn present_mode_prefers_mailbox_then_immediate(a: *mem.Arena) -> err {
+    var modes: [12]u8 = zero
+    modes[0usize] = 2u8
+    modes[4usize] = 0u8
+    modes[8usize] = 1u8
+    if pick_present_mode(modes[0usize..12usize], 3usize, 4294967295u32) != 1u32 { ret Failed }
+    var without: [8]u8 = zero
+    without[0usize] = 2u8
+    without[4usize] = 0u8
+    if pick_present_mode(without[0usize..8usize], 2usize, 4294967295u32) != 0u32 { ret Failed }
+    if pick_present_mode(without[0usize..4usize], 1usize, 4294967295u32) != 2u32 { ret Failed }
+    if pick_present_mode(modes[0usize..12usize], 3usize, 0u32) != 0u32 { ret Failed }
+    if pick_present_mode(without[0usize..4usize], 1usize, 1u32) != 2u32 { ret Failed }
     ret ok
 }

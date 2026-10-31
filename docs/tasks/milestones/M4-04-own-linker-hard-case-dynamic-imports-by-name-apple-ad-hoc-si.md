@@ -19,15 +19,15 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Spec sections
 
-- `docs/spec.md:4192` 13. Toolchain
-  - `docs/spec.md:4307` Diagnostics
-  - `docs/spec.md:4326` Program entry
-  - `docs/spec.md:4366` Testing
-  - `docs/spec.md:4530` Linking
-  - `docs/spec.md:4598` Target CPU levels
-  - `docs/spec.md:4655` Debug information
-  - `docs/spec.md:4749` Editor integration
-  - `docs/spec.md:4775` Standard library
+- `docs/spec.md:4229` 13. Toolchain
+  - `docs/spec.md:4354` Diagnostics
+  - `docs/spec.md:4373` Program entry
+  - `docs/spec.md:4413` Testing
+  - `docs/spec.md:4577` Linking
+  - `docs/spec.md:4645` Target CPU levels
+  - `docs/spec.md:4702` Debug information
+  - `docs/spec.md:4796` Editor integration
+  - `docs/spec.md:4822` Standard library
 
 ## Decisions to read first
 
@@ -35,8 +35,9 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Code anchors
 
-- `.dll`: `lib/e/os.windows.e`×124‡, `lib/e/os/shell.windows.e`×95‡, `src/link_pe.e`×2, `scripts/algos/decisions-pending.md`×1†, `tests/conformance/tools/manifest_unsafe/src/main.e`×1
-- nearest existing implementation: `src/link_pe.e`, `src/link_elf.e`, `src/em_link.e`†, `src/object_coff.e` († over 40 KB, ‡ over 120 KB — read by region)
+- `.dll`: `lib/e/os.windows.e`×135‡, `lib/e/os/shell.windows.e`×95‡, `lib/x/postgresql/capi.windows.e`×34, `lib/x/sqlite/capi.windows.e`×30, `scripts/v3_states_lib.ps1`×25, `lib/x/microsoft/capi.windows.e`×21, `lib/x/oracle/mysqlclient.windows.e`×20, `scripts/grab_v3_dialogs.ps1`×16
+- `.dylib`: `lib/e/os.macos.e`×25‡, `lib/e/os/shell.macos.e`×14‡, `src/link_macho.e`×4, `lib/e/gpu/metal.macos.e`×2
+- nearest existing implementation: `src/link_pe.e`, `src/link_elf.e`†, `src/em_link.e`†, `src/object_coff.e` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

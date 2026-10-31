@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.00 of 1 |
-| queue position | 142 of 142 (only position 1 is eligible for the next session; see README) |
+| score | 0.85 of 1 |
+| queue position | 57 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger.
+> Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger. PART (D2840): e.algo.deflate is zlib's lazy matcher (levels 6 and 9, 64 KiB window across blocks, stored/fixed/dynamic Huffman per 16383-token block); round-trips against Python zlib on 15 inputs x 3 levels, byte-identical to zlib 6 on four inputs, benchmark chart IDAT 11,277 B vs 11,283; e.fmt.png table CRC and deferred Adler. NOT MET: encoder alone about 5x C zlib (9.6 ms vs 1.7 ms on the 345,840-byte raster); the 'at least as fast as matplotlib' criterion is met only by a same-day comparison, not the nine-run protocol; adaptive PNG row filters not built. PART (D3700): png.encode_adaptive with libpng min-sum row filters and indexed output; fmt_png_adaptive byte-identical to Pillow on non-indexed cases, smaller than zlib 6 plus 1%. Missing: the deflate matcher is still ~4x C zlib, the nine-run protocol. PART (D4400): deflate/PNG encode about 2x faster with byte-identical output (callgrind 2.97 G -> ~1.5 G instructions, 800x500 adaptive ~225 -> ~120 ms wall, 48-case old/new differential identical, algo_deflate/fmt_png/fmt_png_adaptive/fmt_zlib/fmt_gzip pass). Still ~1.5-2x C zlib; nine-run protocol not run.
 
 ## Remaining work
 

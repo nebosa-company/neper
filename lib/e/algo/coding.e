@@ -173,6 +173,7 @@ fn bit_writer(out: []u8) -> BitWriter { ret BitWriter { out: out, bits: 0usize }
 
 // Appends the low `width` bits of `value`, most significant first; `width <= 64`.
 fn write_bits(w: *BitWriter, value: u64, width: u32) -> err {
+    if width > 64u32 { ret Invalid }
     if w.bits + usize(width) > w.out.len * 8usize { ret TooSmall }
     var remaining = width
     while remaining > 0u32 {
@@ -192,6 +193,7 @@ fn written(w: *const BitWriter) -> usize { ret (w.bits + 7usize) / 8usize }
 fn bit_reader(data: []const u8) -> BitReader { ret BitReader { data: data, bits: 0usize } }
 
 fn read_bits(r: *BitReader, width: u32) -> (u64, err) {
+    if width > 64u32 { ret (0u64, Invalid) }
     if r.bits + usize(width) > r.data.len * 8usize { ret (0u64, Invalid) }
     var value = 0u64
     var remaining = width

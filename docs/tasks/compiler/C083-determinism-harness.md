@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.90 of 1 |
-| queue position | 16 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 19 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -24,13 +24,14 @@ tool-complete release gates below pass.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own
+> compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own. The device-reached edit case is delivered (C096) with schedule-independence assertions (3f393d47); the suites were not run on it.
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] the device-reached edit case that waits on M3
+- [ ] the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case
+- [ ] which the GPU line before it has to deliver first
 
 ## Decisions to read first
 
@@ -48,8 +49,8 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `link-em`: `src/main.e`×4‡, `benchmarks/fuzz/fuzz.py`×1
-- `perturb`: `src/main.e`×11‡, `src/graph.e`×2†
+- `link-em`: `src/main.e`×5‡, `benchmarks/fuzz/fuzz.py`×1, `src/em_link.e`×1†, `src/tool.e`×1‡, `tests/conformance/tools/capabilities.expected.jsonl`×1
+- `perturb`: `src/main.e`×12‡, `lib/e/thread.e`×5, `src/graph.e`×4†, `scripts/environment_reference.py`×3, `lib/e/gfx/chart.e`×1‡, `scripts/environment_fixture_template.e`×1, `scripts/text_mask_reference.py`×1, `src/tool.e`×1‡
 
 ## Existing fixtures
 

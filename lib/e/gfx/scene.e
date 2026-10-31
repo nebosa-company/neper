@@ -62,7 +62,8 @@ const MAX_STATES: usize = 32usize
 type BuilderState = struct { commands: []Command, count: usize, finished: bool, scale: f32 }
 
 // A texture is premultiplied RGBA, four floats per pixel.
-type Texture = struct { live: bool, generation: u32, width: u32, height: u32, pixels: []f32 }
+// `version` counts the pixel writes (a texture updated in place keeps its generation), for a cache of the pixels on a device.
+type Texture = struct { live: bool, generation: u32, version: u32, width: u32, height: u32, pixels: []f32 }
 type Scene = struct { live: bool, released: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
 type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize, cff: *cffhint.Cff }
 type Edge = struct { x0: f32, y0: f32, x1: f32, y1: f32 }
@@ -70,8 +71,13 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64 }
 type TargetState = struct { target: *gpu.Target }
+
+// A rasteriser that draws a frame instead of the CPU loop (D5929): `e.gfx.gpuraster` installs one on a Vulkan device. `render` is
+// called by `render_scaled` after the damage is found; it answers `true` when it drew and presented the frame, `false` when the
+// scene needs the CPU (the whole frame is then redrawn there, since the CPU canvas missed the frames the hook drew).
+type Rasteriser = struct { context: *void, render: fn(*void, *RendererState, *const Scene, bool, *gpu.Target) -> (bool, err) }
 
 // ------------------------------------------------------------------ the builder
 
@@ -582,6 +588,7 @@ fn half_of(d: []const u8, at: usize) -> f32 {
 }
 
 fn fill_texture(t: *Texture, view: image.ConstImage) {
+    t.version += 1u32
     var y = 0usize
     while y < usize(view.height) {
         var x = 0usize
@@ -1244,10 +1251,18 @@ fn accumulate_edge(acc: []f32, width: usize, height: usize, e: Edge) {
         if xb < 0.0 { xb = 0.0 }
         if xa > limit { xa = limit }
         if xb > limit { xb = limit }
-        let xa_floor = math.floor[f32](xa)
-        let xa_i = usize(xa_floor)
-        var xb_ceil = math.ceil[f32](xb)
-        let xb_i = usize(xb_ceil)
+        // xa and xb are clamped to [0, width] just above, so floor and ceil are a truncation and one compare:
+        // `math.floor` and `math.ceil` are generic, with a threshold test, a sign copy and a second compare around the
+        // same conversion. With the narrower accumulator clear below, `rasterize_edges` went from 0.74 to 0.17 ms a call
+        // on the SLUST match screen (1180x780).
+        let xa_i = usize(xa)
+        let xa_floor = f32(xa_i)
+        var xb_i = usize(xb)
+        var xb_ceil = f32(xb_i)
+        if xb_ceil < xb {
+            xb_i += 1usize
+            xb_ceil = xb_ceil + 1.0
+        }
         if xb_i <= xa_i + 1usize {
             let xmf = 0.5 * (x + xnext) - xa_floor
             acc[line + xa_i] = acc[line + xa_i] + d - d * xmf
@@ -1344,6 +1359,10 @@ fn edge_box(s: *RendererState) {
     if s.box_y0 > s.height { s.box_y0 = s.height }
     // Nothing outside the frame's damage is painted, so nothing there is resolved --
     // but the row's running sum starts where the edges do, left of the damage.
+    // `accumulate_edge` writes no column past `ceil(x1) + 1`: the accumulator is cleared over the edges' columns,
+    // not the frame's whole stride (a 100 px card cleared 1182 floats a row, ~10x its own width).
+    s.acc_x1 = s.width + 2usize
+    if x1 + 2.0 < f32(s.width) { s.acc_x1 = usize(math.ceil[f32](x1)) + 2usize }
     s.acc_x0 = s.box_x0
     if s.box_x0 < s.dx0 { s.box_x0 = s.dx0 }
     if s.box_y0 < s.dy0 { s.box_y0 = s.dy0 }
@@ -1356,7 +1375,11 @@ fn edge_box(s: *RendererState) {
 fn rasterize_edges(s: *RendererState, coverage: []f32) {
     edge_box(s)
     let stride = s.width + 2usize
-    clear_floats(s.acc[s.box_y0 * stride..s.box_y1 * stride], (s.box_y1 - s.box_y0) * stride)
+    var clear_y = s.box_y0
+    while clear_y < s.box_y1 {
+        clear_floats(s.acc[clear_y * stride + s.acc_x0..clear_y * stride + s.acc_x1], s.acc_x1 - s.acc_x0)
+        clear_y += 1usize
+    }
     var i = 0usize
     while i < s.edge_count {
         accumulate_edge(s.acc, s.width, s.height, s.edges[i])
@@ -1416,6 +1439,155 @@ fn blend_pixel(canvas: []f32, at: usize, color: paint.Color, weight: f32) {
     canvas[at + 3usize] = a + canvas[at + 3usize] * keep
 }
 
+// `paint.premultiply(stops_at(stops, t))` in one pass: the interpolated colour is scaled by its own alpha where it is
+// made, with the same operations in the same order, so there is no intermediate colour to build and return.
+fn stops_premultiplied(stops: []const paint.Stop, t: f32) -> paint.Color {
+    let first = stops[0usize]
+    if t <= first.offset { ret paint.Color { red: first.color.red * first.color.alpha, green: first.color.green * first.color.alpha, blue: first.color.blue * first.color.alpha, alpha: first.color.alpha } }
+    var i = 1usize
+    while i < stops.len {
+        let b = stops[i]
+        if t <= b.offset {
+            let a = stops[i - 1usize]
+            var u: f32 = 1.0
+            if b.offset > a.offset { u = (t - a.offset) / (b.offset - a.offset) }
+            let red = a.color.red + (b.color.red - a.color.red) * u
+            let green = a.color.green + (b.color.green - a.color.green) * u
+            let blue = a.color.blue + (b.color.blue - a.color.blue) * u
+            let alpha = a.color.alpha + (b.color.alpha - a.color.alpha) * u
+            ret paint.Color { red: red * alpha, green: green * alpha, blue: blue * alpha, alpha: alpha }
+        }
+        i += 1usize
+    }
+    let last = stops[stops.len - 1usize].color
+    ret paint.Color { red: last.red * last.alpha, green: last.green * last.alpha, blue: last.blue * last.alpha, alpha: last.alpha }
+}
+
+// The two gradient brushes painted without `brush_at` per pixel. Every operation is the one `brush_at` does, in the same
+// order, so the pixels are bit-identical; what changes is what is done again for every pixel: the brush switch, the point
+// built and returned by `transform_point`, the row's constant products, the gradient's own constants, and the `f32(x)`
+// conversion. A pixel that is whole (coverage 1) under an opaque colour is stored, as `blend_pixel` would compute it
+// (`color * 1 + canvas * 0`). Measured on the SLUST-like benchmark, gradient fills were three quarters of the rasteriser.
+fn paint_radial(s: *RendererState, state: DrawState, coverage: []f32, canvas: []f32, inverse: geometry.Transform, radial: paint.RadialGradient, x0: usize, y0: usize, x1: usize, y1: usize) {
+    let center = radial.center
+    let radius = radial.radius
+    let stops = radial.stops
+    let stop_count = stops.len
+    let stop_first = stops[0usize]
+    let stop_last = stops[stop_count - 1usize].color
+    var masked: []f32 = zero
+    if state.has_mask { masked = s.masks[state.mask].data }
+    var y = y0
+    while y < y1 {
+        let py = f32(y) + 0.5
+        let row_x = inverse.m01 * py
+        let row_y = inverse.m11 * py
+        var px = f32(x0) + 0.5
+        var index = y * s.width + x0
+        var x = x0
+        while x < x1 {
+            var c = coverage[index]
+            if state.has_mask { c = c * masked[index] }
+            if c > 0.0 {
+                let qx = inverse.m00 * px + row_x + inverse.m02
+                let qy = inverse.m10 * px + row_y + inverse.m12
+                let dx = center.x - qx
+                let dy = center.y - qy
+                var t: f32 = 1.0
+                if radius > 0.0 { t = math.sqrt[f32](dx * dx + dy * dy) / radius }
+                var pr: f32 = 0.0
+                var pg: f32 = 0.0
+                var pb: f32 = 0.0
+                var pa: f32 = 0.0
+                if t <= stop_first.offset {
+                    pa = stop_first.color.alpha
+                    pr = stop_first.color.red * pa
+                    pg = stop_first.color.green * pa
+                    pb = stop_first.color.blue * pa
+                } else {
+                    var k = 1usize
+                    var found = false
+                    while k < stop_count {
+                        let hi = stops[k]
+                        if t <= hi.offset {
+                            let lo = stops[k - 1usize]
+                            var u: f32 = 1.0
+                            if hi.offset > lo.offset { u = (t - lo.offset) / (hi.offset - lo.offset) }
+                            pa = lo.color.alpha + (hi.color.alpha - lo.color.alpha) * u
+                            pr = (lo.color.red + (hi.color.red - lo.color.red) * u) * pa
+                            pg = (lo.color.green + (hi.color.green - lo.color.green) * u) * pa
+                            pb = (lo.color.blue + (hi.color.blue - lo.color.blue) * u) * pa
+                            found = true
+                            break
+                        }
+                        k += 1usize
+                    }
+                    if !found {
+                        pa = stop_last.alpha
+                        pr = stop_last.red * pa
+                        pg = stop_last.green * pa
+                        pb = stop_last.blue * pa
+                    }
+                }
+                let at = index * 4usize
+                if c >= 1.0 && pa == 1.0 {
+                    canvas[at] = pr
+                    canvas[at + 1usize] = pg
+                    canvas[at + 2usize] = pb
+                    canvas[at + 3usize] = pa
+                } else {
+                    blend_pixel(canvas, at, paint.Color { red: pr, green: pg, blue: pb, alpha: pa }, c)
+                }
+            }
+            x += 1usize
+            index += 1usize
+            px = px + 1.0
+        }
+        y += 1usize
+    }
+}
+
+fn paint_linear(s: *RendererState, state: DrawState, coverage: []f32, canvas: []f32, inverse: geometry.Transform, linear: paint.LinearGradient, x0: usize, y0: usize, x1: usize, y1: usize) {
+    let dx = linear.end.x - linear.start.x
+    let dy = linear.end.y - linear.start.y
+    let len2 = dx * dx + dy * dy
+    var masked: []f32 = zero
+    if state.has_mask { masked = s.masks[state.mask].data }
+    var y = y0
+    while y < y1 {
+        let py = f32(y) + 0.5
+        let row_x = inverse.m01 * py
+        let row_y = inverse.m11 * py
+        var px = f32(x0) + 0.5
+        var index = y * s.width + x0
+        var x = x0
+        while x < x1 {
+            var c = coverage[index]
+            if state.has_mask { c = c * masked[index] }
+            if c > 0.0 {
+                let qx = inverse.m00 * px + row_x + inverse.m02
+                let qy = inverse.m10 * px + row_y + inverse.m12
+                var t: f32 = 0.0
+                if len2 > 0.0 { t = ((qx - linear.start.x) * dx + (qy - linear.start.y) * dy) / len2 }
+                let color = stops_premultiplied(linear.stops, t)
+                let at = index * 4usize
+                if c >= 1.0 && color.alpha == 1.0 {
+                    canvas[at] = color.red
+                    canvas[at + 1usize] = color.green
+                    canvas[at + 2usize] = color.blue
+                    canvas[at + 3usize] = color.alpha
+                } else {
+                    blend_pixel(canvas, at, color, c)
+                }
+            }
+            x += 1usize
+            index += 1usize
+            px = px + 1.0
+        }
+        y += 1usize
+    }
+}
+
 // The coverage buffer painted with a brush through the state's scissor and mask.
 fn paint_coverage(s: *RendererState, state: DrawState, coverage: []f32, brush: *const paint.Brush) {
     let (inverse, invertible) = transform_invert(state.transform)
@@ -1441,14 +1613,26 @@ fn paint_coverage(s: *RendererState, state: DrawState, coverage: []f32, brush: *
     default:
         is_solid = false
     }
+    switch *brush {
+    case .Radial as radial:
+        paint_radial(s, state, coverage, canvas, inverse, radial, x0, y0, x1, y1)
+        ret
+    case .Linear as linear:
+        paint_linear(s, state, coverage, canvas, inverse, linear, x0, y0, x1, y1)
+        ret
+    case .Solid as unused_solid:
+        is_solid = true
+    }
     let opaque = is_solid && solid.alpha >= 1.0
+    var masked: []f32 = zero
+    if state.has_mask { masked = s.masks[state.mask].data }
     var y = y0
     while y < y1 {
         var x = x0
         var index = y * s.width + x0
         while x < x1 {
             var c = coverage[index]
-            if state.has_mask { c = c * s.masks[state.mask].data[index] }
+            if state.has_mask { c = c * masked[index] }
             if c > 0.0 {
                 if opaque && c >= 1.0 {
                     let at = index * 4usize
@@ -3398,24 +3582,42 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
 }
 
 // The accumulated edges become the next mask: the current mask times this coverage.
+// The mask is written, and valid, only inside the box the edges reach (clamped to the scissor), and the scissor is
+// narrowed to that box: outside it the mask is zero and nothing would be painted there anyway, so no pass needs it.
+// This was a loop over the whole damage box for every clip; the SLUST match screen clips about 70 cards, buttons
+// and panels a frame, 0.29 ms each on a 1180x780 damage box, ~40 % of a changed frame's rasteriser time.
 fn push_mask(s: *RendererState, current: *DrawState, mask_count: *usize, coverage: []f32) -> err {
     if *mask_count >= MAX_MASKS { ret TooLarge }
     rasterize_edges(s, coverage)
     try ensure_mask(s, *mask_count)
     let mask = s.masks[*mask_count].data
-    var y = s.dy0
-    while y < s.dy1 {
-        var x = s.dx0
-        while x < s.dx1 {
-            let i = y * s.width + x
-            var c: f32 = 0.0
-            if x >= s.box_x0 && x < s.box_x1 && y >= s.box_y0 && y < s.box_y1 { c = coverage[i] }
+    let (sx0, sy0, sx1, sy1) = scissor_bounds(s, current.scissor)
+    var x0 = s.box_x0
+    var y0 = s.box_y0
+    var x1 = s.box_x1
+    var y1 = s.box_y1
+    if sx0 > x0 { x0 = sx0 }
+    if sy0 > y0 { y0 = sy0 }
+    if sx1 < x1 { x1 = sx1 }
+    if sy1 < y1 { y1 = sy1 }
+    if x1 <= x0 || y1 <= y0 {
+        x1 = x0
+        y1 = y0
+    }
+    var y = y0
+    while y < y1 {
+        var x = x0
+        var i = y * s.width + x0
+        while x < x1 {
+            var c = coverage[i]
             if current.has_mask { c = c * s.masks[current.mask].data[i] }
             mask[i] = c
             x += 1usize
+            i += 1usize
         }
         y += 1usize
     }
+    current.scissor = geometry.intersect(current.scissor, geometry.Rect { x: f32(x0), y: f32(y0), width: f32(x1 - x0), height: f32(y1 - y0) })
     current.mask = *mask_count
     current.has_mask = true
     *mask_count += 1usize
@@ -3494,7 +3696,7 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     }
     try ensure_canvas(s, 0usize)
     let coverage = s.coverage
-    let full = damage_of(s, &s.scenes[slot])
+    var full = damage_of(s, &s.scenes[slot])
     let changed = s.box_count > 0usize
     // (L178, D5905) The pixels this frame changed, as one box, for a presenter that uploads only those.
     s.changed_x0 = 0usize
@@ -3514,6 +3716,27 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
         if full { widen_changed(s, 0usize, 0usize, width, height) }
         if s.changed_x1 > width { s.changed_x1 = width }
         if s.changed_y1 > height { s.changed_y1 = height }
+    }
+    // (D5929) A rasteriser on the device draws the frame, or hands it back: the CPU canvas missed the frames the rasteriser
+    // drew, so a hand-back is a whole-frame CPU redraw.
+    if changed && s.has_raster {
+        let (drawn, raster_error) = s.raster.render(s.raster.context, s, &s.scenes[slot], full, target_state.target)
+        if raster_error != ok { ret raster_error }
+        if drawn {
+            s.raster_frames += 1u64
+            commit_render(s, slot, width, height, scale)
+            ret ok
+        }
+        s.raster_fallbacks += 1u64
+        full = true
+        s.full_frame = true
+        s.has_shift = false
+        s.boxes[0usize] = geometry.Rect { x: 0.0, y: 0.0, width: f32(width), height: f32(height) }
+        s.box_count = 1usize
+        s.changed_x0 = 0usize
+        s.changed_y0 = 0usize
+        s.changed_x1 = width
+        s.changed_y1 = height
     }
     if changed && s.has_shift { shift_pixels(s, s.shift_x0, s.shift_y0, s.shift_x1, s.shift_y1, s.shift_dx, s.shift_dy) }
     var k = 0usize
@@ -3577,6 +3800,8 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     }
     s.wrote_y0 = wy0
     s.wrote_y1 = wy1
+    // The box a swapchain copies into its image (D5928); an offscreen target ignores it.
+    gpu.report_damage(target_state.target, u32(s.changed_x0), u32(s.changed_y0), u32(s.changed_x1), u32(s.changed_y1))
     let (shown, present_error) = gpu.present(s.queue, target_state.target, frame)
     if present_error != ok { ret from_gpu(present_error) }
     // Keep the previous scene comparison until its pixels have actually presented.
@@ -4648,4 +4873,20 @@ fn volumetric_fog(positions: []const f32, width: usize, height: usize, steps: us
         p += 1usize
     }
     ret ok
+}
+
+// Installs a rasteriser (D5929); every later `render_scaled` offers it the frame first.
+fn set_rasteriser(r: *Renderer, rasteriser: Rasteriser) -> err {
+    let (s, state_error) = renderer_state(r)
+    if state_error != ok { ret state_error }
+    s.raster = rasteriser
+    s.has_raster = true
+    ret ok
+}
+
+// (frames the installed rasteriser drew, frames it handed back to the CPU)
+fn raster_counts(r: *Renderer) -> (u64, u64) {
+    let (s, state_error) = renderer_state(r)
+    if state_error != ok { ret (0u64, 0u64) }
+    ret (s.raster_frames, s.raster_fallbacks)
 }

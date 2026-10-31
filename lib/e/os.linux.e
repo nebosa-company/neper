@@ -5946,3 +5946,7 @@ fn sandbox(policy: *const SandboxPolicy) -> err {
     if policy.deny_dynamic_code { ret Unsupported }
     ret ok
 }
+
+// A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
+// such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
+fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }

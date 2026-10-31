@@ -21,13 +21,13 @@
 
 ## Code anchors
 
-- `e.lib`: `src/nir.e`×5†, `src/em.e`×2‡, `src/lower.e`×2‡, `src/em_link.e`×1†
-- `stdlib-hardening.md`: `benchmarks/llm_edit/README.md`×1, `lib/e/cancel.e`×1
-- `lib/e`: `src/assets.e`×6, `scripts/algos/agent_brief.md`×4, `scripts/build-bootstrap.sh`×4, `scripts/render_progress.py`×3, `scripts/render_ux_theme.py`×3, `lib/e/os.linux.e`×2‡, `lib/e/os.windows.e`×2‡, `scripts/algos/reapply.sh`×2
-- `modules.md`: `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `scripts/build-docs-pdf.py`×1
-- `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/algos/add_batch.py`×3, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/algos/reapply.sh`×1, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1
-- `tooling.md`: `src/main.e`×3‡, `src/tool.e`×3‡, `scripts/build-docs-pdf.py`×1
-- `render_progress.py`: `scripts/render_progress.py`×2, `scripts/algos/reapply.sh`×1
+- `e.lib`: `src/wasm.e`×6, `src/nir.e`×5†, `scripts/render_progress.py`×3, `src/em.e`×3‡, `src/lower.e`×2‡, `src/em_link.e`×1†, `src/wasm_code.e`×1†
+- `stdlib-hardening.md`: `benchmarks/llm_edit/README.md`×1, `lib/e/cancel.e`×1, `scripts/build-docs-pdf.py`×1†
+- `lib/e`: `src/assets.e`×6, `scripts/algos/agent_brief.md`×4, `scripts/build-bootstrap.sh`×4, `lib/e/fmt/css/ua.e`×3, `scripts/build-docs-pdf.py`×3†, `scripts/check_module_surfaces.py`×3, `scripts/gen_linux_card_l4.py`×3, `scripts/gen_winmark.py`×3
+- `modules.md`: `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `scripts/build-docs-pdf.py`×1†
+- `module-apis.md`: `scripts/check_module_surfaces.py`×6, `scripts/algos/add_batch.py`×3, `scripts/render_module_apis.py`×3, `scripts/fix_module_surfaces.py`×2, `scripts/render_progress.py`×2, `lib/e/os/shell.neperos.e`×1, `scripts/algos/reapply.sh`×1, `scripts/audit_repo_coverage.py`×1
+- `tooling.md`: `src/main.e`×3‡, `src/tool.e`×3‡, `benchmarks/llm_gen/report.py`×1, `scripts/build-docs-pdf.py`×1†
+- `render_progress.py`: `scripts/render_progress.py`×4, `scripts/algos/reapply.sh`×1
 - nearest existing implementation: `docs/spec.md`, `docs/modules.md`, `docs/module-apis.md`, `docs/tooling.md`, `scripts/render_progress.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

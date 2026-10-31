@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, lost: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize, lenient: bool }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -169,7 +169,11 @@ fn heap_available(backend: Backend) -> bool {
 type QueueState = struct { device: *DeviceState, index: u32, staging_blocks: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
-type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, acquired: bool, closed: bool }
+// `native` is set while a swapchain presents the target (D5928): the frame images stay the renderer's, and `present` copies the
+// newest one into the swapchain image. `stale[i]` is the box of the frame that swapchain image `i` lacks (it holds a frame from
+// up to `swap.count` presents ago, so a changed-box present copies the union of the boxes since it was last written).
+type Damage = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, acquired: bool, closed: bool, native: bool, surface: usize, swap: vulkan.Swapchain, swap_mode: u32, swap_stale: bool, swap_empty: bool, stale: [8]Damage, damage: Damage, has_damage: bool, native_presents: u64, native_skips: u64 }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -936,6 +940,17 @@ fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo
 }
 
 fn state_of(device: *Device) -> (*DeviceState, err) {
+    let (found, found_error) = state_lookup(device)
+    if found_error != ok { ret (found, found_error) }
+    if metal_finish(found) {
+        unlock_state(found)
+        ret (found, Lost)
+    }
+    ret (found, ok)
+}
+
+// The device locked, whatever its health: `close` comes through here so a device that failed still releases its resources.
+fn state_lookup(device: *Device) -> (*DeviceState, err) {
     let pointer = mem.cast[*DeviceState](device.state)
     let wanted = mem.address_of(pointer)
     locks.mutex_lock(&registry_locks[0usize])
@@ -956,8 +971,6 @@ fn state_of(device: *Device) -> (*DeviceState, err) {
         unlock_state(found)
         ret (found, InvalidHandle)
     }
-    // Not reported here: `close` and the queries come through this door, and a device that failed must still close.
-    let failed = metal_finish(found)
     ret (found, ok)
 }
 
@@ -1020,6 +1033,110 @@ fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err) {
     ret (device, device_error)
 }
 
+
+// Which Vulkan device `open_with` picks (D5925). `Default` prefers a supported discrete GPU and otherwise index 0:
+// on an Optimus laptop the discrete RTX 3080 (index 1) renders and the Intel iGPU (index 0) drives the screen.
+type DeviceChoice = enum u8 { Default, Index, Discrete, Integrated }
+type OpenOptions = struct { choice: DeviceChoice, index: u32 }
+
+// `NEPER_VK_DEVICE=<index>|discrete|integrated` as options; unset or unreadable is `Default`, an unknown word is
+// `Default` as well (a typo must not take a window down).
+fn open_options_from_env(a: *mem.Arena) -> OpenOptions {
+    var options = OpenOptions { choice: .Default, index: 0u32 }
+    let checkpoint = mem.mark(a)
+    let (text, text_error) = os.env(a, "NEPER_VK_DEVICE")
+    if text_error == ok {
+        if str.eq(text, "discrete") { options.choice = .Discrete }
+        if str.eq(text, "integrated") { options.choice = .Integrated }
+        let (n, n_error) = str.parse_u64(text)
+        if n_error == ok && n < 16u64 {
+            options.choice = .Index
+            options.index = u32(n)
+        }
+    }
+    mem.reset(a, checkpoint)
+    ret options
+}
+
+// The index of the device `options` names among `records` (supported ones only): `Default` the first discrete one else
+// the first supported one, `Discrete`/`Integrated` the first of that kind, `Index` that index. False when none fits.
+fn choose_device(records: []const DeviceInfo, options: OpenOptions) -> (u32, bool) {
+    var first_supported = 0usize
+    var has_supported = false
+    var discrete = 0usize
+    var has_discrete = false
+    var integrated = 0usize
+    var has_integrated = false
+    var at = 0usize
+    while at < records.len {
+        if records[at].supported {
+            if !has_supported {
+                first_supported = at
+                has_supported = true
+            }
+            if records[at].kind == .Discrete && !has_discrete {
+                discrete = at
+                has_discrete = true
+            }
+            if records[at].kind == .Integrated && !has_integrated {
+                integrated = at
+                has_integrated = true
+            }
+        }
+        at += 1usize
+    }
+    if options.choice == .Index {
+        if usize(options.index) < records.len && records[usize(options.index)].supported { ret (options.index, true) }
+        ret (0u32, false)
+    }
+    if options.choice == .Discrete {
+        if has_discrete { ret (u32(discrete), true) }
+        ret (0u32, false)
+    }
+    if options.choice == .Integrated {
+        if has_integrated { ret (u32(integrated), true) }
+        ret (0u32, false)
+    }
+    if has_discrete { ret (u32(discrete), true) }
+    if has_supported { ret (u32(first_supported), true) }
+    ret (0u32, false)
+}
+
+// `open` of the device `options` chooses. Anything but Vulkan is `open(a, backend, 0)`. A named device that is absent is
+// `NoDevice`; `Default` never fails for want of a discrete GPU, and falls back to index 0 if opening the discrete one fails.
+fn open_with(a: *mem.Arena, backend: Backend, options: OpenOptions) -> (*Device, err) {
+    if backend != .Vulkan {
+        let (device, device_error) = open(a, backend, 0u32)
+        ret (device, device_error)
+    }
+    let checkpoint = mem.mark(a)
+    let (records, records_error) = devices(a, .Vulkan, MAX_DEVICES)
+    if records_error != ok {
+        mem.reset(a, checkpoint)
+        // No inventory to choose from: index 0 keeps the old behaviour, including its error.
+        let (device, device_error) = open(a, backend, 0u32)
+        ret (device, device_error)
+    }
+    let (chosen, found) = choose_device(records, options)
+    mem.reset(a, checkpoint)
+    if !found && options.choice == .Default {
+        let (device, device_error) = open(a, backend, 0u32)
+        ret (device, device_error)
+    }
+    if !found { ret (zero, NoDevice) }
+    let (device, device_error) = open(a, backend, chosen)
+    if device_error != ok && options.choice == .Default && chosen != 0u32 {
+        let (fallback, fallback_error) = open(a, backend, 0u32)
+        ret (fallback, fallback_error)
+    }
+    ret (device, device_error)
+}
+
+// `open_with` under the environment's choice (`NEPER_VK_DEVICE`): what `e.ui.app` opens.
+fn open_preferred(a: *mem.Arena, backend: Backend) -> (*Device, err) {
+    let (device, device_error) = open_with(a, backend, open_options_from_env(a))
+    ret (device, device_error)
+}
 // One enumerated physical device opened: below the floor is `Unsupported`.
 fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Device, err) {
     if !physical.floor { ret (zero, Unsupported) }
@@ -1070,6 +1187,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.lock_owner = atomic.init(0usize)
     state.lock_depth = 0usize
     state.closed = false
+    state.lost = false
     state.buffers = buffers
     state.queues = 0u32
     state.backend = backend
@@ -1088,6 +1206,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     state.heap_ends = 0usize
     state.pending_count = 0usize
     state.heap_count = 1usize
+    state.lenient = false
     let (handles, handles_error) = mem.alloc[Device](a, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
     handles[0usize] = Device { state: mem.cast[*void](state) }
@@ -1227,9 +1346,10 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
 }
 
 fn close(device: *Device) -> err {
-    let (state, state_error) = state_of(device)
+    let (state, state_error) = state_lookup(device)
     if state_error != ok { ret state_error }
     defer unlock_state(state)
+    let drained = metal_finish(state)
     state.closed = true
     var i = 0usize
     while i < state.buffers.len {
@@ -1352,6 +1472,13 @@ fn slot_of(state: *QueueState, owner: u32, slot: u32, generation: u32) -> (usize
 }
 
 fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
+    let (made, made_error) = alloc_in[T](q, n, false)
+    ret (made, made_error)
+}
+
+// `host` marks a buffer the host reads back or fills in bulk (a frame image): on Vulkan it comes from the
+// host-cached memory type, see `vulkan.Context.host_type`. Every other backend ignores it.
+fn alloc_in[T: type](q: *Queue, n: usize, host: bool) -> (Buf[T], err) {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.device)
@@ -1364,7 +1491,9 @@ fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err) {
     let generation = state.device.buffers[slot].generation
     // A Vulkan buffer's bytes are its mapping (D1611).
     if state.device.backend == .Vulkan {
-        let (made, made_error) = vulkan.buffer(a, state.device.context, n * elem)
+        var made: vulkan.Buffer = zero
+        var made_error = ok
+        if host { (made, made_error) = vulkan.host_buffer(a, state.device.context, n * elem) } else { (made, made_error) = vulkan.buffer(a, state.device.context, n * elem) }
         if made_error != ok { ret (zero, OutOfMemory) }
         state.device.buffers[slot] = Buffer { bytes: made.bytes, count: n, elem: elem, generation: generation, live: true, device: made, heap_offset: 0usize, heap_index: 0usize }
         ret (Buf[T] { owner: state.device.owner, slot: u32(slot), generation: generation, len: n }, ok)
@@ -1438,7 +1567,7 @@ fn staging_pool(state: *QueueState) -> err {
     if blocks_error != ok { ret OutOfMemory }
     var made = 0usize
     while made < blocks.len {
-        let (made_block, make_error) = vulkan.buffer(state.device.arena, state.device.context, state.staging_bytes)
+        let (made_block, make_error) = vulkan.host_buffer(state.device.arena, state.device.context, state.staging_bytes)
         if make_error != ok {
             var cleanup = 0usize
             while cleanup < made {
@@ -1661,19 +1790,61 @@ const MAX_IMAGE_SIDE: u32 = 16384u32
 
 fn image(q: *Queue, width: u32, height: u32, format: Format) -> (Image, err) {
     if width == 0u32 || height == 0u32 || width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE { ret (zero, TooLarge) }
-    let (data, data_error) = alloc[u32](q, usize(width) * usize(height))
+    let (data, data_error) = alloc_in[u32](q, usize(width) * usize(height), true)
     if data_error != ok { ret (zero, data_error) }
     ret (Image { data: data, width: width, height: height, format: format }, ok)
 }
 
 // `src` is `width * height` pixels, row-major and tightly packed, written at (x, y).
+// An image is a host-visible mapped buffer on every backend, so the pixels are copied straight into it.
+// The generic `write` stages each row through a second mapped block first; that second copy reads the
+// staging memory back, which cost 106 ms for a 6.4 MB frame on Intel Iris Xe (the old uncached type) and
+// is pure overhead for a buffer the host owns anyway. Staging limits therefore do not apply to images.
 fn write_image(q: *Queue, dst: Image, x: u32, y: u32, width: u32, height: u32, src: []const u32) -> err {
     if x > dst.width || width > dst.width - x || y > dst.height || height > dst.height - y { ret TooLarge }
     if src.len != usize(width) * usize(height) { ret TooLarge }
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
+    let (slot, slot_error) = slot_of(state, dst.data.owner, dst.data.slot, dst.data.generation)
+    if slot_error != ok { ret slot_error }
+    let bytes = state.device.buffers[slot].bytes
+    if src.len == 0usize { ret ok }
+    let from = host_bytes[u32](src)
+    let row_bytes = usize(width) * 4usize
+    if width == dst.width {
+        let at = usize(y) * row_bytes
+        copy_bytes(bytes[at..at + from.len], from)
+        ret ok
+    }
     var row = 0usize
     while row < usize(height) {
-        let at = (usize(y) + row) * usize(dst.width) + usize(x)
-        try write[u32](q, dst.data, at, src[row * usize(width)..(row + 1usize) * usize(width)])
+        let at = ((usize(y) + row) * usize(dst.width) + usize(x)) * 4usize
+        copy_bytes(bytes[at..at + row_bytes], from[row * row_bytes..(row + 1usize) * row_bytes])
+        row += 1usize
+    }
+    ret ok
+}
+
+// The rectangle (x, y, width, height) of `src` into `dst`, tightly packed (`width * height` pixels), so a
+// presenter reads back only what changed instead of the whole frame.
+fn read_image_rect(q: *Queue, src: Image, x: u32, y: u32, width: u32, height: u32, dst: []u32) -> err {
+    if x > src.width || width > src.width - x || y > src.height || height > src.height - y { ret TooLarge }
+    if dst.len < usize(width) * usize(height) { ret TooLarge }
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret state_error }
+    defer unlock_state(state.device)
+    try report_fault(state)
+    let (slot, slot_error) = slot_of(state, src.data.owner, src.data.slot, src.data.generation)
+    if slot_error != ok { ret slot_error }
+    let bytes = state.device.buffers[slot].bytes
+    if width == 0u32 || height == 0u32 { ret ok }
+    let into = host_bytes[u32](dst[..usize(width) * usize(height)])
+    let row_bytes = usize(width) * 4usize
+    var row = 0usize
+    while row < usize(height) {
+        let at = ((usize(y) + row) * usize(src.width) + usize(x)) * 4usize
+        copy_bytes(into[row * row_bytes..(row + 1usize) * row_bytes], bytes[at..at + row_bytes])
         row += 1usize
     }
     ret ok
@@ -1744,18 +1915,33 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state.device)
-    if surface.kind != .Offscreen { ret (zero, Unsupported) }
+    var wants_native = false
+    if surface.kind != .Offscreen {
+        // A Win32 surface (D5928): a Vulkan device whose queue can present to the window; anything else stays unsupported.
+        if surface.kind != .Win32 || state.device.backend != .Vulkan || mem.address_of(surface.handle) == 0usize || format != .Bgra8 { ret (zero, Unsupported) }
+        wants_native = true
+    }
     let target_mark = mem.mark(state.device.arena)
     let (states, states_error) = mem.alloc[TargetState](state.device.arena, 1usize)
     if states_error != ok {
         mem.reset(state.device.arena, target_mark)
         ret (zero, states_error)
     }
-    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, acquired: false, closed: false }
+    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, acquired: false, closed: false, native: false, surface: 0usize, swap: zero, swap_mode: 4294967295u32, swap_stale: false, swap_empty: false, stale: zero, damage: zero, has_damage: false, native_presents: 0u64, native_skips: 0u64 }
     let images_error = target_images(&states[0usize], width, height)
     if images_error != ok {
         mem.reset(state.device.arena, target_mark)
         ret (zero, images_error)
+    }
+    if wants_native {
+        let native_error = native_open(&states[0usize], surface, width, height, format)
+        if native_error != ok {
+            var image_handle = Queue { state: mem.cast[*void](state) }
+            let dropped_front = release_image(&image_handle, states[0usize].images[0usize])
+            let dropped_back = release_image(&image_handle, states[0usize].images[1usize])
+            mem.reset(state.device.arena, target_mark)
+            ret (zero, native_error)
+        }
     }
     let (handles, handles_error) = mem.alloc[Target](state.device.arena, 1usize)
     if handles_error != ok {
@@ -1767,6 +1953,208 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
     }
     handles[0usize] = Target { state: mem.cast[*void](&states[0usize]) }
     ret (&handles[0usize], ok)
+}
+
+// ----------------------------------------------------------- swapchain presentation (D5928)
+
+// NEPER_PRESENT_MODE=fifo|mailbox|immediate picks the swapchain's present mode for measuring; unset is the best of
+// MAILBOX, IMMEDIATE, FIFO, which never paces a 15 fps interface to the display's refresh.
+fn present_mode_from_env(a: *mem.Arena) -> u32 {
+    var mode = 4294967295u32
+    let checkpoint = mem.mark(a)
+    let (text, text_error) = os.env(a, "NEPER_PRESENT_MODE")
+    if text_error == ok {
+        if str.eq(text, "immediate") { mode = 0u32 }
+        if str.eq(text, "mailbox") { mode = 1u32 }
+        if str.eq(text, "fifo") { mode = 2u32 }
+    }
+    mem.reset(a, checkpoint)
+    ret mode
+}
+
+fn full_damage(state: *TargetState) -> Damage {
+    ret Damage { x0: 0u32, y0: 0u32, x1: state.width, y1: state.height }
+}
+
+fn damage_union(left: Damage, right: Damage) -> Damage {
+    if left.x1 <= left.x0 || left.y1 <= left.y0 { ret right }
+    if right.x1 <= right.x0 || right.y1 <= right.y0 { ret left }
+    var x0 = left.x0
+    var y0 = left.y0
+    var x1 = left.x1
+    var y1 = left.y1
+    if right.x0 < x0 { x0 = right.x0 }
+    if right.y0 < y0 { y0 = right.y0 }
+    if right.x1 > x1 { x1 = right.x1 }
+    if right.y1 > y1 { y1 = right.y1 }
+    ret Damage { x0: x0, y0: y0, x1: x1, y1: y1 }
+}
+
+// The surface and first swapchain of a target, every image owing the whole frame.
+fn native_open(state: *TargetState, surface: Surface, width: u32, height: u32, format: Format) -> err {
+    let device = state.queue.device
+    let a = device.arena
+    let (made_surface, surface_error) = vulkan.surface_open(a, device.context, mem.address_of(surface.handle), mem.address_of(surface.context))
+    if surface_error != ok { ret Unsupported }
+    state.swap_mode = present_mode_from_env(a)
+    var no_swap: vulkan.Swapchain = zero
+    let (made, swap_error) = vulkan.swapchain_make(a, device.context, made_surface, width, height, state.swap_mode, no_swap)
+    if swap_error != ok {
+        vulkan.surface_close(made_surface)
+        ret Unsupported
+    }
+    state.surface = made_surface
+    state.swap = made
+    state.native = true
+    state.swap_stale = false
+    state.swap_empty = false
+    native_all_stale(state)
+    ret ok
+}
+
+fn native_all_stale(state: *TargetState) {
+    var i = 0usize
+    while i < 8usize {
+        state.stale[i] = full_damage(state)
+        i += 1usize
+    }
+}
+
+// The swapchain and surface released (the queue idle first), the target back to a plain offscreen one. Safe to call twice.
+fn native_close(state: *TargetState) {
+    if !state.native { ret }
+    let device = state.queue.device
+    vulkan.swapchain_free(device.context, state.swap)
+    var no_swap: vulkan.Swapchain = zero
+    vulkan.surface_close(state.surface)
+    state.swap = no_swap
+    state.surface = 0usize
+    state.native = false
+}
+
+// Whether a swapchain presents this target. False for an offscreen target and after the swapchain failed (the caller then
+// shows the frames itself, as it does for an offscreen target).
+fn native(t: *Target) -> bool {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret false }
+    defer unlock_state(state.queue.device)
+    ret state.native
+}
+
+// Counters of a native target: (presents, skipped presents); skipped ones are acquire timeouts and minimised windows.
+fn native_counts(t: *Target) -> (u64, u64) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret (0u64, 0u64) }
+    defer unlock_state(state.queue.device)
+    ret (state.native_presents, state.native_skips)
+}
+
+// The box of the next present that differs from the frame shown before it; unioned into every swapchain image's stale box.
+// An empty box (x1 <= x0) is no change. Nothing happens for an offscreen target.
+fn report_damage(t: *Target, x0: u32, y0: u32, x1: u32, y1: u32) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret }
+    defer unlock_state(state.queue.device)
+    var box = Damage { x0: x0, y0: y0, x1: x1, y1: y1 }
+    if box.x1 > state.width { box.x1 = state.width }
+    if box.y1 > state.height { box.y1 = state.height }
+    state.damage = damage_union(state.damage, box)
+    state.has_damage = true
+}
+
+// Copies the newest frame (or what changed of it) into a swapchain image and presents it. Any failure of the swapchain
+// ends it and leaves the target offscreen (`native` false), so the caller's next `native` check shows the frame by hand.
+fn native_present(state: *TargetState) {
+    let device = state.queue.device
+    let a = device.arena
+    let ctx = device.context
+    var box = state.damage
+    if !state.has_damage { box = full_damage(state) }
+    state.damage = Damage { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }
+    state.has_damage = false
+    var i = 0usize
+    while i < 8usize {
+        state.stale[i] = damage_union(state.stale[i], box)
+        i += 1usize
+    }
+    if vulkan.swapchain_wait(ctx, &state.swap) != ok {
+        native_close(state)
+        ret
+    }
+    if state.swap_stale || state.swap.width != state.width || state.swap.height != state.height || state.swap_empty {
+        let (made, make_error) = vulkan.swapchain_make(a, ctx, state.surface, state.width, state.height, state.swap_mode, state.swap)
+        if make_error == vulkan.Empty {
+            // Minimised: nothing to show; the damage stays owed.
+            state.swap_empty = true
+            state.native_skips += 1u64
+            ret
+        }
+        if make_error != ok {
+            native_close(state)
+            ret
+        }
+        vulkan.swapchain_retire(ctx, state.swap)
+        state.swap = made
+        state.swap_stale = false
+        state.swap_empty = false
+        native_all_stale(state)
+    }
+    var index = 0u32
+    var attempts = 0u32
+    var acquired = false
+    while !acquired && attempts < 2u32 {
+        let (got, status) = vulkan.swapchain_acquire(ctx, &state.swap)
+        if status == vulkan.VK_SUCCESS || status == vulkan.VK_SUBOPTIMAL {
+            index = got
+            acquired = true
+        } else if status == vulkan.VK_OUT_OF_DATE {
+            let (made, make_error) = vulkan.swapchain_make(a, ctx, state.surface, state.width, state.height, state.swap_mode, state.swap)
+            if make_error == vulkan.Empty {
+                state.swap_empty = true
+                state.native_skips += 1u64
+                ret
+            }
+            if make_error != ok {
+                native_close(state)
+                ret
+            }
+            vulkan.swapchain_retire(ctx, state.swap)
+            state.swap = made
+            native_all_stale(state)
+        } else if status == 1i32 || status == 2i32 {
+            // Not ready / timed out: the window is not being shown; try again with the next frame.
+            state.native_skips += 1u64
+            ret
+        } else {
+            native_close(state)
+            ret
+        }
+        attempts += 1u32
+    }
+    if !acquired {
+        state.native_skips += 1u64
+        ret
+    }
+    var region = state.stale[usize(index)]
+    if region.x1 > state.swap.width { region.x1 = state.swap.width }
+    if region.y1 > state.swap.height { region.y1 = state.swap.height }
+    if region.x1 > state.width { region.x1 = state.width }
+    if region.y1 > state.height { region.y1 = state.height }
+    if region.x1 <= region.x0 || region.y1 <= region.y0 { region = Damage { x0: 0u32, y0: 0u32, x1: 1u32, y1: 1u32 } }
+    let shown = state.images[state.front]
+    let (slot, slot_error) = slot_of(state.queue, shown.data.owner, shown.data.slot, shown.data.generation)
+    if slot_error != ok {
+        native_close(state)
+        ret
+    }
+    let status = vulkan.swapchain_present(a, ctx, &state.swap, index, device.buffers[slot].device.handle, state.width, region.x0, region.y0, region.x1 - region.x0, region.y1 - region.y0)
+    state.stale[usize(index)] = Damage { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }
+    state.native_presents += 1u64
+    if status == vulkan.VK_OUT_OF_DATE || status == vulkan.VK_SUBOPTIMAL {
+        state.swap_stale = true
+    } else if status != vulkan.VK_SUCCESS {
+        native_close(state)
+    }
 }
 
 fn extent(t: *Target) -> (u32, u32) {
@@ -1788,12 +2176,20 @@ fn resize(t: *Target, width: u32, height: u32) -> err {
     replacement.format = state.format
     let images_error = target_images(&replacement, width, height)
     if images_error != ok { ret images_error }
+    // A copy of the old frame may still be reading it (D5928).
+    if state.native { let waited = vulkan.swapchain_wait(state.queue.device.context, &state.swap) }
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
     state.images = replacement.images
     state.width = replacement.width
     state.height = replacement.height
+    if state.native {
+        state.swap_stale = true
+        state.damage = Damage { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }
+        state.has_damage = false
+        native_all_stale(state)
+    }
     state.acquired = false
     ret ok
 }
@@ -1860,6 +2256,7 @@ fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     state.front = 1usize - state.front
     state.serial += 1u64
     state.acquired = false
+    if state.native { native_present(state) }
     let (shown, token_error) = token(q)
     ret (shown, token_error)
 }
@@ -1877,6 +2274,7 @@ fn close_target(t: *Target) -> err {
     let (state, state_error) = target_state(t)
     if state_error != ok { ret state_error }
     defer unlock_state(state.queue.device)
+    native_close(state)
     var handle = Queue { state: mem.cast[*void](state.queue) }
     try release_image(&handle, state.images[0usize])
     try release_image(&handle, state.images[1usize])
@@ -1973,14 +2371,20 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     over.cap = 16usize * parameter_count
     over.off = 16usize * parameter_count
     let source = mem.view(&over, 0usize, 16usize * parameter_count)
-    let (block, block_error) = vulkan.buffer(a, device.context, 16usize * parameter_count + 24usize)
+    // The argument block of the launch (D5927): the context's persistent one when it fits (launches wait, so one serves them all),
+    // else a buffer made and freed here. With the persistent pool, command buffer and fence of `vulkan.dispatch` a one-workgroup
+    // launch went from 853 us to 379 us on Intel Iris Xe and from 1380 us to ~1000 us on the RTX 3080 Laptop GPU (whose floor for an empty
+    // dispatch is ~700 us: Optimus submit latency), measured with D:/repos/slust_work/gw/vkb.e.
+    var block: vulkan.Buffer = zero
+    var block_error = ok
+    if 16usize * parameter_count + 24usize <= vulkan.ARGS_BYTES && device.context.args.handle != 0usize { block = device.context.args } else { (block, block_error) = vulkan.buffer(a, device.context, 16usize * parameter_count + 24usize) }
     if block_error != ok { ret OutOfMemory }
     var offset = 0usize
     var fault_buffer: vulkan.Buffer = zero
     if checked {
         let (made_fault, fault_error) = vulkan.buffer(a, device.context, 32usize)
         if fault_error != ok {
-            vulkan.free(device.context, block)
+            release_block(device, block)
             ret OutOfMemory
         }
         fault_buffer = made_fault
@@ -1998,7 +2402,7 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     while at < layout.len {
         if layout[at] != 115u8 && (layout[at] < 49u8 || layout[at] > 56u8) {
             if checked { vulkan.free(device.context, fault_buffer) }
-            vulkan.free(device.context, block)
+            release_block(device, block)
             ret Unsupported
         }
         let code = usize(layout[at]) - 48usize
@@ -2018,11 +2422,11 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     let (made, made_error) = device_pipeline(device, module_code, entry, compiler_identity)
     if made_error != ok {
         if checked { vulkan.free(device.context, fault_buffer) }
-        vulkan.free(device.context, block)
+        release_block(device, block)
         ret made_error
     }
     let dispatch_error = vulkan.dispatch(a, device.context, made, block.address, u32(gx), u32(gy), u32(gz))
-    vulkan.free(device.context, block)
+    release_block(device, block)
     if dispatch_error != ok {
         if checked { vulkan.free(device.context, fault_buffer) }
         ret Lost
@@ -2055,6 +2459,11 @@ fn launch_device(state: *QueueState, grid: Grid, x: usize, y: usize, z: usize, s
     }
     state.serial += 1u64
     ret ok
+}
+
+// An argument block made for one launch is freed; the context's persistent one is not.
+fn release_block(device: *DeviceState, block: vulkan.Buffer) {
+    if block.handle != device.context.args.handle { vulkan.free(device.context, block) }
 }
 
 // A workgroup must have at least one thread, and each intermediate product must
@@ -2168,22 +2577,21 @@ fn launch_metal(state: *QueueState, gx: usize, gy: usize, gz: usize, x: usize, y
 }
 
 // Waits for the launches `launch_metal` left running, in order, and reads each one's fault block as the Vulkan path reads its
-// buffer; called with the device locked at every entry that could see their effects. True when the device failed one.
+// buffer; called with the device locked at every entry that could see their effects. True once the device has failed a
+// command: the loss is kept, so whichever entry waits first, every later one reports it.
 fn metal_finish(device: *DeviceState) -> bool {
-    if !heap_backend(device.backend) || device.pending_count == 0usize { ret false }
+    if !heap_backend(device.backend) || device.pending_count == 0usize { ret device.lost }
     let driver = driver_of(device.backend)
-    var failed = false
     var slot = 0usize
     while slot < device.pending_count {
         let waited = driver.dispatch_wait(device.pending_commands[slot])
         driver.free(device.pending_blocks[slot])
-        // A command the device failed is `Lost`, once, at the call that waited for it (a launch used to say so itself).
-        if waited != ok { failed = true }
+        if waited != ok { device.lost = true }
         if waited == ok && device.pending_checks[slot] { metal_fault(device, slot) }
         slot += 1usize
     }
     device.pending_count = 0usize
-    ret failed
+    ret device.lost
 }
 
 // One launch's fault block (32 bytes at slot * 32 in heap 0) into its queue's record; the first fault a queue sees is kept.
@@ -2253,6 +2661,61 @@ fn metal_pipeline(device: *DeviceState, module_code: str, entry: str) -> (mtl.Pi
     ret (made, ok)
 }
 
+
+// A device that reports neither `.Ftz` nor `.DenormPreserve` (D5950): the NVIDIA RTX 3080 Laptop GPU answers shaderDenormPreserveFloat32
+// and shaderDenormFlushToZeroFloat32 as false (measured through vkGetPhysicalDeviceProperties2), so by section 10 no kernel that
+// touches an `f32` may launch on it. For a kernel whose results do not depend on denormals (the tile rasteriser's: colours in [0, 1]
+// rounded to bytes) the caller can accept the device's unspecified behaviour: the device then reports `.DenormPreserve`, and the
+// execution mode and capability are removed from the SPIR-V of the kernels it launches, which the driver would refuse. A device that
+// supports either mode is untouched. Nothing happens on a device that is not Vulkan.
+fn accept_unspecified_denormals(device: *Device) -> err {
+    let (state, state_error) = state_of(device)
+    if state_error != ok { ret state_error }
+    defer unlock_state(state)
+    if state.backend != .Vulkan { ret ok }
+    if (state.physical.caps & 384usize) != 0usize { ret ok }
+    state.physical.caps = state.physical.caps | 256usize
+    state.lenient = true
+    ret ok
+}
+
+// `code` (SPIR-V little-endian words) without `OpCapability DenormPreserve` (4464) and `OpExecutionMode ... DenormPreserve` (4459).
+fn strip_denorm_preserve(a: *mem.Arena, code: []u8) -> ([]u8, err) {
+    let (kept, kept_error) = mem.alloc[u8](a, code.len)
+    if kept_error != ok { ret (code, kept_error) }
+    var out = 0usize
+    var at = 0usize
+    while at < 20usize && at < code.len {
+        kept[out] = code[at]
+        out += 1usize
+        at += 1usize
+    }
+    while at + 4usize <= code.len {
+        let head = usize(code[at]) + usize(code[at + 1usize]) * 256usize + usize(code[at + 2usize]) * 65536usize + usize(code[at + 3usize]) * 16777216usize
+        let words = head / 65536usize
+        let opcode = head % 65536usize
+        if words == 0usize || at + words * 4usize > code.len { ret (code, Unsupported) }
+        var drop = false
+        if opcode == 17usize && words >= 2usize {
+            let operand = usize(code[at + 4usize]) + usize(code[at + 5usize]) * 256usize
+            if operand == 4464usize { drop = true }
+        }
+        if opcode == 16usize && words >= 3usize {
+            let mode = usize(code[at + 8usize]) + usize(code[at + 9usize]) * 256usize
+            if mode == 4459usize { drop = true }
+        }
+        if !drop {
+            var k = 0usize
+            while k < words * 4usize {
+                kept[out] = code[at + k]
+                out += 1usize
+                k += 1usize
+            }
+        }
+        at += words * 4usize
+    }
+    ret (kept[0usize..out], ok)
+}
 // The pipeline for a kernel's module and entry on this device, made the first time.
 fn device_pipeline(device: *DeviceState, module: str, entry: str, compiler_identity: u64) -> (vulkan.Pipeline, err) {
     let key = mem.address_of(&module[0usize])
@@ -2270,8 +2733,14 @@ fn device_pipeline(device: *DeviceState, module: str, entry: str, compiler_ident
         at += 1usize
     }
     if device.pipeline_count >= 16usize { ret (zero, TooLarge) }
-    let (code, code_error) = hex_bytes(device.arena, module)
+    let (hexed, code_error) = hex_bytes(device.arena, module)
     if code_error != ok { ret (zero, code_error) }
+    var code = hexed
+    if device.lenient {
+        let (stripped, strip_error) = strip_denorm_preserve(device.arena, hexed)
+        if strip_error != ok { ret (zero, strip_error) }
+        code = stripped
+    }
     let cache_key = pipeline_cache_key(device.physical, code, entry, compiler_identity)
     var cached: []u8 = zero
     let (cache_path, path_error) = pipeline_cache_path(device.arena, cache_key)
@@ -2957,4 +3426,106 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args), 0usize, "", "", "")
     if run_error != ok { ret (0usize, run_error) }
     ret (tiles, ok)
+}
+
+// write_image copies straight into the image and read_image_rect reads a sub-rectangle back: a
+// 3x2 patch written at (2, 1) of a 6x4 image, the rest untouched, read whole and as the patch alone.
+@test
+fn image_rectangles_round_trip(a: *mem.Arena) -> err {
+    let (device, open_error) = open(a, .Cpu, 0u32)
+    if open_error != ok { ret open_error }
+    defer let _ = close(device)
+    let (q, queue_error) = queue(device)
+    if queue_error != ok { ret queue_error }
+    let (img, image_error) = image(q, 6u32, 4u32, .Bgra8)
+    if image_error != ok { ret image_error }
+    var blank: [24]u32 = zero
+    try write_image(q, img, 0u32, 0u32, 6u32, 4u32, blank[0..])
+    let patch: [6]u32 = [6]u32 { 1u32, 2u32, 3u32, 4u32, 5u32, 6u32 }
+    try write_image(q, img, 2u32, 1u32, 3u32, 2u32, patch[0..])
+    var whole: [24]u32 = zero
+    try read_image(q, img, whole[0..])
+    if whole[0usize] != 0u32 { ret Unsupported }
+    if whole[8usize] != 1u32 || whole[10usize] != 3u32 || whole[14usize] != 4u32 || whole[16usize] != 6u32 || whole[11usize] != 0u32 { ret InvalidHandle }
+    var part: [6]u32 = zero
+    try read_image_rect(q, img, 2u32, 1u32, 3u32, 2u32, part[0..])
+    if part[0usize] != 1u32 { ret OutOfMemory }
+    if part[2usize] != 3u32 || part[3usize] != 4u32 || part[5usize] != 6u32 { ret InvalidHandle }
+    if write_image(q, img, 5u32, 0u32, 2u32, 1u32, patch[0..2]) != TooLarge { ret InvalidHandle }
+    ret ok
+}
+
+// `choose_device` (D5925): a supported discrete GPU first by default, else index 0; the named kind or index otherwise; an
+// unsupported device is never chosen.
+@test
+fn default_choice_prefers_a_supported_discrete_device(a: *mem.Arena) -> err {
+    var records: [3]DeviceInfo = zero
+    records[0usize].kind = .Integrated
+    records[0usize].supported = true
+    records[1usize].kind = .Discrete
+    records[1usize].supported = true
+    records[2usize].kind = .Discrete
+    records[2usize].supported = true
+    let (def, found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Default, index: 0u32 })
+    if !found || def != 1u32 { ret Unsupported }
+    let (integrated, integrated_found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Integrated, index: 0u32 })
+    if !integrated_found || integrated != 0u32 { ret Unsupported }
+    let (named, named_found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Index, index: 2u32 })
+    if !named_found || named != 2u32 { ret Unsupported }
+    records[1usize].supported = false
+    let (skipped, skipped_found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Default, index: 0u32 })
+    if !skipped_found || skipped != 2u32 { ret Unsupported }
+    let (_, absent_found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Index, index: 1u32 })
+    if absent_found { ret Unsupported }
+    records[0usize].kind = .Integrated
+    records[2usize].supported = false
+    let (only, only_found) = choose_device(records[0usize..3usize], OpenOptions { choice: .Default, index: 0u32 })
+    if !only_found || only != 0u32 { ret Unsupported }
+    ret ok
+}
+
+// A minimal SPIR-V module (header, OpCapability Shader, OpCapability DenormPreserve, OpExecutionMode DenormPreserve, OpMemoryModel)
+// loses exactly the two denormal instructions (D5950).
+@test
+fn denorm_preserve_is_stripped_from_spirv(a: *mem.Arena) -> err {
+    var words: [16]u32 = zero
+    words[0usize] = 119734787u32
+    words[5usize] = 17u32 | (2u32 << 16u32)
+    words[6usize] = 1u32
+    words[7usize] = 17u32 | (2u32 << 16u32)
+    words[8usize] = 4464u32
+    words[9usize] = 16u32 | (4u32 << 16u32)
+    words[10usize] = 1u32
+    words[11usize] = 4459u32
+    words[12usize] = 32u32
+    words[13usize] = 14u32 | (3u32 << 16u32)
+    var bytes: [64]u8 = zero
+    var i = 0usize
+    while i < 16usize {
+        bytes[i * 4usize] = u8(words[i] % 256u32)
+        bytes[i * 4usize + 1usize] = u8((words[i] / 256u32) % 256u32)
+        bytes[i * 4usize + 2usize] = u8((words[i] / 65536u32) % 256u32)
+        bytes[i * 4usize + 3usize] = u8(words[i] / 16777216u32)
+        i += 1usize
+    }
+    let (kept, kept_error) = strip_denorm_preserve(a, bytes[0usize..64usize])
+    // 64 bytes less the capability (8) and the execution mode (16) is 40, and the Shader capability and memory model stay.
+    if kept_error != ok || kept.len != 40usize { ret Unsupported }
+    if kept[20usize] != 17u8 || kept[24usize] != 1u8 || kept[28usize] != 14u8 { ret Unsupported }
+    ret ok
+}
+
+// A swapchain image lacks every frame since it was last shown: the boxes since then join (D5928).
+@test
+fn damage_boxes_join(a: *mem.Arena) -> err {
+    var none = Damage { x0: 0u32, y0: 0u32, x1: 0u32, y1: 0u32 }
+    let one = Damage { x0: 10u32, y0: 20u32, x1: 30u32, y1: 40u32 }
+    let two = Damage { x0: 5u32, y0: 30u32, x1: 25u32, y1: 60u32 }
+    let from_none = damage_union(none, one)
+    if from_none.x0 != 10u32 || from_none.y1 != 40u32 { ret Unsupported }
+    let joined = damage_union(one, two)
+    if joined.x0 != 5u32 || joined.y0 != 20u32 || joined.x1 != 30u32 || joined.y1 != 60u32 { ret Unsupported }
+    let kept = damage_union(one, none)
+    if kept.x1 != 30u32 { ret Unsupported }
+    ret ok
 }
