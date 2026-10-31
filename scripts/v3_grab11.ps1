@@ -24,11 +24,15 @@ public static class G {
 '@
 function Print-Bmp($h,$w,$hh,$flag){ $b=New-Object System.Drawing.Bitmap $w,$hh; $g=[System.Drawing.Graphics]::FromImage($b); $dc=$g.GetHdc(); [void][G]::PrintWindow($h,$dc,$flag); $g.ReleaseHdc($dc); $g.Dispose(); $b }
 function Flat-Rect($b,$x,$y,$w,$h){ $c=$b.GetPixel($x,$y); for($j=$y;$j -lt $y+$h;$j+=4){ for($i=$x;$i -lt $x+$w;$i+=4){ if($b.GetPixel($i,$j).ToArgb() -ne $c.ToArgb()){ return $false } } }; $true }
+# Pixels more than 2 levels apart between two grabs inside a rectangle. With V3_GRAB_LOG set, Grab11 logs it per grab (flag 0 against flag 2):
+# 0 for a popup means its flag 2 grab was never resampled.
+function Diff-Count($a,$b,$x,$y,$w,$h){ $n=0; for($j=$y;$j -lt $y+$h;$j++){ for($i=$x;$i -lt $x+$w;$i++){ $p=$a.GetPixel($i,$j); $q=$b.GetPixel($i,$j); if([math]::Abs($p.R-$q.R) -gt 2 -or [math]::Abs($p.G-$q.G) -gt 2 -or [math]::Abs($p.B-$q.B) -gt 2){ $n++ } } }; $n }
 function Grab11($h,$f){
   $o=[G]::Geo($h); $w=$o[0]; $hh=$o[1]; $cx=$o[2]; $cy=$o[3]; $cw=$o[4]; $ch=$o[5]
   $b2=Print-Bmp $h $w $hh 2
   if($cw -gt 0 -and $ch -gt 0 -and $cx -ge 0 -and $cy -ge 0 -and ($cx+$cw) -le $w -and ($cy+$ch) -le $hh){
     $b0=Print-Bmp $h $w $hh 0
+    if($env:V3_GRAB_LOG){ $d=-1; if($cw*$ch -le 120000){ $d=Diff-Count $b0 $b2 $cx $cy $cw $ch }; Add-Content $env:V3_GRAB_LOG ("{0}`tclient {1},{2} {3}x{4}`tflag0Flat={5}`tflag2Flat={6}`tflag0vs2Px={7}" -f (Split-Path $f -Leaf),$cx,$cy,$cw,$ch,(Flat-Rect $b0 $cx $cy $cw $ch),(Flat-Rect $b2 $cx $cy $cw $ch),$d) }
     if(-not (Flat-Rect $b0 $cx $cy $cw $ch) -or (Flat-Rect $b2 $cx $cy $cw $ch)){
       $g=[System.Drawing.Graphics]::FromImage($b2); $r=New-Object System.Drawing.Rectangle $cx,$cy,$cw,$ch
       $g.DrawImage($b0,$r,$r,[System.Drawing.GraphicsUnit]::Pixel); $g.Dispose() }
