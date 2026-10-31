@@ -43387,6 +43387,18 @@ the signed Euclidean loop, including the former `i64::MIN / -1` trap, and succes
 calls retain `a*x + b*y == g`. The math-special and math-ntheory fixtures pin these
 limits, failures and ordinary signed Bezout identities.
 
+## D5918 — e.gpu capacity and staging-pool bounds
+
+`e.gpu.open` reserves registry capacity while it builds and publishes the device
+bookkeeping record, so a rejected seventeenth open has not advanced the caller arena.
+Vulkan queues retain both staging dimensions: the default is four 16 MiB blocks, all
+configured blocks are allocated together on the first nonempty transfer, and a source
+that would need more blocks is `TooLarge`. Baseline transfers complete synchronously,
+so the pool is wholly available at the next call rather than exposing an asynchronous
+wait state. The CPU backend remains a direct arena-backed copy. Bitonic sorting stays
+capped at 8,388,608 keys, whose padded grid fits; the next power of two would require
+65,536 workgroups and is rejected before buffer access.
+
 ## D5919 — WASI permission paths stay inside a preopen
 
 `underPreopen` checks both the lexical path and its canonical real path. A symlink or
@@ -43570,3 +43582,134 @@ The merge itself kept `origin`'s Metal heaps (up to four, an address names its h
 `DeviceState.lost` now keeps it. `metal_finish` sets it when a wait fails and returns it from every later call, so every entry that already asked reports `Lost`, including `state_of`. `close` goes through `state_lookup`, which does not ask, drains the pending commands itself and releases the device, so a lost device still closes.
 
 `has` on a lost device answers false. Nothing makes a lost device usable again; open a new one.
+
+
+## D5924 — Cached frame memory, changed-box presents and a faster CPU rasteriser; what a Vulkan swapchain needs
+
+Measured on an Intel Iris Xe (one unified heap: type 0 device-local, type 1 device-local + host-visible + coherent but
+uncached write-combined, type 2 host-visible + coherent + cached) with SLUST's match screen. A `.Vulkan` frame cost 126 ms
+(8 fps): the frame images lived in type 1, where a CPU read runs at ~90 MB/s, and every frame was staged, read back
+whole and blitted whole, changed or not.
+
+- `vulkan.Context.host_type` is the host-visible, coherent, host-cached type (else `memory_type`); `vulkan.host_buffer`
+  allocates from it, and only frame images (`gpu.image`) and staging blocks use it. Kernel buffers keep `memory_type`, so a
+  discrete GPU does not read kernel data from system RAM over PCIe. A type the buffer's requirements exclude falls back.
+  6.4 MB write 106 ms to 3 ms, readback 70 ms to 1.5 ms.
+- `gpu.write_image` copies straight into the mapped image (no second copy out of staging; staging limits no longer apply to
+  images), and `gpu.read_image_rect` reads a rectangle.
+- `ui.window.request_frame` reads back and blits only the changed box the renderer reports (D5905) and nothing when it is
+  empty. The whole frame is still shown for the first frame, after a resize, after a failed blit, with a presenter, on a host
+  whose `os.window_present_rect` answers Unsupported (every host but Windows today), and on an expose: the window procedure's
+  `Paint` runs `window.repaint`, which shows the last presented frame whole at once.
+- Rasteriser (`gfx.scene`), pixel-identical to before (checked by a frame hash): a clip mask is written and valid only inside
+  its edge box and narrows the scissor to it; the edge accumulator is cleared over the edges' columns, not the stride;
+  `accumulate_edge` truncates instead of calling generic `math.floor`/`ceil`; gradient brushes are painted by loops that
+  hoist what `brush_at` redid per pixel.
+
+### What a swapchain needs (not done)
+
+After the above a changed frame's present is a rectangle copy plus one GDI blit (a few tenths of a ms) and an unchanged frame's
+is nothing, so a swapchain replaces a cheap CPU path with a GPU upload of the same bytes; it pays only once the rasteriser runs
+on the GPU and no CPU frame exists. It also cannot be validated on one Intel machine. For when it is built:
+
+1. Instance: `vulkan.devices` creates the instance with no extensions; add `VK_KHR_surface` and `VK_KHR_win32_surface`, and
+   load `vkCreateWin32SurfaceKHR`, `vkDestroySurfaceKHR`, `vkGetPhysicalDeviceSurfaceSupportKHR`,
+   `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `...FormatsKHR`, `...PresentModesKHR`. The surface comes from
+   `os.window_native` (HWND, HINSTANCE) in a `gpu.Surface{ kind: .Win32 }` that `gpu.open_target` accepts today as Unsupported.
+2. Device: `vulkan.open` creates the device with no extensions; add `VK_KHR_swapchain` and load `vkCreateSwapchainKHR`,
+   `vkGetSwapchainImagesKHR`, `vkAcquireNextImageKHR`, `vkQueuePresentKHR`, `vkDestroySwapchainKHR`.
+3. The compute queue family must report present support for the surface, else a second family and an ownership transfer.
+4. Synchronisation: `launch` builds and destroys a command pool per submit and ends in `vkQueueWaitIdle`
+   (`record_and_submit`); a present path needs a persistent pool and command buffers, `vkCreateSemaphore` (acquire, render
+   done), a fence per frame in flight, `vkCmdPipelineBarrier` (UNDEFINED or PRESENT_SRC to TRANSFER_DST and back) and
+   `vkCmdCopyBufferToImage` from the host-visible frame image (`bufferRowLength` = width). The swapchain needs usage
+   TRANSFER_DST and a B8G8R8A8_UNORM format, matching the renderer's packed Bgra8.
+5. `gpu`: `TargetState` carries the swapchain; `gpu.present` copies the front image into the acquired one and presents;
+   `VK_ERROR_OUT_OF_DATE_KHR`/SUBOPTIMAL and a minimised (0x0) window recreate or skip; `gpu.resize` recreates it.
+6. `ui.window`: skip `read_image` and `os.window_present` for a swapchain target. Swapchain images rotate, so a changed-box
+   present needs the union of the last N boxes per image (or `VK_KHR_incremental_present` regions); choose MAILBOX or
+   IMMEDIATE to avoid FIFO pacing a 15 fps UI to the display.
+
+## D5925 — Choosing the Vulkan device: `NEPER_VK_DEVICE`, `gpu.open_with`, discrete by default
+
+An Optimus laptop lists two devices (index 0 Intel Iris Xe, shared memory, drives the screen; index 1 RTX 3080 Laptop GPU, 16 GB, discrete). `gpu.open(a, backend, index)` is unchanged. New: `gpu.OpenOptions { choice: .Default | .Index | .Discrete | .Integrated, index }`,
+`gpu.choose_device(records, options)` (supported devices only: `Default` the first discrete one else the first supported, a named kind or index otherwise, an absent one is `NoDevice`),
+`gpu.open_with(a, backend, options)` (`Default` falls back to index 0 when the discrete device will not open), `gpu.open_options_from_env` and `gpu.open_preferred(a, backend)`, which reads
+`NEPER_VK_DEVICE=<index>|discrete|integrated` (unset or unknown is `Default`). `e.ui.app.init` opens through `open_preferred`. `app.Options` has no device field: a new field would break every
+`app.Options` literal in `examples/`, the fixtures and the WASM and Android samples, so the environment variable and `open_with` are the options. A CPU renderer does not care which GPU holds
+its frame memory, so SLUST's default (`SLUST_BACKEND` unset: the CPU renderer) is unaffected.
+
+Checked on the RTX (memory types 0 to 5: type 5 is device-local + host-visible + coherent in the 16 GB heap, type 4 host-visible + coherent + cached in system RAM; compute family 0; subgroup size 32
+on both devices): the D5924 cached-memory change is right there too. `host_type` is type 4, frame images and staging are system RAM and read back at memory speed (a changed-box frame costs the same
+10 ms of CPU rasterisation and 0.13 ms of present on both devices, `NEPER_FRAME_STATS`, SLUST copy `bench_slust`), and kernel buffers stay in type 5. Measured with a copy of the profile's `vkb`: a CPU read
+of a kernel buffer on the RTX runs at about 5 MB/s (6.4 MB in 1.23 s; 76 ms on Intel), so the CPU must never read a kernel buffer every frame.
+
+## D5926 — `NEPER_FRAME_STATS=1` and a minimised window
+
+`e.ui.app` prints one line per frame that changed pixels (and the first): `frame N render_us= present_us= box=x0,y0,x1,y1`; render is the rasteriser plus the upload and present inside `gpu.present`, present
+is the readback and GDI blit. A minimised window has a 0 x 0 client: the build under zero constraints failed with `widget.InvalidTree` and ended the program (SLUST; reproduced on the CPU and GDI paths before any of
+this work). `present_frame` now draws nothing while the client is empty; the restore's resize event makes a frame due. (SLUST also stops with `a page could not be built` when the window is smaller than about
+650 logical pixels high, after a restore from maximised on a 150 percent display, and on moving to the second monitor: its layout limit, the same on every present path, not changed here.)
+
+## D5927 — Cheap compute launches: a persistent pool, command buffer, fence and argument block
+
+`vulkan.dispatch` made a command pool, a command buffer and a 24-byte argument buffer (create, allocate, map) per launch, ended in `vkQueueWaitIdle`, and left about 700 bytes of records in the arena each
+time. `vulkan.Context` now owns a pool (RESET_COMMAND_BUFFER), one command buffer, a fence and a 4 KB argument block made at `open`; a launch resets and re-records the buffer, submits with the fence, waits on
+it and returns its records to the arena. A one-workgroup launch, measured over 200 launches: Intel Iris Xe 853 us to 379 us, RTX 3080 1380 us to about 1000 us (the RTX floor for an empty dispatch is about
+700 us for one workgroup and 800 us for 2400: Optimus submit latency). A frame pays about 0.4 (Intel) to 0.8 (RTX) ms per launch; the rasteriser makes one. Not done: several dispatches in one submission
+(nothing here needs it), an asynchronous launch. One command buffer and one argument block serve a device, so launches on two queues of one device from two threads at once would share them; `gpu_device_lock` (the device lock held through a launch) still passes.
+
+## D5928 — A Vulkan swapchain (`VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR_swapchain`, `VK_KHR_incremental_present`)
+
+`gpu/vulkan.e`: the instance is made with both surface extensions when the loader lists them (a loader that refuses them gets the old instance), the device with `VK_KHR_swapchain` and, when listed,
+`VK_KHR_incremental_present`. `surface_open` (a Win32 surface; the compute family must present), `swapchain_make` (B8G8R8A8_UNORM, TRANSFER_DST, opaque, MAILBOX else IMMEDIATE else FIFO,
+`NEPER_PRESENT_MODE=fifo|mailbox|immediate` for measuring, `oldSwapchain` chained, `Empty` for a minimised window), `swapchain_acquire` (250 ms timeout), `swapchain_present` (barrier, `vkCmdCopyBufferToImage` of one rectangle
+of the host frame buffer, barrier, submit with a semaphore pair and a fence, `vkQueuePresentKHR` with a `VkPresentRegionsKHR` of the same rectangle). `gpu.open_target` accepts `Surface{kind: .Win32}` on a Vulkan device with a
+Bgra8 target (otherwise `Unsupported`, as `gpu_present` expects for a null handle). The target keeps its two frame images, so the renderer is unchanged; `gpu.report_damage` (called by `scene.render_scaled`) gives it the changed box
+and `gpu.present` copies the front image into the acquired swapchain image. A swapchain image holds a frame from up to N presents ago, so each carries a stale box (the union of the boxes since it was last written) and only that
+is copied. Out-of-date and suboptimal results, a resize, a minimise and an acquire timeout recreate or skip; any other failure ends the swapchain, `gpu.native` turns false, and `ui.window` shows frames by readback and GDI from
+then on (a native window needs no repaint on an expose). `ui.window.open` tries the swapchain when `NEPER_PRESENT=swapchain`, else GDI.
+
+Measured (`benchmarks/window_present.e`: a frame written then shown, 20 presents, microseconds; GDI is readback plus `SetDIBitsToDevice`): Intel Iris Xe full 1180x780 GDI 3515 and swapchain 2226, 1600x1000 6922 and 3130, a 133x136
+box 197 and 473 (219 and 638 at 1600). RTX 3080, display wired to the Intel GPU so the driver copies: full 3285 and 4686, 1600x1000 5629 and 7866, box 213 and 2661 (190 and 4584 at 1600). In SLUST the small animation frames
+(the common case) cost the same on Intel (12.0 ms GDI, 13.1 swapchain) and the first frame on the RTX swapchain costs 326 ms against 82. **The swapchain wins only for large changes on the display's own GPU; GDI stays the default**
+(`SWAPCHAIN_DEFAULT = false`). Tested in the real window on both devices: the match screen draws correctly (screenshots), it survives minimise, restore, six resizes and maximise. Moving to the 3440x1440 second monitor ends
+SLUST on the GDI path too (its layout limit above), so a move between monitors, a DPI change and a lost device were not exercised on the swapchain; a lost device falls back to GDI by construction and is untested.
+
+## D5929 — A GPU tile rasteriser for `e.gfx.scene` (`e.gfx.gpuraster`)
+
+`scene.render_scaled` offers the frame to an installed `scene.Rasteriser` after the damage is found; it answers drawn or hands the frame back (the whole frame is then redrawn on the CPU, whose canvas missed the GPU frames).
+`gpuraster.install(renderer, arena, queue, textures, check)` installs one; `e.ui.app` does so when `NEPER_RASTER=gpu` (`check` draws every frame both ways and prints `RASTERCHECK worst= over2= of=`). The CPU walks the commands
+exactly as `run_commands` does (the same state: transform, scissor, clip masks, opacity layers, and the same flatteners for fills, strokes, rounded clips and glyph outlines) and emits operations: RECT (analytic, with
+`fill_rect_fast`'s own row-minus-column coverage for solid unmasked rectangles), PATH (flattened edges), IMAGE, MASK, LBEGIN and LEND. Each is binned into the 16x16 tiles the damage (plus the last frame's, the back image being two
+frames old) touches; PATH and MASK entries carry the edges that cross the tile and a per-row backdrop (the edges wholly to its left), FULL when it is 1 everywhere. One workgroup per dirty tile, a thread per pixel, composes the entries
+in draw order in float registers (4 layers, 8 masks) and writes BGRA into the frame image. An edge's coverage is the exact box-filter area the CPU's accumulation buffer gives (same clamps and slopes), a gradient is `stops_premultiplied`,
+an image is the bilinear `sample_texture` over float texels (cached per texture generation and version; `scene.Texture` now carries a version), blend is `blend_pixel`. Handed back to the CPU: ClearType, mat and Android text, more
+than 8192 operations, 524288 edges, 8 masks or 4 layers. Tolerance: per channel at most 2 levels, and the tests want no pixel beyond it. Measured: the fixture scenes differ by at most 1 level (0 for rectangles, gradients, layers and
+images); on the real SLUST match screen (`NEPER_RASTER=check`, Intel) 12 frames differ in one pixel of 920 400 (by up to 67 levels, an edge case) and one frame by at most 1 level. Tests: `tests/selfhost/fixtures/link/gfx_gpu_raster`
+(nine scenes against the CPU renderer, on the kernel's CPU build and on every Vulkan device), unit tests in `gpu.e` and `gpu/vulkan.e`; benchmark `benchmarks/gfx_gpu_raster.e`.
+
+Speed (SLUST copy, `NEPER_FRAME_STATS`, milliseconds, Intel Iris Xe, CPU renderer then GPU rasteriser): 1180x780 first frame 93 then 55, second (full) frame 262 then 198, large change 291 then 133, mid 53 then 50, smallest
+animation frame 12.4 then 16.2; 1600x1000 first 133 then 63, full 484 then 287, large 435 then 192, mid 110 then 98, small 17.2 then 17.0. A small frame (150 tiles, 1500 entries, 6400 edges) is 3 ms of encode and 12 ms of kernel on
+Intel: the kernel runs at about 0.3 us a pixel, far from the hardware (every thread walks its tile's edge list and recomputes the box filter; next: the edges in workgroup memory and the slope precomputed per edge). The targets (a full
+1180x780 frame under 4 ms, one card under 2 ms on the RTX) are **not reached**; the RTX does not run the rasteriser at all (D5950). Not done: binning on the GPU (it is CPU), glyph outline caching (a full frame's encode is 17 to 20 ms,
+mostly glyph outlines), the unsupported text modes.
+
+## D5950 — What the RTX 3080 and the kernel language exposed
+
+- **No float kernel launches on the RTX.** `shaderDenormPreserveFloat32` and `shaderDenormFlushToZeroFloat32` are both false (read through `vkGetPhysicalDeviceProperties2`), so by section 10 every kernel that touches an `f32`
+  is `Unsupported`. `gpu.accept_unspecified_denormals(device)` lets a caller whose results do not depend on denormals take the device as it is: the device then reports `.DenormPreserve` and the capability and execution mode
+  are cut out of the SPIR-V it launches (`strip_denorm_preserve`). `gpuraster.install` calls it.
+- **The kernel back end answers `Unsupported` (the module is empty) for a helper that returns a struct or a tuple, and for `!(a > b)`**; both work in the CPU build. Kernels use scalar helpers and `a <= b`.
+- **The RTX draws images as nothing in the rasteriser's kernel** (a bilinear read of float or packed texels at a tile away from the origin; the same code is exact on Intel and on the CPU build, a one-tile test at the origin
+  passes, and the failure moved with unrelated edits: a driver compile problem, not diagnosed). `gpuraster.install` therefore draws a test tile on a Vulkan device (`self_test`) and answers `Refused` when it is wrong, and refuses an NVIDIA device by name (in a checked build the failure differs and the test tile passed); the CPU keeps drawing.
+- Compile times and driver faults met on the way: a dynamically indexed private array made the kernel compile for 38 s on Intel, scalar layer and mask registers 31 s the first time (cached on disk afterwards); `[]shared` scratch
+  compiled in 36 ms but crashed the RTX driver; an `&&` chain followed by an `else if` drew pixels outside a scissor on the RTX, so range tests are functions of nested `if`s.
+- Kernel buffers on the RTX are VRAM behind the BAR: a CPU read runs at about 5 MB/s (D5925), the first present costs about 200 ms, an empty dispatch about 0.8 ms.
+
+## D5951 — Defaults, by measurement
+
+`NEPER_PRESENT` unset is GDI on both GPUs (D5928). The CPU renderer stays SLUST's default (`SLUST_BACKEND` unset). `SLUST_BACKEND=vulkan` opens the preferred device (discrete when present, D5925), draws on the CPU and presents by
+readback and GDI, as fast as the CPU path. `NEPER_RASTER=gpu` tries the GPU rasteriser: on the Intel iGPU it is about twice as fast for first frames and large changes and about equal for the rest, but 30 percent slower for the smallest
+animation frames at 1180x780 and compiles its kernel for 30 to 50 s the first time on a machine; on the RTX it refuses itself. Recommended default: Intel (the screen's GPU) the CPU renderer until the kernel compiles faster, or
+`SLUST_BACKEND=vulkan NEPER_RASTER=gpu` where the first-run wait is acceptable; RTX the CPU renderer (the discrete GPU adds nothing for this UI until the kernel runs there).

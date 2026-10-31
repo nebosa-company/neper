@@ -663,3 +663,7 @@ fn mapping_region(m: Mapping) -> []u8 {
     var none: []u8 = zero
     ret none
 }
+
+// A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
+// such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
+fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }
