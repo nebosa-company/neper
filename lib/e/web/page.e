@@ -167,7 +167,9 @@ fn sniff_label(label: str) -> (str, bool) {
 
 // The `url()` references of a style sheet, made absolute against the sheet's own URL.
 fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str {
-    var out = url.zero_buf(a, text.len * 2usize + 64usize)
+    let (out0, out_error) = url.buf_new(a, text.len * 2usize + 64usize)
+    if out_error != ok { ret text }
+    var out = out0
     var i = 0usize
     while i < text.len {
         let c = text[i]
@@ -240,7 +242,9 @@ fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str {
         url.buf_byte(&out, c)
         i += 1usize
     }
-    ret url.buf_take(a, &out)
+    let (taken, take_error) = url.buf_take(a, &out)
+    if take_error != ok { ret text }
+    ret taken
 }
 
 fn has_backslash(s: str) -> bool {
@@ -277,8 +281,8 @@ fn strip_cdata(a: *mem.Arena, text: str) -> str {
 }
 
 // The `@import` URLs a style sheet text lists, in order.
-fn imports_of(a: *mem.Arena, text: str) -> []const str {
-    var l = sheet.new_loader(a, sheet.media_env(1280.0f64, 720.0f64))
+fn imports_of(p: *Page, text: str) -> []const str {
+    var l = sheet.new_loader(p.pa, sheet.media_env(f64(p.view_width), f64(p.view_height)))
     let e = sheet.load(&l, text)
     if e != ok { ret zero }
     ret sheet.finish(&l).imports
@@ -286,7 +290,7 @@ fn imports_of(a: *mem.Arena, text: str) -> []const str {
 
 // Appends a sheet and, before it, the sheets it imports (to a depth of four); `base` is the sheet's URL.
 fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url, depth: usize) {
-    let imports = imports_of(p.pa, text_in)
+    let imports = imports_of(p, text_in)
     var i = 0usize
     while i < imports.len && depth < 4usize {
         let (abs, good) = resolve_against(p.pa, base, imports[i])
@@ -307,7 +311,7 @@ fn collect_sheets(p: *Page) -> []const str {
     let (made, me) = list.init[str](p.pa, 16usize)
     if me != ok { ret zero }
     var out = made
-    let env = sheet.media_env(1280.0f64, 720.0f64)
+    let env = sheet.media_env(f64(p.view_width), f64(p.view_height))
     let d = &p.tree
     var cur = dom.next_in_tree(d, d.root, d.root)
     while cur != html.NONE {
@@ -359,7 +363,7 @@ fn face_weight(w: str) -> u32 {
 fn load_web_fonts(p: *Page) {
     var si = 0usize
     while si < p.sheets.len {
-        var l = sheet.new_loader(p.pa, sheet.media_env(1280.0f64, 720.0f64))
+        var l = sheet.new_loader(p.pa, sheet.media_env(f64(p.view_width), f64(p.view_height)))
         si += 1usize
         if sheet.load(&l, p.sheets[si - 1usize]) != ok { continue }
         let faces = sheet.finish(&l).fonts
@@ -789,7 +793,9 @@ fn paint_url_image_of(ctx: *void, u: str) -> cpaint.ImageRef {
 fn html_wrapper(a: *mem.Arena, kind: u8, body: str, address: str) -> str {
     if kind == 0u8 {
         // Plain text: preformatted.
-        var out = url.zero_buf(a, body.len * 6usize + 64usize)
+        let (out0, out_error) = url.buf_new(a, body.len * 6usize + 64usize)
+        if out_error != ok { ret "" }
+        var out = out0
         url.buf_str(&out, "<pre style=\"word-wrap:break-word;white-space:pre-wrap\">")
         var i = 0usize
         while i < body.len {
@@ -798,13 +804,19 @@ fn html_wrapper(a: *mem.Arena, kind: u8, body: str, address: str) -> str {
             i += 1usize
         }
         url.buf_str(&out, "</pre>")
-        ret url.buf_take(a, &out)
+        let (wrapped, wrap_error) = url.buf_take(a, &out)
+        if wrap_error != ok { ret "" }
+        ret wrapped
     }
-    var out2 = url.zero_buf(a, address.len * 2usize + 64usize)
+    let (out2_0, out2_error) = url.buf_new(a, address.len * 2usize + 64usize)
+    if out2_error != ok { ret "" }
+    var out2 = out2_0
     url.buf_str(&out2, "<img src=\"")
     url.buf_str(&out2, address)
     url.buf_str(&out2, "\">")
-    ret url.buf_take(a, &out2)
+    let (tag, tag_error) = url.buf_take(a, &out2)
+    if tag_error != ok { ret "" }
+    ret tag
 }
 
 fn find_title(p: *Page) -> str {
@@ -1175,6 +1187,10 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
         cur = dom.next_in_tree(d, d.root, cur)
     }
     p.title = find_title(p)
+    // The first stylesheet pass is viewport-sensitive too; retain the requested
+    // dimensions before collecting styles, imports and web fonts.
+    p.view_width = width
+    p.view_height = height
     p.sheets = collect_sheets(p)
     p.font_base = fonts.faces.len
     load_web_fonts(p)
@@ -1186,8 +1202,6 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     let (v, ve) = view.open_tree(&p.va, p.tree, source, p.sheets, true, fonts, images, width, height)
     if ve != ok { ret (zero, ve) }
     p.view = v
-    p.view_width = width
-    p.view_height = height
     start_scripts(p)
     ret (p, ok)
 }
