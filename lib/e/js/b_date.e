@@ -331,10 +331,87 @@ fn parse_text(s: str) -> f64 {
     ret time_clip(t2)
 }
 
+// One to `max` digits at `at`: (value, index after them, found).
+fn digits_upto(s: str, at: usize, max: usize) -> (f64, usize, bool) {
+    var v = 0.0f64
+    var n = 0usize
+    while at + n < s.len && n < max && s[at + n] >= 48u8 && s[at + n] <= 57u8 {
+        v = v * 10.0f64 + f64(s[at + n] - 48u8)
+        n += 1usize
+    }
+    ret (v, at + n, n > 0usize)
+}
+
+// "1997-3-8 1:1:1.5-07": the ISO date and time with a space for the T and one or two digits per field (no T form).
+fn parse_loose(s: str) -> f64 {
+    var at = 0usize
+    var ysign = 1.0f64
+    var ylen = 4usize
+    if at < s.len && (s[at] == 43u8 || s[at] == 45u8) {
+        if s[at] == 45u8 { ysign = -1.0f64 }
+        ylen = 6usize
+        at += 1usize
+    }
+    let (year0, a1, g1) = digits_upto(s, at, ylen)
+    if !g1 || a1 - at != ylen || a1 >= s.len || s[a1] != 45u8 { ret js.nan() }
+    let (month, a2, g2) = digits_upto(s, a1 + 1usize, 2usize)
+    if !g2 || a2 >= s.len || s[a2] != 45u8 { ret js.nan() }
+    let (day, a3, g3) = digits_upto(s, a2 + 1usize, 2usize)
+    if !g3 || a3 >= s.len || s[a3] != 32u8 { ret js.nan() }
+    let (hour, a4, g4) = digits_upto(s, a3 + 1usize, 2usize)
+    if !g4 || a4 >= s.len || s[a4] != 58u8 { ret js.nan() }
+    let (min, a5, g5) = digits_upto(s, a4 + 1usize, 2usize)
+    if !g5 { ret js.nan() }
+    var sec = 0.0f64
+    var ms = 0.0f64
+    var at2 = a5
+    if at2 < s.len && s[at2] == 58u8 {
+        let (sv, a6, g6) = digits_upto(s, at2 + 1usize, 2usize)
+        if !g6 { ret js.nan() }
+        sec = sv
+        at2 = a6
+        if at2 < s.len && s[at2] == 46u8 {
+            var scale = 100.0f64
+            at2 += 1usize
+            var nd = 0usize
+            while at2 < s.len && s[at2] >= 48u8 && s[at2] <= 57u8 {
+                ms = ms + f64(s[at2] - 48u8) * scale
+                scale = scale / 10.0f64
+                at2 += 1usize
+                nd += 1usize
+            }
+            if nd == 0usize { ret js.nan() }
+            ms = js.floor(ms)
+        }
+    }
+    var tz = 0.0f64
+    if at2 < s.len && (s[at2] == 43u8 || s[at2] == 45u8) {
+        var ts = 1.0f64
+        if s[at2] == 45u8 { ts = -1.0f64 }
+        let (th, a7, g7) = digits_upto(s, at2 + 1usize, 2usize)
+        if !g7 || a7 - at2 != 3usize { ret js.nan() }
+        var tmin = 0.0f64
+        at2 = a7
+        if at2 < s.len {
+            let (tm, a8, g8) = digits_upto(s, at2, 2usize)
+            if !g8 || a8 - at2 != 2usize { ret js.nan() }
+            tmin = tm
+            at2 = a8
+        }
+        tz = ts * (th * 60.0f64 + tmin)
+    }
+    if at2 != s.len { ret js.nan() }
+    if month < 1.0f64 || month > 12.0f64 || day < 1.0f64 || day > 31.0f64 || hour > 24.0f64 || min > 59.0f64 || sec > 59.0f64 { ret js.nan() }
+    let year = ysign * year0
+    ret time_clip(make_date(make_day(year, month - 1.0f64, day), make_time(hour, min, sec, ms)) - tz * 60000.0f64)
+}
+
 fn parse_date(s_in: str) -> f64 {
     let s = js.trim_js(s_in)
     let iso = parse_iso(s)
     if !js.is_nan(iso) { ret iso }
+    let loose = parse_loose(s)
+    if !js.is_nan(loose) { ret loose }
     ret parse_text(s)
 }
 
