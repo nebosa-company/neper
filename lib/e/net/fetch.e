@@ -523,21 +523,31 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
         }
         if !str.eq(cur.scheme, "http") && !str.eq(cur.scheme, "https") { ret (zero, UnsupportedScheme) }
         if bad_port(cur.port) { ret (zero, BlockedPort) }
-        // A subresource (it has a referrer) whose host a filter list names is never requested; the document itself is not filtered.
-        if req.referrer.len > 0usize && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
+        // A subresource (it has a referrer or a destination) whose host a filter list names is never requested; the document itself
+        // is not filtered.
+        if (req.referrer.len > 0usize || req.dest.len > 0usize) && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
             var hit = policy.host_blocked(c.cfg.block_hosts, cur.host)
             if hit && c.cfg.third_hosts.len > 0usize && policy.host_blocked(c.cfg.third_hosts, cur.host) {
                 let (rurl, re) = url.parse(c.a, req.referrer, zero, false)
                 hit = re != ok || !policy.same_party(rurl.host, cur.host)
             }
             if hit && c.cfg.typed_hosts.len > 0usize {
-                // A rule with request-type options covers only those types.
-                let ti = policy.host_index(c.cfg.typed_hosts, cur.host)
-                if ti >= 0i64 && usize(ti) < c.cfg.typed_types.len {
-                    let (page, pe) = url.parse(c.a, req.referrer, zero, false)
-                    hit = policy.options_allow(c.cfg.typed_types[usize(ti)], req.dest, page.host, cur.path)
-                    if pe != ok { hit = false }
+                // The request is blocked when any rule of its host covers it: an unrestricted rule always does, one with request-type,
+                // `domain=` or `path=` options only the requests those name.
+                let (page, pe) = url.parse(c.a, req.referrer, zero, false)
+                var page_host = ""
+                if pe == ok { page_host = page.host }
+                var seen = false
+                var covered = false
+                var ti = 0usize
+                while ti < c.cfg.typed_hosts.len && ti < c.cfg.typed_types.len {
+                    if policy.host_is(c.cfg.typed_hosts[ti], cur.host) {
+                        seen = true
+                        if policy.options_allow(c.cfg.typed_types[ti], req.dest, page_host, cur.path) { covered = true }
+                    }
+                    ti += 1usize
                 }
+                if seen { hit = covered }
             }
             if hit {
                 c.blocked += 1usize

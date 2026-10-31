@@ -1,7 +1,7 @@
 // The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page, over
 // `e.web.shell` (tabs, session history, omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
 // opens URL (default about:blank). The profile (bookmarks and visit log) is `neper-browser.profile` in the working directory,
-// read at start and written on exit. Build with `--arena 4g`: each tab reserves 128 MB and the TLS chain check allocates from
+// read at start and written on exit. Build with `--arena 4g`: each tab reserves 256 MB and the TLS chain check allocates from
 // the same arena, so the default one fails every https page as "not private" or "could not be loaded".
 use e.fs
 use e.gfx.paint
@@ -130,9 +130,9 @@ fn now_ms() -> f64 {
 }
 
 // One frame of page work: timers and scripts, a navigation the page asked for, and a link the view reports as followed.
-fn pump_page(m: *Model) -> bool {
+fn pump_page(m: *Model) {
     let t = shell.active_tab(m.sh)
-    if !t.loaded { ret false }
+    if !t.loaded { ret }
     let more = page.tick(t.pg, now_ms() - m.start_ms)
     let moved = shell.follow_pending(m.sh, t)
     // A tap reaches the page's click handlers first; one that cancels the click also cancels the link.
@@ -148,14 +148,21 @@ fn pump_page(m: *Model) -> bool {
             m.shown_url = ""
         }
     }
-    // A timer still pending keeps frames coming; an idle window would never run it.
-    ret page.next_wakeup(t.pg) >= 0.0f64
+}
+
+// Whether the active page has a timer that is due: an idle window builds no frame, so the loop asks for one then (and only then,
+// so a timer minutes away costs nothing).
+fn timer_due(m: *Model) -> bool {
+    let t = shell.active_tab(m.sh)
+    if !t.loaded { ret false }
+    let due = page.next_wakeup(t.pg)
+    ret due >= 0.0f64 && due <= now_ms() - m.start_ms
 }
 
 fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     mem.reset(&m.frame, m.frame_mark)
     let f = &m.frame
-    if pump_page(m) { widget.request_animation_frame(ctx.runtime) }
+    pump_page(m)
     sync_omni(m)
     let sh = m.sh
     let t = shell.active_tab(sh)
@@ -344,6 +351,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while go {
         let (more, step_error) = app.step(&running, time.millis(16i64))
         if step_error != ok || !more { go = false }
+        if go && timer_due(model) {
+            let asked = app.request_frame(&running)
+        }
     }
     let saved = shell.save_profile(sh, profile_path)
     let closed = app.close(&running)

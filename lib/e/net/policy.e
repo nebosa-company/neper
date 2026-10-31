@@ -817,9 +817,7 @@ fn path_allows(options: str, request_path: str) -> bool {
 fn host_index(domains: []const str, host: str) -> i64 {
     var i = 0usize
     while i < domains.len {
-        let d = domains[i]
-        if str.eq(host, d) { ret i64(i) }
-        if host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d) { ret i64(i) }
+        if host_is(domains[i], host) { ret i64(i) }
         i += 1usize
     }
     ret -1i64
@@ -837,12 +835,19 @@ fn add_unique(out: []str, n: *usize, v: str) {
 
 // Adblock Plus rules: `||host^` network rules and global `##selector` cosmetic rules; everything else is skipped.
 fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
-    let (domains, e1) = mem.alloc[str](a, text.len + 1usize)
-    let (selectors, e2) = mem.alloc[str](a, text.len + 1usize)
-    let (exempt, e3) = mem.alloc[str](a, text.len + 1usize)
-    let (third, e4) = mem.alloc[str](a, text.len + 1usize)
-    let (typed, e5) = mem.alloc[str](a, text.len + 1usize)
-    let (typeopts, e6) = mem.alloc[str](a, text.len + 1usize)
+    // At most one entry per line, so the arrays are sized by the line count, not by the bytes of the list.
+    var cap = 1usize
+    var ci = 0usize
+    while ci < text.len {
+        if text[ci] == 10u8 { cap += 1usize }
+        ci += 1usize
+    }
+    let (domains, e1) = mem.alloc[str](a, cap)
+    let (selectors, e2) = mem.alloc[str](a, cap)
+    let (exempt, e3) = mem.alloc[str](a, cap)
+    let (third, e4) = mem.alloc[str](a, cap)
+    let (typed, e5) = mem.alloc[str](a, cap)
+    let (typeopts, e6) = mem.alloc[str](a, cap)
     var ntp = 0usize
     var nt = 0usize
     var na = 0usize
@@ -910,11 +915,11 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                         let (with_path, pe) = str.concat(a, joined, path_prefix)
                         if je == ok && pe == ok { options = with_path }
                     }
-                    if type_options_named(options) || str.contains(options, "domain=") || str.contains(options, "path=") {
-                        typed[ntp] = host
-                        typeopts[ntp] = options
-                        ntp += 1usize
-                    }
+                    // Every rule is kept with its options (empty for an unrestricted one): a request is blocked when any rule of
+                    // its host covers it.
+                    typed[ntp] = host
+                    typeopts[ntp] = options
+                    ntp += 1usize
                     add_unique(domains, &nd, host)
                 }
             }
@@ -2013,12 +2018,16 @@ fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str) {
 }
 
 // Whether `host` (a parsed URL host, already lower case) is one of `domains` or a subdomain of one: an Adblock Plus `||host^` rule.
+// Whether `host` is the domain `d` or a subdomain of it.
+fn host_is(d: str, host: str) -> bool {
+    if str.eq(host, d) { ret true }
+    ret host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d)
+}
+
 fn host_blocked(domains: []const str, host: str) -> bool {
     var i = 0usize
     while i < domains.len {
-        let d = domains[i]
-        if str.eq(host, d) { ret true }
-        if host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d) { ret true }
+        if host_is(domains[i], host) { ret true }
         i += 1usize
     }
     ret false

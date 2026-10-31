@@ -3540,7 +3540,15 @@ fn size_contained(l: *const Layout, b: u32) -> (bool, f64, f64) {
     let (cv0, has_c) = extra_text(s, "contain")
     if !has_c { ret (false, 0.0f64, 0.0f64) }
     let ct = cv.lower(l.a, cv.trim_ws(cv0))
-    if !str.contains(ct, "size") && !str.eq(ct, "strict") { ret (false, 0.0f64, 0.0f64) }
+    // Whole keywords: `inline-size` contains one axis only and must not read as `size`.
+    var full = false
+    let ctoks = cv.split_top_level_spaces(l.a, ct)
+    var cti = 0usize
+    while cti < ctoks.len {
+        if str.eq(ctoks[cti], "size") || str.eq(ctoks[cti], "strict") { full = true }
+        cti += 1usize
+    }
+    if !full { ret (false, 0.0f64, 0.0f64) }
     var w = 0.0f64
     var h = 0.0f64
     let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
@@ -3786,7 +3794,7 @@ fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64) {
         let vx = vertical_extras(rb)
         if !known_h { h = maxf(0.0f64, (w + hx) / ratio - vx) } else if !known_w { w = maxf(0.0f64, (h + vx) * ratio - hx) }
     }
-    if !known_w && !known_h && !ratio_forced && w > 0.0f64 && h > 0.0f64 {
+    if !known_w && !known_h && !ratio_forced && w > 0.0f64 && h > 0.0f64 && (intr.ratio > 0.0f64 || (intr.has_width && intr.has_height)) {
         // Neither size is set: the constraint violation table of CSS 2.1 10.4 picks the pair that keeps the natural ratio.
         let max_w = clamp_width(l, b, 1.0e9f64, cbw)
         let min_w = clamp_width(l, b, 0.0f64, cbw)
@@ -9028,9 +9036,10 @@ fn mc_prepare(l: *Layout, b: u32, origin: f64, colh: f64) {
     l.mc_use = true
 }
 
-// `colify` over the column starts of height `colh` (none for a wrapping container, whose rows repeat the columns).
-fn colify_t(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize {
-    if l.mc_count == 0usize { mc_prepare(l, b, abs_y, colh) }
+// `colify` over the column starts of height `colh`; `table` is false for a wrapping container (`column-wrap`), whose rows repeat
+// the columns by multiples of the height, so counting and applying use the same breaks.
+fn colify_t(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool, table: bool) -> usize {
+    if table && l.mc_count == 0usize { mc_prepare(l, b, abs_y, colh) }
     let r = colify(l, b, abs_y, colh, stride, apply)
     l.mc_use = false
     ret r
@@ -9336,7 +9345,7 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         // Wrapping and balancing: as short as the columns of one row allow, no taller than `column-height`.
         var stepw = maxf(1.0f64, total / 64.0f64)
         var iterw = 0usize
-        while iterw < 80usize && colify_t(l, b, origin, colh, stride, false) >= cols.count && colh < col_fixed {
+        while iterw < 80usize && colify_t(l, b, origin, colh, stride, false, !col_wrap) >= cols.count && colh < col_fixed {
             colh += stepw
             iterw += 1usize
         }
@@ -9346,13 +9355,13 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
     } else {
         // Balance: the least column height under which everything fits in the available columns.
         // The shortest height found by bisection, so atomic lines end exactly on a column boundary.
-        if colify_t(l, b, origin, colh, stride, false) >= cols.count {
+        if colify_t(l, b, origin, colh, stride, false, !col_wrap) >= cols.count {
             var lo = colh
             var hi = total
             var iter = 0usize
             while iter < 40usize && hi - lo > 0.001f64 {
                 let mid = (lo + hi) / 2.0f64
-                if colify_t(l, b, origin, mid, stride, false) >= cols.count { lo = mid } else { hi = mid }
+                if colify_t(l, b, origin, mid, stride, false, !col_wrap) >= cols.count { lo = mid } else { hi = mid }
                 iter += 1usize
             }
             colh = hi
@@ -9360,7 +9369,7 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         if colh > total { colh = total }
         if ch >= 0.0f64 && colh > ch { colh = ch }
     }
-    var used_k = colify_t(l, b, origin, colh, stride, false)
+    var used_k = colify_t(l, b, origin, colh, stride, false, !col_wrap)
     var result_h = colh
     if col_wrap {
         let rows = used_k / cols.count + 1usize
@@ -9369,7 +9378,7 @@ fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) 
         l.mc_rgap = rgap
         result_h = f64(rows) * colh + f64(rows - 1usize) * rgap
     }
-    used_k = colify_t(l, b, origin, colh, stride, true)
+    used_k = colify_t(l, b, origin, colh, stride, true, !col_wrap)
     l.mc_count = 0usize
     record_rules(l, b, cols, used_k + 1usize, 0.0f64, colh)
     ret result_h
