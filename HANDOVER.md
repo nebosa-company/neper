@@ -47,21 +47,14 @@ export NEPER_SEED='D:/Temp/neper-seed2.exe'
 pwsh -NoProfile -File tests/selfhost/run.ps1 > /d/Temp/suite_full.out 2>&1
 ```
 
-~3 h, sequential, no resume, one QEMU at a time. The SUITE worktree is pinned to `591e9a2c`
-(= master `3fe23739` + the RNG commit, i.e. my merged state *without* the peer's later G012 commits). **A suite run
-(#17) was started at 13:13 on 2026-10-14 and may still be running or have finished: read the tail of
-`D:/Temp/suite_full.out` (look for `EXIT`) before starting another.** Everything up to the NeperOS
-`seedfixture` rows passed in run 16; the standalone seed rows (12) all pass. Not yet reached in a full run:
-`sheetfixture`, `moredocfixture`, `scanfixture`, `externalfixture`, `installdiskfixture`, `installseedfixture`,
-`installappsfixture`, `livefixture`, `livediskfixture`, `liveseedfixture`, `diskfixture` (79 rows). Expect more
-table-expectation drift there (see below). Linux `run.sh` has never been run (edits are by analogy).
+~3 h, sequential, no resume, one QEMU at a time. Start it detached (`Start-Process pwsh`): a session's background task
+was killed at the conformance stage twice. Check out the commit you want in `SUITE` first. Last known: every row
+through `install_update` passes. Not yet reached in a full run: `install_api`, `livefixture`, `livediskfixture`,
+`liveseedfixture`, `diskfixture` and anything after them. Linux `run.sh` has never been run (edits are by analogy).
+The guest runs much slower than the wall clock, so size timing rows generously (D2462-D2477); seedfixture rows need
+`NEPEROS_RNG=1`.
 
-Failures found and fixed this session (so you know the pattern): module-apis catalogue lines with bodies
-(e.gfx.vision), library-fixtures manifest stale, `fmt_png_quant` path had a form feed, host_services.py lost
-`return`s in a merge, shell.e `installed_len` scalar vs array, `flashlight_timer`/`blocks_hold`/`compass_replay`/
-`clipboard_long`/`flashlight_strobe` timing rows (the **guest runs much slower than the wall clock**: size
-waits/holds generously and assert the measurement line, D2462–D2477), `document_device` count 6→8, seedfixture
-rows need `NEPEROS_RNG=1` (Secure vault). Two outstanding items outside this repo state:
+Outstanding:
 
 - The peer's G012 commits changed `lib/e/os.windows.e` etc., so
   `tests/conformance/tools/plan_rename.x64-windows.expected.jsonl` (snapshot hash) is stale on master — whoever
