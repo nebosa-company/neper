@@ -1434,6 +1434,7 @@ fn parse_function(p: *Parser, decl: bool, is_async: bool) -> (u32, err) {
     if p.strict { fl = fl | ast.F_STRICT }
     node(p, fid).flags = fl
     if p.tok.kind == lex.T_IDENT && !is_p(p, "(") {
+        if is_reserved(p.tok.text) { ret (ast.NONE, fail(p, "unexpected reserved word")) }
         node(p, fid).text = p.tok.text
         try adv(p)
     } else if decl && p.anon_default {
