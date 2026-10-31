@@ -1485,6 +1485,27 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
             if se != ok { ret (false, se) }
             ret (to_boolean(sv), ok)
         }
+        if cur.class == C_TYPEDARRAY && !is_symbol_key(key) {
+            // A canonical numeric key never reaches the prototype chain: it sets the element when the receiver is the array itself,
+            // does nothing for an invalid index, and otherwise sets a data property on the receiver.
+            let (is_num, nv) = numeric_index(it, key.name)
+            if is_num {
+                var same = false
+                switch receiver {
+                case .Obj as rcv:
+                    same = rcv == cur
+                default:
+                    same = false
+                }
+                if same {
+                    let (rawv, ne) = ta_raw_of(it, ta_of(cur).kind, val)
+                    if ne != ok { ret (false, ne) }
+                    if ta_valid_index(cur, nv) { ta_set_raw(it, cur, usize(nv), rawv) }
+                    ret (true, ok)
+                }
+                if !ta_valid_index(cur, nv) { ret (true, ok) }
+            }
+        }
         let (p, found) = get_own(it, cur, key)
         if found {
             if (p.flags & P_ACCESSOR) != 0u8 {
@@ -1522,6 +1543,7 @@ fn set_prop(it: *Interp, o: *Obj, key: Key, val: Value, receiver: Value) -> (boo
         if ro.class == C_TYPEDARRAY && !is_symbol_key(key) {
             let (is_num2, nv2) = numeric_index(it, key.name)
             if is_num2 {
+                if !ta_valid_index(ro, nv2) { ret (false, ok) }
                 let (rawv, ne) = ta_raw_of(it, ta_of(ro).kind, val)
                 if ne != ok { ret (false, ne) }
                 if ta_valid_index(ro, nv2) { ta_set_raw(it, ro, usize(nv2), rawv) }
@@ -8848,14 +8870,14 @@ fn ta_get_index(it: *Interp, o: *Obj, idx: usize) -> Value {
     let t = ta_of(o)
     let b = buf_of(t.buffer)
     let size = ta_elem_size(t.kind)
-    if b.detached || t.offset + (idx + 1usize) * size > b.bytes.len { ret undefv() }
+    if idx >= ta_length(o) { ret undefv() }
     ret raw_to_value(it, t.kind, read_unit(b.bytes, t.offset + idx * size, size))
 }
 
 fn ta_set_raw(it: *Interp, o: *Obj, idx: usize, raw: u64) {
     let t = ta_of(o)
     let b = buf_of(t.buffer)
-    if b.immutable { ret }
+    if b.immutable || idx >= ta_length(o) { ret }
     let size = ta_elem_size(t.kind)
     var i = 0usize
     while i < size {

@@ -243,10 +243,10 @@ fn shared_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value
     if ne != ok { ret (js.undefv(), ne) }
     let (maxlen, has_max, mxe) = max_length_option(it, arg(args, 1usize))
     if mxe != ok { ret (js.undefv(), mxe) }
+    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
     let nto = js.as_object(it.new_target)
     let (proto, pe) = js.proto_value_of(it, nto, it.ta_protos[0usize])
     if pe != ok { ret (js.undefv(), pe) }
-    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
     if len > 2147483647.0f64 || (has_max && maxlen > 2147483647.0f64) { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
     var cap = len
     if has_max { cap = maxlen }
@@ -489,19 +489,23 @@ fn create_typed(it: *js.Interp, kind: u8, proto: *js.Obj, length: usize) -> (*js
 fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Value, err) {
     if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor requires 'new'")) }
     let nto = js.as_object(it.new_target)
-    let (proto, pe) = js.proto_value_of(it, nto, ta_default_proto(it, kind))
-    if pe != ok { ret (js.undefv(), pe) }
     let size = js.ta_elem_size(kind)
     let first = arg(args, 0usize)
     if !js.is_object(first) {
+        // The length is converted before the prototype is looked up.
         let (n, ne) = js.to_number(it, first)
         if ne != ok { ret (js.undefv(), ne) }
         let len = js.to_integer(n)
-        if len < 0.0f64 || len > 9007199254740991.0f64 || (args.len > 0usize && js.is_undefined(first) && false) { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
-        let (o, oe) = create_typed(it, kind, proto, usize(len))
+        if len < 0.0f64 || len > 9007199254740991.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
+        let (proto0, pe0) = js.proto_value_of(it, nto, ta_default_proto(it, kind))
+        if pe0 != ok { ret (js.undefv(), pe0) }
+        if len > 2147483647.0f64 { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
+        let (o, oe) = create_typed(it, kind, proto0, usize(len))
         if oe != ok { ret (js.undefv(), oe) }
         ret (js.obj_value(o), ok)
     }
+    let (proto, pe) = js.proto_value_of(it, nto, ta_default_proto(it, kind))
+    if pe != ok { ret (js.undefv(), pe) }
     let fo = js.as_object(first)
     if fo.class == js.C_ARRAYBUFFER {
         let b = js.buf_of(fo)
@@ -537,7 +541,7 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
     }
     if fo.class == js.C_TYPEDARRAY {
         let src = js.ta_of(fo)
-        if js.buf_of(src.buffer).detached { ret (js.undefv(), js.throw_type(it, "source typed array is detached")) }
+        if js.ta_out_of_bounds(fo) { ret (js.undefv(), js.throw_type(it, "source typed array is detached or out of bounds")) }
         let n = js.ta_length(fo)
         if (js.is_big_kind(src.kind)) != (js.is_big_kind(kind)) { ret (js.undefv(), js.throw_type(it, "Cannot mix BigInt and other types, use explicit conversions")) }
         let (o3, oe3) = create_typed(it, kind, proto, n)
@@ -562,6 +566,7 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
     } else {
         let (len, le) = js.length_of(it, fo)
         if le != ok { ret (js.undefv(), le) }
+        if len > 2147483647.0f64 { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
         let (l, lie) = list.init[js.Value](it.a, usize(len) + 1usize)
         var out = l
         if lie != ok { ret (js.undefv(), lie) }
@@ -684,13 +689,13 @@ fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
     if offe != ok { ret (js.undefv(), offe) }
     let offset = js.to_integer(off)
     if offset < 0.0f64 { ret (js.undefv(), js.throw_range(it, "offset is out of bounds")) }
-    if js.buf_of(js.ta_of(o).buffer).detached { ret (js.undefv(), js.throw_type(it, "typed array is detached")) }
+    if js.ta_out_of_bounds(o) { ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds")) }
     let target_len = js.ta_length(o)
     let src = arg(args, 0usize)
     let kind = js.ta_of(o).kind
     if js.is_object(src) && js.as_object(src).class == js.C_TYPEDARRAY {
         let so = js.as_object(src)
-        if js.buf_of(js.ta_of(so).buffer).detached { ret (js.undefv(), js.throw_type(it, "source is detached")) }
+        if js.ta_out_of_bounds(so) { ret (js.undefv(), js.throw_type(it, "source is detached or out of bounds")) }
         let n = js.ta_length(so)
         if js.is_infinite(offset) || f64(n) + offset > f64(target_len) { ret (js.undefv(), js.throw_range(it, "offset is out of bounds")) }
         // Copy through a temporary so overlapping views behave.
@@ -768,7 +773,7 @@ fn ta_slice(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
     if re == ok && js.ta_immutable(r) { ret (js.undefv(), js.throw_type(it, "The result is backed by an immutable ArrayBuffer")) }
     if re != ok { ret (js.undefv(), re) }
     if count > 0.0f64 {
-        if js.buf_of(js.ta_of(o).buffer).detached { ret (js.undefv(), js.throw_type(it, "typed array is detached")) }
+        if js.ta_out_of_bounds(o) { ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds")) }
         let cur = f64(js.ta_length(o))
         var fin2 = fin
         if fin2 > cur { fin2 = cur }
@@ -796,7 +801,7 @@ fn ta_fill(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if fe != ok { ret (js.undefv(), fe) }
     let (fin, fine) = barr.rel_index(it, arg(args, 2usize), len, len)
     if fine != ok { ret (js.undefv(), fine) }
-    if js.buf_of(js.ta_of(o).buffer).detached { ret (js.undefv(), js.throw_type(it, "typed array is detached")) }
+    if js.ta_out_of_bounds(o) { ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds")) }
     var end2 = fin
     let cur = f64(js.ta_length(o))
     if end2 > cur { end2 = cur }
@@ -1012,7 +1017,8 @@ fn ta_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     while f64(i) < len {
         var v = js.ta_get_index(it, o, i)
         if f64(i) == rel { v = new_value }
-        js.ta_set_raw(it, r, i, js.ta_raw_of_typed(js.ta_of(o).kind, v))
+        let we = js.set_index(it, r, f64(i), v)
+        if we != ok { ret (js.undefv(), we) }
         i += 1usize
     }
     ret (js.obj_value(r), ok)
@@ -1116,11 +1122,55 @@ fn g_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value
     ret (r, e)
 }
 fn g_copy_within(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let ge = guarded(it, this_val)
-    if ge != ok { ret (js.undefv(), ge) }
-    if js.ta_immutable(js.as_object(this_val)) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
-    let (r, e) = barr.array_copy_within(it, this_val, args)
-    ret (r, e)
+    let (o, ve) = validate_ta(it, this_val)
+    if ve != ok { ret (js.undefv(), ve) }
+    if js.ta_immutable(o) { ret (js.undefv(), js.throw_type(it, "The typed array is backed by an immutable ArrayBuffer")) }
+    let len = f64(js.ta_length(o))
+    let (to, te) = barr.rel_index(it, arg(args, 0usize), len, 0.0f64)
+    if te != ok { ret (js.undefv(), te) }
+    let (from, fe) = barr.rel_index(it, arg(args, 1usize), len, 0.0f64)
+    if fe != ok { ret (js.undefv(), fe) }
+    let (fin, fine) = barr.rel_index(it, arg(args, 2usize), len, len)
+    if fine != ok { ret (js.undefv(), fine) }
+    var count = fin - from
+    if len - to < count { count = len - to }
+    if count <= 0.0f64 { ret (this_val, ok) }
+    // The arguments may have shrunk or detached the buffer; the copy then stays inside what is left of it.
+    let (o2, ve2) = validate_ta(it, this_val)
+    if ve2 != ok { ret (js.undefv(), ve2) }
+    let t = js.ta_of(o)
+    let b = js.buf_of(t.buffer)
+    let size = js.ta_elem_size(t.kind)
+    let len2 = f64(js.ta_length(o))
+    if len2 - from < count { count = len2 - from }
+    if len2 - to < count { count = len2 - to }
+    if count <= 0.0f64 { ret (this_val, ok) }
+    let limit = js.ta_length(o) * size + t.offset
+    var to_at = usize(to) * size + t.offset
+    var from_at = usize(from) * size + t.offset
+    var left = usize(count) * size
+    var dir = 1i64
+    if from_at < to_at && to_at < from_at + left {
+        dir = -1i64
+        from_at = from_at + left - 1usize
+        to_at = to_at + left - 1usize
+    }
+    while left > 0usize {
+        if from_at < limit && to_at < limit {
+            b.bytes[to_at] = b.bytes[from_at]
+            if dir > 0i64 {
+                from_at += 1usize
+                to_at += 1usize
+            } else if from_at > 0usize && to_at > 0usize {
+                from_at -= 1usize
+                to_at -= 1usize
+            }
+            left -= 1usize
+        } else {
+            left = 0usize
+        }
+    }
+    ret (this_val, ok)
 }
 fn g_keys(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let ge = guarded(it, this_val)
@@ -1384,7 +1434,7 @@ fn dv_byte_length_getter(it: *js.Interp, this_val: js.Value, args: []const js.Va
     let (d, e) = this_dv(it, this_val)
     if e != ok { ret (js.undefv(), e) }
     let (oob, vlen) = dv_state(d)
-    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
+    if oob { ret (js.num_value(0.0f64), ok) }
     ret (js.num_value(f64(vlen)), ok)
 }
 
@@ -1392,7 +1442,7 @@ fn dv_byte_offset_getter(it: *js.Interp, this_val: js.Value, args: []const js.Va
     let (d, e) = this_dv(it, this_val)
     if e != ok { ret (js.undefv(), e) }
     let (oob, vlen) = dv_state(d)
-    if oob { ret (js.undefv(), js.throw_type(it, "DataView is detached or out of bounds")) }
+    if oob { ret (js.num_value(0.0f64), ok) }
     ret (js.num_value(f64(d.offset)), ok)
 }
 
