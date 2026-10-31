@@ -626,7 +626,7 @@ fn check_object(c: *Ctx, id: u32) -> err {
                 try check_expr(c, pn.b)
                 if vn.kind == ast.N_IDENT && vn.text.len > 0usize {
                     // Shorthand names are references and may not be reserved words.
-                    ret ok
+                    continue
                 }
             } else {
                 let kn = node(c, pn.a)

@@ -15,3 +15,4 @@ assert.sameValue(delete oc?.x, true);
 assert.sameValue(oc.x, undefined);
 assert.throws(SyntaxError, function() { eval("new Object?.()"); });
 assert.throws(SyntaxError, function() { eval("class A {} class B extends A { constructor() { super?.(); } }"); });
+assert.throws(SyntaxError, function() { eval("({ __proto__: null, __proto__, __proto__: null })"); });
