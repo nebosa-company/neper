@@ -20,6 +20,8 @@ These are rough, taken from runs that shared the machine with builds and other s
 | `built-ins/RegExp/property-escapes` | 613 | up to an hour: every chunk hits the 240 s limit and reruns test by test |
 | Module suite: `language/module-code`, `import`, `export` | 733 | a few minutes |
 
+The `staging/sm/Date/dst-offset-caching-*-of-8` tests take about 30 s each alone (step limit 4 billion) and time out when the machine is loaded with a six-way parallel run; rerun them alone. A third core run (2026-10-31, about 55 min with other builds running) lost two chunks to that.
+
 A typical single test takes milliseconds. The cost is in a few heavy tests: the `intl402/DateTimeFormat` calendar sweeps take
 one to two minutes each, and a crashing or hanging test costs its timeout (60 s alone, 240 s per chunk) before it is recorded.
 

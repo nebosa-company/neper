@@ -305,6 +305,7 @@ fn read_ident(lx: *Lexer) -> (str, bool, err) {
             break
         }
     }
+    if pos == start { ret ("", true, fail(lx, "invalid escape in identifier")) }
     lx.pos = pos
     ret (str.done(&out), true, ok)
 }
