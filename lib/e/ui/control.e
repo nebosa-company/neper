@@ -7376,8 +7376,10 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     parts_at += 1usize
     // The frame: its height, sides, fill and edge.
     var frame_style = style.defaults()
-    frame_style.width = style.Length { Px: options.width }
+    // A single-line value is laid out unwrapped, so a long one runs past the box unless the box clips it.
+    if !multiline && !options.filled { frame_style.overflow = .Clip }
     var body_height = line
+    frame_style.width = style.Length { Px: options.width }
     if floated && options.filled { body_height = line + style.text_style(t.tokens, .BodySmall).line_height }
     var pad_top = max_zero((h - body_height) * 0.5)
     var height = h
