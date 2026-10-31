@@ -7223,7 +7223,9 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
+    // v3 edits set Tahoma 8 pt, 11 px, through GDI (the 1:1 captures): a whole pixel size, so the text is hinted ClearType
     var small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light { small = style.TextStyle { size: 11.0, line_height: line_height, weight: 400u16, italic: false } }
     // round 12: the dark edits follow the native Windows 11 dark ones: Segoe UI 9 pt (12 px), no Tahoma swap.
     let dark_native = win_dark(t)
     if dark_native { small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false } }
@@ -7250,7 +7252,7 @@ fn windows_edit_theme_kerned(a: *mem.Arena, t: *const Theme, line_height: f32) -
     let (made, made_error) = windows_edit_theme(a, t, line_height)
     if made_error != ok { ret (zero, made_error) }
     var kerned = made
-    if win_dark(t) { kerned.language = "kern" }
+    if win_dark(t) || t.tokens.palette == .Light { kerned.language = "kern" }
     ret (kerned, ok)
 }
 
@@ -7319,6 +7321,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
     var edit_caret: paint.Color = zero
     if win_dark(t) { edit_caret = native_caret_phase(face) }
+    // round 46: the light edit of v3 is GDI too: whole pixel selection and an inverting caret (the glyphs stay on the line box)
+    if !win_dark(t) { edit_caret = widget.gdi_caret(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -7450,7 +7454,11 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let value_stack = widget.stack(0u64, grow, layers[0usize..at])
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: options.width }
-    frame_style.height = style.Length { Px: h }
+    // The light edit is one row shorter than the layout box: the capture's frame is 21 rows high (the extra row of the old
+    // tiles was the double resample), so the face stops there and the last row is whatever lies behind.
+    var frame_h = h
+    if !win_dark(t) { frame_h = h - 1.0 }
+    frame_style.height = style.Length { Px: frame_h }
     frame_style.background = paint.Brush { Solid: face }
     frame_style.border = style.Border { width: 1.0, color: side }
     frame_style.radius = t.tokens.radii.xs
@@ -7458,7 +7466,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.border = style.Border { width: 1.0, color: face }
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
-    var pad_y: f32 = 3.384
+    var pad_y: f32 = 3.0
     if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
     // round 15: the glyphs sit one row above the line box (see widget.place_edit), so the box starts one row lower
@@ -7493,7 +7501,14 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         rim = made_rim
         rim_error = made_error
     } else {
-        let (made_rim, made_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, false)
+        // Hover (round 6): the edit rim a shade darker, and the arrow or fast button under the pointer blue
+        // (`options.chrome_hover`: 1 the edit, 1 + zone of winedit.light_chrome for a button); the face does not change.
+        var over_it = 0u32
+        if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
+            over_it = 1u32
+            if options.chrome_hover > 1u32 { over_it = options.chrome_hover }
+        }
+        let (made_rim, made_error) = winedit.light_chrome(a, options.chrome_kind, chrome_state, over_it, w, h, options.chrome_dim)
         rim = made_rim
         rim_error = made_error
     }
@@ -7506,23 +7521,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         if bars_error != ok { ret (zero, TooLarge) }
         bars[0usize] = windows_bar(w, 1.0, side)
         bars[1usize] = windows_bar(w, 1.0, side)
-        bars[2usize] = windows_bar(1.0, h - 2.0, side)
-        bars[3usize] = windows_bar(1.0, h - 2.0, side)
+        bars[2usize] = windows_bar(1.0, frame_h - 2.0, side)
+        bars[3usize] = windows_bar(1.0, frame_h - 2.0, side)
         stacked[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), bars[0usize..1usize])
-        stacked[3usize] = widget.positioned(0u64, 0.0, h - 1.0, style.defaults(), bars[1usize..2usize])
+        stacked[3usize] = widget.positioned(0u64, 0.0, frame_h - 1.0, style.defaults(), bars[1usize..2usize])
         stacked[4usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), bars[2usize..3usize])
         stacked[5usize] = widget.positioned(0u64, w - 1.0, 1.0, style.defaults(), bars[3usize..4usize])
         layers_at = 6usize
-    }
-    // Round 6, hover (states/hover-*): the rim ring 2 levels darker over the whole edit, the button under the pointer blue
-    // (`options.chrome_hover`: 1 the edit, 2 + zone of winedit.hover_chrome for a button); the face does not change.
-    if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 && !dark_edit {
-        var zone = 0u32
-        if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
-        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
-        if veil_error != ok { ret (zero, veil_error) }
-        stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
-        layers_at += 1usize
     }
     if dark_bar && !options.classic_bar {
         // the themed bar belongs to DarkMode_Explorer, whose frame is white (edit-multiline-explorer)
@@ -7545,7 +7550,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.stack(0u64, style.defaults(), stacked[0usize..layers_at])
+    // the layout box stays `options.width` x `h` although the light face is one row shorter
+    var column_style = style.defaults()
+    if !win_dark(t) {
+        column_style.width = style.Length { Px: options.width }
+        column_style.height = style.Length { Px: h }
+    }
+    column[0usize] = widget.stack(0u64, column_style, stacked[0usize..layers_at])
     var no_gesture: widget.GestureAction = zero
     let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
     if over_error != ok { ret (zero, TooLarge) }
