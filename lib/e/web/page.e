@@ -572,6 +572,18 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
     let name = n.name
     var out: layout.Intrinsic = zero
     if is_inline_svg(p, node) {
+        // With neither width nor height, only the viewBox's aspect ratio is intrinsic; the box takes its width from CSS.
+        let has_w = dom.has_attribute(&p.tree, node, "width")
+        let has_h = dom.has_attribute(&p.tree, node, "height")
+        let (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewBox")
+        if !has_w && !has_h && has_vb {
+            let parts = cv_numbers(p.pa, vb)
+            if parts.len == 4usize && parts[2usize] > 0.0f64 && parts[3usize] > 0.0f64 {
+                out.kind = 1u8
+                out.ratio = parts[2usize] / parts[3usize]
+                ret out
+            }
+        }
         let se = svg_entry(p, node)
         var sratio = 0.0f64
         if se.height > 0u32 { sratio = f64(se.width) / f64(se.height) }
@@ -645,7 +657,7 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
     if str.eq(name, "meter") { ret known(80.0f64, 16.0f64, 0.0f64) }
     if str.eq(name, "audio") { ret known(300.0f64, 54.0f64, 0.0f64) }
     if str.eq(name, "svg") {
-        let (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewbox")
+        let (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewBox")
         out.kind = 1u8
         if has_vb {
             let parts = cv_numbers(p.pa, vb)
