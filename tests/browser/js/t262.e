@@ -267,6 +267,11 @@ fn run_all(ctx: *Ctx) {
         if has_flags {
             var fe2 = ff
             while fe2 < meta.len && meta[fe2] != 10u8 { fe2 += 1usize }
+            // The block list form (`flags:` then `  - module` lines) is read too.
+            while fe2 + 1usize < meta.len && (meta[fe2 + 1usize] == 32u8 || meta[fe2 + 1usize] == 45u8) {
+                fe2 += 1usize
+                while fe2 < meta.len && meta[fe2] != 10u8 { fe2 += 1usize }
+            }
             flags = meta[ff..fe2]
         }
         let (f1, is_raw) = str.find(flags, "raw")
