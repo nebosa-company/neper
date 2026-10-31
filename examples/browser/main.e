@@ -5,6 +5,8 @@
 // the same arena, so the default one fails every https page as "not private" or "could not be loaded".
 use e.fs
 use e.gfx.paint
+use e.gfx.scene
+use e.text.layout as text_layout
 use e.gpu
 use e.io
 use e.mem
@@ -27,10 +29,10 @@ use e.web.page as page
 use e.web.shell as shell
 
 const MAX_SLOTS: usize = 16usize
-// The address field holds at most this many bytes. Laying a longer text out in the frame took more memory than the frame's arena
-// has (the cost grows with the square of the length), which stopped the window; longer addresses are shown clipped and a typed
-// or pasted address longer than this is cut. ponytail: a 400-byte ceiling, raise it together with `frame_arena_bytes`.
-const OMNI_BYTES: usize = 400usize
+// The address field holds at most this many bytes. The renderer flattens one text into at most 65,536 edges (about 40 per
+// glyph), so a longer field would stop the window with "the scene was too large"; a longer address is shown clipped (Enter
+// still uses the whole address) and a longer typed or pasted one is cut.
+const OMNI_BYTES: usize = 1024usize
 
 type FaceSpec = struct { file: str, family: str, weight: u32, italic: bool }
 type Slot = struct { model: *Model, index: usize }
@@ -195,6 +197,12 @@ fn error_text(e: err) -> str {
     if e == widget.DuplicateKey { ret "two widgets had the same key" }
     if e == app.Failed { ret "the window system failed" }
     if e == app.Closed { ret "the window was already closed" }
+    if e == text_layout.TooLarge { ret "a text was too large to lay out" }
+    if e == text_layout.Invalid { ret "a text could not be laid out" }
+    if e == text_layout.TooSmall { ret "a shortened text did not fit its buffer" }
+    if e == scene.TooLarge { ret "the scene was too large" }
+    if e == scene.OutOfMemory { ret "the scene ran out of memory" }
+    if e == scene.Invalid { ret "the scene was invalid" }
     ret "an unnamed error"
 }
 

@@ -147,6 +147,8 @@ fn glyph_count(line: layout.Line) -> usize {
     ret n
 }
 
+const LONG_TEXT_BUDGET: usize = 409600usize
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var latin_bytes: [512]u8 = zero
     let latin_chars: [6]u32 = [6]u32{ 32u32, 45u32, 46u32, 97u32, 98u32, 99u32 }
@@ -181,8 +183,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Character wrap at 12: "ab" | "c"; a word wider than the line breaks by character.
     let (chars, chars_error) = layout.layout(a, "abc", style, options(12.0, .Start, .Character))
     if chars_error != ok || chars.lines.len != 2usize || chars.lines[0].end != 2usize || chars.lines[1].start != 2usize { os.exit(11i32) }
-    let (long, long_error) = layout.layout(a, "abcabc", style, options(12.0, .Start, .Word))
-    if long_error != ok || long.lines.len != 3usize || long.lines[0].end != 2usize { os.exit(12i32) }
+    let (long, spread_error) = layout.layout(a, "abcabc", style, options(12.0, .Start, .Word))
+    if spread_error != ok || long.lines.len != 3usize || long.lines[0].end != 2usize { os.exit(12i32) }
     // No wrap: one line whatever the width.
     let (none, none_error) = layout.layout(a, "ab ab ab", style, options(12.0, .Start, .None))
     if none_error != ok || none.lines.len != 1usize { os.exit(13i32) }
@@ -297,6 +299,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if width_error != layout.Invalid { os.exit(48i32) }
     let (_, ellipsis_error) = layout.layout(a, "ab ab ab", style, layout.Options { width: 15.0, max_lines: 1u32, align: .Start, wrap: .Word, ellipsis: "z", notdef: false })
     if ellipsis_error != layout.MissingGlyph { os.exit(49i32) }
+
+    // Choosing a font per character must not keep its shaping scratch: a long text costs the arena a modest amount per byte.
+    var spread_bytes: [800]u8 = zero
+    var spread_at = 0usize
+    while spread_at < spread_bytes.len {
+        spread_bytes[spread_at] = 97u8
+        spread_at += 1usize
+    }
+    let before_spread = a.off
+    let (_, spread_check) = layout.layout(a, spread_bytes[0..], style, options(0.0, .Start, .Word))
+    if spread_check != ok || a.off - before_spread > LONG_TEXT_BUDGET { os.exit(50i32) }
 
     try io.print("text layout ok\n")
     ret ok

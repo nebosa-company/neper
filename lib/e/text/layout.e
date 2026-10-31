@@ -198,9 +198,15 @@ fn font_for(a: *mem.Arena, style: Style, scalar: u32) -> (usize, err) {
     let width = unicode.write_utf8(scalar, buffer[0..], 0usize)
     var i = 0usize
     while i < style.fonts.len {
+        // Only the first glyph's id is read, so the shaping scratch (several KB per call, once per character of a text) is given
+        // back at once; left in the arena it made a text's layout cost about 4.6 KB per byte.
+        let mark = mem.mark(a)
         let (run, shape_error) = shape.shape(a, style.fonts[i].font, buffer[..width], shape_options(false, style.language, style.fonts[i].size))
+        var mapped = false
+        if shape_error == ok && run.glyphs.len > 0usize && run.glyphs[0].id != 0u32 { mapped = true }
+        mem.reset(a, mark)
         if shape_error != ok { ret (NONE, shape_error) }
-        if run.glyphs.len > 0usize && run.glyphs[0].id != 0u32 { ret (i, ok) }
+        if mapped { ret (i, ok) }
         i += 1usize
     }
     ret (NONE, ok)
