@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neper browser</title>
+<style>
+  body { margin: 8px; font: 14px sans-serif }
+  canvas { display: block; width: 1100px; max-width: calc(100vw - 20px); height: 700px; border: 1px solid #888 }
+  pre { margin: 8px 0 }
+</style>
+<canvas id="screen" width="1100" height="700"></canvas>
+<p id="status">running</p>
+<pre id="stdout"></pre>
+<script type="module">
+  // The Neper browser (examples/browser, built as build/wasm-sweep/neper_browser.wasm) in a window on a canvas.
+  // ?url=ADDRESS is the page it opens (a data: URL needs no network; the wasm host has no sockets), ?module=URL overrides the module.
+  import { run } from '../../../lib/wasm/neper-host.js'
+  const query = new URLSearchParams(location.search)
+  const out = { exitCode: null, stdout: '', error: null, isolated: crossOriginIsolated }
+  window.neperResult = out
+  const shown = document.getElementById('stdout')
+  const decoder = new TextDecoder()
+  const stdout = (bytes) => { if (bytes) shown.textContent = out.stdout += decoder.decode(bytes, { stream: true }) }
+  try {
+    const grab = async (name) => new Uint8Array(await (await fetch('/neperos/assets/fonts/' + name)).arrayBuffer())
+    const files = { 'jost-regular.ttf': await grab('jost-regular.ttf'), 'jost-bold.ttf': await grab('jost-bold.ttf') }
+    const args = query.get('url') ? [query.get('url')] : []
+    out.exitCode = (await run(query.get('module') ?? '/build/wasm-sweep/neper_browser.wasm', { canvas: document.getElementById('screen'), files, args, stdout })).exitCode
+  } catch (error) {
+    out.error = error.message
+  }
+  document.getElementById('status').textContent = out.error ?? `exit ${out.exitCode}`
+</script>

@@ -55,7 +55,7 @@ type ImageEntry = struct {
 }
 
 type Page = struct {
-    pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, fonts: *fontset.Set,
+    pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, blocked0: usize, fonts: *fontset.Set,
     url: str, status: u16, charset: str, title: str, mime: str,
     base: url.Url, tree: dom.Dom, sheets: []const str,
     images: list.List[ImageEntry],
@@ -125,10 +125,12 @@ fn resolve_against(a: *mem.Arena, base: *const url.Url, ref_text: str) -> (str, 
     ret (url.href(a, &u, false), true)
 }
 
-fn get_request(u: str, referrer: str, creds: fetch.Credentials) -> fetch.Request {
+fn get_request(u: str, referrer: str, creds: fetch.Credentials) -> fetch.Request { ret get_request_as(u, referrer, creds, "") }
+
+fn get_request_as(u: str, referrer: str, creds: fetch.Credentials, dest: str) -> fetch.Request {
     let none_headers: []const http.Header = zero
     let none_body: []const u8 = zero
-    ret fetch.Request { url: u, method: http.Method.Get, headers: none_headers, body: none_body, redirect: fetch.Redirect.Follow, credentials: creds, referrer: referrer }
+    ret fetch.Request { url: u, method: http.Method.Get, headers: none_headers, body: none_body, redirect: fetch.Redirect.Follow, credentials: creds, referrer: referrer, dest: dest }
 }
 
 // --- CSS text: decoding, imports, url() rewriting.
@@ -297,7 +299,7 @@ fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url
         i += 1usize
         if !good { continue }
         if !csp_url_ok(p, "style-src-elem", abs) { continue }
-        let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+        let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
         if fe != ok || resp.status >= 400u16 { continue }
         let (sub_base, be) = url.parse(p.pa, abs, zero, false)
         if be != ok { continue }
@@ -331,7 +333,7 @@ fn collect_sheets(p: *Page) -> []const str {
             if has_rel && has_href && has_token(rel, "stylesheet") && !has_token(rel, "alternate") && href.len > 0usize && (!has_media2 || sheet.media_matches(&env, p.pa, media2)) {
                 let (abs, good) = resolve_against(p.pa, &p.base, href)
                 if good && csp_url_ok(p, "style-src-elem", abs) {
-                    let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+                    let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
                     if fe == ok && resp.status < 400u16 {
                         let (sheet_base, be) = url.parse(p.pa, abs, zero, false)
                         if be == ok { push_sheet(p, &out, absolutize_css(p.pa, css_text(p.pa, &resp), &sheet_base), &sheet_base, 0usize) }
@@ -373,7 +375,7 @@ fn load_web_fonts(p: *Page) {
             fi += 1usize
             if f.url.len == 0usize || f.family.len == 0usize { continue }
             if !csp_url_ok(p, "font-src", f.url) { continue }
-            let (resp, fe) = fetch.fetch(p.client, get_request(f.url, p.url, fetch.Credentials.SameOrigin))
+            let (resp, fe) = fetch.fetch(p.client, get_request_as(f.url, p.url, fetch.Credentials.SameOrigin, "font"))
             if fe != ok || resp.status >= 400u16 || resp.body.len < 12usize { continue }
             var data: []const u8 = resp.body
             let b = resp.body
@@ -407,7 +409,7 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
         let blocked = list.push[ImageEntry](&p.images, e)
         ret &p.images.items[p.images.len - 1usize]
     }
-    let (resp, fe) = fetch.fetch(p.client, get_request(abs, p.url, fetch.Credentials.SameOrigin))
+    let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "image"))
     if fe == ok && resp.status < 400u16 && resp.body.len > 0usize {
         var st = io.SliceReader { data: resp.body, off: 0usize }
         let src = io.slice_reader(&st)
@@ -565,6 +567,14 @@ fn decimal_text(a: *mem.Arena, v: u64) -> str {
     ret out[0usize..n]
 }
 
+// The `viewBox` of an <svg>: the HTML parser lowercases the attribute name, a foreign-content parser may keep its case.
+fn svg_view_box(p: *Page, node: html.NodeId) -> (str, bool) {
+    let (low, has_low) = dom.get_attribute(&p.tree, node, "viewbox")
+    if has_low { ret (low, true) }
+    let (camel, has_camel) = dom.get_attribute(&p.tree, node, "viewBox")
+    ret (camel, has_camel)
+}
+
 // The intrinsic size of replaced content and form controls.
 fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic {
     let p = mem.cast[*Page](ctx)
@@ -587,6 +597,16 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
         let se = svg_entry(p, node)
         var sratio = 0.0f64
         if se.height > 0u32 { sratio = f64(se.width) / f64(se.height) }
+        // Without width and height attributes the viewBox still gives the ratio, which a CSS width or height then uses.
+        let (sw_attr, has_sw) = dom.get_attribute(&p.tree, node, "width")
+        let (sh_attr, has_sh) = dom.get_attribute(&p.tree, node, "height")
+        if !has_sw && !has_sh {
+            let (svb, has_svb) = svg_view_box(p, node)
+            if has_svb {
+                let sparts = cv_numbers(p.pa, svb)
+                if sparts.len == 4usize && sparts[2usize] > 0.0f64 && sparts[3usize] > 0.0f64 { sratio = sparts[2usize] / sparts[3usize] }
+            }
+        }
         ret layout.Intrinsic { kind: 1u8, has_width: true, width: f64(se.width), has_height: true, height: f64(se.height), ratio: sratio }
     }
     if str.eq(name, "img") {
@@ -657,7 +677,7 @@ fn intrinsic_of(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.
     if str.eq(name, "meter") { ret known(80.0f64, 16.0f64, 0.0f64) }
     if str.eq(name, "audio") { ret known(300.0f64, 54.0f64, 0.0f64) }
     if str.eq(name, "svg") {
-        let (vb, has_vb) = dom.get_attribute(&p.tree, node, "viewBox")
+        let (vb, has_vb) = svg_view_box(p, node)
         out.kind = 1u8
         if has_vb {
             let parts = cv_numbers(p.pa, vb)
@@ -899,7 +919,7 @@ fn net_hook(ctx: *void, method: str, u: str, header_lines: str, body: []const u8
         }
     }
     let none_body: []const u8 = zero
-    var req = fetch.Request { url: u, method: m, headers: list.slice_const[http.Header](&heads), body: body, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.SameOrigin, referrer: p.url }
+    var req = fetch.Request { url: u, method: m, headers: list.slice_const[http.Header](&heads), body: body, redirect: fetch.Redirect.Follow, credentials: fetch.Credentials.SameOrigin, referrer: p.url, dest: "xmlhttprequest" }
     if body.len == 0usize { req.body = none_body }
     let (resp, fe) = fetch.fetch(p.client, req)
     if fe != ok { ret false }
@@ -926,7 +946,7 @@ fn fetch_text_hook(ctx: *void, u: str, referrer: str, include_credentials: bool)
     if !csp_url_ok(p, "script-src-elem", u) { ret ("", 0u16, false) }
     var mode = fetch.Credentials.SameOrigin
     if include_credentials { mode = fetch.Credentials.Include }
-    let (resp, fe) = fetch.fetch(p.client, get_request(u, p.url, mode))
+    let (resp, fe) = fetch.fetch(p.client, get_request_as(u, p.url, mode, "script"))
     if fe != ok { ret ("", 0u16, false) }
     let (text, de) = cjk.decode_sniffing_bom(p.pa, "UTF-8", resp.body)
     if de != ok { ret ("", resp.status, true) }
@@ -1123,6 +1143,7 @@ fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str,
     let p = &cell[0usize]
     p.pa = a
     p.client = client
+    p.blocked0 = client.blocked
     p.fonts = fonts
     p.has_renderer = false
     p.scripted = false
@@ -1241,3 +1262,6 @@ fn attach_renderer(p: *Page, r: *scene.Renderer) {
         i += 1usize
     }
 }
+
+// How many requests the client's filter list has refused since this page began loading.
+fn blocked_count(p: *const Page) -> usize { ret p.client.blocked - p.blocked0 }

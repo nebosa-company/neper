@@ -700,12 +700,23 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
         dh = bb.h - td.cap_t - td.cap_b
     }
     paint_box_shadow(p, s, x, dy, bb.w, dh)
+    if bb.cf_count > 0u32 && bb.inner != .Table && bb.inner != .Row && bb.inner != .RowGroup {
+        // A box a multicol container breaks paints each column's slice of it.
+        var ci = 0usize
+        while ci < usize(bb.cf_count) {
+            let cf = p.l.cfrags.items[usize(bb.cf_first) + ci]
+            paint_background(p, b, s, x + cf.dx, y + cf.dy, bb.w, cf.h)
+            paint_borders(p, s, x + cf.dx, y + cf.dy, bb.w, cf.h)
+            ci += 1usize
+        }
+        ret
+    }
     if (bb.inner == .Row || bb.inner == .RowGroup) && !bb.coll {
         paint_row_background(p, b, s, x, y, bb.w, bb.h)
     } else {
         paint_background(p, b, s, x, dy, bb.w, dh)
     }
-    if !bb.coll { paint_borders(p, s, x, dy, bb.w, dh) }
+    if !bb.coll && dh > 0.001f64 { paint_borders(p, s, x, dy, bb.w, dh) }
 }
 
 // The columns a column box covers, as (first, end) over the table's column indices; (0, 0) when it is not found.
@@ -981,8 +992,15 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
     let dl = env.text(env.ctx, ts, dots)
     var ew = 0.0f64
     if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
-    // Decoration segments may follow the last text run. `paint_lines` tells us
-    // which text/atomic fragment is actually the last content on this line.
+    // Where the line's content ends: past the fragments that reach furthest (inline box edges after the text count too).
+    // `paint_lines` says which text or atomic fragment is the last content on the line.
+    var tail_end = fr.x + fr.w
+    var li2 = 0usize
+    while li2 < usize(ln.frag_count) {
+        let of = p.l.frags.items[usize(ln.frag_first) + li2]
+        li2 += 1usize
+        if (of.kind == .Segment || of.kind == .Text) && of.x + of.w > tail_end { tail_end = of.x + of.w }
+    }
     let is_last = last_content
     if fr.x >= content_w - ew && !is_last { ret }
     if !is_last && fr.x + fr.w + ew <= content_w + 0.01f64 {
@@ -990,9 +1008,9 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
         ret
     }
     if !is_last { ret }
-    if fr.x + fr.w + ew <= content_w + 0.01f64 {
+    if tail_end + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
-        paint_text_run(p, owner, dots, cx + fr.x + fr.w, dots_y, ew)
+        paint_text_run(p, owner, dots, cx + tail_end, dots_y, ew)
         ret
     }
     // Cut at the longest prefix that leaves room.
@@ -1005,8 +1023,24 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
         let pre = fr.text[0usize..cut]
         let pl = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(fr.box)].style), pre)
         if mem.address_of(pl) != 0usize && f64(pl.bounds.width) <= width_left + 0.01f64 {
-            paint_text_run(p, fr.box, pre, cx + fr.x, cy + fr.y, f64(pl.bounds.width))
-            paint_text_run(p, owner, dots, cx + fr.x + f64(pl.bounds.width), dots_y, ew)
+            var shown = pre
+            var shown_w = f64(pl.bounds.width)
+            // The ellipsis goes after the last break opportunity that fits: a word cut in the middle is dropped whole.
+            if cut < fr.text.len && fr.text[cut] != 32u8 && cut > 0usize && fr.text[cut - 1usize] != 32u8 {
+                var sp = cut
+                while sp > 0usize && fr.text[sp - 1usize] != 32u8 { sp -= 1usize }
+                var e = sp
+                while e > 0usize && fr.text[e - 1usize] == 32u8 { e -= 1usize }
+                if e > 0usize {
+                    let w2 = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(fr.box)].style), fr.text[0usize..e])
+                    if mem.address_of(w2) != 0usize {
+                        shown = fr.text[0usize..e]
+                        shown_w = f64(w2.bounds.width)
+                    }
+                }
+            }
+            paint_text_run(p, fr.box, shown, cx + fr.x, cy + fr.y, shown_w)
+            paint_text_run(p, owner, dots, cx + fr.x + shown_w, dots_y, ew)
             ret
         }
     }

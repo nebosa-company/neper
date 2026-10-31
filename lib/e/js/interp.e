@@ -103,6 +103,8 @@ const B_STRICT_CONST: u8 = 4u8
 const B_ALIAS: u8 = 8u8
 // A let / const / class binding (set with the temporal dead zone): a sloppy direct eval's `var` may not redeclare it.
 const B_LEX: u8 = 16u8
+// A `var` created by sloppy direct eval is configurable: `delete x` removes it.
+const B_DELETABLE: u8 = 32u8
 
 type Binding = struct { name: str, value: Value, flags: u8, target: *Env }
 
@@ -139,12 +141,15 @@ type AgentHub = struct {
     gen: u64, msg: Value, msg_num: f64, reports: [64]str, rhead: usize, rtail: usize
 }
 
+// A tagged template's strings array is made once per call site (the program and the template node) in each realm.
+type TemplateSite = struct { prog: *const ast.Program, node: u32, obj: *Obj }
+
 type Interp = struct {
     a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32,
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
-    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
+    sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, obj_to_string_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, tmpl_sites: list.List[TemplateSite], tmpl_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16,
     modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str,
     pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool,
     gens: list.List[*GenState], wasm: *void, no_eval: bool
@@ -2645,13 +2650,19 @@ fn declare(it: *Interp, e: *Env, name: str, val: Value, flags_in: u8) -> err {
     let (at, found) = env_index(e, name)
     if found {
         e.vars.items[at].value = val
-        e.vars.items[at].flags = flags
+        e.vars.items[at].flags = flags | (e.vars.items[at].flags & B_DELETABLE)
         ret ok
     }
     ret list.push[Binding](&e.vars, Binding { name: name, value: val, flags: flags, target: null_env() })
 }
 
 // A `var`/parameter-style declaration: leaves an existing binding's value alone.
+fn declare_var_deletable(it: *Interp, e: *Env, name: str) -> err {
+    let (at, found) = env_index(e, name)
+    if found { ret ok }
+    ret list.push[Binding](&e.vars, Binding { name: name, value: undefv(), flags: B_DELETABLE, target: null_env() })
+}
+
 fn declare_var(it: *Interp, e: *Env, name: str) -> err {
     let (at, found) = env_index(e, name)
     if found { ret ok }
@@ -2840,10 +2851,29 @@ fn init_binding(it: *Interp, e: *Env, name: str, val: Value) -> err {
 
 // --- functions
 
+// Whether finding `f`'s realm hits a revoked proxy (GetFunctionRealm throws a TypeError there).
+fn realm_chain_revoked(f: *Obj) -> bool {
+    var cur = f
+    var guard = 0u32
+    while guard < 64u32 {
+        guard += 1u32
+        if cur.class == C_BOUND {
+            cur = cur.bound_target
+        } else if cur.class == C_PROXY {
+            if cur.aux == null_obj() { ret true }
+            cur = cur.aux
+        } else {
+            break
+        }
+    }
+    ret false
+}
+
 fn proto_value_of(it: *Interp, ctor: *Obj, fallback: *Obj) -> (*Obj, err) {
     let (pv, pe) = get_prop(it, ctor, key_of("prototype"), obj_value(ctor))
     if pe != ok { ret (fallback, pe) }
     if is_object(pv) { ret (as_object(pv), ok) }
+    if realm_chain_revoked(ctor) { ret (fallback, throw_type(it, "Cannot perform GetFunctionRealm on a revoked proxy")) }
     ret (realm_proto(it, ctor, fallback), ok)
 }
 
@@ -5040,18 +5070,38 @@ fn eval_tagged_x(it: *Interp, f: *Frame, n: ast.Node, tail: bool) -> (Value, err
     let (fv, this_val, fe) = eval_callee(it, f, n.a)
     if fe != ok { ret (undefv(), fe) }
     // The strings array (cooked) with a frozen `raw` array, one per call site.
-    let strings = new_array(it)
-    let raw = new_array(it)
-    var s = 0usize
-    while s < usize(tn.b) {
-        let ts = f.prog.strs[usize(tn.a) + s]
-        if ts.valid { try array_push(it, strings, str_value(ts.cooked)) } else { try array_push(it, strings, undefv()) }
-        try array_push(it, raw, str_value(ts.raw))
-        s += 1usize
+    var cached = false
+    var strings = null_obj()
+    if it.tmpl_init {
+        var ci = 0usize
+        while ci < it.tmpl_sites.len && !cached {
+            if mem.address_of(it.tmpl_sites.items[ci].prog) == mem.address_of(f.prog) && it.tmpl_sites.items[ci].node == n.b {
+                strings = it.tmpl_sites.items[ci].obj
+                cached = true
+            }
+            ci += 1usize
+        }
     }
-    try define_data(it, strings, key_of("raw"), obj_value(raw), 0u8)
-    freeze_object(it, raw)
-    freeze_object(it, strings)
+    if !cached {
+        strings = new_array(it)
+        let raw = new_array(it)
+        var s = 0usize
+        while s < usize(tn.b) {
+            let ts = f.prog.strs[usize(tn.a) + s]
+            if ts.valid { try array_push(it, strings, str_value(ts.cooked)) } else { try array_push(it, strings, undefv()) }
+            try array_push(it, raw, str_value(ts.raw))
+            s += 1usize
+        }
+        try define_data(it, strings, key_of("raw"), obj_value(raw), 0u8)
+        freeze_object(it, raw)
+        freeze_object(it, strings)
+        if !it.tmpl_init {
+            let (tl, tle) = list.init[TemplateSite](it.a, 16usize)
+            it.tmpl_sites = tl
+            it.tmpl_init = true
+        }
+        let site_pushed = list.push[TemplateSite](&it.tmpl_sites, TemplateSite { prog: f.prog, node: n.b, obj: strings })
+    }
     let (l, le) = list.init[Value](it.a, usize(tn.d) + 1usize)
     var args = l
     if le != ok { ret (undefv(), le) }
@@ -5127,6 +5177,12 @@ fn eval_unary(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
             if he != ok { ret (undefv(), he) }
             if holder != null_env() {
                 if holder.has_with { ret (bool_value(delete_prop(it, holder.with_obj, key_of(an2.text))), ok) }
+                let (dat, dfound) = env_index(holder, an2.text)
+                if dfound && (holder.vars.items[dat].flags & B_DELETABLE) != 0u8 {
+                    // The binding goes away: its name no longer matches anything.
+                    holder.vars.items[dat].name = ""
+                    ret (bool_value(true), ok)
+                }
                 ret (bool_value(false), ok)
             }
             let done2 = delete_prop(it, it.global, key_of(an2.text))
@@ -5261,8 +5317,11 @@ fn eval_assign(it: *Interp, f: *Frame, n: ast.Node) -> (Value, err) {
         if tn.kind == ast.N_IDENT {
             let (holder, he) = resolve_scope(it, f, tn.text)
             if he != ok { ret (undefv(), he) }
+            // An unresolvable reference in strict code stays unresolvable even if the right-hand side creates the global.
+            let unresolved = holder == null_env() && !has_property(it, it.global, key_of(tn.text))
             let (v, e) = eval_named(it, f, n.b, target_name(f, n.a))
             if e != ok { ret (undefv(), e) }
+            if unresolved && f.strict { ret (undefv(), throw_reference(it, str_concat(it, tn.text, " is not defined"))) }
             let ae = put_in_scope(it, f, holder, tn.text, v)
             if ae != ok { ret (undefv(), ae) }
             ret (v, ok)
@@ -6586,6 +6645,19 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
                 try bind_pattern(it, f, dn.a, undefv(), mode)
                 continue
             }
+            // Inside `with`, the target of a `var x = ...` is resolved before the initialiser runs (it may delete the binding).
+            if n.op == ast.D_VAR && f.prog.nodes[usize(dn.a)].kind == ast.N_IDENT {
+                let idn = f.prog.nodes[usize(dn.a)]
+                let (wh, whe) = resolve_scope(it, f, idn.text)
+                if whe != ok { ret (normal(), whe) }
+                if wh != null_env() && wh.has_with {
+                    let (wv, wve) = eval_named(it, f, dn.b, idn.text)
+                    if wve != ok { ret (normal(), wve) }
+                    let wpe = put_in_scope(it, f, wh, idn.text, wv)
+                    if wpe != ok { ret (normal(), wpe) }
+                    continue
+                }
+            }
             let (v, e) = eval_named(it, f, dn.b, target_name(f, dn.a))
             if e != ok { ret (normal(), e) }
             try bind_pattern(it, f, dn.a, v, mode)
@@ -6916,7 +6988,7 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
     if ce != ok { ret (normal(), ce) }
     var last = undefv()
     if n.kind == ast.N_FORIN {
-        if is_nullish(coll) { ret (normal(), ok) }
+        if is_nullish(coll) { ret (Completion { kind: CK_NORMAL, value: undefv(), label: "" }, ok) }
         let (co, coe) = to_object(it, coll)
         if coe != ok { ret (normal(), coe) }
         // Enumerable string keys along the prototype chain, each name once.
@@ -7351,6 +7423,7 @@ fn global_declaration_checks(it: *Interp, f: *Frame, root: ast.Node) -> err {
         let fnode = f.prog.nodes[usize(f.prog.kids[usize(root.a) + fi])]
         fi += 1usize
         if fnode.kind == ast.N_FUNC && (fnode.flags & ast.F_DECL) != 0u16 {
+            if has_lexical_global(it, fnode.text) { ret throw_syntax(it, str_concat3(it, "Identifier '", fnode.text, "' has already been declared")) }
             if !can_declare_global_function(it, fnode.text) { ret throw_type(it, str_concat3(it, "Cannot declare global function '", fnode.text, "'")) }
         }
     }
@@ -7599,13 +7672,36 @@ fn direct_eval(it: *Interp, f: *Frame, arg: Value) -> (Value, err) {
             if !has_own(it, it.global, key_of(name)) { try define_data(it, it.global, key_of(name), undefv(), P_DEFAULT) }
             note_var_name(it, name)
         } else {
-            try declare_var(it, tgt, name)
+            try declare_var_deletable(it, tgt, name)
         }
         h += 1usize
+    }
+    // Functions a sloppy direct eval declares are as deletable as its vars (unless the scope already had the name).
+    var fresh_fns: [32]str = zero
+    var fresh_n = 0usize
+    if !g.strict && tgt.parent != null_env() {
+        var fz = 0usize
+        while fz < usize(root.b) && fresh_n < 32usize {
+            let fnode3 = prog.nodes[usize(prog.kids[usize(root.a) + fz])]
+            fz += 1usize
+            if fnode3.kind == ast.N_FUNC && (fnode3.flags & ast.F_DECL) != 0u16 {
+                let (fat, ffound) = env_index(tgt, fnode3.text)
+                if !ffound {
+                    fresh_fns[fresh_n] = fnode3.text
+                    fresh_n += 1usize
+                }
+            }
+        }
     }
     var lex_scope = null_env()
     if !g.strict { lex_scope = tgt }
     try hoist_declarations_in(it, &g, root.a, root.b, lex_scope)
+    var fm = 0usize
+    while fm < fresh_n {
+        let (mat, mfound) = env_index(tgt, fresh_fns[fm])
+        if mfound { tgt.vars.items[mat].flags = tgt.vars.items[mat].flags | B_DELETABLE }
+        fm += 1usize
+    }
     var last = undefv()
     var k = 0usize
     while k < usize(root.b) {
@@ -8301,6 +8397,17 @@ fn get_async_iterator(it: *Interp, v: Value) -> (Iter, err) {
     ret (iter, ok)
 }
 
+// A sync iterator behind `for await` or `yield*` is closed (its `return` called, errors from it ignored) when awaiting one of
+// its values fails; the error being reported is kept.
+fn sync_iter_close_quiet(it: *Interp, iter: Iter) {
+    let saved = it.thrown
+    let (rm, rme) = get_value(it, iter.obj, key_of("return"))
+    if rme == ok && is_callable(rm) {
+        let (rr, rre) = call_function(it, rm, iter.obj, zero_args())
+    }
+    it.thrown = saved
+}
+
 // One step of `for await`: (value, done, error); the frame supplies `await`.
 fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err) {
     let (r, re) = call_function(it, iter.next, iter.obj, zero_args())
@@ -8320,7 +8427,10 @@ fn async_iterator_step(it: *Interp, f: *Frame, iter: Iter) -> (Value, bool, err)
     if ve != ok { ret (undefv(), true, ve) }
     if iter.sync_wrapped {
         let (aw2, awe2) = await_value(it, f, vv)
-        if awe2 != ok { ret (undefv(), true, awe2) }
+        if awe2 != ok {
+            sync_iter_close_quiet(it, iter)
+            ret (undefv(), true, awe2)
+        }
         ret (aw2, false, ok)
     }
     ret (vv, false, ok)
@@ -8534,7 +8644,10 @@ fn gen_yield_star_async(it: *Interp, f: *Frame, iterable: Value) -> (Value, err)
         value = vv
         if iter.sync_wrapped {
             let (aw3, awe3) = await_value(it, f, value)
-            if awe3 != ok { ret (undefv(), awe3) }
+            if awe3 != ok {
+                sync_iter_close_quiet(it, iter)
+                ret (undefv(), awe3)
+            }
             value = aw3
         }
         if to_boolean(dn) {

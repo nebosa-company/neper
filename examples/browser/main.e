@@ -1,13 +1,15 @@
 // The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page, over
 // `e.web.shell` (tabs, session history, omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
 // opens URL (default about:blank). The profile (bookmarks and visit log) is `neper-browser.profile` in the working directory,
-// read at start and written on exit.
+// read at start and written on exit. Build with `--arena 4g`: each tab reserves 256 MB and the TLS chain check allocates from
+// the same arena, so the default one fails every https page as "not private" or "could not be loaded".
 use e.fs
 use e.gfx.paint
 use e.gpu
 use e.io
 use e.mem
 use e.net.fetch as fetch
+use e.net.policy as policy
 use e.net.tls.hoststore as hoststore
 use e.os
 use e.str
@@ -133,7 +135,12 @@ fn pump_page(m: *Model) {
     if !t.loaded { ret }
     let more = page.tick(t.pg, now_ms() - m.start_ms)
     let moved = shell.follow_pending(m.sh, t)
-    let (link, tapped) = view.take_activated(t.pg.view)
+    // A tap reaches the page's click handlers first; one that cancels the click also cancels the link.
+    let (tx, ty, has_tap) = view.take_tap(t.pg.view)
+    var allowed = true
+    if has_tap { allowed = page.click(t.pg, tx, ty) }
+    let (link, tapped0) = view.take_activated(t.pg.view)
+    let tapped = tapped0 && allowed
     if tapped {
         let (abs, good) = page.resolve_against(m.a, &t.pg.base, link)
         if good {
@@ -141,6 +148,15 @@ fn pump_page(m: *Model) {
             m.shown_url = ""
         }
     }
+}
+
+// Whether the active page has a timer that is due: an idle window builds no frame, so the loop asks for one then (and only then,
+// so a timer minutes away costs nothing).
+fn timer_due(m: *Model) -> bool {
+    let t = shell.active_tab(m.sh)
+    if !t.loaded { ret false }
+    let due = page.next_wakeup(t.pg)
+    ret due >= 0.0f64 && due <= now_ms() - m.start_ms
 }
 
 fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
@@ -245,10 +261,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (made, made_error) = fontset.new(a)
     if made_error != ok { os.exit(3i32) }
     var fonts = made
-    let faces = [8]FaceSpec { FaceSpec { file: "C:/Windows/Fonts/segoeui.ttf", family: "Segoe UI", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/segoeuib.ttf", family: "Segoe UI", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/arial.ttf", family: "Arial", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/arialbd.ttf", family: "Arial", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/ariali.ttf", family: "Arial", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/times.ttf", family: "Times New Roman", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/cour.ttf", family: "Courier New", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/verdana.ttf", family: "Verdana", weight: 400u32, italic: false } }
+    let faces = [36]FaceSpec { FaceSpec { file: "C:/Windows/Fonts/segoeui.ttf", family: "Segoe UI", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/segoeuib.ttf", family: "Segoe UI", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/arial.ttf", family: "Arial", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/arialbd.ttf", family: "Arial", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/ariali.ttf", family: "Arial", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/times.ttf", family: "Times New Roman", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/cour.ttf", family: "Courier New", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/verdana.ttf", family: "Verdana", weight: 400u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", family: "Segoe UI", weight: 400u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", family: "Segoe UI", weight: 700u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", family: "Arial", weight: 400u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", family: "Arial", weight: 700u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", family: "Times New Roman", weight: 400u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", family: "Courier New", weight: 400u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/arialbi.ttf", family: "Arial", weight: 700u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/timesbd.ttf", family: "Times New Roman", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/timesi.ttf", family: "Times New Roman", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/timesbi.ttf", family: "Times New Roman", weight: 700u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/courbd.ttf", family: "Courier New", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/couri.ttf", family: "Courier New", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/courbi.ttf", family: "Courier New", weight: 700u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/verdanab.ttf", family: "Verdana", weight: 700u32, italic: false }, FaceSpec { file: "C:/Windows/Fonts/verdanai.ttf", family: "Verdana", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/verdanaz.ttf", family: "Verdana", weight: 700u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/segoeuii.ttf", family: "Segoe UI", weight: 400u32, italic: true }, FaceSpec { file: "C:/Windows/Fonts/segoeuiz.ttf", family: "Segoe UI", weight: 700u32, italic: true }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", family: "Times New Roman", weight: 700u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", family: "Courier New", weight: 700u32, italic: false }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf", family: "Courier New", weight: 400u32, italic: true }, FaceSpec { file: "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf", family: "Courier New", weight: 700u32, italic: true }, FaceSpec { file: "/jost-regular.ttf", family: "Segoe UI", weight: 400u32, italic: false }, FaceSpec { file: "/jost-bold.ttf", family: "Segoe UI", weight: 700u32, italic: false }, FaceSpec { file: "/jost-regular.ttf", family: "Arial", weight: 400u32, italic: false }, FaceSpec { file: "/jost-bold.ttf", family: "Arial", weight: 700u32, italic: false }, FaceSpec { file: "/jost-regular.ttf", family: "Times New Roman", weight: 400u32, italic: false }, FaceSpec { file: "/jost-regular.ttf", family: "Courier New", weight: 400u32, italic: false } }
     var added = 0usize
     var fi = 0usize
-    while fi < 8usize {
+    while fi < 36usize {
         let (bytes, fe) = fs.read_file(a, faces[fi].file, 33554432usize)
         if fe == ok && fontset.add(&fonts, faces[fi].family, faces[fi].weight, faces[fi].italic, bytes, 0u32) == ok { added += 1usize }
         fi += 1usize
@@ -267,8 +283,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // Network.
     let (roots, roots_error) = hoststore.system_roots(a, 4194304usize)
-    if roots_error != ok { os.exit(6i32) }
-    let (cl, client_error) = fetch.client(a, fetch.default_config(roots.der), 256usize)
+    // A host with no trust store (the wasm one) still runs: https pages fail as untrusted, data: pages and fonts work.
+    var root_der: []const u8 = zero
+    if roots_error == ok { root_der = roots.der }
+    var net_config = fetch.default_config(root_der)
+    // An Adblock Plus list in `neper-browser.filters` (optional) names hosts no page may load from.
+    let (filter_text, filter_error) = fs.read_file(a, "neper-browser.filters", 33554432usize)
+    if filter_error == ok { 
+        let rules = policy.parse_filter_list(a, filter_text)
+        net_config.block_hosts = rules.domains
+        net_config.allow_hosts = rules.allow
+        net_config.third_hosts = rules.third
+        net_config.typed_hosts = rules.typed
+        net_config.typed_types = rules.types
+    }
+    let (cl, client_error) = fetch.client(a, net_config, 256usize)
     if client_error != ok { os.exit(7i32) }
     var client = cl
     // The shell, its profile and the first tab.
@@ -322,6 +351,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while go {
         let (more, step_error) = app.step(&running, time.millis(16i64))
         if step_error != ok || !more { go = false }
+        if go && timer_due(model) {
+            let asked = app.request_frame(&running)
+        }
     }
     let saved = shell.save_profile(sh, profile_path)
     let closed = app.close(&running)

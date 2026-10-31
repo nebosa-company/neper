@@ -2996,6 +2996,7 @@ D5914	2685	f16 and bf16 in GLSL, word-equal to the CPU's
 D5915	1243	Presenter ownership ends at fallback, replacement and window close
 D5916	1246	GL dispatch follows the current context, not the process
 D5917	1113	Special-function limits and signed extended gcd boundaries
+D5918	792	e.gpu capacity and staging-pool bounds
 D5919	387	WASI permission paths stay inside a preopen
 D5920	738	A failed presentation retires its acquisition, not its image serial
 D5921	417	JMESPath function arguments require separators
@@ -3016,4 +3017,15 @@ D5933	1929	`e.mem.heap`: one object at a time, checked at compile time
 D5934	1335	A refused commit is asked again, and then called what it is
 D5935	1032	The compiler touches `&slice[i]` given to an import
 D5948	1922	Eight decision numbers were allocated twice; the OpenGL group's moved
-D5949	807	A heap-backed device that lost a command stays lost
+D5949	809	A heap-backed device that lost a command stays lost
+D5924	4276	Cached frame memory, changed-box presents and a faster CPU rasteriser; what a Vulkan swapchain needs
+D5925	1969	Choosing the Vulkan device: `NEPER_VK_DEVICE`, `gpu.open_with`, discrete by default
+D5926	878	`NEPER_FRAME_STATS=1` and a minimised window
+D5927	1182	Cheap compute launches: a persistent pool, command buffer, fence and argument block
+D5928	2910	A Vulkan swapchain (`VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR_swapchain`, `VK_KHR_incremental_present`)
+D5929	3298	A GPU tile rasteriser for `e.gfx.scene` (`e.gfx.gpuraster`)
+D5950	1954	What the RTX 3080 and the kernel language exposed
+D5951	907	Defaults, by measurement
+D5952	972	Multicol columns start where whole lines and unbreakable boxes do
+D5953	935	The browser app: page scripts, taps and fonts
+D5954	674	The browser on wasm32-wasi

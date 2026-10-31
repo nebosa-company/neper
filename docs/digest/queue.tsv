@@ -105,3 +105,4 @@ L176	library	0	237	OpenGL 5: CGL context on macOS (GL 4.1 core, presentation onl
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0.9	1380	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896, D5900): emit-executable ...
 T050	tooling	0	458	Regression test for the heap-backed device-lost path (D5949)	D5949 keeps a device lost after a failed Metal or OpenGL command, but no fixture makes dispatch_wait fail, so nothing fails if the sticky flag or the state_of check is removed.
+L184	library	0.95	1871	Browser: ad and tracker blocking on every request	PART: e.net.fetch.Config.block_hosts and allow_hosts (from e.net.policy.parse_filter_list: ||host^ rules and @@||host^ exceptions) refuse any request that has a referrer (a subresource) to a listed ho

@@ -102,6 +102,7 @@ fn install_bigint(it: *js.Interp) {
     let proto = js.new_obj(it, js.C_OBJECT, it.protos.object)
     it.protos.bigint = proto
     let ctor = js.make_native(it, "BigInt", 1u32, bigint_ctor)
+    ctor.ctor_kind = js.K_BASE
     let e1 = js.define_data(it, ctor, js.key_of("prototype"), js.obj_value(proto), 0u8)
     let e2 = js.define_data(it, proto, js.key_of("constructor"), js.obj_value(ctor), js.P_HIDDEN)
     let e3 = js.define_data(it, it.global, js.key_of("BigInt"), js.obj_value(ctor), js.P_HIDDEN)

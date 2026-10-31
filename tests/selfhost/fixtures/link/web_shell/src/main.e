@@ -24,14 +24,16 @@ fn frame_registry_is_live(a: *mem.Arena) -> bool {
     var tree = parsed
     let (it, ie) = script.new_context(a, &tree, "https://frame-registry.test/")
     if ie != ok { ret false }
-    let setup = "const frame = document.createElement('iframe'); document.body.appendChild(frame); window.frameRegistryOld = frame.contentWindow; window.frameRegistryHits = 0; window.frameRegistryOld.__realm.ensureCeWrapped = function() { window.frameRegistryHits += 1; }; frame.srcdoc = '<p>replacement</p>'; window.frameRegistryFrame = frame;"
+    let setup = "{ const frame = document.createElement('iframe'); document.body.appendChild(frame); window.frameRegistryOld = frame.contentWindow; window.frameRegistryHits = 0; window.frameRegistryOld.__realm.ensureCeWrapped = function() { window.frameRegistryHits += 1; }; frame.srcdoc = '<p>replacement</p>'; window.frameRegistryFrame = frame; }"
     if !script.run_script(it, setup, "frame-registry-setup.js") { ret false }
     script.pump(it, 0.0f64)
-    let check = "const frame = window.frameRegistryFrame; class FrameRegistryProbe extends HTMLElement {} customElements.define('frame-registry-probe', FrameRegistryProbe); if (window.frameRegistryHits !== 0) throw new Error('dropped frame was retained'); if (frame.contentWindow === window.frameRegistryOld || window.length !== 1) throw new Error('frame replacement failed'); frame.remove(); if (window.length !== 0) throw new Error('frame removal failed');"
+    let check = "{ const frame = window.frameRegistryFrame; class FrameRegistryProbe extends HTMLElement {} customElements.define('frame-registry-probe', FrameRegistryProbe); if (window.frameRegistryHits !== 0) throw new Error('dropped frame was retained'); if (frame.contentWindow === window.frameRegistryOld || window.length !== 1) throw new Error('frame replacement failed'); frame.remove(); if (window.length !== 0) throw new Error('frame removal failed'); }"
     ret script.run_script(it, check, "frame-registry-check.js")
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
+    if !frame_registry_is_live(a) { os.exit(86i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }
@@ -91,13 +93,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let old_backing = mem.address_of(&t4.backing[0usize])
     if shell.close_tab(sh, 3usize) != ok || shell.tab_count(sh) != 3usize { os.exit(40i32) }
     if shell.close_tab(sh, 9usize) == ok { os.exit(41i32) }
+    // 6. The visit log: one entry per address, a revisit bumps the count and takes the newest end; it can be searched, deleted,
+    // cleared and survives the profile.
+    let (vs, vse) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse != ok { os.exit(42i32) }
+    shell.record_visit(vs, "https://a.test/x", "Alpha")
+    shell.record_visit(vs, "https://b.test/y", "Beta")
+    shell.record_visit(vs, "https://a.test/x", "Alpha 2")
+    shell.record_visit(vs, "about:blank", "skipped")
+    if vs.visits.len != 2usize || vs.visits.items[1usize].count != 2u32 || !str.eq(vs.visits.items[1usize].title, "Alpha 2") || !str.eq(vs.visits.items[0usize].url, "https://b.test/y") { os.exit(43i32) }
+    let beta = shell.search_visits(vs, "BETA")
+    if beta.len != 1usize || !str.eq(beta[0usize].url, "https://b.test/y") { os.exit(44i32) }
+    let both = shell.search_visits(vs, "test")
+    if both.len != 2usize || !str.eq(both[0usize].url, "https://a.test/x") { os.exit(45i32) }
+    let (vs2, vse2) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse2 != ok || shell.load_profile_text(vs2, shell.profile_text(vs)) != ok { os.exit(46i32) }
+    if vs2.visits.len != 2usize || vs2.visits.items[1usize].count != 2u32 || vs2.visits.items[1usize].at != vs.visits.items[1usize].at { os.exit(47i32) }
+    let (vs3, vse3) = shell.new(a, &client, &fonts, 400.0f32, 200.0f32)
+    if vse3 != ok || shell.load_profile_text(vs3, "V\thttps://c.test/\tGamma\n") != ok { os.exit(48i32) }
+    if vs3.visits.len != 1usize || vs3.visits.items[0usize].count != 1u32 || !str.eq(vs3.visits.items[0usize].title, "Gamma") { os.exit(49i32) }
+    if !shell.delete_visit(vs, "https://b.test/y") || vs.visits.len != 1usize || shell.delete_visit(vs, "https://b.test/y") { os.exit(50i32) }
+    shell.clear_visits(vs)
+    if vs.visits.len != 0usize { os.exit(51i32) }
+    var vi = 0i64
+    while vi < 5002i64 {
+        let (u, ue) = str.concat(a, "https://many.test/", shell.i64_text(a, vi))
+        shell.record_visit(vs, u, "n")
+        vi += 1i64
+    }
+    if vs.visits.len != 5000usize || !str.eq(vs.visits.items[0usize].url, "https://many.test/2") { os.exit(52i32) }
     var reuse = 0usize
     while reuse < 3usize {
         let (reopened, re) = shell.open_tab(sh, "about:blank")
-        if re != ok || mem.address_of(&reopened.backing[0usize]) != old_backing { os.exit(42i32 + i32(reuse)) }
-        if shell.close_tab(sh, 3usize) != ok { os.exit(45i32 + i32(reuse)) }
+        if re != ok || mem.address_of(&reopened.backing[0usize]) != old_backing { os.exit(80i32 + i32(reuse)) }
+        if shell.close_tab(sh, 3usize) != ok { os.exit(83i32 + i32(reuse)) }
         reuse += 1usize
     }
-    if !frame_registry_is_live(a) { os.exit(48i32) }
     ret ok
 }

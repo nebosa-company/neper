@@ -27,6 +27,7 @@ use e.net
 use e.net.cookie as cookie
 use e.net.h2client as h2client
 use e.net.http as http
+use e.net.policy as policy
 use e.net.tls
 use e.os
 use e.str
@@ -34,6 +35,12 @@ use e.time
 
 error BadUrl
 error BlockedPort
+error BlockedByFilter
+error CertificateError
+error CertificateExpired
+error CertificateName
+error CertificateUntrusted
+error CertificateSelfSigned
 error UnsupportedScheme
 error TooManyRedirects
 error RedirectRefused
@@ -47,7 +54,7 @@ type Redirect = enum u8 { Follow, Error, Manual }
 
 type Request = struct {
     url: str, method: http.Method, headers: []const http.Header, body: []const u8,
-    redirect: Redirect, credentials: Credentials, referrer: str
+    redirect: Redirect, credentials: Credentials, referrer: str, dest: str
 }
 
 type Response = struct {
@@ -58,13 +65,13 @@ type Response = struct {
 // `allow_file` lets `file:` URLs be read from the local disk (for tests and local pages; off by default).
 type Config = struct {
     roots: []const u8, user_agent: str, accept_language: str,
-    body_limit: usize, max_redirects: usize, allow_file: bool
+    body_limit: usize, max_redirects: usize, allow_file: bool, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str, typed_hosts: []const str, typed_types: []const str
 }
 
-type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize }
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize }
 
 fn default_config(roots: []const u8) -> Config {
-    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false }
+    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false, block_hosts: zero, allow_hosts: zero, third_hosts: zero, typed_hosts: zero, typed_types: zero }
 }
 
 // A client with a jar of up to `max_cookies` cookies.
@@ -73,7 +80,7 @@ fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err) {
     if ce != ok { ret (zero, ce) }
     let (text, te) = mem.alloc[u8](a, max_cookies * 256usize)
     if te != ok { ret (zero, te) }
-    ret (Client { a: a, cfg: cfg, jar: cookie.jar_new(cookies, text), h1_hosts: zero, h1_count: 0usize }, ok)
+    ret (Client { a: a, cfg: cfg, jar: cookie.jar_new(cookies, text), h1_hosts: zero, h1_count: 0usize, blocked: 0usize }, ok)
 }
 
 fn unix_seconds() -> i64 {
@@ -463,12 +470,22 @@ fn exchange(c: *Client, u: *const url.Url, method: http.Method, headers: []const
                 let cfg2 = tls.ClientConfig { server_name: bare, trust_roots: c.cfg.roots, alpn: protos[0usize..2usize], entropy: entropy, now: now }
                 let (resp2, re2) = h2client.request(c.a, eps[i], cfg2, http.method_text(method), host_header(c.a, u), path_and_query(c.a, u), headers, body, c.cfg.body_limit)
                 if re2 == ok { ret (resp2, ok) }
+                if re2 == tls.InvalidCertificate { ret (zero, CertificateError) }
+                if re2 == tls.CertificateExpired { ret (zero, CertificateExpired) }
+                if re2 == tls.CertificateName { ret (zero, CertificateName) }
+                if re2 == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
+                if re2 == tls.CertificateSelfSigned { ret (zero, CertificateSelfSigned) }
                 if re2 == h2client.NotH2 { remember_h1(c, bare) }
                 try_h2 = false
             }
             let cfg = tls.ClientConfig { server_name: bare, trust_roots: c.cfg.roots, alpn: none[0usize..0usize], entropy: entropy, now: now }
             let (resp, re) = http.request_tls(c.a, eps[i], cfg, &req, limits)
             if re == ok { ret (resp, ok) }
+            if re == tls.InvalidCertificate { ret (zero, CertificateError) }
+            if re == tls.CertificateExpired { ret (zero, CertificateExpired) }
+            if re == tls.CertificateName { ret (zero, CertificateName) }
+            if re == tls.CertificateUntrusted { ret (zero, CertificateUntrusted) }
+            if re == tls.CertificateSelfSigned { ret (zero, CertificateSelfSigned) }
         } else {
             let (resp2, re2) = http.request(c.a, eps[i], &req, limits)
             if re2 == ok { ret (resp2, ok) }
@@ -506,6 +523,37 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
         }
         if !str.eq(cur.scheme, "http") && !str.eq(cur.scheme, "https") { ret (zero, UnsupportedScheme) }
         if bad_port(cur.port) { ret (zero, BlockedPort) }
+        // A subresource (it has a referrer or a destination) whose host a filter list names is never requested; the document itself
+        // is not filtered.
+        if (req.referrer.len > 0usize || req.dest.len > 0usize) && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
+            var hit = policy.host_blocked(c.cfg.block_hosts, cur.host)
+            if hit && c.cfg.third_hosts.len > 0usize && policy.host_blocked(c.cfg.third_hosts, cur.host) {
+                let (rurl, re) = url.parse(c.a, req.referrer, zero, false)
+                hit = re != ok || !policy.same_party(rurl.host, cur.host)
+            }
+            if hit && c.cfg.typed_hosts.len > 0usize {
+                // The request is blocked when any rule of its host covers it: an unrestricted rule always does, one with request-type,
+                // `domain=` or `path=` options only the requests those name.
+                let (page, pe) = url.parse(c.a, req.referrer, zero, false)
+                var page_host = ""
+                if pe == ok { page_host = page.host }
+                var seen = false
+                var covered = false
+                var ti = 0usize
+                while ti < c.cfg.typed_hosts.len && ti < c.cfg.typed_types.len {
+                    if policy.host_is(c.cfg.typed_hosts[ti], cur.host) {
+                        seen = true
+                        if policy.options_allow(c.cfg.typed_types[ti], req.dest, page_host, cur.path) { covered = true }
+                    }
+                    ti += 1usize
+                }
+                if seen { hit = covered }
+            }
+            if hit {
+                c.blocked += 1usize
+                ret (zero, BlockedByFilter)
+            }
+        }
         // Request headers.
         var cross_origin = false
         if redirects > 0usize { cross_origin = !same_origin(c.a, &cur, &origin_url) }

@@ -695,7 +695,133 @@ fn is_private_network_host(a: *mem.Arena, host: str) -> bool {
 
 // --- filter lists ----------------------------------------------------------------------------------------------
 
-type FilterRules = struct { domains: []const str, selectors: []const str }
+type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str, third: []const str, typed: []const str, types: []const str }
+
+// The ABP request-type names; `xhr` is an alias of `xmlhttprequest`.
+fn is_type_option(t: str) -> bool {
+    ret str.eq(t, "script") || str.eq(t, "image") || str.eq(t, "stylesheet") || str.eq(t, "xmlhttprequest") || str.eq(t, "xhr") || str.eq(t, "font") || str.eq(t, "document") || str.eq(t, "subdocument") || str.eq(t, "media") || str.eq(t, "other")
+}
+
+// Whether a rule's `$` options name at least one request type.
+fn type_options_named(options: str) -> bool {
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            var tok = trim(options[start..i])
+            start = i + 1usize
+            if str.starts_with(tok, "~") { tok = tok[1usize..] }
+            if is_type_option(tok) { ret true }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+// Whether a request of type `dest` ("" when unknown) is covered by a rule's `$` options: the positive types name it, a `~type` does not.
+fn type_allows(options: str, dest: str) -> bool {
+    var has_pos = false
+    var matched = false
+    var denied = false
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            var tok = trim(options[start..i])
+            start = i + 1usize
+            var neg = false
+            if str.starts_with(tok, "~") {
+                neg = true
+                tok = tok[1usize..]
+            }
+            if is_type_option(tok) {
+                var same = str.eq(tok, dest)
+                if str.eq(tok, "xhr") && str.eq(dest, "xmlhttprequest") { same = true }
+                if neg {
+                    if same { denied = true }
+                } else {
+                    has_pos = true
+                    if same { matched = true }
+                }
+            }
+        }
+        i += 1usize
+    }
+    if denied { ret false }
+    if has_pos { ret matched }
+    ret true
+}
+
+// Whether a rule's `$domain=a.com|~b.com` option lets it apply on a page at `page_host`: a listed domain (or a subdomain) is required when any is positive, a `~` one excludes.
+fn domain_allows(options: str, page_host: str) -> bool {
+    var start = 0usize
+    var i = 0usize
+    while i <= options.len {
+        if i == options.len || options[i] == 44u8 {
+            let tok = trim(options[start..i])
+            start = i + 1usize
+            if str.starts_with(tok, "domain=") { ret domain_list_allows(tok[7usize..], page_host) }
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+fn domain_list_allows(list: str, page_host: str) -> bool {
+    var has_pos = false
+    var matched = false
+    var start = 0usize
+    var i = 0usize
+    while i <= list.len {
+        if i == list.len || list[i] == 124u8 {
+            var d = trim(list[start..i])
+            start = i + 1usize
+            var neg = false
+            if str.starts_with(d, "~") {
+                neg = true
+                d = d[1usize..]
+            }
+            if d.len > 0usize {
+                let one: [1]str = [1]str{ d }
+                let hit = host_index(one[0..], page_host) >= 0i64
+                if neg {
+                    if hit { ret false }
+                } else {
+                    has_pos = true
+                    if hit { matched = true }
+                }
+            }
+        }
+        i += 1usize
+    }
+    if has_pos { ret matched }
+    ret true
+}
+
+// Whether a rule with these `$` options covers a request of type `dest` made from `page_host`.
+fn options_allow(options: str, dest: str, page_host: str, request_path: str) -> bool {
+    ret type_allows(options, dest) && domain_allows(options, page_host) && path_allows(options, request_path)
+}
+
+// A `path=/prefix` option (from a `||host/prefix^` rule) covers only request paths that start with the prefix.
+fn path_allows(options: str, request_path: str) -> bool {
+    let (at, found) = str.find(options, "path=")
+    if !found { ret true }
+    var rest = options[at + 5usize..]
+    let (comma, has_comma) = str.find(rest, ",")
+    if has_comma { rest = rest[0usize..comma] }
+    ret str.starts_with(request_path, rest)
+}
+
+// The index of the entry of `domains` that `host` is, or a subdomain of; -1 when none.
+fn host_index(domains: []const str, host: str) -> i64 {
+    var i = 0usize
+    while i < domains.len {
+        if host_is(domains[i], host) { ret i64(i) }
+        i += 1usize
+    }
+    ret -1i64
+}
 
 fn add_unique(out: []str, n: *usize, v: str) {
     var i = 0usize
@@ -709,8 +835,22 @@ fn add_unique(out: []str, n: *usize, v: str) {
 
 // Adblock Plus rules: `||host^` network rules and global `##selector` cosmetic rules; everything else is skipped.
 fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
-    let (domains, e1) = mem.alloc[str](a, text.len + 1usize)
-    let (selectors, e2) = mem.alloc[str](a, text.len + 1usize)
+    // At most one entry per line, so the arrays are sized by the line count, not by the bytes of the list.
+    var cap = 1usize
+    var ci = 0usize
+    while ci < text.len {
+        if text[ci] == 10u8 { cap += 1usize }
+        ci += 1usize
+    }
+    let (domains, e1) = mem.alloc[str](a, cap)
+    let (selectors, e2) = mem.alloc[str](a, cap)
+    let (exempt, e3) = mem.alloc[str](a, cap)
+    let (third, e4) = mem.alloc[str](a, cap)
+    let (typed, e5) = mem.alloc[str](a, cap)
+    let (typeopts, e6) = mem.alloc[str](a, cap)
+    var ntp = 0usize
+    var nt = 0usize
+    var na = 0usize
     var nd = 0usize
     var ns = 0usize
     var start = 0usize
@@ -721,7 +861,23 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
             start = i + 1usize
             i += 1usize
             if line.len == 0usize { continue }
-            if str.starts_with(line, "!") || str.starts_with(line, "[Adblock") || str.starts_with(line, "@@") { continue }
+            if str.starts_with(line, "!") || str.starts_with(line, "[Adblock") { continue }
+            // `@@||host^` exempts a host from the network rules.
+            if str.starts_with(line, "@@||") {
+                var aend = line.len
+                var ak = 4usize
+                while ak < line.len {
+                    if line[ak] == 94u8 || line[ak] == 47u8 || line[ak] == 36u8 {
+                        aend = ak
+                        break
+                    }
+                    ak += 1usize
+                }
+                let ahost = trim(lower(a, line[4usize..aend]))
+                if ahost.len > 0usize && !str.contains(ahost, "*") { add_unique(exempt, &na, ahost) }
+                continue
+            }
+            if str.starts_with(line, "@@") { continue }
             if str.starts_with(line, "##") {
                 let selector = trim(line[2usize..])
                 if selector.len > 0usize && !str.starts_with(selector, "+js(") { add_unique(selectors, &ns, selector) }
@@ -737,14 +893,41 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                     }
                     k += 1usize
                 }
-                let host = trim(lower(a, line[2usize..end]))
-                if host.len > 0usize && !str.contains(host, "/") && !str.contains(host, "*") && !str.contains(host, "[") { add_unique(domains, &nd, host) }
+                let full = trim(lower(a, line[2usize..end]))
+                // `||host/path^` limits the rule to URLs whose path starts with `/path`.
+                var host = full
+                var path_prefix = ""
+                let (slash, has_slash) = str.find(full, "/")
+                if has_slash {
+                    host = full[0usize..slash]
+                    path_prefix = full[slash..]
+                }
+                if host.len > 0usize && !str.contains(path_prefix, "*") && !str.contains(host, "*") && !str.contains(host, "[") {
+                    // `$third-party` limits the rule to requests from another site.
+                    if str.contains(line[end..], "$") && str.contains(line[end..], "third-party") && !str.contains(line[end..], "~third-party") { add_unique(third, &nt, host) }
+                    // `$script,~image,...` limits the rule to the named request types.
+                    let tail = line[end..]
+                    let (dollar, has_dollar) = str.find(tail, "$")
+                    var options = ""
+                    if has_dollar { options = lower(a, tail[dollar + 1usize..]) }
+                    if path_prefix.len > 0usize {
+                        let (joined, je) = str.concat(a, options, ",path=")
+                        let (with_path, pe) = str.concat(a, joined, path_prefix)
+                        if je == ok && pe == ok { options = with_path }
+                    }
+                    // Every rule is kept with its options (empty for an unrestricted one): a request is blocked when any rule of
+                    // its host covers it.
+                    typed[ntp] = host
+                    typeopts[ntp] = options
+                    ntp += 1usize
+                    add_unique(domains, &nd, host)
+                }
             }
             continue
         }
         i += 1usize
     }
-    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns] }
+    ret FilterRules { domains: domains[0usize..nd], selectors: selectors[0usize..ns], allow: exempt[0usize..na], third: third[0usize..nt], typed: typed[0usize..ntp], types: typeopts[0usize..ntp] }
 }
 
 // --- Content-Security-Policy -----------------------------------------------------------------------------------
@@ -1832,4 +2015,27 @@ fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str) {
         }
         i += 1usize
     }
+}
+
+// Whether `host` (a parsed URL host, already lower case) is one of `domains` or a subdomain of one: an Adblock Plus `||host^` rule.
+// Whether `host` is the domain `d` or a subdomain of it.
+fn host_is(d: str, host: str) -> bool {
+    if str.eq(host, d) { ret true }
+    ret host.len > d.len + 1usize && host[host.len - d.len - 1usize] == 46u8 && str.eq(host[host.len - d.len..], d)
+}
+
+fn host_blocked(domains: []const str, host: str) -> bool {
+    var i = 0usize
+    while i < domains.len {
+        if host_is(domains[i], host) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// Whether two hosts belong to one site: equal, or one a subdomain of the other.
+fn same_party(x: str, y: str) -> bool {
+    if str.eq(x, y) { ret true }
+    if x.len > y.len + 1usize && x[x.len - y.len - 1usize] == 46u8 && str.eq(x[x.len - y.len..], y) { ret true }
+    ret y.len > x.len + 1usize && y[y.len - x.len - 1usize] == 46u8 && str.eq(y[y.len - x.len..], x)
 }

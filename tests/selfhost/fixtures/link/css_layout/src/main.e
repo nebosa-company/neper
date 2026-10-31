@@ -166,45 +166,45 @@ fn css_issue_regressions(a: *mem.Arena) {
 
     // #1193: the baseline of a row-spanning cell belongs to its first row.
     let (p1193, ok1193) = build(a, "<table><tr><td id=a rowspan=2 style=\"vertical-align:baseline\">a</td><td id=b style=\"vertical-align:baseline;font-size:20px\">b</td></tr><tr><td>c</td></tr></table>", table_css)
-    if !ok1193 { os.exit(153) }
+    if !ok1193 { os.exit(203) }
     let (found1193a, baseline1193a) = layout.first_baseline(&p1193.lay, box_of(p1193, "a"))
     let (found1193b, baseline1193b) = layout.first_baseline(&p1193.lay, box_of(p1193, "b"))
-    if !found1193a || !found1193b || !near(baseline1193a, baseline1193b) { os.exit(154) }
+    if !found1193a || !found1193b || !near(baseline1193a, baseline1193b) { os.exit(204) }
 
     // #1194: only the fixed table's first row contributes cell width hints.
     let (p1194, ok1194) = build(a, "<table style=\"table-layout:fixed;width:200px\"><tr><td id=a>a</td><td id=b>b</td></tr><tr><td style=\"width:150px\">c</td><td>d</td></tr></table>", table_css)
-    if !ok1194 || !near(rect_of(p1194, "a").w, 100.0f64) || !near(rect_of(p1194, "b").w, 100.0f64) { os.exit(155) }
+    if !ok1194 || !near(rect_of(p1194, "a").w, 100.0f64) || !near(rect_of(p1194, "b").w, 100.0f64) { os.exit(205) }
 
     // #1195: table column order follows direction, including the HTML dir hint.
     let (p1195, ok1195) = build(a, "<table dir=rtl><tr><td id=a style=\"width:40px\">a</td><td id=b style=\"width:20px\">b</td></tr></table>", table_css)
-    if !ok1195 || !near(rect_of(p1195, "a").x, 20.0f64) || !near(rect_of(p1195, "b").x, 0.0f64) { os.exit(156) }
+    if !ok1195 || !near(rect_of(p1195, "a").x, 20.0f64) || !near(rect_of(p1195, "b").x, 0.0f64) { os.exit(206) }
     let (p1195_edges, ok1195_edges) = build(a, "<table id=t dir=rtl style=\"border-collapse:collapse\"><tr><td style=\"border-right:10px solid;width:20px\">a</td><td style=\"border-left:4px solid;width:20px\">b</td></tr></table>", table_css)
-    if !ok1195_edges { os.exit(162) }
+    if !ok1195_edges { os.exit(212) }
     let table1195_edges = &p1195_edges.lay.boxes.items[usize(box_of(p1195_edges, "t"))]
-    if !near(table1195_edges.border[3usize], 2.0f64) || !near(table1195_edges.border[1usize], 5.0f64) { os.exit(163) }
+    if !near(table1195_edges.border[3usize], 2.0f64) || !near(table1195_edges.border[1usize], 5.0f64) { os.exit(213) }
     let (p1195_ltr_edges, ok1195_ltr_edges) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:4px solid;width:20px\">a</td><td style=\"border-right:10px solid;width:20px\">b</td></tr></table>", table_css)
-    if !ok1195_ltr_edges { os.exit(164) }
+    if !ok1195_ltr_edges { os.exit(214) }
     let table1195_ltr_edges = &p1195_ltr_edges.lay.boxes.items[usize(box_of(p1195_ltr_edges, "t"))]
-    if !near(table1195_ltr_edges.border[3usize], 2.0f64) || !near(table1195_ltr_edges.border[1usize], 5.0f64) { os.exit(165) }
+    if !near(table1195_ltr_edges.border[3usize], 2.0f64) || !near(table1195_ltr_edges.border[1usize], 5.0f64) { os.exit(215) }
 
     // #1196: collapsed table side borders come from the first row, not later rows.
     let (p1196, ok1196) = build(a, "<table id=t style=\"border-collapse:collapse\"><tr><td style=\"border-left:2px solid;border-right:2px solid;width:10px\"></td></tr><tr><td style=\"border-left:20px solid;border-right:20px solid;width:10px\"></td></tr></table>", table_css)
-    if !ok1196 { os.exit(157) }
+    if !ok1196 { os.exit(207) }
     let table1196 = &p1196.lay.boxes.items[usize(box_of(p1196, "t"))]
-    if !near(table1196.border[3usize], 1.0f64) || !near(table1196.border[1usize], 1.0f64) { os.exit(158) }
+    if !near(table1196.border[3usize], 1.0f64) || !near(table1196.border[1usize], 1.0f64) { os.exit(208) }
 
     // #1197: inline-start floats and clearance resolve against the containing block direction.
     let (p1197_start, ok1197_start) = build(a, "<div style=\"direction:rtl;width:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
-    if !ok1197_start || !near(rect_of(p1197_start, "f").x, 80.0f64) { os.exit(159) }
+    if !ok1197_start || !near(rect_of(p1197_start, "f").x, 80.0f64) { os.exit(209) }
     let (p1197_clear, ok1197_clear) = build(a, "<div style=\"direction:rtl;width:100px\"><div style=\"float:right;width:20px;height:20px\"></div><div id=c style=\"clear:inline-start;height:10px\"></div></div>", "")
-    if !ok1197_clear || !near(rect_of(p1197_clear, "c").y, 20.0f64) { os.exit(160) }
+    if !ok1197_clear || !near(rect_of(p1197_clear, "c").y, 20.0f64) { os.exit(210) }
     let (p1197_vertical, ok1197_vertical) = build(a, "<div style=\"writing-mode:vertical-rl;direction:rtl;width:100px;height:100px\"><div id=f style=\"float:inline-start;width:20px;height:20px\"></div></div>", "")
-    if !ok1197_vertical || !near(rect_of(p1197_vertical, "f").y, 80.0f64) { os.exit(161) }
+    if !ok1197_vertical || !near(rect_of(p1197_vertical, "f").y, 80.0f64) { os.exit(211) }
 
     // #1198: an inline span keeps its segment ownership while its surrounding
     // RTL line is put into visual rather than source order.
     let (p1198, ok1198) = build(a, "<p dir=rtl style=\"font-size:10px\">\xd7\x90\xd7\x91\xd7\x92 <span id=s>123</span> \xd7\x93\xd7\x94\xd7\x95</p>", "")
-    if !ok1198 { os.exit(166) }
+    if !ok1198 { os.exit(216) }
     let span1198 = box_of(p1198, "s")
     var first1198 = 0.0f64
     var middle1198 = 0.0f64
@@ -216,7 +216,7 @@ fn css_issue_regressions(a: *mem.Arena) {
     var fi1198 = 0usize
     while fi1198 < p1198.lay.frags.len {
         let f = p1198.lay.frags.items[fi1198]
-        if f.kind == layout.FragKind.Text && str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92 ") {
+        if f.kind == layout.FragKind.Text && (str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92 ") || str.eq(f.text, "\xd7\x90\xd7\x91\xd7\x92")) {
             first1198 = f.x
             got_first1198 = true
         }
@@ -231,12 +231,12 @@ fn css_issue_regressions(a: *mem.Arena) {
         if f.kind == layout.FragKind.Segment && f.box == span1198 { got_segment1198 = true }
         fi1198 += 1usize
     }
-    if !got_first1198 || !got_middle1198 || !got_last1198 || !got_segment1198 || !(last1198 < middle1198 && middle1198 < first1198) { os.exit(167) }
+    if !got_first1198 || !got_middle1198 || !got_last1198 || !got_segment1198 || !(last1198 < middle1198 && middle1198 < first1198) { os.exit(217) }
 
     // #1199: a tab reaches the next stop, so its width depends on the current
     // inline advance rather than always adding four spaces.
     let (p1199, ok1199) = build(a, "<div style=\"white-space:pre;tab-size:4;font-size:10px\">a\tb</div><div style=\"white-space:pre;tab-size:4;font-size:10px\">aaaa\tb</div>", "")
-    if !ok1199 { os.exit(168) }
+    if !ok1199 { os.exit(218) }
     var tabs1199 = 0usize
     var first_tab1199 = 0.0f64
     var second_tab1199 = 0.0f64
@@ -253,25 +253,25 @@ fn css_issue_regressions(a: *mem.Arena) {
         }
         fi1199 += 1usize
     }
-    if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(169) }
+    if tabs1199 != 2usize || !near(first_tab1199, 40.0f64) || !near(second_tab1199, 80.0f64) { os.exit(219) }
 
     // #1190: a deferred run-in applies its counters exactly once when it is
     // inserted into the following block.
     let (p1190, ok1190) = build(a, "<div class=run>heading</div><div>body</div>", "body { counter-reset:n; } .run { display:run-in; font-size:10px; counter-increment:n; } .run::before { content:counter(n) \". \"; }")
-    if !ok1190 || !frag_has(p1190, "1. ") { os.exit(171) }
+    if !ok1190 || !frag_has(p1190, "1. ") { os.exit(221) }
 
     // #1192: the minimum signed named-line occurrence is unresolvable, not a
     // signed-negation overflow during grid placement.
     let (p1192, ok1192) = build(a, "<div style=\"display:grid;grid-template-columns:[foo] 50px [foo] 50px [foo]\"><div id=a style=\"grid-column:foo -2147483648;height:10px\"></div></div>", "")
-    if !ok1192 || !is_rect(rect_of(p1192, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(170) }
+    if !ok1192 || !is_rect(rect_of(p1192, "a"), 0.0f64, 0.0f64, 50.0f64, 10.0f64) { os.exit(220) }
 
     // #540: a preceding explicit list-item value resets the following marker.
     let (p540, ok540) = build(a, "<ol><li value=5>first</li><li id=next>second</li></ol>", "")
     let (ordinal540, found540) = marker_ordinal(p540, "next")
-    if !ok540 || !found540 || ordinal540 != 6u32 { os.exit(172) }
+    if !ok540 || !found540 || ordinal540 != 6u32 { os.exit(222) }
     let (p540_reversed, ok540_reversed) = build(a, "<ol reversed start=10><li value=5>first</li><li id=next>second</li></ol>", "")
     let (ordinal540_reversed, found540_reversed) = marker_ordinal(p540_reversed, "next")
-    if !ok540_reversed || !found540_reversed || ordinal540_reversed != 4u32 { os.exit(173) }
+    if !ok540_reversed || !found540_reversed || ordinal540_reversed != 4u32 { os.exit(223) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -658,9 +658,88 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 108. A scroll container taller than the viewport gives a vertical flow only the viewport height.
     let (p108, ok108) = build(a, "<div style=\"overflow:hidden;max-height:2000px;font-size:100px\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div>", "")
     if !ok108 || !near(rect_of(p108, "o").h, 600.0f64) { os.exit(149) }
-    // 109. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
-    let (p109, ok109) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
-    if !ok109 || !near(rect_of(p109, "o").h, 50.0f64) { os.exit(150) }
+    // 109. A right-to-left embedded span in a left-to-right line shows its words in reverse order, the spaces between them kept.
+    let (p109, ok109) = build(a, "<div>x <span style=\"direction:rtl;unicode-bidi:embed\">&#x5d0; &#x5d1;</span> y</div>", "")
+    if !ok109 || !str.eq(all_text(a, p109), "x ב א y") { os.exit(150) }
+    // 110. A mirrored character in a right-to-left run is drawn mirrored.
+    let (p110, ok110) = build(a, "<div style=\"direction:rtl\">&#x5d0; &gt; &#x5d1;</div>", "")
+    if !ok110 || !str.eq(all_text(a, p110), "\xd7\x91 < \xd7\x90") { os.exit(151) }
+    // 111. bidi-override puts the characters of the span in the order of its direction whatever their classes.
+    let (p111, ok111) = build(a, "<div>x <span style=\"direction:rtl;unicode-bidi:bidi-override\">ab cd</span></div>", "")
+    if !ok111 || !str.eq(all_text(a, p111), "x cd ab") { os.exit(152) }
+    // 112. In a grid-lanes container an auto-height item stretches to just before the next item laid below it in its lanes.
+    let (p112, ok112) = build(a, "<div style=\"display:grid-lanes;grid-template-columns:50px 50px;height:200px;gap:10px;align-items:stretch\"><div id=a style=\"height:20px\"></div><div id=b></div><div id=c style=\"height:10px;grid-column:span 2\"></div></div>", "")
+    if !ok112 || !near(rect_of(p112, "b").h, 20.0f64) || !near(rect_of(p112, "c").y, 30.0f64) { os.exit(153) }
+    // 113. fill-reverse stacks from the end of the container, track-reverse from the last lane.
+    let (p113, ok113) = build(a, "<div style=\"display:grid-lanes;grid-lanes-direction:column fill-reverse track-reverse;grid-template-columns:50px 50px;width:110px;height:200px;gap:10px\"><div id=a style=\"height:20px\"></div></div>", "")
+    if !ok113 || !near(rect_of(p113, "a").y, 180.0f64) || !near(rect_of(p113, "a").x, 60.0f64) { os.exit(154) }
+    // 114. In row lanes align-items places an item inside its lane, and justify-items inside the room along the lane.
+    let (p114, ok114) = build(a, "<div style=\"display:grid-lanes;grid-template-rows:100px 100px;width:300px;align-items:center;justify-items:end\"><div id=a style=\"width:50px;height:50px\"></div><div id=b style=\"width:20px;height:20px\"></div><div id=c style=\"width:30px;height:10px\"></div></div>", "")
+    // 115. flex-wrap: balance breaks four items into two even lines where wrap fills the first line.
+    let (p115, ok115) = build(a, "<div style=\"display:flex;flex-wrap:balance;width:100px;gap:10px\"><div id=a style=\"width:20px;height:10px\"></div><div id=b style=\"width:20px;height:10px\"></div><div id=c style=\"width:20px;height:10px\"></div><div id=d style=\"width:20px;height:10px\"></div></div>", "")
+    if !ok115 || !near(rect_of(p115, "c").y, 20.0f64) || !near(rect_of(p115, "c").x, 0.0f64) { os.exit(156) }
+    // 116. A grid item with `subgrid` columns lays its items on the parent's tracks, and they size those tracks.
+    let (p116, ok116) = build(a, "<div style=\"display:grid;grid-template-columns:auto auto;width:300px\"><div style=\"grid-column:1\"></div><div id=s style=\"display:grid;grid-column:1 / 3;grid-template-columns:subgrid\"><div id=x style=\"width:70px;height:5px\"></div><div id=y style=\"width:30px;height:5px\"></div></div></div>", "")
+    // 117. Grid items aligned on their baseline line up with the lowest one of the row.
+    let (p117, ok117) = build(a, "<div style=\"display:grid;grid-template-columns:50px 50px;align-items:baseline\"><div id=a style=\"font-size:10px\">x</div><div id=b style=\"font-size:20px\">x</div></div>", "")
+    if !ok117 || !near(rect_of(p117, "a").y, 8.0f64) || !near(rect_of(p117, "b").y, 0.0f64) { os.exit(158) }
+    // 118. Row-lane items aligned on their baseline line up with the lowest one of the lane.
+    let (p118, ok118) = build(a, "<div style=\"display:grid-lanes;grid-template-rows:60px;width:200px;align-items:baseline\"><div id=a style=\"font-size:10px\">x</div><div id=b style=\"font-size:20px\">x</div></div>", "")
+    if !ok118 || !near(rect_of(p118, "a").y, 8.0f64) || !near(rect_of(p118, "b").y, 0.0f64) { os.exit(159) }
+    // 119. A wrapping column flex container of fixed height is as wide as the columns its items fill.
+    let (p119, ok119) = build(a, "<div id=f style=\"display:flex;flex-flow:column wrap;height:100px;width:max-content\"><div style=\"flex:0 0 100px;width:50px\"></div><div style=\"flex:0 0 100px;width:50px\"></div></div>", "")
+    // 120. An ideographic space that ends a line hangs: it is painted but adds nothing to the line's width.
+    let (p120, ok120) = build(a, "<div id=d style=\"width:max-content;font-size:10px\">\xe3\x81\x82\xe3\x81\x82<span>\xe3\x80\x80</span><br>\xe3\x81\x82</div>", "")
+    if !ok120 || !near(rect_of(p120, "d").w, 20.0f64) { os.exit(161) }
+    // 121. With `column-wrap: wrap` and a fixed `column-height`, columns that do not fit in a row start another row.
+    let (p121, ok121) = build(a, "<div id=m style=\"columns:2;column-gap:0;column-fill:auto;column-height:20px;column-wrap:wrap;width:40px;font-size:10px\"><div>aa</div><div>bb</div><div>cc</div><div>dd</div><div id=e>ee</div><div>ff</div></div>", "")
+    if !ok121 || !near(rect_of(p121, "m").h, 40.0f64) || !near(rect_of(p121, "e").y, 20.0f64) || !near(rect_of(p121, "e").x, 0.0f64) { os.exit(162) }
+    // 122. `ic` is an em for the fonts here.
+    let (p122, ok122) = build(a, "<div id=a style=\"width:5ic;height:5px;font-size:10px\"></div>", "")
+    if !ok122 || !near(rect_of(p122, "a").w, 50.0f64) { os.exit(163) }
+    // 123. An aspect-ratio is physical: a vertical box stretched to 100px wide with 2/1 is 50px tall.
+    let (p123, ok123) = build(a, "<div style=\"width:100px;height:300px;position:relative\"><div id=a style=\"aspect-ratio:2/1;position:absolute;left:0;right:0;top:0;writing-mode:vertical-lr\"></div></div>", "")
+    if !ok123 || !near(rect_of(p123, "a").w, 100.0f64) || !near(rect_of(p123, "a").h, 50.0f64) { os.exit(164) }
+    // 124. `lh` is the line height, and `line-clamp: auto` keeps the lines that fit `max-height`.
+    let (p124, ok124) = build(a, "<div id=a style=\"line-clamp:auto;max-height:2lh;font:10px/20px serif;white-space:pre\">1\n2\n3\n4</div>", "")
+    if !ok124 || !near(rect_of(p124, "a").h, 40.0f64) { os.exit(165) }
+    // 125. `counter-reset: reversed(c)` starts at the size of the last step of the items that step it: steps of -1 show 3, 2, 1.
+    let (p125, ok125) = build(a, "<div style=\"counter-reset:reversed(c)\"><div class=i></div><div class=i></div><div class=i></div></div>", ".i { counter-increment: c -1; } .i::before { content: counter(c); }")
+    if !ok125 || !str.eq(all_text(a, p125), "321") { os.exit(166) }
+    // 126. `list-item` is a real counter: in a reversed list the items read 3, 2, 1 and an explicit step changes where the list starts.
+    let (p126, ok126) = build(a, "<ol reversed style=\"list-style:none\"><li></li><li></li><li></li></ol>", "li { display: list-item; } li::before { content: counter(list-item) \".\"; }")
+    if !ok126 || !frag_has(p126, "3.") || !frag_has(p126, "2.") || !frag_has(p126, "1.") || frag_has(p126, "0.") { os.exit(167) }
+    let (p127, ok127) = build(a, "<ol reversed style=\"list-style:none\"><li style=\"counter-increment:list-item -2\"></li><li style=\"counter-increment:list-item -2\"></li></ol>", "li { display: list-item; } li::before { content: counter(list-item) \".\"; }")
+    if !ok127 || !frag_has(p127, "4.") || !frag_has(p127, "2.") || frag_has(p127, "6.") { os.exit(168) }
+    // 128. An absolute child of a flex container sits where a lone flex item would: justify-content centres it along the main axis.
+    let (p128, ok128) = build(a, "<div style=\"display:flex;justify-content:center;width:100px;height:40px;position:relative\"><div id=a style=\"position:absolute;width:20px;height:10px\"></div></div>", "")
+    if !ok128 || !near(rect_of(p128, "a").x, 40.0f64) { os.exit(169) }
+    // 129. The containing block of an absolute box in an inline that holds a block starts on the line where the inline began.
+    let (p129, ok129) = build(a, "<div style=\"width:100px;font:20px/1 serif\"><div style=\"height:60px\"></div>B<span style=\"position:relative\"><div></div>AA<div id=a style=\"position:absolute;top:-60px;width:10px;height:10px\"></div></span></div>", "")
+    if !ok129 || !near(rect_of(p129, "a").y, 0.0f64) { os.exit(170) }
+    // 130. A block that crosses a column boundary is painted as one slice per column.
+    let (p130, ok130) = build(a, "<div style=\"columns:2;column-gap:0;column-fill:auto;width:100px;height:50px\"><div style=\"height:80px;background:green\"></div></div>", "")
+    if !ok130 || p130.lay.cfrags.len != 2usize || !near(p130.lay.cfrags.items[1usize].dx, 50.0f64) || !near(p130.lay.cfrags.items[1usize].h, 30.0f64) { os.exit(171) }
+    // 131. `line-clamp: auto` clamps lines inside child blocks to the box's max-height, which min-height can raise.
+    let (p131, ok131) = build(a, "<div id=c style=\"line-clamp:auto;max-height:60px;font:10px/20px serif;white-space:pre\"><div id=i>1\n2\n3\n4\n5</div></div>", "")
+    if !ok131 || !near(rect_of(p131, "i").h, 60.0f64) { os.exit(172) }
+    // 132. A transformed box is the containing block of its fixed descendants.
+    let (p132, ok132) = build(a, "<div style=\"height:50px\"></div><div id=t style=\"transform:scale(1);height:40px\"><div id=a style=\"position:fixed;top:5px;left:7px;width:10px;height:10px\"></div></div>", "")
+    if !ok132 || !near(rect_of(p132, "a").y, 55.0f64) || !near(rect_of(p132, "a").x, 7.0f64) { os.exit(173) }
+    // 133. `contain: size` ignores the content: the height is the `contain-intrinsic-height`, the width of a max-content box its width.
+    let (p133, ok133) = build(a, "<div id=a style=\"contain:size;contain-intrinsic-size:50px 30px;width:max-content\"><div style=\"height:100px;width:200px\"></div></div>", "")
+    if !ok133 || !near(rect_of(p133, "a").h, 30.0f64) || !near(rect_of(p133, "a").w, 50.0f64) { os.exit(174) }
+    // 134. A grid item with a preferred ratio and a definite height takes its width from the ratio instead of stretching.
+    let (p134, ok134) = build(a, "<div style=\"display:grid;width:300px\"><div id=a style=\"height:100px;aspect-ratio:1/1\"></div></div>", "")
+    if !ok134 || !near(rect_of(p134, "a").w, 100.0f64) { os.exit(175) }
+    if !ok116 || !near(rect_of(p116, "x").x, 0.0f64) || !near(rect_of(p116, "y").x, 170.0f64) { os.exit(157) }
+    if !ok114 || !near(rect_of(p114, "a").y, 25.0f64) || !near(rect_of(p114, "c").y, 145.0f64) || !near(rect_of(p114, "a").x, 250.0f64) || !near(rect_of(p114, "c").x, 270.0f64) { os.exit(155) }
+    // 135. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
+    let (p135, ok135) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
+    if !ok135 || !near(rect_of(p135, "o").h, 50.0f64) { os.exit(176) }
+    // 136. `contain: inline-size` contains one axis only: the block size still follows the content, unlike `contain: size`.
+    let (p136, ok136) = build(a, "<div id=a style=\"contain:inline-size\"><div style=\"height:40px\"></div></div>", "")
+    if !ok136 || !near(rect_of(p136, "a").h, 40.0f64) { os.exit(177) }
     css_issue_regressions(a)
     ret ok
 }

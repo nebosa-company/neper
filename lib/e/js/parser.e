@@ -2143,6 +2143,23 @@ fn parse_statement(p: *Parser) -> (u32, err) {
             }
         }
     }
+    // A label written with an escape (`aw\u0061it:`): reserved words stay reserved, but the contextual ones are labels outside the contexts that reserve them.
+    if p.tok.kind == lex.T_IDENT && p.tok.escaped && !is_reserved(p.tok.text) {
+        let ew = p.tok.text
+        let enx = try peek(p)
+        let blocked = (str.eq(ew, "yield") && (p.in_generator || p.strict)) || (str.eq(ew, "await") && (p.in_async || p.module)) || (p.strict && (str.eq(ew, "let") || str.eq(ew, "static") || str.eq(ew, "implements") || str.eq(ew, "interface") || str.eq(ew, "package") || str.eq(ew, "private") || str.eq(ew, "protected") || str.eq(ew, "public")))
+        if enx.kind == lex.T_PUNCT && str.eq(enx.text, ":") && !blocked {
+            let (eid, eme) = mk(p, ast.N_LABELED)
+            if eme != ok { ret (ast.NONE, eme) }
+            node(p, eid).text = ew
+            try adv(p)
+            try adv(p)
+            p.sub_flag = true
+            let ebody = try parse_statement(p)
+            node(p, eid).a = ebody
+            ret (eid, ok)
+        }
+    }
     // Expression statement.
     let (sid, se) = mk(p, ast.N_EXPR_STMT)
     if se != ok { ret (ast.NONE, se) }

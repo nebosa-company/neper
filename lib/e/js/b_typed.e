@@ -67,10 +67,10 @@ fn array_buffer_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value)
     if ne != ok { ret (js.undefv(), ne) }
     let (maxlen, has_max, mxe) = max_length_option(it, arg(args, 1usize))
     if mxe != ok { ret (js.undefv(), mxe) }
+    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
     let nto = js.as_object(it.new_target)
     let (proto, pe) = js.proto_value_of(it, nto, it.protos.array_buffer)
     if pe != ok { ret (js.undefv(), pe) }
-    if has_max && len > maxlen { ret (js.undefv(), js.throw_range(it, "Invalid array buffer max length")) }
     if len > 2147483647.0f64 || (has_max && maxlen > 2147483647.0f64) { ret (js.undefv(), js.throw_range(it, "Array buffer allocation failed")) }
     var cap = len
     if has_max { cap = maxlen }
@@ -1345,6 +1345,9 @@ fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
     let (proto, pe) = js.proto_value_of(it, nto, it.protos.data_view)
     if pe != ok { ret (js.undefv(), pe) }
     if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
+    // Reading the prototype ran script that may have shrunk a resizable buffer: the bounds are checked again.
+    if offset > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
+    if !js.is_undefined(arg(args, 2usize)) && offset + view_len > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Invalid DataView length")) }
     let o = js.new_obj(it, js.C_DATAVIEW, proto)
     let (cell, ce) = mem.alloc[DView](it.a, 1usize)
     if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }

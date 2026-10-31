@@ -42,7 +42,7 @@ const RIGHT: usize = 1usize
 const BOTTOM: usize = 2usize
 const LEFT: usize = 3usize
 
-type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal }
+type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal, FitLimit }
 
 // A length: `px` plus `pct` times the percentage basis (a fraction: 50% is 0.5). `Number` is a unitless
 // `line-height` factor (in `px`); `Normal` is `line-height: normal`.
@@ -71,7 +71,7 @@ type TableLayout = enum u8 { Auto, Fixed }
 type CaptionSide = enum u8 { Top, Bottom }
 type EmptyCells = enum u8 { Show, Hide }
 type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
-type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse }
+type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse, Balance }
 type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
 type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
 type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
@@ -112,10 +112,10 @@ type Style = struct {
 }
 
 // `ch` and `ex` are the advance of `0` and the x-height as fractions of the font size for the element being styled.
-type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64 }
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64, lh: f64 }
 
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context {
-    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false, ch: 0.5f64, ex: 0.5f64 }
+    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false, ch: 0.5f64, ex: 0.5f64, lh: 0.0f64 }
 }
 
 // --- Small helpers.
@@ -175,6 +175,7 @@ fn bases_for(c: *const Context, em: f64) -> cv.Bases {
     b.viewport_height = c.viewport_height
     b.ch = c.ch
     b.ex = c.ex
+    b.lh = c.lh
     ret b
 }
 
@@ -197,6 +198,11 @@ fn parse_len(c: *const Context, v: str, em: f64, allow: u32) -> (Len, bool) {
         if str.eq(t, "min-content") { ret (Len { kind: .MinContent, px: 0.0f64, pct: 0.0f64 }, true) }
         if str.eq(t, "max-content") { ret (Len { kind: .MaxContent, px: 0.0f64, pct: 0.0f64 }, true) }
         if str.eq(t, "fit-content") || str.eq(t, "-moz-fit-content") || str.eq(t, "-webkit-fit-content") { ret (Len { kind: .FitContent, px: 0.0f64, pct: 0.0f64 }, true) }
+    }
+    if (allow & A_CONTENT) != 0u32 && str.starts_with(t, "fit-content(") && str.ends_with(t, ")") {
+        let (lim, lim_ok) = parse_len(c, t["fit-content(".len..t.len - 1usize], em, A_PERCENT)
+        if lim_ok { ret (Len { kind: .FitLimit, px: lim.px, pct: lim.pct }, true) }
+        ret (len_auto(), false)
     }
     if (allow & A_NUMBER) != 0u32 {
         let (n, is_number) = plain_number(c, t)
@@ -796,7 +802,7 @@ fn apply_flex(ap: *Ap, prop: str, v: str) -> bool {
         ret true
     }
     if str.eq(prop, "flex-wrap") {
-        s.flex_wrap = kw[FlexWrap](low, ",nowrap,wrap,wrap-reverse,", s.flex_wrap)
+        s.flex_wrap = kw[FlexWrap](low, ",nowrap,wrap,wrap-reverse,balance,", s.flex_wrap)
         ret true
     }
     if str.eq(prop, "flex-grow") {
@@ -811,7 +817,7 @@ fn apply_flex(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "flex-basis") {
         if str.eq(low, "content") {
-            s.flex_basis = len_auto()
+            s.flex_basis = Len { kind: .MaxContent, px: 0.0f64, pct: 0.0f64 }
             ret true
         }
         let (l, good) = parse_len(ap.c, low, s.font_size, A_AUTO | A_CONTENT | A_PERCENT)
@@ -868,6 +874,9 @@ fn apply_misc(ap: *Ap, prop: str, v: str) -> bool {
         if good {
             s.display = dv
             s.lanes = false
+            var wk = ""
+            if str.eq(low, "-webkit-box") || str.eq(low, "-webkit-inline-box") { wk = "1" }
+            put_extra(ap, "x-webkit-box", wk)
         } else if str.eq(low, "grid-lanes") || str.eq(low, "masonry") || str.eq(low, "block grid-lanes") || str.eq(low, "grid-lanes block") {
             s.display = .Grid
             s.lanes = true
@@ -1562,7 +1571,7 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     let (emade, eerror) = list.init[Extra](a, 8usize)
     if eerror != ok { ret (s, false, eerror) }
     // Font-relative `ch` and `ex` depend on the element's own font: Ahem (the test font) has a square `0` and an 0.8 em x-height.
-    var cc = Context { a: c.a, viewport_width: c.viewport_width, viewport_height: c.viewport_height, root_font_size: c.root_font_size, dark: c.dark, ch: c.ch, ex: c.ex }
+    var cc = Context { a: c.a, viewport_width: c.viewport_width, viewport_height: c.viewport_height, root_font_size: c.root_font_size, dark: c.dark, ch: c.ch, ex: c.ex, lh: 0.0f64 }
     var fw = 0usize
     if str.contains(cv.lower(a, parent.font_family), "ahem") {
         cc.ch = 1.0f64
@@ -1589,17 +1598,21 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     }
     // Order: direction and writing mode, colour, font size, then the rest (they resolve against those).
     var pass = 0usize
-    while pass < 4usize {
+    while pass < 5usize {
         var j = 0usize
         while j < winners.len {
             let prop = winners[j].declaration.property
             j += 1usize
             if str.starts_with(prop, "--") { continue }
-            var wanted = 3usize
+            var wanted = 4usize
             if str.eq(prop, "direction") || str.eq(prop, "writing-mode") { wanted = 0usize }
             if str.eq(prop, "color") { wanted = 1usize }
             if str.eq(prop, "font-size") { wanted = 2usize }
+            if str.eq(prop, "line-height") || str.eq(prop, "font") { wanted = 3usize }
             if wanted != pass { continue }
+            if pass == 4usize {
+                if s.line_height.kind == .Px { cc.lh = s.line_height.px } else if s.line_height.kind == .Number { cc.lh = s.line_height.px * s.font_size } else { cc.lh = 0.0f64 }
+            }
             let (value, good) = substitute(a, winners[j - 1usize].declaration.value, custom_all, 0usize)
             if good { apply(&ap, prop, value) } else { apply_wide(&ap, prop, "unset") }
         }

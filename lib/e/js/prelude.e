@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 67831)
+    var b = try str.builder(a, 67832)
     try str.push(&b, "// Built-ins written in JavaScript, evaluated into every new realm (generated into prelude.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// They only use intrinsics captured up front, so page scripts cannot change how they behave.\n")
     try str.push(&b, "(function (global) {\n")
@@ -808,7 +808,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "    }\n")
     try str.push(&b, "    if (asyncItems == null) throw new TypeErr('Array.fromAsync: cannot convert null or undefined to an object');\n")
     try str.push(&b, "    var arrayLike = Object(asyncItems);\n")
-    try str.push(&b, "    var len = arrayLike.length;\n")
+    try str.push(&b, "    var len = +arrayLike.length;\n")
     try str.push(&b, "    len = len > 0 ? Math.min(Math.floor(len), 9007199254740991) : 0;\n")
     try str.push(&b, "    A = isConstructor(C) ? new C(len) : new Array(len);\n")
     try str.push(&b, "    for (; k < len; k++) {\n")
