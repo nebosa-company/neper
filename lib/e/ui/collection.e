@@ -2078,6 +2078,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if (sorted || win_hot) && numeric_column(look.center_head, i) {
                 line_main = .Center
                 line_style.width = style.Length { Px: columns[i].width - 23.0 }
+                // round 46: the 1:1 capture's hot caption stands two pixels further right
+                if look.hot_crisp { line_style.width = style.Length { Px: columns[i].width - 19.0 } }
             } else if crisp_centred {
                 line_main = .Start
             } else if numeric_column(look.center_head, i) {
@@ -2109,6 +2111,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             }
             if filter_shown {
                 var filter_pix = gl.gx_chip_filter_hover()
+                if look.hot_crisp && !state.pressed { filter_pix = gl.gx_chip_filter_hover_c() }
                 if state.pressed { filter_pix = gl.gx_chip_filter_pressed() }
                 let (filter_node, filter_error) = gl.pixels(a, filter_pix, 12.0, 11.0)
                 if filter_error != ok { ret (zero, filter_error) }
@@ -2176,7 +2179,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             // (a tree's header has no filter glyphs: its flex centres the caption itself)
             if crisp_centred && win_glyphs { crisp_left = style.Length { Px: f32(i64(columns[i].width - 2.0 - crisp_text) / 2i64) + 1.0 } }
             if win_glyphs && (sorted || win_hot) {
-                head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: 2.0 }, right: sides, bottom: flat }
+                var hot_top: f32 = 2.0
+                if look.hot_crisp { hot_top = 1.0 }
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: hot_top }, right: sides, bottom: flat }
             } else {
                 // round 44: the capture's caption stands six rows below the header's top in the 22 and the 19 pixel headers alike
                 var crisp_down: f32 = 2.0
@@ -3337,7 +3342,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool, cell_down: f32, dialog_grid: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool, cell_down: f32, dialog_grid: bool, hot_crisp: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
