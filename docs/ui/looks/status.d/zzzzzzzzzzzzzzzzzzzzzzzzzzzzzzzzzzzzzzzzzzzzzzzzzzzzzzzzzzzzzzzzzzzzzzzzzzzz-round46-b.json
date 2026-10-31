@@ -1,0 +1,76 @@
+{
+ "spin_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/spin_edit.png",
+    "notes": "ROUND 46-b: the shared edit frame, spin buttons, ellipsis button, GDI text (Tahoma 11 hinted ClearType, whole pixel advances), inverting caret and whole pixel selection are drawn from the true 1:1 captures (lib/e/ui/winedit.e light_chrome; the baked tiles and their y drift are gone). Counted = reference pixels off by more than 2 levels, glyphs included; crops are the captured edits of edits_dialog / edits_states / edits_hover rebuilt from windows-1to1: edits_dialog 8 crops 56 px in total (mask 0, spin 0, button edit 30 and 26), edits_states 16 crops 124 (frames, buttons, arrows, caret and selection exact; remaining pixels are glyph edges and the caret over a glyph), edits_hover 13 crops 89 (blue hover of every spin button and the ellipsis exact). 0 pixels outside the glyph zone in every crop, ink boxes equal. The hot key replica follows the capture in the Windows light look. Spin crops: fast spin rest/focus/pressed/hover (edit, up, down, left, right) 0 to 3 px each; Morph spin rest 0, focus 8, pressed 0.",
+    "gaps": [
+     "Uncaptured: disabled spin edit and dimmed arrows (greyed 40 %, a guess), read-only, invalid (red outline guess), long text, placeholder",
+     "The caret over a glyph is the inverse of the face, not of the glyph pixels under it (8 px in the Morph spin Caret2 crop, 4 in the path edit)",
+     "Remaining counted pixels are ClearType glyph edges (the oracle atlas is 96 % pixel exact)",
+     "Shared with text edit, memo and date edit: their frames changed with it (no crop of theirs re-verified here)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/mask_edit.png",
+    "notes": "ROUND 46-b: the shared edit frame, spin buttons, ellipsis button, GDI text (Tahoma 11 hinted ClearType, whole pixel advances), inverting caret and whole pixel selection are drawn from the true 1:1 captures (lib/e/ui/winedit.e light_chrome; the baked tiles and their y drift are gone). Counted = reference pixels off by more than 2 levels, glyphs included; crops are the captured edits of edits_dialog / edits_states / edits_hover rebuilt from windows-1to1: edits_dialog 8 crops 56 px in total (mask 0, spin 0, button edit 30 and 26), edits_states 16 crops 124 (frames, buttons, arrows, caret and selection exact; remaining pixels are glyph edges and the caret over a glyph), edits_hover 13 crops 89 (blue hover of every spin button and the ellipsis exact). 0 pixels outside the glyph zone in every crop, ink boxes equal. The hot key replica follows the capture in the Windows light look. Mask crops (Options Passwords rest, focus, hover): 0 px each.",
+    "gaps": [
+     "Uncaptured: disabled spin edit and dimmed arrows (greyed 40 %, a guess), read-only, invalid (red outline guess), long text, placeholder",
+     "The caret over a glyph is the inverse of the face, not of the glyph pixels under it (8 px in the Morph spin Caret2 crop, 4 in the path edit)",
+     "Remaining counted pixels are ClearType glyph edges (the oracle atlas is 96 % pixel exact)",
+     "Shared with text edit, memo and date edit: their frames changed with it (no crop of theirs re-verified here)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button_edit.png",
+    "notes": "ROUND 46-b: the shared edit frame, spin buttons, ellipsis button, GDI text (Tahoma 11 hinted ClearType, whole pixel advances), inverting caret and whole pixel selection are drawn from the true 1:1 captures (lib/e/ui/winedit.e light_chrome; the baked tiles and their y drift are gone). Counted = reference pixels off by more than 2 levels, glyphs included; crops are the captured edits of edits_dialog / edits_states / edits_hover rebuilt from windows-1to1: edits_dialog 8 crops 56 px in total (mask 0, spin 0, button edit 30 and 26), edits_states 16 crops 124 (frames, buttons, arrows, caret and selection exact; remaining pixels are glyph edges and the caret over a glyph), edits_hover 13 crops 89 (blue hover of every spin button and the ellipsis exact). 0 pixels outside the glyph zone in every crop, ink boxes equal. The hot key replica follows the capture in the Windows light look. Button edit crops (rest 30, hover over text 30, hover over ellipsis 30, Card Art 26, focus 36, selected 30, ellipsis pressed 30, disabled 12 px).",
+    "gaps": [
+     "Uncaptured: disabled spin edit and dimmed arrows (greyed 40 %, a guess), read-only, invalid (red outline guess), long text, placeholder",
+     "The caret over a glyph is the inverse of the face, not of the glyph pixels under it (8 px in the Morph spin Caret2 crop, 4 in the path edit)",
+     "Remaining counted pixels are ClearType glyph edges (the oracle atlas is 96 % pixel exact)",
+     "Shared with text edit, memo and date edit: their frames changed with it (no crop of theirs re-verified here)"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/list_box_dialog.png",
+    "notes": "ROUND 46-b: the list is drawn from the 1:1 captures: flat sunken edge (160 line top and left, 229 and white right), rows white on the list's #F0F0F0 face, the chosen row's fill to the inner right line, the XOR focus rectangle as the colour inverse on odd offsets. Counted against windows-1to1 (rows the captures show, glyphs included): focus 62, unfocused 62, Columns dialog 54 (v3 3.235's seven names). The two bottom rows of the 154 row crops are the list continuing past the crop, so the bottom edge is not captured.",
+    "gaps": [
+     "Bottom edge of the list is not in any capture (crops are cut)",
+     "Uncaptured: disabled, multi-select, hover row",
+     "Text left ClearType fringe: GDI clips a row at x 4, ours lets one fringe pixel fall at x 3 (a clip node turned the text greyscale)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image_combo_box_dialog.png",
+    "notes": "ROUND 46-b: the closed head, its chevron, the open heads and the Sort window's cell editor are drawn from the 1:1 captures (winedit.combo_chrome, cell_chrome). Counted against windows-1to1 (glyphs included): dialog crops 13 (all three), hover over the drop part 6, hover over the edit 6, cell editor 140 (rest and held), open heads 2 to 6 (Auth, Auth 2, Art, Art 2, Condition, Condition 2). Stays review: the open drop lists, the hover rows and the toolbar combos have no 1:1 capture (popups are separate windows the grab fell back to the resampled one for), so those states still compare with the blurred references.",
+    "gaps": [
+     "Open lists and their rows compare with the resampled capture",
+     "Pictures are v3's coloured bitmaps drawn as placeholders (artwork excluded)",
+     "Disabled: a guess (button grey), no capture",
+     "Row hover uncaptured"
+    ]
+   }
+  }
+ }
+}
