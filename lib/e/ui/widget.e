@@ -1760,6 +1760,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (single, has_single) = measured_single(s, text_key, inner.max_width)
         if has_single { ret (single, ok) }
         let (laid, layout_error) = lay_text(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis, notdef: false })
+        if layout_error == mem.Exhausted { ret (zero, mem.Exhausted) }
         if layout_error != ok { ret (zero, InvalidTree) }
         var remembered = text_limits
         if laid.lines.len <= 1usize { remembered.min_height = 1.0 }
@@ -1772,6 +1773,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         // An empty value stands one line tall.
         if ed.len == 0usize { ret (geometry.Size { width: 0.0, height: ed.style.line_height }, ok) }
         let (laid, layout_error) = lay_edit(a, ed.buffer[0usize..ed.len], ed.style, edit_options(inner.max_width, ed.multiline))
+        if layout_error == mem.Exhausted { ret (zero, mem.Exhausted) }
         if layout_error != ok { ret (zero, InvalidTree) }
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Image as im:
