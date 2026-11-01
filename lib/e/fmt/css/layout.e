@@ -1343,6 +1343,19 @@ fn margin_of(v: f64) -> Margin {
     ret Margin { pos: 0.0f64, neg: v }
 }
 
+// Whether row `r` of the table, or one of its single-row cells, has a specified pixel height.
+fn row_height_specified(l: *Layout, td: TableData, r: usize) -> bool {
+    let rs = st(l, l.boxes.items[usize(td.row_box[r])].style)
+    if rs.height.kind == .Px { ret true }
+    var ci = 0usize
+    while ci < td.cells.len {
+        let info = td.cells.items[ci]
+        if info.row == r && info.rs == 1usize && bstyle(l, info.box).height.kind == .Px { ret true }
+        ci += 1usize
+    }
+    ret false
+}
+
 fn collapse(x: Margin, y: Margin) -> Margin {
     ret Margin { pos: maxf(x.pos, y.pos), neg: minf(x.neg, y.neg) }
 }
@@ -5707,10 +5720,19 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
         r += 1usize
     }
     if ch >= 0.0f64 && td.rows > 0usize && ch > rows_h {
-        let extra = (ch - rows_h) / f64(td.rows)
+        // The surplus goes to the rows without a specified height; when every row has one it is shared by all.
+        var auto_rows = 0usize
         r = 0usize
         while r < td.rows {
-            td.row_h[r] += extra
+            if !row_height_specified(l, td, r) { auto_rows += 1usize }
+            r += 1usize
+        }
+        var share = td.rows
+        if auto_rows > 0usize { share = auto_rows }
+        let extra = (ch - rows_h) / f64(share)
+        r = 0usize
+        while r < td.rows {
+            if auto_rows == 0usize || !row_height_specified(l, td, r) { td.row_h[r] += extra }
             r += 1usize
         }
         rows_h = ch
