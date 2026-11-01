@@ -170,6 +170,7 @@ fn build_kinds(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(32.0, 16.0)
     let sheet = looks.Sheet { name: "button", cells: 12usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     let kinds = looks.Sheet { name: "button_kinds", cells: 16usize, columns: 4usize, cell_w: 133.0, cell_h: 40.0, ctx: zero, build: build_kinds }

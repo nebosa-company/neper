@@ -117,6 +117,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(150.0, 330.0)
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }

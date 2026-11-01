@@ -1,0 +1,20 @@
+{
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "ROUND 74 (merge of lanes h and i): sheet = lane h's 1.75 times grown Neper cells plus lane i's looks.pad_neper(30, 36) (pointer aims land on the head and the first row); the 3 px focus ring is now whole under the label notch (control.e notched(): the cut that hides the top edge behind the label starts at the edge, not half a line above it, so the ring, which lies outside the edge, is no longer overdrawn; the label text hangs over the ring). Focus and both open cells (Neper and NeperDark, 1x and 1.5x) viewed: ring continuous, all six list rows shown. Windows, Linux, Cupertino and Material pictures of the sheet are byte-identical."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "ROUND 74 (merge of lanes h and i): sheet = lane h's 1.75 times grown Neper cells plus lane i's looks.pad_neper(30, 36) (pointer aims land on the head and the first row); the 3 px focus ring is now whole under the label notch (control.e notched(): the cut that hides the top edge behind the label starts at the edge, not half a line above it, so the ring, which lies outside the edge, is no longer overdrawn; the label text hangs over the ring). Focus and both open cells (Neper and NeperDark, 1x and 1.5x) viewed: ring continuous, all six list rows shown. Windows, Linux, Cupertino and Material pictures of the sheet are byte-identical.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}

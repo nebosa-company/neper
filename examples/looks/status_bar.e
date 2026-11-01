@@ -13,6 +13,12 @@ use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
+// The v2 status bar is 24 tall (docs/ux/components/StatusBar); the v3 capture's panels are 19.
+fn bar_h(t: *const control.Theme) -> f32 {
+    if t.tokens.profile == .Neper { ret 24.0 }
+    ret 19.0
+}
+
 fn placed(a: *mem.Arena, node: widget.Node, x: f32, y: f32, w: f32, h: f32) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, inner_error) }
@@ -61,7 +67,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         let (bar, bar_error) = navigation.status_bar_of(a, 1000u64 * u64(i + 1usize), t, items[0usize..3usize], false, width)
         if bar_error != ok { ret (0usize, bar_error) }
-        let (shown, shown_error) = placed(a, bar, x, 0.0, 784.0, 19.0)
+        let (shown, shown_error) = placed(a, bar, x, 0.0, 784.0, bar_h(t))
         if shown_error != ok { ret (0usize, shown_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shown, drive: drive }
         i += 1usize
@@ -93,7 +99,7 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
         items[2usize].fills = true
         let (bar, bar_error) = navigation.status_bar_of(a, 1000u64 * u64(i + 1usize), t, items[0usize..3usize], false, 784.0)
         if bar_error != ok { ret (0usize, bar_error) }
-        let (shown, shown_error) = placed(a, bar, 784.0 - centres[i], 0.0, 1568.0, 19.0)
+        let (shown, shown_error) = placed(a, bar, 784.0 - centres[i], 0.0, 1568.0, bar_h(t))
         if shown_error != ok { ret (0usize, shown_error) }
         cells[i] = looks.Cell { caption: names[i], node: shown, drive: .Hover }
         i += 1usize
@@ -116,7 +122,7 @@ fn build_report(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     items[2usize].fills = true
     let (bar, bar_error) = navigation.status_bar_of(a, 9000u64, t, items[0usize..3usize], false, 1280.0)
     if bar_error != ok { ret (0usize, bar_error) }
-    let (shown, shown_error) = placed(a, bar, 0.0, 0.0, 1280.0, 19.0)
+    let (shown, shown_error) = placed(a, bar, 0.0, 0.0, 1280.0, bar_h(t))
     if shown_error != ok { ret (0usize, shown_error) }
     cells[0usize] = looks.Cell { caption: "Report preview window", node: shown, drive: .None }
     ret (1usize, ok)
@@ -133,6 +139,7 @@ fn run_report(a: *mem.Arena, name: str, text: str) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(20.0, 30.0)
     if args.len > 1usize && strs.eq(args[1usize], "status_bar_hover") {
         let hover = looks.Sheet { name: "status_bar_hover", cells: 4usize, columns: 1usize, cell_w: 1568.0, cell_h: 19.0, ctx: zero, build: build_hover }
         ret looks.run_all(a, &hover)

@@ -22,13 +22,21 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 2usize { value = time.Duration { nanos: (123i64 * 3600i64 + 45i64 * 60i64 + 6i64) * 1000000000i64 } }
         let (node, node_error) = overlay.duration_picker(a, u64((i + 1usize) * 10usize), t, "Duration", value, widget.Change[time.Duration] { ctx: zero, invoke: noop_duration })
         if node_error != ok { ret (0usize, node_error) }
-        cells[i] = looks.Cell { caption: names[i], node: node, drive: drives[i] }
+        var shown = node
+        if t.tokens.profile == .Neper {
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (0usize, held_error) }
+            held[0usize] = node
+            shown = widget.aligned(0u64, .Center, .Center, looks.size_style(300.0, 40.0), held[0usize..1usize])
+        }
+        cells[i] = looks.Cell { caption: names[i], node: shown, drive: drives[i] }
         i += 1usize
     }
     ret (5usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(70.0, 16.0)
     let sheet = looks.Sheet { name: "duration_picker", cells: 5usize, columns: 3usize, cell_w: 250.0, cell_h: 90.0, ctx: zero, build: build }
     ret looks_b_run.run_ten(a, &sheet)
 }

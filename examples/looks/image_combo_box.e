@@ -508,6 +508,7 @@ fn build_hover_edit(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(30.0, 36.0)
     if args.len == 2usize && args[1usize][0usize] == 111u8 { ret run_open(a, usize(args[1usize][1usize]) - 48usize) }
     if args.len == 2usize && args[1usize][0usize] == 68u8 {
         let hover = looks.Sheet { name: "image_combo_box_hover_drop", cells: 1usize, columns: 1usize, cell_w: 360.0, cell_h: 22.0, ctx: zero, build: build_hover_drop }
