@@ -20992,7 +20992,7 @@ fn cupertino_segmented(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     ret (made, made_error)
 }
 
-// The iOS slider: a 4 px track in the fill colour, the accent (minimum track) up to a 28 white thumb with a soft
+// The iOS slider: a 2 px track (Flutter CupertinoSlider) in the fill colour, the accent (minimum track) up to a 28 white thumb with a soft
 // shadow. The runtime's slider element, drawn in no colour, sits over it for the pointer, keys and the tree; its
 // geometry (the thumb centre 8 in, 8 out, from slider_at) is the one painted here.
 fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
@@ -21006,11 +21006,11 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     var rest = style.hexa(0x787880u32, 0.16)
     if dark { rest = style.hexa(0x787880u32, 0.32) }
     let accent = style.color(t.tokens, .Primary)
-    var track = sized_style(width - 16.0, 4.0)
-    track.radius = 2.0
+    var track = sized_style(width - 16.0, 2.0)
+    track.radius = 1.0
     track.background = paint.Brush { Solid: rest }
-    var lit = sized_style(max_zero(centre - 8.0), 4.0)
-    lit.radius = 2.0
+    var lit = sized_style(max_zero(centre - 8.0), 2.0)
+    lit.radius = 1.0
     lit.background = paint.Brush { Solid: accent }
     let state = control_state(t, key, enabled, false)
     let (thumb, thumb_error) = cup_pill_node(a, style.hex(0xFFFFFFu32), style.hex(0x000000u32), 14.0, 1.0, 28.0, 28.0)
@@ -21019,8 +21019,8 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     let hidden = widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
-    layers[1usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
+    layers[0usize] = widget.positioned(0u64, 14.0, 13.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
+    layers[1usize] = widget.positioned(0u64, 14.0, 13.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
     layers[2usize] = widget.positioned(0u64, 6.0 + centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
     layers[3usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), widget_one_of(a, widget.slider(key, hidden, sized_style(width, 28.0))))
     var frame_style = sized_style(width + 12.0, 28.0)
