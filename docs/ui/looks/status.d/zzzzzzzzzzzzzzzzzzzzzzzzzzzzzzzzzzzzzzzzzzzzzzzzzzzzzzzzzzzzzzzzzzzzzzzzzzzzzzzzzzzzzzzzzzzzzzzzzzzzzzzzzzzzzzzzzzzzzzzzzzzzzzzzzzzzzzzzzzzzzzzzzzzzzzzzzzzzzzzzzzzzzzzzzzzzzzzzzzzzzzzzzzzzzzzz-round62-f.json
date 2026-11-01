@@ -1,0 +1,972 @@
+{
+ "document_tabs": {
+  "name": "Document tabs",
+  "extra": true,
+  "neper": "navigation.document_tabs",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "dock_panel": {
+  "name": "Dock panel",
+  "extra": true,
+  "neper": "navigation.dock_panel",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dock_panel.png",
+    "notes": "Round 62 lane f. Docked panel header and body: rest, focused, floating, busy, empty, close hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "workspace": {
+  "name": "Document workspace",
+  "extra": true,
+  "neper": "navigation.multi_document_workspace",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/workspace.png",
+    "notes": "Round 62 lane f. Tab strip over the current document view: three tabs, unsaved, pinned, no document (empty state). Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "wizard": {
+  "name": "Wizard",
+  "extra": true,
+  "neper": "navigation.wizard",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/wizard.png",
+    "notes": "Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "command_palette": {
+  "name": "Command palette",
+  "extra": true,
+  "neper": "navigation.command_palette",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "window_switcher": {
+  "name": "Window switcher",
+  "extra": true,
+  "neper": "navigation.window_switcher",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/window_switcher.png",
+    "notes": "Round 62 lane f. Modal window switcher: open over four windows, second active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "one state only; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "ribbon": {
+  "name": "Ribbon",
+  "extra": true,
+  "neper": "navigation.ribbon",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "title_bar": {
+  "name": "Title bar",
+  "extra": true,
+  "neper": "navigation.title_bar",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/title_bar_all.png",
+    "notes": "Round 62 lane f. Application drawn caption with the platform buttons (Windows glyphs for Neper, Windows and Material, GNOME for Linux, traffic lights for Cupertino): active, inactive, maximised, no maximise, close only, close hovered. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "accordion": {
+  "name": "Accordion",
+  "extra": true,
+  "neper": "control.accordion",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "scroll_area": {
+  "name": "Scroll area",
+  "extra": true,
+  "neper": "control.scroll_area",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/scroll_area.png",
+    "notes": "Round 62 lane f. Viewport with the theme's scroll bar: vertical and horizontal, rest, hover, pressed, scrolled, content that fits. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ }
+}
