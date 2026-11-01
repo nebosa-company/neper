@@ -25,6 +25,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     while i < 4usize {
         // the Options form's DPI phase (examples/looks/dialog.e): the button at client (685, y)
         var options = control.button_options()
+        options.crisp = true
         options.width = 25.0
         options.height = 28.0
         options.enabled = enabled[i]

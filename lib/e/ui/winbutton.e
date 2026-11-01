@@ -16,6 +16,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.winnative
 use e.ui.winpx
+use e.ui.winring
 use e.ui.widget
 
 // Generated from the v3 captures in docs/ui/looks/ref/windows/dialogs (the crisp 96 DPI buttons of Search for Card,
@@ -44,7 +45,7 @@ fn ring_pressed_edges() -> [8]u32 { ret [8]u32{ 0xAA005499u32, 0xFF88B4D8u32, 0x
 // `dx`, `dy` (looks5): the sub-pixel shift of v3's DPI-scaled forms, `dots` the focus rectangle drawn with the ring (0 none, 1
 // normal, 2 pressed) when it is shifted too.
 // looks9: `dx2`, `dy2` the phase at the right and bottom edge (both zero: the phase grows by `ring_eps` per pixel).
-type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32, dark: bool, dx2: f32, dy2: f32 }
+type Ring = struct { kind: u32, face: u32, tint: u32, dx: f32, dy: f32, dots: u32, dark: bool, dx2: f32, dy2: f32, crisp: bool }
 
 // `value` is 0xAARRGGBB; an alpha byte of 0 (a plain 0xRRGGBB) is opaque. looks5: the outer rows and corner cells of a
 // ring carry the share of ring over the dialog face they sit on (v3's Filter dialog is #F9F9F9, the others #F0F0F0).
@@ -201,6 +202,7 @@ fn ring_edge_faced(d: *const Ring, which: usize) -> u32 {
 fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Ring](ctx)
     if d.dark { ret ring_paint_native(d, b, area) }
+    if d.crisp { ret ring_paint_crisp(d, b, area) }
     if d.dx != 0.0 || d.dy != 0.0 || d.dx2 != 0.0 || d.dy2 != 0.0 {
         ret ring_paint_shifted(d, b, area)
     }
@@ -566,10 +568,10 @@ fn ring_paint_shifted(d: *const Ring, b: *scene.Builder, area: geometry.Rect) ->
 }
 
 // The ring, `width` x `height` (the visible box), over a face 0xRRGGBB; `kind` as in `Ring`. A node to put under a button's label.
-fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dx2: f32, dy2: f32, dots: u32, dark: bool) -> (widget.Node, err) {
+fn ring_node(a: *mem.Arena, kind: u32, face: u32, width: f32, height: f32, dx: f32, dy: f32, dx2: f32, dy2: f32, dots: u32, dark: bool, crisp: bool) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, rings_error) }
-    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots, dark: dark, dx2: dx2, dy2: dy2 }
+    rings[0usize] = Ring { kind: kind, face: face, tint: 0u32, dx: dx, dy: dy, dots: dots, dark: dark, dx2: dx2, dy2: dy2, crisp: crisp }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
@@ -598,7 +600,7 @@ fn mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
 // and 4 (and h - 4 and h - 3) of dots every 2 px from x = 6 to w - 7, two columns at x = 3 and w - 4 that alternate
 // per row, and four corner cells that are blends. The dot colours depend on the face: grey #555555 / #AAAAAA on the
 // #FDFDFD face, #665E57 / #99A1A8 on the pressed face.
-type FocusDots = struct { pressed: bool, dark: bool }
+type FocusDots = struct { pressed: bool, dark: bool, crisp: bool, face: u32 }
 
 fn focus_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -612,6 +614,7 @@ fn focus_px(b: *scene.Builder, area: geometry.Rect, rx: f32, ry: f32, value: u32
 fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*FocusDots](ctx)
     if d.dark { ret focus_paint_native(d, b, area) }
+    if d.crisp { ret focus_paint_crisp(d, b, area) }
     let w = f32(u32(area.width + 0.5)) + 2.0
     let h = f32(u32(area.height + 0.5)) + 1.0
     var dark = 0x555555u32
@@ -663,10 +666,10 @@ fn focus_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 // The focus rectangle over a ring box of `width` x `height` (the visible box); `pressed` for the pressed face.
-fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, dark: bool) -> (widget.Node, err) {
+fn focus_node(a: *mem.Arena, pressed: bool, width: f32, height: f32, dark: bool, crisp: bool, face: u32) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[FocusDots](a, 1usize)
     if dots_error != ok { ret (zero, dots_error) }
-    dots[0usize] = FocusDots { pressed: pressed, dark: dark }
+    dots[0usize] = FocusDots { pressed: pressed, dark: dark, crisp: crisp, face: face }
     var s = style.defaults()
     s.width = style.Length { Px: width }
     s.height = style.Length { Px: height }
@@ -771,6 +774,97 @@ fn focus_paint_native(d: *const FocusDots, b: *scene.Builder, area: geometry.Rec
         if (w - 3 + y) % 2 == 0 { right = on }
         try ring_rect(b, area.x + 2.0, area.y + f32(y), 1.0, 1.0, left)
         try ring_rect(b, area.x + f32(w - 3), area.y + f32(y), 1.0, 1.0, right)
+        y += 1
+    }
+    ret ok
+}
+
+// ---- Windows light, crisp: the ring of the true 1:1 v3 captures ----------------------------------------------------------------
+// docs/ui/looks/ref/windows-1to1 shows v3's TcxButton as the native theme draws it at 96 dpi: a box W - 2 by H - 2, one pixel rails
+// (the line colour on top and at the sides, a darker line on the bottom row), the face between, and four 6 x 6 anti-aliased corners. Every
+// position and every state of the captures shows the same corners (24 identical pressed buttons), so there is no sub-pixel phase.
+// The corners are small baked tiles per state (e.ui.winring); everything else is drawn.
+
+// The line colour of the sides and top, and of the bottom row, of a ring kind (0 rest, 1 accent, 2 disabled, 3 pressed).
+fn crisp_line(kind: u32) -> u32 {
+    if kind == 1u32 { ret 0x0078D4u32 }
+    if kind == 2u32 { ret 0xE9E9E9u32 }
+    if kind == 3u32 { ret 0x005499u32 }
+    ret 0xD0D0D0u32
+}
+
+fn crisp_bottom(kind: u32) -> u32 {
+    if kind == 1u32 { ret 0x006BBEu32 }
+    if kind == 2u32 { ret 0xE9E9E9u32 }
+    if kind == 3u32 { ret 0x005499u32 }
+    ret 0xBABABAu32
+}
+
+// The corner tile of a ring: the accent ring on the hover face (#E0EEF9) is the hover ring.
+fn crisp_tile(kind: u32, face: u32) -> [144]u32 {
+    if kind == 1u32 && face == 0xE0EEF9u32 { ret winring.crisp_hover() }
+    if kind == 1u32 { ret winring.crisp_accent() }
+    if kind == 2u32 { ret winring.crisp_disabled() }
+    if kind == 3u32 { ret winring.crisp_pressed() }
+    ret winring.crisp_rest()
+}
+
+// The origin of a crisp ring on whole device pixels: a box centred by its parent (an odd height in an even room) lands on a half pixel, and
+// v3's buttons never do; a half pixel goes up and left, as the captures' integer layouts would put it.
+fn crisp_origin(b: *scene.Builder, v: f32) -> f32 {
+    ret winpx.edge(v - 0.01, scene.builder_scale(b))
+}
+
+fn ring_paint_crisp(d: *const Ring, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = f32(u32(area.width + 0.5))
+    let h = f32(u32(area.height + 0.5))
+    let x0 = crisp_origin(b, area.x)
+    let y0 = crisp_origin(b, area.y)
+    let line = crisp_line(d.kind)
+    let bottom = crisp_bottom(d.kind)
+    try ring_rect(b, x0 + 6.0, y0 + 1.0, w - 12.0, h - 2.0, d.face)
+    try ring_rect(b, x0 + 1.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, x0 + w - 6.0, y0 + 6.0, 5.0, h - 12.0, d.face)
+    try ring_rect(b, x0 + 6.0, y0, w - 12.0, 1.0, line)
+    try ring_rect(b, x0 + 6.0, y0 + h - 1.0, w - 12.0, 1.0, bottom)
+    try ring_rect(b, x0, y0 + 6.0, 1.0, h - 12.0, line)
+    try ring_rect(b, x0 + w - 1.0, y0 + 6.0, 1.0, h - 12.0, line)
+    let tile = crisp_tile(d.kind, d.face)
+    var c = 0usize
+    while c < 4usize {
+        var ox: f32 = 0.0
+        var oy: f32 = 0.0
+        if c == 1usize || c == 3usize { ox = w - 6.0 }
+        if c >= 2usize { oy = h - 6.0 }
+        var k = 0usize
+        while k < 36usize {
+            let value = tile[c * 36usize + k]
+            if value != 0u32 { try ring_rect(b, x0 + ox + f32(k % 6usize), y0 + oy + f32(k / 6usize), 1.0, 1.0, value) }
+            k += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// v3's focus rectangle (DrawFocusRect, an XOR): a one pixel dotted line two pixels inside the box, every other pixel the colour inverted,
+// the pixels with x + y odd (from the box's corner); the four corners of the rectangle are never dots.
+fn focus_paint_crisp(d: *const FocusDots, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = i32(area.width + 0.5)
+    let h = i32(area.height + 0.5)
+    let x0 = crisp_origin(b, area.x)
+    let y0 = crisp_origin(b, area.y)
+    let ink = (d.face ^ 0xFFFFFFu32) & 0xFFFFFFu32
+    var x: i32 = 3
+    while x <= w - 4 {
+        if (x + 2) % 2 == 1 { try ring_rect(b, x0 + f32(x), y0 + 2.0, 1.0, 1.0, ink) }
+        if (x + h - 3) % 2 == 1 { try ring_rect(b, x0 + f32(x), y0 + f32(h - 3), 1.0, 1.0, ink) }
+        x += 1
+    }
+    var y: i32 = 3
+    while y <= h - 4 {
+        if (2 + y) % 2 == 1 { try ring_rect(b, x0 + 2.0, y0 + f32(y), 1.0, 1.0, ink) }
+        if (w - 3 + y) % 2 == 1 { try ring_rect(b, x0 + f32(w - 3), y0 + f32(y), 1.0, 1.0, ink) }
         y += 1
     }
     ret ok

@@ -37,6 +37,7 @@ use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
+use e.ui.winradio
 use e.ui.wintile
 use e.ui.winpageicon
 use e.ui.wintoolicon
@@ -54,7 +55,9 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // window that has just opened has its default button focused: v3's About), for the looks sheets. `ring_x`, `ring_y` (looks9) the exact
 // phase at the top left of the ring (`ring_x2`, `ring_y2` at the right and bottom edge, else it grows by 0.00074 per pixel)
 // of the ring of such a button (the native ring drawn at a fractional position); when both are zero `shift_x`, `shift_y` serve.
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool }
+// `crisp` (Windows light): the ring and focus rectangle of the true 1:1 v3 captures (docs/ui/looks/ref/windows-1to1): a box W - 2 by H - 2,
+// one pixel rails, no sub-pixel phase (every shift above is ignored), the focus dots the face inverted on alternate pixels.
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool, crisp: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -2404,7 +2407,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false, crisp: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2593,7 +2596,7 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
 // is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32) -> (widget.Node, err) {
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, crisp: bool) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
@@ -2625,7 +2628,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if ringed {
         // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
         var dots_kind = 0u32
-        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark {
+        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark && !crisp {
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
@@ -2635,7 +2638,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
             phase_x = ring_x
             phase_y = ring_y
         }
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark, crisp)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2643,8 +2646,8 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark) {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
+        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark || crisp) {
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark, crisp, face)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
             n += 1usize
@@ -2677,6 +2680,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     }
     var look = style.windows_resolve(t.tokens, variant, state)
     look.corners = corners
+    let crisp = options.crisp && t.tokens.palette == .Light
     if !show_label { look.min_width = 29.33 }
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
@@ -2699,13 +2703,17 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         look.min_width = 73.0
         if !show_label { look.min_width = 29.0 }
         look.min_height = 22.0
+        if crisp { look.min_height = 21.0 }
         if options.width > 0.0 { look.min_width = options.width - 2.0 }
         if options.height > 0.0 { look.min_height = options.height - 1.0 }
+        if crisp && options.height > 0.0 { look.min_height = options.height - 2.0 }
     }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
     var ink = look.foreground
+    // the 1:1 captures show a disabled caption in #838383 where it is solid (the resampled ones blurred it to #878787)
+    if crisp && state.disabled { ink = style.hex(0x838383u32) }
     if options.loading { ink.alpha = 0.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -2715,6 +2723,9 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     // to its right (the caption's middle 11.5 px right of the face's); the picture is not part of the caption row
     let dark_picture = has_icon && !options.loading && t.tokens.palette == .Dark && t.tokens.profile == .Windows && corners.top_left == 0.0
     var shift_caption = options.shift_x
+    if crisp { shift_caption = 0.0 }
+    // v3 centres a picture and its caption by integer arithmetic: a half pixel of room goes to the left
+    if crisp && has_icon { shift_caption = 1.0 }
     if dark_picture { shift_caption = 23.0 }
     if has_icon && !options.loading && !dark_picture {
         parts[count] = picture
@@ -2807,7 +2818,19 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, options.shift_y, options.ring_x, options.ring_y, options.ring_x2, options.ring_y2)
+    var shift_y_used = options.shift_y
+    var ring_x_used = options.ring_x
+    var ring_y_used = options.ring_y
+    var ring_x2_used = options.ring_x2
+    var ring_y2_used = options.ring_y2
+    if crisp {
+        shift_y_used = 0.0
+        ring_x_used = 0.0
+        ring_y_used = 0.0
+        ring_x2_used = 0.0
+        ring_y2_used = 0.0
+    }
+    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, shift_y_used, ring_x_used, ring_y_used, ring_x2_used, ring_y2_used, crisp)
     if shown_error != ok { ret (zero, shown_error) }
     var shown = shown_plain
     if dark_picture {
@@ -2919,7 +2942,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -4219,7 +4242,7 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // pixels (121 to 135 levels over 130 px) and why the offset depends on where the control stands. The other
 // windows' rectangles are drawn without the scale (crisp dots of 90 and 165 levels).
 // `lw`, `tw`: the window coordinates of the rectangle's left column and top row (negative: unknown, no scale).
-type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32 }
+type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32, whole: bool }
 // The dots are the inverse of the face (DrawFocusRect's XOR): a dot over a face of 240 is 15, over 249 it is 6.
 
 // A rectangle `w` x `h` at (x, y) as the pixels it covers, each filled with its share of the colour's alpha (the
@@ -4279,6 +4302,29 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Dotted](ctx)
     let x0 = f32(i32(area.x + 0.01))
     let y0 = f32(i32(area.y + 0.01))
+    if d.whole {
+        // DrawFocusRect, an XOR: every other pixel of a one pixel line, the pixels with x + y odd from the corner; 15 rows, `span` + 1 columns.
+        // The origin rounds as the mark's tile does (a row that stands on a half pixel goes down with its mark).
+        let wx = f32(i32(area.x + 0.5))
+        let wy = f32(i32(area.y + 0.5))
+        let last = i32(d.span)
+        var cx: i32 = 1
+        while cx < last {
+            if cx % 2 == 1 {
+                try winpx.fill(b, wx + f32(cx), wy, 1.0, 1.0, d.color)
+                try winpx.fill(b, wx + f32(cx), wy + 14.0, 1.0, 1.0, d.color)
+            }
+            cx += 1
+        }
+        var cy: i32 = 1
+        while cy < 14 {
+            if cy % 2 == 1 { try winpx.fill(b, wx, wy + f32(cy), 1.0, 1.0, d.color) }
+            // the pattern runs on along the line, so the right side's dots follow the rectangle's width
+            if (cy + last) % 2 == 1 { try winpx.fill(b, wx + d.span, wy + f32(cy), 1.0, 1.0, d.color) }
+            cy += 1
+        }
+        ret ok
+    }
     var lw = d.lw
     var tw = d.tw
     var s = d.s
@@ -4314,14 +4360,15 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
 // scale and its line offset (see `Dotted`).
-type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32 }
+// `whole` (the radio of the 1:1 captures, `set_radio_crisp`): DrawFocusRect's dots on whole pixels, the underline on a whole row.
+type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32, whole: bool }
 
 // The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
 fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom: DotGeom) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
     let ink = (255.0 - geom.face) / 255.0
-    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0 }
+    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0, whole: geom.whole }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
@@ -4332,7 +4379,28 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
 // scripts/gen_winmark.py for the contexts).
 type Phase = struct { context: u32, x: f32, y: f32 }
 
+// Windows light radio marks as the true 1:1 captures show them (e.ui.winradio): off, on, on under the pointer or pressed, off pressed; the same
+// at every position, so no sub-pixel phase. Opt in like `group_crisp`, set by the sheets of the radio controls; other sheets keep the old marks.
+var radio_crisp: bool = false
+fn set_radio_crisp(on: bool) { radio_crisp = on }
+
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
+    if radio_crisp && round && t.tokens.palette == .Light && !state.disabled && !mixed {
+        var tile = winradio.radio_off()
+        if chosen {
+            tile = winradio.radio_on()
+            if state.pressed { tile = winradio.radio_onpressed() }
+        } else if state.pressed {
+            tile = winradio.radio_offpressed()
+        }
+        let (crisp_mark, crisp_error) = wintile.tile_node(a, 13usize, 13usize, tile[0usize..169usize])
+        if crisp_error != ok { ret (zero, crisp_error) }
+        let (crisp_cell, crisp_cell_error) = mem.alloc[widget.Node](a, 1usize)
+        if crisp_cell_error != ok { ret (zero, TooLarge) }
+        crisp_cell[0usize] = widget.positioned(0u64, 0.0, f32(i32((high - 14.0) * 0.5 + 0.5)), style.defaults(), mem_one_node(a, crisp_mark))
+        // the 1:1 captures start the caption at 14 (the old layout 13)
+        ret (widget.stack(0u64, sized_style(14.0, high), crisp_cell[0usize..1usize]), ok)
+    }
     // round 10: the native Windows 11 marks (docs/ui/looks/ref/windows-native, e.ui.winnative). Dark: every state (hover is the rest
     // look natively). Light: the states v3 never showed, disabled and indeterminate; v3's own captures keep the rest.
     if t.tokens.palette == .Dark || (t.tokens.palette == .Light && (state.disabled || mixed)) {
@@ -4553,7 +4621,9 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     if focused {
         let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, geom)
         if dots_error != ok { ret (zero, dots_error) }
-        parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
+        var dots_x: f32 = 2.0
+        if geom.whole { dots_x = 1.0 }
+        parts[1usize] = widget.positioned(0u64, dots_x, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
     }
     if mark_at < shown.len {
@@ -4605,7 +4675,11 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if dialog_error != ok { ret (zero, dialog_error) }
     // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
     // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
-    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
+    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0, whole: false }
+    if radio_crisp && round && t.tokens.palette == .Light {
+        geom.whole = true
+        geom.line = 0.0
+    }
     if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
     // Dark: the dots are the XOR of the page, #202020 (the tab page of the Filter dialog #272727).
     if t.tokens.palette == .Dark {
@@ -4615,6 +4689,10 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if phase.context == 0u32 { geom.s = 0.0007 }
     if phase.context == 6u32 { geom.s = 0.00073 }
     if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
+    if geom.whole {
+        geom.line = 0.0
+        geom.s = 0.0
+    }
     if phase.x >= 0.0 && phase.y >= 0.0 {
         var lead: f32 = 15.0
         if !round && !flush { lead = 17.0 }
@@ -4627,6 +4705,12 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = mark_node
     parts[1usize] = label_node
+    // the 42 high radio rows (the Options pages and the Search dialog): the 1:1 captures put the caption a row higher than the resampled ones
+    if radio_crisp && round && t.tokens.palette == .Light && high > 40.0 {
+        var raised = style.defaults()
+        raised.margin = edges(0.0, 0.0, 0.0, 2.0)
+        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, raised, mem_one_node(a, label_node))
+    }
     var row_style = style.defaults()
     row_style.min_height = style.Length { Px: high }
     if !round && !flush { row_style.padding = edges(2.0, 0.0, 0.0, 0.0) }
@@ -7682,6 +7766,8 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     frame_style.width = style.Length { Px: width }
     frame_style.min_height = style.Length { Px: 22.0 }
     if height > 0.0 { frame_style.height = style.Length { Px: height } }
+    // the 1:1 capture's light box is one row shorter than the DFM height + 1 (e.ui.winedit.token_chrome)
+    if height > 0.0 && t.tokens.palette == .Light { frame_style.height = style.Length { Px: height - 1.0 } }
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     if t.tokens.palette == .Dark { frame_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) } }
     frame_style.border = style.Border { width: 1.0, color: win_rgb(237u32, 237u32, 237u32) }
@@ -15840,7 +15926,8 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
 // #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
-type SectionBar = struct { stops: [2]paint.Stop }
+// `whole` (Windows light with the group frames on whole pixels, `set_group_crisp`): the 1:1 captures put the border on the control's own pixels.
+type SectionBar = struct { stops: [2]paint.Stop, whole: bool }
 
 // v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
 // border over it. looks4: fitted to the live 100 % capture's border pixels (fill compositing included):
@@ -15849,10 +15936,16 @@ type SectionBar = struct { stops: [2]paint.Stop }
 // (a fill reaching the border's soft outer pixels would count twice), then the four border lines.
 fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*SectionBar](ctx)
-    let x0 = area.x + 0.15
-    let y0 = area.y + 0.34
-    let w = area.width + 0.35
-    let h = area.height + 0.01
+    var x0 = area.x + 0.15
+    var y0 = area.y + 0.34
+    var w = area.width + 0.35
+    var h = area.height + 0.01
+    if s.whole {
+        x0 = area.x
+        y0 = area.y
+        w = area.width
+        h = area.height
+    }
     let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x0, y: y0 }, end: geometry.Point { x: x0 + w, y: y0 }, stops: s.stops[0usize..2usize] } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x + 1.0, area.y + 1.0, area.width - 1.0, area.height - 1.0), brush: brush } })
     let edge = paint.Brush { Solid: s.stops[0usize].color }
@@ -15869,6 +15962,7 @@ fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
 fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize].whole = group_crisp && t.tokens.palette == .Light
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
     // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
@@ -18545,11 +18639,26 @@ fn windows_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 }
 
 // The frame's four lines (1 unit, #DCDCDC) on explicit outer extents relative to the group's top left.
-type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color }
+type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color, whole: bool }
+
+// Windows light, the true 1:1 captures: a group frame is four one pixel lines of #DCDCDC on whole rows and columns (the 6.35 and 0.65 of the
+// resampled captures are where the lines blurred to). Frames built while this is on take the line pixel that holds their fractional edge.
+var group_crisp: bool = false
+fn set_group_crisp(on: bool) { group_crisp = on }
 
 fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*GroupFrame](ctx)
     let brush = paint.Brush { Solid: g.color }
+    if g.whole {
+        let first_x = f32(i32(area.x + g.left + 0.001))
+        let first_y = f32(i32(area.y + g.top + 0.001))
+        let last_x = f32(i32(area.x + g.right - 1.0 + 0.001))
+        let last_y = f32(i32(area.y + g.bottom - 1.0 + 0.001))
+        try winpx.fill(b, first_x, first_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, last_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+        ret winpx.fill(b, last_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+    }
     let x = area.x + g.left
     let y = area.y + g.top
     let w = g.right - g.left
@@ -18578,7 +18687,7 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
-    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant) }
+    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant), whole: group_crisp && t.tokens.palette == .Light }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
