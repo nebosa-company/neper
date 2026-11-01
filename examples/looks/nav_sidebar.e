@@ -6,6 +6,7 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_e
+use e.ui.looks_y63
 use e.ui.navigation
 use e.ui.widget
 
@@ -22,11 +23,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             count = 4usize
             selected = 3usize
         }
+        // the focus cell: the middle destination selected and the stack centred, where the harness clicks before Tab
+        if i == 3usize { selected = 1usize }
         let (rail, rail_error) = navigation.sidebar(a, u64((i + 1usize) * 100usize), t, labels[0usize..count], selected, subs[0usize..count], 200.0)
         if rail_error != ok { ret (0usize, rail_error) }
         let (boxed, boxed_error) = looks_e.framed(a, u64((i + 1usize) * 100usize + 90usize), 200.0, 200.0, rail)
+        var shown = boxed
+        if i == 3usize {
+            let (middle, middle_error) = looks_y63.framed_center(a, u64((i + 1usize) * 100usize + 90usize), 200.0, 200.0, rail)
+            if middle_error != ok { ret (0usize, middle_error) }
+            shown = middle
+        }
         if boxed_error != ok { ret (0usize, boxed_error) }
-        cells[i] = looks.Cell { caption: names[i], node: boxed, drive: looks_e.drive_of(i, 1usize, 2usize, 3usize) }
+        cells[i] = looks.Cell { caption: names[i], node: shown, drive: looks_e.drive_of(i, 1usize, 2usize, 3usize) }
         i += 1usize
     }
     ret (5usize, ok)

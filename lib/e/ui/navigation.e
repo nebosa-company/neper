@@ -17,6 +17,7 @@ use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.looks_e_draw
+use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -498,6 +499,17 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // `radius-lg` and a 24 icon, casting no shadow. A group named `label`.
 fn bottom_app_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, actions: []const Action, fab: *const Action, width: f32) -> (widget.Node, err) {
     if actions.len > 4usize { ret (zero, TooLarge) }
+    if looks_y63.owns(t) {
+        let (flat, flat_error) = mem.alloc[looks_y63.Act](a, actions.len)
+        if flat_error != ok { ret (zero, TooLarge) }
+        var k = 0usize
+        while k < actions.len {
+            flat[k] = looks_y63.Act { label: actions[k].label, action: &actions[k].action, enabled: actions[k].enabled }
+            k += 1usize
+        }
+        let (made_bar, made_bar_error) = looks_y63.bottom_bar(a, key, t, label, flat, looks_y63.Act { label: fab.label, action: &fab.action, enabled: fab.enabled }, width)
+        ret (made_bar, made_bar_error)
+    }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let (items, items_error) = mem.alloc[widget.Node](a, actions.len)
     if items_error != ok { ret (zero, TooLarge) }
@@ -524,6 +536,9 @@ fn bottom_app_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         look.min_height = 56.0
         let icon_size = t.tokens.sizes.icon_md
         var picture = widget.box(0u64, control.sized_style(icon_size, icon_size), zero)
+        let (mark, mark_error) = control.icon_square(a, look.foreground, .Edit, icon_size)
+        if mark_error != ok { ret (zero, mark_error) }
+        picture = mark
         if fab.icon.slot != 0u32 || fab.icon.generation != 0u32 { picture = widget.image(0u64, widget.Image { texture: fab.icon, fit: .Contain }, control.sized_style(icon_size, icon_size)) }
         let (button, button_error) = control.pressable(a, key + 9u64, t, 3u8, fab.label, look, true, false, &fab.action, picture)
         if button_error != ok { ret (zero, button_error) }
@@ -1330,7 +1345,24 @@ fn destination_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // starts with a 1px `outline-variant` divider (16 at the sides, 8 above and
 // below; none before the first) and its `label-medium` heading in
 // `on-surface-variant`, 16 in, 16 above and 8 below.
+fn items_y63(a: *mem.Arena, items: []const Destination) -> ([]looks_y63.Item, err) {
+    let (out, out_error) = mem.alloc[looks_y63.Item](a, items.len)
+    if out_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        out[i] = looks_y63.Item { label: items[i].label, glyph: items[i].glyph, pictured: items[i].pictured, badge: items[i].badge, dot: items[i].dot, section: items[i].section }
+        i += 1usize
+    }
+    ret (out, ok)
+}
+
 fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, items: []const Destination, selected: usize, picks: []const widget.Submit, tab_stop: usize, height: f32, start: f32, end: f32, width: f32) -> ([]widget.Node, err) {
+    if looks_y63.owns(t) {
+        let (flat, flat_error) = items_y63(a, items)
+        if flat_error != ok { ret (zero, flat_error) }
+        let (made, made_error) = looks_y63.rows(a, first, t, flat, selected, picks, tab_stop, width)
+        ret (made, made_error)
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * items.len)
     if rows_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -1384,6 +1416,10 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
         look.border_width = 0.0
         look.opacity = 1.0
         look.radius = height * 0.5
+        if t.tokens.profile == .MaterialLike && state.focus_visible {
+            look.border_width = 3.0
+            look.border = style.color(t.tokens, .FocusRing)
+        }
         look.custom_padding = true
         look.padding = end
         look.padding_start = start
@@ -1676,6 +1712,15 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions, true, sem, body[0usize])
         ret (made, made_error)
     }
+    if form == .Rail && looks_y63.owns(t) {
+        let (flat, flat_error) = items_y63(a, items)
+        if flat_error != ok { ret (zero, flat_error) }
+        let (flat_rail, flat_rail_error) = looks_y63.rail(a, key + 1u64, t, flat, selected, pick_actions[0usize..items.len], tab_stop, extent)
+        if flat_rail_error != ok { ret (zero, flat_rail_error) }
+        sem.row_count = u32(items.len)
+        let (made_rail, made_rail_error) = destination_tab_list(a, key, t, form, pick_actions, true, sem, flat_rail)
+        ret (made_rail, made_rail_error)
+    }
     let bottom = form == .Bottom
     var pill_width: f32 = 56.0
     var cell = extent
@@ -1701,6 +1746,8 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         var label_ink = muted
         var pill = control.sized_style(pill_width, 32.0)
         pill.radius = 16.0
+        // Material 3 focus indicator: a 3 px ring round the pill for the keyboard focus.
+        if t.tokens.profile == .MaterialLike && state.focus_visible { pill.border = style.Border { width: 3.0, color: style.color(t.tokens, .FocusRing) } }
         var wash_ink = muted
         // md.comp.navigation-bar: an inactive item's hover and press layers are on-surface.
         if t.tokens.profile == .MaterialLike { wash_ink = style.color(t.tokens, .OnSurface) }
@@ -2869,6 +2916,13 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     sheet_style.corners = style.Corners { top_left: 0.0, top_right: lg, bottom_right: lg, bottom_left: 0.0 }
     let rtl = t.tokens.direction == .RightToLeft
     if rtl { sheet_style.corners = style.Corners { top_left: lg, top_right: 0.0, bottom_right: 0.0, bottom_left: lg } }
+    if looks_y63.owns(t) {
+        // Windows' overlay pane rounds its end corners 8; GNOME's and Apple's sidebars are square.
+        var flat_end: f32 = 0.0
+        if t.tokens.profile == .Windows { flat_end = 8.0 }
+        sheet_style.corners = style.Corners { top_left: 0.0, top_right: flat_end, bottom_right: flat_end, bottom_left: 0.0 }
+        if rtl { sheet_style.corners = style.Corners { top_left: flat_end, top_right: 0.0, bottom_right: 0.0, bottom_left: flat_end } }
+    }
     let (panel, panel_error) = mem.alloc[widget.Node](a, 1usize)
     if panel_error != ok { ret (zero, TooLarge) }
     panel[0usize] = widget.box(0u64, sheet_style, body[0usize..1usize])
