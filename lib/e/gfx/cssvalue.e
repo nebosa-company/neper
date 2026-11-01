@@ -2212,6 +2212,22 @@ fn strip_comments(a: *mem.Arena, s: str) -> str {
 }
 
 // A colour as a 32-bit ARGB; `currentcolor` and unknown text are absent.
+// The CSS system colours in the light colour scheme, and the deprecated ones as the modern colours they stand for.
+fn system_color(name: str) -> (u32, bool) {
+    if str.eq(name, "canvas") || str.eq(name, "field") || str.eq(name, "activecaption") || str.eq(name, "appworkspace") || str.eq(name, "background") || str.eq(name, "infobackground") || str.eq(name, "inactivecaption") || str.eq(name, "menu") || str.eq(name, "scrollbar") || str.eq(name, "window") { ret (0xFFFFFFFFu32, true) }
+    if str.eq(name, "canvastext") || str.eq(name, "fieldtext") || str.eq(name, "buttontext") || str.eq(name, "captiontext") || str.eq(name, "infotext") || str.eq(name, "menutext") || str.eq(name, "windowtext") || str.eq(name, "marktext") { ret (0xFF000000u32, true) }
+    if str.eq(name, "buttonface") || str.eq(name, "buttonhighlight") || str.eq(name, "buttonshadow") || str.eq(name, "threedface") { ret (0xFFEFEFEFu32, true) }
+    if str.eq(name, "buttonborder") || str.eq(name, "activeborder") || str.eq(name, "inactiveborder") || str.eq(name, "threeddarkshadow") || str.eq(name, "threedhighlight") || str.eq(name, "threedlightshadow") || str.eq(name, "threedshadow") || str.eq(name, "windowframe") { ret (0xFF767676u32, true) }
+    if str.eq(name, "graytext") || str.eq(name, "inactivecaptiontext") { ret (0xFF6D6D6Du32, true) }
+    if str.eq(name, "highlight") || str.eq(name, "accentcolor") || str.eq(name, "selecteditem") { ret (0xFF0075FFu32, true) }
+    if str.eq(name, "highlighttext") || str.eq(name, "accentcolortext") || str.eq(name, "selecteditemtext") { ret (0xFFFFFFFFu32, true) }
+    if str.eq(name, "linktext") { ret (0xFF0000EEu32, true) }
+    if str.eq(name, "visitedtext") { ret (0xFF551A8Bu32, true) }
+    if str.eq(name, "activetext") { ret (0xFFFF0000u32, true) }
+    if str.eq(name, "mark") { ret (0xFFFFFF00u32, true) }
+    ret (0u32, false)
+}
+
 fn parse_color(a: *mem.Arena, raw: str) -> (u32, bool) {
     var s = lower(a, trim_ws(raw))
     if index_of(s, "/*") >= 0i64 { s = trim_ws(strip_comments(a, s)) }
@@ -2219,6 +2235,8 @@ fn parse_color(a: *mem.Arena, raw: str) -> (u32, bool) {
     if str.eq(s, "transparent") { ret (0u32, true) }
     let (named, is_named) = named_color(s)
     if is_named { ret (named, true) }
+    let (sysc, is_sys) = system_color(s)
+    if is_sys { ret (sysc, true) }
     let relative = index_of(s, "(from ") >= 0i64
     if str.starts_with(s, "#") {
         let (r0, r1) = parse_hex(a, s[1usize..])
