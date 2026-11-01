@@ -22,6 +22,7 @@ use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
 use e.ui.looks_b_ov
+use e.ui.looks_z63
 use e.ui.winchrome
 use e.ui.winmsgicon
 use e.ui.wintile
@@ -2671,33 +2672,35 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     var plate = control.surface_style(t, raised)
     plate.padding.bottom = style.Length { Px: 12.0 }
     plate.width = style.Length { Px: 320.0 }
+    let face = looks_z63.popover_face(t.tokens, plate)
+    if face.styled { plate = face.plate }
     let (card, card_error) = mem.alloc[widget.Node](a, 2usize)
     if card_error != ok { ret (zero, TooLarge) }
-    let fill = style.color(t.tokens, .SurfaceContainerHigh)
+    let fill = face.fill
     let across = placement == .Right || placement == .Left
     var pointing: control.GlyphKind = .ChevronUp
     if placement == .Right { pointing = .ChevronLeft }
     if placement == .Left { pointing = .ChevronRight }
     if placement == .Above || placement == .AboveCenter { pointing = .ChevronDown }
-    let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, 6.0, 12.0), control.if_else(across, 12.0, 6.0))
+    let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, face.beak_h, face.beak_w), control.if_else(across, face.beak_w, face.beak_h))
     if tip_error != ok { ret (zero, tip_error) }
     var inset: f32 = 16.0
-    var offset = gap_offset(placement, 4.0)
+    var offset = gap_offset(placement, face.gap)
     if mem.address_of(t.runtime) != 0usize {
         let (anchor_bounds, has_anchor) = widget.bounds_for_key(t.runtime, anchor)
         if has_anchor {
             if across {
-                offset.y = anchor_bounds.height * 0.5 - 22.0
+                offset.y = anchor_bounds.height * 0.5 - 16.0 - face.beak_w * 0.5
             } else {
                 let surface = widget.surface_size(t.runtime)
                 let first_placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
-                let wanted = anchor_bounds.x + anchor_bounds.width * 0.5 - first_placed.x - 6.0
+                let wanted = anchor_bounds.x + anchor_bounds.width * 0.5 - first_placed.x - face.beak_w * 0.5
                 if wanted < 16.0 { offset.x += wanted - 16.0 }
-                if wanted > 292.0 { offset.x += wanted - 292.0 }
+                if wanted > 304.0 - face.beak_w { offset.x += wanted - (304.0 - face.beak_w) }
                 let placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
-                inset = anchor_bounds.x + anchor_bounds.width * 0.5 - placed.x - 6.0
+                inset = anchor_bounds.x + anchor_bounds.width * 0.5 - placed.x - face.beak_w * 0.5
                 if inset < 16.0 { inset = 16.0 }
-                if inset > 292.0 { inset = 292.0 }
+                if inset > 304.0 - face.beak_w { inset = 304.0 - face.beak_w }
             }
         }
     }
@@ -2717,7 +2720,8 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
         card[0usize] = box_node
         card[1usize] = tip_node
     }
-    let joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
+    var joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
+    if face.styled && !face.beak { joined = box_node }
     var outside = *dismiss
     if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, title, joined, dismiss, outside, offset, key + 1u64)

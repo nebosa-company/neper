@@ -215,7 +215,7 @@ fn build_popover_row(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: 
     if three_error != ok { ret (0usize, three_error) }
     let (count, build_error) = build_popover(ctx, a, t, three)
     if build_error != ok { ret (0usize, build_error) }
-    let (row, row_error) = joined(a, three, count, 340.0, 330.0)
+    let (row, row_error) = joined(a, three, count, 372.0, 380.0)
     if row_error != ok { ret (0usize, row_error) }
     cells[0usize] = looks.Cell { caption: "", node: row, drive: .None }
     ret (1usize, ok)
@@ -262,7 +262,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         name = joined_name
     }
     var spec = looks_g.Spec { name: name, width: 440.0, height: 280.0, ctx: zero, build: build_alert, drive: drive, target: 105u64 }
-    if strs.eq(which, "popover") { spec = looks_g.Spec { name: name, width: 1020.0, height: 330.0, ctx: zero, build: build_popover_row, drive: drive, target: 102u64 } }
+    if strs.eq(which, "popover") { spec = looks_g.Spec { name: name, width: 1116.0, height: 380.0, ctx: zero, build: build_popover_row, drive: drive, target: 102u64 } }
     if strs.eq(which, "flyout") { spec = looks_g.Spec { name: name, width: 1020.0, height: 240.0, ctx: zero, build: build_flyout_row, drive: drive, target: 10u64 } }
     if strs.eq(which, "side_sheet") { spec = looks_g.Spec { name: name, width: 560.0, height: 340.0, ctx: zero, build: build_side, drive: drive, target: 50u64 } }
     if strs.eq(which, "bottom_sheet") { spec = looks_g.Spec { name: name, width: 480.0, height: 360.0, ctx: zero, build: build_bottom, drive: drive, target: 50u64 } }

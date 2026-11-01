@@ -75,7 +75,7 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let closed = looks.Sheet { name: "speed_dial", cells: 4usize, columns: 4usize, cell_w: 140.0, cell_h: 90.0, ctx: zero, build: build }
+    let closed = looks.Sheet { name: "speed_dial", cells: 4usize, columns: 4usize, cell_w: 164.0, cell_h: 90.0, ctx: zero, build: build }
     try looks_a.run_every(a, &closed)
     let open = looks.Sheet { name: "speed_dial_open", cells: 1usize, columns: 1usize, cell_w: 260.0, cell_h: 290.0, ctx: zero, build: build_open }
     ret looks_a.run_every(a, &open)
