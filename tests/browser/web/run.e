@@ -110,7 +110,7 @@ fn wrapper_page(a: *mem.Arena, test_path: str, source: str) -> str {
 type FetchCtx = struct { a: *mem.Arena, root: str }
 
 // The WPT server's files: urls map onto the checkout; testharnessreport.js is the reporter above.
-fn fetch_file(ctx: *void, u: str, referrer: str) -> (str, u16, bool) {
+fn fetch_file(ctx: *void, u: str, referrer: str, nav: bool) -> (str, u16, bool) {
     let fc = mem.cast[*FetchCtx](ctx)
     var path: str = u
     let (sch, has_scheme) = str.find(u, "://")
