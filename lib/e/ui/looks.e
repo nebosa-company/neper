@@ -672,6 +672,28 @@ fn load_reference(a: *mem.Arena, path: str) -> (image.Image, bool) {
     ret (decoded, true)
 }
 
+// A sheet app whose Neper cells (or Windows dark ones, which have no capture of their own) need more room than the Windows
+// capture's (the menus there are taller and wider) sets factors here before run_all; those looks then render the sheet that
+// many times larger in both directions. Default (zero) none.
+var neper_grow: f32 = zero
+var dark_grow: f32 = zero
+fn grow_sheets(neper: f32, windows_dark: f32) {
+    neper_grow = neper
+    dark_grow = windows_dark
+}
+
+// The factor an app multiplies a cell's own sizes by under the Neper looks (1 when none is set).
+fn neper_scale() -> f32 {
+    if neper_grow > 0.0 { ret neper_grow }
+    ret 1.0
+}
+
+// The same under Windows dark.
+fn dark_scale() -> f32 {
+    if dark_grow > 0.0 { ret dark_grow }
+    ret 1.0
+}
+
 // Renders `s` under the Neper, Windows and Windows dark looks at 100 % and 150 %.
 fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
     let only_scale = env_scale(a)
@@ -699,7 +721,16 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             if look_index == 2usize { look = .WindowsDark }
             if look_index == 3usize { look = .NeperDark }
             let ra = rig_scope(a)
-            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
+            var sized = *s
+            if look == .Neper || look == .NeperDark {
+                sized.cell_w = s.cell_w * neper_scale()
+                sized.cell_h = s.cell_h * neper_scale()
+            }
+            if look == .WindowsDark {
+                sized.cell_w = s.cell_w * dark_scale()
+                sized.cell_h = s.cell_h * dark_scale()
+            }
+            let (rig, open_error) = open(ra, sheet_width(&sized), sheet_height(&sized), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
             let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
@@ -707,7 +738,7 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             try fs.make_dirs(ra, folder)
             let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
             if path_error != ok { ret path_error }
-            let (ours, render_error) = render_sheet(rig, s, path)
+            let (ours, render_error) = render_sheet(rig, &sized, path)
             if render_error != ok { ret render_error }
             if look == .Windows {
                 // the true 1:1 capture composite (ref/windows-1to1) when the sheet has one, else the old resampled one

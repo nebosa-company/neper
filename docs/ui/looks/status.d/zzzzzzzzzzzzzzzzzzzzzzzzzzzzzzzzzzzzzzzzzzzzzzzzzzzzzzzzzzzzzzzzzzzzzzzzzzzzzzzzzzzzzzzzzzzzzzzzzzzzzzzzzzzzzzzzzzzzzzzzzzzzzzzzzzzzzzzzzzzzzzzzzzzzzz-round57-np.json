@@ -1,0 +1,23 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "ROUND 57: the audit 25 blank sheets were the menu's fade-in (a resting cell shows none); the sheet app now settles every Neper cell (pointer parked off the sheet, four 100 ms frames) and gives the Neper looks a 1.7 times larger cell (Neper rows are 30 px and the menu 320 px wide, wider than the Windows capture cells), and strips the Windows accelerator marks from the labels. All 78 Neper popup sheets, both scales (156 files), draw a menu: the fewest sampled pixels differing from the page colour below the caption is 2652 (the one row Admin menu); none is blank. Windows, Linux, Cupertino and Material sheets untouched: 20 other apps re-rendered byte identical.",
+    "gaps": [
+     "the Neper menu keeps its 14 row cap, so File and View show their first 14 rows only",
+     "the dfm accelerator marks are not drawn in Neper (the plain label)"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "ROUND 57: as Neper light. All 78 Neper dark popup sheets, both scales, draw a menu and the shortcut column is whole (the cell is 1.7 times the Windows one).",
+    "gaps": [
+     "the Neper menu keeps its 14 row cap, so File and View show their first 14 rows only"
+    ]
+   }
+  }
+ }
+}
