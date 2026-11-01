@@ -336,6 +336,8 @@ fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex {
             }
             i += 1usize
         } else if t.kind == .Delim && (str.eq(t.value, ">") || str.eq(t.value, "+") || str.eq(t.value, "~")) {
+            // A combinator needs a compound before it, and two in a row are an error.
+            if current.len == 0usize && (compounds.len == 0usize || pending_explicit) { ret rejected_complex() }
             if current.len > 0usize {
                 let pushed = list.push[Compound](&compounds, Compound { parts: list.slice_const[Simple](&current) })
                 parser_fail(p, pushed)
@@ -496,8 +498,15 @@ fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simpl
     var ci = false
     if idx < inner.len && inner[idx].kind == .Ident {
         let flag = lower(p, inner[idx].value)
-        if str.eq(flag, "i") { ci = true }
+        if str.eq(flag, "i") {
+            ci = true
+        } else if !str.eq(flag, "s") {
+            ret (none, false)
+        }
+        idx += 1usize
+        idx = skip_ws(inner, idx)
     }
+    if idx < inner.len { ret (none, false) }
     ret (Simple { kind: kind, name: name, argument: value, subs: zero, attr_ci: ci }, true)
 }
 
