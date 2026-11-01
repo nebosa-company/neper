@@ -2282,7 +2282,7 @@ fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, pa
 type Ifc = struct {
     l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow,
     y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64,
-    own: list.List[u32], shift: i64, prev_strong: u8
+    own: list.List[u32], shift: i64, prev_strong: u8, shrink: f64
 }
 
 type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
@@ -2333,6 +2333,8 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
     if x.first_line { indent = resolve_or(cs.text_indent, x.cbw, 0.0f64) }
     out.line_x = lx + indent
     out.avail = rx - lx - indent
+    // Lines break at `lim`; `text-wrap: balance` narrows it while lines stay aligned within the full width.
+    let lim = out.avail - x.shrink
     var pos = 0.0f64
     var last_soft = NONE
     var j = i
@@ -2344,7 +2346,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 layout_atomic(l, p.box, x.cbw, x.bd.cbh)
                 let fb = &l.boxes.items[usize(p.box)]
                 let fw = fb.w + fb.margin[1usize] + fb.margin[3usize]
-                if has_content && fw > out.avail - pos + 0.01f64 {
+                if has_content && fw > lim - pos + 0.01f64 {
                     j += 1usize
                     continue
                 }
@@ -2414,7 +2416,7 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         }
         if hangs { needed = 0.0f64 }
         // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
-        if pos + needed > out.avail + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
+        if pos + needed > lim + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
             let below = next_float_end(l, fc.base, fc.oy + x.y)
             if below > fc.oy + x.y + 0.01f64 {
                 x.y = below - fc.oy
@@ -2422,16 +2424,16 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 ret out
             }
         }
-        if pos + needed > out.avail + 0.01f64 && has_content {
+        if pos + needed > lim + 0.01f64 && has_content {
             if last_soft != NONE {
                 out.end = usize(last_soft) + 1usize
                 ret out
             }
             if p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
-                if split_piece(x, j, out.avail - pos) { continue }
+                if split_piece(x, j, lim - pos) { continue }
             }
-        } else if pos + needed > out.avail + 0.01f64 && !has_content && p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
-            if split_piece(x, j, out.avail) { continue }
+        } else if pos + needed > lim + 0.01f64 && !has_content && p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
+            if split_piece(x, j, lim) { continue }
         }
         has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker || p.kind == .Tab
         if hangs { pos += p.w } else { pos += needed }
@@ -2477,6 +2479,76 @@ fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64
 }
 
 // Lays out the pieces of an inline formatting context into lines of `cont`. Returns the content height.
+// `text-wrap: balance` (or `text-wrap-style: balance`) on the container.
+fn text_wrap_balance(cs: *const style.Style) -> bool {
+    var i = 0usize
+    var on = false
+    while i < cs.extras.len {
+        let nm = cs.extras[i].name
+        if str.eq(nm, "text-wrap") || str.eq(nm, "text-wrap-style") {
+            let (at, has) = str.find(cs.extras[i].value, "balance")
+            on = has
+        }
+        i += 1usize
+    }
+    ret on
+}
+
+// Whether the pieces are plain text, spaces and line breaks: nothing a second scan of the lines could leave behind.
+fn balance_safe(x: *Ifc) -> bool {
+    var i = 0usize
+    while i < x.bd.pieces.len {
+        let k = x.bd.pieces.items[i].kind
+        if k == .Float || k == .Abs || k == .Atomic || k == .Marker || k == .Tab { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn balance_reset(x: *Ifc, lines0: usize, frags0: usize) {
+    x.l.lines.len = lines0
+    x.l.frags.len = frags0
+    x.own.len = 0usize
+    x.y = 0.0f64
+    x.first_line = true
+    x.open_count = 0usize
+    x.shift = 0i64
+    x.prev_strong = 0u8
+    x.l.boxes.items[usize(x.cont)].line_first = NONE
+    x.l.boxes.items[usize(x.cont)].line_count = 0u32
+}
+
+// Lays the pieces out line by line.
+fn ifc_run(x: *Ifc) {
+    let l = x.l
+    let fc = x.fc
+    var i = 0usize
+    var guard = 0usize
+    while i < x.bd.pieces.len && guard < 400000usize {
+        guard += 1usize
+        let scan = scan_line(x, i)
+        if scan.restart { continue }
+        var end = scan.end
+        if end <= i { end = i + 1usize }
+        let lh = emit_line(x, scan, end)
+        end = usize(i64(end) + x.shift)
+        // Floats that waited for this line are placed below it.
+        var df = scan.lead
+        while df < end {
+            let p2 = x.bd.pieces.items[df]
+            if p2.kind == .Float && l.boxes.items[usize(p2.box)].aux != 1u32 {
+                place_float(l, fc, p2.box, fc.ox, x.cbw, fc.oy + x.y + lh, x.cont)
+            }
+            df += 1usize
+        }
+        if lh >= 0.0f64 {
+            x.y += lh
+            x.first_line = false
+        }
+        i = end
+    }
+}
+
 fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -> f64 {
     let cs = bstyle(l, cont)
     let (made, me) = list.init[Piece](l.a, 32usize)
@@ -2499,31 +2571,33 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     let (sa, sd) = font_ad(l, cs)
     let (own_made, own_error) = list.init[u32](l.a, 16usize)
     if own_error != ok { ret 0.0f64 }
-    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd, own: own_made, shift: 0i64, prev_strong: 0u8 }
-    var i = 0usize
-    var guard = 0usize
-    while i < x.bd.pieces.len && guard < 400000usize {
-        guard += 1usize
-        let scan = scan_line(&x, i)
-        if scan.restart { continue }
-        var end = scan.end
-        if end <= i { end = i + 1usize }
-        let lh = emit_line(&x, scan, end)
-        end = usize(i64(end) + x.shift)
-        // Floats that waited for this line are placed below it.
-        var df = scan.lead
-        while df < end {
-            let p2 = x.bd.pieces.items[df]
-            if p2.kind == .Float && l.boxes.items[usize(p2.box)].aux != 1u32 {
-                place_float(l, fc, p2.box, fc.ox, cbw, fc.oy + x.y + lh, cont)
-            }
-            df += 1usize
+    var x = Ifc { l: l, bd: bd, cont: cont, cs: cs, cbw: cbw, fc: fc, y: 0.0f64, first_line: true, open: zero, open_count: 0usize, sa: sa, sd: sd, own: own_made, shift: 0i64, prev_strong: 0u8, shrink: 0.0f64 }
+    let lines0 = l.lines.len
+    let frags0 = l.frags.len
+    ifc_run(&x)
+    // `text-wrap: balance`: the narrowest line width that keeps the line count, found by bisection (only for plain text, so a
+    // rerun leaves nothing behind).
+    if text_wrap_balance(cs) && x.own.len >= 2usize && x.own.len <= 10usize && cs.overflow_wrap == .Normal && cs.word_break == .Normal && l.floats.len == 0usize && line_clamp_count(cs) == 0usize && !line_clamp_is_auto(cs) && balance_safe(&x) {
+        let want = x.own.len
+        var lo = 0.0f64
+        var hi = cbw
+        var step = 0usize
+        while step < 14usize && hi - lo > 0.5f64 {
+            let mid = (lo + hi) / 2.0f64
+            balance_reset(&x, lines0, frags0)
+            x.shrink = cbw - mid
+            ifc_run(&x)
+            if x.own.len == want { hi = mid } else { lo = mid }
+            step += 1usize
         }
-        if lh >= 0.0f64 {
-            x.y += lh
-            x.first_line = false
+        balance_reset(&x, lines0, frags0)
+        x.shrink = cbw - hi
+        ifc_run(&x)
+        if x.own.len != want {
+            balance_reset(&x, lines0, frags0)
+            x.shrink = 0.0f64
+            ifc_run(&x)
         }
-        i = end
     }
     // `line-clamp` / `-webkit-line-clamp`: only the first N lines stay, the last one marked to end with an ellipsis.
     var n_own = x.own.len
