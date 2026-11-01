@@ -11,11 +11,13 @@ use e.ui.looks
 use e.ui.style
 use e.ui.widget
 
-fn content(a: *mem.Arena, vertical: bool, extent: f32) -> ([]widget.Node, err) {
+fn content(a: *mem.Arena, t: *const control.Theme, vertical: bool, extent: f32) -> ([]widget.Node, err) {
     let (nodes, nodes_error) = mem.alloc[widget.Node](a, 1usize)
     if nodes_error != ok { ret (zero, nodes_error) }
     var s = style.defaults()
     s.background = paint.Brush { Solid: style.hex(0xFFFFFFu32) }
+    // Dark: the elevated surface instead of white, so the 35 % label-colour thumb shows on it (the light picture keeps white)
+    if t.tokens.palette == .Dark { s.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) } }
     s.width = style.Length { Px: 90.0 }
     s.height = style.Length { Px: extent }
     if !vertical {
@@ -46,7 +48,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             width = 150.0
             height = 60.0
         }
-        let (kids, kids_error) = content(a, vertical, extent)
+        let (kids, kids_error) = content(a, t, vertical, extent)
         if kids_error != ok { ret (0usize, kids_error) }
         let (bar, bar_error) = control.scroll_area(a, u64(10000usize * (i + 1usize)), t, axis, width, height, offset, extent, kids[0usize..1usize])
         if bar_error != ok { ret (0usize, bar_error) }

@@ -22,6 +22,7 @@ use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
 use e.ui.looks_b_ov
+use e.ui.looks_n78
 use e.ui.looks_z63
 use e.ui.winchrome
 use e.ui.winmsgicon
@@ -5816,7 +5817,7 @@ fn time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, digits: str
     look.min_width = box_w
     look.min_height = box_h
     var big = control.text_options()
-    big.role = .DisplaySmall
+    big.role = looks_n78.time_digit_role(t)
     big.wrap = .None
     let (said, said_error) = control.colored_text(a, 0u64, digits, t, big, ink)
     if said_error != ok { ret (zero, said_error) }
@@ -6357,7 +6358,7 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
         minute_box = minute_node
     }
     var big = control.text_options()
-    big.role = .DisplaySmall
+    big.role = looks_n78.time_digit_role(t)
     big.wrap = .None
     let (colon, colon_error) = control.colored_text(a, 0u64, ":", t, big, style.color(t.tokens, .OnSurface))
     if colon_error != ok { ret (zero, colon_error) }

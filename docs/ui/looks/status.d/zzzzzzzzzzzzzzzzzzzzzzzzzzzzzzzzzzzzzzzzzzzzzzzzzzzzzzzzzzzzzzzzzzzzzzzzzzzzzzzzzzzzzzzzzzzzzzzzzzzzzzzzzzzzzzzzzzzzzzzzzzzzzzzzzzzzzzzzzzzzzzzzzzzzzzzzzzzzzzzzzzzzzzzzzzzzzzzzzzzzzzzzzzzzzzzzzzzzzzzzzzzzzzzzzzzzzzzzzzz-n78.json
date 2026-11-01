@@ -1,0 +1,352 @@
+{
+ "time_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/time_picker_dial.png",
+    "notes": "ROUND 78 (n): Audit 37 fix. The hour and minute digits were display-small (36); M3 and Flutter use display-large (57), the Android look now does (colon too; Windows, Linux, Neper and Cupertino keep display-small). Own comparer on time_picker_dial.png against ref/flutter/material/light/timepicker-dial-open@1x: '30' ink 58 x 43 (dark 59 x 43) against Flutter 59 x 42, '10' ink 56 x 43 against 56 x 42, vertical ink 108 to 150 against 107 to 148. Dialog, dial, handle, selectors as recorded in round 77. Recorded deviations: scrim 32 % (M3 spec, ada8ad) against Flutter 54 % (747175); selector 96 wide (M3) against 111 (Flutter stretches). docs/ui/looks/flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill e6e0e9 exact. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/time_picker_dial.png",
+    "notes": "ROUND 78 (n): Audit 37 fix. The hour and minute digits were display-small (36); M3 and Flutter use display-large (57), the Android look now does (colon too; Windows, Linux, Neper and Cupertino keep display-small). Own comparer on time_picker_dial.png against ref/flutter/material/dark/timepicker-dial-open@1x: '30' ink 58 x 43 (dark 59 x 43) against Flutter 59 x 42, '10' ink 56 x 43 against 56 x 42, vertical ink 108 to 150 against 107 to 148. Dialog, dial, handle, selectors as recorded in round 77. Recorded deviations: scrim 32 % (M3 spec, ada8ad dark 0e0c10) against Flutter 54 % (747175 dark 09080b); selector 96 wide (M3) against 111 (Flutter stretches). docs/ui/looks/flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill 36343b against 36343a. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/range_slider.png",
+    "notes": "ROUND 78 (n): Audit 37 gap recorded, not changed: rest inactive track e6e0e9 (M3 spec, `md.comp.slider.inactive.track.color` = surface-container-highest, and equal to the Material Web ref ref/material slider-labeled-rest e6e0e9 exactly) against Flutter d9d0e4 (Flutter paints secondary-container of its fromSeed palette; the baseline secondary-container is e8def8, so Flutter's value is also the accepted palette difference). Thumb 20, track 4 as before. Spec value kept; flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb a9a3aa against a8a3aa. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter b5b0b7.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/range_slider.png",
+    "notes": "ROUND 78 (n): Audit 37 gap recorded, not changed: rest inactive track 36343b (M3 spec, `md.comp.slider.inactive.track.color` = surface-container-highest, and equal to the Material Web ref ref/material slider-labeled-rest 36343b exactly) against Flutter 413b4f (Flutter paints secondary-container of its fromSeed palette; the baseline secondary-container is e8def8, so Flutter's value is also the accepted palette difference). Thumb 20, track 4 as before. Spec value kept; flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb 646067 against 646068. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter 58545b.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/icon_button.png",
+    "notes": "ROUND 78 (n): Re-pointed from fab.png to icon_button.png (the glyph button is the M3 icon button; the old picture mixed in FABs and the Audit 14 Material Web outline metric). Own comparer, 1x, circle flat fill and size against ref/flutter/material IconButton light: standard 38 flat (40) hover f0e9f1 focus ece5ed; tonal rest e6e0e9 hover d9d4dd focus d6d1da disabled e3dde4; outlined 36 flat inside the 1 px ring (rest, hover f0e9f1). Flutter: standard hover efe9f1 focus ebe5ed; tonal e6e0e9 dad4dd d6d0d9 e2dce4; outlined hover efe9f1. All within 1 level. Not matched: pressed (Flutter frame is a mid-ripple, cac5ce, not compared) and outlined focus (ours e8e1e9, Flutter shows the hover tone efe9f1; recorded). flutter-compare-n.md. | Audit 14 downgrade. Outlined icon buttons: rest 188 px, hover 207, pressed 232 (up to 88 levels, the 1 px outline circle), focus 880 px (primary outline against the capture's grey, the known Material Web ambiguity); standard hover 136 px up to 19 levels. The earlier 0 over the line came from a metric that never sees non-flat ring pixels.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/icon_button.png",
+    "notes": "ROUND 78 (n): Re-pointed from fab.png to icon_button.png (the glyph button is the M3 icon button; the old picture mixed in FABs and the Audit 14 Material Web outline metric). Own comparer, 1x, circle flat fill and size against ref/flutter/material IconButton dark: standard 38 flat (40) hover 232027 focus 26242a; tonal rest 36343b hover 424047 focus 45424a disabled 2d2b31; outlined 36 flat inside the 1 px ring (rest, hover 232027). Flutter: standard hover 222026 focus 27242b; tonal 36343a 423f46 454349 2e2b31; outlined hover 222026. All within 1 level. Not matched: pressed (Flutter frame is a mid-ripple, cac5ce, not compared) and outlined focus (ours 29272d, Flutter shows the hover tone 222026; recorded). flutter-compare-n.md. | Audit 14 downgrade. Outlined icon buttons: rest 208 px, hover 199, pressed 204 (up to 89 levels), focus 869 px; standard hover 138 px.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The icon is Neper's glyph, not the Material icon (glyph ink is excluded from the metric)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "ROUND 78 (n): Viewed: glyph buttons rest, hover, pressed, focus, on and the three navigation bars render; the only pairs under 3:1 are the 007aff glyph on its hover and pressed layers (2.9 to 3.6, a tinted layer by design). Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.6:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "ROUND 78 (n): Android's menu bar is the M3 navigation bar (navigation_bar.png, already this row's picture); measured with the own comparer against ref/flutter/material NavigationBar rest at 1x: bar 360 x 80 (Flutter 360 x 80), fill f3edf7 against f2ecf4 (M3 baseline token), indicator 62 to 64 x 32 e8def8 against 64 x 32 / 62 x 32 e8def8 (dark 4a4458), badges and labels as the ref. Not measured: hover and pressed layers (Flutter frames are mid-fade). flutter-compare-n.md. | Audit 3: 10 cells measured on navigation_bar.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "ROUND 78 (n): Android's menu bar is the M3 navigation bar (navigation_bar.png, already this row's picture); measured with the own comparer against ref/flutter/material NavigationBar rest at 1x: bar 360 x 80 (Flutter 360 x 80), fill 211f26 against 211f24 (M3 baseline token), indicator 62 to 64 x 32 4a4458 against 64 x 32 / 62 x 32 e8def8 (dark 4a4458), badges and labels as the ref. Not measured: hover and pressed layers (Flutter frames are mid-fade). flutter-compare-n.md. | Audit 3: 10 cells measured on navigation_bar.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 216 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/dialog.png",
+    "notes": "ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill f4f4f6 against f1f1f1 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/dialog.png",
+    "notes": "ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill 2c2c2e against 242424 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 202 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/image_combo_box.png",
+    "notes": "ROUND 78 (n): Disabled value 1.8:1 and the faint picture chip are the only text under 4.5:1 (disabled, exempt); the macOS pop-up button, open list and focus ring all draw. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.8:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/image_combo_box.png",
+    "notes": "ROUND 78 (n): Viewed: enabled, hovered, focused, disabled, no pictures, nothing chosen; M3 outlined field with the picture; the only pair under 3:1 is the disabled one and the floated label. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 2.0:1).",
+    "gaps": [
+     "Disabled is the whole field at 38 % opacity, not the M3 12 % outline / 38 % text split",
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/group_box.png",
+    "notes": "ROUND 78 (n): Viewed: macOS box, iOS section, disabled, invalid and empty render; the long caption of the iOS cell runs into the next cell (sheet geometry shared by all looks, not changed). Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.1:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The macOS box title sits above the box instead of in a notch (NSBox style 'above top')",
+     "Fill and hairline alphas of the macOS box are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/vertical_grid.png",
+    "notes": "ROUND 78 (n): Viewed: inset grouped sections open and shut render; the pairs under the floor are the white section card on the f2f2f7 ground (1.1:1, no edge on iOS) and secondary values. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 13 cells under the floor (text 4.5:1, other UI 3:1; lowest 2.9:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Editors are plain text at rest; the focused row's editor (field, combo, ellipsis) is not styled in this sheet",
+     "Section headers are written in capitals in the data, not by the control",
+     "No trailing disclosure chevron on rows",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/data_grid.png",
+    "notes": "ROUND 78 (n): Viewed: list and grouped forms with the filter row, stripes, accent row, sort chevron, footer; the pairs under the floor are the secondary header and filter hint. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 16 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.4:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/data_grid.png",
+    "notes": "ROUND 78 (n): Viewed: list and grouped forms, accent row, stripes, footer; secondary header and filter hint are the only low pairs. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 illegible words.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/scroll_bar.png",
+    "notes": "ROUND 78 (n): Viewed: thin 35 % label thumb, widening, scrolled, fits, horizontal. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 2.4:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Thumb width 4 (8 hovered) vs iOS 3 and macOS 7",
+     "No fade-out timing shown, no legacy always-on scroller",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/scroll_bar.png",
+    "notes": "ROUND 78 (n): Fixed the picture: the content boxes were white on the dark page (horizontal thumbs invisible); now the elevated surface 3a3a3c (cup_scroll.e), 1x and 1.5x, thumbs show in all seven cells. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: light chrome on the dark page (7 white faces).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Thumb width 4 (8 hovered) vs iOS 3 and macOS 7",
+     "No fade-out timing shown, no legacy always-on scroller",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/date_picker.png",
+    "notes": "ROUND 78 (n): Viewed: M3 modal date picker (the Android idiom of the date edit). Own comparer against ref/flutter/material datepicker-calendar-open@1x: dialog 360 wide (ref 360), header 120 (ref 119), selected circle 38 (ref 38), fill ece6f0 against ece6ee; ours stops after the 4 week rows of the month where Flutter fixes the body at 448; the field form (date_input.png) is stale on master and not measured, so review. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "ROUND 78 (n): Viewed: M3 modal date picker, dark (2b2930 dialog, d0bcff selected day); see the light note: field form not measured, body height recorded. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tree_list.png",
+    "notes": "ROUND 78 (n): Viewed: header, 48 dp rows, chevrons, indentation, selected row secondary-container, scroll thumb. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 6 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.5:1).",
+    "gaps": [
+     "The hover and keyboard-focus layers of a row do not show in the sheet (the pointer lands on the virtual list)",
+     "M3 defines no tree: this is the list idiom with chevrons",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tree_list.png",
+    "notes": "ROUND 78 (n): Viewed: dark header, rows, chevrons, selected row, scroll thumb. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 6 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "The hover and keyboard-focus layers of a row do not show in the sheet (the pointer lands on the virtual list)",
+     "M3 defines no tree: this is the list idiom with chevrons",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
