@@ -32,6 +32,7 @@ use e.ui.linux_card
 use e.ui.linuxsoft_lb as linuxsoft
 use e.ui.linuxspin_lb as linuxspin
 use e.ui.linuxmark_lb as linuxmark
+use e.ui.looks_b
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -13672,7 +13673,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         fill = muted
         ink = muted
     }
-    var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
+    var ring = Ring { track: looks_b.track_color(t.tokens), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
     if options.no_data || options.loading { ring.share = 0.0 }
     // The stroke's centre line at 40% of the size: the ring square 90% of it.
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
@@ -13793,7 +13794,7 @@ fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     var tone: style.ColorRole = .Primary
     if share >= warn { tone = .Warning }
     if share >= danger { tone = .Error }
-    let rest_color = style.color(t.tokens, .SurfaceContainerHighest)
+    let rest_color = looks_b.track_color(t.tokens)
     var shown = options.value_text
     if shown.len == 0usize {
         let (digits, digits_error) = rounded_digits(a, value)
