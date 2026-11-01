@@ -1382,6 +1382,41 @@ fn invalid_length_value(prop: str, v: str) -> bool {
     ret false
 }
 
+// A declaration whose value this engine cannot parse for a length or colour property is invalid: it is dropped, so it does not
+// beat an earlier valid declaration of the same property in the cascade.
+fn unparsable_value(a: *mem.Arena, prop: str, v: str) -> bool {
+    let t = cv.trim_ws(v)
+    if t.len == 0usize { ret false }
+    let (vi, has_var) = str.find(t, "var(")
+    let (ei, has_env) = str.find(t, "env(")
+    let (ai, has_attr) = str.find(t, "attr(")
+    if has_var || has_env || has_attr { ret false }
+    let low = cv.lower(a, t)
+    if str.eq(low, "inherit") || str.eq(low, "initial") || str.eq(low, "unset") || str.eq(low, "revert") || str.eq(low, "revert-layer") { ret false }
+    var allow = 0u32
+    var is_color = false
+    if str.eq(prop, "width") || str.eq(prop, "height") || str.eq(prop, "min-width") || str.eq(prop, "min-height") {
+        allow = A_AUTO | A_CONTENT | A_PERCENT
+    } else if str.eq(prop, "max-width") || str.eq(prop, "max-height") {
+        allow = A_NONE | A_CONTENT | A_PERCENT
+    } else if str.eq(prop, "padding-top") || str.eq(prop, "padding-right") || str.eq(prop, "padding-bottom") || str.eq(prop, "padding-left") {
+        allow = A_PERCENT
+    } else if str.eq(prop, "margin-top") || str.eq(prop, "margin-right") || str.eq(prop, "margin-bottom") || str.eq(prop, "margin-left") || str.eq(prop, "top") || str.eq(prop, "right") || str.eq(prop, "bottom") || str.eq(prop, "left") {
+        allow = A_AUTO | A_PERCENT | A_NEGATIVE
+    } else if str.eq(prop, "color") || str.eq(prop, "background-color") {
+        is_color = true
+    } else {
+        ret false
+    }
+    let c = new_context(a, 800.0f64, 600.0f64)
+    if is_color {
+        let (col, good) = parse_color_value(&c, t, 0u32)
+        ret !good
+    }
+    let (l, good2) = parse_len(&c, t, 16.0f64, allow)
+    ret !good2
+}
+
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared {
     let (made, e) = list.init[cascade.Declared](a, declared.len + 8usize)
     if e != ok { ret zero }
@@ -1405,10 +1440,10 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
             while p < pairs.len {
                 var copy = d
                 copy.declaration = cascade.Declaration { property: pairs.items[p].property, value: pairs.items[p].value, important: d.declaration.important }
-                if !invalid_length_value(pairs.items[p].property, pairs.items[p].value) { consider(&best, copy) }
+                if !invalid_length_value(pairs.items[p].property, pairs.items[p].value) && !unparsable_value(a, pairs.items[p].property, pairs.items[p].value) { consider(&best, copy) }
                 p += 1usize
             }
-        } else if !invalid_length_value(prop, d.declaration.value) {
+        } else if !invalid_length_value(prop, d.declaration.value) && !unparsable_value(a, prop, d.declaration.value) {
             consider(&best, d)
         }
     }
