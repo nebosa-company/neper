@@ -2104,15 +2104,15 @@ fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
 }
 
 // (looks) A main-menu popup no taller than `max_height` px (the room the screen leaves): under the
-// Windows look a taller menu is clipped over a bottom scroll arrow, as v3 draws View; other looks
-// ignore it.
+// Windows look a taller menu is clipped over a bottom scroll arrow, as v3 draws View; the other looks scroll it between
+// two chevrons (0: the menu takes all its rows).
 fn bar_menu_limited(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit, max_height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if t.tokens.profile == .Windows {
         let (flat, flat_error) = windows_bar_menu_at(a, key, t, anchor, label, commands, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, 0u8, max_height)
         ret (flat, flat_error)
     }
-    let (made, made_error) = bar_menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, 0u8)
+    let (made, made_error) = bar_menu_clamped(a, key, t, anchor, label, commands, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, 0u8, max_height)
     ret (made, made_error)
 }
 
@@ -2122,7 +2122,20 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         let (flat, flat_error) = windows_bar_menu_at(a, key, t, anchor, label, commands, dismiss, placement, offset, depth, 0.0)
         ret (flat, flat_error)
     }
-    if commands.len > 14usize { ret (zero, TooLarge) }
+    // A menu taller than the window scrolls: the room is the window's height less a margin (no window known: none).
+    var room: f32 = 0.0
+    if mem.address_of(t.runtime) != 0usize {
+        let window = widget.surface_size(t.runtime)
+        if window.height > 16.0 { room = window.height - 16.0 }
+    }
+    let (made, made_error) = bar_menu_clamped(a, key, t, anchor, label, commands, dismiss, placement, offset, depth, room)
+    ret (made, made_error)
+}
+
+// The non-Windows menu (Neper, Cupertino, Material, Linux): every command a row, however many; taller than `max_height`
+// (0: never) the rows scroll between a chevron up and a chevron down (the wheel, or the keyboard focus moving, scrolls it).
+fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8, max_height: f32) -> (widget.Node, err) {
+    var est_height: f32 = 0.0
     var slotted = false
     var k = 0usize
     while k < commands.len {
@@ -2148,6 +2161,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
                 hairs[0usize] = widget.box(0u64, hair, zero)
                 rows[n] = widget.padded(0u64, 10.0, 4.0, 10.0, 4.0, style.defaults(), hairs[0usize..1usize])
                 n += 1usize
+                est_height += 8.5
             }
             let cup_key = key + 1u64 + u64(i)
             let (cup_look, cup_content, cup_error) = control.cupertino_menu_row_parts(a, t, cup_key, c.label, c.shortcut, c.checked, c.radio, c.enabled, c.destructive, has_submenu, c.submenu_open, slotted)
@@ -2160,8 +2174,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             var cup_actions = 0u32
             var cup_controls = 0u64
             var cup_chosen = &c.action
-            var cup_submenu_key = key + 15u64 + 16u64 * u64(i)
-            if depth > 0u8 { cup_submenu_key = key * 32u64 + 16u64 + u64(i) }
+            let cup_submenu_key = key * 32u64 + 16u64 + u64(i)
             if has_submenu {
                 cup_actions = accessibility.ACTION_SHOW_MENU
                 cup_controls = cup_submenu_key
@@ -2172,6 +2185,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             if cup_made_error != ok { ret (zero, cup_made_error) }
             rows[n] = cup_made
             n += 1usize
+            est_height += 22.0
             if has_submenu {
                 let (cup_nested, cup_nested_error) = bar_menu_at(a, cup_submenu_key, t, cup_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, depth + 1u8)
                 if cup_nested_error != ok { ret (zero, cup_nested_error) }
@@ -2191,10 +2205,11 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             lines[0usize] = widget.box(0u64, line, zero)
             rows[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 8.0, style.defaults(), lines[0usize..1usize])
             n += 1usize
+            est_height += 16.0 + t.tokens.sizes.divider
         }
         let item_key = key + 1u64 + u64(i)
         var state = control.control_state(t, item_key, c.enabled, false)
-        if c.submenu_open { state.hovered = true }
+        if c.submenu_open || c.selected { state.hovered = true }
         var ink = style.color(t.tokens, .OnSurface)
         if c.destructive { ink = style.color(t.tokens, .Error) }
         var muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -2272,8 +2287,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         var sem_actions = 0u32
         var controls = 0u64
         var chosen = &c.action
-        var submenu_key = key + 15u64 + 16u64 * u64(i)
-        if depth > 0u8 { submenu_key = key * 32u64 + 16u64 + u64(i) }
+        let submenu_key = key * 32u64 + 16u64 + u64(i)
         if has_submenu {
             sem_actions = accessibility.ACTION_SHOW_MENU
             controls = submenu_key
@@ -2284,6 +2298,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         if made_error != ok { ret (zero, made_error) }
         rows[n] = made
         n += 1usize
+        est_height += 32.0
         if has_submenu {
             let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, depth + 1u8)
             if nested_error != ok { ret (zero, nested_error) }
@@ -2312,7 +2327,42 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
+    if max_height > 0.0 && est_height + 16.0 > max_height {
+        // Taller than the room: the rows in a clipped, scrolling view between two 20 high chevron strips.
+        let strip: f32 = 20.0
+        var view = style.defaults()
+        view.width = style.Length { Percent: 100.0 }
+        view.height = style.Length { Px: max_height - 16.0 - 2.0 * strip }
+        view.overflow = .Clip
+        var inner = style.defaults()
+        inner.width = style.Length { Percent: 100.0 }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, inner, rows[0usize..n])
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        let hidden_thumb = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        let chevron_ink = style.color(t.tokens, .OnSurfaceVariant)
+        var edge = 0usize
+        while edge < 2usize {
+            var kind = control.GlyphKind.ChevronUp
+            if edge == 1usize { kind = .ChevronDown }
+            let (glyph, glyph_error) = control.icon_square(a, chevron_ink, kind, 18.0)
+            if glyph_error != ok { ret (zero, glyph_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = glyph
+            var strip_style = control.sized_style(1.0, strip)
+            strip_style.width = style.Length { Percent: 100.0 }
+            let cell = widget.aligned(0u64, .Center, .Center, strip_style, held[0usize..1usize])
+            if edge == 0usize { parts[0usize] = cell } else { parts[2usize] = cell }
+            edge += 1usize
+        }
+        parts[1usize] = widget.scroll(0u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: hidden_thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, body[0usize..1usize])
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, parts[0usize..3usize])
+    } else {
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
+    }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -10974,6 +11024,17 @@ fn dark_hover_corners(a: *mem.Arena, width: f32) -> (widget.Node, err) {
     ret (widget.stack(0u64, control.sized_style(width, 22.0), parts[0usize..4usize]), ok)
 }
 
+// A dark menu label without its accelerator mark; an `&` before a space is a literal ampersand ("Edition & Card Name").
+fn windows_dark_mnemonic(a: *mem.Arena, label: str) -> (str, usize, err) {
+    if windows_mnemonic_at(label) >= label.len { ret (label, label.len, ok) }
+    let (shown, at, shown_error) = winbutton.mnemonic(a, label[windows_mnemonic_at(label)..label.len])
+    if shown_error != ok { ret ("", 0usize, shown_error) }
+    let head = label[0usize..windows_mnemonic_at(label)]
+    let (merged, join_error) = string.concat(a, head, shown)
+    if join_error != ok { ret ("", 0usize, join_error) }
+    ret (merged, head.len + at, ok)
+}
+
 fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8) -> (widget.Node, err) {
     var caption = control.text_options()
     caption.size = 12.0
@@ -10982,7 +11043,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var widest_keys: f32 = 0.0
     var sized = 0usize
     while sized < commands.len {
-        let (plain_size, _, plain_size_error) = winbutton.mnemonic(a, commands[sized].label)
+        let (plain_size, _, plain_size_error) = windows_dark_mnemonic(a, commands[sized].label)
         if plain_size_error != ok { ret (zero, plain_size_error) }
         let (label_adv, _, _, label_adv_error) = control.run_metrics_faced(a, t, caption, plain_size)
         if label_adv_error != ok { ret (zero, label_adv_error) }
@@ -11016,7 +11077,7 @@ fn windows_dark_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let keyed = c.selected || c.submenu_open
         var ink = style.hex_raw(0xFFFFFFu32)
         if !c.enabled { ink = style.hex_raw(0x6D6D6Du32) }
-        let (plain, mark_at, plain_error) = winbutton.mnemonic(a, c.label)
+        let (plain, mark_at, plain_error) = windows_dark_mnemonic(a, c.label)
         if plain_error != ok { ret (zero, plain_error) }
         let (said, said_error) = control.colored_text(a, 0u64, plain, t, caption, ink)
         if said_error != ok { ret (zero, said_error) }

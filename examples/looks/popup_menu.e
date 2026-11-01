@@ -119,9 +119,19 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     if action_error != ok { ret (0usize, action_error) }
     let (first, first_error) = plain(a, *action)
     if first_error != ok { ret (0usize, first_error) }
-    let (node, node_error) = hung(a, t, 100u64, first, 150.0 - 100.0, 125.0 - 85.0, 300.0, 250.0, action)
+    var drive: looks.Drive = .Hover
+    var grow: f32 = 1.0
+    if t.tokens.profile == .Neper {
+        // Neper: the menu fades in, so the pointer is parked off the sheet while it settles, and the fourth row is the highlighted
+        // one by itself (a hovered row is the selected row's look); the cell is as roomy as the static sheet's.
+        first[3usize].selected = true
+        drive = .Settle
+        grow = looks.neper_scale()
+        looks.aim(0usize, 3000.0, 0.0)
+    }
+    let (node, node_error) = hung(a, t, 100u64, first, 150.0 - 100.0, 125.0 - 85.0, 300.0 * grow, 250.0 * grow, action)
     if node_error != ok { ret (0usize, node_error) }
-    cells[0usize] = looks.Cell { caption: "Hover", node: node, drive: .Hover }
+    cells[0usize] = looks.Cell { caption: "Hover", node: node, drive: drive }
     ret (1usize, ok)
 }
 
@@ -161,7 +171,13 @@ fn parse_items(a: *mem.Arena, action: widget.Submit, text: str, room: usize, sub
             c.glyph = .Picture
             if has_flag(flags, 116u8) { c.glyph = .Table }
             if has_flag(flags, 109u8) { c.glyph = .Sigma }
-            let id = winmenuicon.find(label, !c.enabled, c.checked || has_flag(flags, 120u8))
+            var id = winmenuicon.find(label, !c.enabled, c.checked || has_flag(flags, 120u8))
+            if id >= 1000usize {
+                // the baked pictures are keyed by the spelling v3's menus had when they were cut: try the label without its marks
+                let (bare, bare_error) = unmark(a, label)
+                if bare_error != ok { ret (zero, bare_error) }
+                id = winmenuicon.find(bare, !c.enabled, c.checked || has_flag(flags, 120u8))
+            }
             if id < 1000usize { c.art = id + 1usize }
         }
         // x: the highlighted row (a keyboard's selection in the captures).
@@ -214,8 +230,7 @@ fn unmark_all(a: *mem.Arena, commands: []navigation.BarCommand) -> err {
 
 fn build_menu(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let group = mem.cast[*Group](ctx)
-    var room = 64usize
-    if t.tokens.profile != .Windows { room = 14usize }
+    let room = 64usize
     var i = 0usize
     while i < group.specs.len {
         let spec = &group.specs[i]
@@ -234,10 +249,8 @@ fn build_menu(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         // Only the Windows menus draw v3's accelerator marks; the other looks show the plain label.
         if t.tokens.profile != .Windows { try unmark_all(a, commands) }
         let anchor = 20u64 + 100u64 * u64(i)
-        // The Windows capture of the View menu is 626 px tall and whole; the other profiles keep the 618 px clip with its scroll arrow.
-        var limit = spec.limit
-        if t.tokens.profile == .Windows { limit = 0.0 }
-        let (menu, menu_error) = navigation.bar_menu_limited(a, anchor + 1u64, t, anchor, "Menu", commands, true, action, limit)
+        // Every sheet shows its whole menu (the Windows capture of View is 626 px tall and whole), so no profile is clipped.
+        let (menu, menu_error) = navigation.bar_menu_limited(a, anchor + 1u64, t, anchor, "Menu", commands, true, action, 0.0)
         if menu_error != ok { ret (0usize, menu_error) }
         let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
         if parts_error != ok { ret (0usize, parts_error) }
@@ -341,7 +354,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if only.len == 0usize || strs.eq(only, "popup_menu-hover") {
         let hover = looks.Sheet { name: "popup_menu-hover", cells: 1usize, columns: 1usize, cell_w: 300.0, cell_h: 250.0, ctx: zero, build: build_hover }
-        try looks.run_all(a, &hover)
+        try run_roomy(a, &hover, 0.0)
+        looks.aim(0usize, 0.0, 0.0)
     }
     if only.len > 0usize && (strs.starts_with(only, "popup_menu_sel_") || strs.starts_with(only, "popup_menu_sub_")) || strs.eq(only, "popup_menu_reports_deck_mode") {
         try run_states(a, only)
