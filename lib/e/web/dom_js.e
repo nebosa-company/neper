@@ -3293,7 +3293,7 @@ fn part12(b: *str.Builder) -> err {
     try str.push(b, "};\n")
     try str.push(b, "let svgInterfaceFor = localName => Element.prototype;\n")
     try str.push(b, "function isValidCustomElementName(name) {\n")
-    try str.push(b, "  if (!/^[a-z][-.0-9_a-z·À-ÖØ-öø-ͽͿ-῿‌-‍‿-⁀⁰-↏Ⰰ-⿯、-퟿豈-﷏ﷰ-�]*-[-.0-9_a-z·À-ÖØ-öø-ͽͿ-῿‌-‍‿-⁀⁰-↏Ⰰ-⿯、-퟿豈-﷏ﷰ-�]*$/.test(name)) return false;\n")
+    try str.push(b, "  if (name.indexOf('-') < 0 || !/^[a-z][^\\0\\t\\n\\f\\r \\/>A-Z]*$/u.test(name)) return false;\n")
     try str.push(b, "  return ['annotation-xml', 'color-profile', 'font-face', 'font-face-src', 'font-face-uri', 'font-face-format', 'font-face-name', 'missing-glyph'].indexOf(name) < 0;\n")
     try str.push(b, "}\n")
     try str.push(b, "function MathMLElement() { throw new TypeError('Illegal constructor'); }\n")
