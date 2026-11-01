@@ -33,6 +33,7 @@ use e.ui.linuxsoft_lb as linuxsoft
 use e.ui.linuxspin_lb as linuxspin
 use e.ui.linuxmark_lb as linuxmark
 use e.ui.looks_b
+use e.ui.looks_z63
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -5539,6 +5540,68 @@ fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fir
     ret (node, node_error)
 }
 
+// Round 63 (z): the Linux and Cupertino two-knob slider (looks_z63 draws it); the runtime's own slider, drawn clear, takes the pointer and
+// keys. The pointer picks the knob that wears the hover and the ring (the runtime does not say which handle it is over).
+fn range_z63(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    var lo: f32 = 0.0
+    var hi: f32 = 0.0
+    if high > low {
+        lo = (first - low) / (high - low)
+        hi = (second - low) / (high - low)
+    }
+    lo = math.min[f32](math.max[f32](lo, 0.0), 1.0)
+    hi = math.min[f32](math.max[f32](hi, 0.0), 1.0)
+    if lo > hi {
+        let swapped = lo
+        lo = hi
+        hi = swapped
+    }
+    let gtk = t.tokens.profile == .Linux
+    let state = control_state(t, key, enabled, false)
+    var hot = 0u8
+    if enabled && (state.hovered || state.pressed || state.focus_visible) {
+        hot = 2u8
+        if mem.address_of(t.runtime) != 0usize && (state.hovered || state.pressed) {
+            let (bounds, has_bounds) = widget.bounds_for_key(t.runtime, key)
+            if has_bounds {
+                let spot = widget.pointer_position(t.runtime).x - bounds.x
+                var reach: f32 = 180.0
+                var origin: f32 = 10.0
+                if !gtk {
+                    reach = 184.0
+                    origin = 8.0
+                }
+                if math.abs[f32](spot - (origin + lo * reach)) < math.abs[f32](spot - (origin + hi * reach)) { hot = 1u8 }
+            }
+        }
+    }
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var hidden_style = sized_style(200.0, 28.0)
+    if gtk {
+        hidden_style = sized_style(200.0, 34.0)
+        hidden_style.position = .Absolute
+    }
+    let hidden = widget.slider(key, widget.Slider { value: first, second: second, range: true, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: change_second, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, hidden_style)
+    var body: widget.Node = zero
+    var body_error: err = ok
+    if gtk {
+        let (made, made_error) = looks_z63.linux_range(a, t.tokens, lo, hi, hot, state.focus_visible, enabled, hidden)
+        body = made
+        body_error = made_error
+    } else {
+        let (made, made_error) = looks_z63.cup_range(a, t.tokens, lo, hi, enabled, hidden)
+        body = made
+        body_error = made_error
+    }
+    if body_error != ok { ret (zero, body_error) }
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, body)), ok)
+}
+
 // A slider's value in its pill (D958): rounded digits in `label-large`
 // `inverse-on-surface` on `inverse-surface`, fully rounded.
 fn value_pill(a: *mem.Arena, t: *const Theme, value: f32) -> (widget.Node, err) {
@@ -5574,6 +5637,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     if t.tokens.profile == .Linux && !range {
         let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
         ret (linux, linux_error)
+    }
+    if range && (t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike) {
+        let (shaped, shaped_error) = range_z63(a, key, t, label, first, second, low, high, step, change, change_second, enabled)
+        ret (shaped, shaped_error)
     }
     if t.tokens.profile == .MaterialLike {
         let (droid, droid_error) = material_slider(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled)
@@ -11664,6 +11731,10 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
 // button says expanded in the tree and controls the list.
 fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike {
+        let (flat, flat_error) = speed_dial_flat(a, key, t, label, labels, actions, open, toggle)
+        ret (flat, flat_error)
+    }
     // v2 (D944, docs/ux/components/SpeedDial): the head is the FAB -- 56 tall,
     // `radius-lg`, `primary-container`, elevation 3 -- and, open, the `primary`
     // close circle; the items are 56-tall `primary-container` pills at elevation 2,
@@ -11730,6 +11801,124 @@ fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, label
         if lifted_error != ok { ret (zero, TooLarge) }
         lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
         parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - 8.0 }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// Round 63 (z): the speed dial under the platform looks. Windows: a split button over a MenuFlyout; Linux: a GtkMenuButton (label and
+// arrow) over a popover menu; Cupertino: a tinted pull-down button over a context menu. The head is keyed `key` (Windows: `key + 1` is
+// its arrow part), the menu `key + 2` and the actions `key + 4 + index`; a press outside fires `toggle`. Material and Neper keep the FAB.
+fn speed_dial_flat(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    let profile = t.tokens.profile
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    var head: widget.Node = zero
+    var head_error: err = ok
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    if profile == .Windows {
+        let (made, made_error) = windows_split(a, key, t, label, toggle, open, toggle, button_options())
+        head = made
+        head_error = made_error
+    }
+    if profile == .Linux {
+        let state = control_state(t, key, true, open)
+        var look = style.adwaita_resolve(t.tokens, .Outlined, state)
+        look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.padding_y = look.padding_y - 1.0
+        let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (arrow, arrow_error) = linux_glyph_square(a, look.foreground, .ChevronDown, 16.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = word
+        pair[1usize] = arrow
+        let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 6.0 }, style.defaults(), pair[0usize..2usize])
+        let (made, made_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_EXPAND, key + 2u64, toggle, row)
+        head = made
+        head_error = made_error
+    }
+    if profile == .CupertinoLike {
+        var options = button_options()
+        options.variant = .Tonal
+        let state = control_state(t, key, true, open)
+        let (dots, dots_error) = icon_square(a, style.cupertino_resolve(t.tokens, .Tonal, state, 34.0).foreground, .MoreHoriz, 17.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (made, made_error) = cupertino_button(a, key, t, label, dots, true, toggle, options)
+        head = made
+        head_error = made_error
+    }
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let rows = labels.len
+        var slots = rows
+        if profile == .CupertinoLike { slots = rows * 2usize - 1usize }
+        let (items, items_error) = mem.alloc[widget.Node](a, slots)
+        if items_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < rows {
+            let item_key = key + 4u64 + u64(i)
+            let state = control_state(t, item_key, true, false)
+            var look = style.windows_resolve(t.tokens, .Plain, state)
+            var words = text_options()
+            words.wrap = .None
+            var at = i
+            if profile == .Linux {
+                look = style.adwaita_resolve(t.tokens, .Plain, state)
+                look.padding = 8.0
+                look.padding_y = 5.5
+                look.min_height = 32.0
+            } else if profile == .CupertinoLike {
+                look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
+                look.radius = 0.0
+                look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+                look.padding = 16.0
+                look.padding_y = 11.0
+                look.min_height = 44.0
+                at = i * 2usize
+            } else {
+                look.radius = 4.0
+                look.custom_padding = true
+                look.padding = 11.0
+                look.padding_y = 7.0
+                look.min_height = 32.0
+            }
+            var word: widget.Node = zero
+            var word_error: err = ok
+            if profile == .CupertinoLike {
+                let (made, made_error) = cup_label(a, t, labels[i], 17.0, 400u32, style.color(t.tokens, .Text))
+                word = made
+                word_error = made_error
+            } else {
+                let (made, made_error) = colored_text(a, 0u64, labels[i], t, words, look.foreground)
+                word = made
+                word_error = made_error
+            }
+            if word_error != ok { ret (zero, word_error) }
+            let (item, item_error) = pressable_states_fill(a, item_key, t, 3u8, labels[i], look, true, false, 0u32, 0u32, 0u64, &actions[i], false, word)
+            if item_error != ok { ret (zero, item_error) }
+            items[at] = item
+            if profile == .CupertinoLike && i + 1usize < rows { items[at + 1usize] = looks_z63.menu_rule(t.tokens) }
+            i += 1usize
+        }
+        let menu_card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, looks_z63.menu_panel(t.tokens), items[0usize..slots])
+        var sem: widget.Semantics = zero
+        sem.role = 2u8
+        sem.label = label
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
+        lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, menu_card))
+        var gap: f32 = 4.0
+        if profile == .Linux { gap = 6.0 }
+        if profile == .CupertinoLike { gap = 8.0 }
+        parts[1usize] = widget.overlay(key + 2u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - gap }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }
@@ -12602,6 +12791,16 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     if body_error != ok { ret (zero, TooLarge) }
     var none: []const widget.Node = zero
     body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint, state: zero } }, style: sized_style(size, size), children: none }
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike {
+        // Round 63 (z): the platform's knob (looks_z63).
+        let hand = control_state(t, key, true, false)
+        var knob_kind = 1u8
+        if t.tokens.profile == .Linux { knob_kind = 2u8 }
+        if t.tokens.profile == .CupertinoLike { knob_kind = 3u8 }
+        let (platform, platform_error) = looks_z63.dial_face(a, t.tokens, knob_kind, share, size, hand.hovered, hand.pressed, hand.focus_visible)
+        if platform_error != ok { ret (zero, platform_error) }
+        body[0usize] = platform
+    }
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
     // The readout in the middle: `title-large` (`label-large` on a small face) in
