@@ -1,0 +1,30 @@
+{
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/date_edit.png",
+    "notes": "Audit 36: (1) the field is 256 x 40 (outline rows 357 to 396 in the 1494 px sheet; text_edit, mask_edit, button_edit and autocomplete fields are 48), where the ROUND 76 note and flutter-compare-j say 48 against Flutter's 56: the 40 is recorded nowhere. (2) 'Open, day hover' is pixel for pixel the 'Open' cell shifted 370 x 47 (zero differing pixels in the calendar, light and dark): no day shows a hover, so the cell tests nothing. The drop button circle, 256 x 292 popup and the Hover, Focus and Empty cells are whole and held."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "Audit 36: (1) the field is 256 x 40 (outline rows 357 to 396 in the 1494 px sheet; text_edit, mask_edit, button_edit and autocomplete fields are 48), where the ROUND 76 note and flutter-compare-j say 48 against Flutter's 56: the 40 is recorded nowhere. (2) 'Open, day hover' is pixel for pixel the 'Open' cell shifted 370 x 47 (zero differing pixels in the calendar, light and dark): no day shows a hover, so the cell tests nothing. The drop button circle, 256 x 292 popup and the Hover, Focus and Empty cells are whole and held."
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/combo_box.png",
+    "notes": "Audit 36: (1) combo_box_lists 'Open, scrolling': no field is drawn, the list starts at the sheet top (y 32) and its 21 px Windows rows do not match the hover bands: the band for row 3 starts under the label '2' and ends under '3', the band for 11 starts under '10', so every label straddles a band edge (the Windows row pitch of 21 in a Neper list whose other cells use 36). (2) 'Drop button hot' and 'Drop button pressed' (combo_box.png): the 32 px state circle covers the last letter of the clipped value ('Against Card C' loses its C under the halo) at 1x and 1.5x. The eight combo_box.png cells are otherwise whole, 150 x 46, value clipped before the chevron."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "Audit 36: (1) combo_box_lists 'Open, scrolling': no field is drawn, the list starts at the sheet top (y 32) and its 21 px Windows rows do not match the hover bands: the band for row 3 starts under the label '2' and ends under '3', the band for 11 starts under '10', so every label straddles a band edge (the Windows row pitch of 21 in a Neper list whose other cells use 36). (2) 'Drop button hot' and 'Drop button pressed' (combo_box.png): the 32 px state circle covers the last letter of the clipped value ('Against Card C' loses its C under the halo) at 1x and 1.5x. The eight combo_box.png cells are otherwise whole, 150 x 46, value clipped before the chevron."
+   }
+  }
+ }
+}
