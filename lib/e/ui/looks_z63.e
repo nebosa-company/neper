@@ -162,27 +162,27 @@ fn cup_range(a: *mem.Arena, tokens: *const style.ThemeTokens, lo: f32, hi: f32, 
     var rest = style.hexa(0x787880u32, 0.16)
     if tokens.palette == .Dark { rest = style.hexa(0x787880u32, 0.32) }
     let accent = style.color(tokens, .Primary)
-    var track = fixed(184.0, 4.0)
+    var track = fixed(162.0, 4.0)
     track.radius = 2.0
     track.background = paint.Brush { Solid: rest }
-    var lit = fixed((hi - lo) * 184.0, 4.0)
+    var lit = fixed((hi - lo) * 162.0, 4.0)
     lit.radius = 2.0
     lit.background = paint.Brush { Solid: accent }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), one(a, widget.box(0u64, track, zero)))
-    layers[1usize] = widget.positioned(0u64, 14.0 + lo * 184.0, 12.0, style.defaults(), one(a, widget.box(0u64, lit, zero)))
+    layers[1usize] = widget.positioned(0u64, 14.0 + lo * 162.0, 12.0, style.defaults(), one(a, widget.box(0u64, lit, zero)))
     var k = 0usize
     while k < 2usize {
         let (grip, grip_error) = thumb_node(a, 28.0, style.hex(0xFFFFFFu32), paint.rgba(0.0, 0.0, 0.0, 0.06))
         if grip_error != ok { ret (zero, grip_error) }
         var share = lo
         if k == 1usize { share = hi }
-        layers[2usize + k] = widget.positioned(0u64, share * 184.0, 0.0, style.defaults(), one(a, grip))
+        layers[2usize + k] = widget.positioned(0u64, share * 162.0, 0.0, style.defaults(), one(a, grip))
         k += 1usize
     }
     layers[4usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), one(a, hidden))
-    var frame = fixed(212.0, 28.0)
+    var frame = fixed(190.0, 28.0)
     if !enabled { frame.opacity = 0.4 }
     ret (widget.stack(0u64, frame, layers[0usize..5usize]), ok)
 }

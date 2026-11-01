@@ -361,9 +361,12 @@ fn bar_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
     if said_error != ok { ret (zero, said_error) }
     let (held, held_error) = one(a, said)
     if held_error != ok { ret (zero, held_error) }
-    let centred = widget.padded(0u64, side, 0.0, side, 0.0, style.defaults(), held)
     var look_h = height
     if mac { look_h = 44.0 }
+    var line = style.defaults()
+    line.height = style.Length { Px: look_h }
+    let middle = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, line, held)
+    let centred = widget.padded(0u64, side, 0.0, side, 0.0, style.defaults(), kid(a, middle))
     let (node, node_error) = surface(a, key, t, 3u8, act.label, state, act.enabled, false, 0u32, fill, text_ink, radius, 0.0, look_h, act.action, centred)
     ret (node, node_error)
 }

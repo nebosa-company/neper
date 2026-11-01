@@ -5568,7 +5568,7 @@ fn range_z63(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first:
                 var reach: f32 = 180.0
                 var origin: f32 = 10.0
                 if !gtk {
-                    reach = 184.0
+                    reach = 162.0
                     origin = 8.0
                 }
                 if math.abs[f32](spot - (origin + lo * reach)) < math.abs[f32](spot - (origin + hi * reach)) { hot = 1u8 }
@@ -5580,6 +5580,9 @@ fn range_z63(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first:
     if gtk {
         hidden_style = sized_style(200.0, 34.0)
         hidden_style.position = .Absolute
+    } else {
+        hidden_style = sized_style(178.0, 28.0)
+        hidden_style.radius = 14.0
     }
     let hidden = widget.slider(key, widget.Slider { value: first, second: second, range: true, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: change_second, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, hidden_style)
     var body: widget.Node = zero
@@ -13968,6 +13971,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     if options.unit.len != 0usize {
         var small = text_options()
         small.role = .BodySmall
+        if t.tokens.profile == .CupertinoLike { small.role = .LabelSmall }
         small.wrap = .None
         let (unit_node, unit_error) = colored_text(a, 0u64, options.unit, t, small, muted)
         if unit_error != ok { ret (zero, unit_error) }
@@ -13979,7 +13983,12 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     let pad = size * 0.05
     layers[2usize] = painted
     layers[0usize] = widget.padded(0u64, pad, pad, pad, pad, sized_style(size, size), layers[2usize..3usize])
-    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, sized_style(size, size), inner[0usize..inner_count])
+    var inner_style = sized_style(size, size)
+    if t.tokens.profile == .CupertinoLike && inner_count == 2usize {
+        // HIG: keep the unit caption clear of the arc ends, which close in toward the open bottom: lift the pair into the wider part.
+        inner_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: size * 0.1 } }
+    }
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, inner_style, inner[0usize..inner_count])
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..2usize])
