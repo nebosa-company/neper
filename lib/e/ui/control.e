@@ -20748,6 +20748,17 @@ fn cupertino_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
         edge_w = 0.0
         if state.pressed { face = style.mix(accent, style.hex(0x000000u32), 0.22) }
     }
+    // CupertinoRadio unselected: a 14 disc, white (grey in dark) with a rim a few percent dark in light and none in dark.
+    if round && !filled {
+        edge = style.hexa(0x000000u32, 0.035)
+        face = style.hexa(0xFFFFFFu32, 1.0)
+        if state.pressed { face = style.hex(0xD9D9D9u32) }
+        if dark {
+            edge = cup_clear()
+            face = style.hex(0x383838u32)
+            if state.pressed { face = style.hex(0x565656u32) }
+        }
+    }
     var mark_ink = style.hex(0xFFFFFFu32)
     var words = style.color(t.tokens, .Text)
     var veil: f32 = 1.0

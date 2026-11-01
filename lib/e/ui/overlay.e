@@ -875,10 +875,10 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
     if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
-    // Android: md-menu-item is 56 dp high (72 with a supporting line).
+    // Android: 48 dp as the M3 menu item and Flutter's PopupMenuItem (md-menu draws 56); 72 with a supporting line.
     let android = t.tokens.profile == .MaterialLike
     if android {
-        row_height = 56.0
+        row_height = 48.0
         if c.supporting.len > 0usize { row_height = 72.0 }
     }
     let slot = control.if_else(touch, 24.0, 18.0)
@@ -3419,11 +3419,13 @@ fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     var card_options = control.surface_options(t)
     card_options.background = .SurfaceContainerHigh
     card_options.elevation = 3u8
-    card_options.radius = t.tokens.radii.md
+    card_options.radius = t.tokens.radii.xl
     card_options.padding = 0.0
     var card_style = control.surface_style(t, card_options)
     card_style.width = style.Length { Percent: 100.0 }
     card_style.overflow = .Clip
+    // Dark: the ref's actions card is 1f1f1f.
+    if t.tokens.palette == .Dark { card_style.background = paint.Brush { Solid: style.hex(0x1F1F1Fu32) } }
     let action_column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
     let (groups, groups_error) = mem.alloc[widget.Node](a, 2usize)
     if groups_error != ok { ret (zero, TooLarge) }
@@ -3443,6 +3445,8 @@ fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     var cancel_style = control.surface_style(t, cancel_options)
     cancel_style.width = style.Length { Percent: 100.0 }
     cancel_style.overflow = .Clip
+    // Dark: the ref's Cancel card is 2c2c2c (the palette's raised grey is lighter).
+    if t.tokens.palette == .Dark { cancel_style.background = paint.Brush { Solid: style.hex(0x2C2C2Cu32) } }
     groups[1usize] = widget.box(0u64, cancel_style, cancel_body[0usize..1usize])
     var group_style = style.defaults()
     group_style.width = style.Length { Percent: 100.0 }
