@@ -204,6 +204,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A manifest given by absolute path (`D:/...` or `/...`) names its directory as it is.
     var abs_dir = abs_dir_c
     if dir.len > 1usize && (dir[0usize] == 47u8 || dir[1usize] == 58u8) { abs_dir = dir }
+    client.cfg.file_root = abs_dir
     let mark = mem.mark(a)
     var total = 0usize
     var passed = 0usize

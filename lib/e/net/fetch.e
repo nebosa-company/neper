@@ -65,13 +65,13 @@ type Response = struct {
 // `allow_file` lets `file:` URLs be read from the local disk (for tests and local pages; off by default).
 type Config = struct {
     roots: []const u8, user_agent: str, accept_language: str,
-    body_limit: usize, max_redirects: usize, allow_file: bool, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str, typed_hosts: []const str, typed_types: []const str
+    body_limit: usize, max_redirects: usize, allow_file: bool, file_root: str, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str, typed_hosts: []const str, typed_types: []const str
 }
 
 type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize }
 
 fn default_config(roots: []const u8) -> Config {
-    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false, block_hosts: zero, allow_hosts: zero, third_hosts: zero, typed_hosts: zero, typed_types: zero }
+    ret Config { roots: roots, user_agent: "Mozilla/5.0 (compatible; Neper/1.0)", accept_language: "en-US,en;q=0.9", body_limit: 67108864usize, max_redirects: 20usize, allow_file: false, file_root: "", block_hosts: zero, allow_hosts: zero, third_hosts: zero, typed_hosts: zero, typed_types: zero }
 }
 
 // A client with a jar of up to `max_cookies` cookies.
@@ -266,7 +266,21 @@ fn file_response(c: *Client, u: *const url.Url) -> (Response, err) {
     var from = 0usize
     if decoded.len >= 3usize && decoded[0usize] == 47u8 && decoded[2usize] == 58u8 { from = 1usize }
     let path = decoded[from..]
-    let (bytes, re) = fs.read_file(c.a, path, c.cfg.body_limit)
+    var (bytes, re) = fs.read_file(c.a, path, c.cfg.body_limit)
+    // A root-relative `file:` URL ("/css/support/x.css") is read from `file_root` when the disk root has no such file.
+    if re != ok && c.cfg.file_root.len > 0usize && decoded.len > 0usize && decoded[0usize] == 47u8 {
+        // The URL parser keeps the document's drive letter on a root-relative path ("/D:/css/x.css"): drop it.
+        var tail = decoded
+        if decoded.len >= 3usize && decoded[2usize] == 58u8 { tail = decoded[3usize..] }
+        let (rooted, rooted_e) = str.concat(c.a, c.cfg.file_root, tail)
+        if rooted_e == ok {
+            let (b2, re2) = fs.read_file(c.a, rooted, c.cfg.body_limit)
+            if re2 == ok {
+                bytes = b2
+                re = re2
+            }
+        }
+    }
     if re != ok {
         let (none, he) = mem.alloc[http.Header](c.a, 1usize)
         if he != ok { ret (zero, he) }
