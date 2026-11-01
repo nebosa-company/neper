@@ -7307,7 +7307,9 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
+    // v3 edits set Tahoma 8 pt, 11 px, through GDI (the 1:1 captures): a whole pixel size, so the text is hinted ClearType
     var small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light { small = style.TextStyle { size: 11.0, line_height: line_height, weight: 400u16, italic: false } }
     // round 12: the dark edits follow the native Windows 11 dark ones: Segoe UI 9 pt (12 px), no Tahoma swap.
     let dark_native = win_dark(t)
     if dark_native { small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false } }
@@ -7334,7 +7336,7 @@ fn windows_edit_theme_kerned(a: *mem.Arena, t: *const Theme, line_height: f32) -
     let (made, made_error) = windows_edit_theme(a, t, line_height)
     if made_error != ok { ret (zero, made_error) }
     var kerned = made
-    if win_dark(t) { kerned.language = "kern" }
+    if win_dark(t) || t.tokens.palette == .Light { kerned.language = "kern" }
     ret (kerned, ok)
 }
 
@@ -7403,6 +7405,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
     var edit_caret: paint.Color = zero
     if win_dark(t) { edit_caret = native_caret_phase(face) }
+    // round 46: the light edit of v3 is GDI too: whole pixel selection and an inverting caret (the glyphs stay on the line box)
+    if !win_dark(t) { edit_caret = widget.gdi_caret(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -7534,7 +7538,11 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let value_stack = widget.stack(0u64, grow, layers[0usize..at])
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: options.width }
-    frame_style.height = style.Length { Px: h }
+    // The light edit is one row shorter than the layout box: the capture's frame is 21 rows high (the extra row of the old
+    // tiles was the double resample), so the face stops there and the last row is whatever lies behind.
+    var frame_h = h
+    if !win_dark(t) { frame_h = h - 1.0 }
+    frame_style.height = style.Length { Px: frame_h }
     frame_style.background = paint.Brush { Solid: face }
     frame_style.border = style.Border { width: 1.0, color: side }
     frame_style.radius = t.tokens.radii.xs
@@ -7542,7 +7550,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.border = style.Border { width: 1.0, color: face }
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
-    var pad_y: f32 = 3.384
+    var pad_y: f32 = 3.0
     if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
     // round 15: the glyphs sit one row above the line box (see widget.place_edit), so the box starts one row lower
@@ -7577,7 +7585,14 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         rim = made_rim
         rim_error = made_error
     } else {
-        let (made_rim, made_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, false)
+        // Hover (round 6): the edit rim a shade darker, and the arrow or fast button under the pointer blue
+        // (`options.chrome_hover`: 1 the edit, 1 + zone of winedit.light_chrome for a button); the face does not change.
+        var over_it = 0u32
+        if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
+            over_it = 1u32
+            if options.chrome_hover > 1u32 { over_it = options.chrome_hover }
+        }
+        let (made_rim, made_error) = winedit.light_chrome(a, options.chrome_kind, chrome_state, over_it, w, h, options.chrome_dim)
         rim = made_rim
         rim_error = made_error
     }
@@ -7590,23 +7605,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         if bars_error != ok { ret (zero, TooLarge) }
         bars[0usize] = windows_bar(w, 1.0, side)
         bars[1usize] = windows_bar(w, 1.0, side)
-        bars[2usize] = windows_bar(1.0, h - 2.0, side)
-        bars[3usize] = windows_bar(1.0, h - 2.0, side)
+        bars[2usize] = windows_bar(1.0, frame_h - 2.0, side)
+        bars[3usize] = windows_bar(1.0, frame_h - 2.0, side)
         stacked[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), bars[0usize..1usize])
-        stacked[3usize] = widget.positioned(0u64, 0.0, h - 1.0, style.defaults(), bars[1usize..2usize])
+        stacked[3usize] = widget.positioned(0u64, 0.0, frame_h - 1.0, style.defaults(), bars[1usize..2usize])
         stacked[4usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), bars[2usize..3usize])
         stacked[5usize] = widget.positioned(0u64, w - 1.0, 1.0, style.defaults(), bars[3usize..4usize])
         layers_at = 6usize
-    }
-    // Round 6, hover (states/hover-*): the rim ring 2 levels darker over the whole edit, the button under the pointer blue
-    // (`options.chrome_hover`: 1 the edit, 2 + zone of winedit.hover_chrome for a button); the face does not change.
-    if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 && !dark_edit {
-        var zone = 0u32
-        if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
-        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
-        if veil_error != ok { ret (zero, veil_error) }
-        stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
-        layers_at += 1usize
     }
     if dark_bar && !options.classic_bar {
         // the themed bar belongs to DarkMode_Explorer, whose frame is white (edit-multiline-explorer)
@@ -7629,7 +7634,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.stack(0u64, style.defaults(), stacked[0usize..layers_at])
+    // the layout box stays `options.width` x `h` although the light face is one row shorter
+    var column_style = style.defaults()
+    if !win_dark(t) {
+        column_style.width = style.Length { Px: options.width }
+        column_style.height = style.Length { Px: h }
+    }
+    column[0usize] = widget.stack(0u64, column_style, stacked[0usize..layers_at])
     var no_gesture: widget.GestureAction = zero
     let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
     if over_error != ok { ret (zero, TooLarge) }
@@ -10747,6 +10758,30 @@ fn win5_cell_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 fn image_select_cell(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, held: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+        // round 46: drawn from the 1:1 captures (winedit.cell_chrome); the text stands where they put it
+        let (chrome, chrome_error) = winedit.cell_chrome(a, width, held)
+        if chrome_error != ok { ret (zero, chrome_error) }
+        let (light_t, light_error) = win3_dialog_theme(a, t)
+        if light_error != ok { ret (zero, light_error) }
+        var light_words = text_options()
+        light_words.role = .BodyMedium
+        light_words.wrap = .None
+        // the Sort list and its editor set Tahoma 12 px at GDI whole pixel advances (see win_row)
+        let (light_said, _, light_said_error) = win_gdi_glyphs(a, &light_t, light_words, style.color(t.tokens, .Text), label)
+        if light_said_error != ok { ret (zero, light_said_error) }
+        let (light_layers, light_layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if light_layers_error != ok { ret (zero, TooLarge) }
+        let (light_text, light_text_error) = mem.alloc[widget.Node](a, 1usize)
+        if light_text_error != ok { ret (zero, TooLarge) }
+        light_text[0usize] = light_said
+        var light_line = style.defaults()
+        light_line.height = style.Length { Px: 21.0 }
+        light_line.padding = edges(24.0, 0.0, 0.0, 2.0)
+        light_layers[0usize] = chrome
+        light_layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, light_line, light_text[0usize..1usize])
+        ret (widget.stack(key, sized_style(width, 21.0), light_layers[0usize..2usize]), ok)
+    }
     let (cells, cells_error) = mem.alloc[Win5Cell](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     cells[0usize] = Win5Cell { held: held }
@@ -17001,6 +17036,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     let state = control_state(t, key, enabled, false)
     var c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
     let dark = t.tokens.palette == .Dark
+    let drawn_light = t.tokens.profile == .Windows && t.tokens.palette == .Light
     // round 10: the native dark list-style combo: white text, #6D6D6D disabled
     if dark {
         c.ink = style.hex_raw(0xFFFFFFu32)
@@ -17031,7 +17067,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var chevron_scale: f32 = 1.0
     // looks5 group d: no chevron change under the pointer (the captured hovers have the rest chevron).
     if !enabled { chevron_scale = 0.5 }
-    if dark { chevron_scale = 0.0 }
+    if dark || drawn_light { chevron_scale = 0.0 }
     let focused = state.focused && enabled
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
@@ -17047,8 +17083,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var spread = style.defaults()
     spread.width = style.Length { Px: head_w }
     spread.height = style.Length { Px: text_h }
+    // round 46: the light head's text starts at x 5 of the box in the 1:1 captures
     spread.padding = edges(3.0, 0.0, 0.0, 0.0)
-    if dark { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
+    if dark || drawn_light { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
@@ -17065,6 +17102,16 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         if open || state.pressed { native_state = 3u32 }
         if !enabled { native_state = 2u32 }
         let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, text_h)
+        frame = made_frame
+        frame_error = made_error
+    } else if drawn_light {
+        // round 46: the drop-down box is drawn (the button look of the ellipsis over the dialog face) with its chevron
+        var box_style = 0u32
+        if head_look == 4u32 { box_style = 1u32 }
+        if head_look == 1u32 || head_look == 2u32 || head_look == 3u32 { box_style = 2u32 }
+        if box_style == 2u32 && head_look == 1u32 && edge_x >= 10000.0 { box_style = 4u32 }
+        if !enabled { box_style = 3u32 }
+        let (made_frame, made_error) = winedit.combo_chrome(a, box_style, head_w, 21.0)
         frame = made_frame
         frame_error = made_error
     } else {
@@ -18169,14 +18216,21 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         var count = 1usize
         if state.focused {
             // looks9: on the chosen row the live list's rectangle is 20 tall in the fill-tinted greys (win_list_dots).
-            let (dots, dots_error) = win_list_dots(a, max_zero(width - 2.0), 20.0)
+            var dot_ground = style.hex(16777215u32)
+            if i == selected && list_focused { dot_ground = style.hex(14281721u32) }
+            let (dots, dots_error) = win_lb_dots(a, paint.rgba(1.0 - dot_ground.red, 1.0 - dot_ground.green, 1.0 - dot_ground.blue, 1.0), 1u32, max_zero(width - 2.0), 19.0)
             if dots_error != ok { ret (zero, dots_error) }
             layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, dots))
             count = 2usize
         }
         var row_style = style.defaults()
-        row_style.width = style.Length { Percent: 100.0 }
+        // the chosen row's fill runs to the list's inner right line, the other rows stop short of it
+        var row_w = max_zero(width - 3.0)
+        if i == selected && list_focused { row_w = max_zero(width - 2.0) }
+        row_style.width = style.Length { Px: row_w }
         row_style.height = style.Length { Px: 19.0 }
+        // the rows are white on the list's #F0F0F0 face (it shows below the last one)
+        row_style.background = paint.Brush { Solid: style.hex(16777215u32) }
         if i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex(14281721u32) } }
         if t.tokens.palette == .Dark && i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex_raw(0x0078D7u32) } }
         var stack_style = style.defaults()
@@ -18201,12 +18255,14 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         i += 1usize
     }
     var view_style = style.defaults()
-    view_style.width = style.Length { Px: max_zero(width - 3.0) }
+    view_style.width = style.Length { Px: max_zero(width - 2.0) }
     view_style.height = style.Length { Px: f32(rows) * 19.0 }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
-    let (lines, lines_error) = win3_lines(a)
+    var shown_rows = options.len
+    if shown_rows > usize(rows) { shown_rows = usize(rows) }
+    let (lines, lines_error) = win_lb_frame(a, f32(shown_rows) * 19.0)
     if lines_error != ok { ret (zero, lines_error) }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
     if stacked_error != ok { ret (zero, TooLarge) }
@@ -18223,6 +18279,65 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+
+// ---- round 46: the Windows light list box as the 1:1 captures show it ---------------------------------------------------------------
+// v3's list box has a flat sunken edge: a #A0A0A0 line along the top and the left, a #E5E5E5 one inside the right and the foot and a white one
+// outside them (docs/ui/looks/ref/windows-1to1/states/list-box-*): the frame paints over the #F0F0F0 face. The chosen row's fill runs to the inner
+// right line and its XOR focus rectangle, one pixel dots where (x + y + the row's index) is even, is the colour inverse of what it lies on.
+type WinLbDots = struct { ink: paint.Color, parity: u32 }
+
+fn win_lb_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = area.width
+    let h = area.height
+    try win3_rect(b, area.x, area.y, w, h, style.hex(15790320u32))
+    try win3_rect(b, area.x, area.y, w - 1.0, 1.0, style.hex(10526880u32))
+    try win3_rect(b, area.x, area.y + 1.0, 1.0, h - 2.0, style.hex(10526880u32))
+    try win3_rect(b, area.x + 1.0, area.y + h - 2.0, w - 2.0, 1.0, style.hex(15066597u32))
+    // the inner right line runs beside the rows only (`shade` is their height); the face shows below them
+    let m = mem.cast[*Win3Lines](ctx)
+    try win3_rect(b, area.x + w - 2.0, area.y + 1.0, 1.0, m.shade, style.hex(15066597u32))
+    try win3_rect(b, area.x + w - 1.0, area.y, 1.0, h, style.hex(16777215u32))
+    ret win3_rect(b, area.x, area.y + h - 1.0, w, 1.0, style.hex(16777215u32))
+}
+
+fn win_lb_frame(a: *mem.Arena, rows_h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Lines { shade: rows_h }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_frame_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn win_lb_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinLbDots](ctx)
+    let w = u32(area.width)
+    let h = u32(area.height)
+    var i = 0u32
+    while i < w {
+        if ((i + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, m.ink) }
+        if ((i + h - 1u32 + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h - 1u32), 1.0, 1.0, m.ink) }
+        i += 1u32
+    }
+    var j = 1u32
+    while j + 1u32 < h {
+        if ((j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x, area.y + f32(j), 1.0, 1.0, m.ink) }
+        if ((w - 1u32 + j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(w - 1u32), area.y + f32(j), 1.0, 1.0, m.ink) }
+        j += 1u32
+    }
+    ret ok
+}
+
+fn win_lb_dots(a: *mem.Arena, ink: paint.Color, parity: u32, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[WinLbDots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = WinLbDots { ink: ink, parity: parity }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_dots_paint, state: widget.bytes_of[WinLbDots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 
 // ---- looks3-e: the Windows dialog font ---------------------------------------------------------

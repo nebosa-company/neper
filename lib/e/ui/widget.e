@@ -2153,6 +2153,16 @@ fn native_caret_blinked_off(c: paint.Color) -> bool {
     ret c.alpha > 0.0027 && c.alpha < 0.0035
 }
 
+// round 46: the light (GDI) edit of v3: `Edit.caret` with alpha 0.004 (its rgb the face colour) draws the inverting one pixel caret and
+// the selection on whole pixels running one pixel past the last glyph, as the native edit does, but the glyphs stay on the line box.
+fn gdi_caret(face: paint.Color) -> paint.Color {
+    ret paint.rgba(face.red, face.green, face.blue, 0.004)
+}
+
+fn gdi_caret_face(c: paint.Color) -> bool {
+    ret native_caret_face(c) || (c.alpha > 0.0038 && c.alpha < 0.0042)
+}
+
 // An editor paints its selection under the text, then the text, then -- focused --
 // an underline beneath the composition and a one-pixel caret.
 fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometry.Rect, b: *scene.Builder) -> err {
@@ -2191,7 +2201,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             var i = 0usize
             while i < rects.len {
                 var sel = rects[i]
-                if native_caret_face(ed.caret) {
+                if gdi_caret_face(ed.caret) {
                     // round 13 (native Windows 11 edit, GDI): whole pixel edges, and the fill runs one pixel past the last glyph (under the caret)
                     let left = floor_f(origin.x + sel.x + 0.5)
                     let right = floor_f(origin.x + sel.x + sel.width + 0.5) + 1.0
@@ -2206,7 +2216,38 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     // round 15: the native dark (GDI) edit sets its glyphs one row above the line box its selection and caret fill
     var glyph_origin = origin
     if native_caret_face(ed.caret) { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
-    try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+    // round 46 (the light GDI edit, one selection rectangle): GDI sets the unselected glyphs in the text colour and the selected ones once,
+    // in the selection text colour, so the text colour pass keeps off the selection (a pass over it would darken the edges of the second).
+    var gdi_split = false
+    var split_left: f32 = 0.0
+    var split_right: f32 = 0.0
+    if focused_here && gdi_caret_face(ed.caret) && !native_caret_face(ed.caret) && ed.marked.alpha > 0.0 {
+        let (lo, hi) = selection_of(e)
+        if lo < hi {
+            let (srects, srects_error) = layout.selection(a, &copies[0usize], lo, hi)
+            if srects_error != ok { ret InvalidTree }
+            if srects.len == 1usize {
+                gdi_split = true
+                split_left = floor_f(origin.x + srects[0usize].x + 0.5)
+                split_right = floor_f(origin.x + srects[0usize].x + srects[0usize].width + 0.5)
+            }
+        }
+    }
+    if gdi_split {
+        var save_text: scene.Command = .Save
+        var restore_text: scene.Command = .Restore
+        let far: f32 = 4096.0
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: origin.x - far, y: origin.y - far, width: split_left - origin.x + far, height: far * 2.0 } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_right, y: origin.y - far, width: origin.x + far - split_right, height: far * 2.0 } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+    } else {
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+    }
     if focused_here && scene.cff_text_on() {
         let (lo, hi) = selection_of(e)
         if lo < hi {
@@ -2229,7 +2270,8 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             if marks_error != ok { ret InvalidTree }
             var m = 0usize
             while m < marks.len {
-                let r = marks[m]
+                var r = marks[m]
+                if gdi_split { r = geometry.Rect { x: split_left - origin.x, y: r.y, width: split_right - split_left, height: r.height } }
                 var save: scene.Command = .Save
                 var restore: scene.Command = .Restore
                 try scene.push(b, save)
@@ -2258,7 +2300,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             caret_color = ed.caret
             caret_width = 2.0
         }
-        if native_caret_face(ed.caret) {
+        if gdi_caret_face(ed.caret) {
             // round 13: the native edit's caret inverts what is under it, one whole pixel column at the glyph run's end: the face
             // colour (the sentinel carries it) or, inside the selection, the selection colour
             let col = floor_f(origin.x + c.x + 0.5)

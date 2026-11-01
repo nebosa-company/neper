@@ -69,10 +69,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // list_box_dialog.png, which compares pixel for pixel with ref/windows/list_box_dialog.png
 // (scripts/looks_refs_d.py).
 fn build_dialog(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let names = [8]str{ "Artist", "Edition Name", "Flavor", "Legal", "No", "Power", "Row", "Toughness" }
-    let (picks, picks_error) = pick_actions(a, 8usize)
+    // v3 3.235's Columns list holds seven names (the first captures had Legal too); the Windows light list is eight rows high with the face
+    // showing below them. The other looks keep the eight names.
+    var names = [8]str{ "Artist", "Edition Name", "Flavor", "Legal", "No", "Power", "Row", "Toughness" }
+    var count = 8usize
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+        names = [8]str{ "Artist", "Edition Name", "Flavor", "No", "Power", "Row", "Toughness", "" }
+        count = 7usize
+    }
+    let (picks, picks_error) = pick_actions(a, count)
     if picks_error != ok { ret (0usize, picks_error) }
-    let (list, list_error) = control.list_box(a, 100u64, t, "Columns", names[0usize..8usize], 0usize, picks, 8u32, 152.0)
+    let (list, list_error) = control.list_box(a, 100u64, t, "Columns", names[0usize..count], 0usize, picks, 8u32, 152.0)
     if list_error != ok { ret (0usize, list_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (0usize, parts_error) }

@@ -412,7 +412,10 @@ fn build_head_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n: 
     if o.set == 1usize { shown = "Stretch" }
     if o.set == 2usize { shown = "Unknown" }
     if n == 4usize || n == 6usize { shown = shown }
-    let (head, head_error) = control.win_head(a, 100u64, t, "Head", shown, true, true, &toggle[0usize], true, none, o.width, o.edge_y, o.edge_x)
+    // The Windows light Condition head is the settled open look in the 1:1 capture (no first-frame flag); the other looks keep the old one.
+    var edge_x = o.edge_x
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light && edge_x == 10371.0 { edge_x = 371.0 }
+    let (head, head_error) = control.win_head(a, 100u64, t, "Head", shown, true, true, &toggle[0usize], true, none, o.width, o.edge_y, edge_x)
     if head_error != ok { ret (0usize, head_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (0usize, held_error) }
