@@ -1,0 +1,933 @@
+{
+ "large_title": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/large_title.png",
+    "notes": "Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   }
+  },
+  "neper": "navigation.cupertino_nav_bar"
+ },
+ "bottom_app_bar": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/bottom_app_bar.png",
+    "notes": "Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   }
+  },
+  "name": "Bottom app bar",
+  "extra": true,
+  "neper": "navigation.bottom_app_bar"
+ },
+ "toolbar": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/toolbar.png",
+    "notes": "Row of plain actions at rest, hover, pressed, focus, one disabled and five actions. Derived from the library's toolbar through each look's tokens; the Windows look reuses its flat toolbar.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ]
+   }
+  },
+  "name": "Toolbar",
+  "extra": true,
+  "neper": "navigation.toolbar"
+ },
+ "navigation_stack": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_stack.png",
+    "notes": "Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   }
+  },
+  "name": "Navigation stack",
+  "extra": true,
+  "neper": "navigation.navigation_stack"
+ },
+ "navigation_split": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_split.png",
+    "notes": "Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   }
+  },
+  "name": "Navigation split",
+  "extra": true,
+  "neper": "navigation.navigation_split"
+ },
+ "navigation_drawer": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_drawer.png",
+    "notes": "Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   }
+  },
+  "name": "Navigation drawer",
+  "extra": true,
+  "neper": "navigation.navigation_drawer"
+ },
+ "navigation_rail": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_rail.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   }
+  },
+  "name": "Navigation rail",
+  "extra": true,
+  "neper": "navigation.navigation_rail"
+ },
+ "sidebar": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/sidebar.png",
+    "notes": "Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   }
+  },
+  "name": "Sidebar",
+  "extra": true,
+  "neper": "navigation.sidebar"
+ },
+ "breadcrumbs": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/breadcrumbs.png",
+    "notes": "Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   }
+  },
+  "name": "Breadcrumbs",
+  "extra": true,
+  "neper": "navigation.breadcrumbs"
+ }
+}
