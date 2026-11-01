@@ -1,0 +1,584 @@
+{
+ "progress_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/progress_bar.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): bar 4 px high like Flutter but rounded with a 4 px gap and a stop dot (Neper ProgressBar spec), Flutter is a flat 240x4; fill (20,93,178) vs (66,94,145) light, (179,197,255) vs (172,199,255) dark (palette), track (214,227,255) vs (218,226,249)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/progress_bar.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): bar 4 px high like Flutter but rounded with a 4 px gap and a stop dot (Neper ProgressBar spec), Flutter is a flat 240x4; fill (20,93,178) vs (66,94,145) light, (179,197,255) vs (172,199,255) dark (palette), track (214,227,255) vs (218,226,249).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/progress.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 240x4 flat bar, track now secondary-container: light (232,222,248) and dark (74,68,88) equal the ref; fill dark (208,188,255) vs (207,189,254), light (103,80,164) vs (101,85,143) (baseline vs fromSeed primary, recorded).",
+    "gaps": [
+     "Indeterminate progress is not compared (the sweep is time dependent)",
+     "Linear progress with a buffer, the four-colour form (the same at rest) and the disabled form have cells; Material Web draws a square track end with no stop dot",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/progress.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 240x4 flat bar, track now secondary-container: light (232,222,248) and dark (74,68,88) equal the ref; fill dark (208,188,255) vs (207,189,254), light (103,80,164) vs (101,85,143) (baseline vs fromSeed primary, recorded).",
+    "gaps": [
+     "Indeterminate progress is not compared (the sweep is time dependent)",
+     "Linear progress with a buffer, the four-colour form (the same at rest) and the disabled form have cells; Material Web draws a square track end with no stop dot",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/activity_indicator.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): ring sizes 48/36/24/20/64 with stroke 4/3/2/2.25/4.5 (Neper ProgressRing spec) vs Flutter 40 px stroke 4 (sheet 36 px: stroke 3); arc start and round caps as in Flutter.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/activity_indicator.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): ring sizes 48/36/24/20/64 with stroke 4/3/2/2.25/4.5 (Neper ProgressRing spec) vs Flutter 40 px stroke 4 (sheet 36 px: stroke 3); arc start and round caps as in Flutter.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/activity_indicator.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): sheet sizes 20/36/64, stroke 3 at 36 vs Flutter 40 px stroke 4; no cell at the Flutter size, so the ring is not compared at equal size.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/activity_indicator.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): sheet sizes 20/36/64, stroke 3 at 36 vs Flutter 40 px stroke 4; no cell at the Flutter size, so the ring is not compared at equal size.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   }
+  }
+ },
+ "card": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/card.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): radius 12 and fills match: filled (225,226,233) vs (226,226,233), outlined edge (195,198,213) vs (196,198,208); sheet card 220x76 vs Flutter 192x72 box; dark filled (51,53,58) equal; elevated has a shadow, the ref shows none (artifact outline ignored).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/card.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): radius 12 and fills match: filled (225,226,233) vs (226,226,233), outlined edge (195,198,213) vs (196,198,208); sheet card 220x76 vs Flutter 192x72 box; dark filled (51,53,58) equal; elevated has a shadow, the ref shows none (artifact outline ignored).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/card.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): radius 12; elevated (247,242,250) vs (248,242,250), filled (230,224,233) equal, outlined edge (202,196,208) vs (202,196,207); dark (29,27,32), (54,52,59), (73,69,79) within 1; sheet size 220x76 vs 192x72.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/card.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): radius 12; elevated (247,242,250) vs (248,242,250), filled (230,224,233) equal, outlined edge (202,196,208) vs (202,196,207); dark (29,27,32), (54,52,59), (73,69,79) within 1; sheet size 220x76 vs 192x72.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   }
+  }
+ },
+ "list": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/list_rows.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): no equivalent: Flutter ListTile (two lines, leading icon, trailing chevron, 72 high) and CupertinoListSection have no Neper counterpart; the Neper list is a list box of 21 px text rows (recorded gap).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "divider": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/divider.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px line, colour (221,224,234) blended over two rows vs Flutter (222,223,231), dark (42,44,53) vs (43,45,51): within 3 levels.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/divider.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px line, colour (221,224,234) blended over two rows vs Flutter (222,223,231), dark (42,44,53) vs (43,45,51): within 3 levels.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/divider.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px outline-variant (202,196,208); Flutter blends the same line over two rows (227,221,231 each); dark line (73,69,79).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/divider.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px outline-variant (202,196,208); Flutter blends the same line over two rows (227,221,231 each); dark line (73,69,79).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   }
+  }
+ },
+ "banner": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/banner.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded tonal container with a status well (Neper Banner spec) vs Flutter full-width bar with a rule; container fill (242,243,250) vs (243,243,250), dark (26,27,32) vs (26,28,32).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/banner.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded tonal container with a status well (Neper Banner spec) vs Flutter full-width bar with a rule; container fill (242,243,250) vs (243,243,250), dark (26,27,32) vs (26,28,32).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/banner.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded container vs full-width MaterialBanner (M3 has no banner); container (247,242,250) vs (248,242,250), dark (29,27,32) equal.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/banner.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded container vs full-width MaterialBanner (M3 has no banner); container (247,242,250) vs (248,242,250), dark (29,27,32) equal.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   }
+  }
+ },
+ "snackbar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/snackbar.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): floating snackbar 48 high, radius 4, fill (50,47,53) equal, dark (230,224,233) equal, action (208,188,255) vs (207,189,254); shadow on ours only (ref artifact outline ignored).",
+    "gaps": [
+     "snackbar-two-lines: the action label is 1 px left of the capture (28 flat px off in light, 24 in dark, max 188 levels).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/snackbar.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): floating snackbar 48 high, radius 4, fill (50,47,53) equal, dark (230,224,233) equal, action (208,188,255) vs (207,189,254); shadow on ours only (ref artifact outline ignored).",
+    "gaps": [
+     "snackbar-two-lines: the action label is 1 px left of the capture (28 flat px off in light, 24 in dark, max 188 levels).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "neper": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 48 high, radius 4, fill (47,48,53) vs (46,48,54), dark (225,226,233) vs (226,226,233), action (179,197,255) vs (172,199,255).",
+    "screenshot": "neper/snackbar.png"
+   },
+   "neper_dark": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 48 high, radius 4, fill (47,48,53) vs (46,48,54), dark (225,226,233) vs (226,226,233), action (179,197,255) vs (172,199,255).",
+    "screenshot": "neper-dark/snackbar.png"
+   }
+  }
+ },
+ "badge": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/badge.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dot 6, count badge 16 high, 99+ 27 vs 28 wide; error fill (179,38,30) vs (186,26,26) (baseline vs fromSeed, recorded).",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/badge.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dot 6, count badge 16 high, 99+ 27 vs 28 wide; error fill (179,38,30) vs (186,26,26) (baseline vs fromSeed, recorded).",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "neper": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dot 6, count badge 16 high, 99+ 26 vs 28 wide; error fill (180,36,49) vs (186,26,26) (palette).",
+    "screenshot": "neper/badge.png"
+   },
+   "neper_dark": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dot 6, count badge 16 high, 99+ 26 vs 28 wide; error fill (180,36,49) vs (186,26,26) (palette).",
+    "screenshot": "neper-dark/badge.png"
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/date_picker.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dialog 360 wide radius 28, 48 px day pitch, selected circle 38 vs 38, dialog fill (236,230,240) vs (236,230,238); recorded: scrim 32 % vs Flutter black 54 %, no year dropdown, smaller weekday letters and header.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dialog 360 wide radius 28, 48 px day pitch, selected circle 38 vs 38, dialog fill (236,230,240) vs (236,230,238); recorded: scrim 32 % vs Flutter black 54 %, no year dropdown, smaller weekday letters and header.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "neper": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): same dialog shapes as the Android pair (selected circle 38, 360 wide, radius 28); recorded: scrim 32 % vs 54 %, no year dropdown, smaller header.",
+    "screenshot": "neper/date_picker_modal.png"
+   },
+   "neper_dark": {
+    "status": "ready",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): same dialog shapes as the Android pair (selected circle 38, 360 wide, radius 28); recorded: scrim 32 % vs 54 %, no year dropdown, smaller header.",
+    "screenshot": "neper-dark/date_picker_modal.png"
+   },
+   "cupertino": {
+    "status": "matched",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only (Roboto text): one 36 px band radius 8 across month, day and year wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze, band is a palette role.",
+    "screenshot": "cupertino/picker_wheels.png"
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only (Roboto text): one 36 px band radius 8 across month, day and year wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze, band is a palette role.",
+    "screenshot": "cupertino-dark/picker_wheels.png"
+   }
+  }
+ },
+ "time_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/time_picker_dial.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dial dialog compared: dial 224 vs 256, hour box 80x64 vs 96x80, AM/PM 48x64 vs 52x80, dialog 308 vs 358 wide; unfixed gap (needs Material branches in time_dial).",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/time_picker_dial.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dial dialog compared: dial 224 vs 256, hour box 80x64 vs 96x80, AM/PM 48x64 vs 52x80, dialog 308 vs 358 wide; unfixed gap (needs Material branches in time_dial).",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/time_picker_dial.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dial dialog compared: Neper spec sizes as above, and the dial face and knob draw as squircles (quadratic corners at full radius, 6.8 px off on the 224 dial); unfixed, a global corner decision.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/time_picker_dial.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dial dialog compared: Neper spec sizes as above, and the dial face and knob draw as squircles (quadratic corners at full radius, 6.8 px off on the 224 dial); unfixed, a global corner decision.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/picker_wheels.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/picker_wheels.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/table.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: dense 28 px rows, tinted header and sort glyph vs Flutter 48 px rows, 56 px header and checkbox column; row rule (195,198,213) vs (196,198,208), dark (67,70,83) vs (68,71,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/table.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: dense 28 px rows, tinted header and sort glyph vs Flutter 48 px rows, 56 px header and checkbox column; row rule (195,198,213) vs (196,198,208), dark (67,70,83) vs (68,71,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/table.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: 28 px rows, tinted header, no checkbox column vs Flutter 48 px rows; row rule (202,196,208) vs (202,196,207), dark (73,69,79) vs (73,69,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/table.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: 28 px rows, tinted header, no checkbox column vs Flutter 48 px rows; row rule (202,196,208) vs (202,196,207), dark (73,69,79) vs (73,69,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   }
+  }
+ },
+ "accordion": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/accordion.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped tonal sections radius 12 (Neper Accordion spec) vs Flutter flat ExpansionTile with a leading icon; section fill (242,243,250) vs expanded tile (219,219,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/accordion.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped tonal sections radius 12 (Neper Accordion spec) vs Flutter flat ExpansionTile with a leading icon; section fill (242,243,250) vs expanded tile (219,219,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/accordion.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped sections radius 12 vs flat ExpansionTile; fill (247,242,250) vs expanded tile (222,217,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/accordion.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped sections radius 12 vs flat ExpansionTile; fill (247,242,250) vs expanded tile (222,217,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "wizard": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/wizard.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next (Neper Wizard spec) vs Flutter Stepper track; step circle 24 px in both, active fill (20,93,178) vs (66,94,145) (palette).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/wizard.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next (Neper Wizard spec) vs Flutter Stepper track; step circle 24 px in both, active fill (20,93,178) vs (66,94,145) (palette).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/wizard.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next vs Stepper track with filled grey inactive circles; step circle 24 px, active (103,80,164) vs (101,85,143).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/wizard.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next vs Stepper track with filled grey inactive circles; step circle 24 px, active (103,80,164) vs (101,85,143).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ }
+}

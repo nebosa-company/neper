@@ -5993,6 +5993,8 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     var band = control.sized_style(width, 36.0)
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
     band.radius = t.tokens.radii.sm
+    // Round 70 b: the Cupertino picker has one selection band across every wheel (wheel_row draws it), not one pill each.
+    if t.tokens.profile == .CupertinoLike { band.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     held[10usize] = widget.positioned(0u64, 0.0, 72.0, band, zero)
     held[11usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 180.0), rows[0usize..5usize])
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
@@ -6027,6 +6029,22 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     sem.value = values[selected]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// Round 70 b: the wheels of a picker side by side. Under Cupertino they touch and share one 36 tall `radius-sm` band across the
+// middle row (the Flutter and UIKit picker), else they stand 8 apart each in its own band.
+fn wheel_row(a: *mem.Arena, t: *const control.Theme, parts: []const widget.Node, total: f32) -> (widget.Node, err) {
+    if t.tokens.profile != .CupertinoLike {
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts), ok)
+    }
+    var band = control.sized_style(total, 36.0)
+    band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+    band.radius = t.tokens.radii.sm
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.positioned(0u64, 0.0, 72.0, band, zero)
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts)
+    ret (widget.stack(0u64, control.sized_style(total, 180.0), layers[0usize..2usize]), ok)
 }
 
 // (D1349) The two-digit strings 00..count-1, for a wheel of hours or minutes.
@@ -6091,7 +6109,9 @@ fn time_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8
     sem.label = "Time"
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..n])
+    let (wheels_row, wheels_row_error) = wheel_row(a, t, parts[0usize..n], 72.0 * f32(n))
+    if wheels_row_error != ok { ret (zero, wheels_row_error) }
+    row[0usize] = wheels_row
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
@@ -6229,7 +6249,9 @@ fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: ti
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..3usize])
+    let (wheels_row, wheels_row_error) = wheel_row(a, t, parts[0usize..3usize], 256.0)
+    if wheels_row_error != ok { ret (zero, wheels_row_error) }
+    row[0usize] = wheels_row
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = "Date"
