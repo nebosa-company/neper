@@ -1,6 +1,7 @@
 // AV1 tile decoding: decode_tile, decode_partition and decode_block of the specification. Mode info comes from
 // e.fmt.av1_modes, prediction and residual from e.fmt.av1_recon.
 
+use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -183,6 +184,7 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     b.mv0_col = 0i32
     b.mv1_row = 0i32
     b.mv1_col = 0i32
+    let (tm0, cm0) = time.monotonic()
     if d.st.h.frame_is_intra {
         try M.intra_frame_mode_info(d)
     } else {
@@ -202,8 +204,14 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
         d.dbg_n += 8usize
     }
     store_block(d)
+    let (tm1, cm1) = time.monotonic()
     try R.compute_prediction(d)
+    let (tm2, cm2) = time.monotonic()
     try R.residual(d)
+    let (tm3, cm3) = time.monotonic()
+    d.ns_mode += tm1.nanos - tm0.nanos
+    d.ns_pred += tm2.nanos - tm1.nanos
+    d.ns_resid += tm3.nanos - tm2.nanos
     ret ok
 }
 

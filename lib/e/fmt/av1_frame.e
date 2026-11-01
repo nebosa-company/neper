@@ -305,7 +305,13 @@ fn setup_frame(dc: *Decoder) -> err {
         while k < POOL {
             var q = 0usize
             while q < 3usize {
-                let (pl, ple) = alloc_plane(a, usize(h.mi_cols) * 4usize, usize(h.mi_rows) * 4usize)
+                var pw = usize(h.mi_cols) * 4usize
+                var ph = usize(h.mi_rows) * 4usize
+                if q > 0usize {
+                    pw = pw / 2usize
+                    ph = ph / 2usize
+                }
+                let (pl, ple) = alloc_plane(a, pw, ph)
                 if ple != ok { ret ple }
                 dc.pool[k][q] = pl
                 dc.pool[k][q].w = usize(h.frame_width)
@@ -345,7 +351,9 @@ fn setup_frame(dc: *Decoder) -> err {
         }
         rs += 1usize
     }
-    d.ref_stride = dc.pool[dc.cur_buf][0usize].stride
+    d.ref_stride[0usize] = dc.pool[dc.cur_buf][0usize].stride
+    d.ref_stride[1usize] = dc.pool[dc.cur_buf][1usize].stride
+    d.ref_stride[2usize] = dc.pool[dc.cur_buf][2usize].stride
     // the mv prediction view of the frame
     let m = &d.mvf
     m.mi_rows = h.mi_rows

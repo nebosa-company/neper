@@ -3,6 +3,7 @@
 // Spec numbering is kept for block sizes, prediction modes, reference frames and transform sizes.
 
 use e.mem
+use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -187,6 +188,9 @@ type Dec = struct {
     b: Block,
     dbg: [4096]i32,
     dbg_n: usize,
+    ns_pred: i64,
+    ns_resid: i64,
+    ns_mode: i64,
     frame: [3][]u16,
     stride: [3]usize,
     tx_types: []u8,
@@ -201,7 +205,7 @@ type Dec = struct {
     s_ref: []i8,
     s_mv: []i16,
     ref_planes: [8][3][]u16,
-    ref_stride: usize,
+    ref_stride: [3]usize,
     iwk: av1_inter.Work,
     masks: av1_mask.Masks,
     ii_mask: []u8,

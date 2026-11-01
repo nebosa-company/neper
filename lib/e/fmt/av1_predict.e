@@ -15,7 +15,7 @@ fn motion_of(d: *D.Dec, ref_frame: i32, mv_row: i32, mv_col: i32, f0: usize, f1:
     var m: IN.Motion = zero
     let slot = usize(d.st.h.ref_frame_idx[usize(ref_frame) - av1.LAST_FRAME])
     m.frame.data = d.ref_planes[slot][plane]
-    m.frame.stride = d.ref_stride
+    m.frame.stride = d.ref_stride[plane]
     m.frame.width = d.st.refs[slot].upscaled_width
     m.frame.height = d.st.refs[slot].frame_height
     m.mv_row = mv_row
