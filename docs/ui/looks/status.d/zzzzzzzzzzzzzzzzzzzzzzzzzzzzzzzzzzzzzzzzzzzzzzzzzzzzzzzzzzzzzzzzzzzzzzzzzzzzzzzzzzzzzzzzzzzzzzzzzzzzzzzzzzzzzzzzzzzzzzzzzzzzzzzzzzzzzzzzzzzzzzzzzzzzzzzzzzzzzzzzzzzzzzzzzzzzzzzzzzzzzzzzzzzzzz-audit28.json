@@ -1,0 +1,26 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "AUDIT 28 (master 76715f0e9): upgraded from review. Round 61's four defects hold up under own measurement. (1) Clipping: 312 Neper and Neper dark popup PNGs at 1x and 1.5x have no menu pixel on any cell edge (smallest gap right 40 px, bottom 69 px), and 6 sheets per palette at 1.25x and 2x too. (2) Fill: the hovered fill is 32 px tall and the text sits 1.0 px below its centre by cap height (light 0.97, dark 1.15), 2.3 to 2.5 px by x-height, ink centroid 1.7 (max 2.1) light and 1.9 (max 2.6) dark; v3's own selected row measures 0.0, 1.5 and 0.9. (3) tests/selfhost/fixtures/link/ui_popup_menu_scroll builds, passes, and fails when hover scroll is off (26), headers are off (35), the speed is cut (26) or the direction is swapped (26). (4) Headers are dim small labels (contrast 7.5 and 9.2 to 1) with no key and no focus stop. All popup sheets and 34 other apps re-render byte for byte except neper-dark menu_bar-open (stale, see gaps).",
+    "gaps": [
+     "a flagged row that is disabled draws no fill in Neper (sel_cards_1 and _4, sel_file_1, sel_reports_1 and _4) where v3 draws the blue row",
+     "both chevron strips are drawn whenever the menu overflows, including the up strip at offset 0; hover scroll keeps requesting frames at an end",
+     "the test does not cover the fill centring, the chevron ends or the sheet sizing; neper-dark/menu_bar-open.png (and @1.5x) is stale after round 61 (4213 px differ, text now 6 px lower in each row) and needs regenerating"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "AUDIT 28 (master 76715f0e9): upgraded from review. Round 61's four defects hold up under own measurement. (1) Clipping: 312 Neper and Neper dark popup PNGs at 1x and 1.5x have no menu pixel on any cell edge (smallest gap right 40 px, bottom 69 px), and 6 sheets per palette at 1.25x and 2x too. (2) Fill: the hovered fill is 32 px tall and the text sits 1.0 px below its centre by cap height (light 0.97, dark 1.15), 2.3 to 2.5 px by x-height, ink centroid 1.7 (max 2.1) light and 1.9 (max 2.6) dark; v3's own selected row measures 0.0, 1.5 and 0.9. (3) tests/selfhost/fixtures/link/ui_popup_menu_scroll builds, passes, and fails when hover scroll is off (26), headers are off (35), the speed is cut (26) or the direction is swapped (26). (4) Headers are dim small labels (contrast 7.5 and 9.2 to 1) with no key and no focus stop. All popup sheets and 34 other apps re-render byte for byte except neper-dark menu_bar-open (stale, see gaps).",
+    "gaps": [
+     "a flagged row that is disabled draws no fill in Neper (sel_cards_1 and _4, sel_file_1, sel_reports_1 and _4) where v3 draws the blue row",
+     "both chevron strips are drawn whenever the menu overflows, including the up strip at offset 0; hover scroll keeps requesting frames at an end",
+     "the test does not cover the fill centring, the chevron ends or the sheet sizing; neper-dark/menu_bar-open.png (and @1.5x) is stale after round 61 (4213 px differ, text now 6 px lower in each row) and needs regenerating"
+    ]
+   }
+  }
+ }
+}
