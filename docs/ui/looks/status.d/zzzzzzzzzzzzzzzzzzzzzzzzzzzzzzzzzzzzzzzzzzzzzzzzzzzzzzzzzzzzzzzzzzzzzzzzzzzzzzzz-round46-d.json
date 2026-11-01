@@ -1,0 +1,20 @@
+{
+ "data_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/data_grid_shortcuts_states.png",
+    "notes": "ROUND 46 (worker d; 1:1 captures, counted = more than 2 levels off, glyphs included; nothing promoted, review stays). Dialog grids now use Look.crisp plus Look.dialog_grid (Windows light only): whole sheet counted before to after: data_grid_shortcuts_states 77956 to 5667 (2437 of each cell are the command icons, v3 artwork, not drawn), shortcuts_states2 to 5604, states3 to 2844, shortcuts_hover 81859 to 11122 (hot header cells), hover2 5108, hover3 5181, hover4 2483; data_grid_sort_states 70110 to 2025 (chrome 1174, text 851), sort_hover 1805; data_grid_dialogs_sort 13116 to 370; data_grid_missing_states 30142 to 3504 (chrome 1542), missing_hover 15071 to 1752. data_grid_bottom (collection grid): 28870 to 27957, bottom2 28209 to 27373, bottom3 14083 to 13749 counted; chrome-only about 14.3k per cell of which about 10.3k is the card art strip and about 1k the art thumbnails (v3 coloured artwork, not drawn, classified as artwork excluded); what is drawn now: the hot Used header caption and its filter button, the navigator thumb. Still off in bottom: the selected row's ink (#800000 name, #008000 numbers), the spin editors and ellipsis buttons of that row (about 1.7k). data_grid_group2: the footer band 2.0k is four rows (216 to 219) of the card art strip, artwork, nothing to draw. The stamped-by-fit chrome of the dialog sheets (soft lines, ring pairs) is deleted. Left: icons columns, selected-row editors, top and hover sheets still use the old hot filter bitmap (Look.hot_crisp is set by the bottom sheets only)."
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/vertical_grid.png",
+    "notes": "ROUND 46 (worker d): the Computed rows' 160 px row pictures (colors 2880, strip 1760, legality 2720 baked pixels) are drawn: the strategy bar is a two channel ramp in 2 px steps, the Legality tags are drawn boxes (11 ramp rows and a flat foot); baked tiles remain for the artwork only: four colour discs 18 x 18, the strip marker 9 x 10, five tag letters (about 2.2k px, scripts/gen_vgtiles.py). Counted against the 1:1 capture: vertical_grid 1845 to 1781, states 9490 to 9170, hover 9225 to 8905 (these numbers are now honest: nothing exact by construction except the small tiles). No row promoted. Scale check 1.25, 1.5, 2.0: vertical_grid 92.9, 100, 100 within a pixel 100; data_grid_shortcuts_states 100, 99.9, 100."
+   }
+  }
+ }
+}

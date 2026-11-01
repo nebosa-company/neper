@@ -120,7 +120,10 @@ fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     var caption_x: f32 = 29.0
     // round 15: the live Sort dialog's captions start 6 px further left
     if t.tokens.profile == .Windows { caption_x = 23.0 }
-    cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
+    var caption_up: f32 = 2.0
+    // round 46: Segoe UI in the 1:1 capture's 19 px rows
+    if windows && app.light { caption_up = 4.0 }
+    cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: caption_up } }
     *out = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
     ret ok
 }
@@ -159,7 +162,7 @@ fn load(a: *mem.Arena, app: *App) -> err {
     ret ok
 }
 
-fn plain_grid(windows: bool, events: dg.Events, row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64) -> (dg.Grid, err) {
+fn plain_grid(windows: bool, events: dg.Events, row_height: f32, a: *mem.Arena, tbl: *table.Table, v: *view.View, g: *grp.Grouping, scratch: *mem.Arena, specs: []const dg.ColumnSpec, id: u64, crisp: bool) -> (dg.Grid, err) {
     let (vv, vv_error) = view.create(a, tbl)
     if vv_error != ok { ret (zero, vv_error) }
     *v = vv
@@ -186,6 +189,16 @@ fn plain_grid(windows: bool, events: dg.Events, row_height: f32, a: *mem.Arena, 
     look.foot_w1 = gl.rgb(0xE8E8E8u32)
     look.foot_w2 = gl.rgb(0xE9E9E9u32)
     look.row_height = row_height
+    // round 46: the light grid as the 1:1 capture has it (see data_grid_dialog_states)
+    if crisp {
+        look.crisp = true
+        look.dialog_grid = true
+        look.cell_down = 2.0
+        if row_height > 18.5 { look.cell_down = 0.0 }
+        look.idle_edge = look.idle_fill
+        look.dialog_lines = false
+        look.frame_none = false
+    }
     dg.set_look(&grid, look)
     dg.show_indicator(&grid, false)
     dg.set_grid_lines(&grid, dg.GridLines.Both)
@@ -208,14 +221,14 @@ fn setup(app: *App) -> err {
     var sort_events = dg.no_events()
     sort_events.custom_cell = sort_cell
     sort_events.ctx = mem.cast[*void](app)
-    let (sg, sg_error) = plain_grid(app.windows, sort_events, 19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64)
+    let (sg, sg_error) = plain_grid(app.windows, sort_events, 19.0, a, &app.sort_table, &app.sort_view, &app.sort_group, &app.scratch, sort_specs[0usize..2usize], 100u64, app.windows && app.light)
     if sg_error != ok { ret sg_error }
     app.sort_grid = sg
     if app.windows { dg.set_cell_select(&app.sort_grid, 1usize) }
     let (miss_specs, miss_specs_error) = mem.alloc[dg.ColumnSpec](a, 1usize)
     if miss_specs_error != ok { ret miss_specs_error }
     miss_specs[0usize] = dg.ColumnSpec { title: "Edition", width: 215.0, column: 0usize, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
-    let (mg, mg_error) = plain_grid(app.windows, dg.no_events(), 18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64)
+    let (mg, mg_error) = plain_grid(app.windows, dg.no_events(), 18.0, a, &app.miss_table, &app.miss_view, &app.miss_group, &app.scratch, miss_specs[0usize..1usize], 200u64, app.windows && app.light)
     if mg_error != ok { ret mg_error }
     app.miss_grid = mg
     dg.set_row_ink(&app.miss_grid, zero, miss_ink)
@@ -228,7 +241,18 @@ fn setup(app: *App) -> err {
 }
 
 // A grid at the box it has in the dialog, in the Tahoma theme under the Windows look.
-fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32) -> (widget.Node, err) {
+fn boxed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32, crisp: bool) -> (widget.Node, err) {
+    if crisp {
+        // round 46: the grid draws its own frame, 1 px all round, in the cell's whole box
+        let (grid_body, grid_error) = dg.build(a, grid, t, h - 2.0)
+        if grid_error != ok { ret (zero, grid_error) }
+        let (grid_held, grid_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if grid_held_error != ok { ret (zero, grid_held_error) }
+        grid_held[0usize] = grid_body
+        var face = looks.size_style(w, h)
+        face.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, grid_held[0usize..1usize]), ok)
+    }
     var use_theme = t
     if t.tokens.profile == .Windows {
         let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
@@ -282,9 +306,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         try setup(app)
         app.ready = true
     }
-    let (left, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0)
+    let (left, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0, app.windows && app.light)
     if left_error != ok { ret (0usize, left_error) }
-    let (right, right_error) = boxed(a, t, &app.miss_grid, 234.0, 256.0)
+    let (right, right_error) = boxed(a, t, &app.miss_grid, 234.0, 256.0, app.windows && app.light)
     if right_error != ok { ret (0usize, right_error) }
     cells[0usize] = looks.Cell { caption: "Sort dialog grid", node: left, drive: .None }
     // the cell is as large as the first one, the list at its top left, so both stand on whole pixels
@@ -310,7 +334,7 @@ fn build_sort_selected(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells
     dg.set_forced_focus(&app.sort_grid, true)
     app.sort_grid.has_selection = true
     app.sort_grid.selected_row = 2usize
-    let (left_boxed, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0)
+    let (left_boxed, left_error) = boxed(a, t, &app.sort_grid, 331.0, 259.0, app.windows && app.light)
     if left_error != ok { ret (0usize, left_error) }
     let left = left_boxed
     cells[0usize] = looks.Cell { caption: "Sort dialog grid: Name selected, focused", node: left, drive: .None }
