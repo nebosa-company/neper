@@ -70,6 +70,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(16.0, 20.0)
     let sheet = looks.Sheet { name: "checkbox_states", cells: 15usize, columns: 3usize, cell_w: 160.0, cell_h: 29.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

@@ -32,6 +32,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(12.0, 16.0)
     let sheet = looks.Sheet { name: "pull_to_refresh", cells: 4usize, columns: 2usize, cell_w: 270.0, cell_h: 160.0, ctx: zero, build: build }
     ret h.run_ten(a, &sheet)
 }

@@ -8159,7 +8159,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var state = control_state(t, key, options.enabled, false)
     // Android: the runtime hovers regions, not editors, so the bar answers through a hover region round it.
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         let region_state = control_state(t, key + 1048650u64, options.enabled, false)
         if region_state.hovered { state.hovered = true }
         if region_state.pressed { state.pressed = true }
@@ -8212,6 +8212,12 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         if len != 0usize { room = room - 16.0 - 40.0 }
         editor_style.width = style.Length { Px: max_zero(room) }
     }
+    if t.tokens.profile == .Neper {
+        // The Clear button is 64 wide; a percentage of the unsized stack would ask for the query's intrinsic width and push the button past the bar.
+        var room = options.width - lead - trail - 12.0
+        if len != 0usize { room = room - 64.0 }
+        editor_style.width = style.Length { Px: max_zero(room) }
+    }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
@@ -8259,11 +8265,15 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
+    if t.tokens.profile == .Neper {
+        // The pill carries no outline at rest; keyboard focus and an invalid query draw the field outline (accent, error).
+        if options.invalid { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } } else if state.focused { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    }
     var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
     if android { pad_y = style.Length { Px: 0.0 } }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
-    if android && !options.enabled {
+    if (android || t.tokens.profile == .Neper) && !options.enabled {
         // Disabled: the bar at the 38 % content level.
         bar.opacity = t.tokens.states.disabled_content
     }
@@ -8271,7 +8281,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var bar_gap: f32 = 12.0
     if android { bar_gap = 16.0 }
     let bar_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: bar_gap }, bar, parts[0usize..count])
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         var no_gesture: widget.GestureAction = zero
         let (held_bar, held_bar_error) = mem.alloc[widget.Node](a, 1usize)
         if held_bar_error != ok { ret (zero, TooLarge) }

@@ -690,6 +690,15 @@ fn neper_scale() -> f32 {
     ret 1.0
 }
 
+// Extra logical px a sheet app adds to every cell's width and height under the Neper looks only (a focus ring, a shadow or an
+// open list reaches past a cell sized for the 22 px Windows control). Default (zero) none.
+var neper_pad_w: f32 = zero
+var neper_pad_h: f32 = zero
+fn pad_neper(width: f32, height: f32) {
+    neper_pad_w = width
+    neper_pad_h = height
+}
+
 // The same under Windows dark.
 fn dark_scale() -> f32 {
     if dark_grow > 0.0 { ret dark_grow }
@@ -725,8 +734,8 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             let ra = rig_scope(a)
             var sized = *s
             if look == .Neper || look == .NeperDark {
-                sized.cell_w = s.cell_w * neper_scale()
-                sized.cell_h = s.cell_h * neper_scale()
+                sized.cell_w = s.cell_w * neper_scale() + neper_pad_w
+                sized.cell_h = s.cell_h * neper_scale() + neper_pad_h
             }
             if look == .WindowsDark {
                 sized.cell_w = s.cell_w * dark_scale()

@@ -189,6 +189,7 @@ fn build_row(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(20.0, 30.0)
     if args.len > 1usize && strs.eq(args[1usize], "toolbar_button_hot") {
         let hot = looks.Sheet { name: "toolbar_button_hot", cells: 9usize, columns: 1usize, cell_w: 1314.0, cell_h: 26.0, ctx: zero, build: build_hot }
         ret looks.run_all(a, &hot)

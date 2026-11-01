@@ -140,6 +140,7 @@ fn run_hinted(a: *mem.Arena, n: usize) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(12.0, 50.0)
     if args.len == 2usize && args[1usize][0usize] == 84u8 { ret run_hinted(a, usize(args[1usize][1usize]) - 48usize) }
     let sheet = looks.Sheet { name: "hint", cells: 5usize, columns: 3usize, cell_w: 260.0, cell_h: 110.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)

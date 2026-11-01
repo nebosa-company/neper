@@ -705,6 +705,7 @@ fn run_head(a: *mem.Arena, n: usize) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(30.0, 36.0)
     if args.len == 2usize {
         let first = args[1usize][0usize]
         if first == 115u8 {

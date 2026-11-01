@@ -16,8 +16,8 @@ fn run_neper(a: *mem.Arena, s: *const looks.Sheet) -> err {
             if look_index == 1usize { look = .NeperDark }
             let ra = looks.rig_scope(a)
             var sized = *s
-            sized.cell_w = s.cell_w * looks.neper_scale()
-            sized.cell_h = s.cell_h * looks.neper_scale()
+            sized.cell_w = s.cell_w * looks.neper_scale() + looks.neper_pad_w
+            sized.cell_h = s.cell_h * looks.neper_scale() + looks.neper_pad_h
             let (rig, open_error) = looks.open(ra, looks.sheet_width(&sized), looks.sheet_height(&sized), scale)
             if open_error != ok { ret open_error }
             looks.set_look(rig, look)
