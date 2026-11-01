@@ -5505,6 +5505,8 @@ fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var frame = style.defaults()
     frame.border = style.Border { width: 1.0, color: edge }
     frame.radius = outer
+    // The Android look: the edge sits outside the segments (M3: 40 dp over the edge), as the Flutter ref draws it.
+    if t.tokens.profile == .MaterialLike { frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, frame, items[0usize..count])

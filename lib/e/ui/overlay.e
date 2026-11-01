@@ -4363,7 +4363,14 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 var fill = clear
                 var digit_color = ink
                 var layer_color = ink
-                if inside { digit_color = style.color(t.tokens, .OnPrimaryContainer) }
+                var range_fill = style.color(t.tokens, .PrimaryContainer)
+                var range_ink = style.color(t.tokens, .OnPrimaryContainer)
+                // M3 (and the Flutter ref): the range band is `secondary-container`.
+                if t.tokens.profile == .MaterialLike {
+                    range_fill = style.color(t.tokens, .SecondaryContainer)
+                    range_ink = style.color(t.tokens, .OnSecondaryContainer)
+                }
+                if inside { digit_color = range_ink }
                 if marked { digit_color = primary }
                 if unavailable && !end { digit_color = control.with_alpha(ink, t.tokens.states.disabled_content) }
                 if end {
@@ -4437,7 +4444,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                     }
                     if same_date(date, to) { band_width = cell * 0.5 }
                     var band = control.sized_style(band_width, cell)
-                    band.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                    band.background = paint.Brush { Solid: range_fill }
                     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
                     if layers_error != ok { ret (zero, TooLarge) }
                     var none: []const widget.Node = zero
@@ -5799,8 +5806,15 @@ fn time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, digits: str
     look.padding = 0.0
     look.padding_start = 0.0
     look.padding_y = 0.0
-    look.min_width = 80.0
-    look.min_height = 64.0
+    // The Android look: the M3 selector is 96 by 80 (the other looks 80 by 64).
+    var box_w: f32 = 80.0
+    var box_h: f32 = 64.0
+    if t.tokens.profile == .MaterialLike {
+        box_w = 96.0
+        box_h = 80.0
+    }
+    look.min_width = box_w
+    look.min_height = box_h
     var big = control.text_options()
     big.role = .DisplaySmall
     big.wrap = .None
@@ -5809,7 +5823,7 @@ fn time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, digits: str
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
-    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(80.0, 64.0), held[0usize..1usize])
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(box_w, box_h), held[0usize..1usize])
     let (made, made_error) = control.pressable_states(a, key, t, 3u8, name, look, true, active, 0u32, 0u32, 0u64, action, centred)
     ret (made, made_error)
 }
@@ -6351,7 +6365,18 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
     if row_parts_error != ok { ret (zero, TooLarge) }
     row_parts[0usize] = hour_box
     row_parts[4usize] = colon
-    row_parts[1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(16.0, 64.0), row_parts[4usize..5usize])
+    // The Android look: the M3 row is 96, a 24 colon, 96, then 12 and the 52 period selector (the others: 16 colon, 12 between).
+    var colon_w: f32 = 16.0
+    var colon_h: f32 = 64.0
+    var row_gap: f32 = 12.0
+    var period_pad: f32 = 0.0
+    if t.tokens.profile == .MaterialLike {
+        colon_w = 24.0
+        colon_h = 80.0
+        row_gap = 0.0
+        period_pad = 12.0
+    }
+    row_parts[1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(colon_w, colon_h), row_parts[4usize..5usize])
     row_parts[2usize] = minute_box
     var row_count = 3usize
     if twelve {
@@ -6360,12 +6385,25 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
         if am_error != ok || pm_error != ok { ret (zero, TooLarge) }
         row_parts[5usize] = am
         row_parts[6usize] = pm_node
-        row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), row_parts[5usize..7usize])
+        var period_style = style.defaults()
+        period_style.padding = style.EdgeLengths { left: style.Length { Px: period_pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, period_style, row_parts[5usize..7usize])
+        if t.tokens.profile == .MaterialLike {
+            // One frame: the PM segment starts on the AM's last row so the two 1 px edges make one divider.
+            let (framed, framed_error) = mem.alloc[widget.Node](a, 2usize)
+            if framed_error != ok { ret (zero, TooLarge) }
+            framed[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), row_parts[5usize..6usize])
+            framed[1usize] = widget.positioned(0u64, 0.0, 39.0, style.defaults(), row_parts[6usize..7usize])
+            let (held_period, held_period_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_period_error != ok { ret (zero, TooLarge) }
+            held_period[0usize] = widget.stack(0u64, control.sized_style(52.0, 80.0), framed[0usize..2usize])
+            row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, period_style, held_period[0usize..1usize])
+        }
         row_count = 4usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 12.0 }, style.defaults(), row_parts[0usize..row_count])
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: row_gap }, style.defaults(), row_parts[0usize..row_count])
     var used = 1usize
     if !options.typing {
         let (dial_node, dial_error) = time_dial(a, key, t, hour, minute, editing_minute, twelve, change, choices[4usize..16usize], presses[4usize..16usize])
@@ -6433,12 +6471,30 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
     look.border = style.color(t.tokens, .Outline)
     look.border_width = t.tokens.sizes.divider
     look.radius = t.tokens.radii.sm
+    // The Android look: AM over PM is one 8 round frame (the AM's top corners, the PM's bottom ones).
+    if t.tokens.profile == .MaterialLike {
+        var up: f32 = t.tokens.radii.sm
+        var down: f32 = 0.0
+        if word[0usize] != 65u8 {
+            up = 0.0
+            down = t.tokens.radii.sm
+        }
+        look.corners = style.Corners { top_left: up, top_right: up, bottom_right: down, bottom_left: down }
+    }
     look.custom_padding = true
     look.padding = 0.0
     look.padding_start = 0.0
     look.padding_y = 0.0
-    look.min_width = 48.0
-    look.min_height = 32.0
+    // The Android look: the M3 period selector is 52 by 80, each segment 40 high (the other looks 48 by 64).
+    var seg_w: f32 = 48.0
+    var seg_h: f32 = 32.0
+    if t.tokens.profile == .MaterialLike {
+        seg_w = 52.0
+        seg_h = 40.0
+    }
+    look.min_width = seg_w
+    look.min_height = seg_h
+    if t.tokens.profile == .MaterialLike && word[0usize] != 65u8 { look.min_height = seg_h + 1.0 }
     var caption = control.text_options()
     caption.role = .LabelLarge
     caption.wrap = .None
@@ -6447,7 +6503,7 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
-    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 32.0), held[0usize..1usize])
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(seg_w, look.min_height), held[0usize..1usize])
     var states = 0u32
     if chosen { states = accessibility.STATE_CHECKED }
     let (made, made_error) = control.pressable_states(a, key, t, 5u8, word, look, true, false, states, 0u32, 0u64, action, centred)
@@ -6530,8 +6586,18 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    var face = control.sized_style(224.0, 224.0)
-    face.radius = 112.0
+    // The Android look draws the M3 dial: 256 across, numbers on a 100 ring, a 48 handle (the other looks 224, 88 and 44).
+    var dial_size: f32 = 224.0
+    var spoke: f32 = 88.0
+    var handle: f32 = 44.0
+    if t.tokens.profile == .MaterialLike {
+        dial_size = 256.0
+        spoke = 100.0
+        handle = 48.0
+    }
+    let mid = dial_size * 0.5
+    var face = control.sized_style(dial_size, dial_size)
+    face.radius = mid
     face.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
     layers[n] = widget.box(0u64, face, zero)
     n += 1usize
@@ -6554,28 +6620,28 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     let mode_share = control.eased_on(t, key + 7u64, key + 7u64 + 1048579u64, mode_goal, false, t.tokens.durations.short4)
     var numbers_in = 1.0 - mode_share
     if editing_minute { numbers_in = mode_share }
-    let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
-    let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
+    let knob_x = mid + spoke * math.sin[f32](angle)
+    let knob_y = mid - spoke * math.cos[f32](angle)
     // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
-    var hand = control.sized_style(2.0, 88.0)
+    var hand = control.sized_style(2.0, spoke)
     hand.background = paint.Brush { Solid: primary }
     let (hands, hands_error) = mem.alloc[widget.Node](a, 2usize)
     if hands_error != ok { ret (zero, TooLarge) }
     hands[0usize] = widget.box(0u64, hand, zero)
     // Turned about its own centre, set half way from the dot to the knob.
     hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, style.defaults(), hands[0usize..1usize])
-    layers[n] = widget.positioned(0u64, 111.0 + 44.0 * math.sin[f32](angle), 68.0 - 44.0 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
+    layers[n] = widget.positioned(0u64, mid - 1.0 + spoke * 0.5 * math.sin[f32](angle), mid - spoke * 0.5 - spoke * 0.5 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
     n += 1usize
     var dot = control.sized_style(8.0, 8.0)
     dot.radius = 4.0
     dot.background = paint.Brush { Solid: primary }
-    layers[n] = widget.positioned(0u64, 108.0, 108.0, dot, zero)
+    layers[n] = widget.positioned(0u64, mid - 4.0, mid - 4.0, dot, zero)
     n += 1usize
     if on_number {
-        var knob = control.sized_style(44.0, 44.0)
-        knob.radius = 22.0
+        var knob = control.sized_style(handle, handle)
+        knob.radius = handle * 0.5
         knob.background = paint.Brush { Solid: primary }
-        layers[n] = widget.positioned(0u64, knob_x - 22.0, knob_y - 22.0, knob, zero)
+        layers[n] = widget.positioned(0u64, knob_x - handle * 0.5, knob_y - handle * 0.5, knob, zero)
         n += 1usize
     } else {
         var small_knob = control.sized_style(16.0, 16.0)
@@ -6660,8 +6726,8 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
         both[laid] = centred
         both[laid + 1usize] = cells[0usize]
         let a_i = f32(i) * 0.5235988
-        let x = 112.0 + 88.0 * math.sin[f32](a_i) - 24.0
-        let y = 112.0 - 88.0 * math.cos[f32](a_i) - 24.0
+        let x = mid + spoke * math.sin[f32](a_i) - 24.0
+        let y = mid - spoke * math.cos[f32](a_i) - 24.0
         var number_sem: widget.Semantics = zero
         number_sem.role = 5u8
         number_sem.label = digits
@@ -6681,7 +6747,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if editing_minute { dial_sem.label = "Minutes" }
     let (dial, dial_error) = mem.alloc[widget.Node](a, 1usize)
     if dial_error != ok { ret (zero, TooLarge) }
-    dial[0usize] = widget.stack(key + 5u64, control.sized_style(224.0, 224.0), layers[0usize..n])
+    dial[0usize] = widget.stack(key + 5u64, control.sized_style(dial_size, dial_size), layers[0usize..n])
     // (D1306) The keys: on and back a step, and five minutes with the page keys.
     var kind: TimeChoiceKind = .Hour
     var up = (hour + 1u8) % 24u8
@@ -6720,7 +6786,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if turns_error != ok { ret (zero, TooLarge) }
     turns[0usize] = DialTurn { runtime: t.runtime, ring: key + 7u64, hour: hour, editing_minute: editing_minute, change: change }
     var dial_ring = style.defaults()
-    dial_ring.radius = 112.0
+    dial_ring.radius = mid
     control.focus_look(t)
     focused[1usize] = widget.region(key + 7u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&turns[0usize]), invoke: dial_turn_gesture }, gestures: widget.GESTURE_DRAG | widget.GESTURE_HOVER, enabled: true, focusable: true }, dial_ring, focused[0usize..1usize])
     ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: dial_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[1usize..2usize]), ok)

@@ -1,0 +1,290 @@
+{
+ "slider": {
+  "looks": {
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/slider.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): dark Slider ref: thumb 20 (20), inactive track 4 (4), disabled 646067 and 2d2b31 against 646068 and 2e2b31, hover halo 221f29 equal, focus and pressed 26222e against 26232e. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), the labeled-cell value label is cut by the capture clip in the Material Web ref as in ours. Material Web: 20 states, 1 over the line (labeled pressed, 55 px of edge anti-aliasing on the drop and ring).",
+    "gaps": [
+     "The Material profile draws the classic M3 circle handle (20 dp, level-1 shade, 40 dp state layer); the Expressive vertical bar stays for every other look",
+     "The labeled slider (value label while hovered, focused or pressed) and the one with ticks have cells in every state",
+     "Range hover and press put the state layer on the second handle (the runtime does not say which handle the pointer is on)",
+     "Over the line: slider-labeled-pressed (55)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/range_slider.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb a9a3aa against a8a3aa. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter b5b0b7.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/range_slider.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb 646067 against 646068. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter 58545b.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/activity_indicator.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the M3 size is the 48 cell of progress.png (material/progress.png, circular row): arc 40 across, stroke 4, round caps, no track, as Flutter's CircularProgressIndicator (40, 4); this sheet's 20, 36 and 64 cells are Neper sizes (stroke size / 12, 3 at 36), not M3 sizes. The indeterminate arc is frozen at phase 0.25 here and at one frame in the ref, so arc length is not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/activity_indicator.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the M3 size is the 48 cell of progress.png (material/progress.png, circular row): arc 40 across, stroke 4, round caps, no track, as Flutter's CircularProgressIndicator (40, 4); this sheet's 20, 36 and 64 cells are Neper sizes (stroke size / 12, 3 at 36), not M3 sizes. The indeterminate arc is frozen at phase 0.25 here and at one frame in the ref, so arc length is not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   }
+  }
+ },
+ "tab_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/tabs.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): same sheet as page_control. TabBar primary and secondary refs: primary indicator 3 high, secondary 2, divider 1 px (cac4d0 against cac4cf; dark 49454f against 49454e). Recorded deviations: a primary tab with icon and label is 64 high (M3 and Material Web) against Flutter's 72, the secondary indicator stands on the divider row where Flutter overdraws it, indicator 40 wide against the label ink (as Material Web)."
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): same sheet as page_control. TabBar primary and secondary refs: primary indicator 3 high, secondary 2, divider 1 px (cac4d0 against cac4cf; dark 49454f against 49454e). Recorded deviations: a primary tab with icon and label is 64 high (M3 and Material Web) against Flutter's 72, the secondary indicator stands on the divider row where Flutter overdraws it, indicator 40 wide against the label ink (as Material Web)."
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoTabBar, shapes only, docs/ui/looks/flutter-compare-m.md): the 'bar' cells: face f9f9f9 equal, hairline d2d2d3 against d3d3d3, 49 pt bar plus hairline = Flutter's 50, 10 pt labels, accent 007aff. Recorded deviations: icon box 25 (HIG) against Flutter's 30, inactive 8e8e93 (HIG systemGray) against b7b7b7. The macOS strip cells have no Flutter counterpart and are not measured (page_control stays review).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoTabBar, shapes only, docs/ui/looks/flutter-compare-m.md): the 'bar' cells: face 1d1d1d against 1b1b1b, hairline 2f2f30 where Flutter's dark bar shows none, 49 pt bar plus hairline = Flutter's 50, 10 pt labels, accent 007aff. Recorded deviations: icon box 25 (HIG) against Flutter's 30, inactive 8e8e93 (HIG systemGray) against b7b7b7. The macOS strip cells have no Flutter counterpart and are not measured (page_control stays review).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/segmented_control.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): new sheet examples/looks/material_segmented.e. Fixed: the button was 38 high (the frame edge sat over the segments), now 40 with the edge outside, pill radius 20, as Flutter's SegmentedButton and M3. Measured: outline 1 px 79747e against 7a757f, selected fill e8def8 exact, hover ece5ed against ebe6ee, disabled outline e3dde4 against e2dce4. Recorded: the focus cell holds the middle segment (Flutter the first), segment width follows the sheet cell (83 against 78)."
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/segmented_control.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): new sheet examples/looks/material_segmented.e. Fixed: the button was 38 high (the frame edge sat over the segments), now 40 with the edge outside, pill radius 20, as Flutter's SegmentedButton and M3. Measured: outline 1 px 938f99 against 948f99, selected fill 4a4458 exact, hover 252229 against 242228, disabled outline 2d2b31 against 2e2b31. Recorded: the focus cell holds the middle segment (Flutter the first), segment width follows the sheet cell (83 against 78)."
+   }
+  }
+ },
+ "time_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/time_picker_dial.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill e6e0e9 exact. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/time_picker_dial.png",
+    "notes": "ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill 36343b against 36343a. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   }
+  }
+ },
+ "date_range_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/date_range_picker.png",
+    "notes": "ROUND 77 (m, compared to Flutter DateRangePicker, docs/ui/looks/flutter-compare-m.md): fixed: the range band is secondary-container in the Android look (was primary-container), e8def8 exact against the ref; day circle 40 (flat colour area 1079 px against 1241 for Flutter's 42 px row). Recorded: a field with a popup month (desktop form) against Flutter's full-screen scrolling dialog, day cell and band 40 (M3) against 42.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/date_range_picker.png",
+    "notes": "ROUND 77 (m, compared to Flutter DateRangePicker, docs/ui/looks/flutter-compare-m.md): fixed: the range band is secondary-container in the Android look (was primary-container), 4a4458 exact against the ref; day circle 40 (flat colour area 1079 px against 1241 for Flutter's 42 px row). Recorded: a field with a popup month (desktop form) against Flutter's full-screen scrolling dialog, day cell and band 40 (M3) against 42.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/list_box.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoListSection, shapes only, docs/ui/looks/flutter-compare-m.md): the manifest maps the wheel picker to this row, the list section is the grouped list counterpart. Card corner radius 10 (corner-area estimate 10.6 against 10.9), card ffffff equal, rows 43 + 1 px rule (HIG 44 pitch against Flutter's 45). Recorded: hairline rule 0.5 pt, Flutter tiles carry a leading icon and trailing text.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Section headers and footers not drawn",
+     "Multi-select list keeps its Neper check boxes",
+     "Selection is a tick only (macOS sidebar accent fill not drawn)",
+     "Row hover colour approximated; the scroll thumb is the runtime's",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/list_box.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoListSection, shapes only, docs/ui/looks/flutter-compare-m.md): the manifest maps the wheel picker to this row, the list section is the grouped list counterpart. Card corner radius 10 (corner-area estimate 10.6 against 10.9), card 2c2c2e on a 1c1c1e page (elevated grouped) against 1c1c1e on black, recorded, rows 43 + 1 px rule (HIG 44 pitch against Flutter's 45). Recorded: hairline rule 0.5 pt, Flutter tiles carry a leading icon and trailing text.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Section headers and footers not drawn",
+     "Multi-select list keeps its Neper check boxes",
+     "Selection is a tick only (macOS sidebar accent fill not drawn)",
+     "Row hover colour approximated; the scroll thumb is the runtime's",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tooltip.png",
+    "notes": "ROUND 77 (m, compared to Flutter Tooltip, docs/ui/looks/flutter-compare-m.md): plain tooltip 24 high on inverse-surface 322f35 against Flutter's 32 high grey 707070 (M3 24, kept); the rich tooltip's left edge column is still half a pixel off Material Web (round 33, not touched), and Flutter has no rich tooltip. Stays review. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 33 (still review, one defect left): the plain tooltip is flat 0 off in light and dark; the rich tooltip is flat 0 off with 6 glyph px (147 after the baseline fix, 17 before): its text sat one pixel high and moved with the Blink metrics (plate padding 12 above, 14 before the action row). The rich plate is placed BelowEnd against the anchor and its fractional width puts the left edge half a pixel into a column (ring 218 px light, 112 dark: two columns by 110 rows); snapping the placed rectangle moved the card a whole pixel and was reverted. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Rich tooltip left edge column: the plate's width is fractional where Chrome's box is whole pixels (218 ring px light, 112 dark).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "ROUND 77 (m, compared to Flutter Tooltip, docs/ui/looks/flutter-compare-m.md): plain tooltip 24 high on inverse-surface 322f35 against Flutter's 32 high grey 707070 (M3 24, kept); the rich tooltip's left edge column is still half a pixel off Material Web (round 33, not touched), and Flutter has no rich tooltip. Stays review. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 33 (still review, one defect left): the plain tooltip is flat 0 off in light and dark; the rich tooltip is flat 0 off with 6 glyph px (147 after the baseline fix, 17 before): its text sat one pixel high and moved with the Blink metrics (plate padding 12 above, 14 before the action row). The rich plate is placed BelowEnd against the anchor and its fractional width puts the left edge half a pixel into a column (ring 218 px light, 112 dark: two columns by 110 rows); snapping the placed rectangle moved the card a whole pixel and was reverted. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Rich tooltip left edge column: the plate's width is fractional where Chrome's box is whole pixels (218 ring px light, 112 dark).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/list_rows.png",
+    "notes": "ROUND 77 (m, compared to Flutter ListTile, docs/ui/looks/flutter-compare-m.md): this sheet is the text-row list container (21 px rows) with no Flutter counterpart; the item form (list.png) measured: tile 72, icon ink x 20 to 35, label x 57 as Flutter; hover 8 % against 4 %, focus 10 % against Flutter's 14 %, trailing padding 16 against 24, selected fill secondary-container against none (all recorded). Stays review.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list_rows.png",
+    "notes": "ROUND 77 (m, compared to Flutter ListTile, docs/ui/looks/flutter-compare-m.md): this sheet is the text-row list container (21 px rows) with no Flutter counterpart; the item form (list.png) measured: tile 72, icon ink x 20 to 35, label x 57 as Flutter; hover 8 % against 4 %, focus 10 % against Flutter's 14 %, trailing padding 16 against 24, selected fill secondary-container against none (all recorded). Stays review.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/popup_menu.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoContextMenu, docs/ui/looks/flutter-compare-m.md): ours is the macOS menu (r8, 22 rows), Flutter's the iOS context menu (r14, 43 rows, trailing icons); no macOS ref exists. Not changed, stays review. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoContextMenu: ours is the macOS menu (r8, small rows), the ref is the iOS context menu (r14 card, trailing icons, 250 wide, 43 rows); recorded, shapes not matched. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 10 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.8:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Shortcuts are written as Ctrl+ words, not command symbols",
+     "Item pictures, group heads and the submenu panel are not restyled beyond the row",
+     "Panel radius 10, inset 5, row radius 5 are approximations",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/popup_menu.png",
+    "notes": "ROUND 77 (m, compared to Flutter CupertinoContextMenu, docs/ui/looks/flutter-compare-m.md): ours is the macOS menu (r8, 22 rows), Flutter's the iOS context menu (r14, 43 rows, trailing icons); no macOS ref exists. Not changed, stays review. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoContextMenu: ours is the macOS menu (r8, small rows), the ref is the iOS context menu (r14 card, trailing icons, 250 wide, 43 rows); recorded, shapes not matched. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 20 cells measured on popup_menu.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.3:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.025, 202 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Shortcuts are written as Ctrl+ words, not command symbols",
+     "Item pictures, group heads and the submenu panel are not restyled beyond the row",
+     "Panel radius 10, inset 5, row radius 5 are approximations",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
