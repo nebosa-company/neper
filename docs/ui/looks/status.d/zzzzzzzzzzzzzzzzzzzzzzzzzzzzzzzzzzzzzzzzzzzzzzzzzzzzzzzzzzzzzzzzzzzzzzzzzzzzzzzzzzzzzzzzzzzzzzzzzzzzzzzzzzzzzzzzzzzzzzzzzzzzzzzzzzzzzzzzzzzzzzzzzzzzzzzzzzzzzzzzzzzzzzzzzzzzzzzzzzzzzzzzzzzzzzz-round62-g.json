@@ -1,0 +1,848 @@
+{
+ "alert_dialog": {
+  "name": "Alert dialog",
+  "extra": true,
+  "neper": "control.alert_dialog",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/alert_dialog.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   }
+  }
+ },
+ "popover": {
+  "name": "Popover",
+  "extra": true,
+  "neper": "control.popover",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/popover.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   }
+  }
+ },
+ "flyout": {
+  "name": "Flyout",
+  "extra": true,
+  "neper": "control.flyout",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/flyout.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ]
+   }
+  }
+ },
+ "side_sheet": {
+  "name": "Side sheet",
+  "extra": true,
+  "neper": "control.side_sheet",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/side_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "bottom_sheet": {
+  "name": "Bottom sheet",
+  "extra": true,
+  "neper": "control.bottom_sheet",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/bottom_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "action_sheet": {
+  "name": "Action sheet",
+  "extra": true,
+  "neper": "control.action_sheet",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/action_sheet.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "table": {
+  "name": "Table",
+  "extra": true,
+  "neper": "control.table",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   }
+  }
+ },
+ "tree_table": {
+  "name": "Tree table",
+  "extra": true,
+  "neper": "control.tree_table",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tree_table.png",
+    "notes": "Round 62 (g): rendered by examples/looks/surf_table.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   }
+  }
+ }
+}
