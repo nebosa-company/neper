@@ -20242,6 +20242,8 @@ fn material_icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
             var layer_ink = look.foreground
             if state.pressed { layer_ink = style.color(t.tokens, .OnSurface) }
             look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), layer_ink, state_opacity(t, state))
+            // Flutter keeps the outline colour when an outlined icon button is focused (only the outlined button turns it primary).
+            if state.focus_visible && !state.invalid { look.border = style.color(t.tokens, .Outline) }
         }
     }
     if variant == .Tonal && !toggled {
