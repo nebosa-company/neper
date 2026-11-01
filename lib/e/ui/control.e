@@ -20634,6 +20634,25 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if h < w { r = h * 0.5 }
         ret cup_ring(m, b, cx, cy, r - m.a * 0.5, m.color, m.a)
     }
+    if m.kind == 21u32 {
+        // CupertinoActivityIndicator (cupertino/activity_indicator.dart): eight ticks, each from a third of the radius to the radius,
+        // a fifth of the radius wide with round ends; the alpha ramp 47..147 of 255 runs behind the active tick (b: the turn).
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        let ramp = [8]f32{ 47.0, 47.0, 47.0, 47.0, 72.0, 97.0, 122.0, 147.0 }
+        let active = usize(m.b * 8.0) % 8usize
+        var i = 0usize
+        while i < 8usize {
+            let angle = 6.2831853 * f32(i) / 8.0
+            let dx = math.sin[f32](angle)
+            let dy = 0.0 - math.cos[f32](angle)
+            var color = m.color
+            color.alpha = m.color.alpha * ramp[(i + 8usize - active) % 8usize] / 255.0
+            try cup_line(m, b, cx + dx * (r / 3.0 + m.a * 0.5), cy + dy * (r / 3.0 + m.a * 0.5), cx + dx * (r - m.a * 0.5), cy + dy * (r - m.a * 0.5), color, m.a)
+            i += 1usize
+        }
+        ret ok
+    }
     if m.kind == 20u32 {
         // The Apple mark, simplified: two shoulders, a waist, a leaf and a bite (`other`: the ground colour).
         try cup_disc(m, b, x + w * 0.34, y + h * 0.62, w * 0.34, m.color)
@@ -21234,7 +21253,11 @@ fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, v
     sem.label = label
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(1i64))
-        let (made, made_error) = cup_mark(a, 10u32, ink, ink, size * 0.1, turn, size, size)
+        // Flutter's ticks are 3C3C44 (dark EBEBF5) with their own alpha ramp.
+        var tick = style.hex(0x3C3C44u32)
+        if dark { tick = style.hex(0xEBEBF5u32) }
+        if options.content.alpha > 0.0 { tick = options.content }
+        let (made, made_error) = cup_mark(a, 21u32, tick, tick, size * 0.1, turn, size, size)
         if made_error != ok { ret (zero, made_error) }
         node = made
         sem.states = accessibility.STATE_BUSY

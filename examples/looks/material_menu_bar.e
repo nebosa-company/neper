@@ -99,7 +99,7 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     if action_error != ok { ret (0usize, action_error) }
     let (menu_bar, bar_error) = bar(a, t, *action, 10000u64, 1usize, true)
     if bar_error != ok { ret (0usize, bar_error) }
-    let (shifted, shifted_error) = placed(a, menu_bar, 0.0, 0.0, 520.0, 400.0)
+    let (shifted, shifted_error) = placed(a, menu_bar, 0.0, 0.0, 400.0, 400.0)
     if shifted_error != ok { ret (0usize, shifted_error) }
     cells[0usize] = looks.Cell { caption: "Open (Cards)", node: shifted, drive: .Hover }
     ret (1usize, ok)
@@ -107,7 +107,7 @@ fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize {
-        let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 520.0, cell_h: 400.0, ctx: zero, build: build_open }
+        let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 400.0, cell_h: 400.0, ctx: zero, build: build_open }
         ret looks.run_material(a, &open_sheet)
     }
     let sheet = looks.Sheet { name: "menu_bar", cells: 4usize, columns: 1usize, cell_w: 496.0, cell_h: 64.0, ctx: zero, build: build }

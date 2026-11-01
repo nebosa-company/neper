@@ -18,6 +18,7 @@ use e.ui.control
 use e.ui.input
 use e.ui.looks_e_draw
 use e.ui.looks_q79
+use e.ui.looks_u81
 use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -2212,6 +2213,7 @@ fn menu_scroll_key(key: widget.Key) -> widget.Key {
 // (0: never) the rows scroll between a chevron up and a chevron down (the wheel, or the keyboard focus moving, scrolls it).
 fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8, max_height: f32) -> (widget.Node, err) {
     var est_height: f32 = 0.0
+    var widest: f32 = 0.0
     var slotted = false
     var k = 0usize
     while k < commands.len {
@@ -2279,9 +2281,12 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
             line.height = style.Length { Px: t.tokens.sizes.divider }
             line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             lines[0usize] = widget.box(0u64, line, zero)
-            rows[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 8.0, style.defaults(), lines[0usize..1usize])
+            // Android: Flutter's `Divider(height: 16)` is 16 rows in all (8, the line, 7).
+            var below: f32 = 8.0
+            if looks_q79.is_material(t) { below = 7.0 }
+            rows[n] = widget.padded(0u64, 0.0, 8.0, 0.0, below, style.defaults(), lines[0usize..1usize])
             n += 1usize
-            est_height += 16.0 + t.tokens.sizes.divider
+            est_height += 8.0 + below + t.tokens.sizes.divider
         }
         // Neper: a section header (v3's grey row) is a dim label line, no hover, no press, no focus stop.
         if c.header && t.tokens.profile == .Neper {
@@ -2345,6 +2350,12 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
             } else {
                 parts[p] = widget.box(0u64, control.sized_style(18.0, 18.0), zero)
             }
+            if looks_q79.is_material(t) {
+                let (held_slot, held_slot_error) = mem.alloc[widget.Node](a, 1usize)
+                if held_slot_error != ok { ret (zero, TooLarge) }
+                held_slot[0usize] = parts[p]
+                parts[p] = widget.padded(0u64, 0.0, 0.0, 12.0, 0.0, style.defaults(), held_slot[0usize..1usize])
+            }
             p += 1usize
         }
         var caption = control.text_options()
@@ -2357,19 +2368,45 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         p += 1usize
         parts[p] = widget.spacer(0u64, 1.0)
         p += 1usize
+        // Android: the panel is as wide as its widest row (Flutter's IntrinsicWidth); the label, 12, the shortcut, 12, the arrow.
+        var keys_ink = muted
+        var keys_gap: f32 = 24.0
+        var row_gap: f32 = 8.0
+        if looks_q79.is_material(t) {
+            let (label_w, label_f, label_b, label_e) = control.run_metrics_faced(a, t, caption, c.label)
+            if label_e != ok { ret (zero, label_e) }
+            var keys_w: f32 = 0.0
+            if c.shortcut.len > 0usize {
+                let (kw, kf, kb, ke) = control.run_metrics_faced(a, t, caption, c.shortcut)
+                if ke != ok { ret (zero, ke) }
+                keys_w = kw
+            }
+            let this_w = looks_u81.row_width(label_w, keys_w, c.shortcut.len > 0usize, has_submenu, slotted)
+            if this_w > widest { widest = this_w }
+            // Flutter's shortcut Text inherits the button's on-surface, not the muted ink.
+            keys_ink = ink
+            keys_gap = 12.0
+            row_gap = 0.0
+        }
         if c.shortcut.len > 0usize {
-            let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, muted)
+            let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, keys_ink)
             if keys_error != ok { ret (zero, keys_error) }
             let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
             if held_error != ok { ret (zero, TooLarge) }
             held[0usize] = keys_node
-            parts[p] = widget.padded(0u64, 24.0, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+            parts[p] = widget.padded(0u64, keys_gap, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
             p += 1usize
         }
         if has_submenu {
             let (arrow, arrow_error) = control.icon_square(a, muted, .ChevronRight, 18.0)
             if arrow_error != ok { ret (zero, arrow_error) }
             parts[p] = arrow
+            if row_gap == 0.0 {
+                let (held_arrow, held_arrow_error) = mem.alloc[widget.Node](a, 1usize)
+                if held_arrow_error != ok { ret (zero, TooLarge) }
+                held_arrow[0usize] = arrow
+                parts[p] = widget.padded(0u64, 12.0, 0.0, 0.0, 0.0, style.defaults(), held_arrow[0usize..1usize])
+            }
             p += 1usize
         }
         var line_style = style.defaults()
@@ -2377,7 +2414,7 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         // Neper: the content fills the 32 high row, so its text centres in the hover fill (a content box of its own height sat at the row's top).
         if t.tokens.profile == .Neper { line_style.height = style.Length { Px: 32.0 } }
         if looks_q79.is_material(t) { line_style.height = style.Length { Px: 48.0 } }
-        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, line_style, parts[0usize..p])
+        let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: row_gap }, line_style, parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
         var semantic_role = 22u8
@@ -2422,6 +2459,7 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
     sheet_style.min_width = style.Length { Px: 200.0 }
     if looks_q79.is_material(t) {
         sheet_style.min_width = style.Length { Px: 112.0 }
+        sheet_style.width = style.Length { Px: looks_u81.panel_width(widest) }
         sheet_style.shade = 2u8
     }
     sheet_style.max_width = style.Length { Px: 320.0 }
