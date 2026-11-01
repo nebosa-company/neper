@@ -10753,6 +10753,10 @@ fn windows_gdi_regular_11() -> str { ret "34486;72446844446666666666448885:76776
 // 77 in first place selects it; `panel_width` is the width up to the separator's first pixel.
 fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
+    if style.windows_dark_on() {
+        let (shown, shown_error) = windows_status_bar_report_dark(a, key, t, items, width)
+        ret (shown, shown_error)
+    }
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize * items.len + 6usize)
@@ -10792,6 +10796,86 @@ fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.T
     }
     // the bar's last column is a separator too
     parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 16.0, 14145495u32)
+    n += 1usize
+    ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
+}
+
+// The report bar under the Windows dark palette (no capture in that palette): the earlier drawing.
+fn windows_status_bar_report_dark(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize * items.len + 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
+    n += 1usize
+    parts[n] = windows_rect(0.0, 0.0, width, 1.0, 14671839u32)
+    n += 1usize
+    parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16119285u32)
+    n += 1usize
+    var at: f32 = 0.0
+    var i = 0usize
+    while i < items.len {
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        caption.size = 12.0
+        if items[i].text.len != 0usize {
+            // the preview form's TStatusBar draws Segoe UI 9 pt (12 px; the 57 px ink of "Page 1 of 1"), not Tahoma
+            let (said, said_error) = control.colored_text(a, 0u64, items[i].text, t, caption, style.hex(0u32))
+            if said_error != ok { ret (zero, said_error) }
+            let (said_run_width, _, _, said_metrics_error) = control.run_metrics_faced(a, t, caption, items[i].text)
+            if said_metrics_error != ok { ret (zero, said_metrics_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = said
+            parts[n] = widget.positioned(0u64, at + 1.0, 1.0, control.sized_style(said_run_width, 15.0), held[0usize..1usize])
+            n += 1usize
+        }
+        if items[i].panel_width > 0.0 && !items[i].fills {
+            at += items[i].panel_width
+            // the separators fade with their distance from the left edge (measured: #D9D9D9 / #EEEEEE, then #DFDFDF / #E7E7E7)
+            var dark = 14277081u32
+            var light = 15658734u32
+            if i == 1usize {
+                dark = 14671839u32
+                light = 15198183u32
+            }
+            parts[n] = windows_rect(at, 2.0, 1.0, 15.0, dark)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 2.0, 1.0, 15.0, light)
+            n += 1usize
+            // the end pixels (measured on five report windows): #E8 / #EF above and #E1 / #EE below the first
+            // separator, #EA / #ED and #E5 / #EA the second
+            var top_dark = 15263976u32
+            var top_light = 15724527u32
+            var foot_dark = 14803425u32
+            var foot_light = 15658734u32
+            if i == 1usize {
+                top_dark = 15395562u32
+                top_light = 15592941u32
+                foot_dark = 15066597u32
+                foot_light = 15395562u32
+            }
+            parts[n] = windows_rect(at, 1.0, 1.0, 1.0, top_dark)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 1.0, 1.0, 1.0, top_light)
+            n += 1usize
+            parts[n] = windows_rect(at, 17.0, 1.0, 1.0, foot_dark)
+            n += 1usize
+            parts[n] = windows_rect(at + 1.0, 17.0, 1.0, 1.0, foot_light)
+            n += 1usize
+            at += 2.0
+        }
+        i += 1usize
+    }
+    // the bar's last column (#E6E6E6, lighter at both ends)
+    parts[n] = windows_rect(width - 1.0, 2.0, 1.0, 15.0, 15132390u32)
+    n += 1usize
+    parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 1.0, 15461356u32)
+    n += 1usize
+    parts[n] = windows_rect(width - 1.0, 17.0, 1.0, 1.0, 15329769u32)
     n += 1usize
     ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
 }

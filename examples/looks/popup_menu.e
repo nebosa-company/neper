@@ -191,7 +191,15 @@ fn build_menu(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         let spec = &group.specs[i]
         let (action, action_error) = actions_of(a)
         if action_error != ok { ret (0usize, action_error) }
-        let (commands, commands_error) = parse_items(a, *action, spec.items, room, group.sub)
+        // The Exit item is the 1:1 capture's; the dark sheets keep their blank last item (no capture in that palette).
+        var items_text = spec.items
+        let exit_item = "|ps;Exit;Alt+X"
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark && strs.ends_with(items_text, exit_item) {
+            let (kept, kept_error) = strs.concat(a, items_text[0usize..items_text.len - exit_item.len], "|s; ;")
+            if kept_error != ok { ret (0usize, kept_error) }
+            items_text = kept
+        }
+        let (commands, commands_error) = parse_items(a, *action, items_text, room, group.sub)
         if commands_error != ok { ret (0usize, commands_error) }
         let anchor = 20u64 + 100u64 * u64(i)
         let (menu, menu_error) = navigation.bar_menu_limited(a, anchor + 1u64, t, anchor, "Menu", commands, true, action, spec.limit)
