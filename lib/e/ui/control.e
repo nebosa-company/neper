@@ -34,6 +34,7 @@ use e.ui.linuxspin_lb as linuxspin
 use e.ui.linuxmark_lb as linuxmark
 use e.ui.looks_b
 use e.ui.looks_z63
+use e.ui.looks_o78
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -4903,7 +4904,7 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     nodes[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, shift, nodes[1usize..2usize])
     nodes[3usize] = rows
     var edge = style.defaults()
-    edge.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) }
+    edge.border = style.Border { width: 1.0, color: looks_o78.dark_group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)) }
     edge.radius = 3.0
     edge.padding = edges(7.0, 10.0, 7.0, 5.0)
     nodes[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, edge, nodes[3usize..4usize])
@@ -7906,6 +7907,15 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     frame_style.radius = t.tokens.radii.xs
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 1.0 } }
     var framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..line_count])
+    if height <= 0.0 && t.tokens.palette == .Dark {
+        // round 78: the dark token edit wears the native dark edit frame like the dark text edit (it had the light underline)
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..1usize])
+        let (dark_frame, dark_frame_error) = looks_o78.dark_edit_frame(a, width, state.focused, inner[0usize])
+        if dark_frame_error != ok { ret (zero, dark_frame_error) }
+        framed = dark_frame
+    }
     if height > 0.0 {
         frame_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Surface) }
         frame_style.radius = 0.0
