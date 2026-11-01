@@ -2,6 +2,7 @@
 // tile groups and the sample (temporal unit) loop.
 
 use e.mem
+use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -47,6 +48,9 @@ type Decoder = struct {
     cur_buf: usize,
     out_buf: usize,
     hold: i32,
+    ns_tile: i64,
+    ns_post: i64,
+    ns_setup: i64,
     shown: bool,
     frame_open: bool,
     tile_num: i32,
@@ -467,7 +471,10 @@ fn tile_group(dc: *Decoder, data: []const u8) -> err {
         }
         d.ctx = dc.tile_ctx
         d.sd = av1_sym.init_symbol(data[at..at + size], h.disable_cdf_update)
+        let (t0, c0) = time.monotonic()
         try T.decode_tile(d)
+        let (t1, c1) = time.monotonic()
+        dc.ns_tile += t1.nanos - t0.nanos
         if !h.disable_frame_end_update_cdf && tile == h.context_update_tile_id {
             i = 0usize
             while i < CDF.SAVED_COUNT {
@@ -499,7 +506,10 @@ fn finish_frame(dc: *Decoder) -> err {
     let d = &dc.d
     let w1 = acquire(dc)
     let w2 = acquire(dc)
+    let (p0, pc0) = time.monotonic()
     let (which, post_error) = av1_post.post_filter(d, dc.a, &dc.scratch, planes_of(dc, w1), planes_of(dc, w2))
+    let (p1, pc1) = time.monotonic()
+    dc.ns_post += p1.nanos - p0.nanos
     if post_error != ok { ret post_error }
     var final = dc.cur_buf
     if which == 1usize { final = w1 }
