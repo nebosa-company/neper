@@ -17,12 +17,15 @@ fn cell_h() -> f32 { ret 340.0 }
 
 // The control `above` px below the top of its cell box, so the cell's centre (where the harness
 // puts the pointer) falls where a state needs it.
-fn placed(a: *mem.Arena, node: widget.Node, above: f32) -> (widget.Node, err) {
+fn placed(a: *mem.Arena, t: *const control.Theme, node: widget.Node, above: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = widget.box(0u64, looks.size_style(1.0, above), zero)
     parts[1usize] = node
-    var column = looks.size_style(cell_w(), cell_h())
+    // Neper's field is 7 day cells plus 32 wide (256): a 210 column squeezed it to 200 and left the drop button outside.
+    var across = cell_w()
+    if t.tokens.profile == .Neper { across = 280.0 }
+    var column = looks.size_style(across, cell_h())
     column.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), ok)
 }
@@ -106,9 +109,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             above = cell_h() * 0.5 - 115.0
         }
         if i >= 3usize && i <= 5usize { above = cell_h() * 0.5 - 10.0 }
+        // Neper: the pointer goes to the drop button (106 px right of the cell centre: the 280 column stands centred in the 360 cell, the field 10 in, the icon 20 from its end), not the field's text.
+        var aim_dx: f32 = 0.0
+        if t.tokens.profile == .Neper && (i == 4usize || i == 5usize) { aim_dx = 106.0 }
+        looks.aim(i, aim_dx, 0.0)
         let (node, node_error) = overlay.date_picker_with(a, u64(i + 1usize) * 100u64, t, "Created", chosen, n > 0usize, open, &actions[0usize], chosen, zero, zero, footer)
         if node_error != ok { ret (0usize, node_error) }
-        let (shown, shown_error) = placed(a, node, above)
+        let (shown, shown_error) = placed(a, t, node, above)
         if shown_error != ok { ret (0usize, shown_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shown, drive: drives[i] }
         i += 1usize

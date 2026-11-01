@@ -7112,7 +7112,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         label_color = edge
         value_color = edge
         // M3: a disabled outline is on-surface at 12 % (the filled indicator stays at 38 %).
-        if t.tokens.profile == .MaterialLike && !options.filled { edge = with_alpha(ink, t.tokens.states.disabled_container) }
+        if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) && !options.filled { edge = with_alpha(ink, t.tokens.states.disabled_container) }
     }
     var value_role: style.TextRole = .BodyLarge
     if dense || h <= t.tokens.sizes.control_md { value_role = .BodyMedium }
@@ -7221,6 +7221,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
+    // Neper: the value stays inside the field's content box (as Flutter's TextField clips its text), as the other looks' fields do.
+    if t.tokens.profile == .Neper { grow.overflow = .Clip }
     let value_stack = widget.stack(0u64, grow, editor[0usize..at])
     // The prefix and suffix around the value, in `on-surface-variant`.
     let (row_parts, row_error) = mem.alloc[widget.Node](a, 3usize)
@@ -7287,7 +7289,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         lines[parts_at] = widget.box(0u64, indicator, zero)
         parts_at += 1usize
     } else {
-        if !options.enabled && t.tokens.profile != .MaterialLike { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
+        // Neper: a disabled outlined field has no fill, as Flutter's (the fill showed the label's notch as a light patch).
+        if !options.enabled && t.tokens.profile != .MaterialLike && t.tokens.profile != .Neper { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
         frame_style.border = style.Border { width: edge_width, color: edge }
         frame_style.radius = t.tokens.radii.xs
     }
@@ -8280,6 +8283,8 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
     if android { pad_y = style.Length { Px: 0.0 } }
+    // Neper: with the 32 tall Clear button in it the bar stays 40 (the line's padding on top of the button stretched it to 52).
+    if t.tokens.profile == .Neper && len != 0usize { pad_y = style.Length { Px: 0.0 } }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
     if (android || t.tokens.profile == .Neper) && !options.enabled {
         // Disabled: the bar at the 38 % content level.
@@ -13186,6 +13191,11 @@ fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active:
     caption.wrap = .None
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, ink)
     if label_error != ok { ret (zero, label_error) }
+    // Neper: the row fills the list's width, so a hover or the active row lights the whole row (a hugging button lit a patch).
+    if t.tokens.profile == .Neper {
+        let (filled, filled_error) = pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, accessibility.ACTION_PRESS, 0u64, action, true, label_node)
+        ret (filled, filled_error)
+    }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, label_node)
     ret (node, node_error)
 }
@@ -13254,6 +13264,8 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
             sheet_style.radius = 4.0
             if menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
         }
+        // Neper: the list is as wide as the field (a combo's, an autocomplete's) and stands under its bottom edge, not over its lower outline.
+        if t.tokens.profile == .Neper && menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
@@ -13318,6 +13330,14 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
                 shift = -16.0
             }
         }
+        if t.tokens.profile == .Neper {
+            // The anchor is the editor, (field height less its line) / 2 above the field's bottom edge and 16 in from its side.
+            below = max_zero((t.tokens.metrics.control_height + 16.0 - style.text_style(t.tokens, .BodyLarge).line_height) * 0.5) + 4.0
+            if menu_w > 0.0 {
+                placed_at = .Below
+                shift = -16.0
+            }
+        }
         parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: placed_at, offset: geometry.Point { x: shift, y: below }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
         if active < picks.len { default_action = picks[active] }
     }
@@ -13357,7 +13377,9 @@ fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if field_error != ok { ret (zero, field_error) }
     var none: []const widget.Node = zero
-    let (made, made_error) = suggesting(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss)
+    var menu_w: f32 = 0.0
+    if t.tokens.profile == .Neper { menu_w = options.width }
+    let (made, made_error) = suggesting_wide(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss, menu_w)
     ret (made, made_error)
 }
 

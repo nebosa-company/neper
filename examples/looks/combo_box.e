@@ -178,7 +178,19 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     let now = pass_of(ctx, n, drives[0usize..n])
     i = 0usize
     while i < n {
-        let s = spec_of(sheet_no, i)
+        var s = spec_of(sheet_no, i)
+        // Neper: the drop button is not a field of its own (the 24 px one is Windows'), so the full combo stands and the pointer goes to its chevron.
+        var aim_dx: f32 = 0.0
+        if t.tokens.profile == .Neper && sheet_no == 0usize && (i == 2usize || i == 3usize) {
+            s.options.width = 150.0
+            s.value = "Against Card Color"
+            s.left = 10.0
+            aim_dx = 55.0
+        }
+        // Neper: the Focus tap must land on the editor (its line, 12 px under the cell centre), not on the frame padding above it.
+        var aim_dy: f32 = 0.0
+        if t.tokens.profile == .Neper && sheet_no == 0usize && i == 7usize { aim_dy = 12.0 }
+        if sheet_no == 0usize { looks.aim(i, aim_dx, aim_dy) }
         var choices: []const str = colors[0usize..4usize]
         if s.rows == 22usize { choices = numbers[0usize..22usize] }
         let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, cell_w())

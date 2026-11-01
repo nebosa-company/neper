@@ -36,7 +36,10 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = button
     parts[1usize] = tip
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    var stack_style = style.defaults()
+    // Neper: the rich hint (260 wide) hangs from the anchor's right edge, so the anchor stands 180 in from the cell's left and 60 down, so the hint keeps clear of the sheet edge and the caption.
+    if rich && t.tokens.profile == .Neper { stack_style.padding = style.EdgeLengths { left: style.Length { Px: 180.0 }, top: style.Length { Px: 60.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, stack_style, parts[0usize..2usize]), ok)
 }
 
 // Five cells, each an anchor with its hint shown: one line, wrapped lines, a shortcut, the rich
