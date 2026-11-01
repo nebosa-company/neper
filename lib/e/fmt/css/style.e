@@ -217,6 +217,21 @@ fn parse_len(c: *const Context, v: str, em: f64, allow: u32) -> (Len, bool) {
         if (allow & A_NEGATIVE) == 0u32 && (r.px < 0.0f64 || r.pct < 0.0f64) && r.pct < 0.0f64 { ret (len_auto(), false) }
         ret (r, true)
     }
+    // min() and max() of pure percentages stay a percentage: the largest or smallest of them.
+    if (l.op == .Min || l.op == .Max) && l.terms.len > 0usize && (allow & A_PERCENT) != 0u32 {
+        var pure = true
+        var best = 0.0f64
+        var ti = 0usize
+        while ti < l.terms.len {
+            let tt = l.terms[ti]
+            if tt.op != .None || tt.unit != .Percent || tt.px_offset != 0.0f64 { pure = false }
+            if pure {
+                if ti == 0usize || (l.op == .Max && tt.value > best) || (l.op == .Min && tt.value < best) { best = tt.value }
+            }
+            ti += 1usize
+        }
+        if pure && (best >= 0.0f64 || (allow & A_NEGATIVE) != 0u32) { ret (Len { kind: .Px, px: 0.0f64, pct: best / 100.0f64 }, true) }
+    }
     let (px, ok_px) = cv.to_px(l, bases)
     if !ok_px { ret (len_auto(), false) }
     if px < 0.0f64 && (allow & A_NEGATIVE) == 0u32 { ret (len_auto(), false) }

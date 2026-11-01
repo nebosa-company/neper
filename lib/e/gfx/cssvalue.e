@@ -1106,7 +1106,27 @@ fn scalar_or_eval(a: *mem.Arena, s: str) -> (f64, bool) {
     ret (r0, r1)
 }
 
-fn parse_calc(a: *mem.Arena, expr: str, b: Bases) -> (CssLength, bool) {
+// `expr` without parentheses that wrap all of it: "((1px + 2%))" is "1px + 2%".
+fn strip_outer_parens(expr: str) -> str {
+    var e = trim_ws(expr)
+    while e.len >= 2usize && e[0usize] == 40u8 && e[e.len - 1usize] == 41u8 {
+        var depth = 0i64
+        var wraps = true
+        var i = 0usize
+        while i < e.len {
+            if e[i] == 40u8 { depth += 1i64 }
+            if e[i] == 41u8 { depth -= 1i64 }
+            if depth == 0i64 && i + 1usize < e.len { wraps = false }
+            i += 1usize
+        }
+        if !wraps { break }
+        e = trim_ws(e[1usize..e.len - 1usize])
+    }
+    ret e
+}
+
+fn parse_calc(a: *mem.Arena, expr_in: str, b: Bases) -> (CssLength, bool) {
+    let expr = strip_outer_parens(expr_in)
     let (terms, good) = split_calc_terms(a, expr)
     if !good { ret (zero_length(), false) }
     var px_acc = 0.0f64
