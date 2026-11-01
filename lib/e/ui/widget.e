@@ -2606,7 +2606,7 @@ fn rounded(r: geometry.Rect, radius: f32) -> geometry.RRect {
 }
 
 // The Android look draws a rounded corner as a quarter circle (a cubic) so a radius of half the side is a true circle;
-// every other look keeps the quadratic corner its pictures were taken with. Set by `set_arc_corners`.
+// every other look keeps the quadratic corner its pictures were taken with (the Neper look joins the arcs through the sheet harness only). Set by `set_arc_corners`.
 var arc_corners: bool = false
 
 fn set_arc_corners(on: bool) {
