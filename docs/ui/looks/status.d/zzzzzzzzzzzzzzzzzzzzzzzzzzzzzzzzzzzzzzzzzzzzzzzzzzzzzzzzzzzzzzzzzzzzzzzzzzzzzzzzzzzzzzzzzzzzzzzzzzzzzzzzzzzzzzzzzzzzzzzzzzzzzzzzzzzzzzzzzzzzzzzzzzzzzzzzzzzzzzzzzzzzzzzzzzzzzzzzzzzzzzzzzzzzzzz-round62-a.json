@@ -1,0 +1,1111 @@
+{
+ "icon_button": {
+  "name": "Icon button",
+  "extra": true,
+  "neper": "control.icon_button",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/icon_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Plain, tonal and outlined in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   }
+  }
+ },
+ "toggle_button": {
+  "name": "Toggle button",
+  "extra": true,
+  "neper": "control.toggle_button",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   }
+  }
+ },
+ "split_button": {
+  "name": "Split button",
+  "extra": true,
+  "neper": "control.split_button",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded).",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "speed_dial": {
+  "name": "Speed dial",
+  "extra": true,
+  "neper": "control.speed_dial",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/speed_dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "link": {
+  "name": "Link",
+  "extra": true,
+  "neper": "control.link",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/link.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Rest, hover (underline and state layer), pressed and keyboard focus. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "This round changed control.link (two lines): the underline no longer has a 100 percent width and the column stretches, because a hovered or pressed link filled the whole cell width before",
+     "The state layer is a 44 px hit target with the text in its upper part rather than centred; no look has its own link shape (Windows and Linux link styles are the shared primary text)",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "name": "Range slider",
+  "extra": true,
+  "neper": "control.range_slider",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/range_slider.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ },
+ "rating": {
+  "name": "Rating",
+  "extra": true,
+  "neper": "control.rating",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/rating.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Three of five stars at rest, the fourth star hovered and pressed, keyboard focus, none and all five. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One star drawing (star_paint) for all ten looks; Cupertino, Linux and Windows have no rating control to compare with",
+     "No disabled or read-only state: the control has none"
+    ]
+   }
+  }
+ },
+ "dial": {
+  "name": "Dial",
+  "extra": true,
+  "neper": "control.dial",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dial.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. A 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, and 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "One knob drawing (arc and pointer dot) for all ten looks; none of the platforms has a dial in its kit to compare with",
+     "Hover, pressed and keyboard focus draw nothing different from rest: the knob paints no state layer or ring",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "password_field": {
+  "name": "Password field",
+  "extra": true,
+  "neper": "control.password_field_with",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/password_field.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "control.password_field_with centres the reveal button for the Neper field height, 5 to 7 px low on the 22 px Windows and 34 px Cupertino fields: the sheet draws those two through e.ui.looks_a.password_fitted, so the library control still misplaces it there",
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "name": "Search field",
+  "extra": true,
+  "neper": "control.search_field",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/search_field_all.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), filled with its clear button, hover, keyboard focus, disabled and invalid. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "name": "Autocomplete",
+  "extra": true,
+  "neper": "control.autocomplete",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   }
+  }
+ }
+}

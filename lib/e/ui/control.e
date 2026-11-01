@@ -3410,14 +3410,13 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     lines[0usize] = label_node
     if active {
         var under = style.defaults()
-        under.width = style.Length { Percent: 100.0 }
         under.height = style.Length { Px: t.tokens.sizes.divider }
         under.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
         lines[1usize] = widget.box(0u64, under, zero)
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..count])
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, style.defaults(), lines[0usize..count])
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     // A link is at least the hit target, so a short one is still reachable.
