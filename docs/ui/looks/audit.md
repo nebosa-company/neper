@@ -1,3 +1,23 @@
+# Looks audit 31, 2026-11-01 (round 65: 8 rows raised to review, commit 66ed62c1b)
+
+Independent check of the single commit after audit 30 (`66ed62c1b`, master) in a scratch worktree `looks66-audit` with the committed `neper-self.exe`. Scratch scripts, not committed: a diff lister, a ring and cell margin measurer, a label centre measurer (saturated button found by connected components, the label's first capital C against the button box), a gauge gap measurer (distance transform from the ring to the caption ink), and a light against dark check.
+
+Result. 2 of the 8 rows go from review back to started (overlay `status.d/zzz...-audit31.json`, 201 z): Linux and Linux dark bottom_app_bar. 6 hold at review.
+
+(1) Diff. 24 PNGs changed, all explained: range_slider, gauge (Cupertino and dark), bottom_app_bar (Windows, Linux, Cupertino and their dark ones: the Cupertino pair is not in the claims but is the same shared bar button change) and large_title (Linux and dark), each at 1x and 1.5x. Sources: `control.e`, `looks_y63.e`, `looks_z63.e` only; no other PNG moved.
+
+(2) Re-render. range_slider, nav_bottom_app_bar, gauge and nav_large_title rewrite their PNGs for all looks and `git status` stays clean, so byte-identical.
+
+(3) Measured, 1x and 1.5x. Cupertino and dark range_slider: the focus ring is closed on all four sides and a rounded box; cell 190 px, ring inside it with 3 px margin on all sides at 1x (4 to 5 at 1.5x), 15 px clear of the image edge (22 at 1.5x); the track is 14 px from each cell edge. Bottom bar button, capital C centre against button centre: Windows and dark 1.0 px (0.5 at 1.5x), Linux and dark 0.0 (0.5), so vertical centring holds. The ink box centre including the descender of Compose is 2 px low, which is the p. Cupertino gauge and dark: caption 11 px role (9 px of ink at 1x, 14 at 1.5x), gap to the arc 7.6 to 9.8 px at 1x (11.7 to 15.2 at 1.5x) in all 8 cells.
+
+(4) Failure. Linux and Linux dark bottom_app_bar, four actions cell: the Compose button is 83 px wide (93 in the two actions cell), and the label has 16 px left and 7 px right (25 and 11 at 1.5x), 4.5 px (7) right of centre, hugging the edge. The claim that the label is centred in its button does not hold in that cell. Windows and Windows dark are 16 and 16 in every cell.
+
+(5) large_title. The old and new Linux and Linux dark PNGs differ by 48 pixels at 1x (78 at 1.5x), all in a 10 by 9 box in cell 3: the back arrow is the only change, and it is present. Linux uses the header bar layout (centred bold title), Neper the large title layout; that difference is by design and unchanged.
+
+(6) Light against dark. All 8 rows differ between light and dark at both scales, none is blank, and dark is darker (mean 36 to 46 against 234 to 245).
+
+(7) Control group. 10 older apps from different looks (linux_button, cup_button, material_button, cup_list, linux_list_box, list_box, material_switch, cup_menu, linux_checkbox, material_list) and native_dark4 re-render byte for byte.
+
 # Looks audit 30, 2026-11-01 (round 63: 148 rows raised to review by workers x, y, z, merge 2987a3e91)
 
 Independent check of `looks63-merge` (fast forward of master 7b83071d8; master is checked out in `D:/repos/neper_master`, so the branch could not be landed with `git fetch . branch:master`) in a scratch worktree `looks64-audit` with the committed `neper-self.exe`. Python could not open the status.d paths in the worktree (over 260 characters), so a `subst` drive was used and removed. Scratch scripts, not committed: a row checker, a montage maker for viewing, crops.
