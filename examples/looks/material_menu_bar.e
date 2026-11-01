@@ -73,22 +73,20 @@ fn actions_of(a: *mem.Arena) -> (*widget.Submit, err) {
     ret (&actions[0usize], ok)
 }
 
-// Three cells: the bar at rest, the Cards title hovered and pressed (the pointer sits at the cell's centre).
+// Four cells: the bar at rest, the View title (under the cell's centre) hovered and pressed, keyboard focus.
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (action, action_error) = actions_of(a)
     if action_error != ok { ret (0usize, action_error) }
-    let captions = [4]str{ "Rest", "Hover (Cards)", "Pressed (Cards)", "Keyboard focus" }
+    let captions = [4]str{ "Rest", "Hover (View)", "Pressed (View)", "Keyboard focus" }
     var i = 0usize
     while i < 4usize {
         let (menu_bar, bar_error) = bar(a, t, *action, 10000u64 * u64(i + 1usize), 99usize, true)
         if bar_error != ok { ret (0usize, bar_error) }
         var drive: looks.Drive = .None
-        var x: f32 = 0.0
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
         if i == 3usize { drive = .Focus }
-        if i == 1usize || i == 2usize { x = 240.0 - 108.0 - 8.0 }
-        let (shifted, shifted_error) = placed(a, menu_bar, x + 8.0, 4.0, 496.0, 60.0)
+        let (shifted, shifted_error) = placed(a, menu_bar, 8.0, 4.0, 496.0, 60.0)
         if shifted_error != ok { ret (0usize, shifted_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shifted, drive: drive }
         i += 1usize

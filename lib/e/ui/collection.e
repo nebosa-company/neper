@@ -7128,6 +7128,8 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     var line_style = style.defaults()
                     line_style.width = style.Length { Px: width - 2.0 * inset }
                     line_style.min_height = style.Length { Px: row_min }
+                    // iOS: the 44 pt cell holds its separator, so a row under a hairline is 0.5 short and the pitch stays 44.
+                    if cup && matched > 0usize { line_style.min_height = style.Length { Px: row_min - 0.5 } }
                     line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: right_pad }, bottom: flat }
                     // (D1544) The selected row on `secondary-container`.
                     if options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }

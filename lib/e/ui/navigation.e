@@ -2196,7 +2196,10 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         let window = widget.surface_size(t.runtime)
         if window.height > 16.0 { room = window.height - 16.0 }
     }
-    let (made, made_error) = bar_menu_clamped(a, key, t, anchor, label, commands, dismiss, placement, offset, depth, room)
+    // Android: a top-level panel hangs flush under its title (Flutter's menuPaddingOffset is zero there), no 2 px gap.
+    var at = offset
+    if looks_q79.is_material(t) && depth == 0u8 && placement == .Below { at.y = 0.0 }
+    let (made, made_error) = bar_menu_clamped(a, key, t, anchor, label, commands, dismiss, placement, at, depth, room)
     ret (made, made_error)
 }
 
@@ -2492,7 +2495,8 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
     let arrived = overlay.appeared_share(t, key, t.tokens.durations.short4)
     let (slid, slid_error) = overlay.slid_in(a, t, lifted[0usize], arrived, 4.0)
     if slid_error != ok { ret (zero, slid_error) }
-    lifted[0usize] = slid
+    // Android: Flutter's MenuAnchor panel simply appears, so no slide (it left the panel on a fraction of a pixel).
+    if !looks_q79.is_material(t) { lifted[0usize] = slid }
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
 }
 

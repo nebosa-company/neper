@@ -27,7 +27,7 @@ fn bar_style(t: *const control.Theme) -> style.Style {
     ret s
 }
 
-// A top-level title: square, 64 x 48 at least, 8 px side padding, hover 8 %, pressed or open 10 % of on-surface.
+// A top-level title: square, 64 x 48 at least, 12 px side padding (_scaledPadding, standard density), hover 8 %, pressed or open 10 % of on-surface.
 fn title_look(t: *const control.Theme, look: *style.ResolvedControl, opened: bool, state: style.ControlState) {
     let ink = style.color(t.tokens, .OnSurface)
     var a: f32 = 0.0
@@ -37,7 +37,7 @@ fn title_look(t: *const control.Theme, look: *style.ResolvedControl, opened: boo
     look.background = control.with_alpha(ink, a)
     look.foreground = ink
     look.radius = 0.0
-    look.padding = 8.0
+    look.padding = 12.0
     look.padding_y = 0.0
     look.min_height = 48.0
     look.min_width = 64.0
