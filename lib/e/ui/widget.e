@@ -214,6 +214,9 @@ const GESTURE_HOVER: u8 = 4u8
 const GESTURE_DROP: u8 = 8u8
 const GESTURE_SPACE: u8 = 16u8
 const GESTURE_WHEEL: u8 = 32u8
+// (looks) A hover-scroll strip: while the pointer rests on it (with GESTURE_HOVER) the viewport its semantic parent `controls` scrolls
+// toward the strip's side, at 360 px a second, a frame at a time (a menu's chevron).
+const GESTURE_HOLD: u8 = 64u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -479,6 +482,9 @@ type State = struct {
     // (D1470) When edge auto-scroll last stepped, so a step covers the time since.
     edge_scrolled_at: time.Instant,
     has_edge_scrolled: bool,
+    // When the hover-scroll strip last stepped, so a step covers the time since.
+    hold_scrolled_at: time.Instant,
+    has_hold_scrolled: bool,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -3747,6 +3753,48 @@ fn edge_scroll_step(s: *State, candidate: usize) -> (usize, f32) {
     ret (viewport, 0.0)
 }
 
+// (looks) A frame of hover scroll: the hovered strip (GESTURE_HOLD) scrolls the viewport its semantic parent controls, up when the
+// strip sits above the viewport's middle and down otherwise, until the pointer leaves or the end is reached. The step covers the
+// time since the last one (a 60 Hz frame's at the first, and at most 100 ms after a stall).
+fn hold_scroll(s: *State) -> err {
+    var hovered = false
+    var viewport = 0usize
+    var up = false
+    if s.arena_state.has_hovered && usize(s.arena_state.hovered) < s.elements.len {
+        let r = &s.elements[usize(s.arena_state.hovered)]
+        if r.live && r.kind == REGION_TAG && (r.gestures & GESTURE_HOLD) != 0u8 && r.has_parent {
+            let owner = &s.elements[usize(r.parent)]
+            if owner.has_semantics && owner.sem.controls != 0u64 {
+                let (found, count) = find_by_key(s, owner.sem.controls)
+                if count != 0usize {
+                    viewport = usize(found.slot)
+                    let v = &s.elements[viewport]
+                    if v.kind == SCROLL_TAG && v.viewport_extent > 0.0 {
+                        hovered = true
+                        up = r.bounds.y + r.bounds.height * 0.5 < v.bounds.y + v.bounds.height * 0.5
+                    }
+                }
+            }
+        }
+    }
+    if !hovered {
+        s.has_hold_scrolled = false
+        ret ok
+    }
+    var frames: f32 = 1.0
+    let since = s.animation_time.nanos - s.hold_scrolled_at.nanos
+    if s.has_hold_scrolled && since > 0i64 && since <= 100000000i64 { frames = f32(since) * 60.0 / 1000000000.0 }
+    s.hold_scrolled_at = s.animation_time
+    s.has_hold_scrolled = true
+    let speed: f32 = 360.0
+    var step = speed / 60.0 * frames
+    if up { step = 0.0 - step }
+    let before = s.elements[viewport].scroll_offset
+    try scroll_by(s, viewport, step, false)
+    if s.elements[viewport].scroll_offset != before { s.animation_due = true } else { s.has_hold_scrolled = false }
+    ret ok
+}
+
 // (D1199) A frame of edge auto-scroll for the region being dragged: the viewport
 // moves, the drag's start moves with the content, and the region hears a
 // DragMove at the unmoved pointer, so its travel includes the scroll.
@@ -5543,6 +5591,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_over {
             s.arena_state.hovered = u32(over)
             s.arena_state.has_hovered = true
+            if (s.elements[over].gestures & GESTURE_HOLD) != 0u8 { s.animation_due = true }
             ret fire_gesture(s.elements[over].gesture, Gesture { Hover: p.position })
         }
         let (found, has_found) = hit_action(s, usize(s.root), p.position)
@@ -5679,6 +5728,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret ok
     case .Frame as w:
         try settle_scrolls(s)
+        try hold_scroll(s)
         ret edge_scroll(s)
     case .Close as w:
         ret ok

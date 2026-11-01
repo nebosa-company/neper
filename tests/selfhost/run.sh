@@ -6057,6 +6057,12 @@ ui_content2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-content2-v2-selfhost"
 ui_content2_v2_output=$("$test_build/ui-content2-v2-selfhost")
 [ "$ui_content2_v2_output" = 'ui content2 v2 ok' ]
+# a popup menu taller than its room: wheel, keyboard focus and hover over a chevron strip scroll it
+ui_popup_menu_scroll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_popup_menu_scroll/src/main.e" "$repo" x64 linux "$test_build/ui-popup-menu-scroll-selfhost")
+[ "$ui_popup_menu_scroll_written" = 'executable written' ]
+chmod +x "$test_build/ui-popup-menu-scroll-selfhost"
+ui_popup_menu_scroll_output=$("$test_build/ui-popup-menu-scroll-selfhost")
+[ "$ui_popup_menu_scroll_output" = 'ui popup menu scroll ok' ]
 # v2 rich text: wrap across spans, baseline, code/key/mention, links, max_lines (D964)
 ui_content3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_content3_v2/src/main.e" "$repo" x64 linux "$test_build/ui-content3-v2-selfhost")
 [ "$ui_content3_v2_written" = 'executable written' ]

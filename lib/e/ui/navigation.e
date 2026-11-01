@@ -2132,6 +2132,11 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     ret (made, made_error)
 }
 
+// The key of a long menu's scrolling view (its two chevron strips are the next two keys).
+fn menu_scroll_key(key: widget.Key) -> widget.Key {
+    ret key * 32u64 + 8u64
+}
+
 // The non-Windows menu (Neper, Cupertino, Material, Linux): every command a row, however many; taller than `max_height`
 // (0: never) the rows scroll between a chevron up and a chevron down (the wheel, or the keyboard focus moving, scrolls it).
 fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, depth: u8, max_height: f32) -> (widget.Node, err) {
@@ -2207,6 +2212,24 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
             n += 1usize
             est_height += 16.0 + t.tokens.sizes.divider
         }
+        // Neper: a section header (v3's grey row) is a dim label line, no hover, no press, no focus stop.
+        if c.header && t.tokens.profile == .Neper {
+            var heading = control.text_options()
+            heading.role = .LabelSmall
+            heading.wrap = .None
+            let (title, title_error) = control.colored_text(a, 0u64, c.label, t, heading, style.color(t.tokens, .OnSurfaceVariant))
+            if title_error != ok { ret (zero, title_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = title
+            var above: f32 = 10.0
+            if i == 0usize { above = 6.0 }
+            rows[n] = widget.padded(0u64, 12.0, above, 12.0, 4.0, style.defaults(), held[0usize..1usize])
+            n += 1usize
+            est_height += above + 4.0 + 16.0
+            i += 1usize
+            continue
+        }
         let item_key = key + 1u64 + u64(i)
         var state = control.control_state(t, item_key, c.enabled, false)
         if c.submenu_open || c.selected { state.hovered = true }
@@ -2278,6 +2301,8 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         }
         var line_style = style.defaults()
         line_style.width = style.Length { Percent: 100.0 }
+        // Neper: the content fills the 32 high row, so its text centres in the hover fill (a content box of its own height sat at the row's top).
+        if t.tokens.profile == .Neper { line_style.height = style.Length { Px: 32.0 } }
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, line_style, parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
@@ -2355,10 +2380,19 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
             var strip_style = control.sized_style(1.0, strip)
             strip_style.width = style.Length { Percent: 100.0 }
             let cell = widget.aligned(0u64, .Center, .Center, strip_style, held[0usize..1usize])
-            if edge == 0usize { parts[0usize] = cell } else { parts[2usize] = cell }
+            // Resting the pointer on a strip scrolls the rows toward it (the runtime's hover scroll: GESTURE_HOLD, the semantic parent's `controls`).
+            let (zones, zones_error) = mem.alloc[widget.Node](a, 3usize)
+            if zones_error != ok { ret (zero, TooLarge) }
+            zones[0usize] = cell
+            zones[1usize] = widget.region(menu_scroll_key(key) + 1u64 + u64(edge), widget.Region { gesture: zero, gestures: 4u8 | 64u8, enabled: true, focusable: false }, strip_style, zones[0usize..1usize])
+            var strip_sem: widget.Semantics = zero
+            strip_sem.hidden = true
+            strip_sem.controls = menu_scroll_key(key)
+            zones[2usize] = widget.semantics(0u64, strip_sem, style.defaults(), zones[1usize..2usize])
+            if edge == 0usize { parts[0usize] = zones[2usize] } else { parts[2usize] = zones[2usize] }
             edge += 1usize
         }
-        parts[1usize] = widget.scroll(0u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: hidden_thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, body[0usize..1usize])
+        parts[1usize] = widget.scroll(menu_scroll_key(key), widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: false, scrollbar: false, thumb: hidden_thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view, body[0usize..1usize])
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, parts[0usize..3usize])
     } else {
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])

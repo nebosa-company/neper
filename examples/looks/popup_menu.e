@@ -141,6 +141,11 @@ fn build_hover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 // mnemonic. One sheet per menu named popup_menu_<name>, the capture beside it as ref/windows/<name>.png.
 type Spec = struct { name: str, items: str, limit: f32, w: f32, h: f32 }
 
+fn max_f(a: f32, b: f32) -> f32 {
+    if a > b { ret a }
+    ret b
+}
+
 fn has_flag(flags: str, flag: u8) -> bool {
     var i = 0usize
     while i < flags.len {
@@ -328,14 +333,57 @@ fn run_states(a: *mem.Arena, only: str) -> err {
         group[0usize].specs = specs
         group[0usize].sub = sub
         let sheet = looks.Sheet { name: name, cells: 1usize, columns: 1usize, cell_w: f32(w) + 20.0, cell_h: f32(h) + 20.0, ctx: mem.cast[*void](&group[0usize]), build: build_menu }
-        try run_roomy(a, &sheet, 1.3)
+        let (need_w, need_h) = neper_need(items, "")
+        try run_roomy(a, &sheet, 1.3, need_w, need_h)
     }
     ret ok
 }
 
-// Neper menus and the derived Windows dark ones are taller and wider than the Windows captures' sheet cells, so they get a larger cell here.
-fn run_roomy(a: *mem.Arena, s: *const looks.Sheet, dark: f32) -> err {
-    looks.grow_sheets(1.7, dark)
+// The height of a Neper menu of these items (rim 8 each end, rows 32, a separator 17, a header 20 and its gap) and the top of its
+// highlighted submenu row.
+fn neper_rows(items: str) -> (f32, f32) {
+    var rest = items
+    var y: f32 = 8.0
+    var row_y: f32 = 0.0
+    var first = true
+    while rest.len > 0usize {
+        let (item, tail, more) = strs.split_once(rest, "|")
+        rest = tail
+        if !more { rest = "" }
+        let (flags, _, _) = strs.split_once(item, ";")
+        if has_flag(flags, 104u8) {
+            if first { y += 6.0 + 4.0 + 20.0 } else { y += 10.0 + 4.0 + 20.0 }
+        } else {
+            if has_flag(flags, 115u8) && !first { y += 17.0 }
+            if has_flag(flags, 120u8) && has_flag(flags, 97u8) { row_y = y }
+            y += 32.0
+        }
+        first = false
+    }
+    ret (y + 8.0, row_y)
+}
+
+// The room a Neper menu needs in its cell: the 2 px drop under the anchor, the 4 px pad, the widest menu (320) and its shadow,
+// and a submenu's 320 beside it, hung 8 above its row (none of the sheets opens one yet, so they pass none).
+fn neper_need(items: str, sub: str) -> (f32, f32) {
+    let (parent, row_y) = neper_rows(items)
+    var w: f32 = 4.0 + 320.0 + 28.0
+    var h = parent + 2.0 + 28.0
+    if sub.len > 0usize {
+        let (child, _) = neper_rows(sub)
+        w += 316.0
+        if row_y - 8.0 + child + 28.0 > h { h = row_y - 8.0 + child + 28.0 }
+    }
+    ret (w, h)
+}
+
+// Neper menus and the derived Windows dark ones are taller and wider than the Windows captures' sheet cells, so they get a larger cell here
+// (Neper: at least `need_w` by `need_h`, so that the whole menu, its shadow and its submenu fit and nothing touches the cell's edge).
+fn run_roomy(a: *mem.Arena, s: *const looks.Sheet, dark: f32, need_w: f32, need_h: f32) -> err {
+    var neper: f32 = 1.7
+    if need_w / s.cell_w > neper { neper = need_w / s.cell_w }
+    if need_h / s.cell_h > neper { neper = need_h / s.cell_h }
+    looks.grow_sheets(neper, dark)
     try looks.run_all(a, s)
     looks.grow_sheets(0.0, 0.0)
     ret ok
@@ -347,14 +395,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize { only = args[1usize] }
     if only.len == 0usize || strs.eq(only, "popup_menu") {
         let states = looks.Sheet { name: "popup_menu", cells: 2usize, columns: 2usize, cell_w: 300.0, cell_h: 250.0, ctx: zero, build: build }
-        try run_roomy(a, &states, 0.0)
+        try run_roomy(a, &states, 0.0, 0.0, 0.0)
         // the aim outlives the sheet: the hover sheet after it must find the pointer at its cell's centre
         looks.aim(0usize, 0.0, 0.0)
         looks.aim(1usize, 0.0, 0.0)
     }
     if only.len == 0usize || strs.eq(only, "popup_menu-hover") {
         let hover = looks.Sheet { name: "popup_menu-hover", cells: 1usize, columns: 1usize, cell_w: 300.0, cell_h: 250.0, ctx: zero, build: build_hover }
-        try run_roomy(a, &hover, 0.0)
+        try run_roomy(a, &hover, 0.0, 0.0, 0.0)
         looks.aim(0usize, 0.0, 0.0)
     }
     if only.len > 0usize && (strs.starts_with(only, "popup_menu_sel_") || strs.starts_with(only, "popup_menu_sub_")) || strs.eq(only, "popup_menu_reports_deck_mode") {
@@ -374,7 +422,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if group_error != ok { ret group_error }
         group[0usize].specs = pair
         let both = looks.Sheet { name: "popup_menu_dialog", cells: 2usize, columns: 2usize, cell_w: 217.0, cell_h: 618.0, ctx: mem.cast[*void](&group[0usize]), build: build_menu }
-        try run_roomy(a, &both, 1.3)
+        let (need_w_a, need_h_a) = neper_need(pair[0usize].items, "")
+        let (need_w_b, need_h_b) = neper_need(pair[1usize].items, "")
+        try run_roomy(a, &both, 1.3, max_f(need_w_a, need_w_b), max_f(need_h_a, need_h_b))
     }
     var i = 0usize
     while i < specs.len {
@@ -383,7 +433,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if group_error != ok { ret group_error }
             group[0usize].specs = specs[i..i + 1usize]
             let menu = looks.Sheet { name: specs[i].name, cells: 1usize, columns: 1usize, cell_w: specs[i].w + 20.0, cell_h: specs[i].h + 20.0, ctx: mem.cast[*void](&group[0usize]), build: build_menu }
-            try run_roomy(a, &menu, 1.3)
+            let (need_w, need_h) = neper_need(specs[i].items, "")
+            try run_roomy(a, &menu, 1.3, need_w, need_h)
         }
         i += 1usize
     }
