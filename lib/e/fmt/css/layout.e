@@ -8075,7 +8075,19 @@ fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: b
     }
 }
 
+// A percentage row gap under an indefinite height counts as zero while the rows are sized; it then resolves against the height
+// they gave, which stays the container's height.
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
+    let cs = bstyle(l, b)
+    if ch < 0.0f64 && cs.row_gap.kind == .Px && cs.row_gap.pct != 0.0f64 {
+        let h0 = layout_grid_inner(l, b, cw, ch)
+        let h1 = layout_grid_inner(l, b, cw, h0)
+        ret h0
+    }
+    ret layout_grid_inner(l, b, cw, ch)
+}
+
+fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     let (g, built) = grid_build(l, b, cw, ch)
     if !built { ret 0.0f64 }
