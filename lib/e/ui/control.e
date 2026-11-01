@@ -17127,7 +17127,18 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var count = 2usize
     if focused && !dark {
         // v3 rings a focused list-style combo's text area with its dotted focus rectangle.
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
+        var dots: widget.Node = zero
+        var dots_error: err = ok
+        if drawn_light {
+            // round 48: the 1:1 capture's rectangle is the XOR of the white face, black dots on the pixels with x + y odd, 15 rows
+            let (crisp, crisp_error) = win_lb_dots(a, style.hex(131586u32), 1u32, max_zero(head_w - 22.0), 15.0)
+            dots = crisp
+            dots_error = crisp_error
+        } else {
+            let (soft, soft_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
+            dots = soft
+            dots_error = soft_error
+        }
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }

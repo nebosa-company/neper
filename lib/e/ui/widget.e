@@ -1030,6 +1030,22 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     ret ok
 }
 
+// Keyboard focus on the last focusable element of the page, while a modal overlay is open. Tab and Shift+Tab stay inside
+// the overlay then, so a frame that shows a control behind an open list cannot reach the page's last tab stop any other way.
+fn focus_last_behind_modal(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (modal, has_modal) = topmost_modal(s)
+    if !has_modal || !s.has_root { ret ok }
+    let order = s.focus_order
+    let count = collect_focusable(s, usize(s.root), order, 0usize)
+    if count == 0usize { ret ok }
+    s.focus = order[count - 1usize]
+    s.has_focus = true
+    s.focus_visible = true
+    ret ok
+}
+
 // (D1271) The key of the focused element, or of its nearest keyed ancestor.
 fn focused_key(widget_runtime: *Runtime) -> (Key, bool) {
     let (s, state_error) = state_of(widget_runtime)
@@ -1830,7 +1846,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
         if children_error != ok { ret (zero, children_error) }
         let (result, layout_error) = ui_layout.wrap(a, w, ui_layout.Constraints { min_width: 0.0, max_width: inner.max_width, min_height: 0.0, max_height: inner.max_height }, children)
-        if layout_error != ok { ret (zero, InvalidTree) }
+        if layout_error != ok && layout_error != ui_layout.Overflow { ret (zero, InvalidTree) }
         ret (result.size, ok)
     case .Scroll as sc:
         var open = inner
@@ -3230,7 +3246,7 @@ fn place_wrap(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     let (children, children_error) = children_of(s, a, node, limits, spec.axis == .Horizontal)
     if children_error != ok { ret children_error }
     let (result, layout_error) = ui_layout.wrap(a, spec, limits, children)
-    if layout_error != ok { ret InvalidTree }
+    if layout_error != ok && layout_error != ui_layout.Overflow { ret InvalidTree }
     var i = 0usize
     while i < node.children.len {
         let r = result.children[i]

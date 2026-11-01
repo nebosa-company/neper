@@ -476,6 +476,7 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tap(&rig.harness, x, y)
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
+        try widget.focus_last_behind_modal(&rig.runtime)
         ret testing.hover(&rig.harness, -500.0, -500.0)
     }
     if drive == .FocusPress {
