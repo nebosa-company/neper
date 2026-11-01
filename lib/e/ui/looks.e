@@ -27,6 +27,7 @@ use e.time
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.looks_c
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -204,6 +205,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 64u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
+    try looks_c.sample_picture(a, &rig.renderer)
     // The Android look: Roboto Regular (id 11) and Medium (id 12), led by themselves, then the Windows faces for glyphs Roboto lacks.
     let roboto_bytes = shared_fonts[4usize]
     let medium_bytes = shared_fonts[5usize]
