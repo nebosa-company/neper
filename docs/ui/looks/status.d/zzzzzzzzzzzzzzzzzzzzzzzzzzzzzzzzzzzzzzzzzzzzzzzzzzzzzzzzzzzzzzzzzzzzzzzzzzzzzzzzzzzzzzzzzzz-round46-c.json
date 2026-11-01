@@ -1,0 +1,54 @@
+{
+ "menu_bar": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/menu_bar.png",
+    "notes": "ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. The bar rows (a white row above, a #A0A0A0 and a #FFFFFF row below, no highlight line), the grip and the raised and sunken title boxes (one px: #FFFFFF and #A0A0A0 swapped) are now drawn as the crisp captures show them; the drift tables fitted to the resampled references are gone. Flat chrome px off: menu_bar 0 (11 of 11 cells), menu_bar_hot 0 chrome in 100 of 101 cells, menu_bar_hot_view 7 of 8, the nine open sheets 10 of 10 each; Reports and Search have no 1:1 twin of their hover-switch grab, their cell is cut from states/menu-bar-open-title-* (scripts/looks_bar_ref1to1.py). Review: in two hot cells (one title of menu_bar_hot, the View title sheet) the capture shows no hover look at all (v3's pointer did not reach it) while ours draws the raised box, 114 flat px each. Glyph px (ClearType) are not claimed.",
+    "gaps": [
+     "two hot-title cells whose capture has no hover look (114 flat px each)",
+     "text glyph pixels (ClearType against our hinted text) are not exact"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/status_bar.png",
+    "notes": "ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. Panels (#A0A0A0 above and at the left, a #FFFFFF column inside the right edge, the white line cut at each joint), the end column and the size grip (three diagonal strokes by x + y mod 4) are drawn from the crisp capture; the joint, edge and grip tables fitted to the resampled references are gone, the report bar's separators are one #D7D7D7 column. Flat chrome px off: status_bar rest 0 (strict 1 of 1), status_bar_hover 0 on the four bars, status_bar_report, _11 and _167 0 (the report sheets are pixel equal outside the text, 0 to 138 px, all digits). The only other differing row is the window frame row below the crop (#E8E8E8, outside the control). Ink boxes agree on every bar. Progress, error and narrow cells have no capture (unverified, as the ladder allows).",
+    "gaps": [
+     "progress, error tone and narrow panels have no v3 capture",
+     "text glyph pixels are ClearType-hinted, not bit exact"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/toolbar_button_row.png",
+    "notes": "ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. The strip (a lead column, a #A0A0A0 foot row, a #A0A0A0 closed edge, no light row), the grip, the separators (#A0A0A0 and #FFFFFF, 22 rows) and the hot and pressed box (23 x 22, one px, #FFFFFF and #A0A0A0 swapped when pressed) are drawn as the crisp captures show them, the same in every bar (the drift tables are gone). The toolbar pictures are cut from crisp composites (scripts/looks_bar_ref1to1.py builds the row and hot sheets from main-window@1x and the hover-toolbar-button grabs; scripts/gen_wintoolicon.py). looks_strict on windows-1to1: toolbar_button 1 of 1, toolbar_button_row 16 of 16, toolbar_button_hot 136 of 136 cells, 0 flat chrome px and ink boxes agree; the 26th row of each composite cell (the next window element, #828282) is left the face because the bar is 25 rows. Not captured: unhovered enabled buttons of the Standard and Cards bars beyond the row sheet, the other bars' pressed states.",
+    "gaps": [
+     "the 26th row below the bar is not drawn (outside the control)",
+     "pressed and hot states exist only for the buttons v3 was captured on"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. Against the old popup captures (crisp, see the README) 75 of 76 sheets pass looks_strict and the flat chrome px off total 80 in the whole set, every one inside a 16 x 16 v3 picture (framed picture ground, disabled pictures); the File menu now lists its Exit item (baked from the 1:1 composite, light look only: scripts/gen_winmenuicon.py reads ref/windows then ref/windows-1to1 and fills pictures the old grab lacked). popup_menu_file does not pass either reference: the old file has no Exit row, the 1:1 capture of the same menu shows the checked row without our sunken dither frame (0 flat chrome px, text exact, ink boxes differ on that row), and no single capture agrees with the sheets that pass. Review.",
+    "gaps": [
+     "popup_menu_file: the old and the 1:1 captures disagree on the checked row",
+     "a few v3 pictures differ by up to 29 px each (framed grounds, disabled pictures)"
+    ]
+   }
+  }
+ }
+}

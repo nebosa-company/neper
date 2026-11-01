@@ -16731,46 +16731,6 @@ fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.Resolv
     ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 23.0, min_height: 22.0, corners: zero }
 }
 
-// (looks5-f) A grey that drifts along the main window: `table` holds one digit per measured toolbar button
-// (x 384, 407, 466, 489, 512, 617, 640 of the 800 px window) as an offset from `base`; between them it
-// interpolates, past them it holds.
-fn windows_tool_drift(along: f32, table: str, base: f32) -> u32 {
-    var k = 0usize
-    var x0: f32 = 384.0
-    var x1: f32 = 407.0
-    if along >= 407.0 {
-        k = 1usize
-        x0 = 407.0
-        x1 = 466.0
-    }
-    if along >= 466.0 {
-        k = 2usize
-        x0 = 466.0
-        x1 = 489.0
-    }
-    if along >= 489.0 {
-        k = 3usize
-        x0 = 489.0
-        x1 = 512.0
-    }
-    if along >= 512.0 {
-        k = 4usize
-        x0 = 512.0
-        x1 = 617.0
-    }
-    if along >= 617.0 {
-        k = 5usize
-        x0 = 617.0
-        x1 = 640.0
-    }
-    var frac = (along - x0) / (x1 - x0)
-    if frac < 0.0 { frac = 0.0 }
-    if frac > 1.0 { frac = 1.0 }
-    let v0 = f32(u32(table[k]) - 48u32)
-    let v1 = f32(u32(table[k + 1usize]) - 48u32)
-    ret u32(base + v0 + (v1 - v0) * frac + 0.5)
-}
-
 fn windows_tool_part(x: f32, y: f32, w: f32, h: f32, grey: u32) -> widget.Node {
     var s = style.defaults()
     s.background = paint.Brush { Solid: style.hex(grey * 65793u32) }
@@ -16779,81 +16739,23 @@ fn windows_tool_part(x: f32, y: f32, w: f32, h: f32, grey: u32) -> widget.Node {
     ret widget.positioned(0u64, x, y, s, zero)
 }
 
-// (looks5-f) The 2 px box of a hot or pressed toolbar button, 24 x 23 with its top left at the cell's (0, -1) (the
-// pixels of states/hover-toolbar-button-search-*, drifting along the window as the bar greys do; `along` is the
-// button's x in the 800 px window): hot is raised (#FA and #F5 above and left, #BE, #D2 and #B9 below and right),
-// pressed sunken (#BD, #D3 and #B8 dark above and left, #F9, #F6 light below and right, #F0 inside). Parts are
-// placed by the caller at (-2, -3) from the content's origin, which the button's 2 px padding puts at (2, 2) of the cell.
+// The 1 px box of a hot or pressed toolbar button, 23 x 22 (the 1:1 captures states/hover-toolbar-button-*): hot is raised
+// (#FFFFFF above and at the left, #A0A0A0 at the right and below), pressed sunken (the two swapped). `along` is unused: the
+// greys no longer drift along the window. The caller places the box at (-2, -3) from the content's origin.
 fn windows_tool_box(a: *mem.Arena, pressed: bool, along: f32) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let ox: f32 = 0.0
-    let oy: f32 = 0.0
-    var n = 0usize
-    if !pressed {
-        let l0 = windows_tool_drift(along, "3222110", 249.0)
-        let l1 = windows_tool_drift(along, "0111223", 243.0)
-        let l1_top = windows_tool_drift(along, "0000011", 248.0)
-        let corner = windows_tool_drift(along, "1111100", 246.0)
-        let r0_top = windows_tool_drift(along, "013459:", 203.0)
-        let r0_second = windows_tool_drift(along, "01467<=", 180.0)
-        let r0 = windows_tool_drift(along, "01456;<", 179.0)
-        let r0_foot = windows_tool_drift(along, "0122245", 167.0)
-        let r1_top = windows_tool_drift(along, "8755410", 220.0)
-        let r1 = windows_tool_drift(along, "<;87610", 209.0)
-        let r1_foot = windows_tool_drift(along, "5433310", 228.0)
-        let l_foot = windows_tool_drift(along, "0023366", 206.0)
-        let l_last = windows_tool_drift(along, "0122355", 216.0)
-        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
-        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 250u32)
-        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
-        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, r1_top)
-        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
-        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
-        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
-        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 245u32)
-        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
-        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
-        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
-        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, l_foot)
-        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, 192u32)
-        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 190u32)
-        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, r0_foot)
-        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, l_last)
-        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 210u32)
-        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, r1_foot)
-        n += 18usize
-    } else {
-        let corner = windows_tool_drift(along, "0000111", 203.0)
-        let r0_top = windows_tool_drift(along, "1111000", 231.0)
-        let l0 = windows_tool_drift(along, "0001222", 182.0)
-        let l1_top = windows_tool_drift(along, "1111000", 196.0)
-        let r0_second = windows_tool_drift(along, "1111000", 241.0)
-        let r1 = windows_tool_drift(along, "0001111", 244.0)
-        let l1 = windows_tool_drift(along, "2221000", 216.0)
-        let r0 = windows_tool_drift(along, "1111000", 250.0)
-        let l1_foot = windows_tool_drift(along, "1111000", 240.0)
-        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
-        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 189u32)
-        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
-        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, 243u32)
-        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
-        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
-        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
-        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 211u32)
-        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
-        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
-        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
-        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, 225u32)
-        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, l1_foot)
-        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 249u32)
-        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, 253u32)
-        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, 244u32)
-        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 246u32)
-        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, 242u32)
-        n += 18usize
+    var lit = 255u32
+    var shade = 160u32
+    if pressed {
+        lit = 160u32
+        shade = 255u32
     }
-    ret (widget.stack(0u64, sized_style(24.0, 23.0), parts[0usize..n]), ok)
+    parts[0usize] = windows_tool_part(0.0, 0.0, 22.0, 1.0, lit)
+    parts[1usize] = windows_tool_part(0.0, 1.0, 1.0, 20.0, lit)
+    parts[2usize] = windows_tool_part(22.0, 0.0, 1.0, 21.0, shade)
+    parts[3usize] = windows_tool_part(0.0, 21.0, 23.0, 1.0, shade)
+    ret (widget.stack(0u64, sized_style(23.0, 22.0), parts[0usize..4usize]), ok)
 }
 
 // A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3 draws bitmaps). Hot and pressed draw v3's

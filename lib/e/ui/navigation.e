@@ -9173,105 +9173,29 @@ fn windows_rect(x: f32, y: f32, w: f32, h: f32, color: u32) -> widget.Node {
     ret widget.positioned(0u64, x, y, s, zero)
 }
 
-// (looks5-f) One column of a toolbar's grip: the greys of rows 1, 2, 3 to 21, 22 and 23.
-fn windows_grip_column(parts: []widget.Node, at: usize, x: f32, g1: u32, g2: u32, g3: u32, g22: u32, g23: u32) -> usize {
-    parts[at] = windows_rect(x, 1.0, 1.0, 1.0, g1 * 65793u32)
-    parts[at + 1usize] = windows_rect(x, 2.0, 1.0, 1.0, g2 * 65793u32)
-    parts[at + 2usize] = windows_rect(x, 3.0, 1.0, 19.0, g3 * 65793u32)
-    parts[at + 3usize] = windows_rect(x, 22.0, 1.0, 1.0, g22 * 65793u32)
-    parts[at + 4usize] = windows_rect(x, 23.0, 1.0, 1.0, g23 * 65793u32)
-    ret at + 5usize
+// A toolbar's grip (1:1 capture): two groups of three columns from x 4. White, face and #A0A0A0 down rows 1 to 22 (the white pair at
+// the top of rows 1, the dark pair at the foot), the same in every bar.
+fn windows_toolbar_grip(parts: []widget.Node, at: usize) -> usize {
+    var n = at
+    var g = 0usize
+    while g < 2usize {
+        let x = 4.0 + 3.0 * f32(g)
+        parts[n] = windows_rect(x, 1.0, 1.0, 22.0, 16777215u32)
+        parts[n + 1usize] = windows_rect(x + 2.0, 1.0, 1.0, 22.0, 10526880u32)
+        n += 2usize
+        g += 1usize
+    }
+    parts[n] = windows_rect(5.0, 1.0, 1.0, 1.0, 16777215u32)
+    parts[n + 1usize] = windows_rect(8.0, 1.0, 1.0, 1.0, 16777215u32)
+    parts[n + 2usize] = windows_rect(5.0, 22.0, 2.0, 1.0, 10526880u32)
+    parts[n + 3usize] = windows_rect(8.0, 22.0, 2.0, 1.0, 10526880u32)
+    ret n + 4usize
 }
 
-// (looks5-f) The pixels of the live toolbars (ref/windows/toolbar_button.png: the four bars of v3's second toolbar row, Standard,
-// Cards, Search and Help, `k` 0 to 3). A grip is seven columns from x 4, each its rows 1, 2, 3 to 21, 22 and 23, and the greys
-// drift lighter or darker along the row.
-fn windows_toolbar_grip(parts: []widget.Node, at: usize, k: usize) -> usize {
-    var n = at
-    if k == 0usize {
-        n = windows_grip_column(parts, n, 4.0, 250u32, 255u32, 255u32, 255u32, 246u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 245u32, 240u32, 191u32, 210u32)
-        n = windows_grip_column(parts, n, 6.0, 189u32, 160u32, 160u32, 160u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 249u32, 255u32, 255u32, 255u32, 246u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 245u32, 240u32, 191u32, 210u32)
-        n = windows_grip_column(parts, n, 9.0, 189u32, 160u32, 160u32, 160u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 240u32, 239u32, 239u32, 239u32, 240u32)
-    } else if k == 1usize {
-        n = windows_grip_column(parts, n, 4.0, 248u32, 253u32, 253u32, 253u32, 245u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 247u32, 242u32, 199u32, 214u32)
-        n = windows_grip_column(parts, n, 6.0, 197u32, 171u32, 171u32, 164u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 242u32, 242u32, 242u32, 242u32, 241u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 247u32, 242u32, 199u32, 214u32)
-        n = windows_grip_column(parts, n, 9.0, 197u32, 171u32, 171u32, 164u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 233u32, 229u32, 229u32, 229u32, 236u32)
-    } else if k == 2usize {
-        n = windows_grip_column(parts, n, 4.0, 247u32, 251u32, 251u32, 251u32, 244u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 248u32, 244u32, 208u32, 219u32)
-        n = windows_grip_column(parts, n, 6.0, 205u32, 183u32, 182u32, 168u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 233u32, 229u32, 229u32, 229u32, 236u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 248u32, 244u32, 208u32, 219u32)
-        n = windows_grip_column(parts, n, 9.0, 205u32, 183u32, 182u32, 168u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 226u32, 218u32, 218u32, 218u32, 232u32)
-    } else {
-        n = windows_grip_column(parts, n, 4.0, 246u32, 250u32, 250u32, 250u32, 244u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 249u32, 245u32, 214u32, 223u32)
-        n = windows_grip_column(parts, n, 6.0, 211u32, 191u32, 189u32, 171u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 228u32, 221u32, 221u32, 221u32, 233u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 249u32, 245u32, 214u32, 223u32)
-        n = windows_grip_column(parts, n, 9.0, 211u32, 191u32, 189u32, 171u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 221u32, 211u32, 211u32, 211u32, 229u32)
-    }
-    ret n
-}
-
-// (looks5-f) A closed toolbar's last column (its top, side and foot greys by bar) and, for the bars beside another bar, the
-// light column and the faint one past it that the previous bar's edge leaves at this bar's left (rows 0, 1 to 23, 24).
-fn windows_toolbar_edges(parts: []widget.Node, at: usize, k: usize, width: f32, height: f32) -> usize {
-    var n = at
-    var end_top = 171u32
-    var end_side = 170u32
-    var end_foot = 164u32
-    var lead_foot = 196u32
-    var extra_top = 0u32
-    var extra = 0u32
-    var extra_foot = 0u32
-    if k == 1usize {
-        end_top = 183u32
-        end_side = 181u32
-        end_foot = 168u32
-        lead_foot = 191u32
-        extra_top = 247u32
-        extra = 242u32
-        extra_foot = 191u32
-    } else if k == 2usize {
-        end_top = 190u32
-        end_side = 188u32
-        end_foot = 171u32
-        lead_foot = 186u32
-        extra_top = 248u32
-        extra = 244u32
-        extra_foot = 192u32
-    } else if k == 3usize {
-        end_top = 193u32
-        end_side = 191u32
-        end_foot = 172u32
-        lead_foot = 183u32
-        extra_top = 249u32
-        extra = 245u32
-        extra_foot = 192u32
-    }
-    parts[n] = windows_rect(0.0, height - 2.0, 1.0, 1.0, lead_foot * 65793u32)
-    parts[n + 1usize] = windows_rect(width - 1.0, 0.0, 1.0, 1.0, end_top * 65793u32)
-    parts[n + 2usize] = windows_rect(width - 1.0, 1.0, 1.0, height - 3.0, end_side * 65793u32)
-    parts[n + 3usize] = windows_rect(width - 1.0, height - 2.0, 1.0, 1.0, end_foot * 65793u32)
-    n += 4usize
-    if k > 0usize {
-        parts[n] = windows_rect(1.0, 0.0, 1.0, 1.0, extra_top * 65793u32)
-        parts[n + 1usize] = windows_rect(1.0, 1.0, 1.0, height - 3.0, extra * 65793u32)
-        parts[n + 2usize] = windows_rect(1.0, height - 2.0, 1.0, 1.0, extra_foot * 65793u32)
-        n += 3usize
-    }
-    ret n
+// A closed toolbar's last column: #A0A0A0 from the top to the foot line.
+fn windows_toolbar_edges(parts: []widget.Node, at: usize, width: f32, height: f32) -> usize {
+    parts[at] = windows_rect(width - 1.0, 0.0, 1.0, height - 1.0, 10526880u32)
+    ret at + 1usize
 }
 
 // The dxBar strip, `height` tall (26 in v3: measured at 100 % from the live main window): #F0F0F0
@@ -9293,24 +9217,24 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
     let (core, core_error) = mem.alloc[widget.Node](a, 1usize)
     if core_error != ok { ret (zero, TooLarge) }
     core[0usize] = widget.box(0u64, fill, zero)
-    var dark = 12500670u32
-    var light = 13816530u32
+    var dark = 10526880u32
+    var light = 15790320u32
     var x2: widget.Node = zero
     var x3: widget.Node = zero
     if menu {
-        dark = 12369084u32
-        light = 14606046u32
-        let (a3, e3) = windows_layer(a, 16119285u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
+        dark = 10526880u32
+        light = 16777215u32
+        let (a3, e3) = windows_layer(a, 15790320u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
         if e3 != ok { ret (zero, e3) }
         x3 = a3
         let (a2, e2) = windows_layer(a, 16777215u32, 1.0, 1.0, 0.0, 0.0, x3)
         if e2 != ok { ret (zero, e2) }
         x2 = a2
     } else {
-        let (a3, e3) = windows_layer(a, 16119285u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
+        let (a3, e3) = windows_layer(a, 15790320u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
         if e3 != ok { ret (zero, e3) }
         x3 = a3
-        let (a2, e2) = windows_layer(a, lead, 1.0, 0.0, 0.0, 0.0, x3)
+        let (a2, e2) = windows_layer(a, 16777215u32, 1.0, 0.0, 0.0, 0.0, x3)
         if e2 != ok { ret (zero, e2) }
         x2 = a2
     }
@@ -9329,12 +9253,8 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         parts[n] = windows_rect(0.0, height - 2.0, 1.0, 2.0, 16777215u32)
         n += 1usize
     }
-    var bar_k = 0usize
-    if lead == 15987699u32 { bar_k = 1usize }
-    if lead == 15132390u32 { bar_k = 2usize }
-    if lead == 14540253u32 { bar_k = 3usize }
     if grip && !menu {
-        n = windows_toolbar_grip(parts, n, bar_k)
+        n = windows_toolbar_grip(parts, n)
     }
     if grip && menu {
         var top: f32 = 1.0
@@ -9358,7 +9278,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         while edge < 2usize {
             let x = 6.0 + 3.0 * f32(edge)
             if menu {
-                parts[n] = windows_rect(x, top, 1.0, 1.0, 12303291u32)
+                parts[n] = windows_rect(x, top, 1.0, 1.0, 10526880u32)
                 parts[n + 1usize] = windows_rect(x, top + 1.0, 1.0, rows - 1.0, shade)
                 n += 2usize
             } else {
@@ -9371,15 +9291,13 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         }
     }
     if menu && grip {
-        // (looks4-f) the main menu's grip starts with a soft top (measured: #FA, #F5 beside the lines).
-        parts[n] = windows_rect(4.0, 2.0, 2.0, 1.0, 16448250u32)
-        parts[n + 1usize] = windows_rect(7.0, 2.0, 2.0, 1.0, 16448250u32)
-        parts[n + 2usize] = windows_rect(5.0, 3.0, 1.0, 1.0, 16119285u32)
-        parts[n + 3usize] = windows_rect(8.0, 3.0, 1.0, 1.0, 16119285u32)
-        n += 4usize
+        // The main menu's grip: both white columns are two px wide on its first row (the 1:1 capture).
+        parts[n] = windows_rect(4.0, 2.0, 2.0, 1.0, 16777215u32)
+        parts[n + 1usize] = windows_rect(7.0, 2.0, 2.0, 1.0, 16777215u32)
+        n += 2usize
     }
     if closed && width > 0.0 {
-        n = windows_toolbar_edges(parts, n, bar_k, width, height)
+        n = windows_toolbar_edges(parts, n, width, height)
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -10335,7 +10253,7 @@ fn windows_bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // line at its left (`tone`: #A0A0A0 at the bar's left, fading to #B5B5B5 along it) with a soft
 // #E3E3E3 beside it on every panel but the first, a #F5F5F5 line below and a #FCFCFC and
 // #F3F3F3 pair at its right. The text sits 3 in (the first panel centres it).
-fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u32, first: bool, centered: bool) -> (widget.Node, err) {
+fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, last: bool, first: bool, centered: bool) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
@@ -10348,23 +10266,18 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, tone: u
     } else {
     parts[n] = windows_rect(0.0, 0.0, width, 17.0, 15790320u32)
     n += 1usize
-    parts[n] = windows_rect(1.0, 0.0, width - 1.0, 1.0, 12303291u32)
+    // The 1:1 capture: #A0A0A0 above and at the left, a #FFFFFF column inside the right edge (the last panel has none and its top
+    // line runs to its edge), the top line stopping before that column.
+    var top_line = width - 2.0
+    if last { top_line = width - 1.0 }
+    parts[n] = windows_rect(0.0, 0.0, top_line, 1.0, 10526880u32)
     n += 1usize
-    parts[n] = windows_rect(0.0, 16.0, width, 1.0, 16119285u32)
+    parts[n] = windows_rect(0.0, 0.0, 1.0, 17.0, 10526880u32)
     n += 1usize
-    parts[n] = windows_rect(0.0, 0.0, 1.0, 17.0, tone)
-    n += 1usize
-    if !first {
-        // (looks4-f) the soft column darkens with the tone (#E3 at the first joint, #DB at the second).
-        let grey = tone / 65793u32
-        let soft = u32(227i64 - (i64(grey) - 173i64) * 8i64 / 7i64)
-        parts[n] = windows_rect(1.0, 1.0, 1.0, 15.0, soft * 65793u32)
+    if !last {
+        parts[n] = windows_rect(width - 2.0, 0.0, 1.0, 17.0, 16777215u32)
         n += 1usize
     }
-    parts[n] = windows_rect(width - 2.0, 1.0, 1.0, 15.0, 16579836u32)
-    n += 1usize
-    parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 15.0, 15987699u32)
-    n += 1usize
     }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
@@ -10408,40 +10321,31 @@ fn windows_status_grip(a: *mem.Arena) -> (widget.Node, err) {
         }
         ret (widget.stack(0u64, control.sized_style(13.0, 12.0), dots[0usize..n]), ok)
     }
-    let tones = [4]u32{ 15329769u32, 12434877u32, 11447982u32, 14342874u32 }
-    let last = [4]u32{ 16448250u32, 14540253u32, 12632256u32, 14474460u32 }
+    // Three diagonal strokes (1:1 capture): along a pixel's distance d from the corner diagonal (x + y), 0 is #FFFFFF, 1 and 2 are
+    // #A0A0A0 and 3 is the face, repeating; tile x 12 is the bar's white edge column, drawn by the bar.
     let (rows, rows_error) = mem.alloc[widget.Node](a, 12usize)
     if rows_error != ok { ret (zero, TooLarge) }
-    var d = 0usize
-    while d < 12usize {
-        let (dots, dots_error) = mem.alloc[widget.Node](a, 13usize)
+    var ty = 0usize
+    while ty < 12usize {
+        let (dots, dots_error) = mem.alloc[widget.Node](a, 12usize)
         if dots_error != ok { ret (zero, TooLarge) }
         var count = 0usize
-        if d == 11usize {
-            var x = 0usize
-            while x < 13usize {
-                dots[count] = windows_rect(f32(x), 0.0, 1.0, 1.0, last[x % 4usize])
+        var tx = 11usize - ty
+        while tx < 12usize {
+            let d = (tx + ty - 11usize) % 4usize
+            if d < 3usize {
+                var shade = 16777215u32
+                if d > 0usize { shade = 10526880u32 }
+                dots[count] = windows_rect(f32(tx), 0.0, 1.0, 1.0, shade)
                 count += 1usize
-                x += 1usize
             }
-        } else {
-            var i = 0usize
-            while i + d < 13usize {
-                var shade = 15987699u32
-                if i > 0usize { shade = tones[(i - 1usize) % 4usize] }
-                dots[count] = windows_rect(f32(d + i), 0.0, 1.0, 1.0, shade)
-                count += 1usize
-                i += 1usize
-            }
+            tx += 1usize
         }
-        // row d = 0 is the highest (bar row 6): the stroke starts d from the left edge
-        var y: f32 = 10.0 - f32(d)
-        if d == 11usize { y = 11.0 }
         let (line, line_error) = mem.alloc[widget.Node](a, 1usize)
         if line_error != ok { ret (zero, TooLarge) }
         line[0usize] = widget.stack(0u64, control.sized_style(13.0, 1.0), dots[0usize..count])
-        rows[d] = widget.positioned(0u64, 0.0, y, control.sized_style(13.0, 1.0), line[0usize..1usize])
-        d += 1usize
+        rows[ty] = widget.positioned(0u64, 0.0, f32(ty), control.sized_style(13.0, 1.0), line[0usize..1usize])
+        ty += 1usize
     }
     ret (widget.stack(0u64, control.sized_style(13.0, 12.0), rows[0usize..12usize]), ok)
 }
@@ -10558,17 +10462,10 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     var made = 0usize
     var at: f32 = 0.0
     var end_at = width - end_total + 1.0
-    // (looks4-f) Where two panels meet v3 interrupts the bar's top and bottom lines for 4 px (the
-    // joints, measured from the live capture: greys of the columns left-3 .. left+1 on rows 0, 1, 17
-    // and 18, for the first and the second joint).
-    let (joints, joints_error) = mem.alloc[widget.Node](a, 40usize)
+    // The white line below the panels is cut for the 2 px at each joint between two panels.
+    let (joints, joints_error) = mem.alloc[widget.Node](a, items.len + 1usize)
     if joints_error != ok { ret (zero, TooLarge) }
     var jn = 0usize
-    var joint_no = 0usize
-    let joint_rows = [2][4]u32{ [4]u32{ 240u32, 241u32, 240u32, 217u32 }, [4]u32{ 237u32, 241u32, 240u32, 220u32 } }
-    let joint_row1 = [2][5]u32{ [5]u32{ 244u32, 243u32, 240u32, 173u32, 183u32 }, [5]u32{ 238u32, 244u32, 240u32, 181u32, 180u32 } }
-    let joint_row17 = [2][5]u32{ [5]u32{ 253u32, 243u32, 240u32, 200u32, 236u32 }, [5]u32{ 252u32, 244u32, 240u32, 204u32, 231u32 } }
-    let joint_row18 = [2][4]u32{ [4]u32{ 255u32, 247u32, 245u32, 253u32 }, [4]u32{ 255u32, 248u32, 245u32, 252u32 } }
     var pass = 0usize
     while pass < 2usize {
         i = 0usize
@@ -10576,26 +10473,13 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             if items[i].end == (pass == 1usize) {
                 var left = at
                 if pass == 1usize { left = end_at }
-                let tone = 160u32 + u32(left * 0.047)
-                let (panel, panel_error) = windows_status_panel(a, contents[i], sizes[i], tone * 65793u32, left < 1.0, items[i].centered)
+                let (panel, panel_error) = windows_status_panel(a, contents[i], sizes[i], left + sizes[i] >= width - 1.0, left < 1.0, items[i].centered)
                 if panel_error != ok { ret (zero, panel_error) }
                 row[made] = panel
                 made += 1usize
-                if left >= 1.0 && pass == 0usize && joint_no < 2usize && !dark {
-                    var c = 0usize
-                    while c < 5usize {
-                        let x = left - 3.0 + f32(c)
-                        if c < 4usize {
-                            joints[jn] = windows_rect(x, 0.0, 1.0, 1.0, joint_rows[joint_no][c] * 65793u32)
-                            joints[jn + 1usize] = windows_rect(x, 18.0, 1.0, 1.0, joint_row18[joint_no][c] * 65793u32)
-                            jn += 2usize
-                        }
-                        joints[jn] = windows_rect(x, 1.0, 1.0, 1.0, joint_row1[joint_no][c] * 65793u32)
-                        joints[jn + 1usize] = windows_rect(x, 17.0, 1.0, 1.0, joint_row17[joint_no][c] * 65793u32)
-                        jn += 2usize
-                        c += 1usize
-                    }
-                    joint_no += 1usize
+                if left >= 1.0 {
+                    joints[jn] = windows_rect(left - 2.0, 18.0, 2.0, 1.0, 15790320u32)
+                    jn += 1usize
                 }
                 if pass == 1usize { end_at += sizes[i] + 1.0 } else { at += sizes[i] + 1.0 }
             }
@@ -10625,17 +10509,13 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     } else {
         parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
         n += 1usize
-        parts[n] = windows_rect(0.0, 0.0, width, 1.0, 13948116u32)
-        n += 1usize
         parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16777215u32)
+        n += 1usize
+        parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), joints[0usize..jn])
         n += 1usize
     }
     parts[n] = widget.positioned(0u64, 0.0, 1.0, line, panels[0usize..1usize])
     n += 1usize
-    if jn > 0usize {
-        parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), joints[0usize..jn])
-        n += 1usize
-    }
     let (grip, grip_error) = windows_status_grip(a)
     if grip_error != ok { ret (zero, grip_error) }
     let (grip_held, grip_held_error) = mem.alloc[widget.Node](a, 1usize)
@@ -10644,27 +10524,9 @@ fn windows_status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     parts[n] = widget.positioned(0u64, width - 13.0, 6.0, control.sized_style(13.0, 12.0), grip_held[0usize..1usize])
     n += 1usize
     if !dark {
-    // (looks4-f) The last two columns above and beside the grip, as the live bar ends (v3 has no
-    // right-hand pair on the last panel and a shaded last column).
-    let edge = [19]u32{ 230u32, 224u32, 248u32, 248u32, 248u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 240u32, 211u32, 223u32, 250u32, 255u32 }
-    let near = [6]u32{ 212u32, 187u32, 240u32, 240u32, 240u32, 243u32 }
-    let (ends_nodes, ends_error) = mem.alloc[widget.Node](a, 30usize)
-    if ends_error != ok { ret (zero, TooLarge) }
-    var en = 0usize
-    var ey = 0usize
-    while ey < 19usize {
-        ends_nodes[en] = windows_rect(width - 1.0, f32(ey), 1.0, 1.0, edge[ey] * 65793u32)
-        en += 1usize
-        if ey < 6usize {
-            ends_nodes[en] = windows_rect(width - 2.0, f32(ey), 1.0, 1.0, near[ey] * 65793u32)
-            en += 1usize
-        }
-        ey += 1usize
-    }
-    ends_nodes[en] = windows_rect(0.0, 17.0, 1.0, 1.0, 192u32 * 65793u32)
-    en += 1usize
-    parts[n] = widget.stack(0u64, control.sized_style(width, 19.0), ends_nodes[0usize..en])
-    n += 1usize
+        // the bar's last column is white from the panels' top to the white line
+        parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 18.0, 16777215u32)
+        n += 1usize
     }
     ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
 }
@@ -10755,159 +10617,38 @@ fn windows_menu_under() -> f32 { ret 2.0 }
 // the live captures (states/main-window-rest, where the pointer rested on View, and
 // states/menu-bar-open-title-*). `bw` is the title's width; each fills `parts` and answers how many.
 fn windows_title_box_hot(parts: []widget.Node, bw: f32, along: f32) -> usize {
-    // (looks5-f) every grey drifts along the bar as the open box's do (windows_open_drift): read from the ten hot-title grabs
-    // (states/hover-menubar-title-*), which also fill the box's right edge and the extra column past it.
-    let l_top = windows_open_drift(along, "222111000", 248.0)
-    let left = windows_open_drift(along, "443322210", 251.0)
-    let c1_top = windows_open_drift(along, "000111222", 245.0)
-    let c1 = windows_open_drift(along, "001122234", 240.0)
-    let l21 = windows_open_drift(along, "01234679;", 193.0)
-    let c1_21 = windows_open_drift(along, "000000011", 188.0)
-    let l22 = windows_open_drift(along, "001223456", 213.0)
-    let r_top = windows_open_drift(along, "024579;<?", 188.0)
-    let r_second = windows_open_drift(along, "02579<>AE", 162.0)
-    let r_mid = windows_open_drift(along, "02469;=?C", 162.0)
-    let r21 = windows_open_drift(along, "001233456", 161.0)
-    let e_top = windows_open_drift(along, "=;:975420", 226.0)
-    let e_mid = windows_open_drift(along, "CA?=:8530", 219.0)
-    let e22 = windows_open_drift(along, "665433210", 233.0)
-    parts[0usize] = windows_rect(0.0, 0.0, 1.0, 1.0, l_top * 65793u32)
-    parts[1usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 16448250u32)
-    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, r_top * 65793u32)
-    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, e_top * 65793u32)
-    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 18.0, left * 65793u32)
-    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, c1_top * 65793u32)
-    parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 16119285u32)
-    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, r_second * 65793u32)
-    parts[8usize] = windows_rect(bw, 1.0, 1.0, 19.0, e_mid * 65793u32)
-    parts[9usize] = windows_rect(1.0, 2.0, 1.0, 17.0, c1 * 65793u32)
-    parts[10usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, r_mid * 65793u32)
-    parts[11usize] = windows_rect(0.0, 19.0, 1.0, 1.0, l21 * 65793u32)
-    parts[12usize] = windows_rect(1.0, 19.0, 1.0, 1.0, c1_21 * 65793u32)
-    parts[13usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 12303291u32)
-    parts[14usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, r21 * 65793u32)
-    parts[15usize] = windows_rect(0.0, 20.0, 1.0, 1.0, l22 * 65793u32)
-    parts[16usize] = windows_rect(1.0, 20.0, bw - 1.0, 1.0, 13948116u32)
-    parts[17usize] = windows_rect(bw, 20.0, 1.0, 1.0, e22 * 65793u32)
-    ret 18usize
+    // The raised box of the 1:1 captures: #FFFFFF top and left, #A0A0A0 right and bottom, one px, nothing around it.
+    parts[0usize] = windows_rect(0.0, 0.0, bw - 1.0, 1.0, 16777215u32)
+    parts[1usize] = windows_rect(0.0, 1.0, 1.0, 18.0, 16777215u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 20.0, 10526880u32)
+    parts[3usize] = windows_rect(0.0, 19.0, bw - 1.0, 1.0, 10526880u32)
+    ret 4usize
 }
 
-// (looks5-f) A grey that drifts along the bar: `table` holds one digit per measured open title (File, Cards,
-// Search, View, Card Art, Online, Reports, Tools, Help: their box left edges at along 0, 29, 70, 119, 158, 215,
-// 261, 315, 402) as an offset from `base`; between the titles it interpolates, past them it holds.
-fn windows_open_drift(along: f32, table: str, base: f32) -> u32 {
-    var k = 0usize
-    var x0: f32 = 0.0
-    var x1: f32 = 29.0
-    if along >= 29.0 {
-        k = 1usize
-        x0 = 29.0
-        x1 = 70.0
-    }
-    if along >= 70.0 {
-        k = 2usize
-        x0 = 70.0
-        x1 = 119.0
-    }
-    if along >= 119.0 {
-        k = 3usize
-        x0 = 119.0
-        x1 = 158.0
-    }
-    if along >= 158.0 {
-        k = 4usize
-        x0 = 158.0
-        x1 = 215.0
-    }
-    if along >= 215.0 {
-        k = 5usize
-        x0 = 215.0
-        x1 = 261.0
-    }
-    if along >= 261.0 {
-        k = 6usize
-        x0 = 261.0
-        x1 = 315.0
-    }
-    if along >= 315.0 {
-        k = 7usize
-        x0 = 315.0
-        x1 = 402.0
-    }
-    var frac = (along - x0) / (x1 - x0)
-    if frac < 0.0 { frac = 0.0 }
-    if frac > 1.0 { frac = 1.0 }
-    let v0 = f32(u32(table[k]) - 48u32)
-    let v1 = f32(u32(table[k + 1usize]) - 48u32)
-    ret u32(base + v0 + (v1 - v0) * frac + 0.5)
-}
-
-// The open (sunken) title's box, every grey read from the nine live open-title captures (states/menu-bar-open-title-*):
-// the left line #A1 to #B4 with the line beside it 400 less that, the top left corner, the right line and the extra
-// column past it (#F0 to #F4) all drift along the window, and so do the corner pixels of the foot.
+// The open (sunken) title's box (states/menu-bar-open-title-*, 1:1).
 fn windows_title_box_open(parts: []widget.Node, bw: f32, along: f32) -> usize {
-    let left = 161u32 + u32(along * 0.0473 + 0.5)
-    let beside = 400u32 - left
-    let corner = windows_open_drift(along, "0124578:=", 187.0)
-    let beside_top = windows_open_drift(along, "=<;986530", 200.0)
-    let foot_left = windows_open_drift(along, "011223345", 222.0)
-    let foot_beside = windows_open_drift(along, "765543210", 243.0)
-    let right_top = windows_open_drift(along, "@><;97530", 233.0)
-    let right_second = windows_open_drift(along, ":98754320", 244.0)
-    let right = windows_open_drift(along, "433222110", 251.0)
-    let right_foot = windows_open_drift(along, "111000000", 254.0)
-    let extra = windows_open_drift(along, "011222334", 240.0)
-    let extra_top = windows_open_drift(along, "001112223", 240.0)
-    let extra_last = windows_open_drift(along, "000111111", 240.0)
-    var last_left = 245u32
-    if along >= 190.0 { last_left = 244u32 }
-    parts[0usize] = windows_rect(1.0, 0.0, bw - 2.0, 1.0, 12303291u32)
-    parts[1usize] = windows_rect(0.0, 0.0, 1.0, 1.0, corner * 65793u32)
-    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 1.0, right_top * 65793u32)
-    parts[3usize] = windows_rect(bw, 0.0, 1.0, 1.0, extra_top * 65793u32)
-    parts[4usize] = windows_rect(0.0, 1.0, 1.0, 18.0, left * 65793u32)
-    parts[5usize] = windows_rect(1.0, 1.0, 1.0, 1.0, beside_top * 65793u32)
-    parts[6usize] = windows_rect(2.0, 1.0, bw - 3.0, 1.0, 14013909u32)
-    parts[7usize] = windows_rect(bw - 1.0, 1.0, 1.0, 1.0, right_second * 65793u32)
-    parts[8usize] = windows_rect(bw, 1.0, 1.0, 19.0, extra * 65793u32)
-    parts[9usize] = windows_rect(1.0, 2.0, 1.0, 17.0, beside * 65793u32)
-    parts[10usize] = windows_rect(bw - 1.0, 2.0, 1.0, 17.0, right * 65793u32)
-    parts[11usize] = windows_rect(bw - 1.0, 19.0, 1.0, 1.0, right_foot * 65793u32)
-    parts[12usize] = windows_rect(0.0, 19.0, 1.0, 1.0, foot_left * 65793u32)
-    parts[13usize] = windows_rect(1.0, 19.0, 1.0, 1.0, foot_beside * 65793u32)
-    parts[14usize] = windows_rect(2.0, 19.0, bw - 3.0, 1.0, 16448250u32)
-    parts[15usize] = windows_rect(0.0, 20.0, bw, 1.0, 16119285u32)
-    parts[16usize] = windows_rect(0.0, 20.0, 1.0, 1.0, last_left * 65793u32)
-    parts[17usize] = windows_rect(bw, 20.0, 1.0, 1.0, extra_last * 65793u32)
-    ret 18usize
+    // The sunken box of the 1:1 captures: #A0A0A0 top and left, #FFFFFF right and bottom, one px, nothing around it.
+    parts[0usize] = windows_rect(0.0, 0.0, bw - 1.0, 1.0, 10526880u32)
+    parts[1usize] = windows_rect(0.0, 1.0, 1.0, 18.0, 10526880u32)
+    parts[2usize] = windows_rect(bw - 1.0, 0.0, 1.0, 20.0, 16777215u32)
+    parts[3usize] = windows_rect(0.0, 19.0, bw - 1.0, 1.0, 16777215u32)
+    ret 4usize
 }
 
 // (looks4-f) A bar separator as the live toolbar draws it: 6 x 22 (2 air, a dark and a light
 // column, 2 air), 21 full rows and a faded last one; the greys drift lighter / darker along the
 // window (#A3 / #FC at the left to #B2 / #EA at x 372, measured), so the caller names them.
-fn windows_bar_separator_tone(a: *mem.Arena, dark: u32, light: u32) -> (widget.Node, err) {
+fn windows_bar_separator_tone(a: *mem.Arena) -> (widget.Node, err) {
     if style.windows_dark_on() {
         let (flat, flat_error) = windows_bar_separator(a, 21.0)
         ret (flat, flat_error)
     }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    // The 1:1 capture: a #A0A0A0 and a #FFFFFF column, 22 rows from the bar's row 1, the same in every bar.
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let fade_dark = u32(i64(dark) + (240i64 - i64(dark)) * 5i64 / 8i64)
-    let fade_light = u32(i64(light) - (i64(light) - 240i64) * 2i64 / 3i64)
-    // (looks5-f) the soft first row (measured on the five separators: dark 163 to 178 starts at #BF to #C8, light 252 to 234
-    // at #F7 to #EC) and the faint column past the light one (#F1, #F3 from the fourth separator on)
-    let top_dark = u32(f32(dark) * 0.6 + 93.4)
-    let top_light = u32(f32(light) - (f32(light) - 240.0) * 0.42 + 0.5)
-    var extra = 241u32
-    if dark >= 172u32 { extra = 243u32 }
-    parts[0usize] = windows_rect(2.0, 0.0, 1.0, 21.0, dark * 65793u32)
-    parts[1usize] = windows_rect(3.0, 0.0, 1.0, 21.0, light * 65793u32)
-    parts[2usize] = windows_rect(2.0, 21.0, 1.0, 1.0, fade_dark * 65793u32)
-    parts[3usize] = windows_rect(3.0, 21.0, 1.0, 1.0, fade_light * 65793u32)
-    parts[4usize] = windows_rect(2.0, -1.0, 1.0, 1.0, top_dark * 65793u32)
-    parts[5usize] = windows_rect(3.0, -1.0, 1.0, 1.0, top_light * 65793u32)
-    parts[6usize] = windows_rect(4.0, 0.0, 1.0, 21.0, extra * 65793u32)
-    ret (widget.stack(0u64, control.sized_style(6.0, 22.0), parts[0usize..7usize]), ok)
+    parts[0usize] = windows_rect(2.0, -1.0, 1.0, 22.0, 10526880u32)
+    parts[1usize] = windows_rect(3.0, -1.0, 1.0, 22.0, 16777215u32)
+    ret (widget.stack(0u64, control.sized_style(6.0, 22.0), parts[0usize..2usize]), ok)
 }
 
 // (looks4-f) Tahoma 11 px (8 pt, v3's status bar text): GDI's whole-pixel advances, face 2.
@@ -10919,6 +10660,56 @@ fn windows_gdi_regular_11() -> str { ret "34486;72446844446666666666448885:76776
 // and 3 down, a two pixel separator (#D9D9D9, #EEEEEE) at the end of each panel but the last. An item whose `drop_order` is
 // 77 in first place selects it; `panel_width` is the width up to the separator's first pixel.
 fn windows_status_bar_report(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
+    style.windows_dark_enter(t.tokens)
+    if style.windows_dark_on() {
+        let (shown, shown_error) = windows_status_bar_report_dark(a, key, t, items, width)
+        ret (shown, shown_error)
+    }
+    let (bt, bt_error) = control.windows_bar_theme(a, t)
+    if bt_error != ok { ret (zero, bt_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize * items.len + 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    parts[n] = windows_rect(0.0, 0.0, width, 19.0, 15790320u32)
+    n += 1usize
+    parts[n] = windows_rect(0.0, 18.0, width, 1.0, 16119285u32)
+    n += 1usize
+    var at: f32 = 0.0
+    var i = 0usize
+    while i < items.len {
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        caption.wrap = .None
+        caption.size = 12.0
+        if items[i].text.len != 0usize {
+            // the preview form's TStatusBar draws Segoe UI 9 pt (12 px; the 57 px ink of "Page 1 of 1"), not Tahoma
+            let (said, said_error) = control.colored_text(a, 0u64, items[i].text, t, caption, style.hex(0u32))
+            if said_error != ok { ret (zero, said_error) }
+            let (said_run_width, _, _, said_metrics_error) = control.run_metrics_faced(a, t, caption, items[i].text)
+            if said_metrics_error != ok { ret (zero, said_metrics_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = said
+            parts[n] = widget.positioned(0u64, at + 2.0, 1.0, control.sized_style(said_run_width, 15.0), held[0usize..1usize])
+            n += 1usize
+        }
+        if items[i].panel_width > 0.0 && !items[i].fills {
+            at += items[i].panel_width
+            // a one pixel #D7D7D7 separator (the 1:1 capture)
+            parts[n] = windows_rect(at, 1.0, 1.0, 16.0, 14145495u32)
+            n += 1usize
+            at += 2.0
+        }
+        i += 1usize
+    }
+    // the bar's last column is a separator too
+    parts[n] = windows_rect(width - 1.0, 1.0, 1.0, 16.0, 14145495u32)
+    n += 1usize
+    ret (widget.stack(0u64, control.sized_style(width, 19.0), parts[0usize..n]), ok)
+}
+
+// The report bar under the Windows dark palette (no capture in that palette): the earlier drawing.
+fn windows_status_bar_report_dark(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, width: f32) -> (widget.Node, err) {
     style.windows_dark_enter(t.tokens)
     let (bt, bt_error) = control.windows_bar_theme(a, t)
     if bt_error != ok { ret (zero, bt_error) }

@@ -191,7 +191,15 @@ fn build_menu(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         let spec = &group.specs[i]
         let (action, action_error) = actions_of(a)
         if action_error != ok { ret (0usize, action_error) }
-        let (commands, commands_error) = parse_items(a, *action, spec.items, room, group.sub)
+        // The Exit item is the 1:1 capture's; the dark sheets keep their blank last item (no capture in that palette).
+        var items_text = spec.items
+        let exit_item = "|ps;Exit;Alt+X"
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark && strs.ends_with(items_text, exit_item) {
+            let (kept, kept_error) = strs.concat(a, items_text[0usize..items_text.len - exit_item.len], "|s; ;")
+            if kept_error != ok { ret (0usize, kept_error) }
+            items_text = kept
+        }
+        let (commands, commands_error) = parse_items(a, *action, items_text, room, group.sub)
         if commands_error != ok { ret (0usize, commands_error) }
         let anchor = 20u64 + 100u64 * u64(i)
         let (menu, menu_error) = navigation.bar_menu_limited(a, anchor + 1u64, t, anchor, "Menu", commands, true, action, spec.limit)
@@ -219,7 +227,7 @@ fn build_menu(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
 fn menu_specs(a: *mem.Arena) -> ([]Spec, err) {
     let (specs, specs_error) = mem.alloc[Spec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
-    specs[0usize] = Spec { name: "popup_menu_file", limit: 0.0, w: 251.0, h: 580.0, items: "dp;&New...;Ctrl+N|dp;&Open...;Ctrl+O|dpa;&Reopen;|dps;&Save;Ctrl+S|dp;Save &As...;|dp;Sav&e All;Ctrl+Shift+S|dp;&Close;|dp;C&lose All;Ctrl+Shift+F4|dp;&Delete Deck;|dps;&Properties...;Ctrl+I|dp;Deck &Legality...;F6|dp;&Statistics...;F7|p;Print Proxies...;|h;Mode;|;Deck from Card Pool;Ctrl+F2|c;Collection from Card Pool;Ctrl+F3|;Deck from Collection;Ctrl+F4|p;To&ggle Mode;F12|;To&ggle Mode in Reverse;Shift+F12|ps;&Import...;|p;Update Prices...;|ps;Full Screen;Shift+F11|p;&Minimize;Ctrl+Alt+M|p;Minimize and &Lock;Ctrl+Alt+L|p;Stay on Top;|s; ;" }
+    specs[0usize] = Spec { name: "popup_menu_file", limit: 0.0, w: 251.0, h: 580.0, items: "dp;&New...;Ctrl+N|dp;&Open...;Ctrl+O|dpa;&Reopen;|dps;&Save;Ctrl+S|dp;Save &As...;|dp;Sav&e All;Ctrl+Shift+S|dp;&Close;|dp;C&lose All;Ctrl+Shift+F4|dp;&Delete Deck;|dps;&Properties...;Ctrl+I|dp;Deck &Legality...;F6|dp;&Statistics...;F7|p;Print Proxies...;|h;Mode;|;Deck from Card Pool;Ctrl+F2|c;Collection from Card Pool;Ctrl+F3|;Deck from Collection;Ctrl+F4|p;To&ggle Mode;F12|;To&ggle Mode in Reverse;Shift+F12|ps;&Import...;|p;Update Prices...;|ps;Full Screen;Shift+F11|p;&Minimize;Ctrl+Alt+M|p;Minimize and &Lock;Ctrl+Alt+L|p;Stay on Top;|ps;Exit;Alt+X" }
     specs[1usize] = Spec { name: "popup_menu_cards", limit: 0.0, w: 217.0, h: 496.0, items: "dp;&Add to Deck;|dp;Add &4 to Deck;Ctrl+Ins|dp;Add to Sideboard;|dp;&Remove from Deck;Del|dps;&Add to Collection;|dp;Add &Foil to Collection;|dp;Remove from Collection;Del|dps;&Increase Quantity;Num +|dp;&Toggle Quantity;Ctrl+Alt+T|dp;&Decrease Quantity;Num -|d;Batch Update Selected...;|dp;Delete All;Ctrl+Alt+Shift+Del|dps;Cu&t;Ctrl+X|dp;&Copy;Ctrl+C|dp;&Paste;Ctrl+V|dp;S&elect All;Ctrl+A|sa;&Print;|a;&Export;|a;Copy as Text;|p;&Lock Collection;|dps;Next Deck;Ctrl+Right|dp;Previous Deck;Ctrl+Left" }
     specs[2usize] = Spec { name: "popup_menu_search", limit: 0.0, w: 227.0, h: 488.0, items: "p;&Filter Top...;F3|p;&Filter Bottom...;Shift+F3|p;&Advanced Filter...;Ctrl+Alt+F|p;Reset All Filters;|h;General Filter;|p;&Show Latest Reprints Only;|dpck;All Cards;|p;MTG Online Only;|;Wa&gic the Homebrew Only;|h;Search;|p;&Search...;Ctrl+F|dp;&Next;Ctrl+Down|dp;&Previous;Ctrl+Up|dp;&Cancel;Ctrl+Shift+F|h;Go to;|p;&First;|p;Pre&vious Page;|p;&Previous Card;|p;&Next Card;|p;Ne&xt Page;|p;&Last;|ps;To&ggle Bookmark;Ctrl+Shift+1|dp;Go to Bookmark;Ctrl+1" }
     specs[3usize] = Spec { name: "popup_menu_view", limit: 618.0, w: 214.0, h: 618.0, items: "h;Sort Order;|p;Sort by Edition & Card Name;|p;Sort by Card Name & Edition;|p;Sort...;|p;Clear Sort Order;|h;Group By;|;Group by Edition;|;Group by Type;|;Group by Color;|;Group by Rarity;|;Remove Grouping;|h;Cards;|pc;&Legality;Ctrl+L|p;&Card Rules;Ctrl+T|p;Show Columns...;Ctrl+Alt+C|p;Best &Fit (all columns);|p;Columns Auto &Width;|pc;Show &Group Box;|p;Full &Expand;|p;Full &Collapse;|ptc;Show &Header;|pc;Show &Indicator;|pu;Show Grid &Lines;|;Conditional Formattin&g...;|pmc;Show Summary Footer;|pc;Show &Navigator;|sa;&Toolbars;|c;&Status Bar;|p;Legend;|p;Navigator;" }

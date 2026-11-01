@@ -85,7 +85,7 @@ function Make-PatchedCopy($src='D:\Temp\claude\v3run\mtgstudio.exe',$dst='D:\Tem
   if($hit -ne 1){ throw "expected 1 mutex string, found $hit" }
   [IO.File]::WriteAllBytes($dst,$b) }
 Make-PatchedCopy
-$script:Out = Join-Path $PSScriptRoot '..\docs\ui\looks\ref\windows-1to1\states'
+$script:Out = if($env:V3_STATES_OUT){ $env:V3_STATES_OUT } else { Join-Path $PSScriptRoot '..\docs\ui\looks\ref\windows-1to1\states' }
 $script:p = $null
 $script:Rows = New-Object System.Collections.ArrayList
 $script:MenuX=[ordered]@{File=25;Cards=60;Search=105;View=149;'Card Art'=197;Online=249;Reports=299;Tools=347;Admin=390;Help=431}
