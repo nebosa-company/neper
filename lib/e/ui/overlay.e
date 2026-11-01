@@ -4927,6 +4927,7 @@ fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     options.width = width
     options.invalid = wrong || outside
     options.placeholder = hint
+    options.on_raised = t.tokens.profile == .MaterialLike
     let (field_node, field_error) = control.text_field(a, key, t, label, buffer, len, change, widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }, options)
     if field_error != ok { ret (zero, field_error) }
     var line = control.Message { validity: .Valid, text: hint }
@@ -5233,7 +5234,7 @@ fn date_modal_android(a: *mem.Arena, key: widget.Key, t: *const control.Theme, d
         let (held_entry, held_entry_error) = mem.alloc[widget.Node](a, 1usize)
         if held_entry_error != ok { ret (zero, TooLarge) }
         held_entry[0usize] = entry
-        days_node = widget.padded(0u64, 24.0, 16.0, 24.0, 0.0, style.defaults(), held_entry[0usize..1usize])
+        days_node = widget.padded(0u64, 24.0, 21.0, 24.0, 0.0, style.defaults(), held_entry[0usize..1usize])
     } else {
         var marks: CalendarMarks = zero
         marks.slot = 48.0

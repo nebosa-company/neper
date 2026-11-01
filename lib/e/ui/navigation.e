@@ -17,6 +17,7 @@ use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.looks_e_draw
+use e.ui.looks_q79
 use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -2053,9 +2054,19 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
             look.min_width = 0.0
             caption.role = .Body
         }
+        if looks_q79.is_material(t) {
+            looks_q79.title_look(t, &look, opened, state)
+            tint = look.foreground
+            caption.role = .LabelLarge
+        }
         let (label_node, label_error) = menu_title_label(a, t, menus[i].label, caption, tint, widget.menu_access_keys_visible(t.runtime))
         if label_error != ok { ret (zero, label_error) }
         var shown = label_node
+        if looks_q79.is_material(t) {
+            var fill = style.defaults()
+            fill.height = style.Length { Px: 48.0 }
+            shown = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, fill, control.mem_one_node(a, label_node))
+        }
         if linux {
             let (wide, wide_error) = control.linux_label_width(a, t, caption, menus[i].label)
             if wide_error != ok { ret (zero, wide_error) }
@@ -2108,6 +2119,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     let ends = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: ends, top: flat, right: ends, bottom: flat }
+    if looks_q79.is_material(t) { bar = looks_q79.bar_style(t) }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, heads[0usize..2usize * menus.len + lead_count])
@@ -2308,6 +2320,7 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         look.padding_y = 0.0
         look.min_height = 32.0
         look.min_width = 24.0
+        if looks_q79.is_material(t) { look.min_height = 48.0 }
         let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 0usize
@@ -2333,6 +2346,7 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         }
         var caption = control.text_options()
         caption.role = .BodyMedium
+        if looks_q79.is_material(t) { caption.role = .LabelLarge }
         caption.wrap = .None
         let (said, said_error) = control.colored_text(a, 0u64, c.label, t, caption, ink)
         if said_error != ok { ret (zero, said_error) }
@@ -2359,6 +2373,7 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
         line_style.width = style.Length { Percent: 100.0 }
         // Neper: the content fills the 32 high row, so its text centres in the hover fill (a content box of its own height sat at the row's top).
         if t.tokens.profile == .Neper { line_style.height = style.Length { Px: 32.0 } }
+        if looks_q79.is_material(t) { line_style.height = style.Length { Px: 48.0 } }
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, line_style, parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
@@ -2392,13 +2407,22 @@ fn bar_menu_clamped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
     sheet.background = .SurfaceContainer
     sheet.elevation = 2u8
     sheet.radius = t.tokens.radii.sm
+    if looks_q79.is_material(t) {
+        sheet.radius = 4.0
+        sheet.elevation = 0u8
+    }
     sheet.padding = 0.0
     var sheet_style = control.surface_style(t, sheet)
     let flat = style.Length { Px: 0.0 }
     let rim = style.Length { Px: 8.0 }
     sheet_style.padding = style.EdgeLengths { left: flat, top: rim, right: flat, bottom: rim }
     sheet_style.min_width = style.Length { Px: 200.0 }
+    if looks_q79.is_material(t) {
+        sheet_style.min_width = style.Length { Px: 112.0 }
+        sheet_style.shade = 2u8
+    }
     sheet_style.max_width = style.Length { Px: 320.0 }
+    if looks_q79.is_material(t) { sheet_style.max_width = style.Length { Px: 280.0 } }
     // Neper dark: the panel is 1.1:1 on the page and its shadow does not read on dark, so it takes the frame ink as an edge.
     if t.tokens.profile == .Neper && t.tokens.palette == .Dark { sheet_style.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
     if t.tokens.profile == .CupertinoLike {

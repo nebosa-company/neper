@@ -7035,10 +7035,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool, on_raised: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false, on_raised: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -7302,7 +7302,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     // stack that holds the notch is there floated or not.
     var boxed = frame
     if can_float && !options.filled {
-        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated)
+        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated, options.on_raised)
         if notched_error != ok { ret (zero, notched_error) }
         boxed = notched_node
     }
@@ -7365,7 +7365,7 @@ fn named_editor(a: *mem.Arena, key: widget.Key, label: str, hint: str, invalid: 
 
 // An outlined box with its floated label in a notch over its top edge, `pad_x` in;
 // not `shown`, the box alone in the same stack.
-fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32, shown: bool) -> (widget.Node, err) {
+fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32, shown: bool, raised: bool) -> (widget.Node, err) {
     if !shown {
         let (alone, alone_error) = mem.alloc[widget.Node](a, 1usize)
         if alone_error != ok { ret (zero, TooLarge) }
@@ -7390,6 +7390,7 @@ fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color
     notch_parts[0usize] = widget.box(0u64, lift, lifted[0usize..1usize])
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if raised { cut.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) } }
     let four = style.Length { Px: 4.0 }
     let none = style.Length { Px: 0.0 }
     cut.padding = style.EdgeLengths { left: four, top: none, right: four, bottom: none }
@@ -8463,7 +8464,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     if head_error != ok { ret (zero, head_error) }
     var framed = head_node
     if label.len != 0usize && notch {
-        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x, chosen)
+        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x, chosen, false)
         if notched_error != ok { ret (zero, notched_error) }
         framed = notched_node
     }
