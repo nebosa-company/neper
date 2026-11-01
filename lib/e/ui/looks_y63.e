@@ -390,6 +390,31 @@ fn bottom_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         hover = 0.06
         press = 0.04
     }
+    // GNOME: a bar too narrow for its buttons would shrink them and leave each label hugging one edge, so the side padding gives
+    // way instead (equal on both sides, whole pixels).
+    var trim: f32 = 0.0
+    if t.tokens.profile == .Linux {
+        var natural: f32 = 0.0
+        var buttons = acts.len
+        var w = 0usize
+        while w < acts.len {
+            let (said_w, said_w_error) = control.linux_label_width(a, t, caption_options(.BodyMedium), acts[w].label)
+            if said_w_error != ok { ret (zero, said_w_error) }
+            natural += said_w + 24.0
+            w += 1usize
+        }
+        if fab.label.len > 0usize {
+            let (said_f, said_f_error) = control.linux_label_width(a, t, caption_options(.BodyMedium), fab.label)
+            if said_f_error != ok { ret (zero, said_f_error) }
+            natural += said_f + 32.0
+            buttons += 1usize
+        }
+        let over = natural + 4.0 * f32(buttons - 1usize) - (width - 16.0) + 1.0
+        if buttons > 0usize && over > 0.0 {
+            trim = f32(u32(over / f32(2usize * buttons))) + 1.0
+            if trim > 8.0 { trim = 8.0 }
+        }
+    }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * acts.len + 4usize)
     if parts_error != ok { ret (zero, parts_error) }
     var n = 0usize
@@ -403,7 +428,7 @@ fn bottom_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             parts[n] = widget.spacer(0u64, 1.0)
             n += 1usize
         }
-        let (button, button_error) = bar_button(a, key + 1u64 + u64(i), t, &acts[i], false, radius, button_h, 12.0, hover, press)
+        let (button, button_error) = bar_button(a, key + 1u64 + u64(i), t, &acts[i], false, radius, button_h, 12.0 - trim, hover, press)
         if button_error != ok { ret (zero, button_error) }
         parts[n] = button
         n += 1usize
@@ -414,7 +439,7 @@ fn bottom_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             parts[n] = widget.spacer(0u64, 1.0)
             n += 1usize
         }
-        let (main, main_error) = bar_button(a, key + 9u64, t, &fab, !mac, radius, button_h, 16.0, hover, press)
+        let (main, main_error) = bar_button(a, key + 9u64, t, &fab, !mac, radius, button_h, 16.0 - trim, hover, press)
         if main_error != ok { ret (zero, main_error) }
         parts[n] = main
         n += 1usize
