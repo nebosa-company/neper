@@ -1393,6 +1393,7 @@ fn dataview_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> 
         let (ln, lne) = js.to_number(it, args[2usize])
         if lne != ok { ret (js.undefv(), lne) }
         let l2 = js.to_integer(ln)
+        if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
         if l2 < 0.0f64 || offset + l2 > f64(b.bytes.len) { ret (js.undefv(), js.throw_range(it, "Invalid DataView length")) }
         view_len = l2
     }
@@ -1457,7 +1458,7 @@ fn dv_get(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
     let (n, ne) = js.to_number(it, arg(args, 0usize))
     if ne != ok { ret (js.undefv(), ne) }
     let idx = js.to_integer(n)
-    if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    if idx < 0.0f64 || idx > 9007199254740991.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
     let little = js.to_boolean(arg(args, 1usize))
     let b = js.buf_of(d.buffer)
     let (oob, vlen) = dv_state(d)
@@ -1483,7 +1484,7 @@ fn dv_set(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) 
     let (n, ne) = js.to_number(it, arg(args, 0usize))
     if ne != ok { ret (js.undefv(), ne) }
     let idx = js.to_integer(n)
-    if idx < 0.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
+    if idx < 0.0f64 || idx > 9007199254740991.0f64 || js.is_infinite(idx) { ret (js.undefv(), js.throw_range(it, "Offset is outside the bounds of the DataView")) }
     let (raw, vne) = js.ta_raw_of(it, kind, arg(args, 1usize))
     if vne != ok { ret (js.undefv(), vne) }
     let little = js.to_boolean(arg(args, 2usize))
