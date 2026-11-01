@@ -8,6 +8,7 @@ use e.fmt.av1_tables
 use e.fmt.av1_cdf as CDF
 use e.fmt.av1_dec as D
 use e.fmt.av1_mvp as MV
+use e.fmt.av1_warp as WP
 
 error Unsupported
 
@@ -848,6 +849,15 @@ fn read_modes_and_mvs(d: *D.Dec, compound: bool) {
     }
 }
 
+fn is_scaled(d: *D.Dec, ref_frame: i32) -> bool {
+    let h = &d.st.h
+    let slot = usize(h.ref_frame_idx[usize(ref_frame) - av1.LAST_FRAME])
+    let r = &d.st.refs[slot]
+    let xs = ((r.upscaled_width << 14u32) + (h.frame_width / 2i32)) / h.frame_width
+    let ys = ((r.frame_height << 14u32) + (h.frame_height / 2i32)) / h.frame_height
+    ret xs != 16384i32 || ys != 16384i32
+}
+
 fn inter_block_mode_info(d: *D.Dec) -> err {
     let b = &d.b
     let h = &d.st.h
@@ -867,9 +877,23 @@ fn inter_block_mode_info(d: *D.Dec) -> err {
     d.mvf.tile_col_end = d.col_end
     MV.find_mv_stack(&d.mvf, mb, &d.mvp)
     read_modes_and_mvs(d, compound)
+    b.interintra = false
+    b.wedge_interintra = false
     if !b.skip_mode && seq.enable_interintra_compound && !compound && b.mi_size >= D.BLOCK_8X8 && b.mi_size <= 9usize {
         let ctx = usize(d.tab[av1_tables.T_SIZE_GROUP + b.mi_size] - 1i32)
-        if D.sym(d, CDF.C_INTERINTRA, 3usize, ctx, 2usize) == 1usize { ret Unsupported }
+        b.interintra = D.sym(d, CDF.C_INTERINTRA, 3usize, ctx, 2usize) == 1usize
+        if b.interintra {
+            b.interintra_mode = D.sym(d, CDF.C_INTERINTRAMODE, 5usize, ctx, 4usize)
+            b.ref_frame1 = i32(av1.INTRA_FRAME)
+            b.angle_delta_y = 0i32
+            b.angle_delta_uv = 0i32
+            b.use_filter_intra = false
+            b.wedge_interintra = D.sym(d, CDF.C_WEDGEINTERINTRA, 3usize, b.mi_size, 2usize) == 1usize
+            if b.wedge_interintra {
+                b.wedge_index = D.sym(d, CDF.C_WEDGEINDEX, 17usize, b.mi_size, 16usize)
+                b.wedge_sign = 0usize
+            }
+        }
     }
     b.motion_mode = D.SIMPLE
     if !b.skip_mode && h.is_motion_mode_switchable && D.min_i(D.block_w(d, b.mi_size), D.block_h(d, b.mi_size)) >= 8i32 {
@@ -880,10 +904,13 @@ fn inter_block_mode_info(d: *D.Dec) -> err {
         if compound || b.ref_frame1 == i32(av1.INTRA_FRAME) { simple = true }
         if !simple && !MV.has_overlappable_candidates(&d.mvf, mb, b.avail_u, b.avail_l) { simple = true }
         if !simple {
-            if h.force_integer_mv || !h.allow_warped_motion {
+            let (ns, nse) = WP.find_warp_samples(&d.mvf, mb, b.avail_u, b.avail_l, b.mv0_row, b.mv0_col, b.cand_list[..])
+            if nse != ok { ret nse }
+            b.num_samples = ns
+            if h.force_integer_mv || ns == 0i32 || !h.allow_warped_motion || is_scaled(d, b.ref_frame0) {
                 if D.sym(d, CDF.C_USEOBMC, 3usize, b.mi_size, 2usize) == 1usize { b.motion_mode = D.OBMC }
             } else {
-                ret Unsupported
+                b.motion_mode = D.sym(d, CDF.C_MOTIONMODE, 4usize, b.mi_size, 3usize)
             }
         }
     }

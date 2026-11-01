@@ -9,6 +9,9 @@ use e.fmt.av1_tables
 use e.fmt.av1_cdf
 use e.fmt.av1_lr
 use e.fmt.av1_mvp
+use e.fmt.av1_inter
+use e.fmt.av1_mask
+use e.fmt.av1_intra
 
 error Corrupt
 
@@ -126,6 +129,15 @@ type Block = struct {
     interp0: usize,
     interp1: usize,
     motion_mode: usize,
+    interintra: bool,
+    interintra_mode: usize,
+    wedge_interintra: bool,
+    wedge_index: usize,
+    wedge_sign: usize,
+    num_samples: i32,
+    local_valid: bool,
+    local_params: [6]i32,
+    cand_list: [32]i32,
     comp_group_idx: usize,
     compound_idx: usize,
     ref_mv_idx: i32,
@@ -172,6 +184,8 @@ type Dec = struct {
     current_q_index: i32,
     read_deltas: bool,
     b: Block,
+    dbg: [4096]i32,
+    dbg_n: usize,
     frame: [3][]u16,
     stride: [3]usize,
     tx_types: []u8,
@@ -185,6 +199,15 @@ type Dec = struct {
     s_inter: []u8,
     s_ref: []i8,
     s_mv: []i16,
+    ref_planes: [8][3][]u16,
+    ref_stride: usize,
+    iwk: av1_inter.Work,
+    masks: av1_mask.Masks,
+    ii_mask: []u8,
+    obmc_above: []av1_inter.Neighbor,
+    obmc_left: []av1_inter.Neighbor,
+    motion_field: []i16,
+    mf_slots: [8]av1_mvp.RefSlot,
     mf_refs: []i8,
     mf_mvs: []i16,
     mvf: av1_mvp.Frame,
@@ -250,3 +273,39 @@ fn abs_i(a: i32) -> i32 {
     if a < 0i32 { ret 0i32 - a }
     ret a
 }
+
+fn is_smooth(d: *Dec, row: i32, col: i32, plane: usize) -> bool {
+    if row < 0i32 || col < 0i32 || row >= d.mi_rows || col >= d.mi_cols { ret false }
+    let m = &d.mi[mi_at(d, row, col)]
+    var mode = usize(m.y_mode)
+    if plane > 0usize {
+        if i32(m.ref0) > i32(av1.INTRA_FRAME) { ret false }
+        mode = usize(m.uv_mode)
+    }
+    ret mode == 9usize || mode == 10usize || mode == 11usize
+}
+
+fn is_smooth_above(d: *Dec, plane: usize, avail: bool) -> bool {
+    if !avail { ret false }
+    let b = &d.b
+    var r = b.mi_row - 1i32
+    var c = b.mi_col
+    if plane > 0usize {
+        if d.st.seq.subsampling_x == 1i32 && (b.mi_col & 1i32) == 0i32 { c += 1i32 }
+        if d.st.seq.subsampling_y == 1i32 && (b.mi_row & 1i32) == 1i32 { r -= 1i32 }
+    }
+    ret is_smooth(d, r, c, plane)
+}
+
+fn is_smooth_left(d: *Dec, plane: usize, avail: bool) -> bool {
+    if !avail { ret false }
+    let b = &d.b
+    var r = b.mi_row
+    var c = b.mi_col - 1i32
+    if plane > 0usize {
+        if d.st.seq.subsampling_x == 1i32 && (b.mi_col & 1i32) == 1i32 { c -= 1i32 }
+        if d.st.seq.subsampling_y == 1i32 && (b.mi_row & 1i32) == 0i32 { r += 1i32 }
+    }
+    ret is_smooth(d, r, c, plane)
+}
+

@@ -88,6 +88,18 @@ fn store_block(d: *D.Dec) {
                 if b.is_inter { m.is_inter = 1u8 } else { m.is_inter = 0u8 }
                 if b.skip_mode { m.skip_mode = 1u8 } else { m.skip_mode = 0u8 }
                 if b.skip { m.skip = 1u8 } else { m.skip = 0u8 }
+                let at = D.mi_at(d, rr, cc)
+                d.s_size[at] = u8(b.mi_size)
+                d.s_ymode[at] = u8(b.y_mode)
+                if b.is_inter { d.s_inter[at] = 1u8 } else { d.s_inter[at] = 0u8 }
+                d.s_ref[at * 2usize] = i8(b.ref_frame0)
+                d.s_ref[at * 2usize + 1usize] = i8(b.ref_frame1)
+                if b.is_inter {
+                    d.s_mv[at * 4usize] = i16(b.mv0_row)
+                    d.s_mv[at * 4usize + 1usize] = i16(b.mv0_col)
+                    d.s_mv[at * 4usize + 2usize] = i16(b.mv1_row)
+                    d.s_mv[at * 4usize + 3usize] = i16(b.mv1_col)
+                }
                 m.tx_size = u8(b.tx_size)
                 m.size = u8(b.mi_size)
                 m.segment_id = u8(b.segment_id)
@@ -176,6 +188,17 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     }
     M.read_block_tx_size(d)
     if b.skip { reset_block_context(d) }
+    if b.mi_col >= 48i32 && b.mi_row < 16i32 && b.mi_col < 64i32 && d.dbg_n < 4000usize {
+        d.dbg[d.dbg_n] = b.mi_row
+        d.dbg[d.dbg_n + 1usize] = b.mi_col
+        d.dbg[d.dbg_n + 2usize] = i32(b.mi_size)
+        d.dbg[d.dbg_n + 3usize] = i32(b.y_mode)
+        d.dbg[d.dbg_n + 4usize] = b.ref_frame0
+        d.dbg[d.dbg_n + 5usize] = i32(b.motion_mode)
+        d.dbg[d.dbg_n + 6usize] = b.mv0_row
+        d.dbg[d.dbg_n + 7usize] = b.mv0_col
+        d.dbg_n += 8usize
+    }
     store_block(d)
     try R.compute_prediction(d)
     try R.residual(d)

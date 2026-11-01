@@ -11,6 +11,8 @@ use e.fmt.av1_tile as T
 use e.fmt.av1_mvp
 use e.fmt.av1_lr
 use e.fmt.av1_post
+use e.fmt.av1_inter
+use e.fmt.av1_mask
 
 error Unsupported
 error Invalid
@@ -130,6 +132,34 @@ fn alloc_frame_state(dc: *Decoder) -> err {
     if mfme != ok { ret mfme }
     d.mf_refs = mfr
     d.mf_mvs = mfm
+    let (mfield, mfielde) = mem.alloc[i16](a, 8usize * usize((h.mi_rows >> 1u32) * (h.mi_cols >> 1u32)) * 2usize)
+    if mfielde != ok { ret mfielde }
+    d.motion_field = mfield
+    var sl = 0usize
+    while sl < 8usize {
+        let (smv, smve) = mem.alloc[i16](a, n * 2usize)
+        if smve != ok { ret smve }
+        let (srf, srfe) = mem.alloc[i8](a, n)
+        if srfe != ok { ret srfe }
+        dc.slots[sl].saved_mvs = smv
+        dc.slots[sl].saved_refs = srf
+        sl += 1usize
+    }
+    let (wk, wke) = av1_inter.new_work(a)
+    if wke != ok { ret wke }
+    d.iwk = wk
+    let (mk, mke) = av1_mask.new_masks(a)
+    if mke != ok { ret mke }
+    d.masks = mk
+    let (iim, iime) = mem.alloc[u8](a, 16384usize)
+    if iime != ok { ret iime }
+    d.ii_mask = iim
+    let (oa, oae) = mem.alloc[av1_inter.Neighbor](a, 32usize)
+    if oae != ok { ret oae }
+    let (ol, ole) = mem.alloc[av1_inter.Neighbor](a, 32usize)
+    if ole != ok { ret ole }
+    d.obmc_above = oa
+    d.obmc_left = ol
     let (s4, e4) = mem.alloc[i16](a, n * 4usize)
     if e4 != ok { ret e4 }
     d.s_size = s0
@@ -284,6 +314,18 @@ fn setup_frame(dc: *Decoder) -> err {
         d.stride[p] = dc.pool[dc.cur_buf][p].stride
         p += 1usize
     }
+    var rs = 0usize
+    while rs < 8usize {
+        if dc.slots[rs].buf >= 0i32 {
+            var q = 0usize
+            while q < 3usize {
+                d.ref_planes[rs][q] = dc.pool[usize(dc.slots[rs].buf)][q].data
+                q += 1usize
+            }
+        }
+        rs += 1usize
+    }
+    d.ref_stride = dc.pool[dc.cur_buf][0usize].stride
     // the mv prediction view of the frame
     let m = &d.mvf
     m.mi_rows = h.mi_rows
@@ -302,6 +344,22 @@ fn setup_frame(dc: *Decoder) -> err {
     m.force_integer_mv = h.force_integer_mv
     m.allow_high_precision_mv = h.allow_high_precision_mv
     m.use_ref_frame_mvs = h.use_ref_frame_mvs
+    if h.use_ref_frame_mvs {
+        var k = 0usize
+        while k < 8usize {
+            d.mf_slots[k].mi_rows = dc.slots[k].mi_rows
+            d.mf_slots[k].mi_cols = dc.slots[k].mi_cols
+            d.mf_slots[k].frame_type = st.refs[k].frame_type
+            d.mf_slots[k].mvs = dc.slots[k].saved_mvs
+            d.mf_slots[k].ref_frames = dc.slots[k].saved_refs
+            d.mf_slots[k].order_hints = st.refs[k].saved_order_hints[..]
+            k += 1usize
+        }
+        m.ref_frame_idx = h.ref_frame_idx[..]
+        m.slots = d.mf_slots[..]
+        av1_mvp.motion_field_estimation(m, d.motion_field)
+        m.motion_field = d.motion_field
+    }
     // cdfs of the frame
     if h.primary_ref_frame == av1.PRIMARY_REF_NONE {
         CDF.init_non_coeff(dc.ctx, dc.tab)
@@ -445,6 +503,13 @@ fn finish_frame(dc: *Decoder) -> err {
             dc.pool_ref[final] += 1i32
             dc.slots[i].mi_rows = h.mi_rows
             dc.slots[i].mi_cols = h.mi_cols
+            var q = 0usize
+            while q < d.mi.len {
+                dc.slots[i].saved_refs[q] = d.mf_refs[q]
+                dc.slots[i].saved_mvs[q * 2usize] = d.mf_mvs[q * 2usize]
+                dc.slots[i].saved_mvs[q * 2usize + 1usize] = d.mf_mvs[q * 2usize + 1usize]
+                q += 1usize
+            }
             var k = 0usize
             while k < CDF.SAVED_COUNT {
                 dc.slots[i].ctx[k] = dc.ctx[k]
@@ -507,8 +572,12 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
             var b = av1.bits_of(o.payload)
             try av1.uncompressed_header(&b, &dc.st)
             if dc.st.h.show_existing_frame {
+                if dc.st.h.frame_type == av1.KEY_FRAME { ret Unsupported }
+                let shown_buf = dc.slots[usize(dc.st.h.frame_to_show_map_idx)].buf
+                if shown_buf < 0i32 { ret Invalid }
+                dc.out_buf = usize(shown_buf)
                 dc.shown = true
-                ret Unsupported
+                continue
             }
             try setup_frame(dc)
             dc.frame_open = true

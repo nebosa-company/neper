@@ -322,41 +322,6 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
     ret ok
 }
 
-fn is_smooth(d: *D.Dec, row: i32, col: i32, plane: usize) -> bool {
-    if row < 0i32 || col < 0i32 || row >= d.mi_rows || col >= d.mi_cols { ret false }
-    let m = &d.mi[D.mi_at(d, row, col)]
-    var mode = usize(m.y_mode)
-    if plane > 0usize {
-        if i32(m.ref0) > i32(av1.INTRA_FRAME) { ret false }
-        mode = usize(m.uv_mode)
-    }
-    ret mode == 9usize || mode == 10usize || mode == 11usize
-}
-
-fn is_smooth_above(d: *D.Dec, plane: usize, avail: bool) -> bool {
-    if !avail { ret false }
-    let b = &d.b
-    var r = b.mi_row - 1i32
-    var c = b.mi_col
-    if plane > 0usize {
-        if d.st.seq.subsampling_x == 1i32 && (b.mi_col & 1i32) == 0i32 { c += 1i32 }
-        if d.st.seq.subsampling_y == 1i32 && (b.mi_row & 1i32) == 1i32 { r -= 1i32 }
-    }
-    ret is_smooth(d, r, c, plane)
-}
-
-fn is_smooth_left(d: *D.Dec, plane: usize, avail: bool) -> bool {
-    if !avail { ret false }
-    let b = &d.b
-    var r = b.mi_row
-    var c = b.mi_col - 1i32
-    if plane > 0usize {
-        if d.st.seq.subsampling_x == 1i32 && (b.mi_col & 1i32) == 1i32 { c -= 1i32 }
-        if d.st.seq.subsampling_y == 1i32 && (b.mi_row & 1i32) == 0i32 { r += 1i32 }
-    }
-    ret is_smooth(d, r, c, plane)
-}
-
 fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize, x: i32, y: i32) -> err {
     let b = &d.b
     let seq = &d.st.seq
@@ -407,8 +372,8 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         p.bit_depth = u32(seq.bit_depth)
         p.edge_filter = seq.enable_intra_edge_filter
         if seq.enable_intra_edge_filter {
-            p.above_smooth = is_smooth_above(d, plane, avail_u)
-            p.left_smooth = is_smooth_left(d, plane, avail_l)
+            p.above_smooth = D.is_smooth_above(d, plane, avail_u)
+            p.left_smooth = D.is_smooth_left(d, plane, avail_l)
         }
         try IN.predict_intra(d.frame[plane], d.stride[plane], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), p)
         if is_cfl {
