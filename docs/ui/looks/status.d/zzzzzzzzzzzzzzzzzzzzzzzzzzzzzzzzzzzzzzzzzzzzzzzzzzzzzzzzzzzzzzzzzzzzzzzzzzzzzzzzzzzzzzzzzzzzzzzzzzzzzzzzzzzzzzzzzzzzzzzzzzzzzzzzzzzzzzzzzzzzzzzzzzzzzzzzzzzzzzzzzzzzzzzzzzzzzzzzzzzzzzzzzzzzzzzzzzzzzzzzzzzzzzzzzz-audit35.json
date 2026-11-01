@@ -1,0 +1,172 @@
+{
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/date_edit.png",
+    "notes": "Audit 35: drop button: every cell draws it as a 2 x 15 px dark bar 26 px right of the field (x 323 in the 1494 px sheet), not a button; 'Drop button hot' and 'Drop button pressed' are indistinguishable from rest (the field rings differ, the bar does not). The same bar is in the render before lane i, so the lane's geometry numbers hold and the defect was never looked at. | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): the open calendar popup is 256 x 292 r12 e6e8ef (7 columns, pitch 32, day circle 32) against the 360 wide r28 modal with 40 px circles; field 200 x 48 against 56. The sheet cells were too small and cut the popup at the cell bottom and right edge: Neper cells now carry 150 x 330 px of padding (looks.pad_neper), the whole popup shows. 1.5x popup 383 x 438, exact scale."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "Audit 35: drop button: every cell draws it as a 2 x 15 px dark bar 26 px right of the field (x 323 in the 1494 px sheet), not a button; 'Drop button hot' and 'Drop button pressed' are indistinguishable from rest (the field rings differ, the bar does not). The same bar is in the render before lane i, so the lane's geometry numbers hold and the defect was never looked at. | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): the open calendar popup is 256 x 292 r12 e6e8ef (7 columns, pitch 32, day circle 32) against the 360 wide r28 modal with 40 px circles; field 200 x 48 against 56. The sheet cells were too small and cut the popup at the cell bottom and right edge: Neper cells now carry 150 x 330 px of padding (looks.pad_neper), the whole popup shows. 1.5x popup 383 x 438, exact scale. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/search_field_all.png",
+    "notes": "Audit 35: states change the pill height: the empty cell is 198 x 40 (200 x 40 with the edge) where filled, hover, focus, disabled and invalid are 200 x 52 (196 x 48 plus the 2 px edge); a search bar must not grow 12 px when it holds text. Lane i's 200 x 52 holds for five of six cells. Colours hold (rest e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; dark 292a2f against 282a2f, 38393e against 37383e, 1b1c21 against 191b20). | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the Clear label was clipped at the pill edge, hover darken did not show (editors are not hovered, now a hover region), disabled drew like filled (now the 38 per cent content level), no focus or invalid outline (now 2 px accent and error). Pill 200 x 52 r26 against SearchBar 378 x 56 r28 (full pill both); fill e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; 1.5x 300 x 78. Flutter shows no focus change; the outline is the Neper field rule.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/search_field_all.png",
+    "notes": "Audit 35: states change the pill height: the empty cell is 198 x 40 (200 x 40 with the edge) where filled, hover, focus, disabled and invalid are 200 x 52 (196 x 48 plus the 2 px edge); a search bar must not grow 12 px when it holds text. Lane i's 200 x 52 holds for five of six cells. Colours hold (rest e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; dark 292a2f against 282a2f, 38393e against 37383e, 1b1c21 against 191b20). | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the Clear label was clipped at the pill edge, hover darken did not show (editors are not hovered, now a hover region), disabled drew like filled (now the 38 per cent content level), no focus or invalid outline (now 2 px accent and error). Pill 200 x 52 r26 against SearchBar 378 x 56 r28 (full pill both); fill e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; 1.5x 300 x 78. Flutter shows no focus change; the outline is the Neper field rule. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/autocomplete.png",
+    "notes": "Audit 35: open list (autocomplete_open): the hovered row is a 58 x 36 patch (d7d9df, dark 313338) inside a 168 x 124 list, it should span the row; the list starts 8 px above the field's bottom edge and hides the field's lower outline between x 48 and 216. Field 200 x 48 with 1 px 737784 outline (ref 74777f), list rows 36 and the 168 x 124 surface hold. | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): no Flutter Autocomplete capture; nearest are textfield-outlined (252 x 56, 1 px 74777f, focus 2 px accent) and the DropdownMenu list (rows 48, r4): ours is 200 x 48 with a 1 px 737784 outline (5 levels off in blue, palette G1), 2 px accent on focus, list rows 36 (4 px grid) in a 168 wide eceef4 surface. 1.5x field 296 x 68 flat, list 252 x 186, exact scale. Heights recorded (G2).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/autocomplete.png",
+    "notes": "Audit 35: open list (autocomplete_open): the hovered row is a 58 x 36 patch (d7d9df, dark 313338) inside a 168 x 124 list, it should span the row; the list starts 8 px above the field's bottom edge and hides the field's lower outline between x 48 and 216. Field 200 x 48 with 1 px 737784 outline (ref 74777f), list rows 36 and the 168 x 124 surface hold. | Earlier: ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): no Flutter Autocomplete capture; nearest are textfield-outlined (252 x 56, 1 px 74777f, focus 2 px accent) and the DropdownMenu list (rows 48, r4): ours is 200 x 48 with a 1 px 737784 outline (5 levels off in blue, palette G1), 2 px accent on focus, list rows 36 (4 px grid) in a 168 wide eceef4 surface. 1.5x field 296 x 68 flat, list 252 x 186, exact scale. Heights recorded (G2). Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/text_edit.png",
+    "notes": "Audit 35: 'Long text' cell: 'Heroic Intervention of the Marvel Universe' is not clipped to the field, it leaves the 200 px field and prints over the next cell's 'Empty, focused' field (light and dark). Field outlines, focus and invalid rings are whole and equal the ref colours within palette (737784 against 74777f). | Earlier: The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/text_edit.png",
+    "notes": "Audit 35: 'Long text' cell: 'Heroic Intervention of the Marvel Universe' is not clipped to the field, it leaves the 200 px field and prints over the next cell's 'Empty, focused' field (light and dark). Field outlines, focus and invalid rings are whole and equal the ref colours within palette (737784 against 74777f). | Earlier: Round 24: the pixel-baked Windows THotKey replica (a light frame and a white face, 1.8:1) is no longer drawn by the dark sheets edits_states and edits_hover; the light Neper pictures keep it. scripts/neper_dark_contrast.py finds no violation in edits_dialog, edits_hover, edits_states, text_edit. The focus rings of the Neper text fields (a 2 px border) pass 3:1 in scripts/neper_dark_focus.py.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "Audit 35: 'Long text' cell: the digits run through the field's right outline and on to the sheet edge (field right edge 3 px from the image edge); a field must clip its text. Other cells are whole. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/mask_edit.png",
+    "notes": "Audit 35: 'Long text' cell: the digits run through the field's right outline and on to the sheet edge (field right edge 3 px from the image edge); a field must clip its text. Other cells are whole. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in mask_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/button_edit.png",
+    "notes": "Audit 35: 'Long text' cell: 'D:/Games/Magic/Dec' crosses the field outline, overprints the '...' button and runs to the sheet edge (4 px of text at the last column); the other cells and the focus ring are whole. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/button_edit.png",
+    "notes": "Audit 35: 'Long text' cell: 'D:/Games/Magic/Dec' crosses the field outline, overprints the '...' button and runs to the sheet edge (4 px of text at the last column); the other cells and the focus ring are whole. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in button_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/token_edit.png",
+    "notes": "Audit 35: 'Wrapped' cell: the field outline closes under three tokens and the fourth is drawn below it and cut by the bottom of the sheet (2 px of ink on the last row); the box does not grow with its wrapped tokens. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/token_edit.png",
+    "notes": "Audit 35: 'Wrapped' cell: the field outline closes under three tokens and the fourth is drawn below it and cut by the bottom of the sheet (2 px of ink on the last row); the box does not grow with its wrapped tokens. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in token_edit, token_edit_dialog. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/hint.png",
+    "notes": "Audit 35: rich tooltip ('Price refresh') is flush with the sheet's left edge: 69 rows of ink on column 0, its left shadow and the outer pixel of its border are cut (light and dark); tooltips Plain, Wrapped, With shortcut, Short are whole and the dark fill 2f3035 equals the inverse surface. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter Tooltip: Neper 24 px high inverse-surface 2f3035 (M3 plain tooltip) vs the ref's 32 px grey 700 at 90% (707070, Flutter's default, not the M3 token); dark e1e2e9 vs e8e8e8; recorded. | The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "Audit 35: rich tooltip ('Price refresh') is flush with the sheet's left edge: 69 rows of ink on column 0, its left shadow and the outer pixel of its border are cut (light and dark); tooltips Plain, Wrapped, With shortcut, Short are whole and the dark fill 2f3035 equals the inverse surface. | Earlier: ROUND 70 (compared to Flutter, lane d): compared to Flutter Tooltip: Neper 24 px high inverse-surface 2f3035 (M3 plain tooltip) vs the ref's 32 px grey 700 at 90% (707070, Flutter's default, not the M3 token); dark e1e2e9 vs e8e8e8; recorded. Dark: same measures. | Round 26: the five hint_toolbar_* sheets and hint_grid_header_name drew the v3 hint (pale yellow bevel, light grey grid box) under the dark look's text, 1.27:1 and 1.73:1. Under Neper dark the v3 hint window is now the palette's inverse surface (#E1E2E9) with its ink (InverseOnSurface), the same bubble as the plain hint: text above 12:1, the face 12:1 against the page. scripts/neper_dark_contrast.py finds no violation in hint and the six sheets. The Windows, Windows dark and Neper light sheets are byte for byte those of a render of the commit before.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/combo_box.png",
+    "notes": "Audit 35: every cell draws the value ('Against Card Color') under the drop arrow, so the last letters and the arrow overprint; 'Drop button hot' and 'Drop button pressed' show no field at all, only a 22 x 46 outlined bar with a halo and the label beside it. The sheet is built for the 22 px Windows field and the Neper control is not laid out for it; lane i recorded the sibling sheets (combo_box_focus, combo_box_edit, combo_box_pick, combo_hover) but not this one. | Earlier: The baseline: the v2 outlined combo box in the same cells. Open lists are on neper/combo_box_lists.png (run the app with an argument, `combo_box.exe lists`); the list opens fading, so one frame shows it part way."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "Audit 35: every cell draws the value ('Against Card Color') under the drop arrow, so the last letters and the arrow overprint; 'Drop button hot' and 'Drop button pressed' show no field at all, only a 22 x 46 outlined bar with a halo and the label beside it. The sheet is built for the 22 px Windows field and the Neper control is not laid out for it; lane i recorded the sibling sheets (combo_box_focus, combo_box_edit, combo_box_pick, combo_hover) but not this one. | Earlier: Round 22: scripts/neper_dark_contrast.py finds no violation in combo_box, combo_hover. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}
