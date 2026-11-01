@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 190769)
+    var b = try str.builder(a, 191235)
     try str.push(&b, "// The Intl built-ins (ECMA-402), evaluated into the main realm after Temporal (generated into intl.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// Locale data is a compact built-in set (English plus the language tags the algorithms need); intrinsics are captured up front.\n")
     try str.push(&b, "(function (global) {\n")
@@ -1994,9 +1994,16 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "      if (f.year !== undefined) { push(parts, lit(dayStr !== undefined ? ', ' : ' ')); push(parts, part(yearType, yearStr)); }\n")
     try str.push(&b, "    } else {\n")
     try str.push(&b, "      var first = true;\n")
-    try str.push(&b, "      if (monthStr !== undefined) { push(parts, part('month', monthStr)); first = false; }\n")
-    try str.push(&b, "      if (dayStr !== undefined) { if (!first) push(parts, lit('/')); push(parts, part('day', dayStr)); first = false; }\n")
-    try str.push(&b, "      if (f.year !== undefined) { if (!first) push(parts, lit('/')); push(parts, part(yearType, yearStr)); }\n")
+    try str.push(&b, "      if (split(dt.locale, '-')[0] === 'de') {\n")
+    try str.push(&b, "        // German numeric dates run day, month, year with dots.\n")
+    try str.push(&b, "        if (dayStr !== undefined) { push(parts, part('day', dayStr)); first = false; }\n")
+    try str.push(&b, "        if (monthStr !== undefined) { if (!first) push(parts, lit('.')); push(parts, part('month', monthStr)); first = false; }\n")
+    try str.push(&b, "        if (f.year !== undefined) { if (!first) push(parts, lit('.')); push(parts, part(yearType, yearStr)); }\n")
+    try str.push(&b, "      } else {\n")
+    try str.push(&b, "        if (monthStr !== undefined) { push(parts, part('month', monthStr)); first = false; }\n")
+    try str.push(&b, "        if (dayStr !== undefined) { if (!first) push(parts, lit('/')); push(parts, part('day', dayStr)); first = false; }\n")
+    try str.push(&b, "        if (f.year !== undefined) { if (!first) push(parts, lit('/')); push(parts, part(yearType, yearStr)); }\n")
+    try str.push(&b, "      }\n")
     try str.push(&b, "    }\n")
     try str.push(&b, "    if (eraStr !== undefined) { if (parts.length) push(parts, lit(' ')); push(parts, part('era', eraStr)); }\n")
     try str.push(&b, "    return parts;\n")
