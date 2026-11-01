@@ -60,10 +60,10 @@ fn run(a: *mem.Arena, sheet: *const looks.Sheet) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let stack = looks.Sheet { name: "toast", cells: 1usize, columns: 1usize, cell_w: 420.0, cell_h: 220.0, ctx: zero, build: build_stack }
+    let stack = looks.Sheet { name: "toast", cells: 1usize, columns: 1usize, cell_w: 660.0, cell_h: 250.0, ctx: zero, build: build_stack }
     try run(a, &stack)
-    let failed = looks.Sheet { name: "toast_error", cells: 1usize, columns: 1usize, cell_w: 420.0, cell_h: 130.0, ctx: zero, build: build_error }
+    let failed = looks.Sheet { name: "toast_error", cells: 1usize, columns: 1usize, cell_w: 660.0, cell_h: 130.0, ctx: zero, build: build_error }
     try run(a, &failed)
-    let plain = looks.Sheet { name: "toast_plain", cells: 1usize, columns: 1usize, cell_w: 420.0, cell_h: 130.0, ctx: zero, build: build_plain }
+    let plain = looks.Sheet { name: "toast_plain", cells: 1usize, columns: 1usize, cell_w: 660.0, cell_h: 130.0, ctx: zero, build: build_plain }
     ret run(a, &plain)
 }

@@ -1750,6 +1750,9 @@ fn measure_uncached(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layo
     if has_own_width && own_width - padding.left - padding.right < inner.max_width { inner.max_width = own_width - padding.left - padding.right }
     let (own_height, has_own_height) = style.px_of(node.style.height)
     if has_own_height && own_height - padding.top - padding.bottom < inner.max_height { inner.max_height = own_height - padding.top - padding.bottom }
+    // A maximum width bounds the content too, so a wrapped text under it measures its rows at that width.
+    let (own_cap, has_own_cap) = style.px_of(node.style.max_width)
+    if has_own_cap && own_cap - padding.left - padding.right < inner.max_width { inner.max_width = own_cap - padding.left - padding.right }
     if inner.max_width < 0.0 { inner.max_width = 0.0 }
     if inner.max_height < 0.0 { inner.max_height = 0.0 }
     let (content, content_error) = measure_content(s, a, node, inner)

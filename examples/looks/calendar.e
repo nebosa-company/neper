@@ -16,8 +16,10 @@ fn noop_date(ctx: *void, value: time.Date) -> err { ret ok }
 fn day(d: u8) -> time.Date { ret time.Date { year: 2026i32, month: 10u8, day: d } }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let names = [6]str{ "Nothing chosen", "Chosen day, today", "Range 12 to 18", "Hover on a day", "Keyboard focus", "Week numbers, events" }
-    let drives = [6]looks.Drive{ .None, .None, .None, .Hover, .Focus, .None }
+    // The keyboard focus cell is the last: Tab and Shift+Tab walk every cell of the window, and the focus wraps round to the last
+    // calendar's chosen day, so the ring lands in the cell that shows it.
+    let names = [6]str{ "Nothing chosen", "Chosen day, today", "Range 12 to 18", "Hover on a day", "Week numbers, events", "Keyboard focus" }
+    let drives = [6]looks.Drive{ .None, .None, .None, .Hover, .None, .Focus }
     let show = widget.Change[time.Date] { ctx: zero, invoke: noop_date }
     let pick = widget.Change[time.Date] { ctx: zero, invoke: noop_date }
     var i = 0usize
@@ -30,7 +32,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 1usize { has_today = true }
         if i == 2usize { ranged = true }
         let events = [2]time.Date{ day(8u8), day(20u8) }
-        if i == 5usize {
+        if i == 4usize {
             marks.week_numbers = true
             marks.events = events[0usize..2usize]
             has_today = true

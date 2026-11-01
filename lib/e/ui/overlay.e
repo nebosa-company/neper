@@ -4138,7 +4138,7 @@ fn iso_week_of(count: i64) -> i64 {
 // (D1388) Its names follow the theme language (de, fr, es; English otherwise).
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     if t.tokens.profile == .Linux {
-        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick)
+        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick, ranged, from, to, marks)
         ret (gtk, gtk_error)
     }
     let year = i64(shown.year)
@@ -4362,6 +4362,11 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 look.border = primary
                 look.border_width = 0.0
                 if marked { look.border_width = 1.0 }
+                // The Windows look draws its keyboard focus ring itself (the runtime ring is off): 2 px in the text colour round the disc.
+                if t.tokens.profile == .Windows && (state.focus_visible || state.focused) && !unavailable {
+                    look.border = style.color(t.tokens, .Text)
+                    look.border_width = 2.0
+                }
                 look.radius = cell * 0.5
                 look.custom_padding = true
                 look.padding = 0.0
@@ -4579,6 +4584,11 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
     look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), muted, control.state_opacity(t, state))
     look.foreground = muted
     look.border_width = 0.0
+    // The Windows look draws its keyboard focus ring itself (the runtime ring is off): 2 px in the text colour.
+    if t.tokens.profile == .Windows && state.focus_visible {
+        look.border = style.color(t.tokens, .Text)
+        look.border_width = 2.0
+    }
     look.radius = size * 0.5
     look.custom_padding = true
     look.padding = 0.0
@@ -9172,6 +9182,8 @@ fn linux_turn_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sv
     var face = control.sized_style(32.0, 34.0)
     face.background = paint.Brush { Solid: tint }
     face.radius = 6.0
+    // GTK's keyboard focus ring: the accent at 50 %, 2 px inside the edge.
+    if state.focus_visible { face.border = style.Border { width: 2.0, color: control.with_alpha(style.color(t.tokens, .Primary), 0.5) } }
     let held = widget.aligned(0u64, .Center, .Center, face, widget_pair(a, mark))
     let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_pair(a, held))
     var sem: widget.Semantics = zero
@@ -9208,13 +9220,20 @@ fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, n
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, 34.0), parts[0usize..3usize]), ok)
 }
 
-fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], ranged: bool, from: time.Date, to: time.Date, marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
     let days = time.days_in_month(year, month)
     let week_start = week_start_of(t.language)
     let first_weekday = (weekday_of(year, month, 1i64) + 7i64 - i64(week_start)) % 7i64
+    // Week numbers (the GTK calendar's show-week-numbers) add a 29 wide column at the start, dim and small; the widths grow with it.
+    var extra: f32 = 0.0
+    var lead = 0usize
+    if marks.week_numbers {
+        extra = 29.0
+        lead = 1usize
+    }
     // Previous, next, previous year, next year; then 42 cells (the days of the grid).
     let (turns, turns_error) = mem.alloc[DayPick](a, 46usize)
     if turns_error != ok { ret (zero, TooLarge) }
@@ -9254,12 +9273,12 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if head_parts_error != ok { ret (zero, TooLarge) }
     head_parts[0usize] = month_group
-    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0, 1.0), zero)
+    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0 + extra, 1.0), zero)
     head_parts[2usize] = year_group
-    var head_style = control.sized_style(267.0, 34.0)
+    var head_style = control.sized_style(267.0 + extra, 34.0)
     head_style.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_parts[0usize..3usize])
-    var rule = control.sized_style(267.0, 1.0)
+    var rule = control.sized_style(267.0 + extra, 1.0)
     rule.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
     // The weekday names.
     let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
@@ -9295,7 +9314,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     if rows_error != ok { ret (zero, TooLarge) }
     var week = 0usize
     while week < 6usize {
-        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
         if cells_error != ok { ret (zero, TooLarge) }
         var column = 0usize
         while column < 7usize {
@@ -9316,7 +9335,11 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             if !inside { day_key = key + 300u64 + u64(index) }
             turns[index] = DayPick { day: date, pick: pick, runtime: t.runtime, focus: day_key }
             actions[index] = widget.Submit { ctx: mem.cast[*void](&turns[index]), invoke: day_fire }
-            let chosen = has_selected && same_date(date, selected)
+            var chosen = has_selected && same_date(date, selected)
+            // A range: its two ends are the chosen days, the days between wear a band, today an accent ring.
+            if ranged { chosen = inside && (same_date(date, from) || same_date(date, to)) }
+            let banded = ranged && inside && !same_date(from, to) && within_range(date, from, to)
+            let marked = has_today && inside && same_date(date, today) && !chosen
             var digit_color = ink
             if !inside { digit_color = dim }
             if chosen { digit_color = style.color(t.tokens, .OnPrimary) }
@@ -9347,6 +9370,13 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             var box_style = control.sized_style(34.0, 25.0)
             box_style.background = paint.Brush { Solid: fill }
             box_style.radius = 6.0
+            if marked { box_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Primary) } }
+            // GTK draws the keyboard focus ring inside the day: the accent at 50 %, 2 px.
+            if state.focus_visible && inside {
+                var focus_ink = control.with_alpha(style.color(t.tokens, .Primary), 0.5)
+                if chosen { focus_ink = control.with_alpha(style.color(t.tokens, .OnPrimary), 0.6) }
+                box_style.border = style.Border { width: 2.0, color: focus_ink }
+            }
             // GTK's seven cells are whole numbers of unequal widths (38, 38, 39, 38, 37, 37, 38), so a day number lands off an even grid: left of it
             // by a pixel in the last two columns (one digit) and in the seventh (two digits) and by two in a one digit seventh column
             var nudge: f32 = 0.0
@@ -9374,12 +9404,11 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             press_look.min_height = 28.0
             let (pressed, pressed_error) = control.pressable_states_fill(a, day_key, t, 3u8, spoken[0usize..said], press_look, true, chosen, 0u32, 0u32, 0u64, &actions[index], true, widget.aligned(0u64, .Center, .Center, control.sized_style(34.0, 28.0), widget_pair(a, digits_held)))
             if pressed_error != ok { ret (zero, pressed_error) }
+            // A neighbouring month's day is no Tab stop either (the focus wrapped round to the last of them).
             var tabbed = pressed
-            if inside {
-                let (stop, stop_error) = calendar_tab_stop(a, pressed, usize(date.day) == tab_day)
-                if stop_error != ok { ret (zero, stop_error) }
-                tabbed = stop
-            }
+            let (stop, stop_error) = calendar_tab_stop(a, pressed, inside && usize(date.day) == tab_day)
+            if stop_error != ok { ret (zero, stop_error) }
+            tabbed = stop
             var cell_node = tabbed
             if inside {
                 let (moves, moves_error) = mem.alloc[DayMove](a, 4usize)
@@ -9408,24 +9437,64 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             share.height = style.Length { Px: 28.0 }
             share.min_width = style.Length { Px: 38.0 }
             // GTK's days sit 1.85 px right of the cell's middle
-            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
+            var day_cell = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
+            let evented = inside && date_listed(marks.events, date)
+            if banded || evented {
+                let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+                if layers_error != ok { ret (zero, TooLarge) }
+                var none: []const widget.Node = zero
+                var band_x: f32 = 0.0
+                var band_w: f32 = 38.0
+                if same_date(date, from) {
+                    band_x = 19.0
+                    band_w = 19.0
+                }
+                if same_date(date, to) { band_w = 19.0 }
+                var band = control.sized_style(band_w, 25.0)
+                if banded { band.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Primary), 0.18) } }
+                layers[0usize] = widget.positioned(0u64, band_x, 1.5, band, none)
+                layers[1usize] = day_cell
+                var dot = control.sized_style(3.0, 3.0)
+                dot.radius = 1.5
+                dot.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+                if chosen { dot.background = paint.Brush { Solid: style.color(t.tokens, .OnPrimary) } }
+                if !evented { dot.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
+                layers[2usize] = widget.positioned(0u64, 19.5, 20.5, dot, none)
+                day_cell = widget.stack(0u64, control.sized_style(38.0, 28.0), layers[0usize..3usize])
+            }
+            cells[1usize + column] = day_cell
             column += 1usize
         }
-        var row_style = control.sized_style(267.0, 28.0)
+        var row_style = control.sized_style(267.0 + extra, 28.0)
         row_style.padding.left = style.Length { Px: 1.0 }
-        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
+        if lead == 1usize {
+            // The ISO week of the row's Monday, small and dim.
+            let row_first = time.days_from_civil(year, month, 1i64) + i64(week * 7usize) - first_weekday
+            let monday = row_first + (8i64 - i64(week_start)) % 7i64
+            let (week_bytes, week_bytes_error) = mem.alloc[u8](a, 4usize)
+            if week_bytes_error != ok { ret (zero, TooLarge) }
+            let week_len = control.write_i64(week_bytes, iso_week_of(monday))
+            var small = control.text_options()
+            small.role = .Body
+            small.size = 12.0
+            small.wrap = .None
+            let (week_text, week_text_error) = control.colored_text(a, 0u64, week_bytes[0usize..week_len], t, small, dim)
+            if week_text_error != ok { ret (zero, week_text_error) }
+            cells[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(extra, 28.0), widget_pair(a, week_text))
+        }
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[1usize - lead..8usize])
         week += 1usize
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 4usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = head
     body[1usize] = widget.box(0u64, rule, zero)
-    var weekday_row = control.sized_style(267.0, 29.0)
+    var weekday_row = control.sized_style(267.0 + extra, 29.0)
     weekday_row.margin.top = style.Length { Px: 0.5 }
-    weekday_row.padding.left = style.Length { Px: 2.0 }
+    weekday_row.padding.left = style.Length { Px: 2.0 + extra }
     body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
     body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
-    var frame = control.sized_style(269.0, 236.0)
+    var frame = control.sized_style(269.0 + extra, 236.0)
     frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     var edge = style.hex(0xDDDDDDu32)
     if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }

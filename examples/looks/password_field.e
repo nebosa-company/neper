@@ -28,7 +28,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 6usize { options.invalid = true }
         let change = widget.Change[str] { ctx: zero, invoke: noop_change }
         let submit = widget.Submit { ctx: zero, invoke: noop_submit }
-        let (node, node_error) = looks_a.password_fitted(a, u64((i + 1usize) * 10usize), t, "Password", buffer, len, change, submit, options, i == 4usize, &reveal[0usize])
+        let (node, node_error) = control.password_field_with(a, u64((i + 1usize) * 10usize), t, "Password", buffer, len, change, submit, options, i == 4usize, &reveal[0usize])
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 2usize { drive = .Hover }

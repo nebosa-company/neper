@@ -34,9 +34,9 @@ fn paint_ground(t: *const control.Theme) -> paint.Brush {
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [7]str{ "Contain", "Cover", "Fill", "None (unscaled)", "Rounded", "Bordered", "Small 48" }
+    let captions = [8]str{ "Contain", "Cover", "Fill", "None (unscaled)", "Rounded", "Bordered", "Small 48", "No texture" }
     var i = 0usize
-    while i < 7usize {
+    while i < 8usize {
         let key = u64((i + 1usize) * 16usize)
         var fit: widget.Fit = .Contain
         var w: f32 = 120.0
@@ -59,11 +59,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: .None }
         i += 1usize
     }
-    ret (7usize, ok)
+    ret (8usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "image", cells: 7usize, columns: 4usize, cell_w: 170.0, cell_h: 130.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "image", cells: 8usize, columns: 4usize, cell_w: 170.0, cell_h: 130.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     try looks.run_material(a, &sheet)
     try looks.run_cupertino(a, &sheet)

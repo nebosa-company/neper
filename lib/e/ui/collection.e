@@ -7772,9 +7772,12 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         ret (texted, texted_error)
     }
     let dense = density_of(t) == 0usize
-    let field_h = control.if_else(dense, 32.0, 40.0)
+    var field_h = control.if_else(dense, 32.0, 40.0)
+    // The Windows edit is its own 22 tall; in a taller box its text stood at the top.
+    if t.tokens.profile == .Windows { field_h = 22.0 }
     let gap = control.if_else(dense, 4.0, 8.0)
-    let remove_w = control.if_else(dense, 32.0, 40.0)
+    var remove_w = control.if_else(dense, 32.0, 40.0)
+    if t.tokens.profile == .Windows { remove_w = 24.0 }
     // (D1327) An ordered editor's handle takes 24 and a gap from the fields.
     var handle_w: f32 = 0.0
     if options.ordered { handle_w = 24.0 + gap }
@@ -7810,10 +7813,17 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if heads_error != ok { ret (zero, TooLarge) }
     heads[0usize] = name_head
     heads[1usize] = value_head
-    heads[2usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(name_w, 0.0), heads[0usize..1usize])
-    heads[3usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(value_w, 0.0), heads[1usize..2usize])
-    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, style.defaults(), heads[2usize..4usize])
-    n += 1usize
+    // The Neper and Material outlined fields carry their own label in the border; the other looks' fields have none, so their column
+    // labels take a line of their own over the first row (they stood at zero height and painted over it).
+    var head_h: f32 = 0.0
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike { head_h = style.text_style(t.tokens, .LabelMedium).line_height }
+    heads[2usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(name_w, head_h), heads[0usize..1usize])
+    heads[3usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(value_w, head_h), heads[1usize..2usize])
+    // No pairs, nothing to label: the headings would stand on the Add button.
+    if pairs.len > 0usize {
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, style.defaults(), heads[2usize..4usize])
+        n += 1usize
+    }
     var i = 0usize
     while i < pairs.len {
         if gone_share > 0.0 && gone_at == i {

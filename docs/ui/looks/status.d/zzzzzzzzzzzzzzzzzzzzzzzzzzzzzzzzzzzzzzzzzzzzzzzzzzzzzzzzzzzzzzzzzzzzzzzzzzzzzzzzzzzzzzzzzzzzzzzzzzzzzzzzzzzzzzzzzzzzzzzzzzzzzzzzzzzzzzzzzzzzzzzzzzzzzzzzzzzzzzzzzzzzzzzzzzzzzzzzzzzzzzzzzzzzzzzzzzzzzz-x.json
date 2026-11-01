@@ -1,0 +1,1063 @@
+{
+ "rich_tooltip": {
+  "name": "Rich tooltip",
+  "extra": true,
+  "neper": "overlay.rich_tooltip",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/rich_tooltip.png",
+    "notes": "Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "name": "Toast",
+  "extra": true,
+  "neper": "control.toast",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   }
+  }
+ },
+ "key_value_editor": {
+  "name": "Key-value editor",
+  "extra": true,
+  "neper": "collection.key_value_editor",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "terminal_view": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/terminal_view.png",
+    "notes": "Round 63 (x): the rows are 12 px with the fixed-pitch face (Consolas stands in for Menlo, which is not installed) so the selection fill no longer cuts the glyphs. Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "The fixed-pitch face is Consolas (Menlo and SF Mono are not installed), so the Cupertino rows are not Apple type"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/terminal_view.png",
+    "notes": "Round 63 (x): the rows are 12 px with the fixed-pitch face (Consolas stands in for Menlo, which is not installed) so the selection fill no longer cuts the glyphs. Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "The fixed-pitch face is Consolas (Menlo and SF Mono are not installed), so the Cupertino rows are not Apple type"
+    ]
+   }
+  }
+ },
+ "password_field": {
+  "name": "Password field",
+  "extra": true,
+  "neper": "control.password_field_with",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/password_field.png",
+    "notes": "Round 63 (x): the library control now centres the reveal button on the real field height (22 Windows, 34 Cupertino); the sheet no longer uses a fitted copy. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Empty (placeholder), masked, hover, keyboard focus, revealed, disabled and invalid, with the reveal button. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Windows dark draws the invalid frame with a stray right edge (shared edit chrome)",
+     "Masking is per byte; the Windows bullet is the dark chrome's, the asterisk the light one's"
+    ]
+   }
+  }
+ },
+ "image": {
+  "name": "Image",
+  "extra": true,
+  "neper": "control.image",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/image.png",
+    "notes": "Round 63 (x): an image with no texture draws a neutral frame with the picture mark instead of raising InvalidTree; the sheet has a No texture cell. Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   }
+  }
+ },
+ "icon": {
+  "name": "Icon",
+  "extra": true,
+  "neper": "control.icon",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/icon.png",
+    "notes": "Round 63 (x): the Table and Sigma glyphs are drawn in the third row. Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   }
+  }
+ },
+ "stepper": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "Round 63 (x): the Cupertino stepper shows its value to the left of the pill. Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 94 x 32 pill, 8 pt radius, hover, pressed, focus and disabled states. UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "Round 63 (x): the Cupertino stepper shows its value to the left of the pill. Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 94 x 32 pill, 8 pt radius, hover, pressed, focus and disabled states. UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "gauge": {
+  "name": "Gauge",
+  "extra": true,
+  "neper": "control.gauge",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/gauge.png",
+    "notes": "Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "shortcut_recorder": {
+  "name": "Shortcut recorder",
+  "extra": true,
+  "neper": "control.shortcut_recorder",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   }
+  }
+ },
+ "calendar": {
+  "name": "Calendar",
+  "extra": true,
+  "neper": "overlay.calendar",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/calendar.png",
+    "notes": "Round 63 (x): Linux draws the range band, today ring, week numbers and event dots; Windows and Linux draw the focus ring (the Keyboard focus cell is now the last cell so the ring lands in it; a neighbouring month day is no longer a Tab stop). Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   }
+  }
+ }
+}

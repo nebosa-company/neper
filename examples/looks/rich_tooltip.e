@@ -30,29 +30,36 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = unseen
     parts[1usize] = tip
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, held_error) }
+    held[0usize] = column
+    // The tooltip hangs from the anchor's right edge, so the anchor sits at the cell's right and the card stays inside the image; the
+    // space under the anchor holds the card, so the pair centres in the cell instead of the anchor alone.
+    ret (widget.padded(0u64, 250.0, 0.0, 0.0, 170.0, style.defaults(), held[0usize..1usize]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
-    let captions = [4]str{ "Subhead, text, action", "Text only", "Subhead, text", "Two actions" }
-    let heads = [4]str{ "Price refresh", "", "Price refresh", "Price refresh" }
-    let counts = [4]usize{ 1usize, 0usize, 0usize, 2usize }
-    let texts = [4]str{ "Prices are refreshed every night and can lag a day.", "Refreshed nightly.", "Refreshed nightly.", "Prices are refreshed every night and can lag a day." }
+    let captions = [6]str{ "Subhead, text, action", "Text only", "Subhead, text", "Two actions", "Wrapped text, no action", "Subhead, wrapped text, no action" }
+    let heads = [6]str{ "Price refresh", "", "Price refresh", "Price refresh", "", "Price refresh" }
+    let counts = [6]usize{ 1usize, 0usize, 0usize, 2usize, 0usize, 0usize }
+    let long = "Prices are refreshed every night and can lag a day."
+    let texts = [6]str{ long, "Refreshed nightly.", "Refreshed nightly.", long, long, long }
     var i = 0usize
-    while i < 4usize {
+    while i < 6usize {
         let (node, node_error) = anchored(a, t, &actions[0usize], i, heads[i], texts[i], counts[i])
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: .None }
         i += 1usize
     }
-    ret (4usize, ok)
+    ret (6usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "rich_tooltip", cells: 4usize, columns: 2usize, cell_w: 360.0, cell_h: 300.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "rich_tooltip", cells: 6usize, columns: 2usize, cell_w: 360.0, cell_h: 270.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
     try looks.run_material(a, &sheet)
     try looks.run_cupertino(a, &sheet)

@@ -7,6 +7,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_x63
 use e.ui.terminal as tm
 use e.ui.terminal_view as tv
 use e.ui.widget
@@ -33,11 +34,13 @@ fn width() -> f32 { ret 340.0 }
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let names = [6]str{ "newest line", "scrolled to the oldest", "three lines selected", "hover", "focus", "empty" }
     let change = widget.Change[f32] { ctx: nil, invoke: nothing }
+    let (mono, mono_error) = looks_x63.mono_theme(a, t)
+    if mono_error != ok { ret (0usize, mono_error) }
     var i = 0usize
     while i < 6usize {
         let (views, views_error) = mem.alloc[tv.Viewport](a, 1usize)
         if views_error != ok { ret (0usize, views_error) }
-        views[0usize] = tv.viewport(pick(mem.cast[*Terms](ctx), i), t)
+        views[0usize] = tv.viewport(pick(mem.cast[*Terms](ctx), i), mono)
         let v = &views[0usize]
         var offset = tv.bottom_offset(v, extent(), height())
         if i == 1usize { offset = 0.0 }

@@ -692,7 +692,23 @@ fn icon(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, size: f32, lab
 fn image(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, width: f32, height: f32, fit: widget.Fit, label: str) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: fit }, sized_style(width, height))
+    if texture.generation == 0u32 {
+        // No texture yet (a live one never has generation 0): a neutral frame with the picture mark, so the space is held and the paint cannot fail.
+        let grey = style.hex_raw(0x8A8A8Au32)
+        var mark_size = width * 0.5
+        if height < width { mark_size = height * 0.5 }
+        if mark_size > 36.0 { mark_size = 36.0 }
+        let (mark, mark_error) = icon_square(a, with_alpha(grey, 0.9), .Picture, mark_size)
+        if mark_error != ok { ret (zero, mark_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = mark
+        var ground = sized_style(width, height)
+        ground.background = paint.Brush { Solid: with_alpha(grey, 0.22) }
+        body[0usize] = widget.aligned(0u64, .Center, .Center, ground, held[0usize..1usize])
+    } else {
+        body[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: fit }, sized_style(width, height))
+    }
     var sem: widget.Semantics = zero
     sem.role = ROLE_IMAGE
     sem.label = label
@@ -3911,6 +3927,28 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.7 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.55 })
         try geometry.close_path(&builder)
+    }
+    if g.kind == .Table {
+        // A grid: a frame with a header rule, a second rule and one column rule.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.8 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.8 })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.4 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.4 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.6 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.6 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.4 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.8 })
+    }
+    if g.kind == .Sigma {
+        // A capital sigma: the top bar, the two diagonals meeting at the middle and the bottom bar.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.78, y: y + h * 0.22 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.24, y: y + h * 0.22 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.52, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.24, y: y + h * 0.78 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.78, y: y + h * 0.78 })
     }
     if g.kind == .ArrowUp || g.kind == .ArrowDown {
         // (D980) A shaft and a head, pointing up or down.
@@ -8022,7 +8060,10 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](reveal), invoke: reveal_semantic_action }
     if revealed { sem.states = accessibility.STATE_CHECKED }
     held[3usize] = widget.semantics(0u64, sem, style.defaults(), held[2usize..3usize])
-    let h = t.tokens.metrics.control_height + 16.0
+    // The reveal button centres on the field's own height: the Windows edit is 22 and the Cupertino one 34, not the Neper control height + 16.
+    var h = t.tokens.metrics.control_height + 16.0
+    if t.tokens.profile == .Windows { h = 22.0 }
+    if t.tokens.profile == .CupertinoLike { h = 34.0 }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
@@ -12702,6 +12743,12 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     look.padding_y = max_zero((box_h - 24.0) * 0.5)
     look.min_height = box_h
     look.min_width = 220.0
+    // The Linux and Windows looks draw their keyboard focus themselves (the runtime ring is off): GTK's is the accent at 50 % inside the
+    // edge, 2 px; the Windows one is v3's dotted rectangle, added over the field below.
+    if t.tokens.profile == .Linux && state.focus_visible {
+        look.border = with_alpha(style.color(t.tokens, .Primary), 0.5)
+        look.border_width = 2.0
+    }
     var content: widget.Node = zero
     if recording || chord.key == 0u32 {
         var hint = text_options()
@@ -12719,8 +12766,18 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         if caps_error != ok { ret (zero, caps_error) }
         content = caps
     }
-    let (field_node, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, content)
+    let (pressed_field, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, content)
     if field_error != ok { ret (zero, field_error) }
+    var field_node = pressed_field
+    if t.tokens.profile == .Windows && state.focus_visible {
+        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), 220.0 - 8.0, box_h - 8.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = pressed_field
+        layers[1usize] = widget.positioned(0u64, 4.0, 4.0, style.defaults(), widget_one_of(a, dots))
+        field_node = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+    }
     var keys: widget.Change[input.KeyEvent] = zero
     if recording {
         let (recorders, recorders_error) = mem.alloc[Recorder](a, 1usize)
@@ -13697,6 +13754,13 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         let (bone, bone_error) = skeleton_of(a, key + 2u64, t, size * 0.5, size * 0.2, block)
         if bone_error != ok { ret (zero, bone_error) }
         readout = bone
+        if t.tokens.profile == .Linux {
+            // libadwaita's surface is the skeleton's own colour, so the block would vanish: draw it in the track's grey.
+            var no_sweep: *Sweep = zero
+            let (grey, grey_error) = loading_shape(a, key + 2u64, size * 0.5, size * 0.2, size * 0.1, ring.track, no_sweep)
+            if grey_error != ok { ret (zero, grey_error) }
+            readout = grey
+        }
     }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize)
     if inner_error != ok { ret (zero, TooLarge) }
@@ -14174,6 +14238,24 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
         grown = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, style.defaults(), titled[0usize..2usize])
     }
     grown.style.width = style.Length { Flex: 1.0 }
+    // A message that wraps beside the action and the close stands as tall as its wrapped lines: bound it by the room the row leaves it
+    // (the row measures each child at its whole width, so a wrapped last line spilled into the padding).
+    if !bottom && notices.len > 0usize {
+        var row_parts = at + 2usize
+        if head.action_label.len != 0usize { row_parts += 1usize }
+        // The toast is 340 wide with 16 and 8 at its sides, 8 between the parts, the severity well 32 and the close control-md.
+        var room = 340.0 - 16.0 - 8.0 - t.tokens.sizes.control_md - 8.0 * f32(row_parts - 1usize)
+        if at > 0usize { room = room - 32.0 }
+        if head.action_label.len != 0usize {
+            let (action_width, _, _, action_error) = run_metrics(a, t, .LabelLarge, head.action_label)
+            if action_error != ok { ret (zero, action_error) }
+            let action_look = button_look(t, style.resolve(t.tokens, .Plain, control_state(t, key + 1u64, true, false)), true)
+            var action_box = action_width + 2.0 * action_look.padding
+            if action_box < action_look.min_width { action_box = action_look.min_width }
+            room = room - action_box
+        }
+        grown.style.max_width = style.Length { Px: max_zero(room) }
+    }
     parts[at] = grown
     at += 1usize
     if head.action_label.len != 0usize {
@@ -21151,14 +21233,32 @@ fn cup_step_pill(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.
     ret (widget.stack(0u64, sized_style(94.0, 32.0), layers[0usize..3usize]), ok)
 }
 
-// The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, no value (the app shows it beside).
+// The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, with the value in the body face to its left.
 fn cupertino_stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err) {
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
     if pill_error != ok { ret (zero, pill_error) }
+    // The value stands to the pill's left in the body face (UIKit apps show it beside the stepper; a bare pill hid it).
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    let digit_count = write_i64(digits, value)
+    var caption = text_options()
+    caption.role = .Body
+    caption.color = .OnSurface
+    caption.wrap = .None
+    caption.align = .End
+    let (shown, shown_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
+    if shown_error != ok { ret (zero, shown_error) }
+    var fixed = shown
+    fixed.style.min_width = style.Length { Px: 28.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = fixed
+    parts[1usize] = pill
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
     var none: []widget.Node = zero
-    let (made, made_error) = stepped(a, key, t, label, value, pill, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    let (made, made_error) = stepped(a, key, t, label, value, row, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
     ret (made, made_error)
 }
 

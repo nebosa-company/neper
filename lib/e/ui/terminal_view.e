@@ -67,6 +67,8 @@ fn build_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
     var options = control.text_options()
     options.wrap = .None
     options.mono = true
+    // The Cupertino body size is taller than a terminal row, so the rows overlapped and the selection fill cut the glyphs: Menlo's 12.
+    if v.theme.tokens.profile == .CupertinoLike { options.size = 12.0 }
     let (made, made_error) = control.text(a, 0u64, buf[0usize..n], v.theme, options)
     if made_error != ok { ret made_error }
     *out = made
