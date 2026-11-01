@@ -3224,6 +3224,34 @@ fn intrinsic_size(text: str) -> (f32, f32, bool) {
     ret (0.0, 0.0, false)
 }
 
+// What an SVG document gives as an image to size: each of its width and height when it is a plain length (a percentage or an
+// absent attribute leaves it open), and the aspect ratio from its viewBox, else from a width and a height together (0 for none).
+type ImageDims = struct { has_w: bool, w: f32, has_h: bool, h: f32, ratio: f32 }
+
+fn image_dims(text: str) -> ImageDims {
+    var d = ImageDims { has_w: false, w: 0.0, has_h: false, h: 0.0, ratio: 0.0 }
+    let open = find(text, 0usize, "<svg")
+    if open >= text.len { ret d }
+    let tag = text[open + 1usize..tag_end(text, open)]
+    let w = length_of(tag, "width")
+    let h = length_of(tag, "height")
+    if w > 0.0 {
+        d.has_w = true
+        d.w = w
+    }
+    if h > 0.0 {
+        d.has_h = true
+        d.h = h
+    }
+    let r = view_of(text)
+    if d.has_w && d.has_h {
+        d.ratio = d.w / d.h
+    } else if r.width > 0.0 && r.height > 0.0 {
+        d.ratio = r.width / r.height
+    }
+    ret d
+}
+
 fn default_style(current: paint.Color) -> Style {
     ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, filter_skip: false, font_size: 16.0, anchor: 0usize, font_family: "", font_weight: 400u32, font_italic: false }
 }
@@ -3282,11 +3310,20 @@ fn draw_with(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, c
 }
 
 fn draw_core(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool, faces: []const Face, host: *sf.Host, has_host: bool) -> err {
-    let (vw, vh, has_size) = size(text)
+    let (vw0, vh0, has_size) = size(text)
+    var vw = vw0
+    var vh = vh0
+    var view = view_of(text)
+    // A document with no viewBox and no width and height together has the size it is drawn at.
+    if !has_size {
+        vw = dest.width
+        vh = dest.height
+        view = geometry.rect(0.0, 0.0, vw, vh)
+    }
     var nothing: [1]str = zero
     var blank: Job = zero
     var fit = geometry.transform_identity()
-    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize], fit: &fit, host: host, has_host: has_host, faces: faces }
+    let doc = Doc { text: text, vw: vw, vh: vh, view: view, job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize], fit: &fit, host: host, has_host: has_host, faces: faces }
     let first = Frame { style: default_style(current), ctm: geometry.transform_identity(), layers: 0usize, opens: false }
     ret walk(a, b, doc, text, first, true, dest, 0usize)
 }
@@ -3742,8 +3779,18 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                 anc[anc_n] = raw
                 anc_n += 1usize
                 frames[0usize].style = apply_style(tag, frames[0usize].style)
-                let (vw, vh, has_size) = size(text)
-                if !has_size { ret BadSvg }
+                let (vw0, vh0, has_size) = size(text)
+                var vw = vw0
+                var vh = vh0
+                // No viewBox and no width and height together: the document is the size it is drawn at.
+                if !has_size {
+                    // A viewBox with no area turns the document's rendering off.
+                    let (zero_view, has_zero_view) = attr(tag, "viewBox")
+                    if has_zero_view { ret BadSvg }
+                    vw = dest.width
+                    vh = dest.height
+                }
+                if vw <= 0.0 || vh <= 0.0 { ret BadSvg }
                 var vx = 0.0f32
                 var vy = 0.0f32
                 let (view, has_view) = attr(tag, "viewBox")

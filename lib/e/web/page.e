@@ -51,7 +51,7 @@ error LoadFailed
 // state 0: not tried, 1: decoded, 2: failed.
 type ImageEntry = struct {
     url: str, state: u8, width: u32, height: u32, img: image.Image, svg: str,
-    texture: scene.TextureId, uploaded: bool
+    texture: scene.TextureId, uploaded: bool, has_w: bool, has_h: bool, ratio: f32
 }
 
 type Page = struct {
@@ -456,8 +456,14 @@ fn image_entry(p: *Page, abs: str) -> *ImageEntry {
             let (sw, sh, has_size) = svg.intrinsic_size(text)
             e.state = 1u8
             e.svg = text
+            let dims = svg.image_dims(text)
+            e.has_w = dims.has_w
+            e.has_h = dims.has_h
+            e.ratio = dims.ratio
             e.width = 300u32
             e.height = 150u32
+            if dims.has_w { e.width = u32(dims.w + 0.5f32) }
+            if dims.has_h { e.height = u32(dims.h + 0.5f32) }
             if has_size {
                 e.width = u32(sw + 0.5f32)
                 e.height = u32(sh + 0.5f32)
@@ -786,7 +792,7 @@ fn parse_float(s: str) -> (f64, bool) {
 
 fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef {
     if e.state != 1u8 { ret zero }
-    if e.svg.len > 0usize { ret cpaint.ImageRef { found: true, texture: zero, width: f32(e.width), height: f32(e.height), svg: e.svg } }
+    if e.svg.len > 0usize { ret cpaint.ImageRef { found: true, texture: zero, width: f32(e.width), height: f32(e.height), svg: e.svg, has_w: e.has_w, has_h: e.has_h, ratio: e.ratio } }
     if !e.uploaded {
         if !p.has_renderer { ret zero }
         let ci = image.ConstImage { pixels: e.img.pixels, width: e.img.width, height: e.img.height, stride: e.img.stride, format: e.img.format, alpha: e.img.alpha }
@@ -795,7 +801,7 @@ fn upload(p: *Page, e: *ImageEntry) -> cpaint.ImageRef {
         e.texture = tex
         e.uploaded = true
     }
-    ret cpaint.ImageRef { found: true, texture: e.texture, width: f32(e.width), height: f32(e.height), svg: "" }
+    ret cpaint.ImageRef { found: true, texture: e.texture, width: f32(e.width), height: f32(e.height), svg: "", has_w: true, has_h: true, ratio: 0.0f32 }
 }
 
 fn paint_image_of(ctx: *void, node: html.NodeId) -> cpaint.ImageRef {

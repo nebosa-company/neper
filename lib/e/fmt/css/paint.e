@@ -28,7 +28,55 @@ use e.str
 use e.text.layout as tl
 
 // A vector image has `svg` text instead of a texture.
-type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str }
+type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str, has_w: bool, has_h: bool, ratio: f32 }
+
+// The tile size of a vector background image in a positioning area `aw` by `ah`: `mode` 1 is contain, 2 is cover, else
+// `spec_w` and `spec_h` are the sizes given (-1 for auto). A missing intrinsic size comes from the aspect ratio or, with no ratio,
+// from the area.
+fn svg_tile_size(img: ImageRef, mode: u8, spec_w: f64, spec_h: f64, aw: f64, ah: f64) -> (f64, f64) {
+    let ratio = f64(img.ratio)
+    if mode != 0u8 {
+        if ratio <= 0.0f64 { ret (aw, ah) }
+        var w = aw
+        var h = aw / ratio
+        let fits = h <= ah
+        if (mode == 1u8 && !fits) || (mode == 2u8 && fits) {
+            h = ah
+            w = ah * ratio
+        }
+        ret (w, h)
+    }
+    if spec_w >= 0.0f64 && spec_h >= 0.0f64 { ret (spec_w, spec_h) }
+    if spec_w >= 0.0f64 {
+        if ratio > 0.0f64 { ret (spec_w, spec_w / ratio) }
+        if img.has_h { ret (spec_w, f64(img.height)) }
+        ret (spec_w, ah)
+    }
+    if spec_h >= 0.0f64 {
+        if ratio > 0.0f64 { ret (spec_h * ratio, spec_h) }
+        if img.has_w { ret (f64(img.width), spec_h) }
+        ret (aw, spec_h)
+    }
+    if img.has_w && img.has_h { ret (f64(img.width), f64(img.height)) }
+    if img.has_w {
+        if ratio > 0.0f64 { ret (f64(img.width), f64(img.width) / ratio) }
+        ret (f64(img.width), ah)
+    }
+    if img.has_h {
+        if ratio > 0.0f64 { ret (f64(img.height) * ratio, f64(img.height)) }
+        ret (aw, f64(img.height))
+    }
+    if ratio > 0.0f64 {
+        var w2 = aw
+        var h2 = aw / ratio
+        if h2 > ah {
+            h2 = ah
+            w2 = ah * ratio
+        }
+        ret (w2, h2)
+    }
+    ret (aw, ah)
+}
 
 // Draws `img` into the destination rectangle.
 fn draw_ref(p: *Painter, img: ImageRef, dx: f64, dy: f64, dw: f64, dh: f64) {
@@ -2260,7 +2308,7 @@ fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f
         // Tile size.
         var iw = 0.0f64
         var ih = 0.0f64
-        var tex = ImageRef { found: false, texture: zero, width: 0.0f32, height: 0.0f32, svg: "" }
+        var tex = ImageRef { found: false, texture: zero, width: 0.0f32, height: 0.0f32, svg: "", has_w: false, has_h: false, ratio: 0.0f32 }
         var natural = false
         if layer.kind == 4u8 {
             let env = p.env
@@ -2279,7 +2327,28 @@ fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f
         }
         let sz = cv.split_top_level_spaces(p.a, size_text)
         let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
-        if str.eq(size_text, "cover") && natural {
+        let vector = natural && tex.svg.len > 0usize
+        if vector && (str.eq(size_text, "cover") || str.eq(size_text, "contain")) {
+            var vmode = 1u8
+            if str.eq(size_text, "cover") { vmode = 2u8 }
+            let (vw0, vh0) = svg_tile_size(tex, vmode, -1.0f64, -1.0f64, ow, oh)
+            tw = vw0
+            th = vh0
+        } else if vector {
+            var swv = -1.0f64
+            var shv = -1.0f64
+            if sz.len >= 1usize && !str.eq(sz[0usize], "auto") {
+                let (lw0, gw0) = style.parse_len(&ctx, sz[0usize], s.font_size, style.A_PERCENT)
+                if gw0 { swv = lw0.px + lw0.pct * ow }
+            }
+            if sz.len >= 2usize && !str.eq(sz[1usize], "auto") {
+                let (lh0, gh0) = style.parse_len(&ctx, sz[1usize], s.font_size, style.A_PERCENT)
+                if gh0 { shv = lh0.px + lh0.pct * oh }
+            }
+            let (vw1, vh1) = svg_tile_size(tex, 0u8, swv, shv, ow, oh)
+            tw = vw1
+            th = vh1
+        } else if str.eq(size_text, "cover") && natural {
             let k = maxf(ow / iw, oh / ih)
             tw = iw * k
             th = ih * k
