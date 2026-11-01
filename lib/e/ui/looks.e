@@ -48,7 +48,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font, linux_fonts: []shape.Font }
+type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font, linux_fonts: []shape.Font, semibold_fonts: []shape.Font }
 error Failed
 
 // looks5-e: where a driven cell's pointer goes, as an offset from the cell's centre (default none): an app sets it
@@ -115,6 +115,19 @@ var shared_fonts: [6][]u8 = zero
 var shared_fonts_read: bool = false
 var shared_linux: [3][]u8 = zero
 var shared_linux_read: bool = false
+// Round 81, lane u: Segoe UI Semibold (font id 16) for a Cupertino sheet that asks for it (`read_semibold`, as `read_linux_fonts`
+// is for the Linux sheets): weight 600 then draws semibold, not bold. Other sheets keep their chain, so their PNGs do not move.
+var shared_semibold: []u8 = zero
+var shared_semibold_read: bool = false
+fn semibold_path() -> str { ret "C:/Windows/Fonts/seguisb.ttf" }
+fn read_semibold(a: *mem.Arena) -> err {
+    if shared_semibold_read { ret ok }
+    let (bytes, read_error) = fs.read_file(stable(a), semibold_path(), 16777216usize)
+    if read_error != ok { ret read_error }
+    shared_semibold = bytes
+    shared_semibold_read = true
+    ret ok
+}
 var shared_storage: []u8 = zero
 
 fn read_fonts(a: *mem.Arena) -> err {
@@ -247,6 +260,20 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
         try scene.register_font(&rig.renderer, gtk[2usize])
         rig.linux_fonts = gtk[0usize..7usize]
     }
+    if shared_semibold_read {
+        let (cup, cup_error) = mem.alloc[shape.Font](a, 5usize)
+        if cup_error != ok { ret (rig, cup_error) }
+        cup[0usize] = fonts[0usize]
+        cup[1usize] = fonts[1usize]
+        cup[2usize] = fonts[2usize]
+        cup[3usize] = fonts[3usize]
+        cup[4usize] = shape.Font { id: 16u32, data: shared_semibold, face_index: 0u32 }
+        try scene.register_font(&rig.renderer, cup[4usize])
+        rig.semibold_fonts = cup[0usize..5usize]
+    } else {
+        var no_fonts: []shape.Font = zero
+        rig.semibold_fonts = no_fonts
+    }
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
@@ -316,6 +343,7 @@ fn set_look(rig: *Rig, look: Look) {
     scene.set_pixel_exact_at_one((exact_error == ok && exact_text.len > 0usize) || rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
     if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
+    if (look == .Cupertino || look == .CupertinoDark) && rig.semibold_fonts.len > 0usize { rig.fonts = rig.semibold_fonts }
 }
 
 // The control theme of the rig: its tokens, fonts and runtime.

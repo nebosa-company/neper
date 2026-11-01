@@ -32,7 +32,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     let roles = [12]style.TextRole{ .Body, .Body, .BodySmall, .Caption, .Heading, .Title, .DisplayLarge, .Body, .Body, .Body, .BodySmall, .BodySmall }
     let inks = [12]paint.Color{ ink, muted, muted, muted, ink, ink, ink, blue, blue_held, dim, muted, ink }
     let sizes = [12]f32{ 0.0, 0.0, 13.0, 0.0, 0.0, 0.0, 34.0, 0.0, 0.0, 0.0, 13.0, 13.0 }
-    let weights = [12]u32{ 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 700u32, 0u32, 0u32, 0u32, 0u32, 0u32 }
+    let weights = [12]u32{ 0u32, 0u32, 0u32, 0u32, 600u32, 0u32, 700u32, 0u32, 0u32, 0u32, 0u32, 0u32 }
     var i = 0usize
     while i < 12usize {
         let (node, node_error) = word(a, t, i, values[i], roles[i], inks[i], sizes[i], weights[i])
@@ -44,6 +44,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    try looks.read_semibold(a)
     let sheet = looks.Sheet { name: "label", cells: 12usize, columns: 3usize, cell_w: 270.0, cell_h: 46.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }

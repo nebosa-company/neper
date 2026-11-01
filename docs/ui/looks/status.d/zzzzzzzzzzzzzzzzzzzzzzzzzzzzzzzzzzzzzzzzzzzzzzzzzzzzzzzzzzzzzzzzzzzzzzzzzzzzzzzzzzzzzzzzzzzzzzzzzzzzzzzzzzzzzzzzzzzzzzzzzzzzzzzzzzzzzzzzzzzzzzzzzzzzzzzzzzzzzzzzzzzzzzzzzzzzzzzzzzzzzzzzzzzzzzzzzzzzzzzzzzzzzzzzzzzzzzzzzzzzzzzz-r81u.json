@@ -1,0 +1,110 @@
+{
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu_bar.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md): panel width fixed to its content as Flutter's IntrinsicWidth menu (menu_anchor.dart, _MenuItemLabel: 12 padding, label, 12, shortcut, 12 padding; held to the M3 menu's 112 to 280): the open-Cards panel is 188 wide (was 280, 105 px between label and shortcut, now 12), text ink starts 12 px in and the shortcut ink ends 12 px before the right edge, as in ref/flutter/material/light/menu-anchor-open@1x (last ink 12 px before the flat panel end, label ink 49 px in after a 24 px icon, rows 48 apart). Dividers 16 rows (8, line, 7) as Divider(height: 16), panel 336 high (8 + 6 x 48 + 2 x 16 + 8). The shortcut text is on-surface as in Flutter (was the muted tone). Measured by own comparer on the committed 1x PNG, light and dark viewed. The open sheet's cell is 400 wide so the driven pointer still lands on the hovered row. | AUDIT 40 (2): downgraded to review. Held: whole-pixel bar (rows 38 to 85 = 48, x 20 to 499), titles 24 to 87, 88 to 151, 152 to 219, 220 to 283 (12 px padding, 64 minimum, Search 68), text 12 px in, hover e2dce6 and pressed ded8e2 (dark 312e36, 35323a) = 8 % and 10 % of on-surface, panel flush at y 80 under the bar ending at 79, rows 48, separators one row (cac4d0), disabled 38 %. Fails against menu_anchor.dart: the vertical panel is IntrinsicWidth (_MenuPanelState, _intrinsicCrossSize) with no minimum or maximum in _MenuDefaultsM3, and a row is padding 12, label, 12 (horizontalPadding in _MenuItemLabel), shortcut, padding 12. The widest row here, Increase Quantity (ink 110) and Num + (41), gives about 187 px; the picture is 280 (the M3 cap, not a source default), with 105 px between label and shortcut. The shortcut gap in navigation.e is 24 plus two 8 px flex gaps. Also: the dividers are 17 rows (panel 338 high; Flutter's Divider is 16), the shortcut is drawn muted where Flutter's Text inherits on-surface (M3 tokens say on-surface-variant: the two sources differ), and the tint on the open Cards title (10 %) has no line in menu_anchor.dart. Raise when the panel hugs its widest row (12 / 12 spacing) or the width is recorded as a deviation against Flutter. | ROUND 80 (s): standard density chosen and measured with the own comparer against Flutter menu_anchor.dart (_MenuBarDefaultsM3, _MenuButtonDefaultsM3 with _scaledPadding 12 at the standard density of Android, _MenuDefaultsM3). Bar 48 high on whole rows (32 to 79 in the open sheet), titles 12 px side padding and 64 x 48 minimum (File 64, Cards 64, Search 68, View 64 wide, text ink 12 px in), hover and pressed tones exact: light e2dce6 and ded8e2 over f3edf7, dark 312e36 and 35323a over 211f26 (on-surface 8 % and 10 %), keyboard focus the same as pressed. Menu panel hangs flush under its title (Flutter's menuPaddingOffset is zero, was 2 px), no slide-in (it left the panel on a fraction of a pixel), 280 wide, rows 48 and hovered row 201 to 248 on whole pixels, separators one row each (cac4d0, dark 49454f) at 192 and 305, panel f3edf7 equal to the bar. Hover and pressed cells now target the View title so the bar keeps its 480 width in all four cells. Light and dark viewed. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: the menu shade is level 2 (M3 token) where Flutter paints 3; the bar fills its container where Flutter's MenuBar hugs its content",
+     "The Android bar is the Flutter / desktop idiom of the M3 menu: M3 has no menu bar component, the bar height and padding are Flutter's published MenuBar defaults",
+     "No Flutter MenuBar reference image exists: the numbers are the published source, the hover and pressed frames are not compared with a Flutter frame",
+     "Submenu cascades and checked or radio items are not drawn in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu_bar.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md): panel width fixed to its content as Flutter's IntrinsicWidth menu (menu_anchor.dart, _MenuItemLabel: 12 padding, label, 12, shortcut, 12 padding; held to the M3 menu's 112 to 280): the open-Cards panel is 188 wide (was 280, 105 px between label and shortcut, now 12), text ink starts 12 px in and the shortcut ink ends 12 px before the right edge, as in ref/flutter/material/dark/menu-anchor-open@1x (last ink 12 px before the flat panel end, label ink 49 px in after a 24 px icon, rows 48 apart). Dividers 16 rows (8, line, 7) as Divider(height: 16), panel 336 high (8 + 6 x 48 + 2 x 16 + 8). The shortcut text is on-surface as in Flutter (was the muted tone). Measured by own comparer on the committed 1x PNG, light and dark viewed. The open sheet's cell is 400 wide so the driven pointer still lands on the hovered row. | AUDIT 40 (2): downgraded to review. Held: whole-pixel bar (rows 38 to 85 = 48, x 20 to 499), titles 24 to 87, 88 to 151, 152 to 219, 220 to 283 (12 px padding, 64 minimum, Search 68), text 12 px in, hover e2dce6 and pressed ded8e2 (dark 312e36, 35323a) = 8 % and 10 % of on-surface, panel flush at y 80 under the bar ending at 79, rows 48, separators one row (cac4d0), disabled 38 %. Fails against menu_anchor.dart: the vertical panel is IntrinsicWidth (_MenuPanelState, _intrinsicCrossSize) with no minimum or maximum in _MenuDefaultsM3, and a row is padding 12, label, 12 (horizontalPadding in _MenuItemLabel), shortcut, padding 12. The widest row here, Increase Quantity (ink 110) and Num + (41), gives about 187 px; the picture is 280 (the M3 cap, not a source default), with 105 px between label and shortcut. The shortcut gap in navigation.e is 24 plus two 8 px flex gaps. Also: the dividers are 17 rows (panel 338 high; Flutter's Divider is 16), the shortcut is drawn muted where Flutter's Text inherits on-surface (M3 tokens say on-surface-variant: the two sources differ), and the tint on the open Cards title (10 %) has no line in menu_anchor.dart. Raise when the panel hugs its widest row (12 / 12 spacing) or the width is recorded as a deviation against Flutter. | ROUND 80 (s): standard density chosen and measured with the own comparer against Flutter menu_anchor.dart (_MenuBarDefaultsM3, _MenuButtonDefaultsM3 with _scaledPadding 12 at the standard density of Android, _MenuDefaultsM3). Bar 48 high on whole rows (32 to 79 in the open sheet), titles 12 px side padding and 64 x 48 minimum (File 64, Cards 64, Search 68, View 64 wide, text ink 12 px in), hover and pressed tones exact: light e2dce6 and ded8e2 over f3edf7, dark 312e36 and 35323a over 211f26 (on-surface 8 % and 10 %), keyboard focus the same as pressed. Menu panel hangs flush under its title (Flutter's menuPaddingOffset is zero, was 2 px), no slide-in (it left the panel on a fraction of a pixel), 280 wide, rows 48 and hovered row 201 to 248 on whole pixels, separators one row each (cac4d0, dark 49454f) at 192 and 305, panel f3edf7 equal to the bar. Hover and pressed cells now target the View title so the bar keeps its 480 width in all four cells. Light and dark viewed. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: the menu shade is level 2 (M3 token) where Flutter paints 3; the bar fills its container where Flutter's MenuBar hugs its content",
+     "The Android bar is the Flutter / desktop idiom of the M3 menu: M3 has no menu bar component, the bar height and padding are Flutter's published MenuBar defaults",
+     "No Flutter MenuBar reference image exists: the numbers are the published source, the hover and pressed frames are not compared with a Flutter frame",
+     "Submenu cascades and checked or radio items are not drawn in the sheet"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/label.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for this sheet only): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) still draw Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in this sheet only (other Cupertino controls draw 600 as Bold); colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/label.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for this sheet only): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) still draw Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in this sheet only (other Cupertino controls draw 600 as Bold); colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/activity_indicator.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md; shapes only): the indeterminate spinner now follows Flutter's CupertinoActivityIndicator (cupertino/activity_indicator.dart, solid source citation): eight ticks (was 12), each from a third of the radius to the radius, a fifth of the radius wide with round ends, alpha ramp 47, 72, 97, 122, 147 over 255 behind the active tick, ink 3C3C44 (dark EBEBF5). Measured on the 64 px cell: height 64, ramp 48 / 71 / 97 / 122 / 147. The determinate ring has no Flutter or published Apple number (Flutter has no ring of that shape), so the row stays review. | Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/activity_indicator.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md; shapes only): the indeterminate spinner now follows Flutter's CupertinoActivityIndicator (cupertino/activity_indicator.dart, solid source citation): eight ticks (was 12), each from a third of the radius to the radius, a fifth of the radius wide with round ends, alpha ramp 47, 72, 97, 122, 147 over 255 behind the active tick, ink 3C3C44 (dark EBEBF5). Measured on the 64 px cell: height 64, ramp 48 / 71 / 97 / 122 / 147. The determinate ring has no Flutter or published Apple number (Flutter has no ring of that shape), so the row stays review. | Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/scroll_bar.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md): measured against Flutter's scrollbar.dart (solid, source): rest thumb 4 wide with a 2 px margin from the edge, as the Android scrollbar (thickness 8 / 2, margin 2). Not matching: the hovered and dragged cells draw 8 wide where Flutter on Android keeps 4 (12 only with a visible track), the thumb is one grey in every state where Flutter's drag is on-surface at 60 % and hover 50 % (idle is the theme highlight), and the 32 px thumb is under Flutter's 48 minimum length. M3 itself has no scrollbar spec, so no cited M3 number exists to decide between them. Not changed; stays review. | Audit 3: 16 cells measured on scroll_bar.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The thumb is always shown in the sheet; Android fades it out when idle",
+     "No fast-scroll handle",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/scroll_bar.png",
+    "notes": "ROUND 81 (u, flutter-compare-u.md): measured against Flutter's scrollbar.dart (solid, source): rest thumb 4 wide with a 2 px margin from the edge, as the Android scrollbar (thickness 8 / 2, margin 2). Not matching: the hovered and dragged cells draw 8 wide where Flutter on Android keeps 4 (12 only with a visible track), the thumb is one grey in every state where Flutter's drag is on-surface at 60 % and hover 50 % (idle is the theme highlight), and the 32 px thumb is under Flutter's 48 minimum length. M3 itself has no scrollbar spec, so no cited M3 number exists to decide between them. Not changed; stays review. | Audit 3: 16 cells measured on scroll_bar.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 221 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The thumb is always shown in the sheet; Android fades it out when idle",
+     "No fast-scroll handle",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
