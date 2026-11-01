@@ -1,0 +1,67 @@
+{
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "AUDIT 38 (1): downgraded to review. The picture is navigation_bar.png, which is not drawn by navigation.menu_bar (menu_bar.e, the main-menu bar of File / Cards / Search titles) but by the M3 navigation bar sheet (navigation.navigation_bar destinations); lane n measured a different widget against Flutter NavigationBar and called it matched. The row's own gap says a desktop menu bar has no M3 counterpart, and Flutter has no MenuBar reference in ref/flutter/manifest.csv (only MenuAnchor popups), and no material/menu_bar picture exists. The measurements of the navigation bar are valid for the navigation bar (360 x 80, indicator 62 x 32, fills within 2 levels) and stay as evidence for that control; raise this row when the Android look draws the real menu bar and a picture of it exists. | ROUND 78 (n): Android's menu bar is the M3 navigation bar (navigation_bar.png, already this row's picture); measured with the own comparer against ref/flutter/material NavigationBar rest at 1x: bar 360 x 80 (Flutter 360 x 80), fill f3edf7 against f2ecf4 (M3 baseline token), indicator 62 to 64 x 32 e8def8 against 64 x 32 / 62 x 32 e8def8 (dark 4a4458), badges and labels as the ref. Not measured: hover and pressed layers (Flutter frames are mid-fade). flutter-compare-n.md. | Audit 3: 10 cells measured on navigation_bar.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "AUDIT 38 (1): downgraded to review. The picture is navigation_bar.png, which is not drawn by navigation.menu_bar (menu_bar.e, the main-menu bar of File / Cards / Search titles) but by the M3 navigation bar sheet (navigation.navigation_bar destinations); lane n measured a different widget against Flutter NavigationBar and called it matched. The row's own gap says a desktop menu bar has no M3 counterpart, and Flutter has no MenuBar reference in ref/flutter/manifest.csv (only MenuAnchor popups), and no material/menu_bar picture exists. The measurements of the navigation bar are valid for the navigation bar (360 x 80, indicator 62 x 32, fills within 2 levels) and stay as evidence for that control; raise this row when the Android look draws the real menu bar and a picture of it exists. | ROUND 78 (n): Android's menu bar is the M3 navigation bar (navigation_bar.png, already this row's picture); measured with the own comparer against ref/flutter/material NavigationBar rest at 1x: bar 360 x 80 (Flutter 360 x 80), fill 211f26 against 211f24 (M3 baseline token), indicator 62 to 64 x 32 4a4458 against 64 x 32 / 62 x 32 e8def8 (dark 4a4458), badges and labels as the ref. Not measured: hover and pressed layers (Flutter frames are mid-fade). flutter-compare-n.md. | Audit 3: 10 cells measured on navigation_bar.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 216 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "A desktop menu bar has no M3 counterpart: the top app bar with an overflow menu is the nearest idiom",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "AUDIT 38 (2): downgraded to started. Round 78 raised the row on the frame alone (#707070, 3.3 : 1 against #202020, verified), but the radio captions inside the group are black on #202020 (about 1.1 : 1, unreadable in the picture; the same in windows-dark/choices_filter.png Match group), the reason the row sat at started for many rounds. 'Recorded as a native capture artefact' is true for the matched radio row (it copies a capture) but this group row is derived and has no capture, so nothing forces the unreadable text: a real app would draw light text (the row's own gap). Raise when the group's radio captions are light (3 : 1 at least; 4.5 : 1 for text). | ROUND 78 (lane o, started to review, derived: the group frame was #333333, 1.29 : 1 against the #202020 page (the 3 : 1 bar); it is #707070 now, 3.3 : 1 (looks_o78.dark_group_line), quieter than the edit's #9B9B9B line. The radio rows are the native dark radio rows (round 12 and 13), whose enabled caption is BLACK on #202020 as captured (radio-*-rest: 000000 text pixels, no light ink), so the row captions stay at about 1.1 : 1 while the group caption is white: a recorded native capture artefact, not changed because the matched dark radio row copies it. DERIVED: no native dark capture of a radio group frame exists (the native group box stays #DCDCDC); capped at review) | No native dark reference: the native group box stays light (#DCDCDC frame) in the dark gallery, so the frame cannot be compared; the stand-alone radio rows it holds follow the native dark radio only where the row is 24 px or lower. Contrast: frame #333333 against the page 1.29 : 1 (below the 3 : 1 bar for a control border), caption white 16.3 : 1. Round 15: the radio rows follow the native dark radio rows (see radio); the frame colour is the shared group box choice (worker W3's group_box), not changed here.",
+    "gaps": [
+     "Row captions are black on #202020 as in the native dark radio capture (about 1.1 : 1), the group caption is white: an inherited native artefact, a real app would draw light text",
+     "No native or real-app dark reference for the group frame",
+     "The frame is a decorative #333333 line, 1.29 : 1 against the page: it fails the 3 : 1 border bar, so the status stays started",
+     "The rows inside are not rebuilt to the native 22 px row"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/range_slider.png",
+    "notes": "AUDIT 38 (3): held at matched, reason corrected. The note says Flutter's rest inactive track (d9d0e4, dark 413b4f) is the fromSeed secondary-container; it is not: in the same Flutter scheme segmentedbutton-rest paints secondary-container e8def8 (dark 4a4458). What the refs do show is that Flutter's own single Slider (slider-rest) paints the inactive track e6e0e9 (dark 36343a), equal to ours and to Material Web, so the M3 token argument (surface-container-highest) is valid and the d9d0e4 / 413b4f of RangeSlider is a Flutter RangeSlider quirk, not the palette. Recorded deviation stands with this evidence. | ROUND 78 (n): Audit 37 gap recorded, not changed: rest inactive track e6e0e9 (M3 spec, `md.comp.slider.inactive.track.color` = surface-container-highest, and equal to the Material Web ref ref/material slider-labeled-rest e6e0e9 exactly) against Flutter d9d0e4 (Flutter paints secondary-container of its fromSeed palette; the baseline secondary-container is e8def8, so Flutter's value is also the accepted palette difference). Thumb 20, track 4 as before. Spec value kept; flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb a9a3aa against a8a3aa. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter b5b0b7.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/range_slider.png",
+    "notes": "AUDIT 38 (3): held at matched, reason corrected. The note says Flutter's rest inactive track (d9d0e4, dark 413b4f) is the fromSeed secondary-container; it is not: in the same Flutter scheme segmentedbutton-rest paints secondary-container e8def8 (dark 4a4458). What the refs do show is that Flutter's own single Slider (slider-rest) paints the inactive track e6e0e9 (dark 36343a), equal to ours and to Material Web, so the M3 token argument (surface-container-highest) is valid and the d9d0e4 / 413b4f of RangeSlider is a Flutter RangeSlider quirk, not the palette. Recorded deviation stands with this evidence. | ROUND 78 (n): Audit 37 gap recorded, not changed: rest inactive track 36343b (M3 spec, `md.comp.slider.inactive.track.color` = surface-container-highest, and equal to the Material Web ref ref/material slider-labeled-rest 36343b exactly) against Flutter 413b4f (Flutter paints secondary-container of its fromSeed palette; the baseline secondary-container is e8def8, so Flutter's value is also the accepted palette difference). Thumb 20, track 4 as before. Spec value kept; flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb 646067 against 646068. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter 58545b.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ }
+}
