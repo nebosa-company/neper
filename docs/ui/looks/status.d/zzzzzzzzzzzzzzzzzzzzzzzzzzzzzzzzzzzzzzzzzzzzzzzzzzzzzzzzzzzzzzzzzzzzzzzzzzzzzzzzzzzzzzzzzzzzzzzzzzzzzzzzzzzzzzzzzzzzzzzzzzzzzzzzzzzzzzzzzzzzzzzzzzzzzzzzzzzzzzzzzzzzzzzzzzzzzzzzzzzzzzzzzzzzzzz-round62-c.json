@@ -1,0 +1,1406 @@
+{
+ "divider": {
+  "name": "Divider",
+  "extra": true,
+  "neper": "control.divider",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/divider.png",
+    "notes": "Round 62 lane c. Full width, inset 56, middle inset 16, labelled, label leading, strong and vertical. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   }
+  }
+ },
+ "key_caps": {
+  "name": "Key caps",
+  "extra": true,
+  "neper": "control.key_caps",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/key_caps.png",
+    "notes": "Round 62 lane c. Single key, chords of two and three, function and named keys, compact single and chord. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ]
+   }
+  }
+ },
+ "skeleton": {
+  "name": "Skeleton",
+  "extra": true,
+  "neper": "control.skeleton",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/skeleton.png",
+    "notes": "Round 62 lane c. Text line, short line, circle, rectangle, pill, a block on the highest container, a list row and one block at a frozen shimmer phase. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The shimmer is a time effect: a still sheet cannot show its motion, and the band at phase 0.5 is faint in every look"
+    ]
+   }
+  }
+ },
+ "empty_state": {
+  "name": "Empty state",
+  "extra": true,
+  "neper": "control.empty_state",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/empty_state.png",
+    "notes": "Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   }
+  }
+ },
+ "banner": {
+  "name": "Banner",
+  "extra": true,
+  "neper": "control.banner",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "name": "Toast",
+  "extra": true,
+  "neper": "control.toast",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/toast.png",
+    "notes": "Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   }
+  }
+ },
+ "rich_tooltip": {
+  "name": "Rich tooltip",
+  "extra": true,
+  "neper": "overlay.rich_tooltip",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/rich_tooltip.png",
+    "notes": "Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   }
+  }
+ },
+ "notification_list": {
+  "name": "Notification list",
+  "extra": true,
+  "neper": "control.notification_list",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/notification_list.png",
+    "notes": "Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   }
+  }
+ },
+ "card": {
+  "name": "Card",
+  "extra": true,
+  "neper": "control.card",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   }
+  }
+ },
+ "avatar": {
+  "name": "Avatar",
+  "extra": true,
+  "neper": "control.avatar",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/avatar.png",
+    "notes": "Round 62 lane c. Initials at 24, 32, 40, 56 and 72, square, presence dots, a picture, the person glyph, and a pressable one hovered and focused. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn sample landscape (lib/e/ui/looks_c.e), not a photograph",
+     "Initials colour comes from a hash of the account id into three container roles, the same in every look",
+     "The avatar group is not in the sheet"
+    ]
+   }
+  }
+ },
+ "icon": {
+  "name": "Icon",
+  "extra": true,
+  "neper": "control.icon",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/icon.png",
+    "notes": "Round 62 lane c. The 35 shared glyphs in three rows, size steps 16 to 36, four colour roles, disabled, filled and filled in primary, and a picture icon. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The glyph set is one shared vector set: no look uses its own icon font (Segoe Fluent Icons, SF Symbols, Material Symbols, Adwaita symbolic)",
+     "The Table and Sigma glyphs draw nothing in the third row",
+     "The picture icon is a drawn sample landscape and is not tinted"
+    ]
+   }
+  }
+ },
+ "image": {
+  "name": "Image",
+  "extra": true,
+  "neper": "control.image",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/image.png",
+    "notes": "Round 62 lane c. The sample picture fitted three ways (contain, cover, fill), unscaled, rounded, bordered and a small cover crop. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "An image with no texture raises e.ui.widget.InvalidTree in the harness, so that state has no cell",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ]
+   }
+  }
+ }
+}
