@@ -31,7 +31,7 @@ fn at(a: *mem.Arena, node: widget.Node, x: f32, y: f32) -> (widget.Node, err) {
 fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: u64, label: str, selected: bool, x: f32, y: f32, high: f32, context: u32, window_x: f32, window_y: f32) -> (widget.Node, err) {
     var made: widget.Node = zero
     if t.tokens.profile == .Windows {
-        let (radio, radio_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, high, context, window_x, window_y)
+        let (radio, radio_error) = control.windows_radio_phase(a, key, t, label, selected, action, true, high, context + 1000u32, window_x, window_y)
         if radio_error != ok { ret (zero, radio_error) }
         made = radio
     } else {

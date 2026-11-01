@@ -4235,6 +4235,16 @@ fn radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: 
     ret (node, node_error)
 }
 
+// A radio of a group: the Windows dark look draws its caption light (`group_context` 1000), every other look as `radio`.
+fn radio_in_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, group_context: u32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, 21.0, false, Phase { context: group_context, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+        ret (row, row_error)
+    }
+    let (node, node_error) = radio(a, key, t, label, selected, action, enabled)
+    ret (node, node_error)
+}
+
 // A radio group: a radio per label in a column, keyed `key + 1 + index`, the
 // selected one marked, each firing its own action (one per label, caller-owned);
 // a group in the tree under `label`.
@@ -4244,7 +4254,9 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < labels.len {
-        let (item, item_error) = radio(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled)
+        var group_context = 0u32
+        if t.tokens.profile == .Windows { group_context = 1000u32 }
+        let (item, item_error) = radio_in_group(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, group_context)
         if item_error != ok { ret (zero, item_error) }
         items[i] = item
         i += 1usize
@@ -4704,11 +4716,14 @@ fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, lab
 
 // `windows_choice` in a row `high` tall (a TcxCheckBox is 21, 17 without its transparent border; a
 // radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
-fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase: Phase) -> (widget.Node, err) {
+fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase_raw: Phase) -> (widget.Node, err) {
+    // round 79, lane p: a context of 1000 and up marks a derived radio whose dark caption is light text, not the capture's black
+    let lit = phase_raw.context >= 1000u32
+    let phase = Phase { context: phase_raw.context % 1000u32, x: phase_raw.x, y: phase_raw.y }
     let state = control_state(t, key, enabled, false)
     // round 12: a stand-alone dark check box or radio follows the native Windows 11 dark one (22 high, Segoe UI 9 pt).
     if t.tokens.palette == .Dark && t.tokens.profile == .Windows && high <= 24.0 {
-        let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state)
+        let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state, lit)
         ret (native_row, native_error)
     }
     let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
@@ -4828,7 +4843,7 @@ fn dark_dots_phase(a: *mem.Arena, w: f32, h: f32, rgb: u32, phase: i32) -> (widg
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: dark_dots_measure, paint: dark_dots_paint, state: widget.bytes_of[DarkDots](&made[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 
-fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState) -> (widget.Node, err) {
+fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState, lit: bool) -> (widget.Node, err) {
     let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     if mark_error != ok { ret (zero, mark_error) }
     let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
@@ -4842,7 +4857,7 @@ fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if !enabled { ink = style.hex_raw(0xCCCCCCu32) }
     // round 13: the native dark radio's enabled caption is BLACK on the #202020 page (radio-*-rest, -pressed, -focus: the gallery's
     // WM_CTLCOLORSTATIC colouring does not reach a radio's text); copied as captured
-    if round && enabled { ink = style.hex_raw(0x000000u32) }
+    if round && enabled && !lit { ink = style.hex_raw(0x000000u32) }
     let (words, words_error) = colored_text(a, 0u64, shown, &ft, caption, ink)
     if words_error != ok { ret (zero, words_error) }
     let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)

@@ -1,0 +1,16 @@
+{
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "ROUND 79 (lane p, started to review): the derived group's radio captions are light now. A radio of the group stands as the native dark 22 px row (mark at 0,4, caption at x 16) but its caption ink is #FFFFFF (#CCCCCC disabled) instead of the capture's black: ink max 255 on the #202020 page measured in the rendered cell, 16 : 1 (WCAG), the 4.5 : 1 text bar met; the group caption was already white. The same light caption is used in the derived dark sheets that have no capture (choices_filter Match group and radio_dialog). The standalone radio, radio_states and radio_hover rows keep the capture's black on purpose (their evidence is that capture). Frame #707070 3.3 : 1 (round 78). Review is the ceiling: no capture of a dark group exists.",
+    "gaps": [
+     "The group frame #707070 is a derived choice: no native or real-app dark reference",
+     "The rows inside are the native 22 px dark row, not v3's 42 px TcxRadioGroup row",
+     "The standalone dark radio keeps the native capture's black caption (about 1.1 : 1), a native artefact kept because that row matches the capture"
+    ]
+   }
+  }
+ }
+}
