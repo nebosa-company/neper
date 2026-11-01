@@ -6198,8 +6198,6 @@ fn progress_ink(t: *const Theme, tone: ProgressTone) -> paint.Color {
 fn progress_ground(t: *const Theme, tone: ProgressTone) -> paint.Color {
     if tone == .Error { ret style.color(t.tokens, .ErrorContainer) }
     if tone == .Paused { ret style.color(t.tokens, .SurfaceContainerHighest) }
-    // md-linear-progress: the track is surface-container-highest.
-    if t.tokens.profile == .MaterialLike { ret style.color(t.tokens, .SurfaceContainerHighest) }
     ret style.color(t.tokens, .SecondaryContainer)
 }
 
