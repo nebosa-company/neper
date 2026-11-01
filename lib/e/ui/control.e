@@ -17355,6 +17355,8 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         inner = 16711423u32
     }
     if lit + 1usize == items.len { soft_bottom = 1.0 }
+    // round 53: the raw 1:1 popup captures have a whole 1 px frame on all four sides (the soft lines above were fitted to the resampled grabs): light draws the plain box
+    if t.tokens.profile == .Windows && t.tokens.palette != .Dark { ret (framed, ok) }
     if soft_bottom == 1.0 && soft_right == 1.0 { ret (framed, ok) }
     let (cells, cells_error) = mem.alloc[Win5Edges](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
