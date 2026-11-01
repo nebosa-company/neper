@@ -1,0 +1,24 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "AUDIT 26 (own comparers, master e8275eb5d, popup_menu re-rendered whole: all 156 Neper and 156 Neper dark files byte identical to the committed ones): round 57 did fix the blank sheets (the fewest pixels off the page colour below the caption is 10608 in Neper and 9792 in Neper dark, the one row Admin menu; none blank, 78 sheets, both scales), and the shortcut column, separators, disabled rows, check marks and the Print and Export submenu arrows draw. But the Neper menu control is not whole: navigation.bar_menu_at ends in `if commands.len > 14 { ret TooLarge }` for every non Windows profile, so the sheet app (room = 14) cuts every longer menu to its first 14 entries with no scroll arrow or any sign that rows are missing. v3's menus are File 26 entries (cut before Deck from Card Pool: no Import, Update Prices, Full Screen, Minimize, Exit), View 30 (cut after Card Rules), Search 23, Cards 22 (no Paste, Select All, Print, Export, Lock Collection), Card Art 15: 45 of the 78 sheets show a truncated menu, including the Export and Print parent sheets, whose submenu arrow row is among the missing ones, and the checked rows of View. A control that cannot show 22 of its items (and errors out in a real app) is not ready; Windows scrolls over a bottom arrow, the others do not. Also: the hover sheet popup_menu-hover (cell not enlarged, 324 px wide) clips the menu at the left, top and right (Ctrl+F cut) and no row is highlighted; the 49 _h and _sel_ sheets differ from their rest sheet only in the caption text, so Neper has no visible hover or selected row in any sheet (pointer parked off the sheet); v3's section headers (Mode, Sort Order, Group By, Cards) are drawn as plain items. Back to review until the menu shows all its items (scroll arrows allowed) and a hovered row is visible.",
+    "gaps": [
+     "bar_menu_at returns TooLarge above 14 commands for Neper (and the other non Windows looks): File, View, Search, Cards and Card Art menus are cut to 14 rows in 45 of 78 sheets, no scroll arrows",
+     "no hover or selected row is visible in any Neper popup sheet (the _h and _sel_ sheets equal their rest sheet below the caption); the hover sheet clips its menu"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "AUDIT 26: as Neper light (the dark sheets are blank-free and the shortcut column is whole, but the 14 row cut, the missing hover row and the plain section headers are the same; 45 of 78 sheets truncated).",
+    "gaps": [
+     "bar_menu_at returns TooLarge above 14 commands for Neper (and the other non Windows looks): File, View, Search, Cards and Card Art menus are cut to 14 rows in 45 of 78 sheets, no scroll arrows",
+     "no hover or selected row is visible in any Neper popup sheet (the _h and _sel_ sheets equal their rest sheet below the caption); the hover sheet clips its menu"
+    ]
+   }
+  }
+ }
+}
