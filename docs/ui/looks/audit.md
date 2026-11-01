@@ -1,3 +1,29 @@
+# Looks audit 39, 2026-11-01 (round 79: lanes p and q, master 6c863a65c)
+
+Independent check of looks79-p (Windows Dark radio_group captions, notes) and looks79-q (Android menu_bar and date_edit), in scratch worktree `audit39` with the committed `neper-self.exe`, rendered through a `subst` drive (T:, removed afterwards; `render_looks.py` run through `exec` with `.resolve()` removed). Own scratch comparer (not committed): contrast from exact pixels, colour runs along columns and rows, near-black ink scan of all Windows Dark PNGs, shift-free comparison against `ref/flutter/material/*/datepicker-input-open@1x` and the Flutter checkout's `menu_anchor.dart`.
+
+Result. 4 rows downgraded (overlay `status.d/zzz...-a39.json`): menu_bar Android and dark to review (note 3), radio and group_box Windows Dark to review (notes 1 and 2); 1 row note added, memo Windows stays review (note 4). Held: radio_group Windows Dark review, date_edit Android and dark review. Completion after regeneration, Light / Dark: Windows 87 / 79, Linux 100 / 100, Neper 100 / 100, macOS / iOS 76 / 76, Android 84 / 84 (lane claims: Android menu_bar matched).
+
+(A) radio_group Windows Dark, held at review. Rendered cells: enabled caption ink #FFFFFF on #202020 in all four cells, 16.3 : 1; disabled radio caption #CCCCCC 10.2 : 1, disabled group caption #9D9D9D 6.0 : 1; choices_filter Match group and radio_dialog show light captions, viewed. Observation: the group frame is a 1 px #707070 line (3.29 : 1) only at 1.5x; at 1x it lands on a half pixel and shows as two rows or columns of #484848 (1.8 : 1 each), as the Light frame does (two of #E6E6E6).
+
+(1) radio, Windows Dark, downgraded to review. The row's picture `native_dark.png` draws every enabled radio caption black on #202020 (1.1 : 1, viewed and counted: ink 0,0,0), unreadable; the same in `radio.png`, `radio_states.png`, `radio_hover.png`. It reproduces its capture, but the row's own gap calls the text unreadable.
+
+(2) group_box, Windows Dark, downgraded to review. `native_dark6.png`: the caption "Group" is black on #202020 on the frame line in both cells; the row's own gap says so, and says "the status stays started" while the row said matched.
+
+Scan of all Windows Dark PNGs on a #202020 page for near-black ink: dialog_native (the title bar and the OK frame area, readable text), native_dark, native_dark2, native_dark6, native_dark7, radio, radio_states, radio_hover, checkbox_states, color_picker, radio_group_states, checkbox, native_dark3 and syslink hold black pixels; the unreadable text is only in the radio cells of native_dark and radio, radio_states, radio_hover and in native_dark6; the others are frames, disabled marks or shadows. radio_group_states shows light captions.
+
+(4) memo, Windows Light. Lane p's defect confirmed in `windows/memo.png`: in "Focused, selected" the band over "Permanents" hides the second line, only "d indestructible until" shows; other seven cells whole, Dark memo.png whole. The row was already review but its notes did not say it; a note and a gap are added. Not raised.
+
+(B) menu_bar Android, downgraded to review (3). Reproduced exactly: bar 48 high, f3edf7 (dark 211f26), hover e2dce6 and pressed ded8e2 (dark 312e36, 35323a) = 8 % and 10 % of on-surface; panel 280 wide, rows 48, hovered row e3dee7; disabled items at 38 %. Disagrees with the cited source: `_MenuButtonDefaultsM3._scaledPadding` is max(8, 12 + visualDensity.baseSizeAdjustment.dx), 12 at the standard density of Android, 8 only on compact desktop (where the minimum height is 40). The sheet has 48 high with 8 px title padding; its own menu items use 12. "Search" would be 70 wide, not 64, and every title text sits 4 px left. Also: separators and hovered row sit on half pixels (1 px rules blur over two rows at 1x), and the hover and pressed cells draw a bar 356 wide against 480.
+
+Android date_edit, held at review. date_input.png: outline rows 185 to 240 = 56 high (ref `datepicker-input-open@1x` 206 to 261 = 56), divider to field 22 as the ref, card ece6f0 (ref ece6ee), outline 79747e (ref 7a757f; dark 938f99 against 948f99), notch fill equals the card (light and dark), focus 3 px primary (light 6750a4, dark d0bcff), error 1 px b3261e (dark f2b8b5), all viewed in both themes. The lane's measurements hold; the row stays review as it says.
+
+(C) Regression. 32 sheets re-rendered (radio_group, choices_filter, radio_dialog, memo, menu_bar, material_menu_bar, material_date_picker, radio, radio_states; card, avatar, banner, divider, linux_button, linux_checkbox, linux_dialog, linux_menu_bar, linux_scroll_bar, linux_text_edit, linux_tree_list, cup_scroll, cup_alert, cup_menu_bar, cup_progress, cup_segmented, status_bar, progress_bar, tree_list, toolbar_button, spin_edit, group_box, scroll_bar, label): `git status` clean, every PNG reproduced byte for byte (Neper 4, Linux 7, Cupertino 4, Windows 8 untouched sheets among them).
+
+Honest limits. Flutter source read from the local checkout (D:/flutter), not run; the Flutter refs were not re-captured; hover and pressed cells of the Android bar are not compared with any Flutter frame (none exists).
+
+---
+
 # Looks audit 38, 2026-11-01 (round 78: lanes n and o, master dd89789f8)
 
 Independent check of looks78-n (Android and Cupertino) and looks78-o (Windows), master `5739d90fe` to `dd89789f8`, in scratch worktree `audit38` with the committed `neper-self.exe`, rendered through a `subst` drive (Q:, removed afterwards; `render_looks.py` run through `exec` with `.resolve()` removed). Own scratch comparer (not committed): exact-colour components with bounding boxes, ink boxes, colour histograms, head comparison against `ref/windows-native/dark`, composites. The only pictures that changed in the range are 4 time_picker_dial, 2 Cupertino dark scroll_bar, 4 Windows dark radio_group and token_edit PNGs; everything else in the two lanes is status text.
