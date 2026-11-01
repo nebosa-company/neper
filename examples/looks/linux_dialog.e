@@ -42,7 +42,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     words.align = .Center
     let (body, body_error) = control.colored_text(a, 102u64, "This cannot be undone.", t, words, style.color(t.tokens, .OnSurface))
     if body_error != ok { ret (0usize, body_error) }
-    let (card, card_error) = overlay.linux_alert_card(a, 100u64, t, "Delete file?", body, buttons[0usize..2usize])
+    let (card, card_error) = overlay.linux_alert_card(a, 100u64, t, "Delete file?", body, buttons[0usize..2usize], false)
     if card_error != ok { ret (0usize, card_error) }
     // The window's content (550 x 410) under the scrim, the card in its middle.
     var dim = looks.size_style(550.0, 410.0)
