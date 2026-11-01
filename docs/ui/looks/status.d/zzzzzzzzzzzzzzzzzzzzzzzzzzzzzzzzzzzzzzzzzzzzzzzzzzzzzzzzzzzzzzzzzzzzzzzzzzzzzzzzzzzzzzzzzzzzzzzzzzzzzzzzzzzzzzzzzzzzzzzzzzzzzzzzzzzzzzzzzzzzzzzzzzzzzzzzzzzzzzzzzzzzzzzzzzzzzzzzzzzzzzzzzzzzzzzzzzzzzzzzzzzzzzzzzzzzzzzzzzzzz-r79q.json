@@ -1,0 +1,54 @@
+{
+ "menu_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu_bar.png",
+    "notes": "ROUND 79 (q): the Android look now draws a real menu bar (material_menu_bar.e; menu_bar.png rest, hover, pressed, keyboard focus; menu_bar-open.png the Cards menu open with a hovered row). Flutter has no MenuBar reference image, so measured with the own comparer against cited public numbers: Flutter menu_anchor.dart _MenuBarDefaultsM3 / _MenuButtonDefaultsM3 / _MenuDefaultsM3 and the M3 menu tokens. Bar 48 high, surface-container f3edf7 (dark 211f26), 4 px corners, level 3 shade; titles 64 x 48 minimum, 8 px padding, label-large; hover on-surface 8 % (e2dce6, dark 312e36), pressed, open and focus 10 % (ded8e2, dark 35323a), all exact; menu panel 280 wide (max), rows 48, 4 px corners, level 2 shade, 8 px top and bottom padding, hovered row e3dee7, separator and disabled rows shown. Deviation recorded: menu shade level 2 (M3) against Flutter 3. Light and dark viewed. flutter-compare-q.md. | Supersedes audit 38 (1): the picture is no longer the navigation bar.",
+    "gaps": [
+     "The Android bar is the Flutter / desktop idiom of the M3 menu: M3 has no menu bar component, the bar height and padding are Flutter's published MenuBar defaults",
+     "Submenu cascades and checked or radio items are not drawn in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu_bar.png",
+    "notes": "ROUND 79 (q): the Android look now draws a real menu bar (material_menu_bar.e; menu_bar.png rest, hover, pressed, keyboard focus; menu_bar-open.png the Cards menu open with a hovered row). Flutter has no MenuBar reference image, so measured with the own comparer against cited public numbers: Flutter menu_anchor.dart _MenuBarDefaultsM3 / _MenuButtonDefaultsM3 / _MenuDefaultsM3 and the M3 menu tokens. Bar 48 high, surface-container f3edf7 (dark 211f26), 4 px corners, level 3 shade; titles 64 x 48 minimum, 8 px padding, label-large; hover on-surface 8 % (e2dce6, dark 312e36), pressed, open and focus 10 % (ded8e2, dark 35323a), all exact; menu panel 280 wide (max), rows 48, 4 px corners, level 2 shade, 8 px top and bottom padding, hovered row e3dee7, separator and disabled rows shown. Deviation recorded: menu shade level 2 (M3) against Flutter 3. Light and dark viewed. flutter-compare-q.md. | Supersedes audit 38 (1): the picture is no longer the navigation bar.",
+    "gaps": [
+     "The Android bar is the Flutter / desktop idiom of the M3 menu: M3 has no menu bar component, the bar height and padding are Flutter's published MenuBar defaults",
+     "Submenu cascades and checked or radio items are not drawn in the sheet"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/date_picker.png",
+    "notes": "ROUND 79 (q): the field form is measured. date_input.png was stale (ISO text under a mm/dd/yyyy hint) and its label notch was painted in the page colour; fixed, plus date_input_focus.png and date_input_error.png. Against ref/flutter/material datepicker-input-open@1x: field 56 high (56), outline 1 px 79747e (7a757f), card ece6f0 (ece6ee), header 120 (119), field 21 px under the divider as the ref; focus outline 3 px (M3 token, Flutter 2) and error b3261e recorded. Card 360 wide (M3 token) against Flutter 328 and 279 high against 270 (M3 supporting text) recorded. Stays review: calendar day hover, focus and pressed states are unmeasured and the docked picker is not drawn. flutter-compare-q.md. | ROUND 78 (n): Viewed: M3 modal date picker (the Android idiom of the date edit). Own comparer against ref/flutter/material datepicker-calendar-open@1x: dialog 360 wide (ref 360), header 120 (ref 119), selected circle 38 (ref 38), fill ece6f0 against ece6ee; ours stops after the 4 week rows of the month where Flutter fixes the body at 448; the field form (date_input.png) is stale on master and not measured, so review. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "ROUND 79 (q): the field form is measured. date_input.png was stale (ISO text under a mm/dd/yyyy hint) and its label notch was painted in the page colour; fixed, plus date_input_focus.png and date_input_error.png. Against ref/flutter/material datepicker-input-open@1x: field 56 high (56), outline 1 px 79747e (7a757f), card ece6f0 (ece6ee), header 120 (119), field 21 px under the divider as the ref; focus outline 3 px (M3 token, Flutter 2) and error b3261e recorded. Card 360 wide (M3 token) against Flutter 328 and 279 high against 270 (M3 supporting text) recorded. Stays review: calendar day hover, focus and pressed states are unmeasured and the docked picker is not drawn. flutter-compare-q.md. | ROUND 78 (n): Viewed: M3 modal date picker, dark (2b2930 dialog, d0bcff selected day); see the light note: field form not measured, body height recorded. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.2:1).",
+    "gaps": [
+     "Range pickers and the docked picker are not drawn",
+     "The picker is a static sheet cell, not an open overlay",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
