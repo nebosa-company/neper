@@ -1,3 +1,27 @@
+# Looks audit 41, 2026-11-01 (round 81: lanes t and u, master 40938a9f3)
+
+Independent check of looks81-t (Windows Dark group_box, 19 "not backed by a dark capture" notes) and looks81-u (Android menu_bar, Cupertino label and spinner), scratch worktree `audit41` with the committed `neper-self.exe`, rendered with the `\?\` helper for `render_looks.py`. Own scratch comparers (not committed): best-placement template matching of the dark captures, colour runs, ink coverage against PIL Segoe UI, source read from D:/flutter (`menu_anchor.dart`, `activity_indicator.dart`).
+
+Result. 2 rows downgraded (overlay `status.d/zzz...-a41.json`, 226 z): group_box Windows Dark to review (note 1), splitter Windows Dark to review (note 2). Notes only: check_list_box Windows Dark (3), Cupertino button (6). Held: menu_bar Android and dark matched (4), label macOS / iOS and dark matched (5). Completion after regeneration, Light / Dark: Windows 87 / 79, Linux 100 / 100, Neper 100 / 100, macOS / iOS 77 / 77, Android 85 / 85 (lane claims: Windows Dark 81.3).
+
+(1) group_box, Windows Dark, downgraded. The lane's numbers reproduce: native_dark6 against groupbox-rest and -disabled @1x, 180 px differ, all in the caption box (21,11 to 53,22; the caption is black in the capture and white in ours), 0 outside it (frame #DCDCDC, gap 7 to 43). The row cannot stay matched with the cells it draws: the Long caption cell overruns the frame and cuts the top edge (viewed), Section header is in no capture, group_box_dialog.png still draws #333333 (15105 px of it) against the capture's #DCDCDC, and at 1.5x the capture's lines are 1 px (rows 24 and 118) against ours 2 px (rows 78/79, 159/160). Matched needs every drawn cell right or evidenced; the lane listed these gaps and still raised the row.
+
+(2) splitter, Windows Dark, capped at review. No capture of any splitter state exists; matched rests on the maintainer's 2026-10-17 viewing, and every other capture-less Windows Dark row is review. Matched means a capture was reproduced.
+
+(3) The 19 notes: checked against the dark captures. Accurate (status bar #F0F0F0, menu bar white band, progress light track, tab #F9F9F9, toolbar-hot #E5F3FF, month calendar white, tree 19 px rows). One misleading line, check_list_box: five checklist captures exist, four are the dark list view, only -disabled is light; corrected in the row.
+
+(4) menu_bar Android and dark, held. Reproduced on the committed PNGs: panel 80 to 267 (188), 336 high (8 + 6 x 48 + 2 x 16 + 8), separators 192 and 304, label to shortcut gap 13 (Flutter ref 14), shortcut ink equal to label ink (1d1b20 light, e6e0e9 dark), face f3edf7 / 211f26 against ref f2ecf4 / 211f24; the source agrees (padding 12, shortcut spacing 12, IntrinsicWidth). Correction: the 112 to 280 clamp is the M3 spec, not in `menu_anchor.dart`; it does not bite here. The bar-fills-container deviation and the unmeasured hover and pressed bar cells stay recorded.
+
+(5) Cupertino label, held. Headline coverage 505 (light) and 504 (dark) against Semibold 514 (Regular 391, Bold 672). The "other controls asking 600 still draw Bold" line is recorded (label gap, flutter-compare-u.md). Dependence: the Cupertino button asks 600 and draws Bold; its row did not say so (13 other matched rows do); a gap and note are added, status held because its comparison is shapes only. alert_dialog, action_sheet, dialog and the pickers were not checked.
+
+(6) Spinner, viewed and measured (64 px cell): 64 x 64, tick 6.4 wide from 45 (radius 32), alpha ramp 47 x 4, 72, 97, 122, 147 rising clockwise as `_kAlphaValues` and the `(i - activeTick)` rule give; light and dark identical. Row stays review.
+
+(7) Regression. 31 apps re-rendered (card, avatar, banner, divider, calendar, gauge, linux_button, linux_checkbox, linux_dialog, linux_menu_bar, linux_scroll_bar, linux_text_edit, text_edit, radio, status_bar, progress_bar, tree_list, spin_edit, scroll_bar, toolbar_button, splitter, menu_bar, label, hint, cup_scroll, cup_alert, cup_menu_bar, cup_progress, cup_button, material_progress, material_button) plus group_box, native_dark6, material_menu_bar, cup_label, activity_indicator: `git status` clean after every one, every PNG byte for byte.
+
+Honest limits. Flutter source read, not run; Cupertino weights judged against Windows Segoe UI files, not SF; the 1.5x group box lines compared by rows at one column; Flutter MenuBar has no ref frame.
+
+---
+
 # Looks audit 40, 2026-11-01 (round 80: lanes r and s, master 8984ea9b2)
 
 Independent check of looks80-r (Windows Dark captions, memo) and looks80-s (Android menu bar, Cupertino label), scratch worktree `audit40` with the committed `neper-self.exe`, rendered through a `subst` drive (T:, removed afterwards; `render_looks.py` run through `exec` with `.resolve()` removed). Own scratch comparers (not committed): best-placement template matching of the native dark captures, exact colour runs, ink coverage against PIL Segoe UI at the cited sizes, near-black cluster scan of all Windows Dark PNGs, Flutter `menu_anchor.dart` read from D:/flutter.
