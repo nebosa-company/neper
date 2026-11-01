@@ -1,0 +1,582 @@
+{
+ "memo": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/memo.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 197 x 97 box, 2 px soft edge, fill ffffff (dark 2c2c2e on 1c1c1e, ref dark black); ring 3 px, none in ref; macOS field against CupertinoTextField 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/memo.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 197 x 97 box, 2 px soft edge, fill ffffff (dark 2c2c2e on 1c1c1e, ref dark black); ring 3 px, none in ref; macOS field against CupertinoTextField 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 15 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/mask_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge (34 high), r7 inside, dark edge 464649, fill 2c2c2e; ref 36 high, 2 px edge, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/mask_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge (34 high), r7 inside, dark edge 464649, fill 2c2c2e; ref 36 high, 2 px edge, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 20 cells measured on mask_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 205 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/token_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 298 x 32 inside a 1 px dcdcdd edge, chips 24 high d6eaff r12 (no Flutter equivalent); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/token_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 298 x 32 inside a 1 px dcdcdd edge, chips 24 high d6eaff r12 (no Flutter equivalent); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 16 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 211 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge, trailing 28 x 27 button r2 f0f0f1 (no ref); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge, trailing 28 x 27 button r2 f0f0f1 (no ref); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/text_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 188 x 32 inside a 1 px dcdcdd edge, r7; ref 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): placeholderText and label ink, systemRed invalid edge, accent focus ring, 30 % disabled ink, read only. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "34 height and radius 8 approximate UITextField / SwiftUI roundedBorder; search 36 / 10 are closer to UIKit",
+     "text_field has no clear action: the clear mark only reports an empty change",
+     "Suffix overflows the right padding when prefix and suffix are both set",
+     "Multi-row field has no scrolling viewport",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/text_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 188 x 32 inside a 1 px dcdcdd edge, r7; ref 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): placeholderText and label ink, systemRed invalid edge, accent focus ring, 30 % disabled ink, read only. Audit 3: 24 cells measured on text_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 207 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "34 height and radius 8 approximate UITextField / SwiftUI roundedBorder; search 36 / 10 are closer to UIKit",
+     "text_field has no clear action: the clear mark only reports an empty change",
+     "Suffix overflows the right padding when prefix and suffix are both set",
+     "Multi-row field has no scrolling viewport",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/checkbox.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: unchecked inner 11 x 12 (ref 12 x 12), checked 13 x 14 r3 007aff (ref 14 x 14 r4, 007aff); dark checked 0a84ff against Flutter 3264d7, kept at the system blue (recorded). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 14 x 14 box, pressed, focus, disabled, checked and mixed states differ from rest. Audit 3: 24 cells measured on checkbox.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Box radius 3.5, unchecked edge alpha and pressed face approximated",
+     "Switch thumb stretch while pressed (+6) and the thumb shadow stack are approximations",
+     "Extra controls render_looks.py cannot add as rows: switch (switch.png), segmented_control (segmented_control.png, iOS 32 tall), slider (slider.png, thumb 28, track 4), stepper (spin_edit.png, 94 x 32)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/checkbox.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: unchecked inner 11 x 12 (ref 12 x 12), checked 13 x 14 r3 007aff (ref 14 x 14 r4, 007aff); dark checked 0a84ff against Flutter 3264d7, kept at the system blue (recorded). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 14 x 14 box, pressed, focus, disabled, checked and mixed states differ from rest. Audit 3: 24 cells measured on checkbox.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.7:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 203 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Box radius 3.5, unchecked edge alpha and pressed face approximated",
+     "Switch thumb stretch while pressed (+6) and the thumb shadow stack are approximations",
+     "Extra controls render_looks.py cannot add as rows: switch (switch.png), segmented_control (segmented_control.png, iOS 32 tall), slider (slider.png, thumb 28, track 4), stepper (spin_edit.png, 94 x 32)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/checkbox.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: halo on-surface in focus: unchecked focus e8e1e9 against ref e6e1e8, hover ece5ed against ebe6ee, pressed efe6f6 against eee6f4, halo 40, box 18; dark focus 29272d equal. See flutter-compare-f.md. | Compared to Flutter: box 18 x 18, halo 40 x 40, fills within 2 levels at rest, hover and disabled. Gap left: the focused unchecked halo is tinted primary (#efe6f6) while Flutter uses on-surface (#e6e1e8); not fixed.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: halo on-surface in focus: unchecked focus e8e1e9 against ref e6e1e8, hover ece5ed against ebe6ee, pressed efe6f6 against eee6f4, halo 40, box 18; dark focus 29272d equal. See flutter-compare-f.md. | Compared to Flutter: box 18 x 18, halo 40 x 40, fills within 2 levels at rest, hover and disabled. Gap left: the focused unchecked halo is tinted primary (#efe6f6) while Flutter uses on-surface (#e6e1e8); not fixed.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/radio.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: 11 x 10 inner (ref 12 x 12), selected disc 007aff equal. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 14 pt disc, pressed, focus, disabled, selected states differ from rest. Audit 3: 24 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Dot size and off-state edge approximated",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/radio.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: 11 x 10 inner (ref 12 x 12), selected disc 007aff equal. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 14 pt disc, pressed, focus, disabled, selected states differ from rest. Audit 3: 24 cells measured on radio.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.7:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Dot size and off-state edge approximated",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/switch.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: knob 26 (ref 26), on track 34c759 (dark 30d158) equal, off dedee4 against eaeaeb (dark 39393d against 262629). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 51 x 31 track at 1x and 1.5x, 27 pt thumb, systemGreen on, secondarySystemFill off, pressed, focus, disabled. UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/switch.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: knob 26 (ref 26), on track 34c759 (dark 30d158) equal, off dedee4 against eaeaeb (dark 39393d against 262629). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 51 x 31 track at 1x and 1.5x, 27 pt thumb, systemGreen on, secondarySystemFill off, pressed, focus, disabled. UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/slider.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: track 2 px (fixed from 4, ref 2), thumb 26 (ref 26 to 27), accent 007aff (dark 0a84ff) equal, rest track dedee4 against e4e4e6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 4 pt track, round 28 pt thumb at 0 and 100 %, focus, disabled. UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/slider.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: track 2 px (fixed from 4, ref 2), thumb 26 (ref 26 to 27), accent 007aff (dark 0a84ff) equal, rest track dedee4 against e4e4e6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 4 pt track, round 28 pt thumb at 0 and 100 %, focus, disabled. UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/segmented_control.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: container 181 x 32 against sliding 165 x 32 (label width), thumb 69 x 28 r7 against 57 x 28 r6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 32 pt track in tertiary fill, pressed, focus, disabled states. UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/segmented_control.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: container 181 x 32 against sliding 165 x 32 (label width), thumb 69 x 28 r7 against 57 x 28 r6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 32 pt track in tertiary fill, pressed, focus, disabled states. UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/search_field.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: 220 x 36 r10 against 300 x 36 r9, fill e3e3e9 against efeff0 (flattened translucent fill). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 36 pt high, 10 pt radius, tertiary fill, secondaryLabel placeholder and glyph, focus, disabled. UISearchBar field: 36 tall, 10 round tertiary fill, magnifier and Search placeholder, clear button once typed, halo on focus, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/search_field.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: 220 x 36 r10 against 300 x 36 r9, fill e3e3e9 against efeff0 (flattened translucent fill). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 36 pt high, 10 pt radius, tertiary fill, secondaryLabel placeholder and glyph, focus, disabled. UISearchBar field: 36 tall, 10 round tertiary fill, magnifier and Search placeholder, clear button once typed, halo on focus, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/button.png",
+    "notes": "ROUND 72 (f): measured: filled 94 x 34 r9 against Flutter large 86 x 52 r11; the size class differs, unrecorded gap, stays review. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): sizes 44 / 34 / 28 and macOS 22 (64 least width), systemBlue and systemRed fills, tertiary fill, tint 12 to 30 %, disabled fill band, hover lighter and pressed darker, focus ring, every state differs from rest. Audit 3: not verified: 6 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1). Round 26: the large button is 50 pt (a large UIButton.Configuration), not 44 (the minimum tap target); scripts/cupertino_spec_check.py asserts 50.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "ROUND 72 (f): measured: filled 94 x 34 r9 against Flutter large 86 x 52 r11; the size class differs, unrecorded gap, stays review. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): sizes 44 / 34 / 28 and macOS 22 (64 least width), systemBlue and systemRed fills, tertiary fill, tint 12 to 30 %, disabled fill band, hover lighter and pressed darker, focus ring, every state differs from rest. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1); 1 words fall under 4.5:1 that pass in the light twin (lowest 4.4:1). Round 26: the large button is 50 pt (a large UIButton.Configuration), not 44 (the minimum tap target); scripts/cupertino_spec_check.py asserts 50.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "divider": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/divider.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: 1 px cac4d0 against ref cac4cf (the ref line sits on two half rows e3dde7). See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px outline-variant (202,196,208); Flutter blends the same line over two rows (227,221,231 each); dark line (73,69,79).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/divider.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: 1 px cac4d0 against ref cac4cf (the ref line sits on two half rows e3dde7). See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): 1 px outline-variant (202,196,208); Flutter blends the same line over two rows (227,221,231 each); dark line (73,69,79).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Linux draws libadwaita's #dddddd (#454545 dark) separator; the other looks use the outline-variant token, which is faint on the Windows face"
+    ]
+   }
+  }
+ },
+ "banner": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/banner.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: 400 x 64 r11 card f7f2fa against Flutter full-width bar 420 x 103, no radius, f8f2fa, rule cac4cf; recorded (M3 has no banner); dark 1d1b20 equal. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded container vs full-width MaterialBanner (M3 has no banner); container (247,242,250) vs (248,242,250), dark (29,27,32) equal.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/banner.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: 400 x 64 r11 card f7f2fa against Flutter full-width bar 420 x 103, no radius, f8f2fa, rule cac4cf; recorded (M3 has no banner); dark 1d1b20 equal. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): deviation recorded: rounded container vs full-width MaterialBanner (M3 has no banner); container (247,242,250) vs (248,242,250), dark (29,27,32) equal.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell"
+    ]
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/table.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: header 300 x 55 f3edf7, 1 px cac4d0 rules against 48 px rows, 66 px header, checkbox column, rule cac4cf; recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: 28 px rows, tinted header, no checkbox column vs Flutter 48 px rows; row rule (202,196,208) vs (202,196,207), dark (73,69,79) vs (73,69,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/table.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: header 300 x 55 f3edf7, 1 px cac4d0 rules against 48 px rows, 66 px header, checkbox column, rule cac4cf; recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: 28 px rows, tinted header, no checkbox column vs Flutter 48 px rows; row rule (202,196,208) vs (202,196,207), dark (73,69,79) vs (73,69,78).",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ]
+   }
+  }
+ },
+ "accordion": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/accordion.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: sections 280 wide r12 f7f2fa, 52 px headers against flat 320 x 72 ded9e0 expanded tile; recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped sections radius 12 vs flat ExpansionTile; fill (247,242,250) vs expanded tile (222,217,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/accordion.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: sections 280 wide r12 f7f2fa, 52 px headers against flat 320 x 72 ded9e0 expanded tile; recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: grouped sections radius 12 vs flat ExpansionTile; fill (247,242,250) vs expanded tile (222,217,224).",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "wizard": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/wizard.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: step circle 22 x 22 6750a4 against 24 px 65558f (palette G4); recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next vs Stepper track with filled grey inactive circles; step circle 24 px, active (103,80,164) vs (101,85,143).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/wizard.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: step circle 22 x 22 6750a4 against 24 px 65558f (palette G4); recorded. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): recorded: header of numbered steps with Back/Next vs Stepper track with filled grey inactive circles; step circle 24 px, active (103,80,164) vs (101,85,143).",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "date_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/date_picker.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: dialog 360 wide r28 ece6f0 against ece6ee, header 120 against 119, selected circle 38 against 38, scrim 32 % against 54 % (M3 spec value kept); dark dialog 2b2930 against 2b292f. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dialog 360 wide radius 28, 48 px day pitch, selected circle 38 vs 38, dialog fill (236,230,240) vs (236,230,238); recorded: scrim 32 % vs Flutter black 54 %, no year dropdown, smaller weekday letters and header.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/material: dialog 360 wide r28 ece6f0 against ece6ee, header 120 against 119, selected circle 38 against 38, scrim 32 % against 54 % (M3 spec value kept); dark dialog 2b2930 against 2b292f. See flutter-compare-f.md. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): dialog 360 wide radius 28, 48 px day pitch, selected circle 38 vs 38, dialog fill (236,230,240) vs (236,230,238); recorded: scrim 32 % vs Flutter black 54 %, no year dropdown, smaller weekday letters and header.",
+    "gaps": [
+     "The reference dialog sits on a half pixel, ours on whole pixels (ring 302 light, 304 dark; light off 1516 at the bottom shadow).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/neper: calendar popup 200 wide r12 e6e8ef with 30 px day circles against the 360 wide r28 modal with 38 px circles (desktop dropdown against M3 dialog), recorded; dark popup 292a2f. | ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring; the calendar popup is not compared. | The baseline: overlay.date_picker_with with a typed field (stray carets are the harness's focus slot, as in the other sheets)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/neper: calendar popup 200 wide r12 e6e8ef with 30 px day circles against the 360 wide r28 modal with 38 px circles (desktop dropdown against M3 dialog), recorded; dark popup 292a2f. | ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring; the calendar popup is not compared. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in date_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/neper: field 140 x 48 r4, list 136 wide r4 edeff5 with 46 px rows against DropdownMenu 136 wide, 48 px rows, ededf4; recorded. | The baseline: control.select (no pictures: control.image_select falls back to it under the other looks)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "ROUND 72 (f): measured own comparer vs ref/flutter/neper: field 140 x 48 r4, list 136 wide r4 edeff5 with 46 px rows against DropdownMenu 136 wide, 48 px rows, ededf4; recorded. | Round 24: the Disabled cell is no longer the enabled picture: under Neper dark the whole field (frame, label, picture, value and chevron) is drawn at the 38 % disabled content level, as the Material look does, and is exempt as disabled content in scripts/neper_dark_contrast.py (no violation). The control ignored its enabled flag outside Windows and Material; the light Neper picture still does, which is why the change is gated to the dark palette. Its focus ring (B3C5FF, two-tone against the face) passes scripts/neper_dark_focus.py.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}
