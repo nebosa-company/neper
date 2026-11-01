@@ -141,6 +141,8 @@ fn read_fonts(a: *mem.Arena) -> err {
         shared_fonts[i] = bytes
         i += 1usize
     }
+    // Round 82, lane v: every rig carries Segoe UI Semibold so the Cupertino looks draw weight 600 as semibold in every control.
+    try read_semibold(a)
     shared_fonts_read = true
     ret ok
 }
