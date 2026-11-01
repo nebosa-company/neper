@@ -29,7 +29,7 @@ type Slot = struct {
     saved_refs: []i8,
 }
 
-const POOL: usize = 12usize
+const POOL: usize = 14usize
 
 type Decoder = struct {
     a: *mem.Arena,
@@ -40,12 +40,13 @@ type Decoder = struct {
     tile_ctx: []u16,
     saved_ctx: []u16,
     slots: [8]Slot,
-    pool: [12][3]Plane,
-    pool_ref: [12]i32,
+    pool: [14][3]Plane,
+    pool_ref: [14]i32,
     pool_ready: bool,
     scratch: av1_post.Scratch,
     cur_buf: usize,
     out_buf: usize,
+    hold: i32,
     shown: bool,
     frame_open: bool,
     tile_num: i32,
@@ -69,6 +70,7 @@ fn alloc_plane(a: *mem.Arena, w: usize, h: usize) -> (Plane, err) {
 fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     var dc: Decoder = zero
     dc.a = a
+    dc.hold = 0i32 - 1i32
     let (tab, tab_error) = av1_tables.load(a)
     if tab_error != ok { ret (dc, tab_error) }
     dc.tab = tab
@@ -213,6 +215,19 @@ fn alloc_frame_state(dc: *Decoder) -> err {
     ret ok
 }
 
+fn recount(dc: *Decoder) {
+    var k = 0usize
+    while k < POOL {
+        dc.pool_ref[k] = 0i32
+        k += 1usize
+    }
+    var i = 0usize
+    while i < 8usize {
+        if dc.slots[i].buf >= 0i32 { dc.pool_ref[usize(dc.slots[i].buf)] += 1i32 }
+        i += 1usize
+    }
+}
+
 fn acquire(dc: *Decoder) -> usize {
     var k = 0usize
     while k < POOL {
@@ -306,6 +321,7 @@ fn setup_frame(dc: *Decoder) -> err {
             k += 1usize
         }
         dc.pool_ready = true
+        dc.hold = 0i32 - 1i32
     }
     dc.cur_buf = acquire(dc)
     p = 0usize
@@ -518,8 +534,9 @@ fn finish_frame(dc: *Decoder) -> err {
         }
         i += 1usize
     }
+    recount(dc)
     dc.pool_ref[final] += 1i32
-    dc.pool_ref[final] -= 1i32
+    dc.hold = i32(final)
     dc.shown = h.show_frame
     ret ok
 }
@@ -559,6 +576,8 @@ fn save_motion(dc: *Decoder) {
 fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
     var at = 0usize
     dc.shown = false
+    dc.hold = 0i32 - 1i32
+    recount(dc)
     while at < sample.len {
         let (o, next, obu_error) = av1.read_obu(sample, at)
         if obu_error != ok { ret obu_error }
@@ -576,6 +595,8 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
                 let shown_buf = dc.slots[usize(dc.st.h.frame_to_show_map_idx)].buf
                 if shown_buf < 0i32 { ret Invalid }
                 dc.out_buf = usize(shown_buf)
+                dc.pool_ref[dc.out_buf] += 1i32
+                dc.hold = shown_buf
                 dc.shown = true
                 continue
             }

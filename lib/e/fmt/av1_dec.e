@@ -83,6 +83,7 @@ type Mi = struct {
     interp0: u8,
     interp1: u8,
     comp_group_idx: u8,
+    mmode: u8,
     compound_idx: u8,
     mv0_row: i16,
     mv0_col: i16,

@@ -101,6 +101,8 @@ fn store_block(d: *D.Dec) {
                     d.s_mv[at * 4usize + 3usize] = i16(b.mv1_col)
                 }
                 m.tx_size = u8(b.tx_size)
+                m.mmode = u8(b.motion_mode)
+                if b.interintra { m.mmode = 9u8 }
                 m.size = u8(b.mi_size)
                 m.segment_id = u8(b.segment_id)
                 m.delta_lf0 = i8(d.delta_lf[0usize])
