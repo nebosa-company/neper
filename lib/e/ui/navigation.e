@@ -9173,105 +9173,29 @@ fn windows_rect(x: f32, y: f32, w: f32, h: f32, color: u32) -> widget.Node {
     ret widget.positioned(0u64, x, y, s, zero)
 }
 
-// (looks5-f) One column of a toolbar's grip: the greys of rows 1, 2, 3 to 21, 22 and 23.
-fn windows_grip_column(parts: []widget.Node, at: usize, x: f32, g1: u32, g2: u32, g3: u32, g22: u32, g23: u32) -> usize {
-    parts[at] = windows_rect(x, 1.0, 1.0, 1.0, g1 * 65793u32)
-    parts[at + 1usize] = windows_rect(x, 2.0, 1.0, 1.0, g2 * 65793u32)
-    parts[at + 2usize] = windows_rect(x, 3.0, 1.0, 19.0, g3 * 65793u32)
-    parts[at + 3usize] = windows_rect(x, 22.0, 1.0, 1.0, g22 * 65793u32)
-    parts[at + 4usize] = windows_rect(x, 23.0, 1.0, 1.0, g23 * 65793u32)
-    ret at + 5usize
+// A toolbar's grip (1:1 capture): two groups of three columns from x 4. White, face and #A0A0A0 down rows 1 to 22 (the white pair at
+// the top of rows 1, the dark pair at the foot), the same in every bar.
+fn windows_toolbar_grip(parts: []widget.Node, at: usize) -> usize {
+    var n = at
+    var g = 0usize
+    while g < 2usize {
+        let x = 4.0 + 3.0 * f32(g)
+        parts[n] = windows_rect(x, 1.0, 1.0, 22.0, 16777215u32)
+        parts[n + 1usize] = windows_rect(x + 2.0, 1.0, 1.0, 22.0, 10526880u32)
+        n += 2usize
+        g += 1usize
+    }
+    parts[n] = windows_rect(5.0, 1.0, 1.0, 1.0, 16777215u32)
+    parts[n + 1usize] = windows_rect(8.0, 1.0, 1.0, 1.0, 16777215u32)
+    parts[n + 2usize] = windows_rect(5.0, 22.0, 2.0, 1.0, 10526880u32)
+    parts[n + 3usize] = windows_rect(8.0, 22.0, 2.0, 1.0, 10526880u32)
+    ret n + 4usize
 }
 
-// (looks5-f) The pixels of the live toolbars (ref/windows/toolbar_button.png: the four bars of v3's second toolbar row, Standard,
-// Cards, Search and Help, `k` 0 to 3). A grip is seven columns from x 4, each its rows 1, 2, 3 to 21, 22 and 23, and the greys
-// drift lighter or darker along the row.
-fn windows_toolbar_grip(parts: []widget.Node, at: usize, k: usize) -> usize {
-    var n = at
-    if k == 0usize {
-        n = windows_grip_column(parts, n, 4.0, 250u32, 255u32, 255u32, 255u32, 246u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 245u32, 240u32, 191u32, 210u32)
-        n = windows_grip_column(parts, n, 6.0, 189u32, 160u32, 160u32, 160u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 249u32, 255u32, 255u32, 255u32, 246u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 245u32, 240u32, 191u32, 210u32)
-        n = windows_grip_column(parts, n, 9.0, 189u32, 160u32, 160u32, 160u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 240u32, 239u32, 239u32, 239u32, 240u32)
-    } else if k == 1usize {
-        n = windows_grip_column(parts, n, 4.0, 248u32, 253u32, 253u32, 253u32, 245u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 247u32, 242u32, 199u32, 214u32)
-        n = windows_grip_column(parts, n, 6.0, 197u32, 171u32, 171u32, 164u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 242u32, 242u32, 242u32, 242u32, 241u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 247u32, 242u32, 199u32, 214u32)
-        n = windows_grip_column(parts, n, 9.0, 197u32, 171u32, 171u32, 164u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 233u32, 229u32, 229u32, 229u32, 236u32)
-    } else if k == 2usize {
-        n = windows_grip_column(parts, n, 4.0, 247u32, 251u32, 251u32, 251u32, 244u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 248u32, 244u32, 208u32, 219u32)
-        n = windows_grip_column(parts, n, 6.0, 205u32, 183u32, 182u32, 168u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 233u32, 229u32, 229u32, 229u32, 236u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 248u32, 244u32, 208u32, 219u32)
-        n = windows_grip_column(parts, n, 9.0, 205u32, 183u32, 182u32, 168u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 226u32, 218u32, 218u32, 218u32, 232u32)
-    } else {
-        n = windows_grip_column(parts, n, 4.0, 246u32, 250u32, 250u32, 250u32, 244u32)
-        n = windows_grip_column(parts, n, 5.0, 250u32, 249u32, 245u32, 214u32, 223u32)
-        n = windows_grip_column(parts, n, 6.0, 211u32, 191u32, 189u32, 171u32, 210u32)
-        n = windows_grip_column(parts, n, 7.0, 228u32, 221u32, 221u32, 221u32, 233u32)
-        n = windows_grip_column(parts, n, 8.0, 250u32, 249u32, 245u32, 214u32, 223u32)
-        n = windows_grip_column(parts, n, 9.0, 211u32, 191u32, 189u32, 171u32, 210u32)
-        n = windows_grip_column(parts, n, 10.0, 221u32, 211u32, 211u32, 211u32, 229u32)
-    }
-    ret n
-}
-
-// (looks5-f) A closed toolbar's last column (its top, side and foot greys by bar) and, for the bars beside another bar, the
-// light column and the faint one past it that the previous bar's edge leaves at this bar's left (rows 0, 1 to 23, 24).
-fn windows_toolbar_edges(parts: []widget.Node, at: usize, k: usize, width: f32, height: f32) -> usize {
-    var n = at
-    var end_top = 171u32
-    var end_side = 170u32
-    var end_foot = 164u32
-    var lead_foot = 196u32
-    var extra_top = 0u32
-    var extra = 0u32
-    var extra_foot = 0u32
-    if k == 1usize {
-        end_top = 183u32
-        end_side = 181u32
-        end_foot = 168u32
-        lead_foot = 191u32
-        extra_top = 247u32
-        extra = 242u32
-        extra_foot = 191u32
-    } else if k == 2usize {
-        end_top = 190u32
-        end_side = 188u32
-        end_foot = 171u32
-        lead_foot = 186u32
-        extra_top = 248u32
-        extra = 244u32
-        extra_foot = 192u32
-    } else if k == 3usize {
-        end_top = 193u32
-        end_side = 191u32
-        end_foot = 172u32
-        lead_foot = 183u32
-        extra_top = 249u32
-        extra = 245u32
-        extra_foot = 192u32
-    }
-    parts[n] = windows_rect(0.0, height - 2.0, 1.0, 1.0, lead_foot * 65793u32)
-    parts[n + 1usize] = windows_rect(width - 1.0, 0.0, 1.0, 1.0, end_top * 65793u32)
-    parts[n + 2usize] = windows_rect(width - 1.0, 1.0, 1.0, height - 3.0, end_side * 65793u32)
-    parts[n + 3usize] = windows_rect(width - 1.0, height - 2.0, 1.0, 1.0, end_foot * 65793u32)
-    n += 4usize
-    if k > 0usize {
-        parts[n] = windows_rect(1.0, 0.0, 1.0, 1.0, extra_top * 65793u32)
-        parts[n + 1usize] = windows_rect(1.0, 1.0, 1.0, height - 3.0, extra * 65793u32)
-        parts[n + 2usize] = windows_rect(1.0, height - 2.0, 1.0, 1.0, extra_foot * 65793u32)
-        n += 3usize
-    }
-    ret n
+// A closed toolbar's last column: #A0A0A0 from the top to the foot line.
+fn windows_toolbar_edges(parts: []widget.Node, at: usize, width: f32, height: f32) -> usize {
+    parts[at] = windows_rect(width - 1.0, 0.0, 1.0, height - 1.0, 10526880u32)
+    ret at + 1usize
 }
 
 // The dxBar strip, `height` tall (26 in v3: measured at 100 % from the live main window): #F0F0F0
@@ -9294,7 +9218,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
     if core_error != ok { ret (zero, TooLarge) }
     core[0usize] = widget.box(0u64, fill, zero)
     var dark = 10526880u32
-    var light = 16777215u32
+    var light = 15790320u32
     var x2: widget.Node = zero
     var x3: widget.Node = zero
     if menu {
@@ -9310,7 +9234,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         let (a3, e3) = windows_layer(a, 15790320u32, 0.0, 1.0, 0.0, 0.0, core[0usize])
         if e3 != ok { ret (zero, e3) }
         x3 = a3
-        let (a2, e2) = windows_layer(a, lead, 1.0, 0.0, 0.0, 0.0, x3)
+        let (a2, e2) = windows_layer(a, 16777215u32, 1.0, 0.0, 0.0, 0.0, x3)
         if e2 != ok { ret (zero, e2) }
         x2 = a2
     }
@@ -9329,12 +9253,8 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         parts[n] = windows_rect(0.0, height - 2.0, 1.0, 2.0, 16777215u32)
         n += 1usize
     }
-    var bar_k = 0usize
-    if lead == 15987699u32 { bar_k = 1usize }
-    if lead == 15132390u32 { bar_k = 2usize }
-    if lead == 14540253u32 { bar_k = 3usize }
     if grip && !menu {
-        n = windows_toolbar_grip(parts, n, bar_k)
+        n = windows_toolbar_grip(parts, n)
     }
     if grip && menu {
         var top: f32 = 1.0
@@ -9377,7 +9297,7 @@ fn windows_bar_strip(a: *mem.Arena, nodes: []const widget.Node, height: f32, gri
         n += 2usize
     }
     if closed && width > 0.0 {
-        n = windows_toolbar_edges(parts, n, bar_k, width, height)
+        n = windows_toolbar_edges(parts, n, width, height)
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
@@ -10718,29 +10638,17 @@ fn windows_title_box_open(parts: []widget.Node, bw: f32, along: f32) -> usize {
 // (looks4-f) A bar separator as the live toolbar draws it: 6 x 22 (2 air, a dark and a light
 // column, 2 air), 21 full rows and a faded last one; the greys drift lighter / darker along the
 // window (#A3 / #FC at the left to #B2 / #EA at x 372, measured), so the caller names them.
-fn windows_bar_separator_tone(a: *mem.Arena, dark: u32, light: u32) -> (widget.Node, err) {
+fn windows_bar_separator_tone(a: *mem.Arena) -> (widget.Node, err) {
     if style.windows_dark_on() {
         let (flat, flat_error) = windows_bar_separator(a, 21.0)
         ret (flat, flat_error)
     }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    // The 1:1 capture: a #A0A0A0 and a #FFFFFF column, 22 rows from the bar's row 1, the same in every bar.
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let fade_dark = u32(i64(dark) + (240i64 - i64(dark)) * 5i64 / 8i64)
-    let fade_light = u32(i64(light) - (i64(light) - 240i64) * 2i64 / 3i64)
-    // (looks5-f) the soft first row (measured on the five separators: dark 163 to 178 starts at #BF to #C8, light 252 to 234
-    // at #F7 to #EC) and the faint column past the light one (#F1, #F3 from the fourth separator on)
-    let top_dark = u32(f32(dark) * 0.6 + 93.4)
-    let top_light = u32(f32(light) - (f32(light) - 240.0) * 0.42 + 0.5)
-    var extra = 241u32
-    if dark >= 172u32 { extra = 243u32 }
-    parts[0usize] = windows_rect(2.0, 0.0, 1.0, 21.0, dark * 65793u32)
-    parts[1usize] = windows_rect(3.0, 0.0, 1.0, 21.0, light * 65793u32)
-    parts[2usize] = windows_rect(2.0, 21.0, 1.0, 1.0, fade_dark * 65793u32)
-    parts[3usize] = windows_rect(3.0, 21.0, 1.0, 1.0, fade_light * 65793u32)
-    parts[4usize] = windows_rect(2.0, -1.0, 1.0, 1.0, top_dark * 65793u32)
-    parts[5usize] = windows_rect(3.0, -1.0, 1.0, 1.0, top_light * 65793u32)
-    parts[6usize] = windows_rect(4.0, 0.0, 1.0, 21.0, extra * 65793u32)
-    ret (widget.stack(0u64, control.sized_style(6.0, 22.0), parts[0usize..7usize]), ok)
+    parts[0usize] = windows_rect(2.0, -1.0, 1.0, 22.0, 10526880u32)
+    parts[1usize] = windows_rect(3.0, -1.0, 1.0, 22.0, 16777215u32)
+    ret (widget.stack(0u64, control.sized_style(6.0, 22.0), parts[0usize..2usize]), ok)
 }
 
 // (looks4-f) Tahoma 11 px (8 pt, v3's status bar text): GDI's whole-pixel advances, face 2.

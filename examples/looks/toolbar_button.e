@@ -36,10 +36,7 @@ fn strip(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, b
     var g = 0usize
     while g < groups.len {
         if g > 0usize && t.tokens.profile == .Windows {
-            // The greys of the separators along the live toolbar (dark, light), by separator.
-            let darks = [5]u32{ 163u32, 165u32, 167u32, 175u32, 178u32 }
-            let lights = [5]u32{ 252u32, 249u32, 247u32, 237u32, 234u32 }
-            let (rule, rule_error) = navigation.windows_bar_separator_tone(a, darks[first_rule + g - 1usize], lights[first_rule + g - 1usize])
+            let (rule, rule_error) = navigation.windows_bar_separator_tone(a)
             if rule_error != ok { ret (zero, rule_error) }
             nodes[n] = rule
             n += 1usize
