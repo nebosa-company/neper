@@ -20734,7 +20734,8 @@ fn cupertino_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     var face = style.hexa(0xFFFFFFu32, 1.0)
     var edge = style.hexa(0x000000u32, 0.30)
     if dark {
-        face = style.hexa(0xFFFFFFu32, 0.10)
+        // CupertinoCheckbox dark unchecked: the flat 383838 the ref reads (a 10 % white veil on the sheet ground gave 333335).
+        face = style.hex(0x383838u32)
         edge = style.hexa(0xFFFFFFu32, 0.30)
     }
     if state.pressed && !filled {

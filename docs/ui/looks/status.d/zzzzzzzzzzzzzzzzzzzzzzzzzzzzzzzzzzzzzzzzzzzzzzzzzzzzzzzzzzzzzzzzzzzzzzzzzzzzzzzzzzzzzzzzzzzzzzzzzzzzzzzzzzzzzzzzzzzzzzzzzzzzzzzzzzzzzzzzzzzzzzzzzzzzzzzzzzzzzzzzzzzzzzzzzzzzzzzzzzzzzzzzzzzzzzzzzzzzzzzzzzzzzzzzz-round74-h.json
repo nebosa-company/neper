@@ -1,0 +1,135 @@
+{
+ "bottom_sheet": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/bottom_sheet.png",
+    "notes": "ROUND 74 (h): compared to Flutter (modal bottom sheet, drag handle): handle 32 x 4 r2 in both; fill b1adb6 (on-surface-variant at 40 percent, the M3 spec value, md.sys.color.on-surface-variant at 0.4) against Flutter's solid 49454e (full opacity, no alpha). Flutter's default handle colour deviates from the M3 spec; the spec value is authoritative for the Android look, so the deviation is recorded in flutter-compare-h.md and the handle is kept. Fill, top r28 and the scrim deviation as audit 34 and flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/bottom_sheet.png",
+    "notes": "ROUND 74 (h): compared to Flutter (modal bottom sheet, drag handle): handle 32 x 4 r2 in both; fill 625f66 (on-surface-variant at 40 percent, the M3 spec value, md.sys.color.on-surface-variant at 0.4) against Flutter's solid cac4cf (full opacity, no alpha). Flutter's default handle colour deviates from the M3 spec; the spec value is authoritative for the Android look, so the deviation is recorded in flutter-compare-h.md and the handle is kept. Fill, top r28 and the scrim deviation as audit 34 and flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/checkbox.png",
+    "notes": "ROUND 74 (h): compared to Flutter CupertinoCheckbox dark (shapes only): unchecked fill is now the flat 383838 (own measurement of the sheet: 383838, was 333335; the ref's fill runs 303030 at the top to 3b3b3b at the bottom, 383838 at the middle); box 11 x 12 inside a 1 px edge, 13 x 14 when checked (ref 14 x 14), pressed 525254, checked 0a84ff (ref 3264d7, recorded). Light unchanged (flutter-compare-f.md).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Box radius 3.5, unchecked edge alpha and pressed face approximated",
+     "Switch thumb stretch while pressed (+6) and the thumb shadow stack are approximations",
+     "Extra controls render_looks.py cannot add as rows: switch (switch.png), segmented_control (segmented_control.png, iOS 32 tall), slider (slider.png, thumb 28, track 4), stepper (spin_edit.png, 94 x 32)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/search_field.png",
+    "notes": "ROUND 74 (h): compared to Flutter CupertinoSearchTextField dark (shapes only): ours 220 x 36 fill 323236, ref 300 x 36 fill 1c1c1f on a black ground. Both are the same token, tertiary fill 767680 at 24 percent (ref: 24 percent over 000000 is 1c1c1f; the same token over our sheet ground 1c1c1e gives 323236 exactly, computed). The 22 level difference is the ground (Flutter systemBackground dark is black, ours is the 1c1c1e grouped ground), not the fill; width and r10 against r9 as the light note. Recorded in flutter-compare-h.md for dark as well as light.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/segmented_control.png",
+    "notes": "ROUND 74 (h): compared to Flutter CupertinoSlidingSegmentedControl dark (shapes only): container 181 x 32 fill 323236 against ref 165 x 32 fill 1c1c1f on black; same token (tertiary fill 767680 at 24 percent), different ground (ours 1c1c1e), computed 323236; thumb raised 636366 equal to the ref. Width is the labels, thumb 69 x 28 against 57 x 28; recorded in flutter-compare-h.md for dark as well as light.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "ROUND 74 (h): sheet fixed (examples/looks/image_combo_box.e, Neper cells only: 1.75 times larger, cell 262.5 x 402.5, control at the top left, pointer aimed with looks.aim): the Focus cell's 3 px ring is whole (140 px control from x 10, ring ends at x 985, 107 px short of the cell edge at 1092; it was cut at the right edge of a 150 px cell), and both open cells show the full list, all six rows 47 px each (Junk to Unassigned) with the panel bottom at y 411, about 19 px above the cell bottom (it was cut after two and a half rows). Control geometry unchanged from the round 70 numbers (Flutter DropdownMenu comparison in flutter-compare-d.md and flutter-compare-g.md). Windows and Windows dark pictures of the sheet are byte-identical. Viewed light and dark."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "ROUND 74 (h): sheet fixed (examples/looks/image_combo_box.e, Neper cells only: 1.75 times larger, cell 262.5 x 402.5, control at the top left, pointer aimed with looks.aim): the Focus cell's 3 px ring is whole (140 px control from x 10, ring ends at x 985, 107 px short of the cell edge at 1092; it was cut at the right edge of a 150 px cell), and both open cells show the full list, all six rows 47 px each (Junk to Unassigned) with the panel bottom at y 411, about 19 px above the cell bottom (it was cut after two and a half rows). Control geometry unchanged from the round 70 numbers (Flutter DropdownMenu comparison in flutter-compare-d.md and flutter-compare-g.md). Windows and Windows dark pictures of the sheet are byte-identical. Viewed light and dark.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button.png",
+    "notes": "ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, light): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 007aff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, dark): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 0a84ff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
