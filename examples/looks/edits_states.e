@@ -226,6 +226,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.windows_capture()
     looks.pad_neper(20.0, 40.0)
     let sheet = looks.Sheet { name: "edits_states", cells: 16usize, columns: 1usize, cell_w: 990.0, cell_h: 30.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)

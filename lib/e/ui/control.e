@@ -13269,6 +13269,20 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
+        if t.tokens.profile == .Neper && suggestions.len > 7usize {
+            // Neper: past seven 36 px rows the list scrolls in a viewport instead of squeezing its rows into the window.
+            var view_style = style.defaults()
+            view_style.width = style.Length { Percent: 100.0 }
+            view_style.height = style.Length { Px: 7.0 * 36.0 }
+            view_style.overflow = .Clip
+            let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
+            if stacked_error != ok { ret (zero, TooLarge) }
+            stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), items[0usize..suggestions.len])
+            let (view, view_error) = mem.alloc[widget.Node](a, 1usize)
+            if view_error != ok { ret (zero, TooLarge) }
+            view[0usize] = widget.scroll(list_key + 1048576u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
+            column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, view[0usize..1usize])
+        }
         if t.tokens.profile == .Linux {
             // The popover's soft shadow lies under it: a zero-size node first in the column paints it round the popover's box
             // (the width is the anchor's less 2, the height the rows and the padding).
@@ -13411,6 +13425,8 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     // The value stops before the chevron: its 4 in plus its width, less the side.
     var kept = options
     kept.end_space = max_zero(side + 4.0 - 16.0)
+    // Neper: 4 px between the value and the state circle, which would otherwise touch the last letter.
+    if t.tokens.profile == .Neper { kept.end_space += 4.0 }
     let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, kept)
     if field_error != ok { ret (zero, field_error) }
     let state = control_state(t, key + 1u64, true, false)

@@ -138,7 +138,7 @@ fn combo_cell(a: *mem.Arena, t: *const control.Theme, kind: usize, i: usize) -> 
     // round 13: the native capture of the editable combo with the pointer on its arrow (combo-edit-hover-arrow) shows the edit EMPTY
     // (its window text is Bravo, the child edit paints nothing), so that cell is set empty too.
     var shown = "Bravo"
-    if kind == 0usize && i == 2usize { shown = "" }
+    if kind == 0usize && i == 2usize && t.tokens.profile != .Neper { shown = "" }
     let n = control.copy_text(buffer, shown)
     let (picks, picks_error) = pick_actions(a, 5usize)
     if picks_error != ok { ret (zero, picks_error) }
@@ -151,7 +151,7 @@ fn combo_cell(a: *mem.Arena, t: *const control.Theme, kind: usize, i: usize) -> 
     let key = u64(1000usize + 100usize * kind + 10usize * i)
     let (combo, combo_error) = control.combo_box(a, key, t, "Combo", buffer, n, zero, choices[0usize..5usize], 1usize, false, picks, zero, &toggle[0usize], options)
     if combo_error != ok { ret (zero, combo_error) }
-    if i == 2usize {
+    if i == 2usize && t.tokens.profile != .Neper {
         let (moved, moved_error) = aimed(a, combo, 150.0, 23.0, 140.0, 11.0)
         ret (moved, moved_error)
     }

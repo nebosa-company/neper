@@ -694,6 +694,11 @@ fn neper_scale() -> f32 {
 // open list reaches past a cell sized for the 22 px Windows control). Default (zero) none.
 var neper_pad_w: f32 = zero
 var neper_pad_h: f32 = zero
+// A sheet that reproduces a Windows capture pixel for pixel (22 px fields at the capture's window y): the Neper
+// pictures of it would squeeze 48 px fields into those boxes, so run_all leaves them out.
+var windows_capture_only: bool = zero
+fn windows_capture() { windows_capture_only = true }
+
 fn pad_neper(width: f32, height: f32) {
     neper_pad_w = width
     neper_pad_h = height
@@ -724,6 +729,10 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
         var look_index = 0usize
         while look_index < 4usize {
             if windows_only && look_index != 1usize {
+                look_index += 1usize
+                continue
+            }
+            if windows_capture_only && (look_index == 0usize || look_index == 3usize) {
                 look_index += 1usize
                 continue
             }

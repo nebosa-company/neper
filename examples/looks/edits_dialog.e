@@ -97,6 +97,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.windows_capture()
     let sheet = looks.Sheet { name: "edits_dialog", cells: 8usize, columns: 1usize, cell_w: 520.0, cell_h: 30.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

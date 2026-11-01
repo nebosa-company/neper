@@ -91,6 +91,8 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     caption.wrap = .Word
     caption.max_lines = 2u32
     if cupertino { caption.size = 11.0 }
+    // Neper: a plain hint wraps to its width without dropping lines (M3 sets no line cap).
+    if t.tokens.profile == .Neper { caption.max_lines = 0u32 }
     if linux {
         // libadwaita's tooltip: the body text on one line (GTK wraps only past its own width limit).
         caption.role = .Body
@@ -5632,6 +5634,8 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         side = 28.0
         size = 18.0
     }
+    // Neper pointer hosts: the 48 field of text_edit and its siblings (Flutter's 56 is the touch height).
+    if t.tokens.profile == .Neper && !touch { h = t.tokens.sizes.control_lg }
     var kept = options
     kept.height = h
     kept.end_space = control.max_zero(side + 4.0 - 16.0)

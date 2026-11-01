@@ -112,7 +112,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         // Neper: the pointer goes to the drop button (106 px right of the cell centre: the 280 column stands centred in the 360 cell, the field 10 in, the icon 20 from its end), not the field's text.
         var aim_dx: f32 = 0.0
         if t.tokens.profile == .Neper && (i == 4usize || i == 5usize) { aim_dx = 106.0 }
-        looks.aim(i, aim_dx, 0.0)
+        // Neper: the pointer on a day of the open calendar (Thursday the 15th), below the weekday row.
+        var aim_dy: f32 = 0.0
+        if t.tokens.profile == .Neper && i == 1usize { aim_dy = 98.0 }
+        looks.aim(i, aim_dx, aim_dy)
         let (node, node_error) = overlay.date_picker_with(a, u64(i + 1usize) * 100u64, t, "Created", chosen, n > 0usize, open, &actions[0usize], chosen, zero, zero, footer)
         if node_error != ok { ret (0usize, node_error) }
         let (shown, shown_error) = placed(a, t, node, above)

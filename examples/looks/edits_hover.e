@@ -229,6 +229,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.windows_capture()
     let sheet = looks.Sheet { name: "edits_hover", cells: 14usize, columns: 1usize, cell_w: 990.0, cell_h: 40.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }
