@@ -7821,6 +7821,11 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike { head_h = style.text_style(t.tokens, .LabelMedium).line_height }
     heads[2usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(name_w, head_h), heads[0usize..1usize])
     heads[3usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(value_w, head_h), heads[1usize..2usize])
+    // A zero-height heading still paints its text, over the first field's label; those looks have no heading line at all.
+    if head_h == 0.0 {
+        heads[2usize] = widget.box(0u64, control.sized_style(name_w, 0.0), zero)
+        heads[3usize] = widget.box(0u64, control.sized_style(value_w, 0.0), zero)
+    }
     // No pairs, nothing to label: the headings would stand on the Add button.
     if pairs.len > 0usize {
         rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, style.defaults(), heads[2usize..4usize])
