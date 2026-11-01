@@ -1417,6 +1417,66 @@ fn unparsable_value(a: *mem.Arena, prop: str, v: str) -> bool {
     ret !good2
 }
 
+fn hex_digit_value(c: u8) -> i32 {
+    if c >= 48u8 && c <= 57u8 { ret i32(c) - 48i32 }
+    if c >= 97u8 && c <= 102u8 { ret i32(c) - 87i32 }
+    if c >= 65u8 && c <= 70u8 { ret i32(c) - 55i32 }
+    ret -1i32
+}
+
+// A number-led value with its ASCII escapes resolved (a backslash, "30", a space and "px" give "0px"); other values are returned as they are.
+fn unescape_numeric(a: *mem.Arena, v: str) -> str {
+    let t = cv.trim_ws(v)
+    if t.len == 0usize { ret v }
+    let c0 = t[0usize]
+    if !((c0 >= 48u8 && c0 <= 57u8) || c0 == 46u8 || c0 == 43u8 || c0 == 45u8) { ret v }
+    var has_escape = false
+    var q = 0usize
+    while q < t.len {
+        if t[q] == 92u8 { has_escape = true }
+        if t[q] == 34u8 || t[q] == 39u8 || t[q] == 40u8 { ret v }
+        q += 1usize
+    }
+    if !has_escape { ret v }
+    let (buf, be) = mem.alloc[u8](a, t.len)
+    if be != ok { ret v }
+    var out = 0usize
+    var i = 0usize
+    while i < t.len {
+        let c = t[i]
+        if c != 92u8 {
+            buf[out] = c
+            out += 1usize
+            i += 1usize
+            continue
+        }
+        i += 1usize
+        if i >= t.len { break }
+        var hv = 0i32
+        var nd = 0usize
+        while i < t.len && nd < 6usize && hex_digit_value(t[i]) >= 0i32 {
+            hv = hv * 16i32 + hex_digit_value(t[i])
+            nd += 1usize
+            i += 1usize
+        }
+        if nd == 0usize {
+            buf[out] = t[i]
+            out += 1usize
+            i += 1usize
+            continue
+        }
+        if i < t.len && (t[i] == 32u8 || t[i] == 9u8 || t[i] == 10u8 || t[i] == 12u8 || t[i] == 13u8) { i += 1usize }
+        if hv > 0i32 && hv < 128i32 {
+            buf[out] = u8(hv)
+            out += 1usize
+        } else {
+            ret v
+        }
+    }
+    let res: str = buf[0usize..out]
+    ret res
+}
+
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared {
     let (made, e) = list.init[cascade.Declared](a, declared.len + 8usize)
     if e != ok { ret zero }
@@ -1427,9 +1487,10 @@ fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -
     var pairs = tmp_made
     var i = 0usize
     while i < declared.len {
-        let d = declared[i]
+        var d = declared[i]
         i += 1usize
         let prop = d.declaration.property
+        if !str.starts_with(prop, "--") { d.declaration.value = unescape_numeric(a, d.declaration.value) }
         if str.starts_with(prop, "--") {
             consider(&best, d)
             continue

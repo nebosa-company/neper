@@ -936,6 +936,14 @@ fn match_length(s: str) -> (str, str, bool) {
     } else if at == digits_start {
         ret ("", "", false)
     }
+    // An exponent: "e" or "E", an optional sign and digits ("1e3px"); "1em" is a length in ems.
+    if end_number < s.len && (s[end_number] == 101u8 || s[end_number] == 69u8) {
+        var x = end_number + 1usize
+        if x < s.len && (s[x] == 43u8 || s[x] == 45u8) { x += 1usize }
+        let exp_start = x
+        while x < s.len && is_digit(s[x]) { x += 1usize }
+        if x > exp_start { end_number = x }
+    }
     let unit = s[end_number..]
     if unit.len == 0usize { ret (s[0usize..end_number], "", true) }
     if length_unit_known(unit) { ret (s[0usize..end_number], unit, true) }
@@ -1290,7 +1298,7 @@ fn parse_rgb(a: *mem.Arena, s: str) -> (u32, bool) {
     let open = index_of(s, "(")
     let close = index_of(s, ")")
     if open == -1i64 || close == -1i64 || close < open { ret (0u32, false) }
-    let parts = split_on_mode(a, s[usize(open) + 1usize..usize(close)], 0u8)
+    let parts = split_on_mode(a, s[usize(open) + 1usize..usize(close)], 1u8)
     if parts.len < 3usize { ret (0u32, false) }
     let r = rgb_channel(a, parts[0])
     let g = rgb_channel(a, parts[1])
