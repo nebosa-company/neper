@@ -1,3 +1,17 @@
+# Looks audit 30, 2026-11-01 (round 63: 148 rows raised to review by workers x, y, z, merge 2987a3e91)
+
+Independent check of `looks63-merge` (fast forward of master 7b83071d8; master is checked out in `D:/repos/neper_master`, so the branch could not be landed with `git fetch . branch:master`) in a scratch worktree `looks64-audit` with the committed `neper-self.exe`. Python could not open the status.d paths in the worktree (over 260 characters), so a `subst` drive was used and removed. Scratch scripts, not committed: a row checker, a montage maker for viewing, crops.
+
+Result. 8 of the 148 rows go from review back to started (overlay `status.d/zzz...-audit30.json`, 199 z). For the 76 round 62 controls (760 rows) 752 are at review and 8 at started; the round 63 workers had already lifted all 80 rows that audit 29 downgraded back to review.
+
+(1) Rows. 148 rows over 19 controls: every PNG exists, none is blank (fewest drawn pixels 6742), no row has light equal to dark, every dark picture is darker than its light one, no control shares bytes with another control (popover equals its own popover_hover only).
+
+(2) Re-render. 14 round 63 apps (password_field, calendar, toast, terminal_view, rich_tooltip, h_key_value_editor, icon from x; nav_navigation_rail, nav_sidebar, nav_bottom_app_bar, nav_navigation_drawer_rows from y; speed_dial, range_slider, dial, surf_overlay from z) rewrote 360 PNGs; `git status` stayed clean, so all are byte-identical to the committed ones.
+
+(3) Viewing. 61 PNGs (Windows, Linux and Cupertino of 19 controls, plus Cupertino dark, Windows dark, Neper dark and Material samples). Holding: password_field reveal button centred in all three looks, rich_tooltip cards whole (no clipping, Windows square flat card, Linux and Cupertino rounded), toast stack clear of the caption, key_value_editor header clear of the first row, popover arrows visible (faint white on light grey in Cupertino), Table and Sigma icons present, Cupertino stepper numbers and terminal_view selection whole, calendar band, today ring, week numbers and focus ring in Windows and Linux, navigation_rail, navigation_drawer, sidebar and speed_dial differ in shape per flavor. Downgraded: Cupertino range_slider focus (square ring open and cut on the right), bottom_app_bar in Windows and Linux (Compose label hugs the top of its button), Cupertino gauge (CPU load caption touches the arc ends).
+
+(4) Control group. 10 older apps (linux_button, linux_checkbox, cup_button, cup_list, material_button, material_list, list_box, linux_list_box, material_switch, cup_menu) re-render byte for byte.
+
 # Looks audit 29, 2026-11-01 (round 62: 74 platform idiom controls, 758 rows at review)
 
 Independent check at master 1fbc387cd in a scratch worktree with the committed `neper-self.exe` (nothing was killed, other sessions' changes left alone). Scratch scripts, not committed: a row checker (status overlays `*round62-*.json`, PNG exists, non-blank by counting pixels that differ from the corner colour, md5 duplicates across controls, light against dark byte and mean luminance), a silhouette comparer (mask IoU between flavors) and an edge contact scan.
