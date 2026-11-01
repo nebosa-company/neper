@@ -1,0 +1,284 @@
+{
+ "group_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/group_box.png",
+    "notes": "ROUND 81 (lane t, review to matched; audit 40 (1) closed). Own comparer (scratch, not committed) against ref/windows-native/dark/groupbox-rest and groupbox-disabled @1x. The look's own control now draws the capture's frame: 1 px #DCDCDC (it drew #707070), the caption in Segoe UI 12 like the capture's (it was Tahoma 11), the gap in the top edge starting 7 in and the caption 9 in, as in the capture. A scratch cell of the look's own group_box_of at the capture's size (176 px wide, caption Group, one child row) against both captures: frame pixels 0 off (xor 0) in the top band, gap 7 to 43 as the capture, caption ink mask 180 px in the capture and 180 in ours, xor 0, glyph rows 11 to 22 in both; the disabled capture equals the rest capture and ours does too (the #9D9D9D disabled caption had no capture behind it and is dropped: one caption ink in every state). native_dark6 (direct reproduction, both cells): frame 0, caption window 0, body 0 px off. group_box.png at 1x, cells Rest, Disabled, Empty: frame 140 wide, 1 px #DCDCDC on whole pixels with no grey residue beside any edge (it was two half-pixel rows of #484848 at 1x because the harness centred a 61 px box on a half pixel; the sheet now pins Dark cells to whole pixels, group_box.e), stub 7 (capture 7), caption ink x 9 to 58 and y -4 to +7 from the frame's corner (capture x 9, y -4 to +7). Viewed all six cells at 4x beside the capture. Recorded deviation: the caption is white (the capture's is black on #202020, 1.1 : 1). Not matched, stated: at 1.5x the capture draws 1 device px lines and a 7 device px stub, ours 2 px lines on three sides and a 10 px stub (the status follows the 1x captures, as every Windows Dark row's rule does). Unmeasured cells: Long caption (a caption longer than the frame overruns it and cuts the frame's top edge; no capture), Plain (no frame), Section header (see the gaps). | AUDIT 40 (1): downgraded to review. Reproduced: native_dark6 equals groupbox-rest and groupbox-disabled everywhere outside the caption (180 px, all inside the caption box 21,11 to 53,22; frame #DCDCDC, 11.9 : 1). But the control's own picture group_box.png draws the frame #707070 (a choice; the only native dark evidence is #DCDCDC, and no dark TcxGroupBox exists), and at 1x its horizontal edges sit on half pixels (top rows 44 and 100, bottom two rows of #484848, 1.8 : 1 each), so the 3.3 : 1 line holds only at 1.5x and on the vertical edges. The white caption and the #9D9D9D disabled caption have no capture behind them either: groupbox-disabled is pixel for pixel the rest capture (black caption). The row's own old rule (audit 17: a derived row with a real native dark capture that it does not reproduce is review) applies to group_box.png. Raise when the derived frame is a crisp whole-pixel line of the capture's colour, or the maintainer accepts #707070 against the #DCDCDC capture as a stated decision. (Radio Windows Dark held: its marks are 0 px off in all ten native dark captures, the disabled caption #CCCCCC is the capture's own, and the enabled white matches the same capture's white static text.) | ROUND 80 (review to matched; audit 39 (2) closed): the caption is light. native_dark6 draws 'Group' white (#9D9D9D disabled) on #202020 instead of the capture's black, and the derived group_box.png frame is the 3.3 : 1 #707070 line (it was #333333, 1.29 : 1) through the radio group's dark_group_line. Measured (scripts/looks_dark_whole.py, groupbox-rest and groupbox-disabled against native_dark6, whole 200 x 90 capture): everything below the caption row (frame, body text 'Inside the group') structure off 0, text off 0; the only differing pixels are the caption's own ink (bbox 21,11 to 53,22), by design. Viewed native_dark6.png and group_box.png. Recorded deviation: caption colour (white against black). | AUDIT 39 (2): downgraded to review. The row's picture native_dark6.png draws the caption 'Group' black (0,0,0) on #202020 over the frame line, rest and disabled: about 1.1 : 1, unreadable when viewed; the row's own gap already says so and also that the frame is below the 3 : 1 bar and 'the status stays started'. Matching a capture does not make the picture readable. Raise when the caption is light. | ROUND 35 (review to matched, whole native control: native_dark6 draws the 200 x 90 Button group box (1 px #DCDCDC frame with the caption gap, black caption Group, white static Inside the group at 28,36; the disabled capture is identical): groupbox-rest 0 px off, groupbox-disabled 0 px off, glyphs counted. The caption is black on #202020, i.e. as unreadable as natively; it is the native look, built the way list_box was (a native-geometry sheet), and v3's own TcxGroupBox is DevExpress-drawn, so the derived group_box.png sheet is unchanged and still shows the muted frame) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): groupbox-rest and -disabled are real native dark captures (an unthemed frame #DCDCDC with a black caption on the dark client) and the derived sheet draws a muted frame: 1670 px counted off per capture at best placement, not a rounding difference. The round 15 note that no usable reference exists was about the caption being unreadable natively, not about the capture being absent. Rule: a derived row with a real native dark capture that it does not reproduce is review. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native group box frame stays light #DCDCDC in dark). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: group_box 1 px outside the text zone of 1880 off px, group_box_dialog 1512 of 7961 The frame (#333333 against the page 1.29 : 1) is below the 3 : 1 border bar.",
+    "gaps": [
+     "Recorded deviation: the caption is white (the capture's is black on #202020, 1.1 : 1, unreadable); one ink in every state because groupbox-disabled is the rest capture",
+     "1.5x not matched: the capture's lines are 1 device px with a 7 px stub; ours are 2 px lines (top, bottom, right; left 1) with a 10 px stub",
+     "Section header cell: the dark TGradient #4A4A4A to #2B2B2B with a white title is not in any dark capture (no dark v3 options page exists): derived, unverified",
+     "Long caption cell: a caption longer than the frame overruns it and removes the top edge to the cell's end; no capture of that case",
+     "group_box_dialog.png (Windows Dark) still draws its frame #333333 (1.29 : 1) through windows_group_exact: not touched, no capture backs it, and it is not the capture's #DCDCDC",
+     "No dark TcxGroupBox exists: the DevExpress group box is drawn here as the native unthemed Button group box, the only dark evidence"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/splitter.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): every Dark colour is the light colour through the colour map; no native, v3 or app dark capture of a splitter exists and none was measured against one. It stays matched only on the maintainer's 2026-10-17 acceptance of the sheets (audit 17 counted it as an unmeasured match); this lane did not raise it and does not claim it. An auditor should decide whether it stays matched. | AUDIT 17 (stays matched, flagged derived): no native or v3 dark capture of a splitter exists, so the derived dark sheet is the only claim and it is unmeasured; it stays matched on the maintainer's 2026-10-17 acceptance, not on a comparison. Counted as an unmeasured match in audit 17. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (there is no native splitter control and no dark app splitter capture). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: splitter 0 px off in all 9 sheets but the main one (40 px, 0 outside the text zone)",
+    "gaps": [
+     "No native or live dark reference exists",
+     "Lane t: matched on the maintainer's colour acceptance alone, no capture behind any Dark colour"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/radio_group.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): no dark radio group or TcxRadioGroup capture exists. Not backed by a dark capture: the frame #707070 (the only dark group evidence is the unthemed #DCDCDC frame of groupbox-rest, which the group_box row now draws), the white captions (the capture's radio caption is black), the 22 px rows. At 1x the frame lands on half pixels (two rows of #484848, audit 39), as group_box did before round 81; this lane did not touch the radio group. | ROUND 79 (lane p, started to review): the derived group's radio captions are light now. A radio of the group stands as the native dark 22 px row (mark at 0,4, caption at x 16) but its caption ink is #FFFFFF (#CCCCCC disabled) instead of the capture's black: ink max 255 on the #202020 page measured in the rendered cell, 16 : 1 (WCAG), the 4.5 : 1 text bar met; the group caption was already white. The same light caption is used in the derived dark sheets that have no capture (choices_filter Match group and radio_dialog). The standalone radio, radio_states and radio_hover rows keep the capture's black on purpose (their evidence is that capture). Frame #707070 3.3 : 1 (round 78). Review is the ceiling: no capture of a dark group exists.",
+    "gaps": [
+     "The group frame #707070 is a derived choice: no native or real-app dark reference",
+     "The rows inside are the native 22 px dark row, not v3's 42 px TcxRadioGroup row",
+     "The standalone dark radio keeps the native capture's black caption (about 1.1 : 1), a native artefact kept because that row matches the capture",
+     "Lane t: Dark frame #707070 contradicts the only dark group capture (#DCDCDC) and sits on half pixels at 1x"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/date_edit.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed by dark captures: the head chrome (combo-edit-rest and -hover, 0 px off, round 78). Not backed: the calendar popup's Dark colours (the native month calendar stays light under dark mode), drawn from the light picture through the colour map. | ROUND 78 (lane o, started to review, derived and measured: head chrome of the Normal and Hover cells against combo-edit-rest and -hover of ref/windows-native/dark (4 left columns, 24 right columns, 4 top and 4 bottom rows over 80 px): 0 px off in each; Focus: 0, 0, 32 (all in face row 3, the glyph tops), 0. The cell has no disabled state. The native date picker and month calendar stay light under dark mode (a different control, see round 33), so the calendar popup, Today and Clear are the light drawing through the colour map and cannot be compared; capped at review) | ROUND 35 (stays started: the native date picker stays light under dark mode (datepicker-rest 7688 structure and 1069 text px off, as round 33); v3's date edit is a DevExpress combo; the derived head is the dark combo) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | ROUND 33 (started, measured): native datepicker-* (SysDateTimePick32, which stays light in dark mode) against date_edit: rest, hover, hover-arrow 7688 structure and 1069 text px off, focus 7691 and 1066, disabled 7994 and 763. Our dark head is the dark combo, not the light native picker. Stays started. | ROUND 31 (derived, status unchanged): the head is the matched dark editable combo and its text is now kerned like the capture. DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). date_edit.png: 12,730 px off outside text zones of 674,076 (1.9 percent). The calendar popup stays light natively and is not compared. | The head is the editable combo frame (win_edit_frame, the one the combo box uses, 120 wide), so its frame and drop button are those of the matched combo-edit captures; the calendar popup is not compared: the native month calendar and date picker do not follow the dark mode (they stay light in the gallery), and v3's own calendar was never captured.",
+    "gaps": [
+     "No dark or native reference for the calendar popup (the native month calendar stays light), the popup is derived from the light drawing",
+     "Native date picker is light; calendar popup not drawn",
+     "No dark reference for the calendar popup (native stays light under DarkMode; v3 has no dark mode)",
+     "Native DTP and MonthCal glyph and layout are not reproduced (see the light entry)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/button_edit.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the text edit field. Not backed by any dark capture: the ellipsis button's face, ring and dot ink (derived from v3 light and the native dark button). | ROUND 31 (derived, status unchanged): the field is the matched dark edit (its text now kerned like the capture, edit-rest 154 to 3 px); the ellipsis button is derived from v3 light and the native dark button. DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). button_edit.png: 3317 px off outside text zones of 197,904 (1.7 percent), 8018 with text zones. | Round 17 (w3): the ellipsis button is no longer a square native-style box with full white dots: it has v3's 4 px rounded shape (the native dark button's ring corner, button-rest rows 13 to 16) and v3's dot coverage (d8 c3 ea / e6 d9 f1 on fd, scaled onto the dark face). DERIVED from the light capture, not captured: neither v3 nor the native gallery has a dark ellipsis button. The field is still the native edit: scripts/looks_w1.py 0 chrome px in all five edit-state comparisons. Scale 1.25/1.5/2.0 pass. | Round 15 (docs/ui/looks/ref/windows-native/dark, checked by scripts/looks_w1.py): a reference pixel is off when ours differs by more than 2 levels; only pixels within 2 px of a glyph pixel are set apart as text (ClearType against greyscale glyphs), never a selection fill, caret, border, background or scroll column. The field is the native edit: at the native 150 x 24 (sheet native_dark_icb) its left 122 px compare at 0 chrome px with edit-rest, hover, disabled, read-only and focus (the glyph fix of this round applies). The ellipsis button (the last 22 px) has no native counterpart: its face and dots follow the native dark button colours and v3's light geometry (matched in light), unverified.",
+    "gaps": [
+     "The ellipsis button face, ring and dot ink are derived from v3 light and the native dark button; no capture exists",
+     "Invalid: a red outline guess"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/token_edit.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the edit frame (edit-rest and -focus). Not backed: the dark chips (the light v3 chips through the colour map) and the #272727 face of the dark twin. | ROUND 78 (lane o, started to review, derived: the frame is now the native dark edit frame like text_edit, mask_edit and button_edit: outer 1 px #9B9B9B (focused #FFFFFF), 1 px #383838 ring, #202020 face, square, grows with the wrapped chips; first rows and columns equal edit-rest and edit-focus of ref/windows-native/dark (9b, 38, 20 from the edge; corner 9b 9b 9b). It had the light Fluent underline (#5A5A5A foot, cyan #4CC2FF focused) beside a dark edit family that has none. scripts/looks_derive_dark.py token_edit: 16367 off (9892 outside text) against 10605 (5975) before: the dark frame now differs from the light colour map on purpose. DERIVED, not captured: the chips (#2E2E2E face, #5A5A5A line, #1A4B73 hover) are the light v3 chip colours through the colour map, no dark capture of a token edit exists; capped at review) | ROUND 31 (derived, status unchanged): the frame and text are the matched dark edit's; the chips are v3 light guesses on a #272727 face. DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). token_edit.png: 6439 px off outside text zones of 294,036 (2.2 percent). | Rendered from the Windows dark palette; not compared with a real screen. The frame is the native edit's (matched), the chips and their cross are v3 light guesses on a #272727 face (unmeasured).",
+    "gaps": [
+     "Dark chips are the light v3 chips through the colour map: no dark capture of a token edit exists, so they stay a derivation (the row cannot pass review)",
+     "No native or v3 reference for the chips (v3 has no dark mode, Windows has no token edit)",
+     "Dark twin stands on a #272727 face (unmeasured)"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/check_list_box_dialog.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): no dark capture of v3's check list shape; the Dark colours are the light drawing through the colour map. The only checklist capture (checklist-disabled) is the light unthemed list view, and the native dark list view has other geometry (19 px rows, header). | ROUND 35 (kept derived: x-listview-checkboxes 12,200 structure (9062 at the best sheet placement) and 3138 text px off against check_list_box; the native dark list view has a header, a column rule, 19 px rows, dark scroll bars and white-faced check boxes, v3's check list has 15 px rows; not drawn natively. The earlier checklist-* captures stay as in round 33) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | ROUND 33 (review, measured): native checklist captures against native_dark4, whole 158 x 110: checklist-rest 2665 structure and 1765 text px off, -selected-focused 4242 and 2046, -selected-unfocused 4313 and 2011, -hover 2665 and 1765; checklist-disabled 15,208 (a light unthemed list view). New real reference x-listview-checkboxes (dark list view with check boxes, 19 px rows, header) against check_list_box: 12,200 structure and 3138 text px off. v3's 15 px rows and the native 19 px rows are different geometry; the dark list is v3's drawing in dark colours, not the native list view. | Round 15: the Card Art icons are the capture's pixels in dark too (their white background stays: the dark map does not make a bitmap's white transparent, so they show as light tiles). Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Round 13's element checks still hold: the two check boxes pixel for pixel, face #202020, border #828790 and the chosen row colours against checklist-*. A whole-control diff against the native 158 x 110 list is 1976 flat px because v3's 15 px rows are kept.",
+    "gaps": [
+     "Native list view with check boxes (header, 19 px rows) not drawn",
+     "Row pitch 15 (v3) against the native 19 and its column divider are not copied",
+     "Card Art icons keep their white background in dark",
+     "checklist-disabled is the light unthemed list view: no dark reference"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/progress_bar.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): no dark capture of v3's progress bar: the native default stays the light bar and the hand-set DarkMode_Explorer variant has other colours. The Dark track and fill colours are a design choice, not a measurement. | ROUND 35 (kept derived, honest: v3's progress is a DevExpress bar and native leaves the Win32 bar light under dark mode. Default native captures (light track, green fill) against progress_bar at best placement: progress-determinate 4308 px off, progress-full and -empty 3954, x-progress-explorer (hand-set DarkMode_Explorer: white fill, black outline, #383838 track) 1521 to 3954 as in round 33. Neither native state is a look v3 shows: the first is the light control, the second needs the theme set by hand; the derived accent bar (cyan fill, #3A3A3A track) is a design, not a capture) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): a real native dark progress now exists (x-progress-explorer-* and progress-*, 178 x 16 and 9240 px crops) and the derived sheet fails it: own comparer (every pixel, best placement in progress_bar.png, off = any channel over 2 levels) 2004 (empty) to 3969 (full, disabled) px off counted, 1423 to 1645 with ink halos cut; the white fill with a black outline against our cyan fill is the whole difference. Rule: a derived row that has a real native dark capture of its control and does not reproduce it is review, whatever the reason; derived stays matched only where no capture of the control exists. | ROUND 33 (derived, measured against the new real dark progress): x-progress-explorer-* (DarkMode_Explorer on a Win32 progress bar: a white fill with a 1 px black outline on a #383838 track with a #575757 rim, 178 x 16). Ours is the derived accent bar, a cyan fill on a #3A3A3A track with a #5A5A5A rim: x-progress-explorer-full 3954 structure px off, -determinate, -paused and -error 2682 (natively all three show the same white fill), -empty 1521, -disabled 3566. Track and rim are within 2 to 3 levels; the fill colour is a deliberate difference. Status stays as derived, not claimed as native. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native progress bar is the light one: uxtheme has no dark progress bar). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: progress_bar 429 px off, 0 outside the text zone",
+    "gaps": [
+     "Native default is the light bar; the dark design differs by choice (fill colour)",
+     "No native dark reference exists",
+     "Paused and error tones are not measured"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/page_control.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): the native tab control stays light under dark mode and v3's tab art is DevExpress: every Dark tab colour is derived, with no dark capture behind it. | ROUND 35 (kept derived, honest: the native tab control stays light (x-tab-explorer and tab-rest 21,376 px off at the best placement, 1439 text); v3's page control is DevExpress tab art (baked in light)) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): x-tab-explorer and tab-* are real native dark-mode captures (the tab control stays light) and the derived dark page control differs: 23,140 to 23,333 of 27,600 px counted at best placement in page_control.png. Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-tab-explorer (a tab control stays light natively under DarkMode_Explorer) against page_control: 21,376 structure and 1439 text px off at the best placement. The derived dark page control is dark by design. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no real dark reference exists for this control (the native tab control stays light under DarkMode). The dark sheets are checked against the matched light ones instead: scripts/looks_derive_dark.py: the dark sheet is a consistent light-to-dark colour map of the light one, a pixel being off when its dark colour differs from the dark colour most of its light colour's pixels take by more than 2 levels: page_control sheets 0 px outside the text zone (stats 250 to 470 off, all inside 2 px of text), bottom strips 1 to 2 px, page_control_bottom_states 28 px outside the text zone The round 15 bottom-strip frame columns follow in dark.",
+    "gaps": [
+     "Native tabs are light; dark tab art is derived",
+     "No native dark reference exists",
+     "The tab outlines are 2.4 : 1 against the page: below the 3 : 1 bar for every state"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/status_bar.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): a native status bar stays light under dark mode: every Dark colour of the bar is derived by design, with no dark capture behind it. | ROUND 35 (kept derived, honest: a native status bar stays light under dark mode (statusbar-panels 7523 px off, x-statusbar-explorer 7878); v3's is a DevExpress bar. Not a look v3 shows in dark) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): x-statusbar-explorer, statusbar-nogrip and statusbar-panels are real native dark-mode captures (the bar stays light, DarkMode_Explorer) and the derived dark bar differs from all three: 7124 to 7320 px off counted at best placement. Dark by design is a design choice, not a match of the capture. Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-statusbar-explorer (a status bar stays light natively under DarkMode_Explorer): 7878 structure and 526 text px off against status_bar. The derived dark bar is dark by design. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native status bar stays light under DarkMode. Dark sheet = text white on #2B2B2B 13.5 to 14.2 : 1, no drawn border.",
+    "gaps": [
+     "Native bar is light; derived dark bar is by design",
+     "No native dark reference exists",
+     "Panel hover is none (as v3); the progress fill is a guess"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/toolbar_button.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): the native bar keeps light hot and checked faces under dark mode: the Dark washes for hot, checked and the bar are guesses with no dark capture behind them (the rest state differs from the capture only in its icons). | ROUND 35 (kept derived, honest: v3 draws DevExpress bar buttons; the native bar keeps light hot and checked faces (#E5F3FF) on the dark bar with dim captions, and its icons are the gallery's system icons, not v3's artwork. toolbar-rest 1406 px off, toolbar-hot 1961 (+680 text), toolbar-checked 2164 (+658), x-toolbar-icons-rest 779, -hot 5347, -checked 7453: the rest state differs only in the icons (bbox x 48 to 117), the hot and checked fills are the light native ones against our dark washes) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): the native dark icon toolbars (x-toolbar-icons-rest, -hot, -checked and the older toolbar-*) are real references and the derived sheets fail them: own comparer counted 1220 to 1276 px off at rest and checked, 1942 hot, 3046 to 4870 for toolbar-hot, -checked and -dropdown-hot (the native hot and checked fills stay light, ours are dark). Rule: a derived row with a real native dark capture that it does not reproduce is review. | ROUND 33 (derived, measured): new real reference x-toolbar-icons-rest, -hot, -checked (icon-only toolbar with a separator and a drop arrow, DarkMode_Explorer) against toolbar_button: rest 779 structure and 384 text px off, hot 5347 and 655, checked against toolbar_button_row 7453 and 540. The hot and checked fills of the native bar stay light where the derived look draws dark fills. Stays derived. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native dark toolbar (toolbar-rest .. toolbar-dropdown-hot of ref/windows-native/dark) draws dim text on #202020 and keeps the light hot and checked faces (#E5F3FF), so it is not a look to copy. The dark sheet is the palette's: icon and text #CECECE on the #3C3C3C hot face (7.0 : 1), unmeasured washes.",
+    "gaps": [
+     "Native hot and checked faces are light; dark washes are guesses",
+     "Hot, pressed, checked and disabled washes are guesses from the Windows 11 ramp",
+     "The native dark toolbar is broken (dim text, light hot faces): nothing to match"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/menu_bar.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): the native menu bar capture is a white band with black text under dark mode: the Dark bar colours are derived, with no capture behind them; only the popup below it is native dark (popup_menu). | ROUND 35 (kept derived, honest: the native menu bar is a white band with black text under dark mode (menubar-rest 7331 px off, 426 text) and the dark popup below it is native-dark (matched as popup_menu); v3's main menu is a DevExpress bar manager) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | AUDIT 17 (matched to review): menubar-rest, -hot-first, -hot-second, -open and -open-hover-item are real native dark captures (a white bar with black text, unthemed) and the derived dark bar is a dark bar: the bar and its open popups differ over thousands of px. Rule: a derived row with a real native dark capture that it does not reproduce is review. | DERIVED, not captured (maintainer accepted 2026-10-17 after viewing the sheets): no native or v3 dark reference exists for this control. Round 15: no usable dark reference: the native menu bar stays white under DarkMode (menubar-rest, -hot-*, -open of ref/windows-native/dark). Dark sheet = titles white on #202020 (16.3 : 1), hot and open washes unmeasured. The open menu under a title now is the native dark flyout (see popup_menu).",
+    "gaps": [
+     "Native menu bar is white",
+     "Hot/open washes are guesses; title paddings are v3's",
+     "The native menu bar capture is white: nothing to match"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/tree_list_expanded.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): no dark capture of a TcxTreeList; the native dark tree has other geometry (19 px rows, #828790 frame, light check boxes). Every Dark colour is the light drawing through the colour map. | ROUND 35 (kept derived: x-tree-checkboxes 14,715 and -checked 14,704 structure, 3273 and 3288 text px off against tree_list_expanded. The native dark tree draws 19 px rows, a #828790 frame and light #F3F3F3 check boxes (a native quirk), v3's tree is a DevExpress tree list with 17 px rows and its own artwork; not drawn natively) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | ROUND 33 (review, measured): new real reference x-tree-checkboxes (dark tree view with check boxes, lines at root) and -checked against tree_list_expanded: 14,715 and 14,704 structure, 3273 and 3288 text px off (19 px native rows, native expander glyphs and check boxes against v3's 17 px rows). The dark tree stays v3's drawing through the colour map. | ROUND 31 (derived): v3's coloured edition pictures (the ES column) were left out of the dark list; they are artwork that no colour map touches, and the dark sheets now show them with the light sheet's exact pixels. DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). tree_list_expanded.png: 16,684 px off outside text zones of 233,772 (7.1 percent: the selection and header colours that the native dark list view sets differently by design). | Round 17 (w3): unchanged. DERIVED from the light tree through the colour map; the native dark tree view is a different control. Not compared pixel for pixel. | Round 15: the date and name placement carries over. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Selection #626262 focused and #333333 unfocused occur as in tree-selected-*; v3's geometry (17 px rows, expanders) is kept.",
+    "gaps": [
+     "Native tree view (19 px rows, white check boxes) not drawn",
+     "No whole-control dark reference for TcxTreeList",
+     "tree-hover-expander and -classic-lines not compared"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/vertical_grid_states.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): no dark capture of a property grid exists; every Dark colour follows the light drawing through the colour map (scripts/looks_derive_dark.py measures consistency with that map, not agreement with a capture). | ROUND 31 (started to review, derived): the property grid follows the light drawing through the colour map almost exactly. DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). vertical_grid_states.png: 33 px off outside text zones of 955,416 (0.003 percent), 1326 with text zones; the other vertical_grid sheets 0 to 10 outside text zones. It cannot be matched while the light vertical grid is review. | Round 17 (w3): unchanged and DERIVED. No dark property grid exists natively; the mana and legality bitmaps pass the grey map unchanged in hue. | Unchanged. Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. There is no native property grid, so nothing is compared.",
+    "gaps": [
+     "Selection #264F78 and the band gradient are palette guesses",
+     "No dark property grid exists natively"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/native_dark7.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the DarkMode_ItemsView header (native_dark7: band #191919, column lines, pressed cell). Not backed: the grid body, rows, selection and footer Dark colours (no capture of a dark DevExpress grid) and the header's white captions (the capture's are black). | ROUND 35 (header measured and drawn, grid stays derived: native_dark7 draws the whole DarkMode_ItemsView header (250 x 40: #191919 band 226 x 24 at 10,8, #636363 column lines at 99, 159, 219, black captions, pressed cell #838383 with its caption 1 px right and down, the line at 159 hidden): x-header-itemsview-rest 0 px off, -hot 0 (identical capture), -pressed 0, -sort-up 21 px (the stroked chevron, 9 x 5 AA pixels against the native glyph); before, against data_grid_main, 6672 structure px each. The Explorer header stays light natively (x-header-explorer-rest 6687 and 995 against data_grid_main) and is not drawn. The data grid itself is v3's DevExpress grid through the colour map; the native header is evidence of what the theme draws, not v3's header) Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, best whole-pixel placement in our sheet; off = any channel over 2 levels; glyph pixels counted (audit-8 glyph rule: none set aside). | ROUND 33 (review, measured; marks deleted): the stamped dark frame and bar marks are gone from data_grid, data_grid_top, data_grid_bottom and data_grid_dialog_states (they were dead: a probe mark never appeared in the dark pool grid, and 174 Windows and Windows dark data grid sheets re-render pixel for pixel as committed without them). New real references: x-header-itemsview-rest, -hot, -sort-up (a bare dark header, DarkMode_ItemsView) against data_grid_main: 6672 structure and 0 text px off each (v3's header cell geometry, sort arrow and column lines); x-header-explorer-rest (the Explorer theme header stays light natively) 6687 and 995. The grid is derived. | ROUND 31 (derived, status unchanged). DERIVED, not captured: no dark capture of this control exists; it is built from the matched dark text edit and the light v3 drawing through the colour map, and scripts/looks_derive_dark.py measures how consistently the dark sheet follows that map (pixels whose dark colour differs from their light colour group's mode by more than 2 levels). data_grid_main.png: 2227 px off outside text zones of 268,288 (0.8 percent); data_grid_top 4764 of 304,802, data_grid_states 2347 of 154,200. | Round 17 (w3): the data grid's column lines were the light ramp (two near-white lines, #E3 to #EC and #F8) copied unmapped into the dark sheets, so every column edge showed as a bright #E7 / #F4 bar (seen at x 268, 436 and 500 of data_grid_main). The dark look now draws the single #414141 column line of the native dark list view (listview-*) and no second line (lib/e/ui/collection.e). 62 dark data grid PNGs re-rendered, all light and Neper sheets byte-identical. Still DERIVED: no whole-control dark reference exists for TcxGrid, so nothing is compared pixel for pixel. | Round 15: the light fixes carry over (same geometry; stamped frame pixels go through the dark map). Windows dark has no v3 capture and no native capture of the DevExpress grids, trees or check list: the native dark gallery has only the Win32 list view, tree view, list box and check list, which are different controls (19 px rows, themed lines) from v3's. Evidence is the light to dark colour map style.set_windark checked against listview-* (header #191919, rows #202020 and #2B2B2B, chosen row #1A364D, track #171717). Not matchable pixel for pixel.",
+    "gaps": [
+     "Sort-up chevron 21 px off (stroked lines against the native glyph)",
+     "Native header captions are black on #191919, unreadable, reproduced as captured; v3's grid header is not that",
+     "DERIVED dark; no capture of a dark DevExpress grid",
+     "The frame #828790 and the chosen row's 1 px #0078D4 / #131313 line are not drawn by the v3 grid"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/dialog_native.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed by native dark captures: the caption, its three buttons and the #6A6A6A line. Not backed: the Dark colours of the dialog body and button rows as the look draws them (the message box and task dialog stay light natively) and v3's 33 px close button in dark. | ROUND 33 (still review, measured whole): the whole native dialog is now a sheet (dialog_native: caption, the #6A6A6A line under it, the #202020 client inside the black 8 px resize border, Plain dialog window. and the OK button, 296 x 129). The close button is the 46 wide one (dark) and exact; the old 33 against 46 belonged to the light v3 dialog. Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, placed at the whole-pixel offset with the fewest off in our sheet; a pixel is off when any channel differs by more than 2 levels; text pixels (within 2 px of ink, looks_dark_native.text_zone) are counted in the totals here. dialog-active: structure 519 (the OK button), text 704; dialog-inactive 533 and 688. By zone, dialog-active: black border, face, frame line and the rest 0 px off, caption title 206 px, close X 1 px, body label 498 px, OK button 519 px. Cause, measured: the capture's client text is not GDI hinted (the P of Plain has a 71 percent row above a 41 percent row where a hinted glyph is one full row) and the OK button's top and bottom edges are two partial rows (b5, 77 and aa, 61), so the dialog window was composited at a fractional vertical scale; the controls of the other native captures are not. Not reproducible by hinted text and whole-pixel chrome. | ROUND 31 (still review): the caption of dialog-active and dialog-inactive (31 rows) with glyphs counted 155 to 153: the title sat one pixel low (cap top on row 12, the capture's row 11) and now follows the capture (a caption without an icon pads its title area two pixels at the foot); the lone 46 wide close button is exact (0 px). The 153 left are the title text: DWM sets it as greyscale stems 1.5 px wide, our hinted glyphs have 1 px stems (the D's stem), so none of them is placement. The dialog body (Plain dialog window., OK) and the 1 px window-frame line under the caption have no sheet cell, so the whole dialog is not compared. The 33 px close button is v3's light dialog only. | Round 15: the caption against the native dark captures (window-active, window-inactive, dialog-active, dialog-inactive, 31 rows): the three buttons of the window caption are 0 px off (the glyphs sit 2 px left of and 1 px below v3's live windows: a Glyph kind of 16 or more in winchrome), the dialog's lone close button is now the native 46 wide one with its own asymmetric X (1 px off in dialog-active, 0 in dialog-inactive); the rest of each caption is the title text (ClearType) and the program icon (artwork). The message box and the task dialog stay light natively (no dark reference), the caption's 1 px #6A6A6A line under row 30 is a window frame feature.",
+    "gaps": [
+     "Dialog text and the OK button rows are fractionally blended in the capture (about 1.5 px stems); ours is hinted and whole pixel: 704 px (active)",
+     "The message box and the task dialog stay light natively: no dark reference"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark3.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the 18 native dark button captures. Not backed by a dark capture: the toggle, loading and plain kinds and a pressed split arrow (derived from the captured button). | AUDIT 15 (review to matched): own comparer, each of the 18 native dark button captures searched in the committed dark sheets, flat px (runs of 11 or more grown by 1) off with glyphs counted 7 in all (at most 1 per capture, audit 9 had 191), 0 non-glyph px off; the picture artwork and unverified kinds stay as listed. | Audit 7: 16 of 18 captures within 4 px; button-split-disabled has 9 px off (the arrow has bright #CCCCCC pixels in the capture that ours lacks) and button-icon-disabled 4. Downgraded from matched. | Round 15 recheck (own comparer, flat 8-neighbour or 11 px run, ink more than 60 levels): all 18 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture, hover-pressed) 0 flat px off. | Audit 6: all 17 native dark button captures (rest, hover, pressed, focus, default, disabled, split, picture) 0 chrome px, only text edge pixels differ (15 to 19, glyphs are lighter in grey scale). Confirmed matched.",
+    "gaps": [
+     "The picture is v3's artwork class (a bitmap in the capture): ours is the Info glyph, so the 16 x 16 picture area and its 2 px halo are excluded; the caption ink is within 1 px",
+     "Unverified: toggle, loading and plain kinds, a split button whose arrow part is pressed (the capture is the main part)",
+     "Audit 7: 16 of 18 captures within 4 px; button-split-disabled has 9 px off (the arrow has bright #CCCCCC pixels in the capture that ours lacks) and button-icon-disabled 4"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the 24 px mark and the disabled caption #CCCCCC (all ten native dark radio captures). Not backed: the enabled caption white (the capture's is black on #202020, 1.1 : 1), recorded as a deviation; the group chrome has no dark capture (radio_group). | ROUND 80 (review to matched; audit 39 (1) closed): the captions are light. The capture's enabled radio caption is black on #202020 (1.1 : 1); the dark look now draws every radio caption white (#CCCCCC disabled), in radio, radio_states, radio_hover, native_dark and native_dark2 as well as the group. Measured (scripts/looks_dark_whole.py on the 24 x 22 mark of all 10 native radio captures, native_dark sheet): structure off 0, text off 0 each; caption ink box (pixels 12 levels from the page, x from 24) 24,13 to 97,26 in all five states compared against 24,13 to 98,26 in ours (one pixel wider), disabled caption IoU 1.00; enabled caption ink max 255 on 32 = 16 : 1 (viewed radio.png, radio_states.png, radio_hover.png, native_dark.png). Recorded deviation: caption colour only (white against the capture's black), chosen for legibility; the glyph pixels keep the m hinting floor of round 31. | AUDIT 39 (1): downgraded to review. The row's picture native_dark.png draws the radio captions black on #202020 in every enabled cell (unselected, hover, pressed, focus, selected; only the disabled caption is light): about 1.1 : 1 against the 4.5 : 1 text bar, unreadable in the picture (viewed; pixel counts: caption ink (0,0,0) on (32,32,32)). It matches its capture, but a dark-look row whose own picture cannot be read is not matched; the standalone radio.png, radio_states.png and radio_hover.png are the same. Raise when the captions are light (as the derived group row now draws them) or the black caption is explicitly accepted as the capture's evidence. | ROUND 31 (review to matched): all 10 native dark radio captures with glyphs counted: 18 px off in rest, hover, pressed and disabled, 8 in focus; the ring, dot and focus rectangle are exact (0 px). Every one of those pixels lies in the black caption's m (x 48 to 54, rows 18 to 23 of the capture): the captions are black on #202020 (32 levels from the page), so the audit-8 ink detector never sees them and reports the 8 and 18 as flat px; they are glyph pixels of one hinted glyph, the Segoe UI 12 px m (its middle stem lands a subpixel left in our hinter). Audit-8 rule, stated: only glyph pixels within 2 px of ink are set apart, and only when the chrome, colours and glyph positions are exact; the text engine reproduces 86.5 percent of the ClearType oracle's glyph cells exactly (Segoe UI 12 px regular 97.4, 15 px 92.1) and a differing cell is a hinting difference of that glyph, never a placement or colour error. | Round 15 (own comparer, dark metric, offsets searched within 3 px): the ring, dot and focus rectangle are exact in all 10 native dark captures, so the audit 6 \"ring one pixel off\" is not the ring: its 26 and 37 px were the black caption (the captures' caption is black, 32 levels from the page, so it is never ink under the more-than-60 rule and its anti-aliasing counts as flat). The caption sat a fraction of a row low; half a row up (control.windows_dark_choice) took the flat px off from 45 (rest, hover, pressed), 37 (focus) to 14 and 5; disabled 0. What is left are 5 to 14 px of 4 to 5 levels above the x-height of the round letters (a, m, p, e, b: our outlines overshoot where GDI hinting snaps the x-height); every one is in the caption's glyph rows, none in the control.",
+    "gaps": [
+     "Recorded deviation: the enabled caption is white, not the native capture's black (unreadable at 1.1 : 1)",
+     "The 8 to 18 px of the old black caption's m no longer exist; the white caption was compared by ink box, not pixel by pixel",
+     "Unverified: radio group chrome (no native dark group box)"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark5.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the six menu-popup captures. Not backed by a dark capture: the hovered row of a parent menu (the #353535 fill is read from the submenu's child row), and the picture and radio-dot column (a guessed place, the capture has none). | ROUND 31 (review to matched): the six menu-popup captures and the submenu children with glyphs counted: 2 px off in rest, keyboard-first, -checked, -disabled and submenu-keyboard-item, 2 in menu-popup-submenu (was 19); 0 px outside glyph zones in all six. The submenu's hovered row is a #353535 fill with three pixels of corner antialiasing at each corner (stamped from the capture, dark_hover_corners); it was a square. The check mark and chevron are the capture's own pixels (0 off). The 2 px are glyph pixels of the first row's text. Audit-8 rule, stated: only glyph pixels within 2 px of ink are set apart, and only when the chrome, colours and glyph positions are exact; the text engine reproduces 86.5 percent of the ClearType oracle's glyph cells exactly (Segoe UI 12 px regular 97.4, 15 px 92.1) and a differing cell is a hinting difference of that glyph, never a placement or colour error. | Audit 7: all six menu-popup captures 6 to 43 flat px off (28 to 53 chrome px: the check mark, the submenu chevron and the first row text rows), best placement in native_dark5. Downgraded from matched. | Round 15: the dark popup menu is the native Windows 11 dark flyout (windows_dark_menu_at in navigation.e; v3 has no dark menu): a 1 px #808080 line round a #2B2B2B face, 22 px rows (#2C2C2C) 5 px in, Segoe UI 12 px, a 9 px band with a #3E3E3E rule for a separator, the capture's own 10 x 7 check, 5 x 9 chevron and rounded white keyboard outline (corner pixels), a cascade under its parent (clipped 6 px), the hovered child row #353535. All six captures (menu-popup-rest, -keyboard-first, -keyboard-checked, -keyboard-disabled, -submenu-keyboard-item, -submenu; native_dark5 sheet, scripts/looks_stri",
+    "gaps": [
+     "The hovered row fill (#353535) is read from the child row of menu-popup-submenu; a hovered row of the parent menu has no capture",
+     "Pictures and radio dots (v3 menu images) sit in the check column at a guessed place; the native capture has none",
+     "The 2 px per capture are glyph pixels of the first row"
+    ]
+   }
+  }
+ },
+ "list_box": {
+  "looks": {
+   "windows_dark": {
+    "status": "matched",
+    "screenshot": "windows-dark/native_dark4.png",
+    "notes": "ROUND 81 (lane t, re-audit, status unchanged): backed: the whole native ListBox with its light unthemed scroll column. Not backed: the dark #171717 column of a list that does not overflow (no capture of a ListBox without a bar). | ROUND 33 (review to matched): the dark list box is now the whole native ListBox, not the 99 columns left of its scroll column. A classic ListBox is unthemed in dark mode, so its scroll column is the light one (#F0F0F0, white left line, 2 px #858585 thumb with #929292 end pixels) and replaces the dark bar. The words sat one row below the capture's (the old check searched text and frame apart and hid it); they are up a row. native_dark4 holds the capture's 10 items and a new listbox-disabled cell (chosen row keeps #0078D7, words #6D6D6D). Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, placed at the whole-pixel offset with the fewest off in our sheet; a pixel is off when any channel differs by more than 2 levels; text pixels (within 2 px of ink, looks_dark_native.text_zone) are counted in the totals here. Whole 118 x 110 control, native_dark4: listbox-rest 0 structure px off and 2 text px off; listbox-selected-focused 0 and 2; listbox-selected-unfocused 0 and 2; listbox-hover 0 and 2; listbox-disabled 0 and 2 (before, with the frame aligned: 710 to 966 off). The 2 px of each are one glyph fringe of Golf. Matched under the audit-8 glyph rule with glyphs counted: every one of the 5 captured states is 2 px off. | Unchanged: listbox-rest, -selected-focused, -selected-unfocused and -hover have 0 flat and 0 other px off left of the scroll column (looks_strict13.py --four, 4 of 4). The capture's scroll column is the light unthemed one (Windows leaves a classic list box unthemed in dark mode); ours keeps the dark bar, so the whole 158 px capture is not matched. Copying the light bar would put a white scroll bar in the dark list box.",
+    "gaps": [
+     "A list that does not overflow keeps a dark #171717 column: no native capture of a ListBox without a bar",
+     "The 2 glyph pixels per capture are hinting (ClearType floor)"
+    ]
+   }
+  }
+ }
+}

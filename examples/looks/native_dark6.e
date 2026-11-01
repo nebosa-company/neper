@@ -27,12 +27,9 @@ fn group(a: *mem.Arena, t: *const control.Theme, enabled: bool) -> (widget.Node,
     options.wrap = .None
     let (dark_t, dark_error) = control.windows_edit_theme(a, t, 13.0)
     if dark_error != ok { ret (zero, dark_error) }
-    // round 80: the capture's caption is black on #202020; the dark look draws white, #9D9D9D disabled
+    // the capture's caption is black on #202020 and its disabled picture is its rest picture; the dark look draws white in both (round 81)
     var ink = style.hex_raw(0x000000u32)
-    if t.tokens.profile == .Windows && t.tokens.palette == .Dark {
-        ink = style.hex_raw(0xFFFFFFu32)
-        if !enabled { ink = style.hex_raw(0x9D9D9Du32) }
-    }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Dark { ink = style.hex_raw(0xFFFFFFu32) }
     let (caption, caption_error) = control.colored_text(a, 0u64, "Group", &dark_t, options, ink)
     if caption_error != ok { ret (zero, caption_error) }
     let (body, body_error) = control.windows_label_faced(a, t, "Inside the group", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)

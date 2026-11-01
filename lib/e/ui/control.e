@@ -35,6 +35,7 @@ use e.ui.linuxmark_lb as linuxmark
 use e.ui.looks_b
 use e.ui.looks_z63
 use e.ui.looks_o78
+use e.ui.looks_t81
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -16286,10 +16287,12 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let face = style.color(t.tokens, .Background)
     var ink = style.color(t.tokens, .Text)
     if !options.enabled { ink = style.mix(ink, face, 0.55) }
+    let dark = t.tokens.palette == .Dark
+    ink = looks_t81.group_caption_ink(dark, ink)
     var frame = style.defaults()
-    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 6.35 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: 13.65 }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
-    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: looks_o78.dark_group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)) } }
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: looks_t81.group_margin_top(dark, 6.35) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: looks_t81.group_padding_top(dark, 13.65) }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
+    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: looks_t81.group_line(dark, looks_o78.dark_group_line(dark, style.color(t.tokens, .OutlineVariant))) } }
     if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
     let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -16303,18 +16306,36 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     caption.size = 11.0
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
+    let (words, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
     if heading_error != ok { ret (zero, heading_error) }
+    var heading = words
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
-    held[0usize] = heading
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
+    var cut_x: f32 = 8.0
+    if dark {
+        // the native dark capture's caption: Segoe UI 12 px, 9 in from the frame, its gap starting 7 in
+        var native = text_options()
+        native.face = 7u32
+        native.size = 12.0
+        native.wrap = .None
+        let (dark_t, dark_error) = windows_edit_theme(a, t, 13.0)
+        if dark_error != ok { ret (zero, dark_error) }
+        let (native_heading, native_error) = colored_text(a, 0u64, label, &dark_t, native, ink)
+        if native_error != ok { ret (zero, native_error) }
+        heading = native_heading
+        let (text_width, text_fit, text_base, text_error) = run_metrics_faced(a, &dark_t, native, label)
+        if text_error != ok { ret (zero, text_error) }
+        cut = looks_t81.group_cut(cut, text_width)
+        cut_x = 7.0
+    }
+    held[0usize] = heading
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
-    parts[1usize] = widget.positioned(0u64, 8.0, -2.0, style.defaults(), parts[2usize..3usize])
+    parts[1usize] = widget.positioned(0u64, cut_x, -2.0, style.defaults(), parts[2usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
