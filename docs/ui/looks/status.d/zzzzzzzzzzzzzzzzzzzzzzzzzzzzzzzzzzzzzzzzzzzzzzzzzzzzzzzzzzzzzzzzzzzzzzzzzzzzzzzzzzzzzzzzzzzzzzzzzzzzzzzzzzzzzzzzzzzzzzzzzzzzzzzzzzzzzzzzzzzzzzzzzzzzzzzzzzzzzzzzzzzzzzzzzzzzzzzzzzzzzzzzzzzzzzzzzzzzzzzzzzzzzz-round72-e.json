@@ -1,0 +1,188 @@
+{
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/app_bar.png",
+    "notes": "Compared to Flutter AppBar (lane e, round 72): icon centred in the bar and leading icon x 19 to 37 against 19 to 38; bar is 64 against Flutter 56 on purpose (M3 spec small top app bar), title x and trailing action inset differ; recorded in flutter-compare-e.md. Dark measured: bar 64, ref ink rows 22 to 34.",
+    "gaps": [
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "Compared to Flutter AppBar (lane e, round 72): icon centred in the bar and leading icon x 19 to 37 against 19 to 38; bar is 64 against Flutter 56 on purpose (M3 spec small top app bar), title x and trailing action inset differ; recorded in flutter-compare-e.md. Dark measured: bar 64, ref ink rows 22 to 34.",
+    "gaps": [
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu.png",
+    "notes": "Compared to Flutter PopupMenuButton (lane e, round 72): rows fixed from 56 to 48 dp (label pitch 48, panel padding 8, radius 4 as ref); fill f3edf7 against f2ecf4 (palette); width, shortcut column and shadow recorded in flutter-compare-e.md. The md-menu 56 dp pixel match no longer holds, by decision.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu.png",
+    "notes": "Compared to Flutter PopupMenuButton (lane e, round 72): rows fixed from 56 to 48 dp (label pitch 48, panel padding 8, radius 4 as ref); fill f3edf7 against f2ecf4 (palette); width, shortcut column and shadow recorded in flutter-compare-e.md. The md-menu 56 dp pixel match no longer holds, by decision.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "alert_dialog": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/alert_dialog.png",
+    "notes": "Compared to Flutter AlertDialog (lane e, round 72): card r28 and fill as round 70; scrim 32 percent black (M3 spec, ada8ad) against Flutter 54 percent (747175), measured on both modes and kept, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/alert_dialog.png",
+    "notes": "Compared to Flutter AlertDialog (lane e, round 72): card r28 and fill as round 70; scrim 32 percent black (M3 spec, ada8ad) against Flutter 54 percent (747175), measured on both modes and kept, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   }
+  }
+ },
+ "bottom_sheet": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/bottom_sheet.png",
+    "notes": "Compared to Flutter modal bottom sheet (lane e, round 72): fill, top r28 and handle as round 70; scrim 32 percent (M3 spec, ada8ad) against Flutter 54 percent (747175), measured light and dark and kept, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/bottom_sheet.png",
+    "notes": "Compared to Flutter modal bottom sheet (lane e, round 72): fill, top r28 and handle as round 70; scrim 32 percent (M3 spec, ada8ad) against Flutter 54 percent (747175), measured light and dark and kept, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): bar now transparent with no hairline at rest as the ref (hairline and face only when scrolled); title centre 0.5 px from the 44 pt bar centre (ref 22), trailing action 20 from the edge (ref 21). Back chevron inset 19 against 30 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): bar now transparent with no hairline at rest as the ref (hairline and face only when scrolled); title centre 0.5 px from the 44 pt bar centre (ref 22), trailing action 20 from the edge (ref 21). Back chevron inset 19 against 30 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/large_title.png",
+    "notes": "Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/large_title.png",
+    "notes": "Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/radio_group.png",
+    "notes": "Compared to Flutter CupertinoRadio (shapes only, lane e, round 72): unselected is now a 14 px disc, white with a 3.5 percent rim (light) and flat 383838 without rim (dark) as the ref; selected 14 px disc, 4 px ring, 6 px dot as ref. Dark selected 0a84ff against ref 3264d7 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/radio_group.png",
+    "notes": "Compared to Flutter CupertinoRadio (shapes only, lane e, round 72): unselected is now a 14 px disc, white with a 3.5 percent rim (light) and flat 383838 without rim (dark) as the ref; selected 14 px disc, 4 px ring, 6 px dot as ref. Dark selected 0a84ff against ref 3264d7 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "action_sheet": {
+  "looks": {
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/action_sheet.png",
+    "notes": "Compared to Flutter CupertinoActionSheet (shapes only, lane e, round 72): dark actions card 1f1f1f and Cancel card 2c2c2c now equal the ref (were 3a3a3c, 48484a); cards inset 8, gap 8, radius 14 (ours 14.4 to 14.7 by corner area, ref 13.5 to 14), rows 56 against 57 recorded.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ }
+}

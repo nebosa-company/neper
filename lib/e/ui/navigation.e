@@ -10937,7 +10937,7 @@ fn windows_status_bar_report_dark(a: *mem.Arena, key: widget.Key, t: *const cont
 }
 
 // ---- the Cupertino navigation bar (docs/ui/looks/cupertino) ----------------------------------------------
-// UINavigationBar: 44 tall on the bar face over a hairline, the title centred in 17 semibold, a back button
+// UINavigationBar: 44 tall, transparent at rest and the bar face over a hairline once scrolled, the title centred in 17 semibold, a back button
 // (chevron and the previous title in the accent) or the leading actions at the start, the trailing actions at the end
 // as accent text buttons; the Large size adds the 34 bold title under the row (no hairline until content scrolls).
 fn cupertino_nav_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, options: AppBarOptions, width: f32) -> (widget.Node, err) {
@@ -11051,13 +11051,15 @@ fn cupertino_nav_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ti
     var hairline = control.sized_style(width, 0.5)
     hairline.background = paint.Brush { Solid: style.cupertino_separator(t.tokens) }
     var line_count = column_count
-    if !large || options.scrolled || options.offset > 0.0 {
+    // Scroll edge appearance (iOS 15, Flutter's automaticBackgroundVisibility): the bar is transparent with no hairline until content scrolls under it.
+    let raised = options.scrolled || options.offset > 0.0
+    if raised {
         column[column_count] = widget.box(0u64, hairline, zero)
         line_count = column_count + 1usize
     }
     var bar = style.defaults()
     bar.width = style.Length { Px: width }
-    bar.background = paint.Brush { Solid: face }
+    if raised { bar.background = paint.Brush { Solid: face } }
     let body = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, bar, column[0usize..line_count])
     var sem: widget.Semantics = zero
     sem.role = 2u8
