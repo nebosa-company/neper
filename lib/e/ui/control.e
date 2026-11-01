@@ -4318,10 +4318,9 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         }
         var cy: i32 = 1
         while cy < 14 {
-            if cy % 2 == 1 {
-                try winpx.fill(b, wx, wy + f32(cy), 1.0, 1.0, d.color)
-                try winpx.fill(b, wx + d.span, wy + f32(cy), 1.0, 1.0, d.color)
-            }
+            if cy % 2 == 1 { try winpx.fill(b, wx, wy + f32(cy), 1.0, 1.0, d.color) }
+            // the pattern runs on along the line, so the right side's dots follow the rectangle's width
+            if (cy + last) % 2 == 1 { try winpx.fill(b, wx + d.span, wy + f32(cy), 1.0, 1.0, d.color) }
             cy += 1
         }
         ret ok
