@@ -1,3 +1,19 @@
+# Looks audit 32, 2026-11-01 (round 67: Linux and Linux dark bottom_app_bar, commit ca9736d7e)
+
+Independent check of the single commit after audit 31 (`ca9736d7e`, master) in a scratch worktree `looks68-audit` with the committed `neper-self.exe`, rendered through a `subst` drive (removed afterwards). Scratch scripts, not committed: a diff lister, a saturated button finder with an ink box measurer (label ink against the button box), a cap C measurer, a bar and word run finder.
+
+Result. Both rows hold at review; no overlay, no downgrade.
+
+(1) Diff. 7 files: `looks_y63.e`, the round 67 overlay, `looks-progress.html`, and the four Linux and Linux dark `bottom_app_bar` PNGs (1x and 1.5x). Nothing else changed, no other PNG moved.
+
+(2) Re-render. `nav_bottom_app_bar` rewrote all 20 PNGs (10 looks, 1x and 1.5x) and `git status` stayed clean, so they are byte-identical to the committed ones; the Windows, Cupertino, Material and Neper pictures (and dark ones) are untouched by the commit.
+
+(3) Measured, Compose button against its label ink, Linux and dark identical. Four actions cell: button 85 px wide, 13 px left and 13 right at 1x; 127 px, 19 and 21 at 1.5x. Two actions and disabled cells: 93 px, 17 and 17 at 1x; 139 px, 25 and 27 at 1.5x. At 1.5x the label is therefore 1 px off centre (the worker counted 26 and 20, a threshold difference of one antialiased pixel); nothing is more than 1 px off. Vertical: capital C top and bottom gap 12 and 12 at 1x, 18 and 17 at 1.5x, centre offset 0 and 0.5. No label is clipped, no text overlaps. The sheet has rest and disabled states only (Share greyed, legible); it has no hover, focus or pressed picture. The flat action buttons have no box at rest, so their edge gaps cannot be measured from pixels; word runs are 20 to 22 px apart at 1x (Search to Share to Archive to Delete) and 17 px to the Compose button.
+
+(4) Fit. The bar is 360 px wide (540 at 1.5x), 46 tall (70), inside its 393 px cell with 21 px to spare at the right edge of the four actions cell; Compose ends 8 px inside the bar at 1x. Side padding fell from 16 to 13 px only in the four actions cell, still readable.
+
+(5) Control group. 10 older apps from different looks (linux_toolbar_button, linux_memo, cup_toolbar, cup_segmented, material_chips, material_app_bar, button_states, checkbox, nav_navigation_rail, linux_status_bar) re-render byte for byte.
+
 # Looks audit 31, 2026-11-01 (round 65: 8 rows raised to review, commit 66ed62c1b)
 
 Independent check of the single commit after audit 30 (`66ed62c1b`, master) in a scratch worktree `looks66-audit` with the committed `neper-self.exe`. Scratch scripts, not committed: a diff lister, a ring and cell margin measurer, a label centre measurer (saturated button found by connected components, the label's first capital C against the button box), a gauge gap measurer (distance transform from the ring to the caption ink), and a light against dark check.
