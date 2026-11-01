@@ -5331,7 +5331,7 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "    st.value = sanitizeValue(newType, st.value, el);\n")
     try str.push(b, "  }\n")
     try str.push(b, "  if (newType === 'radio' && isCheckedInput(el)) uncheckGroupMembers(el);\n")
-    try str.push(b, "  if (selectionApplies(newType) && !selectionApplies(oldType)) { const l = inputValue(el).length; st.selStart = st.selEnd = l; }\n")
+    try str.push(b, "  if (selectionApplies(newType) && !selectionApplies(oldType)) { st.selStart = st.selEnd = 0; st.selDir = 'none'; }\n")
     try str.push(b, "}\n")
     try str.push(b, "const prevInsertedInput = elementInserted;\n")
     try str.push(b, "elementInserted = function (el) {\n")
