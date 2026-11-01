@@ -7068,9 +7068,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let focused = state.focused && options.enabled
     var over = state.hovered
     // Android: the runtime hovers regions, not editors, so the field answers through a hover region round its box (as the Windows field does).
-    if t.tokens.profile == .MaterialLike { over = over || control_state(t, key + 1048650u64, options.enabled, false).hovered }
+    if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) { over = over || control_state(t, key + 1048650u64, options.enabled, false).hovered }
     // Android: in a multi-line field the pointer is over the scrolling viewport, not the editor.
-    if t.tokens.profile == .MaterialLike && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
+    if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
     let hovered = over && options.enabled
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     var h = t.tokens.metrics.control_height + 16.0
@@ -7300,7 +7300,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         if notched_error != ok { ret (zero, notched_error) }
         boxed = notched_node
     }
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         var no_gesture: widget.GestureAction = zero
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
