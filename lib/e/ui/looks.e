@@ -283,7 +283,7 @@ fn set_look(rig: *Rig, look: Look) {
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
-    widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux || rig.tokens.profile == .Neper)
     widget.set_skia_corners(rig.tokens.profile == .MaterialLike)
     control.set_material_icons(rig.tokens.profile == .MaterialLike)
     // The Android captures are taken with the caret in its blink-off phase.
