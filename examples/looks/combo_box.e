@@ -190,7 +190,9 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
         // Neper: the Focus tap must land on the editor (its line, 12 px under the cell centre), not on the frame padding above it.
         var aim_dy: f32 = 0.0
         if t.tokens.profile == .Neper && sheet_no == 0usize && i == 7usize { aim_dy = 12.0 }
-        if sheet_no == 0usize { looks.aim(i, aim_dx, aim_dy) }
+        // Neper lists: the second row's middle is 70 px under the column's centre (field 48 high, list 4 under it, 8 of padding, 36 rows).
+        if t.tokens.profile == .Neper && sheet_no == 1usize && i == 1usize { aim_dy = 70.5 }
+        looks.aim(i, aim_dx, aim_dy)
         var choices: []const str = colors[0usize..4usize]
         if s.rows == 22usize { choices = numbers[0usize..22usize] }
         let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, cell_w())
@@ -776,6 +778,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }
     if args.len > 1usize {
+        // Neper: the open lists hang below their fields (a Windows cell is 150 high and cut them over the field).
+        looks.pad_neper(30.0, 290.0)
         let lists = looks.Sheet { name: "combo_box_lists", cells: 4usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build_lists }
         ret looks.run_all(a, &lists)
     }
