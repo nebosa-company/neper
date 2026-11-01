@@ -3587,6 +3587,8 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
     ret ok
 }
 
+fn pbn_is_ident(f: *Frame, id: u32) -> bool { ret f.prog.nodes[usize(id)].kind == ast.N_IDENT }
+
 fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
     let pn = f.prog.nodes[usize(pid)]
     if pn.kind == ast.N_CALL && mode == 0u8 {
@@ -3800,6 +3802,15 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
                 pkey = pk
                 pkind = pkd
             }
+            // A plain identifier target is resolved before the value is read.
+            var early_h = null_env()
+            var has_early = false
+            if (mode == 0u8 || mode == 1u8) && pbn_is_ident(f, ptid) {
+                let (eh, ehe) = resolve_scope(it, f, f.prog.nodes[usize(ptid)].text)
+                if ehe != ok { ret ehe }
+                early_h = eh
+                has_early = true
+            }
             let (pv0, pe) = get_value(it, val, key)
             if pe != ok { ret pe }
             var pv = pv0
@@ -3811,6 +3822,9 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
             if pkind != 0u8 {
                 let ppe = put_target(it, f, ptid, pbase, pkey, pv)
                 if ppe != ok { ret ppe }
+            } else if has_early {
+                let epe = put_in_scope(it, f, early_h, f.prog.nodes[usize(ptid)].text, pv)
+                if epe != ok { ret epe }
             } else {
                 try bind_pattern(it, f, ptid, pv, mode)
             }
