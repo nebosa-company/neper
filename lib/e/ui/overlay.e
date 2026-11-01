@@ -3436,7 +3436,14 @@ fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     let (cancel_body, cancel_body_error) = mem.alloc[widget.Node](a, 1usize)
     if cancel_body_error != ok { ret (zero, TooLarge) }
     cancel_body[0usize] = cancel
-    groups[1usize] = widget.box(0u64, card_style, cancel_body[0usize..1usize])
+    // The Cancel card is the lighter of the two (Flutter CupertinoActionSheet: white over the grey actions card, 2c2c2c over 1f1f1f).
+    var cancel_options = card_options
+    cancel_options.background = .SurfaceContainerLowest
+    if t.tokens.palette == .Dark { cancel_options.background = .SurfaceContainerHighest }
+    var cancel_style = control.surface_style(t, cancel_options)
+    cancel_style.width = style.Length { Percent: 100.0 }
+    cancel_style.overflow = .Clip
+    groups[1usize] = widget.box(0u64, cancel_style, cancel_body[0usize..1usize])
     var group_style = style.defaults()
     group_style.width = style.Length { Percent: 100.0 }
     let grouped = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 8.0 }, group_style, groups[0usize..2usize])

@@ -164,7 +164,13 @@ fn build_action(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let (buttons, buttons_error) = buttons_of(a, 3usize)
     if buttons_error != ok { ret (0usize, buttons_error) }
-    let (node, node_error) = overlay.action_sheet(a, 100u64, t, "Deck actions", buttons, true, dismiss)
+    var node: widget.Node = zero
+    var node_error: err = ok
+    if t.tokens.profile == .CupertinoLike {
+        (node, node_error) = overlay.action_sheet_ios(a, 100u64, t, "Deck actions", buttons, "Cancel", true, dismiss)
+    } else {
+        (node, node_error) = overlay.action_sheet(a, 100u64, t, "Deck actions", buttons, true, dismiss)
+    }
     if node_error != ok { ret (0usize, node_error) }
     cells[0usize] = looks.Cell { caption: "action sheet", node: node, drive: .None }
     ret (1usize, ok)
@@ -237,7 +243,13 @@ fn build_action_window(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let (buttons, buttons_error) = action_buttons(a)
     if buttons_error != ok { ret (0usize, buttons_error) }
-    let (node, node_error) = overlay.action_sheet(a, 100u64, t, "Deck actions", buttons, true, dismiss)
+    var node: widget.Node = zero
+    var node_error: err = ok
+    if t.tokens.profile == .CupertinoLike {
+        (node, node_error) = overlay.action_sheet_ios(a, 100u64, t, "Deck actions", buttons, "Cancel", true, dismiss)
+    } else {
+        (node, node_error) = overlay.action_sheet(a, 100u64, t, "Deck actions", buttons, true, dismiss)
+    }
     if node_error != ok { ret (0usize, node_error) }
     cells[0usize] = looks.Cell { caption: "", node: node, drive: .None }
     ret (1usize, ok)
