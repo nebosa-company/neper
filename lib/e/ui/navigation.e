@@ -16,6 +16,7 @@ use e.ui.accessibility
 use e.ui.animation
 use e.ui.control
 use e.ui.input
+use e.ui.looks_e_draw
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -213,6 +214,13 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         let (ends, ends_error) = mem.alloc[widget.Node](a, trailing.len + 1usize)
         if ends_error != ok { ret (zero, TooLarge) }
         var n = 0usize
+        var lead_count = leading.len
+        if options.back_label.len > 0usize {
+            let (back, back_error) = looks_e_draw.linux_back(a, key + 1u64, t, options.back_label, options.back)
+            if back_error != ok { ret (zero, back_error) }
+            starts[leading.len] = back
+            lead_count = leading.len + 1usize
+        }
         while n < leading.len {
             let (one, one_error) = bar_action(a, key + 2u64 + u64(n), t, &leading[n], style.color(t.tokens, .Text))
             if one_error != ok { ret (zero, one_error) }
@@ -226,7 +234,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
             ends[n] = one
             n += 1usize
         }
-        let (bar, bar_error) = linux_header_bar(a, key, t, title, options.subtitle, starts[0usize..leading.len], ends[0usize..trailing.len], options.end_inset, width)
+        let (bar, bar_error) = linux_header_bar(a, key, t, title, options.subtitle, starts[0usize..lead_count], ends[0usize..trailing.len], options.end_inset, width)
         ret (bar, bar_error)
     }
     if t.tokens.profile == .CupertinoLike {
@@ -1095,6 +1103,7 @@ fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         if named_error != ok { ret (zero, named_error) }
         bar_options.back_label = named
         bar_options.back = *pop
+        if t.tokens.profile == .CupertinoLike { bar_options.back_label = titles[top - 1usize] }
     }
     let pointer = t.tokens.metrics.control_height <= t.tokens.sizes.control_sm
     if pointer && top >= 2usize && jumps.len == titles.len {
@@ -2659,6 +2668,7 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             if named_error != ok { ret (zero, named_error) }
             bar_options.back_label = named
             bar_options.back = options.pop
+            if t.tokens.profile == .CupertinoLike { bar_options.back_label = options.list_label }
             var nothing: []const Action = zero
             let (bar, bar_error) = app_bar_of(a, key + 4u64, t, options.detail_title, nothing, nothing, bar_options, width)
             if bar_error != ok { ret (zero, bar_error) }
