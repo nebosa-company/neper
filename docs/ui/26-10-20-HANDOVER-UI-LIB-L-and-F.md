@@ -24,10 +24,9 @@ Latest audit: audit 22 (independent, 2026-11). Completion 79.5 % overall: Window
 
 Repo: `D:\repos\neper`, branch `master`, commit directly to master (standing decision). The shared tree usually carries ANOTHER session's uncommitted changes in `lib/e/fmt`, `lib/e/js`, `lib/e/web`, `tests/browser`: leave them, use explicit paths in every `git add`.
 
-Merged since: rounds 42 to 49 (master `fd91b6c0f`+). master is NOT checked out in D:epos
-eper (the shared tree sits on another branch): land commits with a worktree then `git fetch . <branch>:master`. Open items from audit 22: the crisp ring/radio/group switches (`set_radio_crisp`, `set_group_crisp`, `crisp` on button options) are opt-in per sheet app, so `Look.Windows` defaults still draw the old ring (make crisp the default); image_combo_box hovered-row edge rows (~1280 px in an open list); picture artwork (toolbar icon atlas 7344 px, card art strip, command icons) is artwork excluded; `native_dark4` and `radio_dialog` Options crop still compare to old/blurred captures.
+Merged since: rounds 42 to 49 (master fd91b6c0f and later). master is NOT checked out in D:/repos/neper (the shared tree sits on another branch): land commits through a worktree, then `git fetch . <branch>:master`. Open items from audit 22: the crisp switches (`set_radio_crisp`, `set_group_crisp`, `crisp` on button options) are opt-in per sheet app, so `Look.Windows` defaults still draw the old ring (make crisp the default); image_combo_box hovered-row edge rows (about 1280 px in an open list); picture artwork (toolbar icon atlas 7344 px, card art strip, command icons) is artwork excluded; `native_dark4` and the `radio_dialog` Options crop still compare to old or blurred captures.
 
-In flight when this was written: nothing. Python (portable, user-approved) lives in `D:	ools\python312` (add to PATH); the v3 capture copy at `D:\Temp\claude3run` lost its executables in a machine reset and must be rebuilt (version-3 build, see memory) before any new v3 capture.
+In flight when this was written: nothing. Python (portable, user-approved) lives in D:/tools/python312 (add it to PATH). The v3 capture copy at D:/Temp/claude/v3run lost its executables in a machine reset and must be rebuilt (version-3 build, see memory) before any new v3 capture.
 
 ## 3. The key recent finding (read this)
 
@@ -78,7 +77,7 @@ Computer-use control of MTG Studio was denied; use only: PrintWindow of a launch
 
 ## 9. Suggested next steps for the new session
 
-1. `git -C D:\repos\neper log --oneline -10`; check whether branch `looks44-gr` has commits not on master; if so review, merge, regenerate the page, and run an independent audit (audit 21) that re-measures the grid rows against `ref/windows-1to1/` with its own comparer and checks the 19 matched Windows Light controls still hold.
+1. `git -C D:/repos/neper log master --oneline -10`; make the crisp switches the Windows default and re-verify the 17 matched Windows Light sheets stay byte-identical; fix the image_combo_box hover row; then run an independent audit (audit 23).
 2. Fix the `data_grid_main` x 498 column and re-render the stale `data_grid_dialogs_sort`.
 3. Ask the user for the missing references, in this order of value: v3 under Windows dark mode (unblocks Windows Dark), any macOS/iOS captures, one real Android screenshot (decides the Android text default). Without them the remaining rows stay at review.
 4. Keep the memory note `neper-ui-looks.md` current (project state, browser decision, priority order).
