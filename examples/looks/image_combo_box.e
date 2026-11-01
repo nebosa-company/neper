@@ -13,6 +13,7 @@ fn noop_submit(ctx: *void) -> err { ret ok }
 
 fn cell_w() -> f32 { ret 150.0 }
 fn cell_h() -> f32 { ret 230.0 }
+fn neper_grow() -> f32 { ret 1.75 }
 
 fn pick_actions(a: *mem.Arena, n: usize) -> ([]widget.Submit, err) {
     let (picks, picks_error) = mem.alloc[widget.Submit](a, n)
@@ -27,12 +28,12 @@ fn pick_actions(a: *mem.Arena, n: usize) -> ([]widget.Submit, err) {
 
 // The control `above` px below the top of its cell box, so the cell's centre (where the harness
 // puts the pointer) falls where a state needs it.
-fn placed(a: *mem.Arena, node: widget.Node, above: f32) -> (widget.Node, err) {
+fn placed(a: *mem.Arena, node: widget.Node, above: f32, grown: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = widget.box(0u64, looks.size_style(1.0, above), zero)
     parts[1usize] = node
-    var column = looks.size_style(cell_w(), cell_h())
+    var column = looks.size_style(cell_w() * grown, cell_h() * grown)
     column.padding = style.EdgeLengths { left: style.Length { Px: 10.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..2usize]), ok)
 }
@@ -136,6 +137,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var open = false
         var enabled = true
         var above: f32 = 64.0
+        let neper = t.tokens.profile == .Neper
+        looks.aim(i, 0.0, 0.0)
         if i == 2usize {
             // The pointer, at the cell's centre, rests on the head: no row is under it.
             open = now == i
@@ -147,6 +150,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             above = cell_h() * 0.5 - 21.0 - 18.0 - 18.0 - 9.0
             selected = 1usize
         }
+        if neper && (i == 2usize || i == 3usize) {
+            // The Neper cells are taller (grow_sheets in main) so the whole list shows: the head sits near the top and the
+            // pointer is aimed at it (open) or at the first row below it (row hover), 48 px each.
+            above = 24.0
+            if i == 2usize { looks.aim(i, 0.0, above + 24.0 - cell_h() * neper_grow() * 0.5) }
+            if i == 3usize { looks.aim(i, 0.0, above + 48.0 + 4.0 + 24.0 - cell_h() * neper_grow() * 0.5) }
+        }
         if i == 4usize { enabled = false }
         if i == 6usize { selected = 99usize }
         let (picks, picks_error) = pick_actions(a, 6usize)
@@ -155,7 +165,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if toggle_error != ok { ret (0usize, toggle_error) }
         let (combo, combo_error) = control.image_select(a, u64(i + 1usize) * 100u64, t, "Format", names[0usize..6usize], shown, selected, open, enabled, &toggle[0usize], picks)
         if combo_error != ok { ret (0usize, combo_error) }
-        let (node, node_error) = placed(a, combo, above)
+        var grown: f32 = 1.0
+        if neper { grown = neper_grow() }
+        let (node, node_error) = placed(a, combo, above, grown)
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drives[i] }
         i += 1usize
@@ -523,6 +535,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }
+    looks.grow_sheets(neper_grow(), 0.0)
     let sheet = looks.Sheet { name: "image_combo_box", cells: 8usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build }
     ret looks.run_all(a, &sheet)
 }
