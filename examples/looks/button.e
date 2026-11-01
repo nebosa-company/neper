@@ -21,7 +21,6 @@ fn on_pixels(a: *mem.Arena, t: *const control.Theme, node: widget.Node, w: f32, 
 
 fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: widget.Key, caption: str, variant: style.ControlVariant, enabled: bool, wide: bool) -> (widget.Node, err) {
     var options = control.button_options()
-    options.crisp = true
     options.variant = variant
     options.enabled = enabled
     if wide {
@@ -86,7 +85,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 // (borderless) button. Pictures are drawn glyphs; v3's are bitmaps from its image list.
 fn kind(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, i: usize) -> (widget.Node, looks.Drive, str, err) {
     var options = control.button_options()
-    options.crisp = true
     let key = u64((i + 1usize) * 10usize)
     if i < 5usize {
         options.width = 125.0

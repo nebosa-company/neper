@@ -13,7 +13,6 @@ fn noop_submit(ctx: *void) -> err { ret ok }
 
 fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key: widget.Key, caption: str, variant: style.ControlVariant) -> (widget.Node, err) {
     var options = control.button_options()
-    options.crisp = true
     options.variant = variant
     let (node, node_error) = control.button(a, key, t, caption, action, options)
     ret (node, node_error)

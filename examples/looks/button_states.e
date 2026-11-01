@@ -75,7 +75,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     var i = 0usize
     while i < 38 {
         var options = control.button_options()
-        options.crisp = true
         options.width = widths[i]
         options.height = heights[i]
         options.enabled = enabled[i]

@@ -44,9 +44,6 @@ fn one(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit, key
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    control.set_group_crisp(true)
-    control.set_radio_crisp(true)
-    control.set_radio_crisp(true)
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }

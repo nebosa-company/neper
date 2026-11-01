@@ -55,9 +55,9 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // window that has just opened has its default button focused: v3's About), for the looks sheets. `ring_x`, `ring_y` (looks9) the exact
 // phase at the top left of the ring (`ring_x2`, `ring_y2` at the right and bottom edge, else it grows by 0.00074 per pixel)
 // of the ring of such a button (the native ring drawn at a fractional position); when both are zero `shift_x`, `shift_y` serve.
-// `crisp` (Windows light): the ring and focus rectangle of the true 1:1 v3 captures (docs/ui/looks/ref/windows-1to1): a box W - 2 by H - 2,
+// Windows light always draws (`windows_crisp`): the ring and focus rectangle of the true 1:1 v3 captures (docs/ui/looks/ref/windows-1to1): a box W - 2 by H - 2,
 // one pixel rails, no sub-pixel phase (every shift above is ignored), the focus dots the face inverted on alternate pixels.
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool, crisp: bool }
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
 // (D1458) `size`, when above 0, sets the text's size in place of its role's,
@@ -2407,7 +2407,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false, crisp: false }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false, width: 0.0, height: 0.0, shift_x: 0.0, shift_y: 0.0, focused: false, ring_x: 0.0, ring_y: 0.0, ring_x2: 0.0, ring_y2: 0.0, circular: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -2680,7 +2680,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     }
     var look = style.windows_resolve(t.tokens, variant, state)
     look.corners = corners
-    let crisp = options.crisp && t.tokens.palette == .Light
+    let crisp = windows_crisp(t)
     if !show_label { look.min_width = 29.33 }
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
@@ -4360,7 +4360,7 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
 // scale and its line offset (see `Dotted`).
-// `whole` (the radio of the 1:1 captures, `set_radio_crisp`): DrawFocusRect's dots on whole pixels, the underline on a whole row.
+// `whole` (the radio of the 1:1 captures, Windows light): DrawFocusRect's dots on whole pixels, the underline on a whole row.
 type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32, whole: bool }
 
 // The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
@@ -4373,6 +4373,10 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
 
+// The crisp geometry of the true 1:1 v3 captures (button ring, radio marks, group frames) is what Windows light draws; the tiles go through
+// winpx, so it holds at every device scale (looks_scale_check). Windows dark and the other looks keep the older paths.
+fn windows_crisp(t: *const Theme) -> bool { ret t.tokens.profile == .Windows && t.tokens.palette == .Light }
+
 // The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
 // looks5: which window's marks to paint and the control's y in it (negative: unknown, the family's first table):
 // the theme bitmap's sub-pixel phase follows the y of the row (the mark stands (high - 14) / 2 below it; see
@@ -4380,12 +4384,10 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
 type Phase = struct { context: u32, x: f32, y: f32 }
 
 // Windows light radio marks as the true 1:1 captures show them (e.ui.winradio): off, on, on under the pointer or pressed, off pressed; the same
-// at every position, so no sub-pixel phase. Opt in like `group_crisp`, set by the sheets of the radio controls; other sheets keep the old marks.
-var radio_crisp: bool = false
-fn set_radio_crisp(on: bool) { radio_crisp = on }
+// at every position, so no sub-pixel phase. The default of Windows light (`windows_crisp`); the other looks keep the old marks.
 
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
-    if radio_crisp && round && t.tokens.palette == .Light && !state.disabled && !mixed {
+    if windows_crisp(t) && round && !state.disabled && !mixed {
         var tile = winradio.radio_off()
         if chosen {
             tile = winradio.radio_on()
@@ -4676,7 +4678,7 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
     // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
     var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0, whole: false }
-    if radio_crisp && round && t.tokens.palette == .Light {
+    if windows_crisp(t) && round {
         geom.whole = true
         geom.line = 0.0
     }
@@ -4706,7 +4708,7 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     parts[0usize] = mark_node
     parts[1usize] = label_node
     // the 42 high radio rows (the Options pages and the Search dialog): the 1:1 captures put the caption a row higher than the resampled ones
-    if radio_crisp && round && t.tokens.palette == .Light && high > 40.0 {
+    if windows_crisp(t) && round && high > 40.0 {
         var raised = style.defaults()
         raised.margin = edges(0.0, 0.0, 0.0, 2.0)
         parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, raised, mem_one_node(a, label_node))
@@ -15961,7 +15963,7 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
 // #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
-// `whole` (Windows light with the group frames on whole pixels, `set_group_crisp`): the 1:1 captures put the border on the control's own pixels.
+// `whole` (Windows light with the group frames on whole pixels, Windows light): the 1:1 captures put the border on the control's own pixels.
 type SectionBar = struct { stops: [2]paint.Stop, whole: bool }
 
 // v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
@@ -15997,7 +15999,7 @@ fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
 fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
-    bars[0usize].whole = group_crisp && t.tokens.palette == .Light
+    bars[0usize].whole = windows_crisp(t)
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
     // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
@@ -18769,8 +18771,6 @@ type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: 
 
 // Windows light, the true 1:1 captures: a group frame is four one pixel lines of #DCDCDC on whole rows and columns (the 6.35 and 0.65 of the
 // resampled captures are where the lines blurred to). Frames built while this is on take the line pixel that holds their fractional edge.
-var group_crisp: bool = false
-fn set_group_crisp(on: bool) { group_crisp = on }
 
 fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*GroupFrame](ctx)
@@ -18813,7 +18813,7 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
-    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant), whole: group_crisp && t.tokens.palette == .Light }
+    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant), whole: windows_crisp(t) }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
