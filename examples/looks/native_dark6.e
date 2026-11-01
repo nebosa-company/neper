@@ -20,14 +20,20 @@ fn solid(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, value: u32) -> widget.No
     ret at(a, x, y, widget.box(0u64, s, zero))
 }
 
-fn group(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
+fn group(a: *mem.Arena, t: *const control.Theme, enabled: bool) -> (widget.Node, err) {
     var options = control.text_options()
     options.face = 7u32
     options.size = 12.0
     options.wrap = .None
     let (dark_t, dark_error) = control.windows_edit_theme(a, t, 13.0)
     if dark_error != ok { ret (zero, dark_error) }
-    let (caption, caption_error) = control.colored_text(a, 0u64, "Group", &dark_t, options, style.hex_raw(0x000000u32))
+    // round 80: the capture's caption is black on #202020; the dark look draws white, #9D9D9D disabled
+    var ink = style.hex_raw(0x000000u32)
+    if t.tokens.profile == .Windows && t.tokens.palette == .Dark {
+        ink = style.hex_raw(0xFFFFFFu32)
+        if !enabled { ink = style.hex_raw(0x9D9D9Du32) }
+    }
+    let (caption, caption_error) = control.colored_text(a, 0u64, "Group", &dark_t, options, ink)
     if caption_error != ok { ret (zero, caption_error) }
     let (body, body_error) = control.windows_label_faced(a, t, "Inside the group", 12.0, 400u32, style.hex_raw(0xFFFFFFu32), false, 0.0, 7u32, 0.0, 0.0, false)
     if body_error != ok { ret (zero, body_error) }
@@ -47,7 +53,7 @@ fn group(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     var i = 0usize
     while i < 2usize {
-        let (node, node_error) = group(a, t)
+        let (node, node_error) = group(a, t, i == 0usize)
         if node_error != ok { ret (0usize, node_error) }
         var name = "groupbox-rest"
         if i == 1usize { name = "groupbox-disabled" }

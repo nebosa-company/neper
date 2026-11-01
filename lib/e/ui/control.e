@@ -4855,9 +4855,7 @@ fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     caption.wrap = .None
     var ink = style.hex_raw(0xFFFFFFu32)
     if !enabled { ink = style.hex_raw(0xCCCCCCu32) }
-    // round 13: the native dark radio's enabled caption is BLACK on the #202020 page (radio-*-rest, -pressed, -focus: the gallery's
-    // WM_CTLCOLORSTATIC colouring does not reach a radio's text); copied as captured
-    if round && enabled && !lit { ink = style.hex_raw(0x000000u32) }
+    // round 80: the capture's enabled radio caption is black on #202020 (unreadable); every dark radio caption is white
     let (words, words_error) = colored_text(a, 0u64, shown, &ft, caption, ink)
     if words_error != ok { ret (zero, words_error) }
     let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
@@ -16291,7 +16289,7 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var frame = style.defaults()
     frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 6.35 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: 13.65 }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
-    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: looks_o78.dark_group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)) } }
     if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
     let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
     if rows_error != ok { ret (zero, TooLarge) }

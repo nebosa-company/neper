@@ -2246,6 +2246,8 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     var gdi_split = false
     var split_left: f32 = 0.0
     var split_right: f32 = 0.0
+    var split_top: f32 = 0.0
+    var split_bottom: f32 = 0.0
     if focused_here && gdi_caret_face(ed.caret) && !native_caret_face(ed.caret) && ed.marked.alpha > 0.0 {
         let (lo, hi) = selection_of(e)
         if lo < hi {
@@ -2255,6 +2257,8 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
                 gdi_split = true
                 split_left = floor_f(origin.x + srects[0usize].x + 0.5)
                 split_right = floor_f(origin.x + srects[0usize].x + srects[0usize].width + 0.5)
+                split_top = origin.y + srects[0usize].y
+                split_bottom = split_top + srects[0usize].height
             }
         }
     }
@@ -2268,6 +2272,15 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
         try scene.push(b, restore_text)
         try scene.push(b, save_text)
         try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_right, y: origin.y - far, width: origin.x + far - split_right, height: far * 2.0 } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        // round 80: the rows above and below the selection's row keep the glyphs between the band's edges (a wrapped second line)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_left, y: origin.y - far, width: split_right - split_left, height: split_top - origin.y + far } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_left, y: split_bottom, width: split_right - split_left, height: origin.y + far - split_bottom } } })
         try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
         try scene.push(b, restore_text)
     } else {
