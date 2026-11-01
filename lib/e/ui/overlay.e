@@ -21,6 +21,7 @@ use e.ui.layout as ui_layout
 use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_b_ov
 use e.ui.winchrome
 use e.ui.winmsgicon
 use e.ui.wintile
@@ -5345,6 +5346,10 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         let (typed_head, typed_head_error) = clocked_field_glyph(a, key, t, label, footer.buffer, footer.len, footer.typed, "", true, open, trigger, typed_look, .Calendar)
         if typed_head_error != ok { ret (zero, typed_head_error) }
         head = typed_head
+    } else if ranged && t.tokens.profile == .Windows {
+        let (range_head, range_head_error) = looks_b_ov.windows_range_head(a, key, t, label, caption, has_value, open, trigger)
+        if range_head_error != ok { ret (zero, range_head_error) }
+        head = range_head
     } else {
         let (plain_head, plain_head_error) = control.field_head(a, key, t, label, caption, has_value, open, trigger, field_height, .Calendar, .Calendar, true)
         if plain_head_error != ok { ret (zero, plain_head_error) }
