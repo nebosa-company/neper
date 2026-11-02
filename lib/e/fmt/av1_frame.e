@@ -78,7 +78,9 @@ type Decoder = struct {
     ns_setup: i64,
     mf_pool: *av1_pool.Pool,
     prof_on: bool,
-    prof: [10]i64,
+    prof: [16]i64,
+    bk_end: i64,
+    bk_spawn: i64,
     shown: bool,
     frame_open: bool,
     tile_num: i32,
@@ -717,7 +719,10 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
     }
     try finish_backend(dc)
     dc.bk_job[0usize] = BkJob { dc: dc, x: x, result: ok }
+    let tn = tick(dc)
+    dc.bk_spawn = tn
     let (th, spawn_error) = thread.spawn[BkJob](bk_main, &dc.bk_job[0usize], 8388608usize)
+    lap(dc, 11usize, tn)
     if spawn_error != ok { ret spawn_error }
     dc.bk_threads[0usize] = th
     dc.bk_running = true
@@ -726,13 +731,20 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
 }
 
 fn bk_main(job: *BkJob) {
+    let tw = tick(job.dc)
+    if job.dc.prof_on { job.dc.prof[14usize] += tw - job.dc.bk_spawn }
     job.result = backend(job.dc, job.x)
+    lap(job.dc, 12usize, tw)
+    job.dc.bk_end = tick(job.dc)
 }
 
 // Waits for the backend thread, if one runs, and hands over the finished frame.
 fn finish_backend(dc: *Decoder) -> err {
     if !dc.bk_running { ret ok }
+    let tj = tick(dc)
     let joined = thread.join(dc.bk_threads[0usize])
+    lap(dc, 10usize, tj)
+    if dc.prof_on { dc.prof[13usize] += tj - dc.bk_end }
     dc.bk_running = false
     if joined != ok { ret joined }
     if dc.bk_job[0usize].result != ok { ret dc.bk_job[0usize].result }
