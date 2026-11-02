@@ -1,0 +1,27 @@
+TITLE
+Get started with Neper in 30 seconds: one prompt, any OS, no third-party toolchain
+
+DESCRIPTION
+Clone Neper, submit one prompt to your coding agent, and build Windows, Linux and macOS executables from one machine. Neper's own emitter and linker write the PE, ELF and Mach-O files, so cross compiling needs no LLVM, no MSVC or MinGW, no Xcode or macOS SDK, no system linker and no Docker.
+
+Written guide with every command and the prompt: https://neper.dev/get-started.html
+Source (MIT): https://github.com/nebosa-company/neper
+Discord: https://discord.gg/AdRneEsbCu
+
+CHAPTERS
+0:00 Clone the repository and build the compiler once
+0:07 Submit one prompt to your coding agent
+0:16 One machine builds for any OS
+0:27 Where to start
+
+THE STEPS
+1. git clone https://github.com/nebosa-company/neper, then run scripts/build-selfhost.ps1 (Windows) or scripts/build-selfhost.sh (Linux, macOS).
+2. Open your coding agent in the repository and submit: "Read docs/llm-neper-card.md first. Then write a Neper command-line program, wordfreq.e, that reads a text file and prints its ten most frequent words. Add @test functions, run them, and fix every diagnostic by its code and span. Then build it for x64 windows, x64 linux and aarch64 macos with emit-executable."
+3. The agent builds with: neper emit-executable wordfreq.e . x64 windows wordfreq.exe --release (also x64 linux, aarch64 macos, aarch64 linux, x64 macos, wasm32 wasi).
+
+THE LIMITS
+- The first compiler is built from a small C99 bootstrap, so that one step needs a C compiler. After it, Neper compiles itself and building programs for any target needs nothing else.
+- macOS executables are ad-hoc signed, not notarized, and still need a Mac or a runner to run on.
+
+TAGS
+neper, programming language, cross compilation, cross compile, no toolchain, LLM, AI coding agent, Claude Code, native executable, Windows, Linux, macOS, open source, MIT
