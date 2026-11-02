@@ -4195,17 +4195,34 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if instruction.opcode == .BranchIf {
                         if instruction.operand_count != 1usize || instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count || instruction.target2 < current.first_block || instruction.target2 >= current.first_block + current.block_count { ret Unsupported }
                         let condition_value = builder.operands[instruction.first_operand]
+                        // When the true block is the one that follows, the jump goes to the false block on the opposite
+                        // condition and the true block is fallen into: one jump where there were two.
+                        let true_follows = builder.blocks[instruction.target].first_instruction == at + 1usize && builder.blocks[instruction.target2].first_instruction != at + 1usize
+                        var inverted = false
                         if context.fused && context.fused_value == condition_value {
                             context.fused = false
-                            let (true_displacement, true_error) = emit_x64.jump_condition(output, context.fused_condition)
-                            if true_error != ok { ret true_error }
-                            try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                            if true_follows {
+                                let (opposite_displacement, opposite_error) = emit_x64.jump_condition(output, context.fused_condition ^ 1usize)
+                                if opposite_error != ok { ret opposite_error }
+                                try add_fixup(fixups, &fixup_count, opposite_displacement, instruction.target2 - current.first_block)
+                                inverted = true
+                            } else {
+                                let (true_displacement, true_error) = emit_x64.jump_condition(output, context.fused_condition)
+                                if true_error != ok { ret true_error }
+                                try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                            }
                         } else {
                             let (condition, condition_error) = read_value(allocations, condition_value, 10usize, output)
                             if condition_error != ok { ret condition_error }
                             let (short, short_error) = short_over_trap(builder, current, at, instruction.target, instruction.target2, context.abi)
                             if short_error != ok { ret short_error }
-                            if short && !context.has_short {
+                            if true_follows && !short {
+                                try emit_x64.test_register(output, condition)
+                                let (zero_displacement, zero_error) = emit_x64.jump_condition(output, 4usize)
+                                if zero_error != ok { ret zero_error }
+                                try add_fixup(fixups, &fixup_count, zero_displacement, instruction.target2 - current.first_block)
+                                inverted = true
+                            } else if short && !context.has_short {
                                 try emit_x64.test_register(output, condition)
                                 let (short_at, short_jump_error) = emit_x64.jump_condition_short(output, 5usize)
                                 if short_jump_error != ok { ret short_jump_error }
@@ -4218,7 +4235,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                                 try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
                             }
                         }
-                        if builder.blocks[instruction.target2].first_instruction != at + 1usize {
+                        if !inverted && builder.blocks[instruction.target2].first_instruction != at + 1usize {
                             let (false_displacement, false_error) = emit_x64.jump(output)
                             if false_error != ok { ret false_error }
                             try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
@@ -4587,7 +4604,8 @@ fn self_test() -> err {
     while scan_at + 1usize < branch_output.count {
         // `cmp r/m64, r64`, or `cmp r/m64, imm` when the right operand is a constant
         if branch_output.bytes[scan_at] == 57u8 || branch_output.bytes[scan_at] == 131u8 || branch_output.bytes[scan_at] == 129u8 { saw_compare = true }
-        if branch_output.bytes[scan_at] == 15u8 && branch_output.bytes[scan_at + 1usize] == 140u8 { saw_conditional = true }
+        // `jl`, or `jge` when the block after is the true one and the jump goes the other way
+        if branch_output.bytes[scan_at] == 15u8 && (branch_output.bytes[scan_at + 1usize] == 140u8 || branch_output.bytes[scan_at + 1usize] == 141u8) { saw_conditional = true }
         scan_at += 1usize
     }
     if !saw_compare || !saw_conditional { ret Unsupported }
