@@ -2,6 +2,7 @@
 // decoder's mode info arrays.
 
 use e.mem
+use e.time
 use e.fmt.av1
 use e.fmt.av1_dec as D
 use e.fmt.av1_lf
@@ -121,7 +122,10 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
     let seq = &d.st.seq
     gather(d, s)
     if h.loop_filter_level[0usize] != 0i32 || h.loop_filter_level[1usize] != 0i32 {
+        let (l0, lc0) = time.monotonic()
         let e = deblock(d, s)
+        let (l1, lc1) = time.monotonic()
+        d.ns_lf += l1.nanos - l0.nanos
         if e != ok { ret (0usize, e) }
     }
     var result = 0usize
@@ -154,10 +158,14 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
         dst.v = w1[2usize]
         dst.stride_y = d.stride[0usize]
         dst.stride_uv = d.stride[1usize]
+        let (c0, cc0) = time.monotonic()
         av1_cdef.cdef_frame(p, d.cdef_idx, s.skips, src, dst)
+        let (c1, cc1) = time.monotonic()
+        d.ns_cdef += c1.nanos - c0.nanos
         result = 1usize
     }
     if h.uses_lr {
+        let (r0t, rc0) = time.monotonic()
         var cdef_src = d.frame
         if result == 1usize { cdef_src = w1 }
         let out = w2
@@ -181,6 +189,8 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
             }
             plane += 1usize
         }
+        let (r1t, rc1) = time.monotonic()
+        d.ns_lr += r1t.nanos - r0t.nanos
         result = 2usize
     }
     ret (result, ok)

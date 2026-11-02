@@ -1,6 +1,7 @@
 // AV1 block reconstruction: prediction and residual (transform blocks, dequantization, inverse transform and the addition
 // to the frame), the tile level context resets and the loop restoration unit syntax of the specification.
 
+use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -303,10 +304,13 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
         dcq = dc_q(d, qindex + h.delta_q_v_dc)
         acq = ac_q(d, qindex + h.delta_q_v_ac)
     }
+    let (tx0, txc0) = time.monotonic()
     try TX.reconstruct(d.quant, tx, tx_type, b.lossless, bd, dcq, acq, d.resid)
     let w = usize(D.tx_w(d, tx))
     let hh = usize(D.tx_h(d, tx))
     let stride = d.stride[plane]
+    let (tx1, txc1) = time.monotonic()
+    d.ns_txfm += tx1.nanos - tx0.nanos
     let mx = i32((1u32 << bd) - 1u32)
     var y = 0usize
     while y < hh {
@@ -375,12 +379,15 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
             p.above_smooth = D.is_smooth_above(d, plane, avail_u)
             p.left_smooth = D.is_smooth_left(d, plane, avail_l)
         }
+        let (in0, inc0) = time.monotonic()
         try IN.predict_intra(d.frame[plane], d.stride[plane], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), p)
         if is_cfl {
             var alpha = b.cfl_alpha_u
             if plane == 2usize { alpha = b.cfl_alpha_v }
             IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), u32(sx), u32(sy), alpha, d.max_luma_w, d.max_luma_h, u32(seq.bit_depth))
         }
+        let (in1, inc1) = time.monotonic()
+        d.ns_intra += in1.nanos - in0.nanos
         if plane == 0usize {
             d.max_luma_w = start_x + step_x * 4i32
             d.max_luma_h = start_y + step_y * 4i32
@@ -413,7 +420,10 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         cp.left_dc = d.left_dc[plane]
         cp.tx_types = d.tx_types
         cp.tx_stride = usize(d.mi_cols)
+        let (cf0, cfc0) = time.monotonic()
         let (res, coef_error) = CO.coeffs(&d.sd, d.ctx, d.tab, &cp, d.quant)
+        let (cf1, cfc1) = time.monotonic()
+        d.ns_coef += cf1.nanos - cf0.nanos
         if coef_error != ok { ret coef_error }
         if res.eob > 0usize { try reconstruct(d, plane, usize(start_x), usize(start_y), tx, res.tx_type) }
     }
