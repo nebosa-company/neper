@@ -112,6 +112,8 @@ type FunctionContext = struct {
     field_result: usize,
     field_base: usize,
     field_offset: usize,
+    // Per value: an integer constant every use of which is an immediate operand, so it is not made.
+    dead_consts: []bool,
 }
 
 const TRAP_RECORDS: usize = 64usize
@@ -3571,10 +3573,27 @@ fn build_live_masks(builder: *nir.Builder, current: nir.Function, context: *Func
     ret ok
 }
 
+// Whether operand `position` of `instruction`, the constant `value`, is taken as an immediate by the selection above: the count of
+// a shift below the width, the right side of an add, subtract, and, or, xor or comparison under 2^31.
+fn immediate_operand(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, position: usize, constant: usize) -> bool {
+    if instruction.operand_count != 2usize || position != 1usize { ret false }
+    if instruction.opcode == .ShiftLeft || instruction.opcode == .ShiftRight {
+        if instruction.ty.kind != .Integer { ret false }
+        let (left_type, left_type_error) = value_type(builder, current, builder.operands[instruction.first_operand])
+        if left_type_error != ok || left_type.kind != .Integer { ret false }
+        ret constant < integer_width(left_type)
+    }
+    if float_operation(builder, current, instruction) { ret false }
+    let plain = instruction.opcode == .Add || instruction.opcode == .AddWrap || instruction.opcode == .Subtract || instruction.opcode == .SubtractWrap || instruction.opcode == .BitAnd || instruction.opcode == .BitXor || instruction.opcode == .BitOr
+    if !plain && !comparison(instruction.opcode) { ret false }
+    ret constant <= 2147483647usize
+}
+
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     if !context.has_arena || function_index >= builder.function_count {
         context.live_masks = context.live_masks[0usize..0usize]
         context.entered = context.entered[0usize..0usize]
+        context.dead_consts = context.dead_consts[0usize..0usize]
         ret function_body(builder, function_index, stack_slots, context)
     }
     let current = builder.functions[function_index]
@@ -3610,6 +3629,43 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     builder.definers = definers
     builder.definers_first = current.first_instruction
     builder.definers_valid = true
+    // The integer constants whose every use is an immediate operand (they are not made).
+    let (total_uses, total_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
+    if total_error != ok { ret total_error }
+    let (immediate_uses, immediate_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
+    if immediate_error != ok { ret immediate_error }
+    let (dead, dead_error) = mem.alloc[bool](context.arena, current.value_count + 1usize)
+    if dead_error != ok { ret dead_error }
+    var zero_at = 0usize
+    while zero_at < total_uses.len {
+        total_uses[zero_at] = 0usize
+        immediate_uses[zero_at] = 0usize
+        dead[zero_at] = false
+        zero_at += 1usize
+    }
+    var use_at = current.first_instruction
+    while use_at < fill_end {
+        let user = builder.instructions[use_at]
+        var position = 0usize
+        while position < user.operand_count {
+            let used = builder.operands[user.first_operand + position]
+            if used < total_uses.len {
+                total_uses[used] += 1usize
+                if definers[used] != 0usize {
+                    let definer = builder.instructions[definers[used] - 1usize]
+                    if definer.opcode == .ConstInteger && definer.has_result && definer.result == used && immediate_operand(builder, current, user, position, definer.immediate) { immediate_uses[used] += 1usize }
+                }
+            }
+            position += 1usize
+        }
+        use_at += 1usize
+    }
+    var dead_at = 0usize
+    while dead_at < total_uses.len {
+        if total_uses[dead_at] != 0usize && total_uses[dead_at] == immediate_uses[dead_at] { dead[dead_at] = true }
+        dead_at += 1usize
+    }
+    context.dead_consts = dead
     context.instruction_offsets = context.instruction_offsets[0usize..0usize]
     context.stack_value_slots = context.stack_value_slots[0usize..0usize]
     let (debug_first, debug_count) = nir.debug_locals_of(builder, current.first_instruction)
@@ -3631,6 +3687,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     context.stack_value_slots = context.stack_value_slots[0usize..0usize]
     context.debug_windows = context.debug_windows[0usize..0usize]
     context.debug_window_count = 0usize
+    context.dead_consts = context.dead_consts[0usize..0usize]
     builder.definers_valid = false
     context.live_masks = context.live_masks[0usize..0usize]
     mem.reset(context.arena, mark)
@@ -3945,7 +4002,9 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
-        if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError || instruction.opcode == .ConstFloat {
+        if instruction.opcode == .ConstInteger && instruction.has_result && instruction.result < context.dead_consts.len && context.dead_consts[instruction.result] {
+            // every use of it is an immediate: nothing to make
+        } else if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError || instruction.opcode == .ConstFloat {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
@@ -4538,7 +4597,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize, dead_consts: zero }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
