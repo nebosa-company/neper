@@ -156,10 +156,19 @@
     .button[disabled] { opacity: .6; cursor: progress; }
     #status { color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
     .panes { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-4); }
-    textarea, #out { width: 100%; min-height: 380px; margin: 0; padding: var(--space-4); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); color: inherit; font: 400 14px/22px var(--font-mono); tab-size: 4; resize: vertical; }
-    #out { overflow: auto; white-space: pre-wrap; }
+    .editor { position: relative; height: 380px; }
+    textarea, #hl, #out { width: 100%; margin: 0; padding: var(--space-4); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); color: inherit; font: 400 14px/22px var(--font-mono); tab-size: 4; letter-spacing: 0; }
+    textarea, #hl { position: absolute; inset: 0; height: 100%; white-space: pre; overflow: auto; resize: none; }
+    #hl { pointer-events: none; }
+    textarea { background: transparent; color: transparent; caret-color: var(--on-surface); }
+    textarea::selection { background: var(--primary-container); color: transparent; }
+    #hl .kw { color: var(--primary); }
+    #hl .fn { color: var(--primary); font-weight: 600; }
+    #hl .str { color: var(--tertiary); }
+    #hl .com { color: var(--on-surface-variant); }
+    #out { height: 380px; overflow: auto; white-space: pre-wrap; }
     #out.err { color: var(--tertiary); }
-    @media (max-width: 799px) { .panes { grid-template-columns: 1fr; } textarea, #out { min-height: 240px; } }
+    @media (max-width: 799px) { .panes { grid-template-columns: 1fr; } .editor, #out { height: 280px; } }
   </style>
 </head>
 <body class="nu-page">
@@ -183,16 +192,24 @@
           <option value="hello">hello.e</option>
           <option value="strings">strings.e</option>
           <option value="squares">squares.e</option>
+          <option value="sort">sort.e</option>
+          <option value="regex">regex.e</option>
+          <option value="json">json.e</option>
+          <option value="sha256">sha256.e</option>
+          <option value="math">math.e</option>
         </select>
         <button class="button nu-btn lg" id="run" type="button" disabled>Compile and run ▶</button>
         <a id="download" class="button secondary nu-btn tonal lg" hidden download="main.wasm">Download .wasm</a>
         <span id="status" role="status">Loading the compiler…</span>
       </div>
       <div class="panes">
-        <textarea id="src" spellcheck="false" aria-label="Neper source"></textarea>
+        <div class="editor">
+          <pre id="hl" aria-hidden="true"></pre>
+          <textarea id="src" spellcheck="false" aria-label="Neper source"></textarea>
+        </div>
         <pre id="out" aria-label="Output" aria-live="polite"></pre>
       </div>
-      <p class="note">This page hosts a small part of the standard library, enough for the samples (<code>e.io</code>, <code>e.mem</code>, <code>e.str</code> and what they use); a <code>use</code> of any other module reports that it is missing. The full compiler and library are on <a href="https://github.com/nebosa-company/neper">GitHub</a>, and <a href="get-started.html">Get started</a> shows how to cross compile for any OS with no third-party toolchain.</p>
+      <p class="note">This page hosts a small part of the standard library, enough for the samples: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.math</code>, <code>e.bytes</code>, <code>e.algo.sort</code>, <code>e.text.regex</code>, <code>e.fmt.json</code> and <code>e.crypto.hash</code>, with what they use. A <code>use</code> of any other module reports that it is missing. The full compiler and library are on <a href="https://github.com/nebosa-company/neper">GitHub</a>, and <a href="get-started.html">Get started</a> shows how to cross compile for any OS with no third-party toolchain.</p>
     </main>
 
     <footer>
@@ -207,8 +224,15 @@
     const show = (t, err) => { $('out').textContent = t; $('out').className = err ? 'err' : '' }
     const bytes = async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer())
     let compiler, fetchLib, downloadUrl
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const highlight = (text) => esc(text).replace(/(\/\/[^\n]*)|("(?:\\.|[^"\\\n])*")|\b(fn)(\s+)([A-Za-z_]\w*)|\b(as|break|case|const|continue|default|defer|else|enum|error|extern|false|for|if|in|let|nil|nocheck|own|ok|resource|ret|shared|struct|switch|true|try|type|undef|union|use|var|when|while|zero|fn)\b/g,
+      (m, com, str, fnw, sp, name, kw) => com ? '<span class="com">' + com + '</span>' : str ? '<span class="str">' + str + '</span>' : fnw ? '<span class="kw">fn</span>' + sp + '<span class="fn">' + name + '</span>' : '<span class="kw">' + kw + '</span>') + '\n'
+    const paint = () => { $('hl').innerHTML = highlight($('src').value) }
+    $('src').addEventListener('input', paint)
+    $('src').addEventListener('scroll', () => { $('hl').scrollTop = $('src').scrollTop; $('hl').scrollLeft = $('src').scrollLeft })
     async function load(name) {
       $('src').value = await (await fetch('play/samples/' + name + '.e')).text()
+      paint()
       show('')
     }
     try {
