@@ -875,6 +875,146 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
     ret store_result(allocations, instruction.result, destination, output)
 }
 
+// The mandatory prefix, opcode and map of one extended packed operation (D5960), by the
+// lane code. Every one is 0x66-prefixed integer SSE; the second return says the opcode
+// is in the 0F 38 map, the fourth that the table has the pair at all.
+fn packed_ext_instruction(ext: usize, lane: usize) -> (usize, bool, usize, bool) {
+    if nir.EXT_MIN_U == ext {
+        if lane == 0usize { ret (102usize, false, 218usize, true) }
+        if lane == 1usize { ret (102usize, true, 58usize, true) }
+        if lane == 2usize { ret (102usize, true, 59usize, true) }
+    }
+    if nir.EXT_MIN_S == ext {
+        if lane == 1usize { ret (102usize, false, 234usize, true) }
+        if lane == 0usize { ret (102usize, true, 56usize, true) }
+        if lane == 2usize { ret (102usize, true, 57usize, true) }
+    }
+    if nir.EXT_MAX_U == ext {
+        if lane == 0usize { ret (102usize, false, 222usize, true) }
+        if lane == 1usize { ret (102usize, true, 62usize, true) }
+        if lane == 2usize { ret (102usize, true, 63usize, true) }
+    }
+    if nir.EXT_MAX_S == ext {
+        if lane == 1usize { ret (102usize, false, 238usize, true) }
+        if lane == 0usize { ret (102usize, true, 60usize, true) }
+        if lane == 2usize { ret (102usize, true, 61usize, true) }
+    }
+    if nir.EXT_ADDS_U == ext && lane <= 1usize { ret (102usize, false, 220usize + lane, true) }
+    if nir.EXT_ADDS_S == ext && lane <= 1usize { ret (102usize, false, 236usize + lane, true) }
+    if nir.EXT_SUBS_U == ext && lane <= 1usize { ret (102usize, false, 216usize + lane, true) }
+    if nir.EXT_SUBS_S == ext && lane <= 1usize { ret (102usize, false, 232usize + lane, true) }
+    if nir.EXT_AVG == ext {
+        if lane == 0usize { ret (102usize, false, 224usize, true) }
+        if lane == 1usize { ret (102usize, false, 227usize, true) }
+    }
+    if nir.EXT_MULHI_S == ext && lane == 1usize { ret (102usize, false, 229usize, true) }
+    if nir.EXT_MULHRS == ext && lane == 1usize { ret (102usize, true, 11usize, true) }
+    if nir.EXT_MADD == ext && lane == 1usize { ret (102usize, false, 245usize, true) }
+    if nir.EXT_SAD == ext && lane == 0usize { ret (102usize, false, 246usize, true) }
+    if nir.EXT_UNPACK_LO == ext {
+        if lane <= 2usize { ret (102usize, false, 96usize + lane, true) }
+        ret (102usize, false, 108usize, true)
+    }
+    if nir.EXT_UNPACK_HI == ext {
+        if lane <= 2usize { ret (102usize, false, 104usize + lane, true) }
+        ret (102usize, false, 109usize, true)
+    }
+    if nir.EXT_PACK_US == ext && lane == 1usize { ret (102usize, false, 103usize, true) }
+    if nir.EXT_PACK_SS == ext {
+        if lane == 1usize { ret (102usize, false, 99usize, true) }
+        if lane == 2usize { ret (102usize, false, 107usize, true) }
+    }
+    if nir.EXT_PACK_US32 == ext && lane == 2usize { ret (102usize, true, 43usize, true) }
+    if nir.EXT_SHUFFLE == ext && lane == 0usize { ret (102usize, true, 0usize, true) }
+    ret (0usize, false, 0usize, false)
+}
+
+// One extended packed operation (D5960): the sources come into xmm0 and xmm1 from their
+// slots, the one instruction (or the few of the absolute difference) runs, and the
+// result goes to the destination -- an address for the load and the store, a slot
+// otherwise. xmm2 is the scratch the absolute difference uses.
+fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
+    let ext = nir.vector_ext(instruction.immediate)
+    let lane = nir.vector_binary_lane(instruction.immediate)
+    let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
+    let ymm = bytes == 32usize && builder.cpu_level >= 3usize
+    if bytes != 16usize && !ymm { ret Unsupported }
+    if !nir.vector_ext_supported(ext, lane, builder.cpu_level) { ret Unsupported }
+    output.vex = ymm
+    let destination_value = builder.operands[instruction.first_operand]
+    if nir.EXT_LOAD == ext || nir.EXT_STORE == ext {
+        let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+        if source_error != ok { ret source_error }
+        try emit_x64.vector_load(output, 0usize, source, bytes, 11usize)
+        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+        ret vex_done(output)
+    }
+    if nir.EXT_SPLAT == ext {
+        let (scalar, scalar_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+        if scalar_error != ok { ret scalar_error }
+        try emit_x64.move_to_float(output, 0usize, scalar, lane == 3usize)
+        if lane == 0usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 96usize) }
+        if lane <= 1usize {
+            try emit_x64.sse(output, 242usize, false, 0usize, 0usize, 112usize)
+            try emit_x64.byte(output, 0usize)
+        }
+        if lane == 2usize || lane <= 1usize { try emit_x64.vector_shuffle(output, 0usize, 0usize, 0usize) }
+        if lane == 3usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 108usize) }
+        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+        ret vex_done(output)
+    }
+    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+    if left_error != ok { ret left_error }
+    try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
+    if nir.EXT_MOVEMASK == ext {
+        // `pmovmskb` answers the top bit of each byte in a general register; r11 is the
+        // scratch no value is allocated to, and it is stored whole into the u64 slot.
+        try emit_x64.sse(output, 102usize, false, 11usize, 0usize, 215usize)
+        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.store_memory(output, destination, 11usize, 64usize)
+        ret vex_done(output)
+    }
+    let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
+    if right_error != ok { ret right_error }
+    try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
+    var result = 0usize
+    if nir.EXT_ABSDIFF_U == ext {
+        // |a - b| = (a -sat b) | (b -sat a), the saturating subtract of the lane's width.
+        var subtract = 216usize
+        if lane == 1usize { subtract = 217usize }
+        try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 1usize, subtract)
+        try emit_x64.vector_op(output, 102usize, 1usize, 0usize, subtract)
+        try emit_x64.vector_op(output, 102usize, 1usize, 2usize, 235usize)
+        result = 1usize
+    } else {
+        if nir.EXT_ABSDIFF_S == ext {
+            // |a - b| = max(a, b) - min(a, b) on signed words, wrapping.
+            try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+            try emit_x64.vector_op(output, 102usize, 0usize, 1usize, 238usize)
+            try emit_x64.vector_op(output, 102usize, 2usize, 1usize, 234usize)
+            try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 249usize)
+        } else {
+            let (mandatory, map38, opcode, known) = packed_ext_instruction(ext, lane)
+            if !known { ret Unsupported }
+            if map38 {
+                try emit_x64.sse38(output, mandatory, 0usize, 1usize, opcode)
+            } else {
+                try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+            }
+        }
+    }
+    let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+    if destination_error != ok { ret destination_error }
+    try emit_x64.vector_store(output, destination, result, bytes, 11usize)
+    ret vex_done(output)
+}
+
 // Section 4's lane-wise operator as one packed SSE2 instruction over the whole
 // sixteen-byte vector -- three for `~`, which no unit has, and seven and ten for `*%`
 // on thirty-two- and sixty-four-bit lanes, which this baseline has not -- which `lower` asks for by
@@ -885,6 +1025,7 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 // `regalloc` keeps a vector live across operations and drops the two moves.
 fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
     if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
+    if nir.vector_ext(instruction.immediate) != 0usize { ret select_vector_ext(builder, current, instruction, allocations, output, context) }
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
     if operation >= 12usize { ret select_vector_shift(builder, current, instruction, allocations, output, context) }

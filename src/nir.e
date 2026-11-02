@@ -141,6 +141,75 @@ fn vector_binary_lane(immediate: usize) -> usize { ret immediate / 256usize % 16
 
 fn vector_binary_lanes(immediate: usize) -> usize { ret immediate % 256usize }
 
+// The extended packed operations (D5960): `VectorBinary` with the bits above the shift
+// flag naming an operation of `e.simd` that is one or a few instructions on x64 and has
+// no operator -- a load or store through a slice, a splat, a saturating add, a pack, a
+// byte shuffle. The operation field is empty then, and `lane` and `lanes` still say
+// the shape of ONE chunk (a register's worth of the operand). The operands are always
+// three: a destination address, the first source address and the second (a scalar for
+// the splat, the destination for the store). Lowering only emits one where
+// `vector_ext_supported` says the instruction level has it.
+const EXT_LOAD: usize = 1usize
+const EXT_STORE: usize = 2usize
+const EXT_SPLAT: usize = 3usize
+const EXT_MIN_U: usize = 4usize
+const EXT_MIN_S: usize = 5usize
+const EXT_MAX_U: usize = 6usize
+const EXT_MAX_S: usize = 7usize
+const EXT_ADDS_U: usize = 8usize
+const EXT_ADDS_S: usize = 9usize
+const EXT_SUBS_U: usize = 10usize
+const EXT_SUBS_S: usize = 11usize
+const EXT_AVG: usize = 12usize
+const EXT_MULHI_S: usize = 13usize
+const EXT_MULHRS: usize = 14usize
+const EXT_MADD: usize = 15usize
+const EXT_SAD: usize = 16usize
+const EXT_UNPACK_LO: usize = 17usize
+const EXT_UNPACK_HI: usize = 18usize
+const EXT_PACK_US: usize = 19usize
+const EXT_PACK_SS: usize = 20usize
+const EXT_PACK_US32: usize = 21usize
+const EXT_SHUFFLE: usize = 22usize
+const EXT_MOVEMASK: usize = 23usize
+const EXT_ABSDIFF_U: usize = 24usize
+const EXT_ABSDIFF_S: usize = 25usize
+
+fn vector_ext_immediate(ext: usize, lane: usize, lanes: usize) -> usize {
+    ret ext * 8388608usize + lane * 256usize + lanes
+}
+
+fn vector_ext(immediate: usize) -> usize { ret immediate / 8388608usize }
+
+// Whether the instruction level has the extended operation on that lane shape (lane
+// code 0 to 3: one, two, four, eight bytes). Level 1 is SSE2, level 2 adds SSSE3 and
+// SSE4.1 (the byte shuffle, `pmulhrsw`, the remaining min and max forms, the
+// unsigned-saturating 32-bit pack).
+fn vector_ext_supported(ext: usize, lane: usize, cpu_level: usize) -> bool {
+    if EXT_LOAD == ext || EXT_STORE == ext || EXT_SPLAT == ext { ret true }
+    if EXT_MIN_U == ext || EXT_MAX_U == ext {
+        if lane == 0usize { ret true }
+        ret lane <= 2usize && cpu_level >= 2usize
+    }
+    if EXT_MIN_S == ext || EXT_MAX_S == ext {
+        if lane == 1usize { ret true }
+        ret cpu_level >= 2usize && lane != 1usize && lane <= 2usize
+    }
+    if EXT_ADDS_U <= ext && EXT_SUBS_S >= ext { ret lane <= 1usize }
+    if EXT_AVG == ext { ret lane <= 1usize }
+    if EXT_MULHI_S == ext || EXT_MADD == ext { ret lane == 1usize }
+    if EXT_MULHRS == ext { ret lane == 1usize && cpu_level >= 2usize }
+    if EXT_SAD == ext || EXT_MOVEMASK == ext { ret lane == 0usize }
+    if EXT_UNPACK_LO == ext || EXT_UNPACK_HI == ext { ret lane <= 3usize }
+    if EXT_PACK_US == ext { ret lane == 1usize }
+    if EXT_PACK_SS == ext { ret lane == 1usize || lane == 2usize }
+    if EXT_PACK_US32 == ext { ret lane == 2usize && cpu_level >= 2usize }
+    if EXT_SHUFFLE == ext { ret lane == 0usize && cpu_level >= 2usize }
+    if EXT_ABSDIFF_U == ext { ret lane <= 1usize }
+    if EXT_ABSDIFF_S == ext { ret lane == 1usize }
+    ret false
+}
+
 // `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one
 // immediate an instruction has. Never renumber these either: they are in the format.
 type AtomicRmwKind = enum u8 {

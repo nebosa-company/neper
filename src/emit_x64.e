@@ -17,6 +17,8 @@ type Buffer = struct {
     // store, with `vzeroupper` so the scalar float path's legacy SSE pays no
     // transition.
     vex: bool,
+    // The 0F 38 opcode map (D5960): set around one VEX prefix by `sse38`.
+    map38: bool,
 }
 
 fn init(buffer: *Buffer, bytes: []u8) -> err {
@@ -339,7 +341,7 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
         // field is the opcode's extension and whose destination therefore rides in
         // vvvv (the NDD form).
         var first = reg
-        if opcode == 40usize || opcode == 112usize || opcode == 110usize || opcode == 126usize || opcode == 16usize || opcode == 17usize { first = 0usize }
+        if opcode == 40usize || opcode == 112usize || opcode == 110usize || opcode == 126usize || opcode == 16usize || opcode == 17usize || opcode == 215usize { first = 0usize }
         if opcode == 113usize || opcode == 114usize || opcode == 115usize { first = rm }
         // `vmovq` and `vmovd` are the one pair that refuse a 256-bit length.
         let full = opcode != 110usize && opcode != 126usize
@@ -354,6 +356,30 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
     if rm >= 8usize { extension += 1usize }
     if extension != 0usize { try byte(buffer, 64usize + extension) }
     try byte(buffer, 15usize)
+    try byte(buffer, opcode)
+    ret modrm(buffer, reg, rm)
+}
+
+// A packed instruction of the 0F 38 map (SSSE3, SSE4.1): the same prefix and operand
+// layout as `sse` with one more opcode byte, and VEX's map field 2 under `vex`.
+fn sse38(buffer: *Buffer, mandatory: usize, reg: usize, rm: usize, opcode: usize) -> err {
+    try check_register(reg)
+    try check_register(rm)
+    if buffer.vex {
+        buffer.map38 = true
+        let prefixed = vex_prefix(buffer, mandatory, false, reg, reg, rm, true)
+        buffer.map38 = false
+        if prefixed != ok { ret prefixed }
+        try byte(buffer, opcode)
+        ret modrm(buffer, reg, rm)
+    }
+    if mandatory != 0usize { try byte(buffer, mandatory) }
+    var extension = 0usize
+    if reg >= 8usize { extension += 4usize }
+    if rm >= 8usize { extension += 1usize }
+    if extension != 0usize { try byte(buffer, 64usize + extension) }
+    try byte(buffer, 15usize)
+    try byte(buffer, 56usize)
     try byte(buffer, opcode)
     ret modrm(buffer, reg, rm)
 }
@@ -420,6 +446,7 @@ fn vex_prefix(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, first: 
     if mandatory == 243usize { pp = 2usize }
     if mandatory == 242usize { pp = 3usize }
     var second = 1usize + 64usize
+    if buffer.map38 { second = 2usize + 64usize }
     if reg < 8usize { second += 128usize }
     if rm < 8usize { second += 32usize }
     var third = (15usize - first) * 8usize + pp
