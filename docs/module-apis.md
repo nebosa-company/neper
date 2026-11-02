@@ -497,7 +497,7 @@ type Base85Alphabet = enum u8 { Ascii85, Z85 }
 type Reader = struct { data: []const u8, off: usize }
 type Writer = struct { data: []u8, off: usize }
 type Base64Encoder = struct { alphabet: Base64Alphabet, padded: bool, held: [3]u8, count: usize }
-type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize }
+type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize, finished: bool }
 error End
 error Invalid
 error TooLarge
@@ -1232,6 +1232,7 @@ fn depth(t: *const Tree, i: usize) -> usize
 fn lca(t: *const Tree, i: usize, j: usize) -> (usize, err)
 fn range_min(t: *const Tree, lo: usize, hi: usize) -> (usize, err)
 fn is_valid[T: type](keys: []const T, t: *const Tree) -> bool
+fn node_count_fits_ids(node_count: u64) -> bool
 ```
 
 `build[T]` (stack construction, leftmost minimum on ties), `lca` by parent walking,
@@ -1562,6 +1563,7 @@ fn contains[K: type](s: *const SkipList[K], key: K) -> bool
 fn lower_bound[K: type](s: *const SkipList[K], key: K) -> u32
 fn next[K: type](s: *const SkipList[K], node: u32) -> u32
 fn collect[K: type](s: *const SkipList[K], out: []K) -> (usize, err)
+fn pool_fits_ids(pool_len: u64) -> bool
 ```
 
 `SkipList[K]` over caller pools with `levels` levels and geometric heights from the
@@ -2490,6 +2492,8 @@ fn pow(base: f64, exponent: f64) -> f64
 fn log(number: f64, base: f64) -> (f64, err)
 fn signum(x: f64) -> i64
 fn parse_int(text: str, base: i64) -> (i64, err)
+fn negative_magnitude(value: i64) -> u64
+fn signed_distance(upper: i64, lower: i64) -> u64
 ```
 
 Terraform-compatible collection operations over `e.fmt.json` values (L022), after petcow: `flatten`, `distinct`, `compact`, `slice`, `element` (wraps round), `one`, `matchkeys`, `zipmap`, `transpose`, `setproduct`, `range` (at most 1,000,000 elements, a zero step refused), the number functions `sum`, `product`, `minimum`, `maximum`, `pow`, `log` (a result that is not finite is `NotFinite`), `signum` and `parse_int` (base 2 to 36, optional sign, surrounding whitespace). Equality is by value (`1` equals `1.0`; objects by key set). Results that build lists or objects live in the caller's arena. The fixture `algo_collect` checks 5770 cases against Python objects.
@@ -2514,6 +2518,7 @@ fn subsets_of_mask[Ctx: type](mask: u64, ctx: *Ctx, visit: fn(*Ctx, u64) -> bool
 fn subset_sums(values: []i64, bits: u32) -> err
 fn subset_sums_inverse(values: []i64, bits: u32) -> err
 fn superset_sums(values: []i64, bits: u32) -> err
+fn transform_length(bits: u32) -> (usize, bool)
 ```
 
 Enumerators either step caller-held state in place (`next_*`, `false` when exhausted,
@@ -2554,6 +2559,7 @@ fn monotonic_stack(values: []const i64, prev_smaller: []usize, next_smaller: []u
 fn next_greater(values: []const i64, out: []usize, stack: []usize) -> err
 fn convex_hull_trick(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, scratch: []Line) -> err
 fn li_chao_tree(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, lines: []Line, filled: []u8) -> err
+fn li_chao_storage(low: i64, high: i64) -> (usize, err)
 ```
 
 Each routine states the scratch it needs and answers `TooSmall` when short; values
@@ -2763,7 +2769,7 @@ fn eval_call(ev: *Evaluator, node: Node, scope: *const Scope, has_scope: bool) -
 fn invoke(ev: *Evaluator, entry: *const Entry, nodes: []const Node, scope: *const Scope, has_scope: bool) -> Value
 fn zero_items_mut() -> []Value
 fn variable_name(node: Node) -> (str, bool)
-fn bind(a: *mem.Arena, parent: *const Scope, has_parent: bool, name: str, value: Value) -> *const Scope
+fn bind(a: *mem.Arena, parent: *const Scope, has_parent: bool, name: str, value: Value) -> (*const Scope, err)
 fn let_handler(c: *Call) -> Value
 fn lets_handler(c: *Call) -> Value
 fn register_core(r: *Registry, a: *mem.Arena) -> err
@@ -2858,7 +2864,7 @@ fn flat_values(a: *mem.Arena, args: []const f.Value) -> []const f.Value
 fn numbers(c: *f.Call, args: []const f.Value) -> ([]const f64, f.Value)
 fn sum_of(nums: []const f64) -> f64
 fn mean_of(nums: []const f64) -> f64
-fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> []f64
+fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> ([]f64, f.Value)
 fn variance(c: *f.Call, nums: []const f64, population: bool) -> f.Value
 fn one(c: *f.Call) -> f.Value
 fn at(c: *f.Call, i: usize) -> f.Value
@@ -3187,8 +3193,8 @@ The four conversion functions of the formula library: TOTEXT (with `0.00` format
 ### `e.algo.formula.misc`
 
 ```neper
-fn items_of(a: *mem.Arena, v: f.Value) -> []const f.Value
-fn values_of(a: *mem.Arena, count: usize) -> []f.Value
+fn items_of(a: *mem.Arena, v: f.Value) -> ([]const f.Value, bool)
+fn values_of(a: *mem.Arena, count: usize) -> ([]f.Value, bool)
 fn array_of(out: []f.Value, n: usize) -> f.Value
 fn js_number(a: *mem.Arena, v: f.Value) -> f64
 fn js_trim(s: str) -> str
@@ -3224,7 +3230,7 @@ fn h_all(c: *f.Call) -> f.Value
 fn join_parts(a: *mem.Arena, parts: []const str, delim: str) -> str
 fn h_join(c: *f.Call) -> f.Value
 fn h_flat(c: *f.Call) -> f.Value
-fn operands(c: *f.Call) -> []const f.Value
+fn operands(c: *f.Call) -> ([]const f.Value, bool)
 fn h_unique(c: *f.Call) -> f.Value
 fn h_compact(c: *f.Call) -> f.Value
 fn is_ws_byte(b: u8) -> bool
@@ -3291,6 +3297,7 @@ fn alias2(a: *mem.Arena, x: str, y: str) -> []const str
 fn alias3(a: *mem.Arena, x: str, y: str, z: str) -> []const str
 fn alias4(a: *mem.Arena, x: str, y: str, z: str, w: str) -> []const str
 fn register(r: *f.Registry, a: *mem.Arena) -> err
+fn out_of_memory() -> f.Value
 ```
 
 The random/hash/encode, array, reference and extraction functions of the formula library (49 functions): RANDOM, UUID, MD5, SHA1, SHA256, CRC32, BASE64, URLENCODE, GENERATEPASSWORD; the lambda forms MAP, FILTER, REDUCE, SORT (V8's order for ties and inconsistent comparisons), ANY, ALL and JOIN, FLAT, UNIQUE, COMPACT, COLLECT, GET, SPLIT, SLICE; ROW, CURRENTUSER, ISCHANGED, NAME, PROPERTY and the other host references (read from `Context.host`, `prior`, `meta`); JSONQUERY and XMLQUERY. `register` adds them to a registry.
@@ -3944,6 +3951,7 @@ type Budget = struct { within: bool, known: bool, budget: f64, measured: f64, me
 
 fn within_budget(a: *mem.Arena, name: str, measured_ms: f64) -> Budget
 fn percentile(a: *mem.Arena, values: []const f64, p: f64) -> (f64, bool)
+fn max_counter() -> f64
 ```
 
 Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, up to f64's largest exactly representable integer (minting beyond it and exceeding the configured table capacity return `Full`), keyset pagination that orders the supplied rows on each call in O(n log n) time with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
@@ -4028,6 +4036,7 @@ type UndoState = struct { can_undo: bool, can_redo: bool, undo_depth: usize }
 fn undo_state(s: *UndoStore, editor: str, table: str) -> UndoState
 fn bulk_changes(a: *mem.Arena, rows: []const view.Row, record_ids: []const f.Value, field: str, value: f.Value) -> []const Change
 fn same_undo_value(left: f.Value, right: f.Value) -> bool
+fn outcome_problem(chunk: []const f.Value, rows: []const IdOutcome, claimed: []bool) -> str
 ```
 
 Batch operations and edit history: a batch run in bounded chunks with a per-record outcome ledger a killed job resumes from, the bulk mutation planner (every target authorized up front, the whole operation refused if any is denied unless asked to skip, chunked, sync or async by size, one correlation marker), its runner with progress events and its per-reason report, and per-editor per-table undo/redo stacks of cell and range edits with acknowledged-only settlement, depth caps and scope-change clearing. Callbacks are function values over a caller-owned state pointer. Checked against appdor's own engine.
@@ -4072,6 +4081,7 @@ fn s2_neighbors(id: u64, out: []u64)
 fn s2_token(id: u64, out: []u8) -> usize
 fn haversine_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64
 fn bearing_deg(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64
+fn s2_cell_checked(lat_deg: f64, lng_deg: f64, level: u32) -> (u64, err)
 ```
 
 Google S2 cell ids: `s2_cell`, `s2_cell_leaf`, `s2_level`, `s2_face`, `s2_parent`,
@@ -4279,6 +4289,7 @@ fn compose_basic(epsilons: []const f64) -> f64
 fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
 fn top_bit(x: u64) -> u64
 fn padme_ceil(length: u64) -> (u64, err)
+fn valid_response_probability(p: f64) -> bool
 ```
 
 Differential privacy: `laplace` and `laplace_vector`, `gaussian` with `gaussian_sigma`
@@ -4396,6 +4407,7 @@ fn reservoir_weighted_sample[T: type](s: *const WeightedReservoir[T]) -> []T
 fn priority_sample(r: *Pcg64, weights: []const f64, chosen: []usize, adjusted: []f64) -> (f64, err)
 fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adjusted: []f64) -> (f64, err)
 fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T]
+fn alias_finite(value: f64) -> bool
 ```
 
 `bounded(..., 0)` returns zero; otherwise it is unbiased rejection sampling.
@@ -4473,6 +4485,7 @@ fn push_relabel(a: *mem.Arena, net: *Network) -> (i64, err)
 fn min_cut(a: *mem.Arena, net: *const Network, side: []u8) -> err
 fn edge_flow(net: *const Network, edge_index: usize) -> i64
 fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usize, flow_links: []const u32, rate: []f64) -> (usize, err)
+error InvalidFlow
 ```
 
 `build` turns a graph and a capacity function into a residual network in the
@@ -4529,6 +4542,7 @@ fn walk_chosen[E: type](g: *const graph.Graph[E], chosen: []u8, start: graph.Nod
 fn copy_nodes(a: *mem.Arena, from: []const graph.NodeId, count: usize) -> ([]const graph.NodeId, err)
 fn suurballe[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Pair, err)
 fn yen_k_shortest[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, k_paths: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Routes, err)
+fn finite_weight(value: f64) -> bool
 ```
 
 Distances are `f64` with `infinity()` for unreachable; `bellman_ford`,
@@ -4704,6 +4718,7 @@ fn eoq(demand: f64, order_cost: f64, holding_cost: f64) -> (f64, err)
 fn eoq_total(demand: f64, order_cost: f64, holding_cost: f64, quantity: f64) -> (f64, err)
 fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err)
 fn newsvendor_discrete(demands: []const f64, probs: []const f64, ratio: f64) -> (f64, err)
+fn finite(value: f64) -> bool
 ```
 
 `holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
@@ -4751,6 +4766,7 @@ fn saturate(g: *EGraph, rules: []const Rule, max_iterations: usize, matches: []u
 fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, best_node: []u32) -> (u32, err)
 fn extract_write(g: *EGraph, class: u32, best_node: []const u32, out_op: []u32, out_a: []u32, out_b: []u32) -> (usize, err)
 fn write_tree(g: *EGraph, class: u32, best_node: []const u32, out_op: []u32, out_a: []u32, out_b: []u32, count: *usize) -> (u32, err)
+fn add_cost(a: u32, b: u32) -> u32
 ```
 
 An egg-style e-graph over caller arrays: `add`/`add_leaf` through a hashcons, `merge`,
@@ -4849,6 +4865,7 @@ fn stoer_wagner(w: []f64, n: usize, side: []u8, scratch: []f64, marks: []usize) 
 fn find(parent: []u32, v: u32) -> u32
 fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8) -> (usize, err)
 fn karger_best[E: type](a: *mem.Arena, g: *const graph.Graph[E], runs: usize, r: *rand.Pcg64, best_side: []u8, side: []u8) -> (usize, err)
+fn karger_with_scratch[E: type](g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8, parent: []u32, order: []usize) -> (usize, err)
 ```
 
 `stoer_wagner` over a dense weight matrix answers the global minimum cut and one side;
@@ -4913,6 +4930,9 @@ fn lk_positions(work: []const usize, pos: []usize, n: usize)
 fn lk_reverse(work: []usize, n: usize, i: usize, j: usize)
 fn lk_chain(d: []const f64, n: usize, work: []usize, pos: []usize, t1: usize, first_t3: usize, depth_limit: usize, best_gain: f64, best: []usize) -> f64
 fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, depth: usize, breadth: usize) -> (f64, usize, err)
+fn has_product(len: usize, a: usize, b: usize) -> bool
+fn has_scaled(len: usize, count: usize, factor: usize, extra: usize) -> bool
+fn matrix_symmetric(d: []const f64, n: usize) -> bool
 ```
 
 Tours over a distance matrix: `tsp_nearest_neighbor`, `tsp_two_opt`, `tsp_or_opt`,
@@ -5018,6 +5038,7 @@ fn element(domains: []u8, k: usize, index: usize, result: usize, array: []const 
 fn table(domains: []u8, k: usize, vars: []const usize, tuples: []const usize, rows: usize) -> err
 fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const usize, demand: []const usize, capacity: usize, horizon: usize, profile: []usize) -> err
 fn global_cardinality(domains: []u8, k: usize, vars: []const usize, lo: []const usize, hi: []const usize) -> err
+fn augment_without(domains: []const u8, k: usize, vars: []const usize, x: usize, match_value: []usize, seen: []u8, fixed: usize) -> bool
 ```
 
 Domains as `n × k` bytes and binary constraints as the caller's `allowed(ctx, x, y, a, b)`
@@ -5401,6 +5422,7 @@ fn direction(d: usize, bit: u64) -> u64
 fn normal_polar(r: *rand.Pcg64) -> (f64, f64)
 fn importance_weights[Ctx: type](samples: []const f64, ctx: *Ctx, target_density: fn(*Ctx, f64) -> f64, proposal_density: fn(*Ctx, f64) -> f64, out: []f64) -> (f64, err)
 fn copula_gaussian(r: *rand.Pcg64, factor: []const f64, n: usize, out: []f64, scratch: []f64) -> err
+fn alias_finite(value: f64) -> bool
 ```
 
 Variates draw from a `*rand.Pcg64`. `binomial` inverts the CDF below a mean of 30
@@ -5503,6 +5525,7 @@ fn ks[Ctx: type](values: []f64, ctx: *Ctx, cdf: fn(*Ctx, f64) -> f64) -> (Result
 fn anderson_darling[Ctx: type](values: []f64, ctx: *Ctx, cdf: fn(*Ctx, f64) -> f64) -> (Result, err)
 fn royston_poly(c: []const f64, x: f64) -> f64
 fn shapiro_wilk(values: []f64, scratch: []f64) -> (Result, err)
+fn finite(x: f64) -> bool
 ```
 
 Every test answers a statistic and a two-sided p-value. The rank tests use the
@@ -5549,6 +5572,7 @@ fn mode(values: []const f64, scratch: []f64) -> (f64, usize, err)
 fn weighted_mean(values: []const f64, weights: []const f64) -> (f64, err)
 fn weighted_variance(values: []const f64, weights: []const f64, unbiased: bool) -> (f64, err)
 fn weighted_quantile(values: []const f64, weights: []const f64, p: f64, order: []usize) -> (f64, err)
+fn finite(value: f64) -> bool
 ```
 
 Elementary inferential completions beside `e.algo.stat.test`: `z_test`/`z_test_two`
@@ -6798,11 +6822,12 @@ fn was(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, fiel
 fn changed(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, field: str, options: json.Value) -> bool
 fn filter_by_history(a: *mem.Arena, records: []const json.Value, revisions: []const json.Value, predicate: json.Value) -> ([]const json.Value, err)
 fn field_history(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, fields: []const str) -> ([]const json.Value, err)
-fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool)
+fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool, err)
 fn parse_ms(s: str) -> (i64, bool)
 fn iso_ms(a: *mem.Arena, ms: i64) -> (str, err)
 fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, now_ms: i64, windows: json.Value, has_windows: bool) -> (json.Value, err)
 fn export_history(a: *mem.Arena, chain: []const json.Value, record_id: json.Value, has_record_id: bool) -> (json.Value, err)
+fn valid_window_days(days: f64) -> bool
 ```
 
 Tamper-evident record history (L037), after appdor's `src/history/tamper-evident.js` and `diffRecords`: a SHA-256 hash chain over an audit stream (`chain_append`, `verify_chain` naming the first broken link), the field-level diff that makes a revision (`diff_records`, `record_change`), the WAS and CHANGED temporal predicates and the history filter built on them (`was`, `changed`, `filter_by_history`, `field_history`), plan-tiered retention that rebuilds the retained suffix behind a `retention-truncation` marker, and a portable export. Values are JSON; the canonical text has keys in byte order and no whitespace. Checked against appdor's own module over 220 random operation scripts on both hosts (D2336).
@@ -7170,14 +7195,12 @@ fn hex_digit(n: u8) -> u8
 fn is_alnum(c: u8) -> bool
 fn encode_uri_component(a: *mem.Arena, s: str) -> str
 fn form_encode(a: *mem.Arena, s: str) -> str
-fn is_digits(s: str) -> bool
-fn small_number(s: str) -> i64
-fn private_v4(host: str) -> bool
 fn is_safe_url(a: *mem.Arena, url: str) -> (bool, str)
 fn auth_headers(a: *mem.Arena, o: *ir.Obj, auth: json.Value)
 type Param = struct { name: str, value: str }
 fn build_request(a: *mem.Arena, connection: json.Value, request: json.Value) -> json.Value
 fn build_push_request(a: *mem.Arena, connection: json.Value, entity: str, entry: json.Value, mapping: json.Value) -> json.Value
+fn is_ipv4_literal(s: str) -> bool
 ```
 
 The push half of two-way sync (L037), after appdor's `src/sync/writeback.js` with `src/connectors/writeback-outbox.js`, `sync-engine.js` and `index.js`: the outbox entry and its lifecycle (`create_entry`, `record_delivery`, `plan_reversion`, `mark_reverted`, `summarize_outbox`), the host's judgements (`two_way_fields`, `writeback_mapping`, `entry_from_row`, `entry_patch`, `settle_delivery`, `revert_patch`, `finish_reversion`, `echo_set`, `suppress_echoes`, `outbox_line`), the engine (`map_remote_to_local`, `map_local_to_remote`, `plan_two_way_sync`) and the SSRF-checked `build_request` and `build_push_request`. The clock and the entry id are arguments; words come back through the host's translator.
@@ -7923,6 +7946,7 @@ type BoostState = struct { recents: *Recents, user: str }
 
 fn recents_boost(state: *void, d: IndexDoc) -> f64
 fn purge_for_user(r: *Recents, user: str, visible: []const str)
+fn grow_favorites(r: *Recents, slot: usize) -> bool
 ```
 
 Full-text search over documents and records after appdor's search engine: AND-term scoring with title, prefix and body weights, the index-time field allowlist, find-in-table snippets and the client/server plan, an incremental document index with realm boundaries that fail closed and permission trimming before truncation, an outbox consumer with an idempotent cursor, dead letters and wedge detection, and recents and favorites boosts.
@@ -7947,6 +7971,7 @@ fn cycle_brent[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> 
 fn ternary_min_i64[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64
 fn ternary_min_f64[Ctx: type](low: f64, high: f64, iterations: usize, ctx: *Ctx, f: fn(*Ctx, f64) -> f64) -> f64
 fn ternary[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64
+fn i64_distance(upper: i64, lower: i64) -> u64
 ```
 
 Sorted-slice entry points order by `T.cmp` and answer an index; the `_by` form takes
@@ -8729,14 +8754,19 @@ fn parse_or(p: *Parser, depth: u32) -> (u32, bool)
 fn meta_value(p: *Parser) -> bool
 fn parse_rule(p: *Parser) -> err
 fn compile(a: *mem.Arena, source: str) -> (Set, err)
-fn tokens_at(s: *const Set, t: usize, end: usize, data: []const u8, pos: usize) -> bool
+fn tokens_at(s: *const Set, t: usize, end: usize, data: []const u8, pos: usize, work: *MatchWork) -> (bool, err)
 fn literal_at(s: *const Set, pat: Pattern, data: []const u8, pos: usize, wide: bool) -> bool
-fn pattern_at(s: *const Set, pi: usize, data: []const u8, pos: usize) -> bool
-fn count_matches(s: *const Set, pi: usize, data: []const u8) -> u32
-fn nth_match(s: *const Set, pi: usize, data: []const u8, k: usize) -> (usize, bool)
+fn pattern_at(s: *const Set, pi: usize, data: []const u8, pos: usize, work: *MatchWork) -> (bool, err)
+fn count_matches(s: *const Set, pi: usize, data: []const u8, work: *MatchWork) -> (u32, err)
+fn nth_match(s: *const Set, pi: usize, data: []const u8, k: usize) -> (usize, bool, err)
 fn compare(op: u8, x: u64, y: u64) -> bool
-fn eval(s: *const Set, node: u32, data: []const u8, counts: []const u32) -> bool
+fn eval(s: *const Set, node: u32, data: []const u8, counts: []const u32, work: *MatchWork) -> (bool, err)
 fn scan(s: *const Set, data: []const u8, counts: []u32, matched: []bool) -> err
+const MAX_MATCH_WORK: usize = 4194304usize
+type MatchWork = struct { remaining: usize }
+error TooComplex
+fn hex_jump_work_is_bounded(a: *mem.Arena) -> err
+fn take_match_work(work: *MatchWork) -> bool
 ```
 
 YARA-lite signature scanning: `compile` parses rule text (`meta:`, `strings:`, `condition:`) into arena tables and `scan` counts, per string, the offsets where it matches and evaluates every rule. Strings are quoted text (`ascii`, `wide`, `nocase`, `fullword`, `\xHH` escapes) or hex (`??`, nibble wildcards, `[n]`/`[n-m]` jumps); conditions have `and`/`or`/`not`, `$a`, `$a at N`, `#a OP N`, `filesize OP N`, and `any|all|none|N of them|($a, $b*)`. Overlapping occurrences count, ascii and wide hits at one offset count once; jumps backtrack, so cost per offset is bounded by the product of the jump widths. Capacities: 64 rules, 256 strings, 4096 tokens, 1024 condition nodes (`TooMany`). Not here: regexes, modules, imports, ranges beyond `at`, alternatives, tags, `for` loops, xor/base64.
@@ -8790,6 +8820,10 @@ fn box_rounded(row: usize, part: usize) -> str
 fn box_heavyhead(row: usize, part: usize) -> str
 fn box_part(style: BoxStyle, row: usize, part: usize) -> str
 fn bar_char(ascii: bool, k: u64) -> str
+error BadElapsed
+fn finite(value: f64) -> bool
+fn interval_limit() -> f64
+fn valid_interval(seconds: f64) -> bool
 ```
 
 Terminal output as pure string builders: `render_meter` is tqdm's default progress line (`prefix: PPP%|bar| n/total [elapsed<left, rate]`, or `n unit [elapsed, rate]` with no total or past it; an ASCII or block-element bar; `ncols` trims the line, 0 means a ten-column bar), taking the elapsed seconds so the caller owns the clock. `render_markup` turns rich-style tags (`[bold red]`, `[on blue]`, `[/]`, `[/name]`, `\[` literal; attributes bold dim italic underline blink reverse conceal strike and their one-letter forms; the 16 ANSI colours) into one SGR run per text segment, or strips them with `color` false; anything else is `BadMarkup`. `render_table` draws a header, a rule and row-major cells in `Ascii`, `Square`, `Rounded` or `HeavyHead` boxes with per-column alignment, widths counted in scalars. Windows VT-mode enabling, interactive prompts, wide-character widths, 256-colour and truecolour, word wrapping and spinners are not here.
@@ -8943,6 +8977,8 @@ fn words(text: str, bounds: []usize) -> (usize, err)
 fn greedy(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, err)
 fn optimal(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, err)
 fn justify(line: str, width: usize, out: []u8, scratch: []usize) -> (str, err)
+fn capped_cost_add(left: usize, right: usize) -> usize
+fn capped_cost_mul(left: usize, right: usize) -> usize
 ```
 
 `greedy` and `optimal` (Knuth's minimum-raggedness dynamic programme, the last line
@@ -9281,6 +9317,7 @@ type Options = struct { case_sensitive: bool, numeric: bool }
 fn codepoint_cmp(a: str, b: str) -> i32
 fn natural_cmp(a: str, b: str, options: Options) -> i32
 fn compare(a: str, b: str, options: Options) -> i32
+fn byte_cmp(a: str, b: str) -> i32
 ```
 
 Locale-aware collation is exposed by `e.text.locale`; this module remains the
@@ -11545,6 +11582,8 @@ fn parse_number(text: str) -> (u64, bool)
 fn parse_uri(uri: str) -> (Provisioning, err)
 fn percent_decode(text: str, out: []u8) -> (usize, err)
 fn hex_nibble(c: u8) -> u8
+const COUNTER_MAX: u64 = 18446744073709551615u64
+const MAX_VERIFY_WINDOW: u32 = 4096u32
 ```
 
 `parse_uri` reads an `otpauth://totp|hotp/Label?secret=...&issuer=...&algorithm=SHA1|SHA256|SHA512&digits=6-9&period=...&counter=...` URI (C140): views into the URI, `percent_decode` for the label and issuer; a missing secret, a bad algorithm, digit count or period, or a hotp without a counter is `Invalid`.
@@ -11627,6 +11666,9 @@ fn argon2_encode(out: []u8, kind: Argon2Kind, t: u32, m_kib: u32, p: u32, salt: 
 fn argon2_verify(password: []const u8, phc: []const u8, memory: []u8) -> (bool, err)
 fn scrypt_encode(out: []u8, n: usize, r: usize, p: usize, salt: []const u8, tag: []const u8) -> (usize, err)
 fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool, err)
+fn argon2_memory_checked(m_kib: u32) -> (usize, bool)
+fn scratch_maximum() -> usize
+fn scrypt_scratch_checked(n: usize, r: usize, p: usize) -> (usize, bool)
 ```
 
 Password hashing (L117, D2520): `argon2` runs Argon2d, Argon2i or Argon2id (`Argon2Kind`) at version 0x13 over the caller's `memory` of `m_kib` kibibytes, and `argon2_run` also takes a version (16 or 19) and the optional secret and associated data. `argon2_encode`/`scrypt_encode` write the PHC strings `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag` (unpadded standard Base64); `argon2_verify`/`scrypt_verify` parse one (a missing `v=` is version 16, a non-canonical Base64 tail, a padding character, a leading zero or an extra segment is `Invalid`), recompute the tag and compare it with `e.crypto.hash.equal_constant_time`. A hostile string is bounded: `t` over one million, an scrypt exponent over 32, `r` or `p` over 1024, and a salt or tag over 64 bytes answer `TooLarge`, and a memory demand beyond the caller's buffer answers `TooSmall` before any work. bcrypt's `bcrypt_verify` accepts `$2a$`, `$2b$` and `$2y$`; bcrypt, scrypt and Argon2 cost is the caller's to cap before accepting a stored string.
@@ -12800,8 +12842,8 @@ type Seeker = struct { ctx: *void, seek: fn(*void, i64, os.SeekWhence) -> (u64, 
 type LimitedReader = struct { source: Reader, remaining: u64 }
 type CountingWriter = struct { sink: Writer, count: u64 }
 type TeeWriter = struct { left: Writer, right: Writer }
-type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize }
-type BufferState = struct { source: Reader, sink: Writer, buffer: []u8, off: usize, len: usize }
+type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize, backing: *MemoryWriter }
+type BufferState = struct { source: Reader, sink: Writer, buffer: []u8, off: usize, len: usize, pending_error: err }
 type DetailBufferState = struct { source: DetailReader, sink: DetailWriter, buffer: []u8, off: usize, len: usize, pending_error: err, pending_detail: os.ErrorDetail }
 error End
 error TooSmall
@@ -12877,6 +12919,7 @@ fn forwarding_flush(ctx: *void) -> err
 fn no_flush(ctx: *void) -> err
 fn no_flush_detail(ctx: *void, detail: *os.ErrorDetail) -> err
 
+fn tee_flush(ctx: *void) -> err
 ```
 
 `BufferedReader` and `BufferedWriter` hold their state behind a `*void` so that the
@@ -13033,11 +13076,12 @@ error Empty
 error Invalid
 
 fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err)
-fn bytes(m: Mapping) -> []u8
+fn bytes(m: Mapping) -> []const u8
 fn flush(m: Mapping) -> err
 fn close(m: own Mapping) -> err
 fn map(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err)
 fn unmap(m: own Mapping) -> err
+fn bytes_mut(m: Mapping) -> ([]u8, err)
 ```
 
 Offset and length are byte values; the implementation performs page alignment
@@ -13159,6 +13203,8 @@ fn host_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
 fn host_remove(ctx: *void, a: *mem.Arena, path: str) -> err
 fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
 fn host_vfs(h: *Host) -> Vfs
+fn host_drive_root(root: str, n: usize) -> bool
+fn mark_prepare(o: *Overlay, path: str) -> ([]Mark, str, err)
 ```
 
 Virtual filesystems (L119) behind one interface in the shape of e.fs. `Vfs` is a context and six operations
@@ -13283,10 +13329,9 @@ The host half of `e.proc.sys`, composed of per-target variants only (`host.windo
 
 ```neper
 type Pool[Ctx: type] = struct { state: *void }
-type State[Ctx: type] = struct { q: queue.Queue[u32], ctx: *Ctx, task: fn(*Ctx, u32), pending: Atomic[u32], lock: sync.Mutex, idle: sync.Condition, threads: []thread.Thread, started: usize, deps: []const u32, dep_starts: []const usize, indegree: []Atomic[u32], dag_nodes: usize }
+type State[Ctx: type] = struct { q: queue.Queue[Work], ctx: *Ctx, task: fn(*Ctx, u32), pending: Atomic[u32], lock: sync.Mutex, idle: sync.Condition, threads: []thread.Thread, started: usize, dag_lock: sync.Mutex, deps: []const u32, dep_starts: []const usize, indegree: []Atomic[u32], dag_failed: Atomic[u32] }
 type Fork[Ctx: type] = struct { ctx: *Ctx, leaf: fn(*Ctx, usize, usize), lo: usize, hi: usize, grain: usize }
-type Deque = struct { items: []u32, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
-type Steal[Ctx: type] = struct { ctx: *Ctx, task: fn(*Ctx, u32), deques: []Deque, remaining: Atomic[u32], counts: []u32 }
+type Steal[Ctx: type] = struct { ctx: *Ctx, task: fn(*Ctx, u32), deques: []deque.Deque[u32], remaining: Atomic[u32], counts: []u32 }
 type Thief[Ctx: type] = struct { pool: *Steal[Ctx], index: usize }
 error Invalid
 error Full
@@ -13296,7 +13341,7 @@ fn state_of[Ctx: type](p: *Pool[Ctx]) -> *State[Ctx]
 fn worker_main[Ctx: type](s: *State[Ctx])
 fn finish_one[Ctx: type](s: *State[Ctx])
 fn release_dependents[Ctx: type](s: *State[Ctx], id: u32)
-fn submit_state[Ctx: type](s: *State[Ctx], id: u32) -> err
+fn submit_state[Ctx: type](s: *State[Ctx], id: u32, dag: bool) -> err
 fn wait_idle[Ctx: type](s: *State[Ctx])
 fn pool[Ctx: type](a: *mem.Arena, workers: usize, queue_capacity: usize, ctx: *Ctx, task: fn(*Ctx, u32)) -> (Pool[Ctx], err)
 fn submit[Ctx: type](p: *Pool[Ctx], id: u32) -> err
@@ -13305,9 +13350,6 @@ fn run[Ctx: type](p: *Pool[Ctx], ids: []const u32) -> err
 fn shutdown[Ctx: type](p: *Pool[Ctx]) -> err
 fn fork_task[Ctx: type](f: *Fork[Ctx], id: u32)
 fn fork_join[Ctx: type](a: *mem.Arena, workers: usize, ctx: *Ctx, lo: usize, hi: usize, grain: usize, leaf: fn(*Ctx, usize, usize)) -> err
-fn deque_push(d: *Deque, v: u32)
-fn deque_take(d: *Deque) -> (u32, bool)
-fn deque_steal(d: *Deque) -> (u32, bool)
 fn steal_run[Ctx: type](s: *Steal[Ctx], index: usize, id: u32)
 fn steal_main[Ctx: type](w: *Thief[Ctx])
 fn work_stealing[Ctx: type](a: *mem.Arena, workers: usize, ctx: *Ctx, task: fn(*Ctx, u32), ids: []const u32, counts: []u32) -> err
@@ -13316,6 +13358,7 @@ fn later(deadlines: []const u64, x: u32, y: u32) -> bool
 fn sift(deadlines: []const u64, out: []u32, root: usize, end: usize)
 fn edf_order(deadlines: []const u64, out: []u32) -> err
 fn edf[Ctx: type](p: *Pool[Ctx], deadlines: []const u64, ids: []const u32, order: []u32) -> err
+type Work = struct { id: u32, dag: bool }
 ```
 
 Task ids over one context type: `pool`, `submit`, `try_submit`, `run` (submit all and
@@ -13359,6 +13402,7 @@ fn suspend[Ctx: type](s: *Scheduler[Ctx]) -> err
 fn resume[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err
 fn run[Ctx: type](s: *Scheduler[Ctx]) -> err
 fn join_fiber[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err
+fn join_done[Ctx: type](s: *Scheduler[Ctx]) -> err
 ```
 
 ### `e.sync`
@@ -13497,7 +13541,7 @@ owner's `push` and `pop`, any thread's `steal` (`Stolen`, `Empty` or `Retry`), `
 ### `e.concurrent.stack`
 
 ```neper
-type Stack = struct { head: Atomic[u64], free: Atomic[u64], count: Atomic[u64], next: []u32, value: []u64 }
+type Stack = struct { head: Atomic[u64], free: Atomic[u64], count: Atomic[u64], links_lock: sync.Mutex, next: []u32, value: []u64 }
 error Invalid
 error Full
 const NIL: u32 = 4294967295u32
@@ -13693,8 +13737,8 @@ error Invalid
 const NANOS_PER_SECOND: i64 = 1000000000i64
 const NANOS_PER_DAY: i64 = 86400000000000i64
 const NANOS_PER_MINUTE: i64 = 60000000000i64
-const MAX_CIVIL_DAY: i64 = 106750i64
-const MIN_CIVIL_DAY: i64 = -106750i64
+const MAX_CIVIL_DAY: i64 = 106751i64
+const MIN_CIVIL_DAY: i64 = -106752i64
 const ISO8601_LENGTH: usize = 30usize
 
 fn now() -> (Timestamp, err)
@@ -14480,6 +14524,8 @@ fn render_comparison(b: *str.Builder, name: str, c: Comparison) -> err
 fn time_batch[Ctx: type](ctx: *Ctx, body: fn(*Ctx), iters: u64) -> (f64, err)
 fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err)
 fn run[Ctx: type](name: str, cfg: Config, ctx: *Ctx, body: fn(*Ctx), samples: []f64) -> (Report, err)
+error Invalid
+fn welch_df(base: Stats, current: Stats) -> usize
 ```
 
 A criterion-style benchmark harness over `e.time`. `run` warms a body up for `warmup_ns` while
@@ -14584,6 +14630,7 @@ fn name_of(m: *const Mock, method: u32) -> str
 fn put_difference(b: *str.Builder, e: *const Expectation, c: *const Call)
 fn verify(m: *const Mock, out: []u8) -> (str, err)
 fn assert_verified(m: *const Mock, buf: []u8) -> err
+error TooManyArgs
 ```
 
 Mocks, stubs and spies as a table (no runtime reflection): a call is a method number plus up to four integer arguments checked by `e.test.match` matchers; `expect`, `with_arg`, `returns`/`returns_list`, `times`, `in_order` script it, `allow` is a stub, `call` is the double's method body, and `verify`/`assert_verified` produce the failure diagnostics (unexpected calls with the first differing argument, out-of-order calls, missing calls).
@@ -14689,6 +14736,7 @@ fn put_layer(b: *str.Builder, layer: u8)
 fn put_violation(b: *str.Builder, g: *const Graph, rules: []const Rule, v: Violation)
 fn describe(g: *const Graph, rules: []const Rule, vs: []const Violation, out: []u8) -> str
 fn assert_holds(g: *Graph, rules: []const Rule, scratch: []Violation, buf: []u8) -> err
+error Duplicate
 ```
 
 Architecture rules over a module dependency graph, ArchUnit-style: build a `Graph` by hand or with `uses` (the `use` lines of a source), state `Layering`, `Forbid`, `OnlyDepend`, `NoCycles`, `LayerRange` and `Naming` rules as data, `check` lists every violation and `assert_holds` fails the running test with one line per violation. Prefix matching is by name component.
@@ -14710,7 +14758,7 @@ fn emit(o: *Out, text: str) -> err
 fn source_name(s: str, at: usize) -> (str, usize, err)
 fn builtin(c: u8) -> str
 fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err)
-fn parse_type(s: str, at: usize, o: *Out) -> (usize, err)
+fn parse_type(s: str, at: usize, o: *Out, depth: usize) -> (usize, err)
 fn demangle(symbol: str, dst: []u8) -> (str, err)
 ```
 
@@ -14890,7 +14938,6 @@ fn memory_delete(ctx: *void, a: *mem.Arena, key: str) -> err
 fn memory_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
 fn fs_store(f: *FsStore) -> Store
 fn fs_error(e: err) -> err
-fn fs_path(a: *mem.Arena, f: *FsStore, key: str) -> (str, err)
 fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
 fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
 fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
@@ -14898,6 +14945,13 @@ fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err
 fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
 fn bytes_equal(x: []const u8, y: []const u8) -> bool
 fn conformance(s: *Store, a: *mem.Arena) -> u32
+fn ascii_equal(left: str, right: str) -> bool
+fn ascii_lower(byte: u8) -> u8
+fn fs_key_conflict(a: *mem.Arena, rooted: *const fs.Root, key: str) -> err
+fn fs_temp_directory(a: *mem.Arena, root: str, key: str) -> (str, err)
+fn key_is_directory_of(directory: str, key: str) -> bool
+fn store_path_style() -> path.Style
+fn windows_device_name(segment: str) -> bool
 ```
 
 One put/get/stat/delete/list surface over places that hold named blobs (opendal and fsspec at the portable layer). A `Store` is a context pointer plus five function pointers, so a backend is whatever fills them in; `memory_store` (a sorted table copied into the arena, at most `capacity` keys, `TooLarge` past it) and `fs_store` (a root directory; `/`-separated keys become nested files and parent directories are made) ship here, `e.store.http` is the third. A key has no empty, `.` or `..` segment, no leading or trailing `/`, no backslash and no NUL (`Invalid`), so it cannot leave its store; `list` is a byte prefix over keys in byte order (`TooLarge` when `out` is full); reading an absent key is `NotFound` and deleting one is `ok`. `conformance` is the one script every backend runs: overwrite, binary and empty values, nested and non-ASCII keys, read bounds, ordering, prefix listing, absent keys, idempotent delete, escaping keys, a 70000-byte value; it answers 0 or the first failing step. A filesystem backend cannot hold a key and a key beneath it at once (`a` and `a/b`); object stores can. Not here: streaming reads and writes, ranges, metadata beyond size, conditional writes, multipart, and the virtual-filesystem overlay and union mounts of L119.
@@ -14925,6 +14979,7 @@ fn parse_decimal(s: str) -> (u64, bool)
 fn http_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
 fn http_delete(ctx: *void, a: *mem.Arena, key: str) -> err
 fn http_list(ctx: *void, a: *mem.Arena, prefix: str, out: []store.Entry) -> (usize, err)
+fn http_key_conflict(h: *HttpStore, a: *mem.Arena, key: str) -> err
 ```
 
 `e.store` over HTTP. An `HttpStore` speaks a small REST object protocol under a base path: `PUT base/key` stores, `GET` reads (404 is `NotFound`), `HEAD` answers the size in Content-Length, `DELETE` removes (404 is fine), and `GET base/?prefix=P` lists `key<TAB>size` lines in byte order. Keys are percent-encoded per byte (uppercase hex; `A-Za-z0-9-._~` and `/` kept), checked against `urllib.parse.quote`. The `Transport` is a function pointer so a TLS client, a proxy or a test server can sit behind it; `net_transport` is plain TCP over `e.net.http.request`. One request per call, no connection reuse, no signing: an S3 or GCS client is a cloud client and stays out by the cloud ruling.
@@ -15012,6 +15067,7 @@ fn reload(a: *mem.Arena, c: *Config, path: str, format: Format) -> (usize, err)
 fn split_path(path: str) -> (str, str)
 fn names_file(event_path: str, base: str) -> bool
 fn watch_poll(a: *mem.Arena, w: watch.Watch, c: *Config, dir: str, base: str, path: str, format: Format) -> (usize, usize, err)
+fn names_equal(event_path: str, base: str) -> bool
 ```
 
 Layered configuration in the manner of viper. A key's value is the one from the highest layer that
@@ -15101,7 +15157,7 @@ error Invalid
 type Node = struct { path: str, command: *const cli.Command, parent: usize }
 
 fn valid_name(s: str) -> bool
-fn count_commands(c: *const cli.Command) -> usize
+fn count_commands(c: *const cli.Command, depth: usize) -> (usize, err)
 fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err)
 fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err)
 fn takes_value(o: *const cli.Option) -> bool
@@ -15416,7 +15472,7 @@ error TooSmall
 fn seq_mask(bits: u32) -> u64
 fn seq_wrap(seq: u64, bits: u32) -> u64
 fn seq_less(a: u64, b: u64, bits: u32) -> bool
-fn sender(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender
+fn sender(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> (Sender, err)
 fn sender_in_flight(s: *const Sender) -> usize
 fn sender_can_send(s: *const Sender) -> bool
 fn sender_send(s: *Sender, now: u64) -> (u64, err)
@@ -15439,8 +15495,9 @@ fn rtt_karn(e: *Rtt, sample_us: u64, was_retransmitted: bool) -> bool
 fn rtt_rto(e: *const Rtt) -> u64
 fn aimd_ack(cwnd: u64, ssthresh: u64, mss: u64) -> u64
 fn aimd_loss(cwnd: u64, mss: u64, timeout: bool) -> (u64, u64)
-fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender
+fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> (Sender, err)
 fn selective_repeat(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err)
+fn valid_bits(bits: u32) -> bool
 ```
 
 Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeouts`,
@@ -15633,6 +15690,10 @@ fn inbox_slots(i: *const Inbox) -> usize
 fn inbox_find(i: *const Inbox, id: u16) -> (usize, bool)
 fn inbox_pending(i: *const Inbox) -> usize
 fn inbox_receive(i: *Inbox, src: []const u8, dst: []u8) -> (bool, u16, usize, err)
+fn binary_data(dst: []u8, data: []const u8) -> (usize, err)
+fn put_binary(dst: []u8, at: *usize, data: []const u8) -> err
+fn utf8_valid(s: []const u8) -> bool
+fn valid_topic_name(topic: str) -> bool
 ```
 
 MQTT 3.1.1 packets (`encode_connect`, `encode_publish`, `decode_publish`, the acks,
@@ -15940,11 +16001,12 @@ fn amplification_allowance(p: *const Path) -> u64
 fn can_send(p: *const Path, n: u64) -> bool
 fn connection(paths: []Path, cids: CidSet, peer_cids: CidSet, local: Address, remote: Address, dcid_index: usize) -> (Connection, err)
 fn path_received(c: *Connection, index: usize, n: u64)
-fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, out: []u8) -> (usize, err)
+fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, received: u64, out: []u8) -> (usize, err)
 fn on_path_response(c: *Connection, data: [8]u8, now: u64) -> (bool, err)
 fn retire_old(c: *Connection, out: []u8) -> (usize, err)
 fn on_path_challenge(c: *Connection, data: [8]u8, index: usize, out: []u8) -> (usize, err)
 fn path_timeout(c: *Connection, now: u64, pto: u64) -> bool
+error AmplificationLimited
 ```
 
 RFC 9000 headers (`header_decode`, long and short encoders), the migration frames
@@ -16155,7 +16217,7 @@ fn registrable_domain_cors(a: *mem.Arena, host: str) -> str
 fn corp_block_reason(a: *mem.Arena, document_origin: str, has_document: bool, resource_url: str, corp_header: str, has_corp: bool, embedder_requires_corp: bool) -> Reason
 fn no_cors_response_block_reason(a: *mem.Arena, document_origin: str, has_document: bool, resource_url: str, response: Headers, embedder_requires_corp: bool) -> Reason
 
-type Cookie = struct { name: str, value: str, domain: str, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
+type Cookie = struct { name: str, value: str, domain: str, host_only: bool, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
 type CookieJar = struct { cookies: []Cookie, count: usize, block_third_party: bool }
 
 fn new_cookie_jar(a: *mem.Arena, block_third_party: bool) -> CookieJar
@@ -16178,6 +16240,11 @@ type CookieHeader = struct { present: bool, value: str }
 fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool, partition_key: str, has_partition_key: bool, now_ms: i64) -> CookieHeader
 fn jar_clear(j: *CookieJar)
 fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str)
+fn cookie_domain_matches(a: *mem.Arena, host: str, c: Cookie) -> bool
+fn cookie_path_matches(request: str, cookie: str) -> bool
+fn cors_safelisted_value(value: str) -> bool
+fn default_cookie_path(request: str) -> str
+fn is_cors_unsafe_request_header_byte(c: u8) -> bool
 ```
 
 HTTP policy helpers (L046), after Vaper's pure `net/` policy files: RFC 9111 caching (`http_is_cacheable`, `http_freshness`, `current_age`, `freshness_lifetime`, `heuristic_lifetime`, `http_can_serve_stale_on_error`, `conditional_headers`, with `HttpDate.parse`'s three formats), the RFC 6265bis cookie jar (`CookieJar`: Secure, SameSite, `__Host-`/`__Secure-` prefixes, CHIPS partitions, third-party blocking, per-domain and global caps, `Set-Cookie` splitting that spares `Expires` dates), CORS and cross-origin policies (simple requests, preflight and response checks, the preflight cache with `Access-Control-Max-Age`, CORP, COEP, COOP), Content-Security-Policy source lists, the IP-literal private-network classifier and the Adblock Plus filter-list subset. Time is a parameter in milliseconds. Checked against Vaper's own Dart over 771 cases on both hosts (D2351).
@@ -16556,7 +16623,7 @@ const DEFAULT_MAX_FRAME: usize = 16384usize
 const DEFAULT_WINDOW: u32 = 65535u32
 type Frame = struct { kind: u8, flags: u8, stream: u32, payload: []const u8 }
 type Setting = struct { id: u16, value: u32 }
-type Header = struct { name: str, value: str }
+type Header = struct { name: str, value: str, staged: u8 }
 type Table = struct { data: []u8, lens: []u32, count: usize, used: usize, size: usize, max_size: usize, limit: usize, pending: bool, pending_size: usize, smallest: usize }
 
 fn preface() -> str
@@ -16594,6 +16661,25 @@ fn encode_block(t: *Table, dst: []u8, headers: []const Header, sensitive: []cons
 fn static_name(index: usize) -> str
 fn static_value(index: usize) -> str
 fn huffman_table() -> str
+type EncodeStage = struct { base_count: usize, count: usize, used: usize, size: usize, max_size: usize }
+type StagedTable = struct { base_count: usize, count: usize, used: usize, size: usize, max_size: usize }
+fn commit_block(t: *Table, block: []const u8, headers: []const Header) -> err
+fn encode_capacity(t: *const Table, dst: []u8, headers: []const Header, sensitive: []const str, huffman: bool) -> (usize, err)
+fn encode_stage_evict_oldest(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8)
+fn encode_stage_evict_to(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, limit: usize)
+fn encode_stage_find_field(t: *const Table, s: *const EncodeStage, headers: []const Header, marks: []const u8, name: str, value: str) -> (usize, usize)
+fn encode_stage_insert(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, field: usize)
+fn encode_stage_lookup(t: *const Table, s: *const EncodeStage, headers: []const Header, marks: []const u8, index: usize) -> (str, str, err)
+fn encode_stage_resize(t: *const Table, s: *EncodeStage, headers: []const Header, marks: []u8, size: usize) -> err
+fn encoded_int_len(value: u64, prefix: u8) -> usize
+fn encoded_string_len(s: str, huffman: bool) -> usize
+fn skip_string(b: []const u8, at: *usize) -> err
+fn staged_clear(s: *StagedTable, out: []Header)
+fn staged_evict_oldest(t: *const Table, s: *StagedTable, out: []Header)
+fn staged_evict_to(t: *const Table, s: *StagedTable, out: []Header, limit: usize)
+fn staged_insert(t: *const Table, s: *StagedTable, out: []Header, field: usize)
+fn staged_lookup(t: *const Table, s: *const StagedTable, out: []const Header, index: usize) -> (str, str, err)
+fn staged_resize(t: *const Table, s: *StagedTable, out: []Header, size: usize) -> err
 ```
 
 HTTP/2 framing and HPACK (L101's transport half), over caller buffers with no transport. `frame_decode` reads one frame (the 9-byte header, `Incomplete` at a partial tail, `FrameSize` past the peer's maximum) and `frame_encode` writes one; `unpad`, `headers_fragment`, `settings_decode`/`settings_encode` and the connection `preface` cover the payloads a client needs. The header codec is RFC 7541 whole: static and dynamic tables (the dynamic one in caller storage, newest first), prefix integers, string literals with Huffman coding (canonical decode), size updates (`table_announce` writes the smallest size seen then the current one), never-indexed fields (`encode_block`'s `sensitive` names), and the RFC's refusals (index 0 or out of range, an update past the limit or after the first field, bad Huffman padding or an EOS symbol). `decode_block` copies every name and value into the caller's scratch so the headers stay valid when the table changes. Stream state and flow control are the caller's (`e.net.grpc` has a client connection). Checked against hpack and hyperframe: library-written blocks (Huffman on and off, size changes, never-indexed fields), every frame type, integers at every prefix, the 257 Huffman codes (via 24 strings), the invalid-block refusals, and Neper's own encoder output read back by `hpack.Decoder` before it became a golden (D2646).
@@ -16795,6 +16881,15 @@ fn kind_name(kind: u8) -> str
 fn rule_matches(rule: str, m: *const Message) -> bool
 fn parse_address(text: str, out: []u8) -> (Address, err)
 fn hex_value(c: u8) -> u8
+fn add_match(b: *Bus, rule: str, body: []Value) -> (Message, err)
+fn address_token_byte(c: u8) -> bool
+fn address_value_byte(c: u8) -> bool
+fn hello_reply(b: *Bus, reply: *const Message) -> err
+fn request_name(b: *Bus, name: str, request_flags: u32, body: []Value) -> (Message, err)
+fn rule_value_equal(rule: str, key: str, want: str) -> (bool, bool)
+fn rule_value_path_under(rule: str, key: str, path: str) -> (bool, bool)
+fn serial_pending(b: *const Bus, serial: u32) -> bool
+fn skip_value_depth(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize, depth: u32) -> (bool, err)
 ```
 
 D-Bus (L126): the wire format, the authentication exchange and the client bookkeeping over caller buffers, with no socket. `put_value`/`get_value` marshal and unmarshal typed values by signature in either byte order with the specification's alignment, array length limit (64 MiB), nesting limits and strict checks (booleans 0 or 1, no interior NUL, NUL-terminated strings and signatures, zero padding); `Value` carries array element signatures and variant signatures so empty arrays and nested variants survive a round trip. `message_encode`/`message_decode` handle whole messages (method call, return, error, signal) in either byte order with the header fields in libdbus's order, required fields by kind, unknown fields skipped by their signature, `Truncated` until the message is whole. `auth_external` and `auth_anonymous` write the SASL first line, `auth_reply` answers `OK` with `BEGIN` and refuses `REJECTED`. `Bus` allocates serials and keeps the table of calls awaiting a reply (`call`, `hello`, `retire`); `rule_matches` tests a match rule (type, sender, interface, member, path, path_namespace, destination, argN) and `parse_address` reads a bus address (`unix:path=`, `abstract=`, `runtime=yes`, `tcp:host=,port=`, `%XX` escapes, first entry). Checked against dbus-next (its Marshaller, `Message._marshall` and Unmarshaller over 150 random typed bodies and 40 messages; big-endian twins from a reference marshaller asserted byte-equal to the library's on every little-endian vector), with the AUTH line from dbus-next's authenticator and match rules and addresses from the specification, 444 vectors on both hosts (D2648). Not done: the AF_UNIX socket and SCM_RIGHTS fd passing (`e.os` platform code; Linux was not run), the `org.freedesktop.DBus` convenience calls beyond Hello/RequestName/AddMatch, introspection XML, property and ObjectManager helpers, service export, and the notification, portal and tray backends this was queued to unlock.
@@ -16854,7 +16949,7 @@ Packet header codecs (L051): Ethernet II with 802.1Q/802.1ad tags, ARP (IPv4 ove
 error Truncated
 error Invalid
 
-type Reader = struct { data: []const u8, at: usize, big_endian: bool, nanos: bool, pcapng: bool, linktype: u32, snaplen: u32, if_count: usize, if_linktypes: [16]u32, if_resolution: [16]u32 }
+type Reader = struct { data: []const u8, at: usize, big_endian: bool, nanos: bool, pcapng: bool, linktype: u32, snaplen: u32, if_count: usize, if_linktypes: [16]u32, if_resolution: [16]u32, if_binary: [16]bool }
 type Record = struct { ts_sec: u64, ts_nsec: u32, caplen: u32, origlen: u32, linktype: u32, data: []const u8 }
 
 fn u16_at(b: []const u8, at: usize, big: bool) -> u32
@@ -17162,7 +17257,7 @@ or NUL is `Invalid` before it is written. No local store, no APOP.
 ### `e.net.imap`
 
 ```neper
-type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, greeting: str, last: str, authenticated: bool, caps: Capabilities, tag: u32, limit: usize, buf: []u8, at: usize, len: usize, line: []u8, cmd: []u8 }
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, poisoned: bool, greeting: str, last: str, authenticated: bool, caps: Capabilities, tag: u32, limit: usize, buf: []u8, at: usize, len: usize, line: []u8, cmd: []u8 }
 type Capabilities = struct { imap4rev1: bool, starttls: bool, login_disabled: bool, auth_plain: bool, sasl_ir: bool, uidplus: bool, idle: bool, move: bool, raw: str }
 type Reply = struct { text: str, untagged: []const str }
 type Mailbox = struct { exists: u32, recent: u32, uid_validity: u32, uid_next: u32, unseen: u32, flags: str, permanent_flags: str, read_only: bool }
@@ -17236,6 +17331,7 @@ fn expunge(s: *Session) -> (usize, err)
 fn noop(s: *Session) -> err
 fn close_mailbox(s: *Session) -> err
 fn logout(s: *Session) -> err
+const LITERAL_LIMIT: usize = 1073741824usize
 ```
 
 IMAP4rev1 client over any `io.Reader`/`io.Writer` pair. `connect`, `capability` and `starttls` negotiate;
@@ -17379,7 +17475,7 @@ type Result = struct { code: u32, matched_dn: str, message: str, referrals: []co
 type Attribute = struct { name: str, values: []const str }
 type Entry = struct { dn: str, attributes: []const Attribute }
 type Change = struct { operation: u8, attribute: str, values: []const str }
-type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, next_id: u32, last: Result, limit: usize, buf: []u8, at: usize, len: usize, msg: []u8, out: []u8, references: usize }
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, poisoned: bool, next_id: u32, last: Result, limit: usize, buf: []u8, at: usize, len: usize, msg: []u8, out: []u8, references: usize }
 type Writer = struct { buf: []u8, at: usize, failed: bool }
 type Cursor = struct { data: []const u8, at: usize }
 
@@ -17534,6 +17630,7 @@ fn store(c: *Cache, candidate: Record, flush: bool, ttl: u32, now: u64) -> err
 fn learn(c: *Cache, packet: []const u8, now: u64) -> (usize, err)
 fn text_of(a: *mem.Arena, wire: []const u8) -> (str, err)
 fn discover(c: *Cache, a: *mem.Arena, service: str, domain: str, now: u64) -> ([]const Found, err)
+const MAX_NAME: usize = 255usize
 ```
 
 Multicast DNS and DNS-SD over the packet codec of e.net.dns; the caller moves datagrams. `answer` is the
@@ -18096,6 +18193,7 @@ fn ack(db: *Db, name: str, seq: u64) -> err
 fn compact(db: *Db, a: *mem.Arena, lim: Limits) -> (Db, err)
 fn save(db: *Db, s: *store.Store, key: str) -> err
 fn open(a: *mem.Arena, s: *store.Store, key: str, lim: Limits) -> (Db, usize, err)
+fn length_fits_u32(length: u64) -> bool
 ```
 
 An embedded document and event store in one append-only file (L147), in the shape of LiteDB and Marten. The file is `NDS1` and CRC32-framed records (a document put, a document delete, an event, a mark); every operation appends its frame and applies that same frame to the in-memory tables, exactly as `restore` does, so a reopened database equals the one that wrote it. Documents are named collections of id to text. The journal is global-sequenced and per-stream-versioned; `append` takes the version the caller expects (`ANY_VERSION` for none) and a mismatch is `Concurrency` with nothing written. `project` folds events after the projection's persisted mark through its idempotent `apply`, `rebuild` clears the collection and folds again, `poll`/`ack` give a subscription a persisted position. `restore` replays sound frames and reports the bytes of a torn or damaged tail it dropped; `compact` rebuilds from live documents, every event and the marks; `save`/`open` use an `e.store` key. Lookups are linear; the store is single-threaded; clustering stays with `e.dist`.
@@ -20181,7 +20279,7 @@ fn schema_f64(s: *const json.Value) -> (f64, err)
 fn schema_usize(s: *const json.Value) -> (usize, err)
 fn code_points(s: str) -> usize
 fn resolve_ref(c: *Checker, reference: str) -> (*const json.Value, err)
-fn check_number(s: []const json.Member, v: f64) -> (bool, err)
+fn check_number(c: *Checker, s: []const json.Member, v: f64, source_number: json.Number) -> (bool, err)
 fn check_string(c: *Checker, s: []const json.Member, v: str) -> (bool, err)
 fn check_array(c: *Checker, s: []const json.Member, items: []const json.Value, n: usize, depth: usize) -> (bool, usize, err)
 fn check_object(c: *Checker, s: []const json.Member, members: []const json.Member, n: usize, depth: usize) -> (bool, usize, err)
@@ -20189,6 +20287,11 @@ fn subschemas(s: []const json.Member, name: str) -> ([]const json.Value, bool, e
 fn check(c: *Checker, schema: *const json.Value, v: *const json.Value, n: usize, depth: usize) -> (bool, usize, err)
 fn validate_value(a: *mem.Arena, root: *const json.Value, doc: *const json.Value, path: []u8) -> (bool, usize, err)
 fn validate(a: *mem.Arena, schema_json: str, doc_json: str, path: []u8) -> (bool, usize, err)
+const MAX_MULTIPLE_DIGITS: usize = 1024usize
+const MAX_MULTIPLE_POWER: usize = 1024usize
+fn exact_multiple(a: *mem.Arena, value: json.Number, divisor: json.Number) -> (bool, err)
+fn exact_number(a: *mem.Arena, source_number: json.Number) -> (bignum.Int, bignum.Int, err)
+fn ten_to(a: *mem.Arena, exponent: usize) -> (bignum.Int, err)
 ```
 
 `validate` and `validate_value` over parsed e.fmt.json trees: type, enum, const,
@@ -20219,7 +20322,7 @@ fn is_name_start(c: i32) -> bool
 fn is_name(c: i32) -> bool
 fn hex_value(c: i32) -> i32
 
-type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+type Scan = struct { a: *mem.Arena, keep: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token], failure: err }
 
 fn cp(s: *const Scan, at: usize) -> i32
 fn peek(s: *const Scan, offset: usize) -> i32
@@ -20267,6 +20370,7 @@ fn parse_declarations(a: *mem.Arena, tokens: []const Token) -> ([]const Declarat
 fn raw_text(source: str, tokens: []const Token) -> str
 fn decoded_text(a: *mem.Arena, source: str, tokens: []const Token) -> str
 fn tokenize_with(a: *mem.Arena, keep: *mem.Arena, input: str) -> ([]const Token, err)
+fn fail(s: *Scan, e: err)
 ```
 
 A CSS Syntax Level 3 tokenizer and rule grammar (L038), after Vaper's `css_tokenizer.dart` and `css_syntax.dart`: `tokenize` turns text into tokens with byte offsets and never fails (malformed text becomes `BadString`, `BadUrl` and `Delim` recovery tokens), `parse_rules` builds qualified rules, at-rules and simple blocks, `parse_declarations` reads a block's declarations with `!important`, and `raw_text` slices the source for a token range byte-faithfully. Unbalanced blocks end at the end of input, a bad declaration is skipped to the next `;` and a rule with no block is dropped. Checked against Vaper's own Dart code over 420 random inputs of well-formed and malformed CSS on both hosts (D2340).
@@ -20290,21 +20394,21 @@ fn add_spec(x: Specificity, y: Specificity) -> Specificity
 fn zero_spec() -> Specificity
 fn simple_specificity(s: Simple) -> Specificity
 fn specificity(sel: Selector) -> Specificity
-type Parser = struct { a: *mem.Arena, src: str }
+type Parser = struct { a: *mem.Arena, src: str, failure: *err }
 type SimpleResult = struct { good: bool, has_selector: bool, selector: Simple, has_pseudo: bool, pseudo: PseudoElement, next: usize }
 type Complex = struct { good: bool, selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
 fn new_simple(kind: SimpleKind, name: str) -> Simple
 fn rejected() -> SimpleResult
 fn found_simple(s: Simple, next: usize) -> SimpleResult
 fn found_pseudo(p: PseudoElement, next: usize) -> SimpleResult
-fn lower(a: *mem.Arena, s: str) -> str
+fn lower(p: *const Parser, s: str) -> str
 fn trim(toks: []const syntax.Token) -> []const syntax.Token
 fn skip_ws(toks: []const syntax.Token, from: usize) -> usize
 fn is_delim(t: syntax.Token, value: str) -> bool
 fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const []const syntax.Token
 fn rejected_complex() -> Complex
-fn push_simple(l: *list.List[Simple], s: Simple)
-fn new_simples(a: *mem.Arena) -> list.List[Simple]
+fn push_simple(p: *const Parser, l: *list.List[Simple], s: Simple)
+fn new_simples(p: *const Parser) -> list.List[Simple]
 fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex
 fn parse_simple(p: *const Parser, toks: []const syntax.Token, start: usize) -> SimpleResult
 fn parse_attribute(p: *const Parser, toks: []const syntax.Token, open: usize) -> SimpleResult
@@ -20319,6 +20423,11 @@ fn trim_text(s: str) -> str
 fn parse_nth(p: *const Parser, kind: SimpleKind, arg: []const syntax.Token) -> Simple
 fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> (Simple, bool)
 fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err)
+fn parse_selector_list(a: *mem.Arena, source: str, tokens: []const syntax.Token, forgiving: bool) -> ([]const RuleSelector, err)
+fn parse_selector_list_forgiving(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err)
+fn parser_error(p: *const Parser) -> err
+fn parser_fail(p: *const Parser, e: err)
+fn split_top_level_comma_with(p: *const Parser, tokens: []const syntax.Token) -> []const []const syntax.Token
 ```
 
 ### `e.ui.interpolate`
@@ -20627,6 +20736,7 @@ const F_MODAL: u32 = 128u32
 const F_POPOVER_OPEN: u32 = 8u32
 fn looks_custom(name: str) -> bool
 fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool
+fn is_empty(m: *const Matcher, el: html.NodeId) -> bool
 ```
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
@@ -20648,12 +20758,12 @@ type Bucket = enum u8 { Universal, Id, Klass, Tag }
 type Index = struct { rules: []const Rule, ids: map.Map[str, usize], classes: map.Map[str, usize], tags: map.Map[str, usize], head: []usize, tail: []usize, next: []usize, slots: usize, universal_head: usize, universal_tail: usize }
 fn beats(x: Declared, y: Declared) -> bool
 fn find_property(best: *const list.List[Declared], property: str) -> i64
-fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner
+fn rank(a: *mem.Arena, declared: []const Declared) -> ([]const Winner, err)
 fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: str, second: str)
-fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> Index
+fn build_index(a: *mem.Arena, rules: []const Rule, pseudo: bool) -> (Index, err)
 fn is_blank_byte(c: u8) -> bool
 fn class_seen(classes: str, end: usize, name: str) -> bool
-fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize
+fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> ([]const usize, err)
 fn names_contain(names: []const str, name: str) -> bool
 fn containers_match(stack: []const ContainerBox, queries: []const ContainerQuery) -> bool
 fn scoped(m: *const match.Matcher, root: html.NodeId) -> match.Matcher
@@ -20671,14 +20781,14 @@ fn length_hint(a: *mem.Arena, v: str) -> str
 fn legacy_font_size(s: str) -> (str, bool)
 fn one_of(name: str, a: str, b: str, c: str, d: str, e: str, f: str, g: str, h: str) -> bool
 fn ancestor_named(m: *const match.Matcher, el: html.NodeId, name: str) -> html.NodeId
-fn push_hint(out: *list.List[Declaration], property: str, value: str)
-fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Declaration
-fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration
-fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox)
-fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner
+fn push_hint(out: *list.List[Declaration], property: str, value: str) -> err
+fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> ([]const Declaration, err)
+fn inline_declarations(a: *mem.Arena, source: str) -> ([]const Declaration, err)
+fn collect(m: *const match.Matcher, out: *list.List[Declared], idx: *const Index, author: bool, el: html.NodeId, stack: []const ContainerBox) -> err
+fn resolve(m: *const match.Matcher, ua: *const Index, author: *const Index, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> ([]const Winner, err)
 const END: usize = 18446744073709551615usize
-fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize)
-fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str)
+fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) -> err
+fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) -> err
 ```
 
 ### `e.fmt.html.accessible`
@@ -20775,7 +20885,7 @@ type Key = struct { identifier: bool, name: str, expr: []const Expr }
 type Part = struct { kind: PartKind, text: str, expr: []const Expr }
 type Expr = struct { kind: Kind, text: str, flag: bool, items: []const Expr, keys: []const Key, ops: []const Operator, parts: []const Part, names: []const str }
 type Item = struct { is_block: bool, name: str, labels: []const str, value: []const Expr, body: []const Item }
-type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize }
+type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool }
 
 fn blank(kind: Kind) -> Expr
 fn peek(p: *const Parser) -> u8
@@ -20830,10 +20940,11 @@ A read-only HCL2 parser (L041), enough of the native syntax to read Terraform: a
 ```neper
 type Node = struct { id: str, kind: str, depends_on: []const str, blocked: bool }
 
-fn push(b: *str.Builder, s: str)
-fn push_label(b: *str.Builder, s: str)
-fn push_index(b: *str.Builder, n: usize)
+fn push(b: *str.Builder, s: str) -> err
+fn push_label(b: *str.Builder, s: str) -> err
+fn push_index(b: *str.Builder, n: usize) -> err
 fn flowchart(a: *mem.Arena, project: str, nodes: []const Node) -> (str, err)
+fn push_title(b: *str.Builder, s: str) -> err
 ```
 
 A Mermaid flowchart emitter (L042): `flowchart` writes the `flowchart LR` text for a project's resource graph from `Node` values (an id, a kind, the ids it depends on and whether it is blocked), with petcow's node-id mangling, escaped labels and a dashed edge for a dependency that names no node. Checked against petcow's own `to_mermaid` over random graphs on both hosts (D2345).
@@ -20861,6 +20972,7 @@ fn string_at(data: []const u8, table: Section, offset: u32) -> (str, err)
 fn section_name(data: []const u8, h: Header, s: Section) -> (str, err)
 fn symbol(data: []const u8, h: Header, table: Section, index: usize) -> (Symbol, err)
 fn dynamic(data: []const u8, h: Header, table: Section, index: usize) -> (Dynamic, err)
+fn entry_offset(data: []const u8, base: u64, index: usize, width: usize) -> (u64, bool)
 ```
 
 Read-only ELF32 and ELF64 reader in either byte order: file header, program headers, section headers with names from the section-name string table, `.symtab`/`.dynsym` entries with names from their string table, and dynamic-section tags. Every offset and length is checked before use (`Truncated` for a table or string past the data, `Invalid` for a bad identification, class, entry size or index); strings borrow from the input and nothing allocates. No relocations, no disassembly.
@@ -20900,7 +21012,7 @@ Read-only PE/COFF reader for PE32 and PE32+: DOS header and `e_lfanew`, COFF hea
 type Dialect = struct { delimiter: u8, quote: u8, crlf: bool, header: bool }
 type Row = struct { fields: []const str }
 type Reader = struct { state: *void }
-type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool }
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool, source_ended: bool, bom_checked: bool, pending: [2]u8, pending_at: usize, pending_len: usize, last_pending: bool }
 type Writer = struct { sink: io.Writer, dialect: Dialect }
 error Invalid
 error TooLarge
@@ -21060,6 +21172,7 @@ fn component_at(s: str, index: usize) -> (u64, str, bool)
 fn component_count(s: str) -> usize
 fn cmp_loose(have: str, want: str) -> i32
 fn at_least(have: str, want: str) -> bool
+const MAX_SAFE_INTEGER: u64 = 9007199254740991u64
 ```
 
 `parse` (SemVer 2.0.0 with an optional `v`), `cmp` (spec precedence; build ignored),
@@ -21187,6 +21300,7 @@ fn encode(e: *Encoder, value: *const Value) -> err
 fn count_until_break(d: *const Decoder) -> (usize, err)
 fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err)
 fn skip_depth(d: *Decoder, depth: u16) -> err
+fn container_count(value: u64) -> (usize, err)
 ```
 
 A streaming `Encoder` over a caller buffer (`encode_uint/int/negative/bytes/text/
@@ -21223,8 +21337,8 @@ fn parser(source: str, keys: []str, scratch: []u8) -> Parser
 fn peek(p: *Parser) -> u8
 fn peek_at(p: *Parser, ahead: usize) -> u8
 fn skip_space(p: *Parser)
-fn skip_comment(p: *Parser)
-fn skip_blank(p: *Parser)
+fn skip_comment(p: *Parser) -> err
+fn skip_blank(p: *Parser) -> err
 fn expect_eol(p: *Parser) -> err
 fn put(p: *Parser, byte: u8) -> err
 fn put_utf8(p: *Parser, point: u32) -> err
@@ -21237,7 +21351,7 @@ fn multi_literal(p: *Parser) -> (str, err)
 fn is_bare(c: u8) -> bool
 fn key_path(p: *Parser) -> ([]const str, err)
 fn is_digit(c: u8) -> bool
-fn strip_underscores(p: *Parser, text: str) -> (str, err)
+fn strip_underscores(p: *Parser, text: str, radix: u8) -> (str, err)
 fn looks_like_datetime(text: str) -> bool
 fn datetime_ok(text: str) -> bool
 fn number(p: *Parser, text: str) -> (Value, err)
@@ -21245,6 +21359,14 @@ fn push_container(p: *Parser, state: u8) -> err
 fn value(p: *Parser) -> (Value, err)
 fn pop(p: *Parser)
 fn parse(p: *Parser) -> (Event, err)
+fn date_end(text: str, at: usize) -> (usize, bool)
+fn decimal_pair(text: str, at: usize) -> (i64, bool)
+fn forbidden_comment_control(c: u8) -> bool
+fn forbidden_raw_string_control(c: u8) -> bool
+fn is_radix_digit(c: u8, radix: u8) -> bool
+fn leap_year(year: i64) -> bool
+fn month_days(year: i64, month: i64) -> i64
+fn partial_time_end(text: str, at: usize) -> (usize, bool)
 ```
 
 A pull parser: `parser` over the source with caller key slots and a decode scratch,
@@ -21302,13 +21424,15 @@ fn is_punct(c: u8) -> bool
 fn is_white(c: u8) -> bool
 fn is_scheme_char(c: u8) -> bool
 fn autolink(text: str, at: usize) -> (usize, bool, bool)
-fn code_span(text: str, at: usize, run_end: usize) -> (usize, usize, usize, bool)
+fn code_span(text: str, at: usize, run_end: usize, scan_budget: *usize) -> (usize, usize, usize, bool, err)
 fn link_tail(text: str, at: usize) -> (usize, usize, usize, usize, usize, bool)
 fn process_emphasis(s: *Inlines, bottom: usize) -> err
 fn flush_text(s: *Inlines, from: usize, to: usize) -> err
 fn parse_inlines(text: str, out: []Inline) -> (usize, err)
 fn is_container(kind: InlineKind) -> bool
 fn later(a: Inline, b: Inline) -> bool
+const MAX_CODE_SPAN_SCAN: usize = 1048576usize
+fn spend_code_span_scan(scan_budget: *usize) -> bool
 ```
 
 `parse_blocks` (a container-stack line parser: ATX and setext headings, thematic
@@ -21351,7 +21475,7 @@ type Element = struct { tag: str, id: str, class_lo: u32, class_hi: u32, attr_lo
 type Attribute = struct { name: str, value: str }
 type Dom = struct { elements: []const Element, classes: []const str, attributes: []const Attribute }
 type Origin = enum u8 { UserAgent, User, Author }
-type Decl = struct { origin: Origin, important: bool, specificity: u32, order: u32 }
+type Decl = struct { origin: Origin, important: bool, specificity: Specificity, order: u32 }
 error Invalid
 error TooSmall
 const NONE: u32 = 4294967295u32
@@ -21373,11 +21497,14 @@ fn match_compound(d: *const Dom, index: usize, c: str) -> (bool, err)
 fn match_complex(d: *const Dom, index: usize, sel: str) -> (bool, err)
 fn matches(d: *const Dom, index: usize, selector: str) -> (bool, err)
 fn select(d: *const Dom, selector: str, out: []u32) -> (usize, err)
-fn specificity_one(sel: str) -> (u32, err)
-fn specificity(selector: str) -> (u32, err)
+fn specificity_one(sel: str) -> (Specificity, err)
+fn specificity(selector: str) -> (Specificity, err)
 fn rank(decl: Decl) -> u32
 fn precedes(x: Decl, y: Decl) -> bool
 fn cascade(decls: []const Decl, out_order: []u32) -> err
+type Specificity = struct { ids: usize, classes: usize, types: usize }
+fn specificity_compare(x: Specificity, y: Specificity) -> i32
+fn zero_specificity() -> Specificity
 ```
 
 Selectors matched right to left over a caller element table (`matches`, `select`:
@@ -21487,6 +21614,7 @@ fn first_branch(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> (usize,
 fn resolve(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> err
 fn copy_value(w: *const Schema, wn: u32, d: *Decoder, o: *Sink) -> err
 fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *Decoder, o: *Sink) -> err
+fn byte_count(d: *const Decoder, n: i64) -> (usize, err)
 ```
 
 Avro binary encoding over caller cursors (`decoder`, `sink`, zigzag varints, the
@@ -21546,7 +21674,7 @@ fn put[T: type](b: *Builder, v: T) -> err
 fn put_bytes(b: *Builder, data: []const u8) -> err
 fn put_offset(b: *Builder, off: usize) -> err
 fn start_table(b: *Builder, field_count: usize) -> err
-fn slot(b: *Builder, field: usize)
+fn slot(b: *Builder, field: usize) -> err
 fn add[T: type](b: *Builder, field: usize, v: T, fallback: T) -> err
 fn add_u8(b: *Builder, field: usize, v: u8, fallback: u8) -> err
 fn add_u16(b: *Builder, field: usize, v: u16, fallback: u16) -> err
@@ -21566,6 +21694,9 @@ fn end_vector(b: *Builder) -> (usize, err)
 fn create_vector_u8(b: *Builder, data: []const u8) -> (usize, err)
 fn finish(b: *Builder, root_offset: usize, identifier: str) -> err
 fn bytes(b: *const Builder) -> []const u8
+const MAX_I32: usize = 2147483647usize
+const MAX_U16: usize = 65535usize
+const MAX_U32: usize = 4294967295usize
 ```
 
 Zero-copy FlatBuffers reading with every offset bounds-checked: `root`,
@@ -21611,6 +21742,7 @@ fn sign_hmac(header_json: str, payload_json: str, key: []const u8, alg: Alg, dst
 fn sign_hs256(header_json: str, payload_json: str, key: []const u8, dst: []u8) -> (usize, err)
 fn sign_ed25519(header_json: str, payload_json: str, secret: sign.Ed25519SecretKey, dst: []u8) -> (usize, err)
 fn escape_hex(s: str, from: usize) -> (u32, err)
+fn string_equals(raw: str, expected: str) -> (bool, err)
 ```
 
 JWS compact serialisation: `split`, `header`, `payload`, `member` (an allocation-free
@@ -21649,6 +21781,7 @@ fn describe(meta: []const u8, field: usize, cols: []Column, names: []str, count:
 fn buffer(m: *const Message, buffers: fb.Vector, k: usize) -> ([]const u8, err)
 fn bind(m: *const Message, cols: []Column, count: usize) -> err
 fn columns(stream: []const u8, cols: []Column, names: []str) -> (usize, err)
+fn validate_offsets(c: *const Column, limit: usize) -> err
 ```
 
 The Arrow columnar layout over caller buffers (`Column` with validity, offsets and data;
@@ -21724,6 +21857,7 @@ fn store_value(v: *Values, row: usize, kind: i32, src: []const u8, at: usize) ->
 fn dictionary_entry(dict: []const u8, kind: i32, index: usize, dict_count: usize) -> (usize, err)
 fn data_page(v: *Values, base: usize, h: *const PageHeader, page: []const u8, kind: i32, max_def: u32, dict: []const u8, dict_count: usize) -> err
 fn decode(file: []const u8, m: *const FileMetaData, chunk_index: usize, v: *Values, scratch: []u8) -> (usize, err)
+fn clear_null(v: *Values, row: usize, kind: i32)
 ```
 
 Parquet reading: the RLE/bit-packing hybrid (`decode_page`, `rle_bitpack_hybrid`,
@@ -22122,7 +22256,7 @@ fn put_length(dst: []u8, at: usize, n: usize) -> usize
 fn put_sequence(src: []const u8, anchor: usize, lit: usize, offset: usize, mlen: usize, dst: []u8, at: usize) -> (usize, err)
 fn encode(src: []const u8, dst: []u8, table: []u32) -> (usize, err)
 fn get_length(src: []const u8, at: usize, base: usize) -> (usize, usize, err)
-fn decode_into(src: []const u8, dst: []u8, start: usize) -> (usize, err)
+fn decode_into(src: []const u8, dst: []u8, start: usize, history_start: usize) -> (usize, err)
 fn decode(src: []const u8, dst: []u8) -> (usize, err)
 fn rotl32(x: u32, r: u32) -> u32
 fn xxh32_round(acc: u32, w: u32) -> u32
@@ -22179,7 +22313,7 @@ fn length(d: *Lz, probs: []u16, base: usize, pos_state: usize) -> u32
 fn distance(d: *Lz, probs: []u16, len: u32) -> u32
 fn literal(d: *Lz, probs: []u16, dst: []u8)
 fn reset_probs(probs: []u16, lc: u32, lp: u32)
-fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err
+fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool, allow_marker: bool) -> err
 fn set_lz_props(d: *Lz, p: Props)
 fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
 fn decode(src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
@@ -22189,6 +22323,8 @@ fn lzma2_dict_size(b: u8) -> (u32, err)
 fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_size: u32) -> (usize, usize, err)
 fn check_size(kind: u32) -> usize
 fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
+type IndexCursor = struct { at: usize, end: usize, count: u64, start: usize }
+fn index_cursor(src: []const u8, flags: u8) -> (IndexCursor, err)
 ```
 
 LZMA decoding over caller storage: `header`, `probs_required`, `decode` (the alone
@@ -22282,13 +22418,14 @@ error TooLarge
 
 type Part = struct { name: str, data: []const u8 }
 
-const MAX_PARTS: usize = 65535usize
+const MAX_PARTS: usize = 65534usize
 const MAX_TOTAL: usize = 4294967295usize
 
 fn put16(out: []u8, at: usize, v: u32)
 fn put32(out: []u8, at: usize, v: u32)
 fn put_bytes(out: []u8, at: usize, src: []const u8)
 fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err)
+fn utf8_flags(name: str) -> u32
 ```
 
 ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a malformed UTF-8 or otherwise invalid `e.fmt.zip` name is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
@@ -22362,7 +22499,7 @@ type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory
 type Archive = struct { state: *void }
 type Huff = struct { count: [16]u16, symbol: [306]u16 }
 type Bits = struct { data: []const u8, pos: usize, end: usize, bad: bool }
-type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_has: bool, chain_offsets: []u64 }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_storage: []u8, chain_has: bool, chain_offsets: []u64, chain_offsets_storage: []u64 }
 error Invalid
 error Unsupported
 error Checksum
@@ -22385,10 +22522,13 @@ fn huff_build(h: *Huff, lengths: []const u8) -> err
 fn huff_decode(h: *Huff, b: *Bits) -> u32
 fn read_tables(b: *Bits, main: *Huff, dist: *Huff, low: *Huff, lens: *Huff) -> err
 fn code_length(b: *Bits, slot: u32) -> u32
-fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> err
+fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64, decoder: *Decoder) -> err
 fn compressed(e: Entry) -> bool
 fn decode_chain(st: *State, index: usize) -> err
 fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+type Decoder = struct { main: Huff, dist: Huff, low: Huff, lens: Huff, have_tables: bool, cache: [4]usize, last_len: usize }
+fn file_extra_error(data: []const u8) -> err
+fn grown_capacity(have: usize, need: usize, limit: usize) -> usize
 ```
 
 RAR5 archive reader (L120), decode only, over an archive held in memory. `open` walks the block headers (each
@@ -22548,6 +22688,7 @@ fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs
 fn reconstruct_hmtx(a: *mem.Arena, data: []const u8, glyph_count: i64, metrics: usize, x_mins: []const u32) -> ([]u8, err)
 fn checksum(d: []const u8, len: usize) -> u32
 fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err)
+fn transformed_length_add(total: usize, length: usize) -> (usize, bool)
 ```
 
 A WOFF2 font decoder (L043): `to_sfnt` reads the container and table directory (known-tag indexes, UIntBase128 lengths), decompresses the table data through `e.fmt.brotli`, reverses the `glyf`/`loca` transform (the seven glyph streams, triplet-coded points, composite glyphs, bounding boxes, overlap bitmap) and the `hmtx` transform, and rebuilds the sfnt with recomputed table checksums and `head.checkSumAdjustment`. Font collections, malformed streams and unsupported transforms are `Invalid`. Checked against Vaper's `woff2ToSfnt` over 320 random and damaged fonts on both hosts (D2346).
@@ -22566,6 +22707,8 @@ fn put32(b: []u8, at: usize, v: u32)
 fn put16(b: []u8, at: usize, v: u32)
 fn inflate(a: *mem.Arena, window: []u8, raw: []const u8, want: usize) -> ([]u8, err)
 fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err)
+type TagSort = struct {}
+fn compare_tag(ctx: *TagSort, left: Entry, right: Entry) -> i32
 ```
 
 A WOFF 1.0 font decoder (L043): `to_sfnt` reads the 44-byte header and the 20-byte table directory, inflates each table whose compressed length is below its original length (zlib framing and Adler-32 checked over `e.algo.deflate`), and rebuilds the sfnt with the offset table, tag-sorted directory entries and tables padded to four bytes. A short, inconsistent or uncompressible input is `Invalid`. Checked against Vaper's `woffToSfnt` over 160 random and damaged fonts on both hosts (D2346).
@@ -22618,6 +22761,9 @@ fn workbook_to_tables(a: *mem.Arena, sheets: []const Sheet, pins: []const Pin) -
 fn parse_cell_ref(ref: str) -> (i64, i64, bool)
 fn sheet_formulas(a: *mem.Arena, cells: []const FormulaCell) -> ([]Formula, err)
 fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Description, err)
+const MAX_TABLE_CELLS: usize = 1048576usize
+error TooLarge
+fn header_used(out: []const str, candidate: str) -> bool
 ```
 
 Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
@@ -22686,6 +22832,8 @@ type Raw = struct { column: usize, row: usize, kind: str, style: usize, value: s
 
 fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []const bool) -> ([]const []const xlsx.Cell, err)
 fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err)
+const MAX_DECODE_CELLS: usize = 1048576usize
+const MAX_DECODE_ROWS: usize = 65536usize
 ```
 
 XLSX workbook encode and decode over the `e.fmt.xlsx` cell model (L100). `encode` turns `[]xlsx.Sheet` into a SpreadsheetML package for DataGrid and report export: text through a shared-strings table, numbers, booleans, dates (serials with a date number format, Excel's 1900 leap-year quirk kept, 1900-01-01 to 9999-12-31), an optional bold header row, column widths and merged ranges (`Layout` per sheet). `decode` reads such a package back to the same model and also what Excel, openpyxl and XlsxWriter write: shared, inline and formula-string cells, DEFLATE parts, date cells found by their number format; a formula cell decodes as its cached value. Bounds are Excel's (1,048,576 rows, 16,384 columns, a 31-character sheet name without `: \ / ? * [ ]`, unique ignoring case, 32,767 characters of text without XML-illegal control characters, merges inside the sheet and not overlapping): `BadSheetName`, `BadText`, `BadCell`, `BadLayout`, `TooLarge`. Charts, pivots, rich text runs, styles beyond the bold header and the date format, and compression of what is written are not here; a `BadDate` cell is written empty. Checked against an independent Python writer (byte equality, loaded back by openpyxl) and workbooks written by openpyxl and XlsxWriter (`scripts/gen_xlsx_book_test.py`).
@@ -23692,6 +23840,7 @@ fn is_hex_binary(s: str) -> bool
 fn base64_value(c: u8) -> i32
 fn is_base64(s: str) -> bool
 fn valid(t: Type, text: str) -> bool
+fn int_unbounded(s: str, negative_ok: bool, positive_ok: bool, zero_ok: bool) -> bool
 ```
 
 XML Schema 1.0 built-in datatypes: `valid(type, text)` answers whether `text` is a legal lexical form of
@@ -24269,10 +24418,27 @@ fn wsdl_soap11() -> str
 fn wsdl_soap12() -> str
 fn attr(d: *const xml.Document, id: xml.NodeId, name: str) -> str
 fn local_of(qname: str) -> str
-fn collect_parts(a: *mem.Arena, d: *const xml.Document, definitions: xml.NodeId, message: str) -> ([]Part, err)
 fn wsdl_parse(a: *mem.Arena, source: []const u8) -> (Wsdl, err)
 fn xsd_neper_type(local: str) -> (str, bool)
 fn parse_xsd_boolean(text: str) -> (bool, err)
+type Message = struct { name: str, parts: []Part }
+type NameIndex = struct { slots: []NameSlot }
+type NameSlot = struct { key: str, value: usize, occupied: bool }
+type PairIndex = struct { slots: []PairSlot }
+type PairSlot = struct { first: str, second: str, value: usize, occupied: bool }
+fn index_capacity(count: usize) -> usize
+fn message_parts(messages: []const Message, by_name: *const NameIndex, name: str) -> []Part
+fn messages_of(a: *mem.Arena, d: *const xml.Document, definitions: xml.NodeId) -> ([]Message, NameIndex, err)
+fn name_get(index: *const NameIndex, key: str) -> (usize, bool)
+fn name_index(a: *mem.Arena, count: usize) -> (NameIndex, err)
+fn name_put(index: *NameIndex, key: str, value: usize)
+fn name_slot(index: *const NameIndex, key: str) -> usize
+fn pair_get(index: *const PairIndex, first: str, second: str) -> (usize, bool)
+fn pair_hash(first: str, second: str) -> u32
+fn pair_index(a: *mem.Arena, count: usize) -> (PairIndex, err)
+fn pair_put(index: *PairIndex, first: str, second: str, value: usize)
+fn pair_slot(index: *const PairIndex, first: str, second: str) -> usize
+fn parts_of(a: *mem.Arena, d: *const xml.Document, message: xml.NodeId) -> ([]Part, err)
 ```
 
 SOAP 1.1 and 1.2 envelopes, faults and a WSDL 1.1 operation reader over `e.fmt.xml`, with no HTTP
@@ -24449,12 +24615,17 @@ fn push_gml_string(b: *str.Builder, s: str) -> err
 fn push_gml_value(b: *str.Builder, a: Attr) -> err
 fn gml_key_ok(name: str) -> bool
 fn push_spaces(b: *str.Builder, n: usize) -> err
-fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, skip_label: bool) -> err
-fn node_index(g: Graph, name: str) -> u32
-fn gml_base(d: Document, index: usize) -> u32
-fn gml_graph_out(b: *str.Builder, d: Document, index: usize, spaces: usize, depth: usize) -> err
+fn gml_attrs(b: *str.Builder, attrs: []const Attr, spaces: usize, ignored: str, reserved_first: str, reserved_second: str) -> err
+fn node_index(nodes: *const NodeIndex, name: str) -> u32
+fn gml_graph_out(b: *str.Builder, d: Document, nodes: *const NodeIndex, index: usize, spaces: usize, depth: usize) -> err
 fn write_gml(a: *mem.Arena, d: Document) -> (str, err)
 fn to_csr(a: *mem.Arena, d: Document, index: usize) -> (graph.Graph[f64], err)
+type NodeIndex = struct { slots: []u32, names: []str, count: usize }
+fn gml_id_lookup(table: []const u32, ids: []const str, names: []const str, id: str) -> (str, bool)
+fn gml_id_table(a: *mem.Arena, ids: []const str) -> ([]u32, err)
+fn mark_node_scope(d: Document, graph_index: usize, marks: []u8, depth: usize) -> err
+fn scoped_node_index(a: *mem.Arena, d: Document, root: usize) -> (NodeIndex, err)
+fn selected_node_index(a: *mem.Arena, scope: *const NodeIndex, selected: []const u8) -> (NodeIndex, err)
 ```
 
 Graph interchange (L155): GraphML, GEXF and GML read and written over one model, and `to_csr` into `e.data.graph`. A `Document` is a list of `Graph`s, the first the root and the rest nested ones, each `Node` naming its subgraph by index (`NONE` for none); nodes and edges carry string identifiers and typed `Attr`s (name, `AttrKind` of String, Boolean, Int, Long, Float or Double, text), which is what round-trips: GraphML `key`/`data` with key defaults on read, GEXF `attributes`/`attvalues` with `label`, `weight` and the graph `name`, and the scalar key-value pairs of GML. `read_graphml`, `read_gexf` and `read_gml` take text and return the document (`Malformed`, `Dangling` for an edge naming no node or a duplicate id found by `validate`, `Unsupported` for hyperedges and ports, `TooLarge`); `write_graphml`, `write_gexf` and `write_gml` write it (`BadName` for a key GML cannot spell or a control character, `Unsupported` for edges in a GEXF hierarchy subgraph). GraphML keeps nested graphs in nodes and per-edge `directed`; GEXF keeps hierarchy as `nodes` nested in a node and a per-edge `type`; GML keeps a `graph` list nested in a node, writes a node's `id` as its index over all graphs and its identifier as `label` (the NetworkX and Gephi convention, so a node attribute called `label` is not written) and non-ASCII text as `&#N;`. `to_csr(a, d, i)` builds graph `i` as `e.data.graph.Graph[f64]` with node `n` the graph's n-th node and the `weight` attribute (default 1) as the edge value, an undirected edge becoming two directed ones. Not here: hypergraphs, ports, GEXF dynamics and viz data, layout and style, and a typed GML beyond integer, real and string. Checked on files written by NetworkX (types and values derived from the NetworkX graph), the GraphML primer's nested example, a GEXF hierarchy and a GML nested graph, and on writers compared byte for byte with independent ones that NetworkX read back (`scripts/gen_graph_test.py`).
@@ -24573,6 +24744,13 @@ fn known_pseudo_class(name: str) -> bool
 fn parse_with(a: *mem.Arena, source: str, options: html.Options, spare: usize, scripting: bool) -> (Dom, err)
 fn selector_known(sel: selector.Selector) -> bool
 fn sized(options: html.Options, source: str) -> html.Options
+type DocumentSequence = struct { elements: usize, doctypes: usize, saw_element: bool }
+error InvalidCharacter
+fn check_class_token(token: str) -> err
+fn check_insert_excluding(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId, removed: NodeId) -> err
+fn document_add(d: *const Dom, state: *DocumentSequence, child: NodeId) -> bool
+fn document_add_node(d: *const Dom, state: *DocumentSequence, id: NodeId) -> bool
+fn document_insert_ok(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId, removed: NodeId) -> bool
 ```
 
 ### `e.fmt.css.expand`
@@ -24744,11 +24922,11 @@ fn builder_byte(t: *Text, c: u8)
 fn builder_text(t: *Text, s: str)
 fn builder_done(t: *Text) -> str
 type Sheet = struct { rules: []const cascade.Rule, index: cascade.Index, pindex: cascade.Index, author: bool, pseudo_kinds: u32 }
-fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> Sheet
-fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64)
+fn new_sheet(a: *mem.Arena, rules: []const cascade.Rule, author: bool) -> (Sheet, err)
+fn gather(m: *const cssm.Matcher, out: *list.List[cascade.Declared], rs: *const Sheet, el: html.NodeId, stack: []const cascade.ContainerBox, want: i64) -> err
 fn consider(best: *list.List[cascade.Declared], entry: cascade.Declared)
 fn rank_expanded(a: *mem.Arena, declared: []const cascade.Declared, rtl: bool) -> []const cascade.Declared
-fn declared_direction(declared: []const cascade.Declared, fallback: bool) -> bool
+fn declared_direction(a: *mem.Arena, declared: []const cascade.Declared, fallback: bool, customs: []const Custom) -> bool
 fn blockify(d: Display) -> Display
 fn finish(s: *Style)
 fn compute(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, author: *const Sheet, el: html.NodeId, parent: *const Style) -> (Style, err)
@@ -24762,8 +24940,9 @@ fn load_style_elements(l: *sheet.Loader, d: *const dom.Dom) -> err
 fn compute_document(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
 fn compute_document_sheets(c: *Context, d: *const dom.Dom, sheets: []const str, out: []Style) -> err
 fn compute_document_with(c: *Context, d: *const dom.Dom, sheets: []const str, style_elements: bool, out: []Style) -> err
-fn declared_writing_mode(declared: []const cascade.Declared, parent: *const Style) -> u8
+fn declared_writing_mode(a: *mem.Arena, declared: []const cascade.Declared, parent: *const Style, customs: []const Custom) -> u8
 fn invalid_length_value(prop: str, v: str) -> bool
+fn resolved_customs(a: *mem.Arena, declared: []const cascade.Declared, inherited: []const Custom) -> ([]const Custom, err)
 ```
 
 ### `e.fmt.css.sheet`
@@ -24812,38 +24991,40 @@ fn container_feature(a: *mem.Arena, text: str) -> (container.Condition, bool)
 fn container_cond(a: *mem.Arena, text: str) -> (container.Condition, bool)
 fn container_query(a: *mem.Arena, prelude: str) -> (cascade.ContainerQuery, bool)
 fn first_word_end(t: str) -> usize
-fn scope_selectors(a: *mem.Arena, text: str) -> []const selector.Selector
-fn scope_rule(a: *mem.Arena, prelude: str) -> cascade.Scope
+fn scope_selectors(a: *mem.Arena, text: str) -> ([]const selector.Selector, bool)
+fn scope_rule(a: *mem.Arena, prelude: str) -> (cascade.Scope, bool)
 fn url_in(a: *mem.Arena, entry: str) -> (str, bool)
 fn format_in(a: *mem.Arena, entry: str, url: str) -> str
 fn select_font_src(a: *mem.Arena, value: str) -> str
-type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope }
+type Ctx = struct { has_layer: bool, layer: i64, path: str, containers: []const cascade.ContainerQuery, scopes: []const cascade.Scope, nesting: usize }
 type Loader = struct { a: *mem.Arena, env: MediaEnv, rules: list.List[cascade.Rule], fonts: list.List[FontFace], keyframes: list.List[Keyframes], properties: list.List[PropertyRule], imports: list.List[str], layers: list.List[str], order: i64, anonymous: usize, scratch: mem.Arena }
 fn new_loader(a: *mem.Arena, env: MediaEnv) -> Loader
 fn layer_index(l: *Loader, name: str) -> i64
 fn decls_of(l: *Loader, src: str, tokens: []const syntax.Token) -> []const cascade.Declaration
 fn decl_value(decls: []const cascade.Declaration, name: str) -> (str, bool)
 fn style_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
-fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> Ctx
-fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> Ctx
+fn with_container(l: *Loader, ctx: Ctx, q: cascade.ContainerQuery) -> (Ctx, err)
+fn with_scope(l: *Loader, ctx: Ctx, sc: cascade.Scope) -> (Ctx, err)
 fn add_font_face(l: *Loader, src: str, tokens: []const syntax.Token)
 fn stop_offset(a: *mem.Arena, s: str) -> (f64, bool)
 fn add_keyframes(l: *Loader, src: str, one: syntax.Rule)
 fn add_property(l: *Loader, src: str, one: syntax.Rule)
 fn add_import(l: *Loader, src: str, one: syntax.Rule)
 fn layer_names(l: *Loader, ctx: Ctx, prelude: str) -> []const str
-fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
+fn at_rule(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err
 fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str
 type Text = struct { b: str.Builder, bad: bool }
 fn try_text(a: *mem.Arena, cap: usize) -> Text
 fn text_push(t: *Text, s: str)
 fn text_push_usize(t: *Text, v: usize)
 fn text_done(t: *Text) -> str
-fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx)
-fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx)
+fn walk_block(l: *Loader, src: str, one: syntax.Rule, ctx: Ctx) -> err
+fn walk(l: *Loader, src: str, rules: []const syntax.Rule, ctx: Ctx) -> err
 fn load(l: *Loader, source: str) -> err
 fn finish(l: *Loader) -> Loaded
 fn parse_sheet(a: *mem.Arena, env: MediaEnv, source: str) -> (Loaded, err)
+const MAX_GROUPING_DEPTH: usize = 16usize
+error TooDeep
 ```
 
 ### `e.fmt.css.ua`
@@ -24934,7 +25115,7 @@ fn float_edge_right(l: *const Layout, base: usize, y0: f64, y1: f64, ceil_x: f64
 fn float_bottom(l: *const Layout, base: usize, side: u32, floor: f64) -> f64
 fn next_float_end(l: *const Layout, base: usize, y: f64) -> f64
 fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64
-type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
+type PieceKind = enum u8 { Text, Tab, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
 type Piece = struct { kind: PieceKind, box: u32, text: str, w: f64, trail: f64, soft: bool, ink: bool, start: usize, clen: usize }
 type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64, cbh: f64 }
 fn push_piece(bd: *Builder, p: Piece)
@@ -25142,6 +25323,13 @@ fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize
 fn wrap_orphan_table_parts(l: *Layout, b: u32)
 fn fixed_block_size(l: *const Layout, b: u32) -> f64
 fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
+fn clear_on_side(l: *const Layout, parent: u32, value: style.Clear, left_side: bool) -> bool
+fn float_on_left(l: *const Layout, parent: u32, value: style.Float) -> bool
+fn inline_start_is_left(l: *const Layout, parent: u32) -> bool
+fn tab_advance(l: *const Layout, s: *const style.Style, x: f64) -> f64
+fn table_column_index(ncols: usize, logical: usize, rtl: bool) -> usize
+fn table_left_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
+fn table_right_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
 ```
 
 ### `e.fmt.css.geom`
@@ -25264,10 +25452,11 @@ fn has_mask(p: *Painter, s: *const style.Style) -> bool
 fn paint_collapsed(p: *Painter, t: u32, x: f64, y: f64)
 fn paint_column_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64)
 fn paint_edge_band(p: *Painter, e: layout.Edge, x: f64, y: f64, len: f64, horizontal: bool)
-fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64)
+fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64, last_content: bool)
 fn paint_row_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f64, h: f64)
 fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64)
 fn snap(v: f64) -> f64
+fn paint_atomic_ellipsis(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64)
 ```
 
 ### `e.text.fontset`
@@ -25348,13 +25537,13 @@ error Failure
 type State = enum u8 { SchemeStart, Scheme, NoScheme, SpecialRelativeOrAuthority, PathOrAuthority, Relative, RelativeSlash, SpecialAuthoritySlashes, SpecialAuthorityIgnoreSlashes, Authority, Host, Hostname, Port, File, FileSlash, FileHost, PathStart, Path, OpaquePath, Query, Fragment }
 type EncodeSet = enum u8 { C0, Fragment, Query, SpecialQuery, Path, Userinfo, Component }
 const EOF: u32 = 4294967295u32
-type Buf = struct { data: []u8, len: usize }
+type Buf = struct { data: []u8, len: usize, full: bool }
 fn buf_new(a: *mem.Arena, cap: usize) -> (Buf, err)
 fn buf_byte(b: *Buf, c: u8)
 fn buf_str(b: *Buf, s: str)
 fn buf_text(b: *const Buf) -> str
-fn buf_take(a: *mem.Arena, b: *const Buf) -> str
-fn copy_str(a: *mem.Arena, s: str) -> str
+fn buf_take(a: *mem.Arena, b: *const Buf) -> (str, err)
+fn copy_str(a: *mem.Arena, s: str) -> (str, err)
 fn is_alpha(c: u32) -> bool
 fn is_digit(c: u32) -> bool
 fn is_hex(c: u32) -> bool
@@ -25371,38 +25560,37 @@ fn is_special(u: *const Url) -> bool
 fn includes_credentials(u: *const Url) -> bool
 fn forbidden_host(c: u32) -> bool
 fn forbidden_domain(c: u32) -> bool
-fn pct_decode_utf8(a: *mem.Arena, s: str) -> str
-fn lower_ascii_copy(a: *mem.Arena, s: str) -> str
+fn pct_decode_utf8(a: *mem.Arena, s: str) -> (str, err)
+fn lower_ascii_copy(a: *mem.Arena, s: str) -> (str, err)
 fn all_ascii(s: str) -> bool
 fn has_xn_label(s: str) -> bool
-fn domain_to_ascii(a: *mem.Arena, domain: str) -> (str, bool)
+fn domain_to_ascii(a: *mem.Arena, domain: str) -> (str, err)
 fn ipv4_number(s: str) -> (u64, bool)
-fn split_dots(a: *mem.Arena, s: str) -> []const str
-fn list_of_str(a: *mem.Arena) -> list.List[str]
-fn ends_in_number(a: *mem.Arena, domain: str) -> bool
-fn parse_ipv4(a: *mem.Arena, input: str) -> (str, bool)
+fn split_dots(a: *mem.Arena, s: str) -> ([]const str, err)
+fn list_of_str(a: *mem.Arena) -> (list.List[str], err)
+fn ends_in_number(a: *mem.Arena, domain: str) -> (bool, err)
+fn parse_ipv4(a: *mem.Arena, input: str) -> (str, err)
 fn put_decimal(b: *Buf, v: u64)
 fn put_hex16(b: *Buf, v: u32)
-fn parse_ipv6(a: *mem.Arena, input: str) -> (str, bool)
-fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, bool)
+fn parse_ipv6(a: *mem.Arena, input: str) -> (str, err)
+fn parse_host(a: *mem.Arena, input: str, opaque: bool) -> (str, err)
 fn is_windows_drive_letter(s: str) -> bool
 fn is_normalized_drive_letter(s: str) -> bool
 fn starts_with_drive_letter(cps: []const u32, at: usize) -> bool
 fn is_single_dot(s: str) -> bool
 fn is_double_dot(s: str) -> bool
 type Parser = struct { a: *mem.Arena, scheme: str, username: str, password: str, host: str, has_host: bool, port: i32, segs: list.List[str], opaque_path: bool, opaque_text: Buf, query: str, has_query: bool, fragment: str, has_fragment: bool }
-fn from_parser(p: *const Parser) -> Url
-fn join_path(p: *const Parser) -> str
-fn path_segments(a: *mem.Arena, path: str) -> list.List[str]
-fn to_parser(a: *mem.Arena, u: *const Url) -> Parser
+fn from_parser(p: *const Parser) -> (Url, err)
+fn join_path(p: *const Parser) -> (str, err)
+fn path_segments(a: *mem.Arena, path: str) -> (list.List[str], err)
+fn to_parser(a: *mem.Arena, u: *const Url) -> (Parser, err)
 fn shorten_path(p: *Parser)
-fn push_seg(p: *Parser, s: str)
+fn push_seg(p: *Parser, s: str) -> err
 fn decode_input(a: *mem.Arena, input: str) -> ([]u32, err)
 fn is_c0_or_space(c: u32) -> bool
 fn is_tab_newline(c: u32) -> bool
-fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Parser, has_override: bool, override: State) -> bool
-fn zero_buf(a: *mem.Arena, cap: usize) -> Buf
-fn new_parser(a: *mem.Arena) -> Parser
+fn run(a: *mem.Arena, input_text: str, base: *const Url, has_base: bool, p: *Parser, has_override: bool, override: State) -> err
+fn new_parser(a: *mem.Arena) -> (Parser, err)
 fn parse(a: *mem.Arena, input: str, base: *const Url, has_base: bool) -> (Url, err)
 fn parse_against(a: *mem.Arena, input: str, base_text: str) -> (Url, err)
 fn serialize_authority(buf: *Buf, u: *const Url)
@@ -25425,6 +25613,8 @@ fn set_pathname(a: *mem.Arena, u: *const Url, value: str) -> Url
 fn strip_trailing_spaces(u: *Url)
 fn set_search(a: *mem.Arena, u: *const Url, value: str) -> Url
 fn set_hash(a: *mem.Arena, u: *const Url, value: str) -> Url
+fn join2_checked(a: *mem.Arena, x: str, y: str) -> (str, err)
+fn parser_url_or_original(u: *const Url, p: *const Parser, run_error: err) -> Url
 ```
 
 ### `e.net.uts46`
@@ -25442,9 +25632,11 @@ fn rec_start(records: str, i: usize) -> u32
 fn lookup(cp: u32) -> Rec
 fn pool_at(i: usize) -> u32
 fn is_mark(cp: u32) -> bool
-fn nfc_points(a: *mem.Arena, points: []const u32) -> bool
+fn nfc_points(a: *mem.Arena, points: []const u32) -> (bool, err)
 fn status_ok(status: u8, strict: bool) -> bool
 fn to_ascii(a: *mem.Arena, domain: str, strict: bool) -> (str, bool)
+error Invalid
+fn to_ascii_checked(a: *mem.Arena, domain: str, strict: bool) -> (str, err)
 ```
 
 ### `e.net.uts46_table`
@@ -25616,6 +25808,7 @@ fn file_response(c: *Client, u: *const url.Url) -> (Response, err)
 fn known_h1(c: *Client, host: str) -> bool
 fn mime_of_extension(path: str) -> str
 fn remember_h1(c: *Client, host: str)
+fn drop_redirect_header(name: str, cross_origin: bool) -> bool
 ```
 
 ### `e.web.page`
@@ -25635,7 +25828,7 @@ fn css_text(a: *mem.Arena, r: *const fetch.Response) -> str
 fn sniff_label(label: str) -> (str, bool)
 fn absolutize_css(a: *mem.Arena, text: str, base: *const url.Url) -> str
 fn is_ident_byte(c: u8) -> bool
-fn imports_of(a: *mem.Arena, text: str) -> []const str
+fn imports_of(p: *Page, text: str) -> []const str
 fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url, depth: usize)
 fn collect_sheets(p: *Page) -> []const str
 fn image_entry(p: *Page, abs: str) -> *ImageEntry
@@ -25662,7 +25855,7 @@ fn csp_inline_ok(p: *Page, directive: str, nonce: str, text: str) -> bool
 fn csp_url_ok(p: *Page, directive: str, u: str) -> bool
 fn decimal_text(a: *mem.Arena, v: u64) -> str
 fn face_weight(w: str) -> u32
-fn fetch_text_hook(ctx: *void, u: str, referrer: str) -> (str, u16, bool)
+fn fetch_text_hook(ctx: *void, u: str, referrer: str, include_credentials: bool) -> (str, u16, bool)
 fn flush_layout(p: *Page)
 fn geom_hook(ctx: *void, node: u32, what: u8, out: []f64) -> bool
 fn has_backslash(s: str) -> bool
@@ -25720,13 +25913,12 @@ fn punct_len(src: str, at: usize) -> usize
 fn is_punct_start(c: u8) -> bool
 fn next_token(lx: *Lexer) -> (Tok, err)
 fn regex_at(lx: *Lexer, start: usize) -> (Tok, err)
-fn id_part_at(s: str, at: usize) -> bool
 fn id_part_cp(cp: u32) -> bool
 fn id_start_cp(cp: u32) -> bool
-fn newer_than_tables(cp: u32, cat: unicode.Category) -> bool
 fn regex_may_start(src: str, from: usize, at: usize) -> bool
-fn scalar_in(s: str, at: usize) -> u32
 fn uspace_len(s: str, at: usize) -> usize
+fn id_part_len(s: str, at: usize) -> usize
+fn scalar_at(s: str, at: usize) -> (u32, usize, bool)
 ```
 
 ### `e.js.ast`
@@ -27521,12 +27713,13 @@ fn part42(b: *str.Builder) -> err
 fn part43(b: *str.Builder) -> err
 fn part44(b: *str.Builder) -> err
 fn part45(b: *str.Builder) -> err
+fn part46(b: *str.Builder) -> err
 ```
 
 ### `e.web.script`
 
 ```neper
-type Host = struct { d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool, fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool, view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool, net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, csp_ctx: *void, csp_fn: CspFn, has_csp: bool, parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool }
+type Host = struct { d: *dom.Dom, now: f64, log: list.List[str], base: str, title_hint: str, errors: u32, nav: str, has_nav: bool, fetch_ctx: *void, fetch_fn: FetchFn, has_fetch: bool, dirty: bool, view_ctx: *void, geom_fn: GeomFn, style_fn: StyleFn, has_view: bool, net_ctx: *void, net_fn: NetFn, has_net: bool, inline_modules: u32, module_fetches: list.List[ModuleFetch], csp_ctx: *void, csp_fn: CspFn, has_csp: bool, parent: *js.Interp, has_parent: bool, children: list.List[*js.Interp], dom_prog: *void, has_dom_prog: bool }
 fn host_of(it: *js.Interp) -> *Host
 fn arg(args: []const js.Value, i: usize) -> js.Value
 fn nid(v: js.Value) -> u32
@@ -27597,7 +27790,7 @@ fn pump_once(it: *js.Interp) -> f64
 fn pump(it: *js.Interp, limit_ms: f64)
 fn advance(it: *js.Interp, ms: f64)
 type CspFn = fn(*void, u32, str, str) -> bool
-type FetchFn = fn(*void, str, str) -> (str, u16, bool)
+type FetchFn = fn(*void, str, str, bool) -> (str, u16, bool)
 type GeomFn = fn(*void, u32, u8, []f64) -> bool
 type NetFn = fn(*void, str, str, str, []const u8, *NetResult) -> bool
 type NetResult = struct { status: u16, status_text: str, url: str, headers: str, body: []const u8 }
@@ -27641,6 +27834,12 @@ fn set_fetch(it: *js.Interp, ctx: *void, f: FetchFn)
 fn set_net(it: *js.Interp, ctx: *void, f: NetFn)
 fn set_view(it: *js.Interp, ctx: *void, g: GeomFn, st: StyleFn)
 fn take_navigation(it: *js.Interp) -> (str, bool)
+type ModuleFetch = struct { url: str, include_credentials: bool }
+fn file_reader_encoding(a: *mem.Arena, label: str, mime_type: str) -> (str, err)
+fn load_module(it: *js.Interp, referrer: str, spec_in: str, include_credentials: bool) -> (*void, err)
+fn n_decode_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn remember_credentials(h: *Host, u: str, include_credentials: bool) -> err
+fn remembered_credentials(h: *Host, u: str) -> bool
 ```
 
 ### `e.fmt.html.template`
@@ -27958,6 +28157,7 @@ fn silk_tbl_rs_3_4() -> str
 fn silk_tbl_rs_2_3() -> str
 fn silk_tbl_rs_1_2() -> str
 fn silk_tbl_rs_delay() -> str
+fn range_within(r: *const Range, bits: i32) -> bool
 ```
 
 An Opus decoder (RFC 6716): packet framing with the section 3.4 refusals, the range
@@ -28059,6 +28259,8 @@ fn shift_of(mask: u32) -> u32
 fn bits_of(mask: u32) -> u32
 fn channel(pixel: u32, mask: u32, shift: u32, bits: u32) -> u8
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+fn alpha_of(h: Header) -> image.Alpha
+fn mask_is_contiguous(mask: u32) -> bool
 ```
 
 BMP / DIB decoder (L124): the OS/2 core and the Windows INFO, V4 and V5 headers; 1, 4, 8, 16, 24 and 32 bits
@@ -28088,6 +28290,7 @@ fn inspect(a: *mem.Arena, source: io.Reader) -> (image.Info, err)
 fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err)
 fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([]Frame, err)
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+fn decode_some(a: *mem.Arena, source: io.Reader, options: DecodeOptions, stop_after: usize) -> ([]Frame, err)
 ```
 
 GIF decoder (L124) with animation: `decode` composes the first frame on the logical screen, `decode_frames`
@@ -28159,6 +28362,7 @@ fn value_u32(e: *const Exif, t: Tag, index: usize) -> (u32, err)
 fn value_rational(e: *const Exif, t: Tag, index: usize) -> (u32, u32, err)
 fn value_text(e: *const Exif, t: Tag) -> (str, err)
 fn orientation(a: *mem.Arena, block: []const u8) -> u32
+fn element_offset(e: *const Exif, t: Tag, index: usize, width: usize) -> (usize, err)
 ```
 
 EXIF reader (L124): `block_of_jpeg`, `block_of_png` and `block_of_webp` find the TIFF-structured block, `open`
@@ -28305,7 +28509,7 @@ const NTP_UNIX_DELTA: u64 = 2208988800u64
 const NTP_MODE_CLIENT: u8 = 3u8
 const NTP_MODE_SERVER: u8 = 4u8
 
-type NtpPacket = struct { leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32, root_delay: u32, root_dispersion: u32, reference_id: u32, reference: u64, origin: u64, receive: u64, transmit: u64 }
+type NtpPacket = struct { leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32, root_delay: i32, root_dispersion: u32, reference_id: u32, reference: u64, origin: u64, receive: u64, transmit: u64 }
     leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32,
     root_delay: u32, root_dispersion: u32, reference_id: u32,
     reference: u64, origin: u64, receive: u64, transmit: u64,
@@ -28325,6 +28529,9 @@ fn ntp_short_to_nanos(v: u32) -> i64
 fn nanos_to_ntp_short(nanos: i64) -> (u32, err)
 fn offset_delay(t1: i64, t2: i64, t3: i64, t4: i64) -> (i64, i64)
 fn ntp_check_reply(sent: u64, reply: NtpPacket) -> err
+fn bits_from_i32(v: i32) -> u32
+fn i32_from_bits(v: u32) -> i32
+fn ntp_signed_short_to_nanos(v: i32) -> i64
 ```
 
 `marzullo` (the interval covered by the most sources) and `marzullo_estimate`,
@@ -28953,7 +29160,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (SignedData, err)
 fn find_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
 fn signer_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
 fn digest(bits: u16, content: []const u8, out: []u8) -> usize
-fn attribute_value(encoded: []const u8, want: []const u8) -> ([]const u8, bool)
+fn attribute_value(encoded: []const u8, want: []const u8, value_tag: u32) -> ([]const u8, bool)
 fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err
 fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err
 fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err)
@@ -28965,6 +29172,11 @@ fn tlv5(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []con
 fn tlv6(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8, p4: []const u8, p5: []const u8) -> (usize, err)
 fn utc_time(seconds: i64, dst: []u8) -> str
 fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret: sign.Ed25519SecretKey, attached: bool, signing_time: i64, out: []u8) -> (usize, err)
+const UTC_TIME_AFTER_LAST: i64 = 2524608000i64
+const UTC_TIME_FIRST: i64 = -631152000i64
+fn verify_detached(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err
+fn verify_signer_content(a: *mem.Arena, sd: *const SignedData, index: usize, content: []const u8) -> err
+fn verify_signer_detached(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err
 ```
 
 CMS / PKCS #7 SignedData (RFC 5652) for S/MIME. `parse` reads a DER ContentInfo (attached or detached content, embedded certificates, SignerInfos by IssuerAndSerialNumber); `verify_signer`/`verify` check the content digest against the signed `messageDigest` attribute (SHA-256/384/512), the `contentType` attribute, and the signature over the signed attributes re-tagged as a SET (or over the content when there are none) with the signer's embedded certificate: ECDSA P-256/P-384, RSA PKCS#1 v1.5 or Ed25519; `signer_certificate` returns the certificate for `e.crypto.x509.verify`, since trust is the caller's. `sign_ed25519` writes a SignedData (RFC 8419: SHA-512, signed attributes with content type, signing time and message digest, the signer certificate embedded, detached or attached) that OpenSSL verifies. RSA and ECDSA signing are not here (`e.crypto.sign` has no PKCS#1 v1.5 signer and its P-256 signer is `Unsupported`); BER indefinite lengths, SubjectKeyIdentifier signers, CRLs, countersignatures and EnvelopedData are not interpreted.
@@ -28995,6 +29207,10 @@ fn knows(r: *const Robots, agent: str) -> bool
 fn applicable(r: *const Robots, agent: str) -> (str, bool)
 fn allowed(r: *const Robots, agent: str, path: str) -> bool
 fn crawl_delay(r: *const Robots, agent: str) -> (u32, bool)
+fn hex_value(c: u8) -> u8
+fn norm_len(s: str) -> usize
+fn norm_prefix(s: str, raw_end: usize) -> usize
+fn unreserved(c: u8) -> bool
 ```
 
 robots.txt (RFC 9309): `parse` once, then `allowed(robots, agent, path)` and `crawl_delay` per crawler product token. Fields are case-insensitive, `#` comments, a colon or a space separates; consecutive `User-agent` lines share a group, groups naming the same agent merge, rules before any agent are ignored, `Sitemap` is site-wide (`robots.sitemaps`). The group is the crawler's own name (exact, case-insensitive) else `*`; the longest matching pattern wins and `Allow` wins ties; `*` matches any run and a trailing `$` anchors the end; `/robots.txt` is always allowed; `Crawl-delay` seconds are answered in milliseconds. Matching is against the path-and-query as given with `%XX` hex digits upper-cased; no URL parsing or further percent-decoding, and `index.html` is not treated as `/`. Everything is a slice of the text, which must outlive the `Robots`.
@@ -29022,6 +29238,10 @@ fn leaf(w: *xml.Writer, name: str, value: str) -> err
 fn write_document(sink: io.Writer, entries: []const Entry, index: bool) -> err
 fn write_urlset(sink: io.Writer, entries: []const Entry) -> err
 fn write_index(sink: io.Writer, entries: []const Entry) -> err
+fn declares_namespace(name: str, wanted: str) -> bool
+fn has_sitemap_name(doc: *const xml.Document, id: u32, namespace: str, name: str) -> bool
+fn prefix(name: str) -> str
+fn resolved_namespace(doc: *const xml.Document, id: u32) -> (str, bool)
 ```
 
 Sitemaps (sitemaps.org 0.9): `parse` reads a `urlset` or `sitemapindex` XML document (matching by local name, so any namespace prefix works; extension elements and unknown children are skipped; CDATA and entities decoded) into `Entry` values (`loc`, `lastmod`, `changefreq`, `priority` as written), refusing a missing or oversized `loc`, an unknown `changefreq` or a `priority` outside 0.0..1.0 as `Invalid` and more than 50000 entries as `TooMany`; `parse_text` reads the one-URL-per-line form; `write_urlset`/`write_index` emit the XML declaration and namespace with the same checks. Not here: gzip handling, the 50 MB size limit, or interpreting the image/video/news extensions.
@@ -29058,10 +29278,11 @@ error Long
 error Overflow
 error TooSmall
 error Mismatch
-fn record_width(fields: []const Field) -> usize
+fn record_width(fields: []const Field) -> (usize, err)
 fn trimmed(f: Field, cut: str) -> str
 fn read(fields: []const Field, mode: Mode, line: str, out: []str) -> err
 fn write(fields: []const Field, values: []const str, dst: []u8) -> (str, err)
+error TooLarge
 ```
 
 FileHelpers-style fixed-width records: a layout is a slice of `Field {name, width, align, pad, trim, optional}`; `read` cuts a line into trimmed values (slices of the line) under `Mode` `Exact`, `AllowMore`, `AllowLess` or `AllowVariable` (`Short`/`Long` otherwise), `write` pads and aligns values into a line and refuses an over-long value as `Overflow`. Widths are bytes. Not here: typed conversion of field text (dates, numbers, decimals), field converters, record hierarchies, or multi-line records.
@@ -29149,6 +29370,8 @@ fn utf16_bmp(a: *mem.Arena, s: str) -> ([]u8, err)
 fn pbes2_encrypt(a: *mem.Arena, b: *Build, plain: []const u8, password: str, salt: []const u8, iv: []const u8, iterations: u32) -> ([]const u8, []const u8, err)
 fn attributes_piece(b: *Build, a: *mem.Arena, friendly: str, key_id: []const u8) -> ([]const u8, err)
 fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly: str, password: str, p: Params, out: []u8) -> (usize, err)
+const MAX_PARSE_ITERATIONS: u32 = 1000000u32
+fn parse_iterations(iterations: u32) -> err
 ```
 
 PKCS #12 (.p12/.pfx, RFC 7292): `parse` verifies the MAC and returns key bags (PKCS #8, decrypted when shrouded) and certificate bags with friendly names and local key ids; `encode` writes one private key and its chain (PBES2 AES-256-CBC / PBKDF2-HMAC-SHA256, HMAC-SHA-256 MAC, salts and IVs supplied by the caller). Read profile: PBES2 with HMAC-SHA-256/512 PRFs and AES-128/192/256-CBC, MACs HMAC-SHA-256/512; a store that uses PBE-SHA1-3DES, PBE-SHA1-RC2-40 or a SHA-1 MAC (pre-3.0 OpenSSL, old Java) is `Unsupported`. A wrong password shows as `BadPassword`. Not here: legacy ciphers, secret bags, CRL bags, or several keys per file on write.
@@ -29367,6 +29590,7 @@ fn recv(c: *Conn) -> ([]const u8, err)
 fn next_question_id(c: *Conn) -> u32
 fn recv_answer(c: *Conn, id: u32) -> ([]const u8, err)
 fn recv_question(c: *Conn) -> (u32, []const u8, err)
+fn message_body_length(has_id: bool, id: u32, payload_length: usize) -> (usize, err)
 ```
 
 NNG / nanomsg scalability-protocols wire over TCP and the brokerless survey, request, publish and push patterns on one connection: the 8-byte handshake with the protocol number (`encode_handshake`/`decode_handshake`, `peer_of` for compatibility), length-prefixed messages (`encode_message`/`decode_message`), the 4-byte high-bit id that REQ/REP and SURVEYOR/RESPONDENT carry (`split_id`, `next_question_id`), and blocking `Conn` calls (`handshake`, `send`, `recv`, `recv_answer` which skips answers to other ids, `recv_question`); SUB filtering is `topic_matches` on receipt. Byte-compatible with NNG 1.x (checked against pynng streams). Not here: raw mode and device backtraces, TLS/websocket transports, reconnect, and timeout options.
@@ -29571,6 +29795,7 @@ fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> (Kalman, err)
 fn kalman_start(k: *Kalman, angle: f64)
 fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64
 fn noise_bias(samples: []const f64) -> (f64, f64)
+fn finite(value: f64) -> bool
 ```
 
 Kalman attitude filter and sensor self-test (C162): `kalman_new`, `kalman_start` and `kalman_step` are the two-state (angle, gyroscope bias) filter IMU attitude code uses -- predict with the gyroscope rate across `dt`, correct with the accelerometer angle -- and `noise_bias` is a flat-surface self-test: the mean (bias) and sample standard deviation (noise) of readings. Checked against an independent Python implementation of the 2x2 covariance recursion (`control_kalman`).
@@ -29661,6 +29886,12 @@ fn peg(p: *const Peg, rule: usize, text: str, memo: []i64) -> (usize, bool, err)
 fn peg_rule(p: *const Peg, rule: usize, text: str, pos: usize, memo: []i64) -> (usize, bool)
 fn peg_match(p: *const Peg, node: u32, text: str, pos: usize, memo: []i64) -> (usize, bool)
 fn constrained_decode(g: *const Grammar, start: u32, prefix: []const u32, vocab: []const u32, allowed: []bool, items: []Item, sets: []usize) -> (usize, err)
+fn grammar_valid(g: *const Grammar) -> bool
+fn peg_left_recursive(p: *const Peg, states: []i64) -> bool
+fn peg_node_left_info(p: *const Peg, node: usize, states: []i64) -> (bool, bool)
+fn peg_node_refs_valid(p: *const Peg, node: usize, depth: usize) -> bool
+fn peg_rule_left_info(p: *const Peg, rule: usize, states: []i64) -> (bool, bool)
+fn peg_table_valid(p: *const Peg) -> bool
 ```
 
 `lex` (table scanner with a caller operator list), `lex_indent` (off-side rule),
@@ -29696,6 +29927,12 @@ fn member(state: str, at: usize) -> (str, str, usize, bool)
 fn tracestate_get(state: str, key: str) -> (str, bool)
 fn tracestate_set(state: str, key: str, value: str, out: []u8) -> (usize, err)
 fn append(out: []u8, n: usize, s: str) -> (usize, err)
+const FLAG_RANDOM: u8 = 2u8
+const FLAG_SUPPORTED: u8 = 3u8
+fn random(c: *const TraceContext) -> bool
+fn tracestate_key_char(c: u8) -> bool
+fn valid_tracestate_key(key: str) -> bool
+fn valid_tracestate_value(value: str) -> bool
 ```
 
 W3C Trace Context: `parse_traceparent`, `format_traceparent`, `child`, `propagate`,
@@ -29809,6 +30046,13 @@ fn first(g: *const base.Grammar, nullable_set: []const bool, first_sets: []u64) 
 fn follow(g: *const base.Grammar, start: u32, nullable_set: []const bool, first_sets: []const u64, follow_sets: []u64) -> err
 fn table(g: *const base.Grammar, start: u32, nullable_set: []bool, first_sets: []u64, follow_sets: []u64, out: []u32) -> (usize, err)
 fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const u32, stack: []u32, out_rules: []u32) -> (usize, err)
+const WALK_CYCLE: u64 = 4u64
+const WALK_EMPTY: u64 = 2u64
+const WALK_STOP: u64 = 3u64
+const WALK_STRIDE: u64 = 8u64
+const WALK_UNSEEN: u64 = 0u64
+const WALK_VISITING: u64 = 1u64
+fn mark_no_input_cycles(g: *const base.Grammar, cols: usize, out: []u32, state: []u64, frames: []u64) -> err
 ```
 
 Over `e.parse` grammars: `nullable`, `first`, `first_of`, `follow` as bitsets,
@@ -29917,7 +30161,7 @@ type Entry = struct { term: u64, value: i64, cfg_old: u64, cfg_new: u64 }
 type Message = struct { from: u32, to: u32, kind: Kind, term: u64, index: u64, term2: u64, commit: u64, value: i64, flag: bool, entry: Entry }
 type Pool = struct { items: []Message, len: usize }
 type Role = enum u8 { Follower, Candidate, Leader }
-type Node = struct { id: u32, role: Role, term: u64, voted_for: u32, votes: u64, leader: u32, log: []Entry, log_len: usize, snap_index: u64, snap_term: u64, snap_state: i64, commit: u64, applied: u64, state: i64, next_index: []u64, match_index: []u64, cfg_old: u64, cfg_new: u64, timeout_at: u64, heartbeat_at: u64 }
+type Node = struct { id: u32, role: Role, term: u64, voted_for: u32, votes: u64, leader: u32, log: []Entry, log_len: usize, snap_index: u64, snap_term: u64, snap_state: i64, snap_cfg_old: u64, snap_cfg_new: u64, commit: u64, applied: u64, state: i64, next_index: []u64, match_index: []u64, cfg_old: u64, cfg_new: u64, timeout_at: u64, heartbeat_at: u64 }
 type Cluster = struct { nodes: []Node, rng: rand.Pcg64, timeout_min: u64, timeout_max: u64, heartbeat: u64 }
 type Acceptor = struct { promised: u64, accepted_n: u64, accepted_value: i64 }
 type Proposer = struct { round: u64, n: u64, value: i64, phase: u8, promises: u64, best_n: u64, best_value: i64, learned_n: u64, learned_mask: u64, decided: bool, decided_value: i64 }
@@ -29982,6 +30226,8 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err
 fn pump(c: *Cluster, now: u64, up: u64, out: *Pool) -> err
 fn raft_election(c: *Cluster, node: usize, now: u64, up: u64, out: *Pool) -> (Role, u64, err)
 fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: *Pool) -> (u64, err)
+fn restore_configuration(n: *Node)
+fn snapshot_configuration(n: *const Node, count: usize) -> (u64, u64)
 ```
 
 Simulated consensus over caller message pools (node ids as mask bits): Raft
@@ -30285,6 +30531,7 @@ fn residual(xs: []const f64, ys: []const f64, ths: []const f64, edges: []const E
 fn cholesky_solve(hm: []f64, b: []f64, m: usize) -> err
 fn accumulate(hm: []f64, b: []f64, m: usize, ja: []const f64, col_a: usize, jb: []const f64, col_b: usize, ex: f64, ey: f64, eth: f64, wxy: f64, wth: f64)
 fn pose_graph_optimize(xs: []f64, ys: []f64, ths: []f64, edges: []const Edge, iterations: usize, scratch: []f64) -> (f64, err)
+fn finite(v: f64) -> bool
 ```
 
 `occupancy_update` (Bresenham log-odds) with `occupancy_probability`, `raycast` and
@@ -30360,6 +30607,7 @@ fn nlms(x: []const f64, d: []const f64, mu: f64, eps: f64, w: []f64, out_error: 
 fn rls(x: []const f64, d: []const f64, lambda: f64, delta: f64, w: []f64, p: []f64, scratch: []f64, out_error: []f64) -> err
 fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64, out: []f64) -> (usize, err)
 fn resample_sinc(x: []const f64, ratio: f64, half_width: usize, out: []f64) -> err
+fn finite_f64(value: f64) -> bool
 ```
 
 Smoothing (`moving_average`, `ema`, `savitzky_golay`), filters (`fir`, `iir`, `one_pole`,
@@ -30429,6 +30677,7 @@ fn orset_contains(s: *const OrSet, element: u64) -> bool
 fn orset_find(s: *const OrSet, tag: Tag) -> (usize, bool)
 fn orset_merge(dst: *OrSet, src: *const OrSet) -> err
 fn merge(a: *Crdt, b: *const Crdt) -> err
+error Exhausted
 ```
 
 State-based CRDTs over caller storage: G-counter, PN-counter, LWW-register and an OR-set
@@ -30561,12 +30810,12 @@ error TooSmall
 error Invalid
 
 fn sent(out: []Message) -> Sent
-fn push(s: *Sent, from: usize, to: usize, marker: bool, amount: u64)
+fn push(s: *Sent, from: usize, to: usize, marker: bool, amount: u64) -> err
 fn snapshot(procs: []Proc, channels: []Channel, initial: []const u64) -> (Snapshot, err)
 fn snapshot_send(s: *Snapshot, from: usize, to: usize, amount: u64, out: *Sent) -> err
-fn record(s: *Snapshot, i: usize, except: usize, out: *Sent)
+fn record(s: *Snapshot, i: usize, except: usize, out: *Sent) -> err
 fn snapshot_initiate(s: *Snapshot, i: usize, out: *Sent) -> err
-fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> bool
+fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> (bool, err)
 fn snapshot_complete(s: *const Snapshot) -> bool
 fn snapshot_total(s: *const Snapshot) -> u64
 fn snapshot_live(s: *const Snapshot) -> u64
@@ -30705,6 +30954,8 @@ fn subframe(b: *Bits, out: []i64, block: usize, width_in: u32) -> err
 fn decode_frame(d: *Decoder, out: []i32, scratch: []i64) -> (usize, err)
 fn decode(src: []const u8, out: []i32, scratch: []i64) -> (usize, err)
 fn md5_check(out: []const i32, info: StreamInfo, bytes: []u8) -> bool
+fn sample_fits(value: i64, bits: u32) -> bool
+fn samples_fit(values: []const i64, bits: u32) -> bool
 ```
 
 FLAC decoding over caller storage: `stream_info`, `frame_header` (CRC-8), `decode_frame`
@@ -30749,7 +31000,7 @@ error Invalid
 
 fn gcd(a: u64, b: u64) -> u64
 fn lcm(a: u64, b: u64) -> u64
-fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64)
+fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64, err)
 fn add_mod(a: u64, b: u64, m: u64) -> u64
 fn mul_mod(a: u64, b: u64, m: u64) -> u64
 fn pow_mod(base: u64, exponent: u64, m: u64) -> u64
@@ -30773,6 +31024,10 @@ fn sqrt_mod(n: u64, p: u64) -> (u64, bool)
 fn stern_brocot_search(x: f64, tolerance: f64, max_den: u64) -> (u64, u64)
 fn farey_next(a: u64, c: u64, b: u64, d: u64, n: u64) -> (u64, u64)
 fn farey(n: u64, out: []u64) -> (usize, err)
+error Unrepresentable
+fn maximum_i64() -> i64
+fn minimum_i64() -> i64
+fn subtract_product(a: i64, b: i64, c: i64) -> (i64, bool)
 ```
 
 Exact over the full `u64` range: `mul_mod` never overflows and `is_prime` is the
@@ -30875,6 +31130,12 @@ fn newton[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, df: fn(*Ctx, f64) -> f6
 fn halley[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, df: fn(*Ctx, f64) -> f64, d2f: fn(*Ctx, f64) -> f64, start: f64, tolerance: f64, max_iterations: u32) -> Result
 fn secant[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, first: f64, second: f64, tolerance: f64, max_iterations: u32) -> Result
 fn brent[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tolerance: f64, max_iterations: u32) -> Result
+fn bracket_half_width(a: f64, b: f64) -> f64
+fn bracket_iqi(a: f64, fa: f64, b: f64, fb: f64, c: f64, fc: f64) -> f64
+fn bracket_midpoint(a: f64, b: f64) -> f64
+fn bracket_quarter(a: f64, b: f64) -> f64
+fn bracket_secant(a: f64, fa: f64, b: f64, fb: f64) -> f64
+fn opposite_sign(a: f64, b: f64) -> bool
 ```
 
 Every method takes the function as a value over borrowed context and stops when
@@ -30900,6 +31161,8 @@ fn t_cdf(t: f64, df: f64) -> f64
 fn chi_squared_cdf(x: f64, df: f64) -> f64
 fn f_cdf(x: f64, d1: f64, d2: f64) -> f64
 fn choose(n: f64, k: f64) -> f64
+fn infinity() -> f64
+fn negative_infinity() -> f64
 ```
 
 Lanczos log-gamma, series and continued-fraction incomplete gamma and beta,
@@ -30942,6 +31205,7 @@ fn dwt(x: []const f64, wavelet: Wavelet, approx: []f64, detail: []f64) -> err
 fn idwt(approx: []const f64, detail: []const f64, wavelet: Wavelet, out: []f64) -> err
 fn wavedec(x: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err
 fn waverec(coefficients: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err
+fn wavelet_levels_valid(n: usize, levels: usize) -> bool
 ```
 
 `fft`/`ifft` transform split real and imaginary arrays of a power-of-two length in
@@ -30964,6 +31228,8 @@ fn verlet[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: [
 fn leapfrog[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
 fn yoshida[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
 fn euler_maruyama[Ctx: type](ctx: *Ctx, drift: fn(*Ctx, f64, []const f64, []f64), diffusion: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, noise: []const f64, scratch: []f64) -> err
+error Invalid
+fn has_scratch(scratch_len: usize, count: usize, vectors: usize) -> bool
 ```
 
 Every stepper advances the caller's state by one step of `h` in place over caller
@@ -31149,6 +31415,8 @@ fn gaussian_entropy_constant(n: usize) -> f64
 fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, draws: usize, scratch: []f64) -> (f64, err)
 fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err)
 fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err
+fn has_nuts_scratch(len: usize, n: usize, max_depth: usize) -> bool
+fn has_rows(len: usize, rows: usize, width: usize) -> bool
 ```
 
 Every sampler starts at the caller's `x`, writes `count` rows into `samples` and leaves
@@ -32249,6 +32517,7 @@ fn sample_u(g: *MacGrid, x: f64, y: f64) -> f64
 fn sample_v(g: *MacGrid, x: f64, y: f64) -> f64
 fn fluid_mac(g: *MacGrid, gravity_y: f64, dt: f64, iterations: usize) -> err
 fn mac_divergence(g: *MacGrid) -> f64
+fn finite(value: f64) -> bool
 ```
 
 2-d dynamics over packed caller arrays: `pbd_step`, `xpbd_step` (compliance and
@@ -32570,6 +32839,7 @@ fn oscillator_polyblep(kind: Waveform, phase: f64, increment: f64) -> f64
 fn wavetable_build(table: []f64, harmonics: usize) -> err
 fn wavetable(table: []const f64, phase: f64, interpolation: Interpolation) -> f64
 fn karplus_strong(frequency: f64, sample_rate: f64, decay: f64, r: *rand.Pcg64, out: []f64) -> err
+fn stage_fraction(e: *Adsr, duration: f64) -> f64
 ```
 
 `adsr` envelopes (`adsr_gate`, `adsr_next`) advance every attack, decay and
@@ -33037,7 +33307,6 @@ const SHAPE_ELLIPSE: u8 = 1u8
 const SHAPE_PICTURE: u8 = 2u8
 const SHAPE_LINE: u8 = 3u8
 fn resolve_target(a: *mem.Arena, base: str, dest: str) -> str
-fn related_part(a: *mem.Arena, ar: *zip.Archive, rels_name: str, base: str, id: str) -> str
 fn part_bytes(a: *mem.Arena, ar: *zip.Archive, name: str) -> []const u8
 fn number_attribute(node: *const xml.Node, name: str) -> usize
 fn pictures(a: *mem.Arena, data: []const u8) -> ([]Picture, err)
@@ -33047,6 +33316,11 @@ fn hex_digit(c: u8) -> u32
 fn has_ancestor(nodes: []const xml.Node, n: usize, name: str) -> bool
 fn within(nodes: []const xml.Node, n: usize, root: usize) -> bool
 fn slide_layout(a: *mem.Arena, data: []const u8, number: usize) -> (SlideLayout, err)
+const LIMIT_BLIP_ATTEMPTS: usize = 64usize
+type Relationship = struct { id: str, target: str }
+fn local_attribute(element: *const xml.Node, name: str) -> (str, bool)
+fn related_parts(a: *mem.Arena, ar: *zip.Archive, rels_name: str, base: str) -> []Relationship
+fn relation_target(relations: []const Relationship, id: str) -> str
 ```
 
 Word tables (C152, D3809): `tables` reads a `.docx`'s tables in document order as `Grid`s (rows, columns, `cells[row * columns + column]`): the paragraphs of a cell joined by a space, a short row padded with empty cells, a table nested in a cell contributing its text to that cell rather than a grid of its own, at most 2000 by 64. `Grid.after` is the number of paragraphs outside any table before the table (0 for a sheet), and `cell_flags` says for each paragraph `paragraphs` gives whether it sits in a cell, so a viewer can leave those out of the text and set the grids in between. `paragraphs` is unchanged (a cell's paragraphs are still paragraphs in order). Checked on a package made with Python's zipfile (`reference_table.py`).
@@ -33151,7 +33425,7 @@ fn xml_first_text(a: *mem.Arena, part: []const u8, name: str) -> (str, err)
 fn package_meta(a: *mem.Arena, data: []const u8, part_name: str, title_name: str, author_name: str) -> (str, str, err)
 fn paragraph_texts(a: *mem.Arena, ps: []const ooxml.Paragraph) -> ([]str, err)
 fn slides_text(a: *mem.Arena, slides: []const ooxml.Slide) -> (str, err)
-fn read_pdf_string(a: *mem.Arena, data: []const u8, key: str) -> (str, err)
+fn read_pdf_string(a: *mem.Arena, data: []const u8, from: usize, until: usize, key: str) -> (str, err)
 fn html_skipped(name: str) -> bool
 fn html_block(name: str) -> bool
 
@@ -33183,6 +33457,28 @@ fn json_extract_value(a: *mem.Arena, v: *const json.Value, size: usize) -> (Docu
 fn json_line(b: *str.Builder, lines: *usize, s: str) -> err
 fn json_emit(b: *str.Builder, v: *const json.Value, lines: *usize) -> err
 fn extract(a: *mem.Arena, data: []const u8, name: str) -> (Document, err)
+fn extension_format(name: str) -> Format
+fn has_nul(s: str) -> bool
+fn markdown_marker_close(line: str, from: usize, marker: u8, count: usize) -> bool
+fn markdown_marker_slot(c: u8, count: usize) -> usize
+fn markdown_word(c: u8) -> bool
+fn pdf_delimiter(c: u8) -> bool
+fn pdf_digit(c: u8) -> bool
+fn pdf_hex_bytes(a: *mem.Arena, data: []const u8, from: usize, until: usize) -> (str, err)
+fn pdf_hex_digit(c: u8) -> u32
+fn pdf_info_span(data: []const u8) -> (usize, usize, bool)
+fn pdf_literal_bytes(a: *mem.Arena, data: []const u8, from: usize, until: usize) -> (str, err)
+fn pdf_metadata(a: *mem.Arena, data: []const u8) -> (str, str, err)
+fn pdf_number(data: []const u8, from: usize, until: usize) -> (usize, usize, bool)
+fn pdf_object_span(data: []const u8, wanted_number: usize, wanted_generation: usize) -> (usize, usize, bool)
+fn pdf_text(a: *mem.Arena, raw: []const u8) -> (str, err)
+fn pdf_utf16be(a: *mem.Arena, raw: []const u8) -> (str, err)
+fn pdf_word_at(data: []const u8, at: usize, until: usize, word: str) -> bool
+fn vcard_count(source: []const u8) -> usize
+fn windows1251_scalar(c: u8) -> u32
+fn windows1251_to_utf8(a: *mem.Arena, s: str) -> (str, err)
+fn windows1252_scalar(c: u8) -> u32
+fn windows1252_to_utf8(a: *mem.Arena, s: str) -> (str, err)
 ```
 
 The document text-extraction facade (L153): `detect(a, data, name)` names the `Format` of a byte slice from its content (PDF header, zip entries such as `word/document.xml`, `xl/workbook.xml`, `ppt/slides/`, the OpenDocument `mimetype` entry, HTML and XML declarations, `BEGIN:VCARD`, mail headers, a JSON that parses), with the file name's extension as the tie-break among text formats and for Markdown, CSV and plain text; `extract` detects and then `extract_as` reads the document through the codec that owns the format and returns `Document { format, text, title, author, parts }`. Text per format: PDF pages joined by a blank line with the Info dictionary's Title and Author (literal or UTF-16 hex strings); DOCX and PPTX paragraphs and slides with core properties; ODT, ODP and ODS the same from `meta.xml`; XLSX each sheet's name then its rows with tab-separated cells; HTML the visible text with script, style, head and template dropped, blocks on their own lines, table cells tab separated, and the `title` element; XML the character data one node per line; JSON the keys and string values, one per line; Markdown the text with block and inline markup removed line by line (not a CommonMark parse) and the first heading as the title; CSV and TSV rows by lines; mail the `text/plain` body (the HTML part reduced to text when there is none) with quoted-printable, base64, Latin-1 and RFC 2047 handled, the Subject as title and From as author; vCard one line per card. Errors: `Unsupported` for binary or unknown data, `Corrupt` for a document its codec refuses, `Encoding` for text that is not UTF-8, `TooLarge`. Not here: OCR and handwriting, encodings other than UTF-8 and Latin-1, PDFs with ASCII85 or object streams (`e.fmt.pdf` reads FlateDecode only, so a stock reportlab file with page compression gives no text), legacy binary Office formats, archives and images, and the wiring into the L034 indexing pipeline. Checked on a corpus from independent producers (reportlab and pypdf, python-docx, python-pptx, openpyxl, hand-built OpenDocument, Python's email package, the Neper PDF writer's generator) in `scripts/gen_extract_test.py`.
@@ -33211,6 +33507,10 @@ fn paragraph_of(nodes: []const xml.Node, n: usize) -> usize
 fn walk_sheet(a: *mem.Arena, nodes: []const xml.Node, table: usize, fill: bool, cells: []str, columns: usize, rows_out: *usize, columns_out: *usize)
 fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (ooxml.Grid, err)
 fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err)
+fn advance_grid(at: usize, repeat: usize, limit: usize) -> usize
+fn odf_attribute(node: *const xml.Node, name: str) -> (str, bool)
+fn sheet_table(nodes: []const xml.Node, n: usize) -> bool
+fn table_owner(nodes: []const xml.Node, n: usize) -> usize
 ```
 
 The text of an OpenDocument package, read over `e.fmt.zip` and `e.fmt.xml` the way `e.fmt.ooxml` reads Office Open XML (C142): `paragraphs` gives an `.odt`'s `text:p` and `text:h` in order (the text of each, its style name or `Heading<level>`, whether it sits in a list item, `text:s` spaces, tabs and line breaks as characters, entities decoded), `slides` an `.odp`'s `draw:page`s in order with each page's paragraphs. Tables and frames are not laid out; their text is a paragraph like any other. A package with no `content.xml` is `NoContent`, bytes that are not a zip `NotAPackage` (from `e.fmt.ooxml`). Checked against packages made with Python's zipfile and an ElementTree walk (`scripts/gen_odf_test.py`).
@@ -33302,6 +33602,8 @@ fn build_request(out: []u8, version: u8, community: str, kind: u8, request_id: i
 fn read_header(data: []const u8, at: usize, limit: usize) -> (u8, usize, usize, err)
 fn read_integer(data: []const u8, start: usize, length: usize) -> i64
 fn decode(data: []const u8) -> (Message, err)
+const MAX_LENGTH: usize = 65535usize
+fn oid_valid(arcs: []const u32) -> bool
 ```
 
 SNMP v1 and v2c messages (RFC 1157, RFC 3416) over a small BER codec (L137): `build_request` writes a GetRequest, GetNextRequest or SetRequest for one binding, `decode` reads a message of any PDU (a GetResponse above all) with up to eight bindings of INTEGER, Gauge32, Counter32, TimeTicks, Counter64 (saturating), octet string, IpAddress, OID, NULL and the v2c exceptions. Lengths are definite, short or long form. No UDP; SNMPv3 is not covered. Checked against messages built by an independent BER encoder written in Python.
@@ -33353,12 +33655,16 @@ type Alert = struct { identifier: str, sender: str, sent: str, status: str, mess
 
 const MAX_INFOS: usize = 16usize
 
-fn local(name: str) -> str
 fn is_space(c: u8) -> bool
 fn trim(s: str) -> str
 fn text_under(a: *mem.Arena, nodes: []const xml.Node, at: usize) -> (str, err)
 fn set_field(info: *Info, name: str, value: str)
 fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err)
+fn cap_name(nodes: []const xml.Node, at: usize) -> (str, bool)
+fn cap_namespace() -> str
+fn namespace_declaration(name: str, prefix: str) -> bool
+fn namespace_of(nodes: []const xml.Node, at: usize, prefix: str) -> (str, bool)
+fn qname(name: str) -> (str, str, bool)
 ```
 
 Common Alerting Protocol 1.2 (C156): `parse` reads an `<alert>` over `e.fmt.xml` into the message (identifier, sender, sent, status, message type, scope) and each `<info>` block (language, first category, event, urgency, severity, certainty, effective, onset, expires, sender name, headline, description, instruction, web, the first area's description and the number of areas), element names matched without a namespace prefix and text trimmed. No polygons, geocodes, resources or signatures; a document whose root is not `alert` is `NotCap`, malformed XML the parser's error. Checked against an ElementTree walk of two-language, cancel and prefixed documents (`scripts/gen_cap_test.py`).
@@ -33369,7 +33675,7 @@ Common Alerting Protocol 1.2 (C156): `parse` reads an `<alert>` over `e.fmt.xml`
 ```neper
 error TooLarge
 
-type Event = struct { kind: str, data: str, id: str, has_id: bool, retry: i64, has_retry: bool }
+type Event = struct { kind: str, data: str, id: str, has_id: bool, retry: i64, has_retry: bool, dispatch: bool }
 
 const MAX_EVENT: usize = 1048576usize
 const MAX_LINES: usize = 128usize
@@ -33389,7 +33695,7 @@ Server-Sent Events (`text/event-stream`, HTML Living Standard 9.2) read incremen
 error Invalid
 error TooMany
 
-type Value = struct { kind: u8, text: str, number: f64, integer: i64 }
+type Value = struct { kind: u8, text: str, number: f64, integer: i64, unsigned: u64 }
 type Point = struct { x: i32, y: i32 }
 type Feature = struct { id: u64, has_id: bool, kind: u8, tags: []u32, points: []Point, parts: []usize }
 type Layer = struct { name: str, version: u32, extent: u32, keys: []str, values: []Value, features: []Feature }
@@ -33416,6 +33722,7 @@ fn f32_from_bits(w: u32) -> f32
 fn f64_from_bits(w: u64) -> f64
 fn parse_layer(a: *mem.Arena, payload: []const u8) -> (Layer, err)
 fn parse(a: *mem.Arena, data: []const u8) -> ([]Layer, err)
+type GeometryState = enum u8 { Start, PointDone, LineNeedLine, LineDone, PolygonNeedLine, PolygonNeedClose, PolygonDone }
 ```
 
 Mapbox Vector Tiles (specification 2.1, C160), decoded over `e.fmt.protobuf`: `parse` reads a tile's layers (name, extent, version, key and value tables, values keeping their protobuf type) and each layer's features (id, geometry type, tag pairs, and the MoveTo, LineTo and ClosePath commands resolved to absolute integer points in the layer's extent, with `parts` giving where each linestring or ring ends). Truncated geometry or tag lists are `Invalid`. The tile format OpenStreetMap vector sources (OpenFreeMap, Protomaps) serve; rendering and the transform to the screen belong to the caller. Checked against a tile built by an independent encoder (`scripts/gen_mvt_test.py`).
@@ -33444,7 +33751,7 @@ fn parse(a: *mem.Arena, line: str, host: str, request_path: str, secure_request:
 fn expired(c: Cookie, now: i64) -> bool
 fn jar_new(cookies: []Cookie, text: []u8) -> Jar
 fn keep(jar: *Jar, s: str) -> (str, bool)
-fn compact(jar: *Jar, scratch: []u8) -> bool
+fn compact(jar: *Jar, scratch: []u8, replace_at: usize, replacement: Cookie) -> bool
 fn own(jar: *Jar, c: Cookie) -> (Cookie, bool)
 fn store(jar: *Jar, c: Cookie, now: i64) -> err
 fn header(a: *mem.Arena, jar: *Jar, host: str, path: str, secure: bool, now: i64) -> (str, err)
@@ -33461,7 +33768,6 @@ error NoPages
 type Object = struct { number: usize, start: usize, end: usize }
 const MAX_OBJECTS: usize = 4096usize
 const MAX_PAGES: usize = 512usize
-const MAX_STREAM: u64 = 8388608u64
 fn is_space(c: u8) -> bool
 fn is_delim(c: u8) -> bool
 fn is_digit(c: u8) -> bool
@@ -33491,7 +33797,7 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
 type Shape = struct { kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str }
 type Image = struct { width: u32, height: u32, pixels: []u8 }
 type Painting = struct { width: f64, height: f64, shapes: []Shape, images: []Image }
-type FontInfo = struct { object: usize, first: usize, widths: []u16, codes: []u16, unis: []u32, mapped: usize, two_byte: bool, default_width: usize }
+type FontInfo = struct { object: usize, first: usize, widths: []u16, codes: []u16, unis: []str, mapped: usize, two_byte: bool, default_width: usize }
 type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
 const SHAPE_FILL: u8 = 0u8
 const SHAPE_LINE: u8 = 1u8
@@ -33500,19 +33806,19 @@ const SHAPE_IMAGE: u8 = 3u8
 const MAX_IMAGES: usize = 6usize
 const MAX_IMAGE_PIXELS: usize = 1048576usize
 const MAX_FONTS: usize = 8usize
-const MAX_CMAP: usize = 1024usize
+const MAX_CMAP: usize = 65536usize
 const MAX_WIDTHS: usize = 4096usize
 const MAX_SHAPES: usize = 4000usize
 const MAX_SEGMENTS: usize = 256usize
 const STATE_DEPTH: usize = 8usize
-type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64, data: []const u8, table: []Object, count: usize, res_s: usize, res_e: usize, images: []Image, image_n: usize, image_objs: [6]usize, fonts: [8]FontInfo, font_n: usize, cur_font: usize, form_depth: usize }
+type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, overflow_depth: usize, overflow_saved: []f64, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64, data: []const u8, table: []Object, count: usize, res_s: usize, res_e: usize, images: []Image, image_n: usize, image_objs: [6]usize, fonts: [8]FontInfo, font_n: usize, cur_font: usize, form_depth: usize }
 fn paint_start(out: []Shape) -> Painter
 fn paint_push(p: *Painter, kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str)
 fn paint_path(p: *Painter, fill: bool, stroke: bool)
 fn paint_line_to(p: *Painter, x: f64, y: f64)
 fn paint_text(p: *Painter, text: str)
 fn put_utf8(out: []u8, at: usize, cp: u32) -> usize
-fn font_unicode(f: *const FontInfo, code: usize) -> u32
+fn font_unicode(f: *const FontInfo, code: usize) -> (str, bool)
 fn font_width(f: *const FontInfo, code: usize) -> usize
 fn paint_run(a: *mem.Arena, p: *Painter, raw: []const u8)
 fn paint_move_text(p: *Painter, tx: f64, ty: f64)
@@ -33527,11 +33833,11 @@ fn array_token(data: []const u8, at: usize, until: usize) -> (u8, f64, usize)
 fn read_widths(data: []const u8, s: usize, e: usize, out: []u16) -> usize
 fn read_cid_widths(data: []const u8, s: usize, e: usize, out: []u16) -> usize
 fn hex_value(data: []const u8, at: usize, until: usize) -> (u32, usize, usize, bool)
-fn read_cmap(data: []const u8, f: *FontInfo, codes: []u16, unis: []u32) -> usize
-fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> usize
+fn read_cmap(a: *mem.Arena, data: []const u8, f: *FontInfo, codes: []u16, unis: []str) -> (usize, err)
+fn load_font(a: *mem.Arena, p: *Painter, object: usize) -> (usize, err)
 fn unpredict(raw: []u8, row_bytes: usize, bpp: usize) -> usize
 fn decode_image(a: *mem.Arena, p: *Painter, s: usize, e: usize) -> (Image, bool)
-fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8)
+fn paint_xobject(a: *mem.Arena, p: *Painter, name: []const u8) -> err
 fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err
 fn media_box(data: []const u8, from: usize, until: usize) -> (f64, f64, bool)
 fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err)
@@ -33540,6 +33846,36 @@ const MAX_OUTLINE: usize = 64usize
 const NO_PAGE: usize = 4294967295usize
 fn string_after(a: *mem.Arena, data: []const u8, s: usize, e: usize, key: str) -> str
 fn outline(a: *mem.Arena, data: []const u8) -> ([]OutlineItem, err)
+error InvalidAscii85
+const MAX_ASCII85: usize = 8388608usize
+const MAX_TEXT_STREAM: usize = 8388608usize
+error TooLarge
+fn ascii85_size(raw: []const u8) -> (usize, err)
+fn ascii85_value(group: [5]u32) -> (u32, bool)
+fn at_keyword(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool
+fn at_stream_keyword(data: []const u8, at: usize, from: usize, until: usize) -> bool
+fn at_token(data: []const u8, at: usize, word: str, from: usize, until: usize) -> bool
+fn cmap_entry_count(data: []const u8) -> (usize, err)
+fn find_keyword(data: []const u8, word: str, from: usize, until: usize) -> usize
+fn font_mapping_bound(f: *const FontInfo) -> usize
+fn grow_text_output(a: *mem.Arena, out: []u8, used: usize, content_len: usize, bytes_per_input: usize) -> ([]u8, err)
+fn hex_text(a: *mem.Arena, data: []const u8, at: usize, until: usize, increment: u32) -> (str, usize, bool)
+fn inherited_media_box(data: []const u8, table: []const Object, count: usize, ps: usize, pe: usize) -> (f64, f64, bool)
+fn length_number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool)
+fn object_end(data: []const u8, from: usize) -> usize
+fn output_capacity(input_len: usize, bytes_per_input: usize, extra: usize) -> (usize, bool)
+fn paint_restore(p: *Painter)
+fn paint_save(a: *mem.Arena, p: *Painter) -> err
+fn painter_mapping_bound(p: *const Painter) -> usize
+fn put_font_code(out: []u8, at: usize, f: *const FontInfo, code: usize) -> usize
+fn refs_in_array_alloc(a: *mem.Arena, data: []const u8, from: usize, until: usize, key: str) -> ([]usize, err)
+fn refs_in_array_count(data: []const u8, from: usize, until: usize, key: str) -> usize
+fn skip_comment(data: []const u8, at: usize, until: usize) -> usize
+fn skip_hex(data: []const u8, at: usize, until: usize) -> usize
+fn skip_literal(data: []const u8, at: usize, until: usize) -> usize
+fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize
+fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool)
+fn stream_start(data: []const u8, at: usize, until: usize) -> usize
 ```
 
 A page painted (C152, C172, D3801): `page_painting` runs page N's content streams and gives the page's size (its MediaBox, or the first MediaBox of any page tree node, else 612 by 792) and the shapes in paint order: `SHAPE_FILL` (a rectangle filled by `re` then `f`, `F`, `f*`, `B`), `SHAPE_LINE` (a segment of `m`/`l`/`h`/`re` stroked by `S`, `s`, `B`, with the line width and the stroke colour) and `SHAPE_TEXT` (a `Tj`/`TJ`/`'`/`"` string at the text position, with the font size scaled by `Tm`), in user space (origin bottom left) after the `cm` scale and offset; colours from `g`, `rg`, `k` and their stroke forms, `q`/`Q` nest eight deep. Not a renderer: a `cm` rotation or shear is not followed, a curve is its chord, a filled path that is not a rectangle is not filled, clipping and images (`Do`) are ignored, and text is placed with no glyph metrics (half its size a character). Checked on a hand-written page with a red fill, a blue 3-unit line, text after `Td`, a `cm` scale and offset undone by `Q`, and a CMYK black kerned `TJ` (`reference_paint.py`).
@@ -33702,7 +34038,7 @@ QR Code, Code 128 and EAN-13 (C121, L137). `qr_encode` makes the smallest QR sym
 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attrs: u32 }
-type Terminal = struct { cols: usize, rows: usize, main_cells: []Cell, alt_cells: []Cell, alt: bool, cx: usize, cy: usize, pen: Cell, saved_x: usize, saved_y: usize, saved_pen: Cell, top: usize, bottom: usize, cursor_visible: bool, autowrap: bool, state: u32, params: [16]i32, param_count: usize, private: bool, utf8_left: usize, utf8_value: u32, scrollback: []Cell, scroll_cap: usize, scroll_count: usize, scroll_start: usize }
+type Terminal = struct { cols: usize, rows: usize, main_cells: []Cell, alt_cells: []Cell, alt: bool, cx: usize, cy: usize, pen: Cell, saved_x: usize, saved_y: usize, saved_pen: Cell, top: usize, bottom: usize, cursor_visible: bool, autowrap: bool, state: u32, params: [16]i32, param_count: usize, private: bool, utf8_left: usize, utf8_value: u32, utf8_floor: u32, scrollback: []Cell, scroll_cap: usize, scroll_count: usize, scroll_start: usize }
 const BOLD: u32 = 1u32
 const UNDERLINE: u32 = 2u32
 const REVERSE: u32 = 4u32
@@ -33868,6 +34204,15 @@ fn out_raw(o: *Out, s: str)
 fn out_value(o: *Out, s: str)
 fn out_end(o: *Out)
 fn write(cards: []const Card, buf: []u8) -> (usize, err)
+fn continuation(byte: u8) -> bool
+fn decode_quoted_printable(a: *mem.Arena, value: []const u8) -> (str, err)
+fn hex_value(c: u8) -> (u8, bool)
+fn is_quoted_printable_line(line: []const u8) -> bool
+fn out_fold(o: *Out)
+fn out_utf8(o: *Out, s: str, at: usize, width: usize)
+fn parameter_value(params: []const u8, wanted: str) -> (str, bool)
+fn quoted_printable_value(a: *mem.Arena, value: []const u8, params: []const u8) -> (str, err)
+fn utf8_width(s: str, at: usize) -> usize
 ```
 
 vCards (C127): `parse` reads the cards of a .vcf text (versions 2.1, 3.0 and 4.0) into `Card` values with the display name, the family and given names, up to four telephone numbers with their first TYPE (lower case), up to two e-mail addresses, the organisation and a note; lines are unfolded, groups and parameters read, values unescaped, everything else skipped; no BEGIN:VCARD is `Malformed`. `write` writes cards as vCard 3.0 with CRLF lines folded at 75 octets. Checked against vobject on its own output and on hand-made 2.1 and folded texts.
