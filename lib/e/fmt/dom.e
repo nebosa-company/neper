@@ -343,7 +343,8 @@ fn check_insert_excluding(d: *const Dom, parent: NodeId, child: NodeId, before: 
     if before != NONE && d.nodes[usize(before)].parent != parent { ret NotChild }
     if child == before { ret ok }
     let ck = d.nodes[usize(child)].kind
-    if ck == .Doctype && parent != d.root { ret HierarchyRequest }
+    // Documents the page creates are fragment-like nodes here: only the script layer knows them as documents.
+    if ck == .Doctype && pk != .Document { ret HierarchyRequest }
     if ck == .Text && parent == d.root { ret HierarchyRequest }
     if ck == .Document && child == d.root { ret HierarchyRequest }
     if !document_insert_ok(d, parent, child, before, removed) { ret HierarchyRequest }
