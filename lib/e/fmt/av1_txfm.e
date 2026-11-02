@@ -1,7 +1,11 @@
 // AV1 dequantization and inverse transforms (specification sections "Reconstruct process" and
-// "Inverse transform process"), without quantizer matrices and without the final addition to the
-// prediction.
+// "Inverse transform process"), without quantizer matrices.
 //
+//   reconstruct_add(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, eob_row_limit, eob_col_limit,
+//                   dst, dst_stride, dst_x, dst_y, scratch) -> err
+//     dequantizes, runs both transform passes and the final rounding, and ADDS the residual to the 8-bit
+//     plane dst (row stride dst_stride) at (dst_x, dst_y), clamping to 0..255. bit_depth must be 8. The whole
+//     w * h block must lie inside dst. scratch needs w * h + 4 * w entries (4352 always suffice).
 //   reconstruct(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, out) -> err
 //     quant   the parsed coefficients as the spec's Quant array: Quant[i * tw + j] with tw = Min(32, w),
 //             th = Min(32, h) rows (so a 64-wide or 64-high block has only its 32x32 corner)
@@ -19,10 +23,19 @@
 //
 // tx_size is the spec's TxSize (0 = TX_4X4 .. 18 = TX_64X16), tx_type the spec's PlaneTxType
 // (0 = DCT_DCT .. 15 = H_FLIPADST). A tx_type that needs a 1D transform the spec does not define for that
-// length (ADST above 16, identity above 32) is `Invalid`. All the arithmetic is done in 64 bits, so every
-// bit depth the spec allows is exact. The lossy fast path (reconstruct_eob) uses unrolled strided 1D
-// transforms generated from the spec's butterfly structure (idctN, iadst8, iadst16 below); the lossless
-// path and inverse_transform_2d use the generic loops.
+// length (ADST above 16, identity above 32) is `Invalid`.
+//
+// Speed: for 8-bit lossy blocks (reconstruct_add, reconstruct_eob, reconstruct) the 1D transforms run on
+// Vec[i32, 4]: one lane per row (row pass) or per column (column pass), the same butterfly network for all
+// four, so the block is dequantized into a transposed 4-row staging buffer, transformed, and transposed back
+// with unpack_lo / unpack_hi. For 8-bit input every product is a 16-bit value times a constant of at most 2^12
+// (sums of two stay below 2^31), so i32 lanes give the spec's 64-bit result. DCTs have variants that skip the
+// inputs known to be zero (4, 8, 16, 32 leading non-zero inputs). The unrolled vector transforms (v* below)
+// are generated from the spec's butterfly structure. Lossless blocks and every bit depth other than 8 take
+// the generic scalar path (reconstruct_generic, 64-bit arithmetic, exact for every bit depth).
+
+use e.mem
+use e.simd
 
 error Invalid
 
@@ -703,2848 +716,3755 @@ fn reconstruct_generic(quant: []const i32, tx_size: usize, tx_type: usize, lossl
     }
     ret ok
 }
-
-fn idct4(t: []i32, off: usize, st: usize, r: u32) {
+fn vidct4(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 0usize * st])
-    var v1: i64 = i64(t[off + 2usize * st])
-    var v2: i64 = i64(t[off + 1usize * st])
-    var v3: i64 = i64(t[off + 3usize * st])
-    tx = (2048i64 + v0 * 2896i64 - v1 * 2896i64) >> 12u32
-    ty = (2048i64 + v0 * 2896i64 + v1 * 2896i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1567i64 - v3 * 3784i64) >> 12u32
-    ty = (2048i64 + v2 * 3784i64 + v3 * 1567i64) >> 12u32
-    v2 = tx
-    v3 = ty
-    tx = v0 + v3
-    ty = v0 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v3 = ty
-    tx = v1 + v2
-    ty = v1 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v2 = ty
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(v1)
-    t[off + 2usize * st] = i32(v2)
-    t[off + 3usize * st] = i32(v3)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 2usize * st)
+    var s2 = vld(t, off + 1usize * st)
+    var s3 = vld(t, off + 3usize * st)
+    var s4 = (((kp2048) +% (s0 *% kp2896)) -% (s1 *% kp2896)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp2896)) +% (s1 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s0 +% s2), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s4 +% s1), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s4 -% s1), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s0 -% s2), lo, hi)))
     }
 }
 
-fn idct8(t: []i32, off: usize, st: usize, r: u32) {
+fn vidct8(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 0usize * st])
-    var v1: i64 = i64(t[off + 4usize * st])
-    var v2: i64 = i64(t[off + 2usize * st])
-    var v3: i64 = i64(t[off + 6usize * st])
-    var v4: i64 = i64(t[off + 1usize * st])
-    var v5: i64 = i64(t[off + 5usize * st])
-    var v6: i64 = i64(t[off + 3usize * st])
-    var v7: i64 = i64(t[off + 7usize * st])
-    tx = (2048i64 + v4 * 799i64 - v7 * 4017i64) >> 12u32
-    ty = (2048i64 + v4 * 4017i64 + v7 * 799i64) >> 12u32
-    v4 = tx
-    v7 = ty
-    tx = (2048i64 + v5 * 3406i64 - v6 * 2276i64) >> 12u32
-    ty = (2048i64 + v5 * 2276i64 + v6 * 3406i64) >> 12u32
-    v5 = tx
-    v6 = ty
-    tx = (2048i64 + v0 * 2896i64 - v1 * 2896i64) >> 12u32
-    ty = (2048i64 + v0 * 2896i64 + v1 * 2896i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1567i64 - v3 * 3784i64) >> 12u32
-    ty = (2048i64 + v2 * 3784i64 + v3 * 1567i64) >> 12u32
-    v2 = tx
-    v3 = ty
-    tx = v4 + v5
-    ty = v4 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v5 = ty
-    tx = v7 + v6
-    ty = v7 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v6 = ty
-    tx = v0 + v3
-    ty = v0 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v3 = ty
-    tx = v1 + v2
-    ty = v1 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v2 = ty
-    tx = (2048i64 + v6 * 2896i64 - v5 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v5 * 2896i64) >> 12u32
-    v6 = ty
-    v5 = tx
-    tx = v0 + v7
-    ty = v0 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v7 = ty
-    tx = v1 + v6
-    ty = v1 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v6 = ty
-    tx = v2 + v5
-    ty = v2 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v5 = ty
-    tx = v3 + v4
-    ty = v3 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v4 = ty
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(v1)
-    t[off + 2usize * st] = i32(v2)
-    t[off + 3usize * st] = i32(v3)
-    t[off + 4usize * st] = i32(v4)
-    t[off + 5usize * st] = i32(v5)
-    t[off + 6usize * st] = i32(v6)
-    t[off + 7usize * st] = i32(v7)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 4usize * st)
+    var s2 = vld(t, off + 2usize * st)
+    var s3 = vld(t, off + 6usize * st)
+    var s4 = vld(t, off + 1usize * st)
+    var s5 = vld(t, off + 5usize * st)
+    var s6 = vld(t, off + 3usize * st)
+    var s7 = vld(t, off + 7usize * st)
+    var s8 = (((kp2048) +% (s4 *% kp799)) -% (s7 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s7 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s5 *% kp3406)) -% (s6 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s6 *% kp3406)) >> 12u32
+    s6 = (((kp2048) +% (s0 *% kp2896)) -% (s1 *% kp2896)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp2896)) +% (s1 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    s3 = vclp((s8 +% s7), lo, hi)
+    s7 = vclp((s8 -% s7), lo, hi)
+    s8 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s0 +% s2), lo, hi)
+    s0 = vclp((s0 -% s2), lo, hi)
+    s2 = vclp((s6 +% s1), lo, hi)
+    s1 = vclp((s6 -% s1), lo, hi)
+    s6 = (((kp2048) +% (s4 *% kp2896)) -% (s7 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp2896)) +% (s7 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s5 +% s8), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s2 +% s4), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s1 +% s6), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s0 +% s3), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s0 -% s3), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s1 -% s6), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s2 -% s4), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s5 -% s8), lo, hi)))
     }
 }
 
-fn idct16(t: []i32, off: usize, st: usize, r: u32) {
+fn vidct16(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 0usize * st])
-    var v1: i64 = i64(t[off + 8usize * st])
-    var v2: i64 = i64(t[off + 4usize * st])
-    var v3: i64 = i64(t[off + 12usize * st])
-    var v4: i64 = i64(t[off + 2usize * st])
-    var v5: i64 = i64(t[off + 10usize * st])
-    var v6: i64 = i64(t[off + 6usize * st])
-    var v7: i64 = i64(t[off + 14usize * st])
-    var v8: i64 = i64(t[off + 1usize * st])
-    var v9: i64 = i64(t[off + 9usize * st])
-    var v10: i64 = i64(t[off + 5usize * st])
-    var v11: i64 = i64(t[off + 13usize * st])
-    var v12: i64 = i64(t[off + 3usize * st])
-    var v13: i64 = i64(t[off + 11usize * st])
-    var v14: i64 = i64(t[off + 7usize * st])
-    var v15: i64 = i64(t[off + 15usize * st])
-    tx = (2048i64 + v8 * 401i64 - v15 * 4076i64) >> 12u32
-    ty = (2048i64 + v8 * 4076i64 + v15 * 401i64) >> 12u32
-    v8 = tx
-    v15 = ty
-    tx = (2048i64 + v9 * 3166i64 - v14 * 2598i64) >> 12u32
-    ty = (2048i64 + v9 * 2598i64 + v14 * 3166i64) >> 12u32
-    v9 = tx
-    v14 = ty
-    tx = (2048i64 + v10 * 1931i64 - v13 * 3612i64) >> 12u32
-    ty = (2048i64 + v10 * 3612i64 + v13 * 1931i64) >> 12u32
-    v10 = tx
-    v13 = ty
-    tx = (2048i64 + v11 * 3920i64 - v12 * 1189i64) >> 12u32
-    ty = (2048i64 + v11 * 1189i64 + v12 * 3920i64) >> 12u32
-    v11 = tx
-    v12 = ty
-    tx = (2048i64 + v4 * 799i64 - v7 * 4017i64) >> 12u32
-    ty = (2048i64 + v4 * 4017i64 + v7 * 799i64) >> 12u32
-    v4 = tx
-    v7 = ty
-    tx = (2048i64 + v5 * 3406i64 - v6 * 2276i64) >> 12u32
-    ty = (2048i64 + v5 * 2276i64 + v6 * 3406i64) >> 12u32
-    v5 = tx
-    v6 = ty
-    tx = v8 + v9
-    ty = v8 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v9 = ty
-    tx = v11 + v10
-    ty = v11 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v10 = ty
-    tx = v12 + v13
-    ty = v12 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v13 = ty
-    tx = v15 + v14
-    ty = v15 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v14 = ty
-    tx = (2048i64 + v0 * 2896i64 - v1 * 2896i64) >> 12u32
-    ty = (2048i64 + v0 * 2896i64 + v1 * 2896i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1567i64 - v3 * 3784i64) >> 12u32
-    ty = (2048i64 + v2 * 3784i64 + v3 * 1567i64) >> 12u32
-    v2 = tx
-    v3 = ty
-    tx = v4 + v5
-    ty = v4 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v5 = ty
-    tx = v7 + v6
-    ty = v7 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v6 = ty
-    tx = (2048i64 + v14 * 1567i64 - v9 * 3784i64) >> 12u32
-    ty = (2048i64 + v14 * 3784i64 + v9 * 1567i64) >> 12u32
-    v14 = ty
-    v9 = tx
-    tx = (2048i64 - v13 * 3784i64 - v10 * 1567i64) >> 12u32
-    ty = (2048i64 + v13 * 1567i64 - v10 * 3784i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = v0 + v3
-    ty = v0 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v3 = ty
-    tx = v1 + v2
-    ty = v1 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v2 = ty
-    tx = (2048i64 + v6 * 2896i64 - v5 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v5 * 2896i64) >> 12u32
-    v6 = ty
-    v5 = tx
-    tx = v8 + v11
-    ty = v8 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v11 = ty
-    tx = v9 + v10
-    ty = v9 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v10 = ty
-    tx = v15 + v12
-    ty = v15 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v12 = ty
-    tx = v14 + v13
-    ty = v14 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v13 = ty
-    tx = v0 + v7
-    ty = v0 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v7 = ty
-    tx = v1 + v6
-    ty = v1 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v6 = ty
-    tx = v2 + v5
-    ty = v2 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v5 = ty
-    tx = v3 + v4
-    ty = v3 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v4 = ty
-    tx = (2048i64 + v13 * 2896i64 - v10 * 2896i64) >> 12u32
-    ty = (2048i64 + v13 * 2896i64 + v10 * 2896i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = (2048i64 + v12 * 2896i64 - v11 * 2896i64) >> 12u32
-    ty = (2048i64 + v12 * 2896i64 + v11 * 2896i64) >> 12u32
-    v12 = ty
-    v11 = tx
-    tx = v0 + v15
-    ty = v0 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v15 = ty
-    tx = v1 + v14
-    ty = v1 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v14 = ty
-    tx = v2 + v13
-    ty = v2 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v13 = ty
-    tx = v3 + v12
-    ty = v3 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v12 = ty
-    tx = v4 + v11
-    ty = v4 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v11 = ty
-    tx = v5 + v10
-    ty = v5 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v10 = ty
-    tx = v6 + v9
-    ty = v6 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v9 = ty
-    tx = v7 + v8
-    ty = v7 - v8
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v8 = ty
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(v1)
-    t[off + 2usize * st] = i32(v2)
-    t[off + 3usize * st] = i32(v3)
-    t[off + 4usize * st] = i32(v4)
-    t[off + 5usize * st] = i32(v5)
-    t[off + 6usize * st] = i32(v6)
-    t[off + 7usize * st] = i32(v7)
-    t[off + 8usize * st] = i32(v8)
-    t[off + 9usize * st] = i32(v9)
-    t[off + 10usize * st] = i32(v10)
-    t[off + 11usize * st] = i32(v11)
-    t[off + 12usize * st] = i32(v12)
-    t[off + 13usize * st] = i32(v13)
-    t[off + 14usize * st] = i32(v14)
-    t[off + 15usize * st] = i32(v15)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp3166 = vsp(3166i32)
+    let kp2598 = vsp(2598i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp3920 = vsp(3920i32)
+    let kp1189 = vsp(1189i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 8usize * st)
+    var s2 = vld(t, off + 4usize * st)
+    var s3 = vld(t, off + 12usize * st)
+    var s4 = vld(t, off + 2usize * st)
+    var s5 = vld(t, off + 10usize * st)
+    var s6 = vld(t, off + 6usize * st)
+    var s7 = vld(t, off + 14usize * st)
+    var s8 = vld(t, off + 1usize * st)
+    var s9 = vld(t, off + 9usize * st)
+    var s10 = vld(t, off + 5usize * st)
+    var s11 = vld(t, off + 13usize * st)
+    var s12 = vld(t, off + 3usize * st)
+    var s13 = vld(t, off + 11usize * st)
+    var s14 = vld(t, off + 7usize * st)
+    var s15 = vld(t, off + 15usize * st)
+    var s16 = (((kp2048) +% (s8 *% kp401)) -% (s15 *% kp4076)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4076)) +% (s15 *% kp401)) >> 12u32
+    s15 = (((kp2048) +% (s9 *% kp3166)) -% (s14 *% kp2598)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2598)) +% (s14 *% kp3166)) >> 12u32
+    s14 = (((kp2048) +% (s10 *% kp1931)) -% (s13 *% kp3612)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp3612)) +% (s13 *% kp1931)) >> 12u32
+    s13 = (((kp2048) +% (s11 *% kp3920)) -% (s12 *% kp1189)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp1189)) +% (s12 *% kp3920)) >> 12u32
+    s12 = (((kp2048) +% (s4 *% kp799)) -% (s7 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s7 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s5 *% kp3406)) -% (s6 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s6 *% kp3406)) >> 12u32
+    s6 = vclp((s16 +% s15), lo, hi)
+    s15 = vclp((s16 -% s15), lo, hi)
+    s16 = vclp((s13 +% s14), lo, hi)
+    s13 = vclp((s13 -% s14), lo, hi)
+    s14 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = (((kp2048) +% (s0 *% kp2896)) -% (s1 *% kp2896)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp2896)) +% (s1 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    s3 = vclp((s12 +% s7), lo, hi)
+    s7 = vclp((s12 -% s7), lo, hi)
+    s12 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s8 *% kp1567)) -% (s15 *% kp3784)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp3784)) +% (s15 *% kp1567)) >> 12u32
+    s15 = (((kp2048) -% (s10 *% kp3784)) -% (s13 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s13 = vclp((s0 +% s2), lo, hi)
+    s0 = vclp((s0 -% s2), lo, hi)
+    s2 = vclp((s9 +% s1), lo, hi)
+    s1 = vclp((s9 -% s1), lo, hi)
+    s9 = (((kp2048) +% (s4 *% kp2896)) -% (s7 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp2896)) +% (s7 *% kp2896)) >> 12u32
+    s7 = vclp((s6 +% s16), lo, hi)
+    s6 = vclp((s6 -% s16), lo, hi)
+    s16 = vclp((s5 +% s15), lo, hi)
+    s5 = vclp((s5 -% s15), lo, hi)
+    s15 = vclp((s11 +% s14), lo, hi)
+    s11 = vclp((s11 -% s14), lo, hi)
+    s14 = vclp((s8 +% s10), lo, hi)
+    s8 = vclp((s8 -% s10), lo, hi)
+    s10 = vclp((s13 +% s12), lo, hi)
+    s12 = vclp((s13 -% s12), lo, hi)
+    s13 = vclp((s2 +% s4), lo, hi)
+    s2 = vclp((s2 -% s4), lo, hi)
+    s4 = vclp((s1 +% s9), lo, hi)
+    s1 = vclp((s1 -% s9), lo, hi)
+    s9 = vclp((s0 +% s3), lo, hi)
+    s0 = vclp((s0 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s8 *% kp2896)) -% (s5 *% kp2896)) >> 12u32
+    s5 = (((kp2048) +% (s8 *% kp2896)) +% (s5 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s11 *% kp2896)) -% (s6 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s11 *% kp2896)) +% (s6 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s10 +% s15), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s13 +% s14), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s4 +% s5), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s9 +% s6), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s0 +% s8), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s1 +% s3), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s2 +% s16), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s12 +% s7), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s12 -% s7), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s2 -% s16), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s1 -% s3), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 -% s8), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s9 -% s6), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s4 -% s5), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s13 -% s14), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s10 -% s15), lo, hi)))
     }
 }
 
-fn idct32(t: []i32, off: usize, st: usize, r: u32) {
+fn vidct32(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 0usize * st])
-    var v1: i64 = i64(t[off + 16usize * st])
-    var v2: i64 = i64(t[off + 8usize * st])
-    var v3: i64 = i64(t[off + 24usize * st])
-    var v4: i64 = i64(t[off + 4usize * st])
-    var v5: i64 = i64(t[off + 20usize * st])
-    var v6: i64 = i64(t[off + 12usize * st])
-    var v7: i64 = i64(t[off + 28usize * st])
-    var v8: i64 = i64(t[off + 2usize * st])
-    var v9: i64 = i64(t[off + 18usize * st])
-    var v10: i64 = i64(t[off + 10usize * st])
-    var v11: i64 = i64(t[off + 26usize * st])
-    var v12: i64 = i64(t[off + 6usize * st])
-    var v13: i64 = i64(t[off + 22usize * st])
-    var v14: i64 = i64(t[off + 14usize * st])
-    var v15: i64 = i64(t[off + 30usize * st])
-    var v16: i64 = i64(t[off + 1usize * st])
-    var v17: i64 = i64(t[off + 17usize * st])
-    var v18: i64 = i64(t[off + 9usize * st])
-    var v19: i64 = i64(t[off + 25usize * st])
-    var v20: i64 = i64(t[off + 5usize * st])
-    var v21: i64 = i64(t[off + 21usize * st])
-    var v22: i64 = i64(t[off + 13usize * st])
-    var v23: i64 = i64(t[off + 29usize * st])
-    var v24: i64 = i64(t[off + 3usize * st])
-    var v25: i64 = i64(t[off + 19usize * st])
-    var v26: i64 = i64(t[off + 11usize * st])
-    var v27: i64 = i64(t[off + 27usize * st])
-    var v28: i64 = i64(t[off + 7usize * st])
-    var v29: i64 = i64(t[off + 23usize * st])
-    var v30: i64 = i64(t[off + 15usize * st])
-    var v31: i64 = i64(t[off + 31usize * st])
-    tx = (2048i64 + v16 * 201i64 - v31 * 4091i64) >> 12u32
-    ty = (2048i64 + v16 * 4091i64 + v31 * 201i64) >> 12u32
-    v16 = tx
-    v31 = ty
-    tx = (2048i64 + v17 * 3035i64 - v30 * 2751i64) >> 12u32
-    ty = (2048i64 + v17 * 2751i64 + v30 * 3035i64) >> 12u32
-    v17 = tx
-    v30 = ty
-    tx = (2048i64 + v18 * 1751i64 - v29 * 3703i64) >> 12u32
-    ty = (2048i64 + v18 * 3703i64 + v29 * 1751i64) >> 12u32
-    v18 = tx
-    v29 = ty
-    tx = (2048i64 + v19 * 3857i64 - v28 * 1380i64) >> 12u32
-    ty = (2048i64 + v19 * 1380i64 + v28 * 3857i64) >> 12u32
-    v19 = tx
-    v28 = ty
-    tx = (2048i64 + v20 * 995i64 - v27 * 3973i64) >> 12u32
-    ty = (2048i64 + v20 * 3973i64 + v27 * 995i64) >> 12u32
-    v20 = tx
-    v27 = ty
-    tx = (2048i64 + v21 * 3513i64 - v26 * 2106i64) >> 12u32
-    ty = (2048i64 + v21 * 2106i64 + v26 * 3513i64) >> 12u32
-    v21 = tx
-    v26 = ty
-    tx = (2048i64 + v22 * 2440i64 - v25 * 3290i64) >> 12u32
-    ty = (2048i64 + v22 * 3290i64 + v25 * 2440i64) >> 12u32
-    v22 = tx
-    v25 = ty
-    tx = (2048i64 + v23 * 4052i64 - v24 * 601i64) >> 12u32
-    ty = (2048i64 + v23 * 601i64 + v24 * 4052i64) >> 12u32
-    v23 = tx
-    v24 = ty
-    tx = (2048i64 + v8 * 401i64 - v15 * 4076i64) >> 12u32
-    ty = (2048i64 + v8 * 4076i64 + v15 * 401i64) >> 12u32
-    v8 = tx
-    v15 = ty
-    tx = (2048i64 + v9 * 3166i64 - v14 * 2598i64) >> 12u32
-    ty = (2048i64 + v9 * 2598i64 + v14 * 3166i64) >> 12u32
-    v9 = tx
-    v14 = ty
-    tx = (2048i64 + v10 * 1931i64 - v13 * 3612i64) >> 12u32
-    ty = (2048i64 + v10 * 3612i64 + v13 * 1931i64) >> 12u32
-    v10 = tx
-    v13 = ty
-    tx = (2048i64 + v11 * 3920i64 - v12 * 1189i64) >> 12u32
-    ty = (2048i64 + v11 * 1189i64 + v12 * 3920i64) >> 12u32
-    v11 = tx
-    v12 = ty
-    tx = v16 + v17
-    ty = v16 - v17
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v17 = ty
-    tx = v19 + v18
-    ty = v19 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v19 = tx
-    v18 = ty
-    tx = v20 + v21
-    ty = v20 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v20 = tx
-    v21 = ty
-    tx = v23 + v22
-    ty = v23 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v23 = tx
-    v22 = ty
-    tx = v24 + v25
-    ty = v24 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v24 = tx
-    v25 = ty
-    tx = v27 + v26
-    ty = v27 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v27 = tx
-    v26 = ty
-    tx = v28 + v29
-    ty = v28 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v28 = tx
-    v29 = ty
-    tx = v31 + v30
-    ty = v31 - v30
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v30 = ty
-    tx = (2048i64 + v4 * 799i64 - v7 * 4017i64) >> 12u32
-    ty = (2048i64 + v4 * 4017i64 + v7 * 799i64) >> 12u32
-    v4 = tx
-    v7 = ty
-    tx = (2048i64 + v5 * 3406i64 - v6 * 2276i64) >> 12u32
-    ty = (2048i64 + v5 * 2276i64 + v6 * 3406i64) >> 12u32
-    v5 = tx
-    v6 = ty
-    tx = v8 + v9
-    ty = v8 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v9 = ty
-    tx = v11 + v10
-    ty = v11 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v10 = ty
-    tx = v12 + v13
-    ty = v12 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v13 = ty
-    tx = v15 + v14
-    ty = v15 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v14 = ty
-    tx = (2048i64 + v30 * 799i64 - v17 * 4017i64) >> 12u32
-    ty = (2048i64 + v30 * 4017i64 + v17 * 799i64) >> 12u32
-    v30 = ty
-    v17 = tx
-    tx = (2048i64 - v29 * 4017i64 - v18 * 799i64) >> 12u32
-    ty = (2048i64 + v29 * 799i64 - v18 * 4017i64) >> 12u32
-    v29 = ty
-    v18 = tx
-    tx = (2048i64 + v26 * 3406i64 - v21 * 2276i64) >> 12u32
-    ty = (2048i64 + v26 * 2276i64 + v21 * 3406i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = (2048i64 - v25 * 2276i64 - v22 * 3406i64) >> 12u32
-    ty = (2048i64 + v25 * 3406i64 - v22 * 2276i64) >> 12u32
-    v25 = ty
-    v22 = tx
-    tx = (2048i64 + v0 * 2896i64 - v1 * 2896i64) >> 12u32
-    ty = (2048i64 + v0 * 2896i64 + v1 * 2896i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1567i64 - v3 * 3784i64) >> 12u32
-    ty = (2048i64 + v2 * 3784i64 + v3 * 1567i64) >> 12u32
-    v2 = tx
-    v3 = ty
-    tx = v4 + v5
-    ty = v4 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v5 = ty
-    tx = v7 + v6
-    ty = v7 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v6 = ty
-    tx = (2048i64 + v14 * 1567i64 - v9 * 3784i64) >> 12u32
-    ty = (2048i64 + v14 * 3784i64 + v9 * 1567i64) >> 12u32
-    v14 = ty
-    v9 = tx
-    tx = (2048i64 - v13 * 3784i64 - v10 * 1567i64) >> 12u32
-    ty = (2048i64 + v13 * 1567i64 - v10 * 3784i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = v16 + v19
-    ty = v16 - v19
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v19 = ty
-    tx = v17 + v18
-    ty = v17 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v17 = tx
-    v18 = ty
-    tx = v23 + v20
-    ty = v23 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v23 = tx
-    v20 = ty
-    tx = v22 + v21
-    ty = v22 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v22 = tx
-    v21 = ty
-    tx = v24 + v27
-    ty = v24 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v24 = tx
-    v27 = ty
-    tx = v25 + v26
-    ty = v25 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v25 = tx
-    v26 = ty
-    tx = v31 + v28
-    ty = v31 - v28
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v28 = ty
-    tx = v30 + v29
-    ty = v30 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v30 = tx
-    v29 = ty
-    tx = v0 + v3
-    ty = v0 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v3 = ty
-    tx = v1 + v2
-    ty = v1 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v2 = ty
-    tx = (2048i64 + v6 * 2896i64 - v5 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v5 * 2896i64) >> 12u32
-    v6 = ty
-    v5 = tx
-    tx = v8 + v11
-    ty = v8 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v11 = ty
-    tx = v9 + v10
-    ty = v9 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v10 = ty
-    tx = v15 + v12
-    ty = v15 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v12 = ty
-    tx = v14 + v13
-    ty = v14 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v13 = ty
-    tx = (2048i64 + v29 * 1567i64 - v18 * 3784i64) >> 12u32
-    ty = (2048i64 + v29 * 3784i64 + v18 * 1567i64) >> 12u32
-    v29 = ty
-    v18 = tx
-    tx = (2048i64 + v28 * 1567i64 - v19 * 3784i64) >> 12u32
-    ty = (2048i64 + v28 * 3784i64 + v19 * 1567i64) >> 12u32
-    v28 = ty
-    v19 = tx
-    tx = (2048i64 - v27 * 3784i64 - v20 * 1567i64) >> 12u32
-    ty = (2048i64 + v27 * 1567i64 - v20 * 3784i64) >> 12u32
-    v27 = ty
-    v20 = tx
-    tx = (2048i64 - v26 * 3784i64 - v21 * 1567i64) >> 12u32
-    ty = (2048i64 + v26 * 1567i64 - v21 * 3784i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = v0 + v7
-    ty = v0 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v7 = ty
-    tx = v1 + v6
-    ty = v1 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v6 = ty
-    tx = v2 + v5
-    ty = v2 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v5 = ty
-    tx = v3 + v4
-    ty = v3 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v4 = ty
-    tx = (2048i64 + v13 * 2896i64 - v10 * 2896i64) >> 12u32
-    ty = (2048i64 + v13 * 2896i64 + v10 * 2896i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = (2048i64 + v12 * 2896i64 - v11 * 2896i64) >> 12u32
-    ty = (2048i64 + v12 * 2896i64 + v11 * 2896i64) >> 12u32
-    v12 = ty
-    v11 = tx
-    tx = v16 + v23
-    ty = v16 - v23
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v23 = ty
-    tx = v17 + v22
-    ty = v17 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v17 = tx
-    v22 = ty
-    tx = v18 + v21
-    ty = v18 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v18 = tx
-    v21 = ty
-    tx = v19 + v20
-    ty = v19 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v19 = tx
-    v20 = ty
-    tx = v31 + v24
-    ty = v31 - v24
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v24 = ty
-    tx = v30 + v25
-    ty = v30 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v30 = tx
-    v25 = ty
-    tx = v29 + v26
-    ty = v29 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v29 = tx
-    v26 = ty
-    tx = v28 + v27
-    ty = v28 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v28 = tx
-    v27 = ty
-    tx = v0 + v15
-    ty = v0 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v15 = ty
-    tx = v1 + v14
-    ty = v1 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v14 = ty
-    tx = v2 + v13
-    ty = v2 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v13 = ty
-    tx = v3 + v12
-    ty = v3 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v12 = ty
-    tx = v4 + v11
-    ty = v4 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v11 = ty
-    tx = v5 + v10
-    ty = v5 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v10 = ty
-    tx = v6 + v9
-    ty = v6 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v9 = ty
-    tx = v7 + v8
-    ty = v7 - v8
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v8 = ty
-    tx = (2048i64 + v27 * 2896i64 - v20 * 2896i64) >> 12u32
-    ty = (2048i64 + v27 * 2896i64 + v20 * 2896i64) >> 12u32
-    v27 = ty
-    v20 = tx
-    tx = (2048i64 + v26 * 2896i64 - v21 * 2896i64) >> 12u32
-    ty = (2048i64 + v26 * 2896i64 + v21 * 2896i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = (2048i64 + v25 * 2896i64 - v22 * 2896i64) >> 12u32
-    ty = (2048i64 + v25 * 2896i64 + v22 * 2896i64) >> 12u32
-    v25 = ty
-    v22 = tx
-    tx = (2048i64 + v24 * 2896i64 - v23 * 2896i64) >> 12u32
-    ty = (2048i64 + v24 * 2896i64 + v23 * 2896i64) >> 12u32
-    v24 = ty
-    v23 = tx
-    tx = v0 + v31
-    ty = v0 - v31
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v31 = ty
-    tx = v1 + v30
-    ty = v1 - v30
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v30 = ty
-    tx = v2 + v29
-    ty = v2 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v29 = ty
-    tx = v3 + v28
-    ty = v3 - v28
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v28 = ty
-    tx = v4 + v27
-    ty = v4 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v27 = ty
-    tx = v5 + v26
-    ty = v5 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v26 = ty
-    tx = v6 + v25
-    ty = v6 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v25 = ty
-    tx = v7 + v24
-    ty = v7 - v24
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v24 = ty
-    tx = v8 + v23
-    ty = v8 - v23
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v23 = ty
-    tx = v9 + v22
-    ty = v9 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v22 = ty
-    tx = v10 + v21
-    ty = v10 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v10 = tx
-    v21 = ty
-    tx = v11 + v20
-    ty = v11 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v20 = ty
-    tx = v12 + v19
-    ty = v12 - v19
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v19 = ty
-    tx = v13 + v18
-    ty = v13 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v13 = tx
-    v18 = ty
-    tx = v14 + v17
-    ty = v14 - v17
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v17 = ty
-    tx = v15 + v16
-    ty = v15 - v16
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v16 = ty
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(v1)
-    t[off + 2usize * st] = i32(v2)
-    t[off + 3usize * st] = i32(v3)
-    t[off + 4usize * st] = i32(v4)
-    t[off + 5usize * st] = i32(v5)
-    t[off + 6usize * st] = i32(v6)
-    t[off + 7usize * st] = i32(v7)
-    t[off + 8usize * st] = i32(v8)
-    t[off + 9usize * st] = i32(v9)
-    t[off + 10usize * st] = i32(v10)
-    t[off + 11usize * st] = i32(v11)
-    t[off + 12usize * st] = i32(v12)
-    t[off + 13usize * st] = i32(v13)
-    t[off + 14usize * st] = i32(v14)
-    t[off + 15usize * st] = i32(v15)
-    t[off + 16usize * st] = i32(v16)
-    t[off + 17usize * st] = i32(v17)
-    t[off + 18usize * st] = i32(v18)
-    t[off + 19usize * st] = i32(v19)
-    t[off + 20usize * st] = i32(v20)
-    t[off + 21usize * st] = i32(v21)
-    t[off + 22usize * st] = i32(v22)
-    t[off + 23usize * st] = i32(v23)
-    t[off + 24usize * st] = i32(v24)
-    t[off + 25usize * st] = i32(v25)
-    t[off + 26usize * st] = i32(v26)
-    t[off + 27usize * st] = i32(v27)
-    t[off + 28usize * st] = i32(v28)
-    t[off + 29usize * st] = i32(v29)
-    t[off + 30usize * st] = i32(v30)
-    t[off + 31usize * st] = i32(v31)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp3035 = vsp(3035i32)
+    let kp2751 = vsp(2751i32)
+    let kp1751 = vsp(1751i32)
+    let kp3703 = vsp(3703i32)
+    let kp3857 = vsp(3857i32)
+    let kp1380 = vsp(1380i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp3513 = vsp(3513i32)
+    let kp2106 = vsp(2106i32)
+    let kp2440 = vsp(2440i32)
+    let kp3290 = vsp(3290i32)
+    let kp4052 = vsp(4052i32)
+    let kp601 = vsp(601i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp3166 = vsp(3166i32)
+    let kp2598 = vsp(2598i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp3920 = vsp(3920i32)
+    let kp1189 = vsp(1189i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 16usize * st)
+    var s2 = vld(t, off + 8usize * st)
+    var s3 = vld(t, off + 24usize * st)
+    var s4 = vld(t, off + 4usize * st)
+    var s5 = vld(t, off + 20usize * st)
+    var s6 = vld(t, off + 12usize * st)
+    var s7 = vld(t, off + 28usize * st)
+    var s8 = vld(t, off + 2usize * st)
+    var s9 = vld(t, off + 18usize * st)
+    var s10 = vld(t, off + 10usize * st)
+    var s11 = vld(t, off + 26usize * st)
+    var s12 = vld(t, off + 6usize * st)
+    var s13 = vld(t, off + 22usize * st)
+    var s14 = vld(t, off + 14usize * st)
+    var s15 = vld(t, off + 30usize * st)
+    var s16 = vld(t, off + 1usize * st)
+    var s17 = vld(t, off + 17usize * st)
+    var s18 = vld(t, off + 9usize * st)
+    var s19 = vld(t, off + 25usize * st)
+    var s20 = vld(t, off + 5usize * st)
+    var s21 = vld(t, off + 21usize * st)
+    var s22 = vld(t, off + 13usize * st)
+    var s23 = vld(t, off + 29usize * st)
+    var s24 = vld(t, off + 3usize * st)
+    var s25 = vld(t, off + 19usize * st)
+    var s26 = vld(t, off + 11usize * st)
+    var s27 = vld(t, off + 27usize * st)
+    var s28 = vld(t, off + 7usize * st)
+    var s29 = vld(t, off + 23usize * st)
+    var s30 = vld(t, off + 15usize * st)
+    var s31 = vld(t, off + 31usize * st)
+    var s32 = (((kp2048) +% (s16 *% kp201)) -% (s31 *% kp4091)) >> 12u32
+    s16 = (((kp2048) +% (s16 *% kp4091)) +% (s31 *% kp201)) >> 12u32
+    s31 = (((kp2048) +% (s17 *% kp3035)) -% (s30 *% kp2751)) >> 12u32
+    s17 = (((kp2048) +% (s17 *% kp2751)) +% (s30 *% kp3035)) >> 12u32
+    s30 = (((kp2048) +% (s18 *% kp1751)) -% (s29 *% kp3703)) >> 12u32
+    s18 = (((kp2048) +% (s18 *% kp3703)) +% (s29 *% kp1751)) >> 12u32
+    s29 = (((kp2048) +% (s19 *% kp3857)) -% (s28 *% kp1380)) >> 12u32
+    s19 = (((kp2048) +% (s19 *% kp1380)) +% (s28 *% kp3857)) >> 12u32
+    s28 = (((kp2048) +% (s20 *% kp995)) -% (s27 *% kp3973)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp3973)) +% (s27 *% kp995)) >> 12u32
+    s27 = (((kp2048) +% (s21 *% kp3513)) -% (s26 *% kp2106)) >> 12u32
+    s21 = (((kp2048) +% (s21 *% kp2106)) +% (s26 *% kp3513)) >> 12u32
+    s26 = (((kp2048) +% (s22 *% kp2440)) -% (s25 *% kp3290)) >> 12u32
+    s22 = (((kp2048) +% (s22 *% kp3290)) +% (s25 *% kp2440)) >> 12u32
+    s25 = (((kp2048) +% (s23 *% kp4052)) -% (s24 *% kp601)) >> 12u32
+    s23 = (((kp2048) +% (s23 *% kp601)) +% (s24 *% kp4052)) >> 12u32
+    s24 = (((kp2048) +% (s8 *% kp401)) -% (s15 *% kp4076)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4076)) +% (s15 *% kp401)) >> 12u32
+    s15 = (((kp2048) +% (s9 *% kp3166)) -% (s14 *% kp2598)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2598)) +% (s14 *% kp3166)) >> 12u32
+    s14 = (((kp2048) +% (s10 *% kp1931)) -% (s13 *% kp3612)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp3612)) +% (s13 *% kp1931)) >> 12u32
+    s13 = (((kp2048) +% (s11 *% kp3920)) -% (s12 *% kp1189)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp1189)) +% (s12 *% kp3920)) >> 12u32
+    s12 = vclp((s32 +% s31), lo, hi)
+    s31 = vclp((s32 -% s31), lo, hi)
+    s32 = vclp((s29 +% s30), lo, hi)
+    s29 = vclp((s29 -% s30), lo, hi)
+    s30 = vclp((s28 +% s27), lo, hi)
+    s27 = vclp((s28 -% s27), lo, hi)
+    s28 = vclp((s25 +% s26), lo, hi)
+    s25 = vclp((s25 -% s26), lo, hi)
+    s26 = vclp((s23 +% s22), lo, hi)
+    s22 = vclp((s23 -% s22), lo, hi)
+    s23 = vclp((s20 +% s21), lo, hi)
+    s20 = vclp((s20 -% s21), lo, hi)
+    s21 = vclp((s19 +% s18), lo, hi)
+    s18 = vclp((s19 -% s18), lo, hi)
+    s19 = vclp((s16 +% s17), lo, hi)
+    s16 = vclp((s16 -% s17), lo, hi)
+    s17 = (((kp2048) +% (s4 *% kp799)) -% (s7 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s7 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s5 *% kp3406)) -% (s6 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s6 *% kp3406)) >> 12u32
+    s6 = vclp((s24 +% s15), lo, hi)
+    s15 = vclp((s24 -% s15), lo, hi)
+    s24 = vclp((s13 +% s14), lo, hi)
+    s13 = vclp((s13 -% s14), lo, hi)
+    s14 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = (((kp2048) +% (s16 *% kp799)) -% (s31 *% kp4017)) >> 12u32
+    s16 = (((kp2048) +% (s16 *% kp4017)) +% (s31 *% kp799)) >> 12u32
+    s31 = (((kp2048) -% (s18 *% kp4017)) -% (s29 *% kp799)) >> 12u32
+    s18 = (((kp2048) +% (s18 *% kp799)) -% (s29 *% kp4017)) >> 12u32
+    s29 = (((kp2048) +% (s20 *% kp3406)) -% (s27 *% kp2276)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp2276)) +% (s27 *% kp3406)) >> 12u32
+    s27 = (((kp2048) -% (s22 *% kp2276)) -% (s25 *% kp3406)) >> 12u32
+    s22 = (((kp2048) +% (s22 *% kp3406)) -% (s25 *% kp2276)) >> 12u32
+    s25 = (((kp2048) +% (s0 *% kp2896)) -% (s1 *% kp2896)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp2896)) +% (s1 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    s3 = vclp((s17 +% s7), lo, hi)
+    s7 = vclp((s17 -% s7), lo, hi)
+    s17 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s8 *% kp1567)) -% (s15 *% kp3784)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp3784)) +% (s15 *% kp1567)) >> 12u32
+    s15 = (((kp2048) -% (s10 *% kp3784)) -% (s13 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s13 = vclp((s12 +% s32), lo, hi)
+    s12 = vclp((s12 -% s32), lo, hi)
+    s32 = vclp((s9 +% s31), lo, hi)
+    s9 = vclp((s9 -% s31), lo, hi)
+    s31 = vclp((s28 +% s30), lo, hi)
+    s28 = vclp((s28 -% s30), lo, hi)
+    s30 = vclp((s27 +% s29), lo, hi)
+    s27 = vclp((s27 -% s29), lo, hi)
+    s29 = vclp((s26 +% s23), lo, hi)
+    s23 = vclp((s26 -% s23), lo, hi)
+    s26 = vclp((s22 +% s20), lo, hi)
+    s20 = vclp((s22 -% s20), lo, hi)
+    s22 = vclp((s19 +% s21), lo, hi)
+    s19 = vclp((s19 -% s21), lo, hi)
+    s21 = vclp((s16 +% s18), lo, hi)
+    s16 = vclp((s16 -% s18), lo, hi)
+    s18 = vclp((s0 +% s2), lo, hi)
+    s0 = vclp((s0 -% s2), lo, hi)
+    s2 = vclp((s25 +% s1), lo, hi)
+    s1 = vclp((s25 -% s1), lo, hi)
+    s25 = (((kp2048) +% (s4 *% kp2896)) -% (s7 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp2896)) +% (s7 *% kp2896)) >> 12u32
+    s7 = vclp((s6 +% s24), lo, hi)
+    s6 = vclp((s6 -% s24), lo, hi)
+    s24 = vclp((s5 +% s15), lo, hi)
+    s5 = vclp((s5 -% s15), lo, hi)
+    s15 = vclp((s11 +% s14), lo, hi)
+    s11 = vclp((s11 -% s14), lo, hi)
+    s14 = vclp((s8 +% s10), lo, hi)
+    s8 = vclp((s8 -% s10), lo, hi)
+    s10 = (((kp2048) +% (s16 *% kp1567)) -% (s9 *% kp3784)) >> 12u32
+    s9 = (((kp2048) +% (s16 *% kp3784)) +% (s9 *% kp1567)) >> 12u32
+    s16 = (((kp2048) +% (s19 *% kp1567)) -% (s12 *% kp3784)) >> 12u32
+    s12 = (((kp2048) +% (s19 *% kp3784)) +% (s12 *% kp1567)) >> 12u32
+    s19 = (((kp2048) -% (s23 *% kp3784)) -% (s28 *% kp1567)) >> 12u32
+    s23 = (((kp2048) +% (s23 *% kp1567)) -% (s28 *% kp3784)) >> 12u32
+    s28 = (((kp2048) -% (s20 *% kp3784)) -% (s27 *% kp1567)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp1567)) -% (s27 *% kp3784)) >> 12u32
+    s27 = vclp((s18 +% s17), lo, hi)
+    s17 = vclp((s18 -% s17), lo, hi)
+    s18 = vclp((s2 +% s4), lo, hi)
+    s2 = vclp((s2 -% s4), lo, hi)
+    s4 = vclp((s1 +% s25), lo, hi)
+    s1 = vclp((s1 -% s25), lo, hi)
+    s25 = vclp((s0 +% s3), lo, hi)
+    s0 = vclp((s0 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s8 *% kp2896)) -% (s5 *% kp2896)) >> 12u32
+    s5 = (((kp2048) +% (s8 *% kp2896)) +% (s5 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s11 *% kp2896)) -% (s6 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s11 *% kp2896)) +% (s6 *% kp2896)) >> 12u32
+    s11 = vclp((s13 +% s31), lo, hi)
+    s13 = vclp((s13 -% s31), lo, hi)
+    s31 = vclp((s32 +% s30), lo, hi)
+    s30 = vclp((s32 -% s30), lo, hi)
+    s32 = vclp((s10 +% s28), lo, hi)
+    s10 = vclp((s10 -% s28), lo, hi)
+    s28 = vclp((s16 +% s19), lo, hi)
+    s16 = vclp((s16 -% s19), lo, hi)
+    s19 = vclp((s22 +% s29), lo, hi)
+    s22 = vclp((s22 -% s29), lo, hi)
+    s29 = vclp((s21 +% s26), lo, hi)
+    s21 = vclp((s21 -% s26), lo, hi)
+    s26 = vclp((s9 +% s20), lo, hi)
+    s9 = vclp((s9 -% s20), lo, hi)
+    s20 = vclp((s12 +% s23), lo, hi)
+    s12 = vclp((s12 -% s23), lo, hi)
+    s23 = vclp((s27 +% s15), lo, hi)
+    s15 = vclp((s27 -% s15), lo, hi)
+    s27 = vclp((s18 +% s14), lo, hi)
+    s14 = vclp((s18 -% s14), lo, hi)
+    s18 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s25 +% s6), lo, hi)
+    s6 = vclp((s25 -% s6), lo, hi)
+    s25 = vclp((s0 +% s8), lo, hi)
+    s0 = vclp((s0 -% s8), lo, hi)
+    s8 = vclp((s1 +% s3), lo, hi)
+    s1 = vclp((s1 -% s3), lo, hi)
+    s3 = vclp((s2 +% s24), lo, hi)
+    s2 = vclp((s2 -% s24), lo, hi)
+    s24 = vclp((s17 +% s7), lo, hi)
+    s7 = vclp((s17 -% s7), lo, hi)
+    s17 = (((kp2048) +% (s12 *% kp2896)) -% (s16 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp2896)) +% (s16 *% kp2896)) >> 12u32
+    s16 = (((kp2048) +% (s9 *% kp2896)) -% (s10 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2896)) +% (s10 *% kp2896)) >> 12u32
+    s10 = (((kp2048) +% (s21 *% kp2896)) -% (s30 *% kp2896)) >> 12u32
+    s21 = (((kp2048) +% (s21 *% kp2896)) +% (s30 *% kp2896)) >> 12u32
+    s30 = (((kp2048) +% (s22 *% kp2896)) -% (s13 *% kp2896)) >> 12u32
+    s13 = (((kp2048) +% (s22 *% kp2896)) +% (s13 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s23 +% s19), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s27 +% s29), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s18 +% s26), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s5 +% s20), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s25 +% s12), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s8 +% s9), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s3 +% s21), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s24 +% s13), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s7 +% s30), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s2 +% s10), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s1 +% s16), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 +% s17), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s6 +% s28), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s4 +% s32), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s14 +% s31), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s15 +% s11), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s15 -% s11), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s14 -% s31), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s4 -% s32), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s6 -% s28), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 -% s17), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s1 -% s16), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s2 -% s10), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s7 -% s30), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s24 -% s13), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s3 -% s21), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s8 -% s9), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s25 -% s12), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s5 -% s20), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s18 -% s26), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s27 -% s29), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s23 -% s19), lo, hi)))
     }
 }
 
-fn idct64_k32(t: []i32, off: usize, st: usize, r: u32) {
+fn vidct64(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 0usize * st])
-    var v1: i64 = 0i64
-    var v2: i64 = i64(t[off + 16usize * st])
-    var v3: i64 = 0i64
-    var v4: i64 = i64(t[off + 8usize * st])
-    var v5: i64 = 0i64
-    var v6: i64 = i64(t[off + 24usize * st])
-    var v7: i64 = 0i64
-    var v8: i64 = i64(t[off + 4usize * st])
-    var v9: i64 = 0i64
-    var v10: i64 = i64(t[off + 20usize * st])
-    var v11: i64 = 0i64
-    var v12: i64 = i64(t[off + 12usize * st])
-    var v13: i64 = 0i64
-    var v14: i64 = i64(t[off + 28usize * st])
-    var v15: i64 = 0i64
-    var v16: i64 = i64(t[off + 2usize * st])
-    var v17: i64 = 0i64
-    var v18: i64 = i64(t[off + 18usize * st])
-    var v19: i64 = 0i64
-    var v20: i64 = i64(t[off + 10usize * st])
-    var v21: i64 = 0i64
-    var v22: i64 = i64(t[off + 26usize * st])
-    var v23: i64 = 0i64
-    var v24: i64 = i64(t[off + 6usize * st])
-    var v25: i64 = 0i64
-    var v26: i64 = i64(t[off + 22usize * st])
-    var v27: i64 = 0i64
-    var v28: i64 = i64(t[off + 14usize * st])
-    var v29: i64 = 0i64
-    var v30: i64 = i64(t[off + 30usize * st])
-    var v31: i64 = 0i64
-    var v32: i64 = i64(t[off + 1usize * st])
-    var v33: i64 = 0i64
-    var v34: i64 = i64(t[off + 17usize * st])
-    var v35: i64 = 0i64
-    var v36: i64 = i64(t[off + 9usize * st])
-    var v37: i64 = 0i64
-    var v38: i64 = i64(t[off + 25usize * st])
-    var v39: i64 = 0i64
-    var v40: i64 = i64(t[off + 5usize * st])
-    var v41: i64 = 0i64
-    var v42: i64 = i64(t[off + 21usize * st])
-    var v43: i64 = 0i64
-    var v44: i64 = i64(t[off + 13usize * st])
-    var v45: i64 = 0i64
-    var v46: i64 = i64(t[off + 29usize * st])
-    var v47: i64 = 0i64
-    var v48: i64 = i64(t[off + 3usize * st])
-    var v49: i64 = 0i64
-    var v50: i64 = i64(t[off + 19usize * st])
-    var v51: i64 = 0i64
-    var v52: i64 = i64(t[off + 11usize * st])
-    var v53: i64 = 0i64
-    var v54: i64 = i64(t[off + 27usize * st])
-    var v55: i64 = 0i64
-    var v56: i64 = i64(t[off + 7usize * st])
-    var v57: i64 = 0i64
-    var v58: i64 = i64(t[off + 23usize * st])
-    var v59: i64 = 0i64
-    var v60: i64 = i64(t[off + 15usize * st])
-    var v61: i64 = 0i64
-    var v62: i64 = i64(t[off + 31usize * st])
-    var v63: i64 = 0i64
-    tx = (2048i64 + v32 * 101i64) >> 12u32
-    ty = (2048i64 + v32 * 4095i64) >> 12u32
-    v32 = tx
-    v63 = ty
-    tx = (2048i64 - v62 * 2824i64) >> 12u32
-    ty = (2048i64 + v62 * 2967i64) >> 12u32
-    v33 = tx
-    v62 = ty
-    tx = (2048i64 + v34 * 1660i64) >> 12u32
-    ty = (2048i64 + v34 * 3745i64) >> 12u32
-    v34 = tx
-    v61 = ty
-    tx = (2048i64 - v60 * 1474i64) >> 12u32
-    ty = (2048i64 + v60 * 3822i64) >> 12u32
-    v35 = tx
-    v60 = ty
-    tx = (2048i64 + v36 * 897i64) >> 12u32
-    ty = (2048i64 + v36 * 3996i64) >> 12u32
-    v36 = tx
-    v59 = ty
-    tx = (2048i64 - v58 * 2191i64) >> 12u32
-    ty = (2048i64 + v58 * 3461i64) >> 12u32
-    v37 = tx
-    v58 = ty
-    tx = (2048i64 + v38 * 2359i64) >> 12u32
-    ty = (2048i64 + v38 * 3349i64) >> 12u32
-    v38 = tx
-    v57 = ty
-    tx = (2048i64 - v56 * 700i64) >> 12u32
-    ty = (2048i64 + v56 * 4036i64) >> 12u32
-    v39 = tx
-    v56 = ty
-    tx = (2048i64 + v40 * 501i64) >> 12u32
-    ty = (2048i64 + v40 * 4065i64) >> 12u32
-    v40 = tx
-    v55 = ty
-    tx = (2048i64 - v54 * 2520i64) >> 12u32
-    ty = (2048i64 + v54 * 3229i64) >> 12u32
-    v41 = tx
-    v54 = ty
-    tx = (2048i64 + v42 * 2019i64) >> 12u32
-    ty = (2048i64 + v42 * 3564i64) >> 12u32
-    v42 = tx
-    v53 = ty
-    tx = (2048i64 - v52 * 1092i64) >> 12u32
-    ty = (2048i64 + v52 * 3948i64) >> 12u32
-    v43 = tx
-    v52 = ty
-    tx = (2048i64 + v44 * 1285i64) >> 12u32
-    ty = (2048i64 + v44 * 3889i64) >> 12u32
-    v44 = tx
-    v51 = ty
-    tx = (2048i64 - v50 * 1842i64) >> 12u32
-    ty = (2048i64 + v50 * 3659i64) >> 12u32
-    v45 = tx
-    v50 = ty
-    tx = (2048i64 + v46 * 2675i64) >> 12u32
-    ty = (2048i64 + v46 * 3102i64) >> 12u32
-    v46 = tx
-    v49 = ty
-    tx = (2048i64 - v48 * 301i64) >> 12u32
-    ty = (2048i64 + v48 * 4085i64) >> 12u32
-    v47 = tx
-    v48 = ty
-    tx = (2048i64 + v16 * 201i64) >> 12u32
-    ty = (2048i64 + v16 * 4091i64) >> 12u32
-    v16 = tx
-    v31 = ty
-    tx = (2048i64 - v30 * 2751i64) >> 12u32
-    ty = (2048i64 + v30 * 3035i64) >> 12u32
-    v17 = tx
-    v30 = ty
-    tx = (2048i64 + v18 * 1751i64) >> 12u32
-    ty = (2048i64 + v18 * 3703i64) >> 12u32
-    v18 = tx
-    v29 = ty
-    tx = (2048i64 - v28 * 1380i64) >> 12u32
-    ty = (2048i64 + v28 * 3857i64) >> 12u32
-    v19 = tx
-    v28 = ty
-    tx = (2048i64 + v20 * 995i64) >> 12u32
-    ty = (2048i64 + v20 * 3973i64) >> 12u32
-    v20 = tx
-    v27 = ty
-    tx = (2048i64 - v26 * 2106i64) >> 12u32
-    ty = (2048i64 + v26 * 3513i64) >> 12u32
-    v21 = tx
-    v26 = ty
-    tx = (2048i64 + v22 * 2440i64) >> 12u32
-    ty = (2048i64 + v22 * 3290i64) >> 12u32
-    v22 = tx
-    v25 = ty
-    tx = (2048i64 - v24 * 601i64) >> 12u32
-    ty = (2048i64 + v24 * 4052i64) >> 12u32
-    v23 = tx
-    v24 = ty
-    tx = v32 + v33
-    ty = v32 - v33
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v32 = tx
-    v33 = ty
-    tx = v35 + v34
-    ty = v35 - v34
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v35 = tx
-    v34 = ty
-    tx = v36 + v37
-    ty = v36 - v37
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v36 = tx
-    v37 = ty
-    tx = v39 + v38
-    ty = v39 - v38
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v39 = tx
-    v38 = ty
-    tx = v40 + v41
-    ty = v40 - v41
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v40 = tx
-    v41 = ty
-    tx = v43 + v42
-    ty = v43 - v42
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v43 = tx
-    v42 = ty
-    tx = v44 + v45
-    ty = v44 - v45
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v44 = tx
-    v45 = ty
-    tx = v47 + v46
-    ty = v47 - v46
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v47 = tx
-    v46 = ty
-    tx = v48 + v49
-    ty = v48 - v49
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v48 = tx
-    v49 = ty
-    tx = v51 + v50
-    ty = v51 - v50
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v51 = tx
-    v50 = ty
-    tx = v52 + v53
-    ty = v52 - v53
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v52 = tx
-    v53 = ty
-    tx = v55 + v54
-    ty = v55 - v54
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v55 = tx
-    v54 = ty
-    tx = v56 + v57
-    ty = v56 - v57
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v56 = tx
-    v57 = ty
-    tx = v59 + v58
-    ty = v59 - v58
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v59 = tx
-    v58 = ty
-    tx = v60 + v61
-    ty = v60 - v61
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v60 = tx
-    v61 = ty
-    tx = v63 + v62
-    ty = v63 - v62
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v63 = tx
-    v62 = ty
-    tx = (2048i64 + v8 * 401i64) >> 12u32
-    ty = (2048i64 + v8 * 4076i64) >> 12u32
-    v8 = tx
-    v15 = ty
-    tx = (2048i64 - v14 * 2598i64) >> 12u32
-    ty = (2048i64 + v14 * 3166i64) >> 12u32
-    v9 = tx
-    v14 = ty
-    tx = (2048i64 + v10 * 1931i64) >> 12u32
-    ty = (2048i64 + v10 * 3612i64) >> 12u32
-    v10 = tx
-    v13 = ty
-    tx = (2048i64 - v12 * 1189i64) >> 12u32
-    ty = (2048i64 + v12 * 3920i64) >> 12u32
-    v11 = tx
-    v12 = ty
-    tx = v16 + v17
-    ty = v16 - v17
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v17 = ty
-    tx = v19 + v18
-    ty = v19 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v19 = tx
-    v18 = ty
-    tx = v20 + v21
-    ty = v20 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v20 = tx
-    v21 = ty
-    tx = v23 + v22
-    ty = v23 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v23 = tx
-    v22 = ty
-    tx = v24 + v25
-    ty = v24 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v24 = tx
-    v25 = ty
-    tx = v27 + v26
-    ty = v27 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v27 = tx
-    v26 = ty
-    tx = v28 + v29
-    ty = v28 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v28 = tx
-    v29 = ty
-    tx = v31 + v30
-    ty = v31 - v30
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v30 = ty
-    tx = (2048i64 + v62 * 401i64 - v33 * 4076i64) >> 12u32
-    ty = (2048i64 + v62 * 4076i64 + v33 * 401i64) >> 12u32
-    v62 = ty
-    v33 = tx
-    tx = (2048i64 - v61 * 4076i64 - v34 * 401i64) >> 12u32
-    ty = (2048i64 + v61 * 401i64 - v34 * 4076i64) >> 12u32
-    v61 = ty
-    v34 = tx
-    tx = (2048i64 + v58 * 3166i64 - v37 * 2598i64) >> 12u32
-    ty = (2048i64 + v58 * 2598i64 + v37 * 3166i64) >> 12u32
-    v58 = ty
-    v37 = tx
-    tx = (2048i64 - v57 * 2598i64 - v38 * 3166i64) >> 12u32
-    ty = (2048i64 + v57 * 3166i64 - v38 * 2598i64) >> 12u32
-    v57 = ty
-    v38 = tx
-    tx = (2048i64 + v54 * 1931i64 - v41 * 3612i64) >> 12u32
-    ty = (2048i64 + v54 * 3612i64 + v41 * 1931i64) >> 12u32
-    v54 = ty
-    v41 = tx
-    tx = (2048i64 - v53 * 3612i64 - v42 * 1931i64) >> 12u32
-    ty = (2048i64 + v53 * 1931i64 - v42 * 3612i64) >> 12u32
-    v53 = ty
-    v42 = tx
-    tx = (2048i64 + v50 * 3920i64 - v45 * 1189i64) >> 12u32
-    ty = (2048i64 + v50 * 1189i64 + v45 * 3920i64) >> 12u32
-    v50 = ty
-    v45 = tx
-    tx = (2048i64 - v49 * 1189i64 - v46 * 3920i64) >> 12u32
-    ty = (2048i64 + v49 * 3920i64 - v46 * 1189i64) >> 12u32
-    v49 = ty
-    v46 = tx
-    tx = (2048i64 + v4 * 799i64) >> 12u32
-    ty = (2048i64 + v4 * 4017i64) >> 12u32
-    v4 = tx
-    v7 = ty
-    tx = (2048i64 - v6 * 2276i64) >> 12u32
-    ty = (2048i64 + v6 * 3406i64) >> 12u32
-    v5 = tx
-    v6 = ty
-    tx = v8 + v9
-    ty = v8 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v9 = ty
-    tx = v11 + v10
-    ty = v11 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v10 = ty
-    tx = v12 + v13
-    ty = v12 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v13 = ty
-    tx = v15 + v14
-    ty = v15 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v14 = ty
-    tx = (2048i64 + v30 * 799i64 - v17 * 4017i64) >> 12u32
-    ty = (2048i64 + v30 * 4017i64 + v17 * 799i64) >> 12u32
-    v30 = ty
-    v17 = tx
-    tx = (2048i64 - v29 * 4017i64 - v18 * 799i64) >> 12u32
-    ty = (2048i64 + v29 * 799i64 - v18 * 4017i64) >> 12u32
-    v29 = ty
-    v18 = tx
-    tx = (2048i64 + v26 * 3406i64 - v21 * 2276i64) >> 12u32
-    ty = (2048i64 + v26 * 2276i64 + v21 * 3406i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = (2048i64 - v25 * 2276i64 - v22 * 3406i64) >> 12u32
-    ty = (2048i64 + v25 * 3406i64 - v22 * 2276i64) >> 12u32
-    v25 = ty
-    v22 = tx
-    tx = v32 + v35
-    ty = v32 - v35
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v32 = tx
-    v35 = ty
-    tx = v33 + v34
-    ty = v33 - v34
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v33 = tx
-    v34 = ty
-    tx = v39 + v36
-    ty = v39 - v36
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v39 = tx
-    v36 = ty
-    tx = v38 + v37
-    ty = v38 - v37
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v38 = tx
-    v37 = ty
-    tx = v40 + v43
-    ty = v40 - v43
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v40 = tx
-    v43 = ty
-    tx = v41 + v42
-    ty = v41 - v42
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v41 = tx
-    v42 = ty
-    tx = v47 + v44
-    ty = v47 - v44
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v47 = tx
-    v44 = ty
-    tx = v46 + v45
-    ty = v46 - v45
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v46 = tx
-    v45 = ty
-    tx = v48 + v51
-    ty = v48 - v51
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v48 = tx
-    v51 = ty
-    tx = v49 + v50
-    ty = v49 - v50
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v49 = tx
-    v50 = ty
-    tx = v55 + v52
-    ty = v55 - v52
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v55 = tx
-    v52 = ty
-    tx = v54 + v53
-    ty = v54 - v53
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v54 = tx
-    v53 = ty
-    tx = v56 + v59
-    ty = v56 - v59
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v56 = tx
-    v59 = ty
-    tx = v57 + v58
-    ty = v57 - v58
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v57 = tx
-    v58 = ty
-    tx = v63 + v60
-    ty = v63 - v60
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v63 = tx
-    v60 = ty
-    tx = v62 + v61
-    ty = v62 - v61
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v62 = tx
-    v61 = ty
-    tx = (2048i64 + v0 * 2896i64) >> 12u32
-    ty = (2048i64 + v0 * 2896i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1567i64) >> 12u32
-    ty = (2048i64 + v2 * 3784i64) >> 12u32
-    v2 = tx
-    v3 = ty
-    tx = v4 + v5
-    ty = v4 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v5 = ty
-    tx = v7 + v6
-    ty = v7 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v6 = ty
-    tx = (2048i64 + v14 * 1567i64 - v9 * 3784i64) >> 12u32
-    ty = (2048i64 + v14 * 3784i64 + v9 * 1567i64) >> 12u32
-    v14 = ty
-    v9 = tx
-    tx = (2048i64 - v13 * 3784i64 - v10 * 1567i64) >> 12u32
-    ty = (2048i64 + v13 * 1567i64 - v10 * 3784i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = v16 + v19
-    ty = v16 - v19
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v19 = ty
-    tx = v17 + v18
-    ty = v17 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v17 = tx
-    v18 = ty
-    tx = v23 + v20
-    ty = v23 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v23 = tx
-    v20 = ty
-    tx = v22 + v21
-    ty = v22 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v22 = tx
-    v21 = ty
-    tx = v24 + v27
-    ty = v24 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v24 = tx
-    v27 = ty
-    tx = v25 + v26
-    ty = v25 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v25 = tx
-    v26 = ty
-    tx = v31 + v28
-    ty = v31 - v28
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v28 = ty
-    tx = v30 + v29
-    ty = v30 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v30 = tx
-    v29 = ty
-    tx = (2048i64 + v61 * 799i64 - v34 * 4017i64) >> 12u32
-    ty = (2048i64 + v61 * 4017i64 + v34 * 799i64) >> 12u32
-    v61 = ty
-    v34 = tx
-    tx = (2048i64 + v60 * 799i64 - v35 * 4017i64) >> 12u32
-    ty = (2048i64 + v60 * 4017i64 + v35 * 799i64) >> 12u32
-    v60 = ty
-    v35 = tx
-    tx = (2048i64 - v59 * 4017i64 - v36 * 799i64) >> 12u32
-    ty = (2048i64 + v59 * 799i64 - v36 * 4017i64) >> 12u32
-    v59 = ty
-    v36 = tx
-    tx = (2048i64 - v58 * 4017i64 - v37 * 799i64) >> 12u32
-    ty = (2048i64 + v58 * 799i64 - v37 * 4017i64) >> 12u32
-    v58 = ty
-    v37 = tx
-    tx = (2048i64 + v53 * 3406i64 - v42 * 2276i64) >> 12u32
-    ty = (2048i64 + v53 * 2276i64 + v42 * 3406i64) >> 12u32
-    v53 = ty
-    v42 = tx
-    tx = (2048i64 + v52 * 3406i64 - v43 * 2276i64) >> 12u32
-    ty = (2048i64 + v52 * 2276i64 + v43 * 3406i64) >> 12u32
-    v52 = ty
-    v43 = tx
-    tx = (2048i64 - v51 * 2276i64 - v44 * 3406i64) >> 12u32
-    ty = (2048i64 + v51 * 3406i64 - v44 * 2276i64) >> 12u32
-    v51 = ty
-    v44 = tx
-    tx = (2048i64 - v50 * 2276i64 - v45 * 3406i64) >> 12u32
-    ty = (2048i64 + v50 * 3406i64 - v45 * 2276i64) >> 12u32
-    v50 = ty
-    v45 = tx
-    tx = v0 + v3
-    ty = v0 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v3 = ty
-    tx = v1 + v2
-    ty = v1 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v2 = ty
-    tx = (2048i64 + v6 * 2896i64 - v5 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v5 * 2896i64) >> 12u32
-    v6 = ty
-    v5 = tx
-    tx = v8 + v11
-    ty = v8 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v11 = ty
-    tx = v9 + v10
-    ty = v9 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v10 = ty
-    tx = v15 + v12
-    ty = v15 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v12 = ty
-    tx = v14 + v13
-    ty = v14 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v13 = ty
-    tx = (2048i64 + v29 * 1567i64 - v18 * 3784i64) >> 12u32
-    ty = (2048i64 + v29 * 3784i64 + v18 * 1567i64) >> 12u32
-    v29 = ty
-    v18 = tx
-    tx = (2048i64 + v28 * 1567i64 - v19 * 3784i64) >> 12u32
-    ty = (2048i64 + v28 * 3784i64 + v19 * 1567i64) >> 12u32
-    v28 = ty
-    v19 = tx
-    tx = (2048i64 - v27 * 3784i64 - v20 * 1567i64) >> 12u32
-    ty = (2048i64 + v27 * 1567i64 - v20 * 3784i64) >> 12u32
-    v27 = ty
-    v20 = tx
-    tx = (2048i64 - v26 * 3784i64 - v21 * 1567i64) >> 12u32
-    ty = (2048i64 + v26 * 1567i64 - v21 * 3784i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = v32 + v39
-    ty = v32 - v39
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v32 = tx
-    v39 = ty
-    tx = v33 + v38
-    ty = v33 - v38
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v33 = tx
-    v38 = ty
-    tx = v34 + v37
-    ty = v34 - v37
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v34 = tx
-    v37 = ty
-    tx = v35 + v36
-    ty = v35 - v36
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v35 = tx
-    v36 = ty
-    tx = v47 + v40
-    ty = v47 - v40
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v47 = tx
-    v40 = ty
-    tx = v46 + v41
-    ty = v46 - v41
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v46 = tx
-    v41 = ty
-    tx = v45 + v42
-    ty = v45 - v42
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v45 = tx
-    v42 = ty
-    tx = v44 + v43
-    ty = v44 - v43
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v44 = tx
-    v43 = ty
-    tx = v48 + v55
-    ty = v48 - v55
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v48 = tx
-    v55 = ty
-    tx = v49 + v54
-    ty = v49 - v54
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v49 = tx
-    v54 = ty
-    tx = v50 + v53
-    ty = v50 - v53
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v50 = tx
-    v53 = ty
-    tx = v51 + v52
-    ty = v51 - v52
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v51 = tx
-    v52 = ty
-    tx = v63 + v56
-    ty = v63 - v56
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v63 = tx
-    v56 = ty
-    tx = v62 + v57
-    ty = v62 - v57
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v62 = tx
-    v57 = ty
-    tx = v61 + v58
-    ty = v61 - v58
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v61 = tx
-    v58 = ty
-    tx = v60 + v59
-    ty = v60 - v59
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v60 = tx
-    v59 = ty
-    tx = v0 + v7
-    ty = v0 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v7 = ty
-    tx = v1 + v6
-    ty = v1 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v6 = ty
-    tx = v2 + v5
-    ty = v2 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v5 = ty
-    tx = v3 + v4
-    ty = v3 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v4 = ty
-    tx = (2048i64 + v13 * 2896i64 - v10 * 2896i64) >> 12u32
-    ty = (2048i64 + v13 * 2896i64 + v10 * 2896i64) >> 12u32
-    v13 = ty
-    v10 = tx
-    tx = (2048i64 + v12 * 2896i64 - v11 * 2896i64) >> 12u32
-    ty = (2048i64 + v12 * 2896i64 + v11 * 2896i64) >> 12u32
-    v12 = ty
-    v11 = tx
-    tx = v16 + v23
-    ty = v16 - v23
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v23 = ty
-    tx = v17 + v22
-    ty = v17 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v17 = tx
-    v22 = ty
-    tx = v18 + v21
-    ty = v18 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v18 = tx
-    v21 = ty
-    tx = v19 + v20
-    ty = v19 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v19 = tx
-    v20 = ty
-    tx = v31 + v24
-    ty = v31 - v24
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v24 = ty
-    tx = v30 + v25
-    ty = v30 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v30 = tx
-    v25 = ty
-    tx = v29 + v26
-    ty = v29 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v29 = tx
-    v26 = ty
-    tx = v28 + v27
-    ty = v28 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v28 = tx
-    v27 = ty
-    tx = (2048i64 + v59 * 1567i64 - v36 * 3784i64) >> 12u32
-    ty = (2048i64 + v59 * 3784i64 + v36 * 1567i64) >> 12u32
-    v59 = ty
-    v36 = tx
-    tx = (2048i64 + v58 * 1567i64 - v37 * 3784i64) >> 12u32
-    ty = (2048i64 + v58 * 3784i64 + v37 * 1567i64) >> 12u32
-    v58 = ty
-    v37 = tx
-    tx = (2048i64 + v57 * 1567i64 - v38 * 3784i64) >> 12u32
-    ty = (2048i64 + v57 * 3784i64 + v38 * 1567i64) >> 12u32
-    v57 = ty
-    v38 = tx
-    tx = (2048i64 + v56 * 1567i64 - v39 * 3784i64) >> 12u32
-    ty = (2048i64 + v56 * 3784i64 + v39 * 1567i64) >> 12u32
-    v56 = ty
-    v39 = tx
-    tx = (2048i64 - v55 * 3784i64 - v40 * 1567i64) >> 12u32
-    ty = (2048i64 + v55 * 1567i64 - v40 * 3784i64) >> 12u32
-    v55 = ty
-    v40 = tx
-    tx = (2048i64 - v54 * 3784i64 - v41 * 1567i64) >> 12u32
-    ty = (2048i64 + v54 * 1567i64 - v41 * 3784i64) >> 12u32
-    v54 = ty
-    v41 = tx
-    tx = (2048i64 - v53 * 3784i64 - v42 * 1567i64) >> 12u32
-    ty = (2048i64 + v53 * 1567i64 - v42 * 3784i64) >> 12u32
-    v53 = ty
-    v42 = tx
-    tx = (2048i64 - v52 * 3784i64 - v43 * 1567i64) >> 12u32
-    ty = (2048i64 + v52 * 1567i64 - v43 * 3784i64) >> 12u32
-    v52 = ty
-    v43 = tx
-    tx = v0 + v15
-    ty = v0 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v15 = ty
-    tx = v1 + v14
-    ty = v1 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v14 = ty
-    tx = v2 + v13
-    ty = v2 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v13 = ty
-    tx = v3 + v12
-    ty = v3 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v12 = ty
-    tx = v4 + v11
-    ty = v4 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v11 = ty
-    tx = v5 + v10
-    ty = v5 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v10 = ty
-    tx = v6 + v9
-    ty = v6 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v9 = ty
-    tx = v7 + v8
-    ty = v7 - v8
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v8 = ty
-    tx = (2048i64 + v27 * 2896i64 - v20 * 2896i64) >> 12u32
-    ty = (2048i64 + v27 * 2896i64 + v20 * 2896i64) >> 12u32
-    v27 = ty
-    v20 = tx
-    tx = (2048i64 + v26 * 2896i64 - v21 * 2896i64) >> 12u32
-    ty = (2048i64 + v26 * 2896i64 + v21 * 2896i64) >> 12u32
-    v26 = ty
-    v21 = tx
-    tx = (2048i64 + v25 * 2896i64 - v22 * 2896i64) >> 12u32
-    ty = (2048i64 + v25 * 2896i64 + v22 * 2896i64) >> 12u32
-    v25 = ty
-    v22 = tx
-    tx = (2048i64 + v24 * 2896i64 - v23 * 2896i64) >> 12u32
-    ty = (2048i64 + v24 * 2896i64 + v23 * 2896i64) >> 12u32
-    v24 = ty
-    v23 = tx
-    tx = v32 + v47
-    ty = v32 - v47
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v32 = tx
-    v47 = ty
-    tx = v63 + v48
-    ty = v63 - v48
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v63 = tx
-    v48 = ty
-    tx = v33 + v46
-    ty = v33 - v46
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v33 = tx
-    v46 = ty
-    tx = v62 + v49
-    ty = v62 - v49
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v62 = tx
-    v49 = ty
-    tx = v34 + v45
-    ty = v34 - v45
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v34 = tx
-    v45 = ty
-    tx = v61 + v50
-    ty = v61 - v50
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v61 = tx
-    v50 = ty
-    tx = v35 + v44
-    ty = v35 - v44
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v35 = tx
-    v44 = ty
-    tx = v60 + v51
-    ty = v60 - v51
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v60 = tx
-    v51 = ty
-    tx = v36 + v43
-    ty = v36 - v43
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v36 = tx
-    v43 = ty
-    tx = v59 + v52
-    ty = v59 - v52
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v59 = tx
-    v52 = ty
-    tx = v37 + v42
-    ty = v37 - v42
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v37 = tx
-    v42 = ty
-    tx = v58 + v53
-    ty = v58 - v53
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v58 = tx
-    v53 = ty
-    tx = v38 + v41
-    ty = v38 - v41
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v38 = tx
-    v41 = ty
-    tx = v57 + v54
-    ty = v57 - v54
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v57 = tx
-    v54 = ty
-    tx = v39 + v40
-    ty = v39 - v40
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v39 = tx
-    v40 = ty
-    tx = v56 + v55
-    ty = v56 - v55
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v56 = tx
-    v55 = ty
-    tx = v0 + v31
-    ty = v0 - v31
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v31 = ty
-    tx = v1 + v30
-    ty = v1 - v30
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v30 = ty
-    tx = v2 + v29
-    ty = v2 - v29
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v29 = ty
-    tx = v3 + v28
-    ty = v3 - v28
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v28 = ty
-    tx = v4 + v27
-    ty = v4 - v27
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v27 = ty
-    tx = v5 + v26
-    ty = v5 - v26
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v26 = ty
-    tx = v6 + v25
-    ty = v6 - v25
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v25 = ty
-    tx = v7 + v24
-    ty = v7 - v24
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v24 = ty
-    tx = v8 + v23
-    ty = v8 - v23
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v23 = ty
-    tx = v9 + v22
-    ty = v9 - v22
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v22 = ty
-    tx = v10 + v21
-    ty = v10 - v21
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v10 = tx
-    v21 = ty
-    tx = v11 + v20
-    ty = v11 - v20
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v20 = ty
-    tx = v12 + v19
-    ty = v12 - v19
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v19 = ty
-    tx = v13 + v18
-    ty = v13 - v18
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v13 = tx
-    v18 = ty
-    tx = v14 + v17
-    ty = v14 - v17
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v17 = ty
-    tx = v15 + v16
-    ty = v15 - v16
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v16 = ty
-    tx = (2048i64 + v55 * 2896i64 - v40 * 2896i64) >> 12u32
-    ty = (2048i64 + v55 * 2896i64 + v40 * 2896i64) >> 12u32
-    v55 = ty
-    v40 = tx
-    tx = (2048i64 + v54 * 2896i64 - v41 * 2896i64) >> 12u32
-    ty = (2048i64 + v54 * 2896i64 + v41 * 2896i64) >> 12u32
-    v54 = ty
-    v41 = tx
-    tx = (2048i64 + v53 * 2896i64 - v42 * 2896i64) >> 12u32
-    ty = (2048i64 + v53 * 2896i64 + v42 * 2896i64) >> 12u32
-    v53 = ty
-    v42 = tx
-    tx = (2048i64 + v52 * 2896i64 - v43 * 2896i64) >> 12u32
-    ty = (2048i64 + v52 * 2896i64 + v43 * 2896i64) >> 12u32
-    v52 = ty
-    v43 = tx
-    tx = (2048i64 + v51 * 2896i64 - v44 * 2896i64) >> 12u32
-    ty = (2048i64 + v51 * 2896i64 + v44 * 2896i64) >> 12u32
-    v51 = ty
-    v44 = tx
-    tx = (2048i64 + v50 * 2896i64 - v45 * 2896i64) >> 12u32
-    ty = (2048i64 + v50 * 2896i64 + v45 * 2896i64) >> 12u32
-    v50 = ty
-    v45 = tx
-    tx = (2048i64 + v49 * 2896i64 - v46 * 2896i64) >> 12u32
-    ty = (2048i64 + v49 * 2896i64 + v46 * 2896i64) >> 12u32
-    v49 = ty
-    v46 = tx
-    tx = (2048i64 + v48 * 2896i64 - v47 * 2896i64) >> 12u32
-    ty = (2048i64 + v48 * 2896i64 + v47 * 2896i64) >> 12u32
-    v48 = ty
-    v47 = tx
-    tx = v0 + v63
-    ty = v0 - v63
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v63 = ty
-    tx = v1 + v62
-    ty = v1 - v62
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v62 = ty
-    tx = v2 + v61
-    ty = v2 - v61
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v61 = ty
-    tx = v3 + v60
-    ty = v3 - v60
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v60 = ty
-    tx = v4 + v59
-    ty = v4 - v59
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v59 = ty
-    tx = v5 + v58
-    ty = v5 - v58
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v58 = ty
-    tx = v6 + v57
-    ty = v6 - v57
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v57 = ty
-    tx = v7 + v56
-    ty = v7 - v56
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v56 = ty
-    tx = v8 + v55
-    ty = v8 - v55
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v55 = ty
-    tx = v9 + v54
-    ty = v9 - v54
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v54 = ty
-    tx = v10 + v53
-    ty = v10 - v53
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v10 = tx
-    v53 = ty
-    tx = v11 + v52
-    ty = v11 - v52
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v52 = ty
-    tx = v12 + v51
-    ty = v12 - v51
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v51 = ty
-    tx = v13 + v50
-    ty = v13 - v50
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v13 = tx
-    v50 = ty
-    tx = v14 + v49
-    ty = v14 - v49
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v14 = tx
-    v49 = ty
-    tx = v15 + v48
-    ty = v15 - v48
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v15 = tx
-    v48 = ty
-    tx = v16 + v47
-    ty = v16 - v47
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v16 = tx
-    v47 = ty
-    tx = v17 + v46
-    ty = v17 - v46
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v17 = tx
-    v46 = ty
-    tx = v18 + v45
-    ty = v18 - v45
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v18 = tx
-    v45 = ty
-    tx = v19 + v44
-    ty = v19 - v44
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v19 = tx
-    v44 = ty
-    tx = v20 + v43
-    ty = v20 - v43
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v20 = tx
-    v43 = ty
-    tx = v21 + v42
-    ty = v21 - v42
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v21 = tx
-    v42 = ty
-    tx = v22 + v41
-    ty = v22 - v41
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v22 = tx
-    v41 = ty
-    tx = v23 + v40
-    ty = v23 - v40
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v23 = tx
-    v40 = ty
-    tx = v24 + v39
-    ty = v24 - v39
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v24 = tx
-    v39 = ty
-    tx = v25 + v38
-    ty = v25 - v38
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v25 = tx
-    v38 = ty
-    tx = v26 + v37
-    ty = v26 - v37
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v26 = tx
-    v37 = ty
-    tx = v27 + v36
-    ty = v27 - v36
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v27 = tx
-    v36 = ty
-    tx = v28 + v35
-    ty = v28 - v35
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v28 = tx
-    v35 = ty
-    tx = v29 + v34
-    ty = v29 - v34
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v29 = tx
-    v34 = ty
-    tx = v30 + v33
-    ty = v30 - v33
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v30 = tx
-    v33 = ty
-    tx = v31 + v32
-    ty = v31 - v32
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v31 = tx
-    v32 = ty
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(v1)
-    t[off + 2usize * st] = i32(v2)
-    t[off + 3usize * st] = i32(v3)
-    t[off + 4usize * st] = i32(v4)
-    t[off + 5usize * st] = i32(v5)
-    t[off + 6usize * st] = i32(v6)
-    t[off + 7usize * st] = i32(v7)
-    t[off + 8usize * st] = i32(v8)
-    t[off + 9usize * st] = i32(v9)
-    t[off + 10usize * st] = i32(v10)
-    t[off + 11usize * st] = i32(v11)
-    t[off + 12usize * st] = i32(v12)
-    t[off + 13usize * st] = i32(v13)
-    t[off + 14usize * st] = i32(v14)
-    t[off + 15usize * st] = i32(v15)
-    t[off + 16usize * st] = i32(v16)
-    t[off + 17usize * st] = i32(v17)
-    t[off + 18usize * st] = i32(v18)
-    t[off + 19usize * st] = i32(v19)
-    t[off + 20usize * st] = i32(v20)
-    t[off + 21usize * st] = i32(v21)
-    t[off + 22usize * st] = i32(v22)
-    t[off + 23usize * st] = i32(v23)
-    t[off + 24usize * st] = i32(v24)
-    t[off + 25usize * st] = i32(v25)
-    t[off + 26usize * st] = i32(v26)
-    t[off + 27usize * st] = i32(v27)
-    t[off + 28usize * st] = i32(v28)
-    t[off + 29usize * st] = i32(v29)
-    t[off + 30usize * st] = i32(v30)
-    t[off + 31usize * st] = i32(v31)
-    t[off + 32usize * st] = i32(v32)
-    t[off + 33usize * st] = i32(v33)
-    t[off + 34usize * st] = i32(v34)
-    t[off + 35usize * st] = i32(v35)
-    t[off + 36usize * st] = i32(v36)
-    t[off + 37usize * st] = i32(v37)
-    t[off + 38usize * st] = i32(v38)
-    t[off + 39usize * st] = i32(v39)
-    t[off + 40usize * st] = i32(v40)
-    t[off + 41usize * st] = i32(v41)
-    t[off + 42usize * st] = i32(v42)
-    t[off + 43usize * st] = i32(v43)
-    t[off + 44usize * st] = i32(v44)
-    t[off + 45usize * st] = i32(v45)
-    t[off + 46usize * st] = i32(v46)
-    t[off + 47usize * st] = i32(v47)
-    t[off + 48usize * st] = i32(v48)
-    t[off + 49usize * st] = i32(v49)
-    t[off + 50usize * st] = i32(v50)
-    t[off + 51usize * st] = i32(v51)
-    t[off + 52usize * st] = i32(v52)
-    t[off + 53usize * st] = i32(v53)
-    t[off + 54usize * st] = i32(v54)
-    t[off + 55usize * st] = i32(v55)
-    t[off + 56usize * st] = i32(v56)
-    t[off + 57usize * st] = i32(v57)
-    t[off + 58usize * st] = i32(v58)
-    t[off + 59usize * st] = i32(v59)
-    t[off + 60usize * st] = i32(v60)
-    t[off + 61usize * st] = i32(v61)
-    t[off + 62usize * st] = i32(v62)
-    t[off + 63usize * st] = i32(v63)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp101 = vsp(101i32)
+    let kp4095 = vsp(4095i32)
+    let kp2824 = vsp(2824i32)
+    let kp2967 = vsp(2967i32)
+    let kp1660 = vsp(1660i32)
+    let kp3745 = vsp(3745i32)
+    let kp1474 = vsp(1474i32)
+    let kp3822 = vsp(3822i32)
+    let kp897 = vsp(897i32)
+    let kp3996 = vsp(3996i32)
+    let kp2191 = vsp(2191i32)
+    let kp3461 = vsp(3461i32)
+    let kp2359 = vsp(2359i32)
+    let kp3349 = vsp(3349i32)
+    let kp700 = vsp(700i32)
+    let kp4036 = vsp(4036i32)
+    let kp501 = vsp(501i32)
+    let kp4065 = vsp(4065i32)
+    let kp2520 = vsp(2520i32)
+    let kp3229 = vsp(3229i32)
+    let kp2019 = vsp(2019i32)
+    let kp3564 = vsp(3564i32)
+    let kp1092 = vsp(1092i32)
+    let kp3948 = vsp(3948i32)
+    let kp1285 = vsp(1285i32)
+    let kp3889 = vsp(3889i32)
+    let kp1842 = vsp(1842i32)
+    let kp3659 = vsp(3659i32)
+    let kp2675 = vsp(2675i32)
+    let kp3102 = vsp(3102i32)
+    let kp301 = vsp(301i32)
+    let kp4085 = vsp(4085i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp2751 = vsp(2751i32)
+    let kp3035 = vsp(3035i32)
+    let kp1751 = vsp(1751i32)
+    let kp3703 = vsp(3703i32)
+    let kp1380 = vsp(1380i32)
+    let kp3857 = vsp(3857i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp2106 = vsp(2106i32)
+    let kp3513 = vsp(3513i32)
+    let kp2440 = vsp(2440i32)
+    let kp3290 = vsp(3290i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp2598 = vsp(2598i32)
+    let kp3166 = vsp(3166i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 16usize * st)
+    var s2 = vld(t, off + 8usize * st)
+    var s3 = vld(t, off + 24usize * st)
+    var s4 = vld(t, off + 4usize * st)
+    var s5 = vld(t, off + 20usize * st)
+    var s6 = vld(t, off + 12usize * st)
+    var s7 = vld(t, off + 28usize * st)
+    var s8 = vld(t, off + 2usize * st)
+    var s9 = vld(t, off + 18usize * st)
+    var s10 = vld(t, off + 10usize * st)
+    var s11 = vld(t, off + 26usize * st)
+    var s12 = vld(t, off + 6usize * st)
+    var s13 = vld(t, off + 22usize * st)
+    var s14 = vld(t, off + 14usize * st)
+    var s15 = vld(t, off + 30usize * st)
+    var s16 = vld(t, off + 1usize * st)
+    var s17 = vld(t, off + 17usize * st)
+    var s18 = vld(t, off + 9usize * st)
+    var s19 = vld(t, off + 25usize * st)
+    var s20 = vld(t, off + 5usize * st)
+    var s21 = vld(t, off + 21usize * st)
+    var s22 = vld(t, off + 13usize * st)
+    var s23 = vld(t, off + 29usize * st)
+    var s24 = vld(t, off + 3usize * st)
+    var s25 = vld(t, off + 19usize * st)
+    var s26 = vld(t, off + 11usize * st)
+    var s27 = vld(t, off + 27usize * st)
+    var s28 = vld(t, off + 7usize * st)
+    var s29 = vld(t, off + 23usize * st)
+    var s30 = vld(t, off + 15usize * st)
+    var s31 = vld(t, off + 31usize * st)
+    var s32 = ((kp2048) +% (s16 *% kp101)) >> 12u32
+    s16 = ((kp2048) +% (s16 *% kp4095)) >> 12u32
+    var s33 = ((kp2048) -% (s31 *% kp2824)) >> 12u32
+    s31 = ((kp2048) +% (s31 *% kp2967)) >> 12u32
+    var s34 = ((kp2048) +% (s17 *% kp1660)) >> 12u32
+    s17 = ((kp2048) +% (s17 *% kp3745)) >> 12u32
+    var s35 = ((kp2048) -% (s30 *% kp1474)) >> 12u32
+    s30 = ((kp2048) +% (s30 *% kp3822)) >> 12u32
+    var s36 = ((kp2048) +% (s18 *% kp897)) >> 12u32
+    s18 = ((kp2048) +% (s18 *% kp3996)) >> 12u32
+    var s37 = ((kp2048) -% (s29 *% kp2191)) >> 12u32
+    s29 = ((kp2048) +% (s29 *% kp3461)) >> 12u32
+    var s38 = ((kp2048) +% (s19 *% kp2359)) >> 12u32
+    s19 = ((kp2048) +% (s19 *% kp3349)) >> 12u32
+    var s39 = ((kp2048) -% (s28 *% kp700)) >> 12u32
+    s28 = ((kp2048) +% (s28 *% kp4036)) >> 12u32
+    var s40 = ((kp2048) +% (s20 *% kp501)) >> 12u32
+    s20 = ((kp2048) +% (s20 *% kp4065)) >> 12u32
+    var s41 = ((kp2048) -% (s27 *% kp2520)) >> 12u32
+    s27 = ((kp2048) +% (s27 *% kp3229)) >> 12u32
+    var s42 = ((kp2048) +% (s21 *% kp2019)) >> 12u32
+    s21 = ((kp2048) +% (s21 *% kp3564)) >> 12u32
+    var s43 = ((kp2048) -% (s26 *% kp1092)) >> 12u32
+    s26 = ((kp2048) +% (s26 *% kp3948)) >> 12u32
+    var s44 = ((kp2048) +% (s22 *% kp1285)) >> 12u32
+    s22 = ((kp2048) +% (s22 *% kp3889)) >> 12u32
+    var s45 = ((kp2048) -% (s25 *% kp1842)) >> 12u32
+    s25 = ((kp2048) +% (s25 *% kp3659)) >> 12u32
+    var s46 = ((kp2048) +% (s23 *% kp2675)) >> 12u32
+    s23 = ((kp2048) +% (s23 *% kp3102)) >> 12u32
+    var s47 = ((kp2048) -% (s24 *% kp301)) >> 12u32
+    s24 = ((kp2048) +% (s24 *% kp4085)) >> 12u32
+    var s48 = ((kp2048) +% (s8 *% kp201)) >> 12u32
+    s8 = ((kp2048) +% (s8 *% kp4091)) >> 12u32
+    var s49 = ((kp2048) -% (s15 *% kp2751)) >> 12u32
+    s15 = ((kp2048) +% (s15 *% kp3035)) >> 12u32
+    var s50 = ((kp2048) +% (s9 *% kp1751)) >> 12u32
+    s9 = ((kp2048) +% (s9 *% kp3703)) >> 12u32
+    var s51 = ((kp2048) -% (s14 *% kp1380)) >> 12u32
+    s14 = ((kp2048) +% (s14 *% kp3857)) >> 12u32
+    var s52 = ((kp2048) +% (s10 *% kp995)) >> 12u32
+    s10 = ((kp2048) +% (s10 *% kp3973)) >> 12u32
+    var s53 = ((kp2048) -% (s13 *% kp2106)) >> 12u32
+    s13 = ((kp2048) +% (s13 *% kp3513)) >> 12u32
+    var s54 = ((kp2048) +% (s11 *% kp2440)) >> 12u32
+    s11 = ((kp2048) +% (s11 *% kp3290)) >> 12u32
+    var s55 = ((kp2048) -% (s12 *% kp601)) >> 12u32
+    s12 = ((kp2048) +% (s12 *% kp4052)) >> 12u32
+    var s56 = vclp((s32 +% s33), lo, hi)
+    s32 = vclp((s32 -% s33), lo, hi)
+    s33 = vclp((s35 +% s34), lo, hi)
+    s34 = vclp((s35 -% s34), lo, hi)
+    s35 = vclp((s36 +% s37), lo, hi)
+    s36 = vclp((s36 -% s37), lo, hi)
+    s37 = vclp((s39 +% s38), lo, hi)
+    s38 = vclp((s39 -% s38), lo, hi)
+    s39 = vclp((s40 +% s41), lo, hi)
+    s40 = vclp((s40 -% s41), lo, hi)
+    s41 = vclp((s43 +% s42), lo, hi)
+    s42 = vclp((s43 -% s42), lo, hi)
+    s43 = vclp((s44 +% s45), lo, hi)
+    s44 = vclp((s44 -% s45), lo, hi)
+    s45 = vclp((s47 +% s46), lo, hi)
+    s46 = vclp((s47 -% s46), lo, hi)
+    s47 = vclp((s24 +% s23), lo, hi)
+    s23 = vclp((s24 -% s23), lo, hi)
+    s24 = vclp((s22 +% s25), lo, hi)
+    s22 = vclp((s22 -% s25), lo, hi)
+    s25 = vclp((s26 +% s21), lo, hi)
+    s21 = vclp((s26 -% s21), lo, hi)
+    s26 = vclp((s20 +% s27), lo, hi)
+    s20 = vclp((s20 -% s27), lo, hi)
+    s27 = vclp((s28 +% s19), lo, hi)
+    s19 = vclp((s28 -% s19), lo, hi)
+    s28 = vclp((s18 +% s29), lo, hi)
+    s18 = vclp((s18 -% s29), lo, hi)
+    s29 = vclp((s30 +% s17), lo, hi)
+    s17 = vclp((s30 -% s17), lo, hi)
+    s30 = vclp((s16 +% s31), lo, hi)
+    s16 = vclp((s16 -% s31), lo, hi)
+    s31 = ((kp2048) +% (s4 *% kp401)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4076)) >> 12u32
+    var s57 = ((kp2048) -% (s7 *% kp2598)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp3166)) >> 12u32
+    var s58 = ((kp2048) +% (s5 *% kp1931)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp3612)) >> 12u32
+    var s59 = ((kp2048) -% (s6 *% kp1189)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp3920)) >> 12u32
+    var s60 = vclp((s48 +% s49), lo, hi)
+    s48 = vclp((s48 -% s49), lo, hi)
+    s49 = vclp((s51 +% s50), lo, hi)
+    s50 = vclp((s51 -% s50), lo, hi)
+    s51 = vclp((s52 +% s53), lo, hi)
+    s52 = vclp((s52 -% s53), lo, hi)
+    s53 = vclp((s55 +% s54), lo, hi)
+    s54 = vclp((s55 -% s54), lo, hi)
+    s55 = vclp((s12 +% s11), lo, hi)
+    s11 = vclp((s12 -% s11), lo, hi)
+    s12 = vclp((s10 +% s13), lo, hi)
+    s10 = vclp((s10 -% s13), lo, hi)
+    s13 = vclp((s14 +% s9), lo, hi)
+    s9 = vclp((s14 -% s9), lo, hi)
+    s14 = vclp((s8 +% s15), lo, hi)
+    s8 = vclp((s8 -% s15), lo, hi)
+    s15 = (((kp2048) +% (s16 *% kp401)) -% (s32 *% kp4076)) >> 12u32
+    s16 = (((kp2048) +% (s16 *% kp4076)) +% (s32 *% kp401)) >> 12u32
+    s32 = (((kp2048) -% (s17 *% kp4076)) -% (s34 *% kp401)) >> 12u32
+    s17 = (((kp2048) +% (s17 *% kp401)) -% (s34 *% kp4076)) >> 12u32
+    s34 = (((kp2048) +% (s18 *% kp3166)) -% (s36 *% kp2598)) >> 12u32
+    s18 = (((kp2048) +% (s18 *% kp2598)) +% (s36 *% kp3166)) >> 12u32
+    s36 = (((kp2048) -% (s19 *% kp2598)) -% (s38 *% kp3166)) >> 12u32
+    s19 = (((kp2048) +% (s19 *% kp3166)) -% (s38 *% kp2598)) >> 12u32
+    s38 = (((kp2048) +% (s20 *% kp1931)) -% (s40 *% kp3612)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp3612)) +% (s40 *% kp1931)) >> 12u32
+    s40 = (((kp2048) -% (s21 *% kp3612)) -% (s42 *% kp1931)) >> 12u32
+    s21 = (((kp2048) +% (s21 *% kp1931)) -% (s42 *% kp3612)) >> 12u32
+    s42 = (((kp2048) +% (s22 *% kp3920)) -% (s44 *% kp1189)) >> 12u32
+    s22 = (((kp2048) +% (s22 *% kp1189)) +% (s44 *% kp3920)) >> 12u32
+    s44 = (((kp2048) -% (s23 *% kp1189)) -% (s46 *% kp3920)) >> 12u32
+    s23 = (((kp2048) +% (s23 *% kp3920)) -% (s46 *% kp1189)) >> 12u32
+    s46 = ((kp2048) +% (s2 *% kp799)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4017)) >> 12u32
+    var s61 = ((kp2048) -% (s3 *% kp2276)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3406)) >> 12u32
+    var s62 = vclp((s31 +% s57), lo, hi)
+    s31 = vclp((s31 -% s57), lo, hi)
+    s57 = vclp((s59 +% s58), lo, hi)
+    s58 = vclp((s59 -% s58), lo, hi)
+    s59 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = (((kp2048) +% (s8 *% kp799)) -% (s48 *% kp4017)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4017)) +% (s48 *% kp799)) >> 12u32
+    s48 = (((kp2048) -% (s9 *% kp4017)) -% (s50 *% kp799)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp799)) -% (s50 *% kp4017)) >> 12u32
+    s50 = (((kp2048) +% (s10 *% kp3406)) -% (s52 *% kp2276)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp2276)) +% (s52 *% kp3406)) >> 12u32
+    s52 = (((kp2048) -% (s11 *% kp2276)) -% (s54 *% kp3406)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp3406)) -% (s54 *% kp2276)) >> 12u32
+    s54 = vclp((s56 +% s33), lo, hi)
+    s33 = vclp((s56 -% s33), lo, hi)
+    s56 = vclp((s15 +% s32), lo, hi)
+    s15 = vclp((s15 -% s32), lo, hi)
+    s32 = vclp((s37 +% s35), lo, hi)
+    s35 = vclp((s37 -% s35), lo, hi)
+    s37 = vclp((s36 +% s34), lo, hi)
+    s34 = vclp((s36 -% s34), lo, hi)
+    s36 = vclp((s39 +% s41), lo, hi)
+    s39 = vclp((s39 -% s41), lo, hi)
+    s41 = vclp((s38 +% s40), lo, hi)
+    s38 = vclp((s38 -% s40), lo, hi)
+    s40 = vclp((s45 +% s43), lo, hi)
+    s43 = vclp((s45 -% s43), lo, hi)
+    s45 = vclp((s44 +% s42), lo, hi)
+    s42 = vclp((s44 -% s42), lo, hi)
+    s44 = vclp((s47 +% s24), lo, hi)
+    s24 = vclp((s47 -% s24), lo, hi)
+    s47 = vclp((s23 +% s22), lo, hi)
+    s22 = vclp((s23 -% s22), lo, hi)
+    s23 = vclp((s26 +% s25), lo, hi)
+    s25 = vclp((s26 -% s25), lo, hi)
+    s26 = vclp((s20 +% s21), lo, hi)
+    s20 = vclp((s20 -% s21), lo, hi)
+    s21 = vclp((s27 +% s28), lo, hi)
+    s27 = vclp((s27 -% s28), lo, hi)
+    s28 = vclp((s19 +% s18), lo, hi)
+    s18 = vclp((s19 -% s18), lo, hi)
+    s19 = vclp((s30 +% s29), lo, hi)
+    s29 = vclp((s30 -% s29), lo, hi)
+    s30 = vclp((s16 +% s17), lo, hi)
+    s16 = vclp((s16 -% s17), lo, hi)
+    s17 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s63 = ((kp2048) +% (s1 *% kp1567)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp3784)) >> 12u32
+    var s64 = vclp((s46 +% s61), lo, hi)
+    s46 = vclp((s46 -% s61), lo, hi)
+    s61 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s4 *% kp1567)) -% (s31 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s31 *% kp1567)) >> 12u32
+    s31 = (((kp2048) -% (s5 *% kp3784)) -% (s58 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s58 *% kp3784)) >> 12u32
+    s58 = vclp((s60 +% s49), lo, hi)
+    s49 = vclp((s60 -% s49), lo, hi)
+    s60 = vclp((s7 +% s48), lo, hi)
+    s7 = vclp((s7 -% s48), lo, hi)
+    s48 = vclp((s53 +% s51), lo, hi)
+    s51 = vclp((s53 -% s51), lo, hi)
+    s53 = vclp((s52 +% s50), lo, hi)
+    s50 = vclp((s52 -% s50), lo, hi)
+    s52 = vclp((s55 +% s12), lo, hi)
+    s12 = vclp((s55 -% s12), lo, hi)
+    s55 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s14 +% s13), lo, hi)
+    s13 = vclp((s14 -% s13), lo, hi)
+    s14 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = (((kp2048) +% (s16 *% kp799)) -% (s15 *% kp4017)) >> 12u32
+    s15 = (((kp2048) +% (s16 *% kp4017)) +% (s15 *% kp799)) >> 12u32
+    s16 = (((kp2048) +% (s29 *% kp799)) -% (s33 *% kp4017)) >> 12u32
+    s29 = (((kp2048) +% (s29 *% kp4017)) +% (s33 *% kp799)) >> 12u32
+    s33 = (((kp2048) -% (s27 *% kp4017)) -% (s35 *% kp799)) >> 12u32
+    s27 = (((kp2048) +% (s27 *% kp799)) -% (s35 *% kp4017)) >> 12u32
+    s35 = (((kp2048) -% (s18 *% kp4017)) -% (s34 *% kp799)) >> 12u32
+    s18 = (((kp2048) +% (s18 *% kp799)) -% (s34 *% kp4017)) >> 12u32
+    s34 = (((kp2048) +% (s20 *% kp3406)) -% (s38 *% kp2276)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp2276)) +% (s38 *% kp3406)) >> 12u32
+    s38 = (((kp2048) +% (s25 *% kp3406)) -% (s39 *% kp2276)) >> 12u32
+    s25 = (((kp2048) +% (s25 *% kp2276)) +% (s39 *% kp3406)) >> 12u32
+    s39 = (((kp2048) -% (s24 *% kp2276)) -% (s43 *% kp3406)) >> 12u32
+    s24 = (((kp2048) +% (s24 *% kp3406)) -% (s43 *% kp2276)) >> 12u32
+    s43 = (((kp2048) -% (s22 *% kp2276)) -% (s42 *% kp3406)) >> 12u32
+    s22 = (((kp2048) +% (s22 *% kp3406)) -% (s42 *% kp2276)) >> 12u32
+    s42 = vclp((s0 +% s1), lo, hi)
+    s0 = vclp((s0 -% s1), lo, hi)
+    s1 = vclp((s17 +% s63), lo, hi)
+    s17 = vclp((s17 -% s63), lo, hi)
+    s63 = (((kp2048) +% (s2 *% kp2896)) -% (s46 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s46 *% kp2896)) >> 12u32
+    s46 = vclp((s62 +% s57), lo, hi)
+    s57 = vclp((s62 -% s57), lo, hi)
+    s62 = vclp((s3 +% s31), lo, hi)
+    s3 = vclp((s3 -% s31), lo, hi)
+    s31 = vclp((s6 +% s59), lo, hi)
+    s6 = vclp((s6 -% s59), lo, hi)
+    s59 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s8 *% kp1567)) -% (s7 *% kp3784)) >> 12u32
+    s7 = (((kp2048) +% (s8 *% kp3784)) +% (s7 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s13 *% kp1567)) -% (s49 *% kp3784)) >> 12u32
+    s13 = (((kp2048) +% (s13 *% kp3784)) +% (s49 *% kp1567)) >> 12u32
+    s49 = (((kp2048) -% (s12 *% kp3784)) -% (s51 *% kp1567)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp1567)) -% (s51 *% kp3784)) >> 12u32
+    s51 = (((kp2048) -% (s10 *% kp3784)) -% (s50 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) -% (s50 *% kp3784)) >> 12u32
+    s50 = vclp((s54 +% s32), lo, hi)
+    s32 = vclp((s54 -% s32), lo, hi)
+    s54 = vclp((s56 +% s37), lo, hi)
+    s37 = vclp((s56 -% s37), lo, hi)
+    s56 = vclp((s9 +% s35), lo, hi)
+    s9 = vclp((s9 -% s35), lo, hi)
+    s35 = vclp((s16 +% s33), lo, hi)
+    s16 = vclp((s16 -% s33), lo, hi)
+    s33 = vclp((s40 +% s36), lo, hi)
+    s36 = vclp((s40 -% s36), lo, hi)
+    s40 = vclp((s45 +% s41), lo, hi)
+    s41 = vclp((s45 -% s41), lo, hi)
+    s45 = vclp((s43 +% s34), lo, hi)
+    s34 = vclp((s43 -% s34), lo, hi)
+    s43 = vclp((s39 +% s38), lo, hi)
+    s38 = vclp((s39 -% s38), lo, hi)
+    s39 = vclp((s44 +% s23), lo, hi)
+    s23 = vclp((s44 -% s23), lo, hi)
+    s44 = vclp((s47 +% s26), lo, hi)
+    s26 = vclp((s47 -% s26), lo, hi)
+    s47 = vclp((s22 +% s20), lo, hi)
+    s20 = vclp((s22 -% s20), lo, hi)
+    s22 = vclp((s24 +% s25), lo, hi)
+    s24 = vclp((s24 -% s25), lo, hi)
+    s25 = vclp((s19 +% s21), lo, hi)
+    s19 = vclp((s19 -% s21), lo, hi)
+    s21 = vclp((s30 +% s28), lo, hi)
+    s28 = vclp((s30 -% s28), lo, hi)
+    s30 = vclp((s15 +% s18), lo, hi)
+    s15 = vclp((s15 -% s18), lo, hi)
+    s18 = vclp((s29 +% s27), lo, hi)
+    s27 = vclp((s29 -% s27), lo, hi)
+    s29 = vclp((s42 +% s61), lo, hi)
+    s42 = vclp((s42 -% s61), lo, hi)
+    s61 = vclp((s1 +% s2), lo, hi)
+    s1 = vclp((s1 -% s2), lo, hi)
+    s2 = vclp((s17 +% s63), lo, hi)
+    s17 = vclp((s17 -% s63), lo, hi)
+    s63 = vclp((s0 +% s64), lo, hi)
+    s0 = vclp((s0 -% s64), lo, hi)
+    s64 = (((kp2048) +% (s4 *% kp2896)) -% (s3 *% kp2896)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp2896)) +% (s3 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s6 *% kp2896)) -% (s57 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s57 *% kp2896)) >> 12u32
+    s57 = vclp((s58 +% s48), lo, hi)
+    s48 = vclp((s58 -% s48), lo, hi)
+    s58 = vclp((s60 +% s53), lo, hi)
+    s53 = vclp((s60 -% s53), lo, hi)
+    s60 = vclp((s5 +% s51), lo, hi)
+    s5 = vclp((s5 -% s51), lo, hi)
+    s51 = vclp((s8 +% s49), lo, hi)
+    s8 = vclp((s8 -% s49), lo, hi)
+    s49 = vclp((s11 +% s52), lo, hi)
+    s11 = vclp((s11 -% s52), lo, hi)
+    s52 = vclp((s14 +% s55), lo, hi)
+    s14 = vclp((s14 -% s55), lo, hi)
+    s55 = vclp((s7 +% s10), lo, hi)
+    s7 = vclp((s7 -% s10), lo, hi)
+    s10 = vclp((s13 +% s12), lo, hi)
+    s12 = vclp((s13 -% s12), lo, hi)
+    s13 = (((kp2048) +% (s27 *% kp1567)) -% (s16 *% kp3784)) >> 12u32
+    s16 = (((kp2048) +% (s27 *% kp3784)) +% (s16 *% kp1567)) >> 12u32
+    s27 = (((kp2048) +% (s15 *% kp1567)) -% (s9 *% kp3784)) >> 12u32
+    s9 = (((kp2048) +% (s15 *% kp3784)) +% (s9 *% kp1567)) >> 12u32
+    s15 = (((kp2048) +% (s28 *% kp1567)) -% (s37 *% kp3784)) >> 12u32
+    s28 = (((kp2048) +% (s28 *% kp3784)) +% (s37 *% kp1567)) >> 12u32
+    s37 = (((kp2048) +% (s19 *% kp1567)) -% (s32 *% kp3784)) >> 12u32
+    s19 = (((kp2048) +% (s19 *% kp3784)) +% (s32 *% kp1567)) >> 12u32
+    s32 = (((kp2048) -% (s23 *% kp3784)) -% (s36 *% kp1567)) >> 12u32
+    s23 = (((kp2048) +% (s23 *% kp1567)) -% (s36 *% kp3784)) >> 12u32
+    s36 = (((kp2048) -% (s26 *% kp3784)) -% (s41 *% kp1567)) >> 12u32
+    s26 = (((kp2048) +% (s26 *% kp1567)) -% (s41 *% kp3784)) >> 12u32
+    s41 = (((kp2048) -% (s20 *% kp3784)) -% (s34 *% kp1567)) >> 12u32
+    s20 = (((kp2048) +% (s20 *% kp1567)) -% (s34 *% kp3784)) >> 12u32
+    s34 = (((kp2048) -% (s24 *% kp3784)) -% (s38 *% kp1567)) >> 12u32
+    s24 = (((kp2048) +% (s24 *% kp1567)) -% (s38 *% kp3784)) >> 12u32
+    s38 = vclp((s29 +% s31), lo, hi)
+    s29 = vclp((s29 -% s31), lo, hi)
+    s31 = vclp((s61 +% s59), lo, hi)
+    s59 = vclp((s61 -% s59), lo, hi)
+    s61 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s63 +% s6), lo, hi)
+    s6 = vclp((s63 -% s6), lo, hi)
+    s63 = vclp((s0 +% s4), lo, hi)
+    s0 = vclp((s0 -% s4), lo, hi)
+    s4 = vclp((s17 +% s64), lo, hi)
+    s17 = vclp((s17 -% s64), lo, hi)
+    s64 = vclp((s1 +% s62), lo, hi)
+    s1 = vclp((s1 -% s62), lo, hi)
+    s62 = vclp((s42 +% s46), lo, hi)
+    s42 = vclp((s42 -% s46), lo, hi)
+    s46 = (((kp2048) +% (s12 *% kp2896)) -% (s8 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s12 *% kp2896)) +% (s8 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s7 *% kp2896)) -% (s5 *% kp2896)) >> 12u32
+    s5 = (((kp2048) +% (s7 *% kp2896)) +% (s5 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s14 *% kp2896)) -% (s53 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp2896)) +% (s53 *% kp2896)) >> 12u32
+    s53 = (((kp2048) +% (s11 *% kp2896)) -% (s48 *% kp2896)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp2896)) +% (s48 *% kp2896)) >> 12u32
+    s48 = vclp((s50 +% s33), lo, hi)
+    s33 = vclp((s50 -% s33), lo, hi)
+    s50 = vclp((s25 +% s39), lo, hi)
+    s25 = vclp((s25 -% s39), lo, hi)
+    s39 = vclp((s54 +% s40), lo, hi)
+    s40 = vclp((s54 -% s40), lo, hi)
+    s54 = vclp((s21 +% s44), lo, hi)
+    s21 = vclp((s21 -% s44), lo, hi)
+    s44 = vclp((s56 +% s45), lo, hi)
+    s45 = vclp((s56 -% s45), lo, hi)
+    s56 = vclp((s30 +% s47), lo, hi)
+    s30 = vclp((s30 -% s47), lo, hi)
+    s47 = vclp((s35 +% s43), lo, hi)
+    s35 = vclp((s35 -% s43), lo, hi)
+    s43 = vclp((s18 +% s22), lo, hi)
+    s18 = vclp((s18 -% s22), lo, hi)
+    s22 = vclp((s13 +% s34), lo, hi)
+    s13 = vclp((s13 -% s34), lo, hi)
+    s34 = vclp((s16 +% s24), lo, hi)
+    s16 = vclp((s16 -% s24), lo, hi)
+    s24 = vclp((s27 +% s41), lo, hi)
+    s27 = vclp((s27 -% s41), lo, hi)
+    s41 = vclp((s9 +% s20), lo, hi)
+    s9 = vclp((s9 -% s20), lo, hi)
+    s20 = vclp((s15 +% s36), lo, hi)
+    s15 = vclp((s15 -% s36), lo, hi)
+    s36 = vclp((s28 +% s26), lo, hi)
+    s26 = vclp((s28 -% s26), lo, hi)
+    s28 = vclp((s37 +% s32), lo, hi)
+    s32 = vclp((s37 -% s32), lo, hi)
+    s37 = vclp((s19 +% s23), lo, hi)
+    s19 = vclp((s19 -% s23), lo, hi)
+    s23 = vclp((s38 +% s49), lo, hi)
+    s38 = vclp((s38 -% s49), lo, hi)
+    s49 = vclp((s31 +% s52), lo, hi)
+    s31 = vclp((s31 -% s52), lo, hi)
+    s52 = vclp((s61 +% s55), lo, hi)
+    s55 = vclp((s61 -% s55), lo, hi)
+    s61 = vclp((s3 +% s10), lo, hi)
+    s3 = vclp((s3 -% s10), lo, hi)
+    s10 = vclp((s63 +% s8), lo, hi)
+    s8 = vclp((s63 -% s8), lo, hi)
+    s63 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s64 +% s14), lo, hi)
+    s14 = vclp((s64 -% s14), lo, hi)
+    s64 = vclp((s62 +% s11), lo, hi)
+    s11 = vclp((s62 -% s11), lo, hi)
+    s62 = vclp((s42 +% s53), lo, hi)
+    s42 = vclp((s42 -% s53), lo, hi)
+    s53 = vclp((s1 +% s7), lo, hi)
+    s1 = vclp((s1 -% s7), lo, hi)
+    s7 = vclp((s17 +% s12), lo, hi)
+    s12 = vclp((s17 -% s12), lo, hi)
+    s17 = vclp((s0 +% s46), lo, hi)
+    s0 = vclp((s0 -% s46), lo, hi)
+    s46 = vclp((s6 +% s51), lo, hi)
+    s6 = vclp((s6 -% s51), lo, hi)
+    s51 = vclp((s2 +% s60), lo, hi)
+    s2 = vclp((s2 -% s60), lo, hi)
+    s60 = vclp((s59 +% s58), lo, hi)
+    s58 = vclp((s59 -% s58), lo, hi)
+    s59 = vclp((s29 +% s57), lo, hi)
+    s29 = vclp((s29 -% s57), lo, hi)
+    s57 = (((kp2048) +% (s19 *% kp2896)) -% (s32 *% kp2896)) >> 12u32
+    s19 = (((kp2048) +% (s19 *% kp2896)) +% (s32 *% kp2896)) >> 12u32
+    s32 = (((kp2048) +% (s26 *% kp2896)) -% (s15 *% kp2896)) >> 12u32
+    s15 = (((kp2048) +% (s26 *% kp2896)) +% (s15 *% kp2896)) >> 12u32
+    s26 = (((kp2048) +% (s9 *% kp2896)) -% (s27 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2896)) +% (s27 *% kp2896)) >> 12u32
+    s27 = (((kp2048) +% (s16 *% kp2896)) -% (s13 *% kp2896)) >> 12u32
+    s13 = (((kp2048) +% (s16 *% kp2896)) +% (s13 *% kp2896)) >> 12u32
+    s16 = (((kp2048) +% (s18 *% kp2896)) -% (s35 *% kp2896)) >> 12u32
+    s18 = (((kp2048) +% (s18 *% kp2896)) +% (s35 *% kp2896)) >> 12u32
+    s35 = (((kp2048) +% (s30 *% kp2896)) -% (s45 *% kp2896)) >> 12u32
+    s30 = (((kp2048) +% (s30 *% kp2896)) +% (s45 *% kp2896)) >> 12u32
+    s45 = (((kp2048) +% (s21 *% kp2896)) -% (s40 *% kp2896)) >> 12u32
+    s21 = (((kp2048) +% (s21 *% kp2896)) +% (s40 *% kp2896)) >> 12u32
+    s40 = (((kp2048) +% (s25 *% kp2896)) -% (s33 *% kp2896)) >> 12u32
+    s25 = (((kp2048) +% (s25 *% kp2896)) +% (s33 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s23 +% s50), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s49 +% s54), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s52 +% s56), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s61 +% s43), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s10 +% s34), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s63 +% s41), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s5 +% s36), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s64 +% s37), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s62 +% s19), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s53 +% s15), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s7 +% s9), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s17 +% s13), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s46 +% s18), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s51 +% s30), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s60 +% s21), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s59 +% s25), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s29 +% s40), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s58 +% s45), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s2 +% s35), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s6 +% s16), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 +% s27), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s12 +% s26), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s1 +% s32), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s42 +% s57), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s11 +% s28), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s14 +% s20), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s4 +% s24), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s8 +% s22), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s3 +% s47), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s55 +% s44), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s31 +% s39), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s38 +% s48), lo, hi)))
+    vst(t, off + 32usize * st, (vclp((s38 -% s48), lo, hi)))
+    vst(t, off + 33usize * st, (vclp((s31 -% s39), lo, hi)))
+    vst(t, off + 34usize * st, (vclp((s55 -% s44), lo, hi)))
+    vst(t, off + 35usize * st, (vclp((s3 -% s47), lo, hi)))
+    vst(t, off + 36usize * st, (vclp((s8 -% s22), lo, hi)))
+    vst(t, off + 37usize * st, (vclp((s4 -% s24), lo, hi)))
+    vst(t, off + 38usize * st, (vclp((s14 -% s20), lo, hi)))
+    vst(t, off + 39usize * st, (vclp((s11 -% s28), lo, hi)))
+    vst(t, off + 40usize * st, (vclp((s42 -% s57), lo, hi)))
+    vst(t, off + 41usize * st, (vclp((s1 -% s32), lo, hi)))
+    vst(t, off + 42usize * st, (vclp((s12 -% s26), lo, hi)))
+    vst(t, off + 43usize * st, (vclp((s0 -% s27), lo, hi)))
+    vst(t, off + 44usize * st, (vclp((s6 -% s16), lo, hi)))
+    vst(t, off + 45usize * st, (vclp((s2 -% s35), lo, hi)))
+    vst(t, off + 46usize * st, (vclp((s58 -% s45), lo, hi)))
+    vst(t, off + 47usize * st, (vclp((s29 -% s40), lo, hi)))
+    vst(t, off + 48usize * st, (vclp((s59 -% s25), lo, hi)))
+    vst(t, off + 49usize * st, (vclp((s60 -% s21), lo, hi)))
+    vst(t, off + 50usize * st, (vclp((s51 -% s30), lo, hi)))
+    vst(t, off + 51usize * st, (vclp((s46 -% s18), lo, hi)))
+    vst(t, off + 52usize * st, (vclp((s17 -% s13), lo, hi)))
+    vst(t, off + 53usize * st, (vclp((s7 -% s9), lo, hi)))
+    vst(t, off + 54usize * st, (vclp((s53 -% s15), lo, hi)))
+    vst(t, off + 55usize * st, (vclp((s62 -% s19), lo, hi)))
+    vst(t, off + 56usize * st, (vclp((s64 -% s37), lo, hi)))
+    vst(t, off + 57usize * st, (vclp((s5 -% s36), lo, hi)))
+    vst(t, off + 58usize * st, (vclp((s63 -% s41), lo, hi)))
+    vst(t, off + 59usize * st, (vclp((s10 -% s34), lo, hi)))
+    vst(t, off + 60usize * st, (vclp((s61 -% s43), lo, hi)))
+    vst(t, off + 61usize * st, (vclp((s52 -% s56), lo, hi)))
+    vst(t, off + 62usize * st, (vclp((s49 -% s54), lo, hi)))
+    vst(t, off + 63usize * st, (vclp((s23 -% s50), lo, hi)))
     }
 }
 
-fn fadst8(t: []i32, off: usize, st: usize, r: u32) {
+fn vfadst8(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 7usize * st])
-    var v1: i64 = i64(t[off + 0usize * st])
-    var v2: i64 = i64(t[off + 5usize * st])
-    var v3: i64 = i64(t[off + 2usize * st])
-    var v4: i64 = i64(t[off + 3usize * st])
-    var v5: i64 = i64(t[off + 4usize * st])
-    var v6: i64 = i64(t[off + 1usize * st])
-    var v7: i64 = i64(t[off + 6usize * st])
-    tx = (2048i64 + v0 * 401i64 - v1 * 4076i64) >> 12u32
-    ty = (2048i64 + v0 * 4076i64 + v1 * 401i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 1931i64 - v3 * 3612i64) >> 12u32
-    ty = (2048i64 + v2 * 3612i64 + v3 * 1931i64) >> 12u32
-    v2 = ty
-    v3 = tx
-    tx = (2048i64 + v4 * 3166i64 - v5 * 2598i64) >> 12u32
-    ty = (2048i64 + v4 * 2598i64 + v5 * 3166i64) >> 12u32
-    v4 = ty
-    v5 = tx
-    tx = (2048i64 + v6 * 3920i64 - v7 * 1189i64) >> 12u32
-    ty = (2048i64 + v6 * 1189i64 + v7 * 3920i64) >> 12u32
-    v6 = ty
-    v7 = tx
-    tx = v0 + v4
-    ty = v0 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v4 = ty
-    tx = v1 + v5
-    ty = v1 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v5 = ty
-    tx = v2 + v6
-    ty = v2 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v6 = ty
-    tx = v3 + v7
-    ty = v3 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v7 = ty
-    tx = (2048i64 + v4 * 1567i64 - v5 * 3784i64) >> 12u32
-    ty = (2048i64 + v4 * 3784i64 + v5 * 1567i64) >> 12u32
-    v4 = ty
-    v5 = tx
-    tx = (2048i64 + v7 * 3784i64 - v6 * 1567i64) >> 12u32
-    ty = (2048i64 + v7 * 1567i64 + v6 * 3784i64) >> 12u32
-    v7 = ty
-    v6 = tx
-    tx = v0 + v2
-    ty = v0 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v2 = ty
-    tx = v4 + v6
-    ty = v4 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v6 = ty
-    tx = v1 + v3
-    ty = v1 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v3 = ty
-    tx = v5 + v7
-    ty = v5 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v7 = ty
-    tx = (2048i64 + v2 * 2896i64 - v3 * 2896i64) >> 12u32
-    ty = (2048i64 + v2 * 2896i64 + v3 * 2896i64) >> 12u32
-    v2 = ty
-    v3 = tx
-    tx = (2048i64 + v6 * 2896i64 - v7 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v7 * 2896i64) >> 12u32
-    v6 = ty
-    v7 = tx
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(0i64 - v4)
-    t[off + 2usize * st] = i32(v6)
-    t[off + 3usize * st] = i32(0i64 - v2)
-    t[off + 4usize * st] = i32(v3)
-    t[off + 5usize * st] = i32(0i64 - v7)
-    t[off + 6usize * st] = i32(v5)
-    t[off + 7usize * st] = i32(0i64 - v1)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp3166 = vsp(3166i32)
+    let kp2598 = vsp(2598i32)
+    let kp3920 = vsp(3920i32)
+    let kp1189 = vsp(1189i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    let kp2896 = vsp(2896i32)
+    let kp0 = vsp(0i32)
+    var s0 = vld(t, off + 7usize * st)
+    var s1 = vld(t, off + 0usize * st)
+    var s2 = vld(t, off + 5usize * st)
+    var s3 = vld(t, off + 2usize * st)
+    var s4 = vld(t, off + 3usize * st)
+    var s5 = vld(t, off + 4usize * st)
+    var s6 = vld(t, off + 1usize * st)
+    var s7 = vld(t, off + 6usize * st)
+    var s8 = (((kp2048) +% (s0 *% kp401)) -% (s1 *% kp4076)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp4076)) +% (s1 *% kp401)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp1931)) -% (s3 *% kp3612)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3612)) +% (s3 *% kp1931)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp3166)) -% (s5 *% kp2598)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp2598)) +% (s5 *% kp3166)) >> 12u32
+    s5 = (((kp2048) +% (s6 *% kp3920)) -% (s7 *% kp1189)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp1189)) +% (s7 *% kp3920)) >> 12u32
+    s7 = vclp((s0 +% s4), lo, hi)
+    s0 = vclp((s0 -% s4), lo, hi)
+    s4 = vclp((s8 +% s3), lo, hi)
+    s3 = vclp((s8 -% s3), lo, hi)
+    s8 = vclp((s2 +% s6), lo, hi)
+    s2 = vclp((s2 -% s6), lo, hi)
+    s6 = vclp((s1 +% s5), lo, hi)
+    s1 = vclp((s1 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s0 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s1 *% kp3784)) -% (s2 *% kp1567)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp1567)) +% (s2 *% kp3784)) >> 12u32
+    s2 = vclp((s7 -% s8), lo, hi)
+    var s9 = vclp((s0 -% s3), lo, hi)
+    var s10 = vclp((s4 -% s6), lo, hi)
+    var s11 = vclp((s5 -% s1), lo, hi)
+    vst(t, off + 0usize * st, (vclp((s7 +% s8), lo, hi)))
+    vst(t, off + 1usize * st, kp0 -% (vclp((s0 +% s3), lo, hi)))
+    vst(t, off + 2usize * st, ((((kp2048) +% (s9 *% kp2896)) +% (s11 *% kp2896)) >> 12u32))
+    vst(t, off + 3usize * st, kp0 -% ((((kp2048) +% (s2 *% kp2896)) +% (s10 *% kp2896)) >> 12u32))
+    vst(t, off + 4usize * st, ((((kp2048) +% (s2 *% kp2896)) -% (s10 *% kp2896)) >> 12u32))
+    vst(t, off + 5usize * st, kp0 -% ((((kp2048) +% (s9 *% kp2896)) -% (s11 *% kp2896)) >> 12u32))
+    vst(t, off + 6usize * st, (vclp((s5 +% s1), lo, hi)))
+    vst(t, off + 7usize * st, kp0 -% (vclp((s4 +% s6), lo, hi)))
     }
 }
 
-fn fadst16(t: []i32, off: usize, st: usize, r: u32) {
+fn vfadst16(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let hi: i64 = (1i64 << (r - 1u32)) - 1i64
-    let lo: i64 = 0i64 - (1i64 << (r - 1u32))
-    var tx: i64 = 0i64
-    var ty: i64 = 0i64
-    var v0: i64 = i64(t[off + 15usize * st])
-    var v1: i64 = i64(t[off + 0usize * st])
-    var v2: i64 = i64(t[off + 13usize * st])
-    var v3: i64 = i64(t[off + 2usize * st])
-    var v4: i64 = i64(t[off + 11usize * st])
-    var v5: i64 = i64(t[off + 4usize * st])
-    var v6: i64 = i64(t[off + 9usize * st])
-    var v7: i64 = i64(t[off + 6usize * st])
-    var v8: i64 = i64(t[off + 7usize * st])
-    var v9: i64 = i64(t[off + 8usize * st])
-    var v10: i64 = i64(t[off + 5usize * st])
-    var v11: i64 = i64(t[off + 10usize * st])
-    var v12: i64 = i64(t[off + 3usize * st])
-    var v13: i64 = i64(t[off + 12usize * st])
-    var v14: i64 = i64(t[off + 1usize * st])
-    var v15: i64 = i64(t[off + 14usize * st])
-    tx = (2048i64 + v0 * 201i64 - v1 * 4091i64) >> 12u32
-    ty = (2048i64 + v0 * 4091i64 + v1 * 201i64) >> 12u32
-    v0 = ty
-    v1 = tx
-    tx = (2048i64 + v2 * 995i64 - v3 * 3973i64) >> 12u32
-    ty = (2048i64 + v2 * 3973i64 + v3 * 995i64) >> 12u32
-    v2 = ty
-    v3 = tx
-    tx = (2048i64 + v4 * 1751i64 - v5 * 3703i64) >> 12u32
-    ty = (2048i64 + v4 * 3703i64 + v5 * 1751i64) >> 12u32
-    v4 = ty
-    v5 = tx
-    tx = (2048i64 + v6 * 2440i64 - v7 * 3290i64) >> 12u32
-    ty = (2048i64 + v6 * 3290i64 + v7 * 2440i64) >> 12u32
-    v6 = ty
-    v7 = tx
-    tx = (2048i64 + v8 * 3035i64 - v9 * 2751i64) >> 12u32
-    ty = (2048i64 + v8 * 2751i64 + v9 * 3035i64) >> 12u32
-    v8 = ty
-    v9 = tx
-    tx = (2048i64 + v10 * 3513i64 - v11 * 2106i64) >> 12u32
-    ty = (2048i64 + v10 * 2106i64 + v11 * 3513i64) >> 12u32
-    v10 = ty
-    v11 = tx
-    tx = (2048i64 + v12 * 3857i64 - v13 * 1380i64) >> 12u32
-    ty = (2048i64 + v12 * 1380i64 + v13 * 3857i64) >> 12u32
-    v12 = ty
-    v13 = tx
-    tx = (2048i64 + v14 * 4052i64 - v15 * 601i64) >> 12u32
-    ty = (2048i64 + v14 * 601i64 + v15 * 4052i64) >> 12u32
-    v14 = ty
-    v15 = tx
-    tx = v0 + v8
-    ty = v0 - v8
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v8 = ty
-    tx = v1 + v9
-    ty = v1 - v9
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v9 = ty
-    tx = v2 + v10
-    ty = v2 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v10 = ty
-    tx = v3 + v11
-    ty = v3 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v11 = ty
-    tx = v4 + v12
-    ty = v4 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v12 = ty
-    tx = v5 + v13
-    ty = v5 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v13 = ty
-    tx = v6 + v14
-    ty = v6 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v6 = tx
-    v14 = ty
-    tx = v7 + v15
-    ty = v7 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v7 = tx
-    v15 = ty
-    tx = (2048i64 + v8 * 799i64 - v9 * 4017i64) >> 12u32
-    ty = (2048i64 + v8 * 4017i64 + v9 * 799i64) >> 12u32
-    v8 = ty
-    v9 = tx
-    tx = (2048i64 + v13 * 4017i64 - v12 * 799i64) >> 12u32
-    ty = (2048i64 + v13 * 799i64 + v12 * 4017i64) >> 12u32
-    v13 = ty
-    v12 = tx
-    tx = (2048i64 + v10 * 3406i64 - v11 * 2276i64) >> 12u32
-    ty = (2048i64 + v10 * 2276i64 + v11 * 3406i64) >> 12u32
-    v10 = ty
-    v11 = tx
-    tx = (2048i64 + v15 * 2276i64 - v14 * 3406i64) >> 12u32
-    ty = (2048i64 + v15 * 3406i64 + v14 * 2276i64) >> 12u32
-    v15 = ty
-    v14 = tx
-    tx = v0 + v4
-    ty = v0 - v4
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v4 = ty
-    tx = v8 + v12
-    ty = v8 - v12
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v12 = ty
-    tx = v1 + v5
-    ty = v1 - v5
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v5 = ty
-    tx = v9 + v13
-    ty = v9 - v13
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v13 = ty
-    tx = v2 + v6
-    ty = v2 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v2 = tx
-    v6 = ty
-    tx = v10 + v14
-    ty = v10 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v10 = tx
-    v14 = ty
-    tx = v3 + v7
-    ty = v3 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v3 = tx
-    v7 = ty
-    tx = v11 + v15
-    ty = v11 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v11 = tx
-    v15 = ty
-    tx = (2048i64 + v4 * 1567i64 - v5 * 3784i64) >> 12u32
-    ty = (2048i64 + v4 * 3784i64 + v5 * 1567i64) >> 12u32
-    v4 = ty
-    v5 = tx
-    tx = (2048i64 + v12 * 1567i64 - v13 * 3784i64) >> 12u32
-    ty = (2048i64 + v12 * 3784i64 + v13 * 1567i64) >> 12u32
-    v12 = ty
-    v13 = tx
-    tx = (2048i64 + v7 * 3784i64 - v6 * 1567i64) >> 12u32
-    ty = (2048i64 + v7 * 1567i64 + v6 * 3784i64) >> 12u32
-    v7 = ty
-    v6 = tx
-    tx = (2048i64 + v15 * 3784i64 - v14 * 1567i64) >> 12u32
-    ty = (2048i64 + v15 * 1567i64 + v14 * 3784i64) >> 12u32
-    v15 = ty
-    v14 = tx
-    tx = v0 + v2
-    ty = v0 - v2
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v0 = tx
-    v2 = ty
-    tx = v4 + v6
-    ty = v4 - v6
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v4 = tx
-    v6 = ty
-    tx = v8 + v10
-    ty = v8 - v10
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v8 = tx
-    v10 = ty
-    tx = v12 + v14
-    ty = v12 - v14
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v12 = tx
-    v14 = ty
-    tx = v1 + v3
-    ty = v1 - v3
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v1 = tx
-    v3 = ty
-    tx = v5 + v7
-    ty = v5 - v7
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v5 = tx
-    v7 = ty
-    tx = v9 + v11
-    ty = v9 - v11
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v9 = tx
-    v11 = ty
-    tx = v13 + v15
-    ty = v13 - v15
-    if tx > hi { tx = hi } else if tx < lo { tx = lo }
-    if ty > hi { ty = hi } else if ty < lo { ty = lo }
-    v13 = tx
-    v15 = ty
-    tx = (2048i64 + v2 * 2896i64 - v3 * 2896i64) >> 12u32
-    ty = (2048i64 + v2 * 2896i64 + v3 * 2896i64) >> 12u32
-    v2 = ty
-    v3 = tx
-    tx = (2048i64 + v6 * 2896i64 - v7 * 2896i64) >> 12u32
-    ty = (2048i64 + v6 * 2896i64 + v7 * 2896i64) >> 12u32
-    v6 = ty
-    v7 = tx
-    tx = (2048i64 + v10 * 2896i64 - v11 * 2896i64) >> 12u32
-    ty = (2048i64 + v10 * 2896i64 + v11 * 2896i64) >> 12u32
-    v10 = ty
-    v11 = tx
-    tx = (2048i64 + v14 * 2896i64 - v15 * 2896i64) >> 12u32
-    ty = (2048i64 + v14 * 2896i64 + v15 * 2896i64) >> 12u32
-    v14 = ty
-    v15 = tx
-    t[off + 0usize * st] = i32(v0)
-    t[off + 1usize * st] = i32(0i64 - v8)
-    t[off + 2usize * st] = i32(v12)
-    t[off + 3usize * st] = i32(0i64 - v4)
-    t[off + 4usize * st] = i32(v6)
-    t[off + 5usize * st] = i32(0i64 - v14)
-    t[off + 6usize * st] = i32(v10)
-    t[off + 7usize * st] = i32(0i64 - v2)
-    t[off + 8usize * st] = i32(v3)
-    t[off + 9usize * st] = i32(0i64 - v11)
-    t[off + 10usize * st] = i32(v15)
-    t[off + 11usize * st] = i32(0i64 - v7)
-    t[off + 12usize * st] = i32(v5)
-    t[off + 13usize * st] = i32(0i64 - v13)
-    t[off + 14usize * st] = i32(v9)
-    t[off + 15usize * st] = i32(0i64 - v1)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp1751 = vsp(1751i32)
+    let kp3703 = vsp(3703i32)
+    let kp2440 = vsp(2440i32)
+    let kp3290 = vsp(3290i32)
+    let kp3035 = vsp(3035i32)
+    let kp2751 = vsp(2751i32)
+    let kp3513 = vsp(3513i32)
+    let kp2106 = vsp(2106i32)
+    let kp3857 = vsp(3857i32)
+    let kp1380 = vsp(1380i32)
+    let kp4052 = vsp(4052i32)
+    let kp601 = vsp(601i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    let kp2896 = vsp(2896i32)
+    let kp0 = vsp(0i32)
+    var s0 = vld(t, off + 15usize * st)
+    var s1 = vld(t, off + 0usize * st)
+    var s2 = vld(t, off + 13usize * st)
+    var s3 = vld(t, off + 2usize * st)
+    var s4 = vld(t, off + 11usize * st)
+    var s5 = vld(t, off + 4usize * st)
+    var s6 = vld(t, off + 9usize * st)
+    var s7 = vld(t, off + 6usize * st)
+    var s8 = vld(t, off + 7usize * st)
+    var s9 = vld(t, off + 8usize * st)
+    var s10 = vld(t, off + 5usize * st)
+    var s11 = vld(t, off + 10usize * st)
+    var s12 = vld(t, off + 3usize * st)
+    var s13 = vld(t, off + 12usize * st)
+    var s14 = vld(t, off + 1usize * st)
+    var s15 = vld(t, off + 14usize * st)
+    var s16 = (((kp2048) +% (s0 *% kp201)) -% (s1 *% kp4091)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp4091)) +% (s1 *% kp201)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp995)) -% (s3 *% kp3973)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3973)) +% (s3 *% kp995)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp1751)) -% (s5 *% kp3703)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3703)) +% (s5 *% kp1751)) >> 12u32
+    s5 = (((kp2048) +% (s6 *% kp2440)) -% (s7 *% kp3290)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp3290)) +% (s7 *% kp2440)) >> 12u32
+    s7 = (((kp2048) +% (s8 *% kp3035)) -% (s9 *% kp2751)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp2751)) +% (s9 *% kp3035)) >> 12u32
+    s9 = (((kp2048) +% (s10 *% kp3513)) -% (s11 *% kp2106)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp2106)) +% (s11 *% kp3513)) >> 12u32
+    s11 = (((kp2048) +% (s12 *% kp3857)) -% (s13 *% kp1380)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp1380)) +% (s13 *% kp3857)) >> 12u32
+    s13 = (((kp2048) +% (s14 *% kp4052)) -% (s15 *% kp601)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp601)) +% (s15 *% kp4052)) >> 12u32
+    s15 = vclp((s0 +% s8), lo, hi)
+    s0 = vclp((s0 -% s8), lo, hi)
+    s8 = vclp((s16 +% s7), lo, hi)
+    s7 = vclp((s16 -% s7), lo, hi)
+    s16 = vclp((s2 +% s10), lo, hi)
+    s2 = vclp((s2 -% s10), lo, hi)
+    s10 = vclp((s1 +% s9), lo, hi)
+    s1 = vclp((s1 -% s9), lo, hi)
+    s9 = vclp((s4 +% s12), lo, hi)
+    s4 = vclp((s4 -% s12), lo, hi)
+    s12 = vclp((s3 +% s11), lo, hi)
+    s3 = vclp((s3 -% s11), lo, hi)
+    s11 = vclp((s6 +% s14), lo, hi)
+    s6 = vclp((s6 -% s14), lo, hi)
+    s14 = vclp((s5 +% s13), lo, hi)
+    s5 = vclp((s5 -% s13), lo, hi)
+    s13 = (((kp2048) +% (s0 *% kp799)) -% (s7 *% kp4017)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp4017)) +% (s7 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s3 *% kp4017)) -% (s4 *% kp799)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp799)) +% (s4 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s2 *% kp3406)) -% (s1 *% kp2276)) >> 12u32
+    s1 = (((kp2048) +% (s2 *% kp2276)) +% (s1 *% kp3406)) >> 12u32
+    s2 = (((kp2048) +% (s5 *% kp2276)) -% (s6 *% kp3406)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp3406)) +% (s6 *% kp2276)) >> 12u32
+    s6 = vclp((s15 +% s9), lo, hi)
+    s9 = vclp((s15 -% s9), lo, hi)
+    s15 = vclp((s0 +% s7), lo, hi)
+    s0 = vclp((s0 -% s7), lo, hi)
+    s7 = vclp((s8 +% s12), lo, hi)
+    s8 = vclp((s8 -% s12), lo, hi)
+    s12 = vclp((s13 +% s3), lo, hi)
+    s3 = vclp((s13 -% s3), lo, hi)
+    s13 = vclp((s16 +% s11), lo, hi)
+    s11 = vclp((s16 -% s11), lo, hi)
+    s16 = vclp((s1 +% s2), lo, hi)
+    s1 = vclp((s1 -% s2), lo, hi)
+    s2 = vclp((s10 +% s14), lo, hi)
+    s10 = vclp((s10 -% s14), lo, hi)
+    s14 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s9 *% kp1567)) -% (s8 *% kp3784)) >> 12u32
+    s8 = (((kp2048) +% (s9 *% kp3784)) +% (s8 *% kp1567)) >> 12u32
+    s9 = (((kp2048) +% (s0 *% kp1567)) -% (s3 *% kp3784)) >> 12u32
+    s0 = (((kp2048) +% (s0 *% kp3784)) +% (s3 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s10 *% kp3784)) -% (s11 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) +% (s11 *% kp3784)) >> 12u32
+    s11 = (((kp2048) +% (s4 *% kp3784)) -% (s1 *% kp1567)) >> 12u32
+    s1 = (((kp2048) +% (s4 *% kp1567)) +% (s1 *% kp3784)) >> 12u32
+    s4 = vclp((s6 -% s13), lo, hi)
+    var s17 = vclp((s8 -% s3), lo, hi)
+    var s18 = vclp((s15 -% s16), lo, hi)
+    var s19 = vclp((s0 -% s11), lo, hi)
+    var s20 = vclp((s7 -% s2), lo, hi)
+    var s21 = vclp((s5 -% s10), lo, hi)
+    var s22 = vclp((s12 -% s14), lo, hi)
+    var s23 = vclp((s9 -% s1), lo, hi)
+    vst(t, off + 0usize * st, (vclp((s6 +% s13), lo, hi)))
+    vst(t, off + 1usize * st, kp0 -% (vclp((s15 +% s16), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s0 +% s11), lo, hi)))
+    vst(t, off + 3usize * st, kp0 -% (vclp((s8 +% s3), lo, hi)))
+    vst(t, off + 4usize * st, ((((kp2048) +% (s17 *% kp2896)) +% (s21 *% kp2896)) >> 12u32))
+    vst(t, off + 5usize * st, kp0 -% ((((kp2048) +% (s19 *% kp2896)) +% (s23 *% kp2896)) >> 12u32))
+    vst(t, off + 6usize * st, ((((kp2048) +% (s18 *% kp2896)) +% (s22 *% kp2896)) >> 12u32))
+    vst(t, off + 7usize * st, kp0 -% ((((kp2048) +% (s4 *% kp2896)) +% (s20 *% kp2896)) >> 12u32))
+    vst(t, off + 8usize * st, ((((kp2048) +% (s4 *% kp2896)) -% (s20 *% kp2896)) >> 12u32))
+    vst(t, off + 9usize * st, kp0 -% ((((kp2048) +% (s18 *% kp2896)) -% (s22 *% kp2896)) >> 12u32))
+    vst(t, off + 10usize * st, ((((kp2048) +% (s19 *% kp2896)) -% (s23 *% kp2896)) >> 12u32))
+    vst(t, off + 11usize * st, kp0 -% ((((kp2048) +% (s17 *% kp2896)) -% (s21 *% kp2896)) >> 12u32))
+    vst(t, off + 12usize * st, (vclp((s5 +% s10), lo, hi)))
+    vst(t, off + 13usize * st, kp0 -% (vclp((s9 +% s1), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s12 +% s14), lo, hi)))
+    vst(t, off + 15usize * st, kp0 -% (vclp((s7 +% s2), lo, hi)))
     }
 }
 
-fn idct_nd(t: []i32, off: usize, st: usize, n: i32, r: u32) {
-    if n == 2i32 { idct4(t, off, st, r) } else if n == 3i32 { idct8(t, off, st, r) } else if n == 4i32 { idct16(t, off, st, r) } else if n == 5i32 { idct32(t, off, st, r) } else { idct64_k32(t, off, st, r) }
-}
-
-fn iadst4_nd(t: []i32, off: usize, st: usize) {
+fn vidct8_k4(t: []i32, off: usize, st: usize, r: u32) {
     @nocheck {
-    let t0 = i64(t[off])
-    let t1 = i64(t[off + st])
-    let t2 = i64(t[off + 2usize * st])
-    let t3 = i64(t[off + 3usize * st])
-    let s0 = 1321i64 * t0 + 3803i64 * t2 + 2482i64 * t3
-    let s1 = 2482i64 * t0 - 1321i64 * t2 - 3803i64 * t3
-    let s2 = 3344i64 * (t0 - t2 + t3)
-    let s3 = 3344i64 * t1
-    t[off] = i32((s0 + s3 + 2048i64) >> 12u32)
-    t[off + st] = i32((s1 + s3 + 2048i64) >> 12u32)
-    t[off + 2usize * st] = i32((s2 + 2048i64) >> 12u32)
-    t[off + 3usize * st] = i32((s0 + s1 - s3 + 2048i64) >> 12u32)
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 2usize * st)
+    var s2 = vld(t, off + 1usize * st)
+    var s3 = vld(t, off + 3usize * st)
+    var s4 = ((kp2048) +% (s2 *% kp799)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4017)) >> 12u32
+    var s5 = ((kp2048) -% (s3 *% kp2276)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3406)) >> 12u32
+    var s6 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s7 = ((kp2048) +% (s1 *% kp1567)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp3784)) >> 12u32
+    var s8 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s0 +% s1), lo, hi)
+    s0 = vclp((s0 -% s1), lo, hi)
+    s1 = vclp((s6 +% s7), lo, hi)
+    s6 = vclp((s6 -% s7), lo, hi)
+    s7 = (((kp2048) +% (s2 *% kp2896)) -% (s4 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s4 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s3 +% s5), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s1 +% s2), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s6 +% s7), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s0 +% s8), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s0 -% s8), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s6 -% s7), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s1 -% s2), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s3 -% s5), lo, hi)))
     }
 }
 
-fn iidentity_nd(t: []i32, off: usize, st: usize, n: i32) {
+fn vidct16_k4(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 2usize * st)
+    var s2 = vld(t, off + 1usize * st)
+    var s3 = vld(t, off + 3usize * st)
+    var s4 = ((kp2048) +% (s2 *% kp401)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4076)) >> 12u32
+    var s5 = ((kp2048) -% (s3 *% kp1189)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3920)) >> 12u32
+    var s6 = ((kp2048) +% (s1 *% kp799)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4017)) >> 12u32
+    var s7 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s8 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s9 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s10 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s11 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s12 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s13 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s14 = (((kp2048) +% (s2 *% kp1567)) -% (s4 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s4 *% kp1567)) >> 12u32
+    s4 = (((kp2048) -% (s3 *% kp3784)) -% (s5 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s5 *% kp3784)) >> 12u32
+    s5 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s15 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s16 = (((kp2048) +% (s1 *% kp2896)) -% (s6 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s6 *% kp2896)) >> 12u32
+    s6 = vclp((s7 +% s8), lo, hi)
+    s7 = vclp((s7 -% s8), lo, hi)
+    s8 = vclp((s14 +% s4), lo, hi)
+    s4 = vclp((s14 -% s4), lo, hi)
+    s14 = vclp((s10 +% s9), lo, hi)
+    s9 = vclp((s10 -% s9), lo, hi)
+    s10 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s5 +% s13), lo, hi)
+    s5 = vclp((s5 -% s13), lo, hi)
+    s13 = vclp((s15 +% s1), lo, hi)
+    s1 = vclp((s15 -% s1), lo, hi)
+    s15 = vclp((s11 +% s16), lo, hi)
+    s11 = vclp((s11 -% s16), lo, hi)
+    s16 = vclp((s0 +% s12), lo, hi)
+    s0 = vclp((s0 -% s12), lo, hi)
+    s12 = (((kp2048) +% (s2 *% kp2896)) -% (s4 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s4 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s9 *% kp2896)) -% (s7 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s9 *% kp2896)) +% (s7 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s3 +% s14), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s13 +% s10), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s15 +% s2), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s16 +% s7), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s0 +% s4), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s11 +% s12), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s1 +% s8), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s5 +% s6), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s5 -% s6), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s1 -% s8), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s11 -% s12), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 -% s4), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s16 -% s7), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s15 -% s2), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s13 -% s10), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s3 -% s14), lo, hi)))
+    }
+}
+
+fn vidct16_k8(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp2598 = vsp(2598i32)
+    let kp3166 = vsp(3166i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 4usize * st)
+    var s2 = vld(t, off + 2usize * st)
+    var s3 = vld(t, off + 6usize * st)
+    var s4 = vld(t, off + 1usize * st)
+    var s5 = vld(t, off + 5usize * st)
+    var s6 = vld(t, off + 3usize * st)
+    var s7 = vld(t, off + 7usize * st)
+    var s8 = ((kp2048) +% (s4 *% kp401)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4076)) >> 12u32
+    var s9 = ((kp2048) -% (s7 *% kp2598)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp3166)) >> 12u32
+    var s10 = ((kp2048) +% (s5 *% kp1931)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp3612)) >> 12u32
+    var s11 = ((kp2048) -% (s6 *% kp1189)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp3920)) >> 12u32
+    var s12 = ((kp2048) +% (s2 *% kp799)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4017)) >> 12u32
+    var s13 = ((kp2048) -% (s3 *% kp2276)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3406)) >> 12u32
+    var s14 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s15 = ((kp2048) +% (s1 *% kp1567)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp3784)) >> 12u32
+    var s16 = vclp((s12 +% s13), lo, hi)
+    s12 = vclp((s12 -% s13), lo, hi)
+    s13 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s4 *% kp1567)) -% (s8 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s8 *% kp1567)) >> 12u32
+    s8 = (((kp2048) -% (s5 *% kp3784)) -% (s10 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s10 *% kp3784)) >> 12u32
+    s10 = vclp((s0 +% s1), lo, hi)
+    s0 = vclp((s0 -% s1), lo, hi)
+    s1 = vclp((s7 +% s15), lo, hi)
+    s7 = vclp((s7 -% s15), lo, hi)
+    s15 = (((kp2048) +% (s2 *% kp2896)) -% (s12 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s12 *% kp2896)) >> 12u32
+    s12 = vclp((s14 +% s9), lo, hi)
+    s9 = vclp((s14 -% s9), lo, hi)
+    s14 = vclp((s3 +% s8), lo, hi)
+    s3 = vclp((s3 -% s8), lo, hi)
+    s8 = vclp((s6 +% s11), lo, hi)
+    s6 = vclp((s6 -% s11), lo, hi)
+    s11 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s10 +% s13), lo, hi)
+    s10 = vclp((s10 -% s13), lo, hi)
+    s13 = vclp((s1 +% s2), lo, hi)
+    s1 = vclp((s1 -% s2), lo, hi)
+    s2 = vclp((s7 +% s15), lo, hi)
+    s7 = vclp((s7 -% s15), lo, hi)
+    s15 = vclp((s0 +% s16), lo, hi)
+    s0 = vclp((s0 -% s16), lo, hi)
+    s16 = (((kp2048) +% (s4 *% kp2896)) -% (s3 *% kp2896)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp2896)) +% (s3 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s6 *% kp2896)) -% (s9 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s9 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s5 +% s8), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s13 +% s11), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s2 +% s3), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s15 +% s6), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s0 +% s4), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s7 +% s16), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s1 +% s14), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s10 +% s12), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s10 -% s12), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s1 -% s14), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s7 -% s16), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 -% s4), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s15 -% s6), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s2 -% s3), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s13 -% s11), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s5 -% s8), lo, hi)))
+    }
+}
+
+fn vidct32_k4(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 2usize * st)
+    var s2 = vld(t, off + 1usize * st)
+    var s3 = vld(t, off + 3usize * st)
+    var s4 = ((kp2048) +% (s2 *% kp201)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4091)) >> 12u32
+    var s5 = ((kp2048) -% (s3 *% kp601)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp4052)) >> 12u32
+    var s6 = ((kp2048) +% (s1 *% kp401)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4076)) >> 12u32
+    var s7 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s8 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s9 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s10 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s11 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s12 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s13 = (((kp2048) +% (s2 *% kp799)) -% (s4 *% kp4017)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp4017)) +% (s4 *% kp799)) >> 12u32
+    s4 = (((kp2048) -% (s3 *% kp2276)) -% (s5 *% kp3406)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp3406)) -% (s5 *% kp2276)) >> 12u32
+    s5 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s14 = (((kp2048) +% (s1 *% kp1567)) -% (s6 *% kp3784)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp3784)) +% (s6 *% kp1567)) >> 12u32
+    s6 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s15 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s16 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s17 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s18 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s19 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s20 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s21 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s22 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s23 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s24 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s25 = vclp(s14, lo, hi)
+    s14 = vclp(s14, lo, hi)
+    var s26 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s27 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s28 = (((kp2048) +% (s2 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s13 *% kp1567)) >> 12u32
+    s13 = (((kp2048) +% (s10 *% kp1567)) -% (s7 *% kp3784)) >> 12u32
+    s7 = (((kp2048) +% (s10 *% kp3784)) +% (s7 *% kp1567)) >> 12u32
+    s10 = (((kp2048) -% (s9 *% kp3784)) -% (s8 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s9 *% kp1567)) -% (s8 *% kp3784)) >> 12u32
+    s9 = (((kp2048) -% (s3 *% kp3784)) -% (s4 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s4 *% kp3784)) >> 12u32
+    s4 = vclp(s22, lo, hi)
+    s22 = vclp(s22, lo, hi)
+    var s29 = vclp(s23, lo, hi)
+    s23 = vclp(s23, lo, hi)
+    var s30 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s31 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s32 = (((kp2048) +% (s1 *% kp2896)) -% (s14 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s14 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s12 *% kp2896)) -% (s11 *% kp2896)) >> 12u32
+    s11 = (((kp2048) +% (s12 *% kp2896)) +% (s11 *% kp2896)) >> 12u32
+    s12 = vclp((s6 +% s16), lo, hi)
+    s6 = vclp((s6 -% s16), lo, hi)
+    s16 = vclp((s15 +% s17), lo, hi)
+    s15 = vclp((s15 -% s17), lo, hi)
+    s17 = vclp((s28 +% s9), lo, hi)
+    s9 = vclp((s28 -% s9), lo, hi)
+    s28 = vclp((s13 +% s10), lo, hi)
+    s10 = vclp((s13 -% s10), lo, hi)
+    s13 = vclp((s20 +% s18), lo, hi)
+    s18 = vclp((s20 -% s18), lo, hi)
+    s20 = vclp((s21 +% s19), lo, hi)
+    s19 = vclp((s21 -% s19), lo, hi)
+    s21 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s7 +% s8), lo, hi)
+    s7 = vclp((s7 -% s8), lo, hi)
+    s8 = vclp((s4 +% s26), lo, hi)
+    s4 = vclp((s4 -% s26), lo, hi)
+    s26 = vclp((s29 +% s27), lo, hi)
+    s27 = vclp((s29 -% s27), lo, hi)
+    s29 = vclp((s30 +% s1), lo, hi)
+    s1 = vclp((s30 -% s1), lo, hi)
+    s30 = vclp((s31 +% s11), lo, hi)
+    s11 = vclp((s31 -% s11), lo, hi)
+    s31 = vclp((s0 +% s14), lo, hi)
+    s0 = vclp((s0 -% s14), lo, hi)
+    s14 = vclp((s5 +% s32), lo, hi)
+    s5 = vclp((s5 -% s32), lo, hi)
+    s32 = vclp((s23 +% s25), lo, hi)
+    s23 = vclp((s23 -% s25), lo, hi)
+    s25 = vclp((s22 +% s24), lo, hi)
+    s22 = vclp((s22 -% s24), lo, hi)
+    s24 = (((kp2048) +% (s7 *% kp2896)) -% (s10 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp2896)) +% (s10 *% kp2896)) >> 12u32
+    s10 = (((kp2048) +% (s2 *% kp2896)) -% (s9 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s9 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s19 *% kp2896)) -% (s15 *% kp2896)) >> 12u32
+    s15 = (((kp2048) +% (s19 *% kp2896)) +% (s15 *% kp2896)) >> 12u32
+    s19 = (((kp2048) +% (s18 *% kp2896)) -% (s6 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s18 *% kp2896)) +% (s6 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s8 +% s13), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s26 +% s20), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s29 +% s21), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s30 +% s3), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s31 +% s7), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s14 +% s2), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s32 +% s15), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s25 +% s6), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s22 +% s19), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s23 +% s9), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s5 +% s10), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 +% s24), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s11 +% s28), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s1 +% s17), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s27 +% s16), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s4 +% s12), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s4 -% s12), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s27 -% s16), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s1 -% s17), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s11 -% s28), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 -% s24), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s5 -% s10), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s23 -% s9), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s22 -% s19), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s25 -% s6), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s32 -% s15), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s14 -% s2), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s31 -% s7), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s30 -% s3), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s29 -% s21), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s26 -% s20), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s8 -% s13), lo, hi)))
+    }
+}
+
+fn vidct32_k8(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp1380 = vsp(1380i32)
+    let kp3857 = vsp(3857i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 4usize * st)
+    var s2 = vld(t, off + 2usize * st)
+    var s3 = vld(t, off + 6usize * st)
+    var s4 = vld(t, off + 1usize * st)
+    var s5 = vld(t, off + 5usize * st)
+    var s6 = vld(t, off + 3usize * st)
+    var s7 = vld(t, off + 7usize * st)
+    var s8 = ((kp2048) +% (s4 *% kp201)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4091)) >> 12u32
+    var s9 = ((kp2048) -% (s7 *% kp1380)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp3857)) >> 12u32
+    var s10 = ((kp2048) +% (s5 *% kp995)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp3973)) >> 12u32
+    var s11 = ((kp2048) -% (s6 *% kp601)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp4052)) >> 12u32
+    var s12 = ((kp2048) +% (s2 *% kp401)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4076)) >> 12u32
+    var s13 = ((kp2048) -% (s3 *% kp1189)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3920)) >> 12u32
+    var s14 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s15 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s16 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s17 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s18 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s19 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s20 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s21 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s22 = ((kp2048) +% (s1 *% kp799)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4017)) >> 12u32
+    var s23 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s24 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s25 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s26 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s27 = (((kp2048) +% (s4 *% kp799)) -% (s8 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s8 *% kp799)) >> 12u32
+    s8 = (((kp2048) -% (s7 *% kp4017)) -% (s9 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp799)) -% (s9 *% kp4017)) >> 12u32
+    s9 = (((kp2048) +% (s5 *% kp3406)) -% (s10 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s10 *% kp3406)) >> 12u32
+    s10 = (((kp2048) -% (s6 *% kp2276)) -% (s11 *% kp3406)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp3406)) -% (s11 *% kp2276)) >> 12u32
+    s11 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s28 = vclp(s22, lo, hi)
+    s22 = vclp(s22, lo, hi)
+    var s29 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s30 = (((kp2048) +% (s2 *% kp1567)) -% (s12 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s12 *% kp1567)) >> 12u32
+    s12 = (((kp2048) -% (s3 *% kp3784)) -% (s13 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s13 = vclp((s14 +% s15), lo, hi)
+    s14 = vclp((s14 -% s15), lo, hi)
+    s15 = vclp((s27 +% s8), lo, hi)
+    s8 = vclp((s27 -% s8), lo, hi)
+    s27 = vclp((s17 +% s16), lo, hi)
+    s16 = vclp((s17 -% s16), lo, hi)
+    s17 = vclp((s10 +% s9), lo, hi)
+    s9 = vclp((s10 -% s9), lo, hi)
+    s10 = vclp((s18 +% s19), lo, hi)
+    s18 = vclp((s18 -% s19), lo, hi)
+    s19 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s21 +% s20), lo, hi)
+    s20 = vclp((s21 -% s20), lo, hi)
+    s21 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s31 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s32 = (((kp2048) +% (s1 *% kp2896)) -% (s22 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s22 *% kp2896)) >> 12u32
+    s22 = vclp((s23 +% s24), lo, hi)
+    s23 = vclp((s23 -% s24), lo, hi)
+    s24 = vclp((s30 +% s12), lo, hi)
+    s12 = vclp((s30 -% s12), lo, hi)
+    s30 = vclp((s26 +% s25), lo, hi)
+    s25 = vclp((s26 -% s25), lo, hi)
+    s26 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s4 *% kp1567)) -% (s8 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s8 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s20 *% kp1567)) -% (s14 *% kp3784)) >> 12u32
+    s14 = (((kp2048) +% (s20 *% kp3784)) +% (s14 *% kp1567)) >> 12u32
+    s20 = (((kp2048) -% (s18 *% kp3784)) -% (s16 *% kp1567)) >> 12u32
+    s16 = (((kp2048) +% (s18 *% kp1567)) -% (s16 *% kp3784)) >> 12u32
+    s18 = (((kp2048) -% (s5 *% kp3784)) -% (s9 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s9 *% kp3784)) >> 12u32
+    s9 = vclp((s7 +% s29), lo, hi)
+    s7 = vclp((s7 -% s29), lo, hi)
+    s29 = vclp((s31 +% s1), lo, hi)
+    s1 = vclp((s31 -% s1), lo, hi)
+    s31 = vclp((s11 +% s32), lo, hi)
+    s11 = vclp((s11 -% s32), lo, hi)
+    s32 = vclp((s0 +% s28), lo, hi)
+    s0 = vclp((s0 -% s28), lo, hi)
+    s28 = (((kp2048) +% (s2 *% kp2896)) -% (s12 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s12 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s25 *% kp2896)) -% (s23 *% kp2896)) >> 12u32
+    s23 = (((kp2048) +% (s25 *% kp2896)) +% (s23 *% kp2896)) >> 12u32
+    s25 = vclp((s13 +% s27), lo, hi)
+    s13 = vclp((s13 -% s27), lo, hi)
+    s27 = vclp((s15 +% s17), lo, hi)
+    s15 = vclp((s15 -% s17), lo, hi)
+    s17 = vclp((s3 +% s18), lo, hi)
+    s3 = vclp((s3 -% s18), lo, hi)
+    s18 = vclp((s8 +% s20), lo, hi)
+    s8 = vclp((s8 -% s20), lo, hi)
+    s20 = vclp((s6 +% s10), lo, hi)
+    s6 = vclp((s6 -% s10), lo, hi)
+    s10 = vclp((s21 +% s19), lo, hi)
+    s19 = vclp((s21 -% s19), lo, hi)
+    s21 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s14 +% s16), lo, hi)
+    s14 = vclp((s14 -% s16), lo, hi)
+    s16 = vclp((s9 +% s30), lo, hi)
+    s9 = vclp((s9 -% s30), lo, hi)
+    s30 = vclp((s29 +% s26), lo, hi)
+    s26 = vclp((s29 -% s26), lo, hi)
+    s29 = vclp((s31 +% s2), lo, hi)
+    s2 = vclp((s31 -% s2), lo, hi)
+    s31 = vclp((s32 +% s23), lo, hi)
+    s23 = vclp((s32 -% s23), lo, hi)
+    s32 = vclp((s0 +% s12), lo, hi)
+    s0 = vclp((s0 -% s12), lo, hi)
+    s12 = vclp((s11 +% s28), lo, hi)
+    s11 = vclp((s11 -% s28), lo, hi)
+    s28 = vclp((s1 +% s24), lo, hi)
+    s1 = vclp((s1 -% s24), lo, hi)
+    s24 = vclp((s7 +% s22), lo, hi)
+    s7 = vclp((s7 -% s22), lo, hi)
+    s22 = (((kp2048) +% (s14 *% kp2896)) -% (s8 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s14 *% kp2896)) +% (s8 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s4 *% kp2896)) -% (s3 *% kp2896)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp2896)) +% (s3 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s19 *% kp2896)) -% (s15 *% kp2896)) >> 12u32
+    s15 = (((kp2048) +% (s19 *% kp2896)) +% (s15 *% kp2896)) >> 12u32
+    s19 = (((kp2048) +% (s6 *% kp2896)) -% (s13 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s13 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s16 +% s20), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s30 +% s10), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s29 +% s21), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s31 +% s5), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s32 +% s8), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s12 +% s3), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s28 +% s15), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s24 +% s6), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s7 +% s19), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s1 +% s4), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s11 +% s14), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 +% s22), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s23 +% s18), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s2 +% s17), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s26 +% s27), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s9 +% s25), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s9 -% s25), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s26 -% s27), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s2 -% s17), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s23 -% s18), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 -% s22), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s11 -% s14), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s1 -% s4), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s7 -% s19), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s24 -% s6), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s28 -% s15), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s12 -% s3), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s32 -% s8), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s31 -% s5), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s29 -% s21), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s30 -% s10), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s16 -% s20), lo, hi)))
+    }
+}
+
+fn vidct32_k16(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp2751 = vsp(2751i32)
+    let kp3035 = vsp(3035i32)
+    let kp1751 = vsp(1751i32)
+    let kp3703 = vsp(3703i32)
+    let kp1380 = vsp(1380i32)
+    let kp3857 = vsp(3857i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp2106 = vsp(2106i32)
+    let kp3513 = vsp(3513i32)
+    let kp2440 = vsp(2440i32)
+    let kp3290 = vsp(3290i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp2598 = vsp(2598i32)
+    let kp3166 = vsp(3166i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 8usize * st)
+    var s2 = vld(t, off + 4usize * st)
+    var s3 = vld(t, off + 12usize * st)
+    var s4 = vld(t, off + 2usize * st)
+    var s5 = vld(t, off + 10usize * st)
+    var s6 = vld(t, off + 6usize * st)
+    var s7 = vld(t, off + 14usize * st)
+    var s8 = vld(t, off + 1usize * st)
+    var s9 = vld(t, off + 9usize * st)
+    var s10 = vld(t, off + 5usize * st)
+    var s11 = vld(t, off + 13usize * st)
+    var s12 = vld(t, off + 3usize * st)
+    var s13 = vld(t, off + 11usize * st)
+    var s14 = vld(t, off + 7usize * st)
+    var s15 = vld(t, off + 15usize * st)
+    var s16 = ((kp2048) +% (s8 *% kp201)) >> 12u32
+    s8 = ((kp2048) +% (s8 *% kp4091)) >> 12u32
+    var s17 = ((kp2048) -% (s15 *% kp2751)) >> 12u32
+    s15 = ((kp2048) +% (s15 *% kp3035)) >> 12u32
+    var s18 = ((kp2048) +% (s9 *% kp1751)) >> 12u32
+    s9 = ((kp2048) +% (s9 *% kp3703)) >> 12u32
+    var s19 = ((kp2048) -% (s14 *% kp1380)) >> 12u32
+    s14 = ((kp2048) +% (s14 *% kp3857)) >> 12u32
+    var s20 = ((kp2048) +% (s10 *% kp995)) >> 12u32
+    s10 = ((kp2048) +% (s10 *% kp3973)) >> 12u32
+    var s21 = ((kp2048) -% (s13 *% kp2106)) >> 12u32
+    s13 = ((kp2048) +% (s13 *% kp3513)) >> 12u32
+    var s22 = ((kp2048) +% (s11 *% kp2440)) >> 12u32
+    s11 = ((kp2048) +% (s11 *% kp3290)) >> 12u32
+    var s23 = ((kp2048) -% (s12 *% kp601)) >> 12u32
+    s12 = ((kp2048) +% (s12 *% kp4052)) >> 12u32
+    var s24 = ((kp2048) +% (s4 *% kp401)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4076)) >> 12u32
+    var s25 = ((kp2048) -% (s7 *% kp2598)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp3166)) >> 12u32
+    var s26 = ((kp2048) +% (s5 *% kp1931)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp3612)) >> 12u32
+    var s27 = ((kp2048) -% (s6 *% kp1189)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp3920)) >> 12u32
+    var s28 = vclp((s16 +% s17), lo, hi)
+    s16 = vclp((s16 -% s17), lo, hi)
+    s17 = vclp((s19 +% s18), lo, hi)
+    s18 = vclp((s19 -% s18), lo, hi)
+    s19 = vclp((s20 +% s21), lo, hi)
+    s20 = vclp((s20 -% s21), lo, hi)
+    s21 = vclp((s23 +% s22), lo, hi)
+    s22 = vclp((s23 -% s22), lo, hi)
+    s23 = vclp((s12 +% s11), lo, hi)
+    s11 = vclp((s12 -% s11), lo, hi)
+    s12 = vclp((s10 +% s13), lo, hi)
+    s10 = vclp((s10 -% s13), lo, hi)
+    s13 = vclp((s14 +% s9), lo, hi)
+    s9 = vclp((s14 -% s9), lo, hi)
+    s14 = vclp((s8 +% s15), lo, hi)
+    s8 = vclp((s8 -% s15), lo, hi)
+    s15 = ((kp2048) +% (s2 *% kp799)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4017)) >> 12u32
+    var s29 = ((kp2048) -% (s3 *% kp2276)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3406)) >> 12u32
+    var s30 = vclp((s24 +% s25), lo, hi)
+    s24 = vclp((s24 -% s25), lo, hi)
+    s25 = vclp((s27 +% s26), lo, hi)
+    s26 = vclp((s27 -% s26), lo, hi)
+    s27 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = (((kp2048) +% (s8 *% kp799)) -% (s16 *% kp4017)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4017)) +% (s16 *% kp799)) >> 12u32
+    s16 = (((kp2048) -% (s9 *% kp4017)) -% (s18 *% kp799)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp799)) -% (s18 *% kp4017)) >> 12u32
+    s18 = (((kp2048) +% (s10 *% kp3406)) -% (s20 *% kp2276)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp2276)) +% (s20 *% kp3406)) >> 12u32
+    s20 = (((kp2048) -% (s11 *% kp2276)) -% (s22 *% kp3406)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp3406)) -% (s22 *% kp2276)) >> 12u32
+    s22 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s31 = ((kp2048) +% (s1 *% kp1567)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp3784)) >> 12u32
+    var s32 = vclp((s15 +% s29), lo, hi)
+    s15 = vclp((s15 -% s29), lo, hi)
+    s29 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s4 *% kp1567)) -% (s24 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s24 *% kp1567)) >> 12u32
+    s24 = (((kp2048) -% (s5 *% kp3784)) -% (s26 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s26 *% kp3784)) >> 12u32
+    s26 = vclp((s28 +% s17), lo, hi)
+    s17 = vclp((s28 -% s17), lo, hi)
+    s28 = vclp((s7 +% s16), lo, hi)
+    s7 = vclp((s7 -% s16), lo, hi)
+    s16 = vclp((s21 +% s19), lo, hi)
+    s19 = vclp((s21 -% s19), lo, hi)
+    s21 = vclp((s20 +% s18), lo, hi)
+    s18 = vclp((s20 -% s18), lo, hi)
+    s20 = vclp((s23 +% s12), lo, hi)
+    s12 = vclp((s23 -% s12), lo, hi)
+    s23 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s14 +% s13), lo, hi)
+    s13 = vclp((s14 -% s13), lo, hi)
+    s14 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = vclp((s0 +% s1), lo, hi)
+    s0 = vclp((s0 -% s1), lo, hi)
+    s1 = vclp((s22 +% s31), lo, hi)
+    s22 = vclp((s22 -% s31), lo, hi)
+    s31 = (((kp2048) +% (s2 *% kp2896)) -% (s15 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s15 *% kp2896)) >> 12u32
+    s15 = vclp((s30 +% s25), lo, hi)
+    s25 = vclp((s30 -% s25), lo, hi)
+    s30 = vclp((s3 +% s24), lo, hi)
+    s3 = vclp((s3 -% s24), lo, hi)
+    s24 = vclp((s6 +% s27), lo, hi)
+    s6 = vclp((s6 -% s27), lo, hi)
+    s27 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = (((kp2048) +% (s8 *% kp1567)) -% (s7 *% kp3784)) >> 12u32
+    s7 = (((kp2048) +% (s8 *% kp3784)) +% (s7 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s13 *% kp1567)) -% (s17 *% kp3784)) >> 12u32
+    s13 = (((kp2048) +% (s13 *% kp3784)) +% (s17 *% kp1567)) >> 12u32
+    s17 = (((kp2048) -% (s12 *% kp3784)) -% (s19 *% kp1567)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp1567)) -% (s19 *% kp3784)) >> 12u32
+    s19 = (((kp2048) -% (s10 *% kp3784)) -% (s18 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) -% (s18 *% kp3784)) >> 12u32
+    s18 = vclp((s9 +% s29), lo, hi)
+    s9 = vclp((s9 -% s29), lo, hi)
+    s29 = vclp((s1 +% s2), lo, hi)
+    s1 = vclp((s1 -% s2), lo, hi)
+    s2 = vclp((s22 +% s31), lo, hi)
+    s22 = vclp((s22 -% s31), lo, hi)
+    s31 = vclp((s0 +% s32), lo, hi)
+    s0 = vclp((s0 -% s32), lo, hi)
+    s32 = (((kp2048) +% (s4 *% kp2896)) -% (s3 *% kp2896)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp2896)) +% (s3 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s6 *% kp2896)) -% (s25 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s25 *% kp2896)) >> 12u32
+    s25 = vclp((s26 +% s16), lo, hi)
+    s16 = vclp((s26 -% s16), lo, hi)
+    s26 = vclp((s28 +% s21), lo, hi)
+    s21 = vclp((s28 -% s21), lo, hi)
+    s28 = vclp((s5 +% s19), lo, hi)
+    s5 = vclp((s5 -% s19), lo, hi)
+    s19 = vclp((s8 +% s17), lo, hi)
+    s8 = vclp((s8 -% s17), lo, hi)
+    s17 = vclp((s11 +% s20), lo, hi)
+    s11 = vclp((s11 -% s20), lo, hi)
+    s20 = vclp((s14 +% s23), lo, hi)
+    s14 = vclp((s14 -% s23), lo, hi)
+    s23 = vclp((s7 +% s10), lo, hi)
+    s7 = vclp((s7 -% s10), lo, hi)
+    s10 = vclp((s13 +% s12), lo, hi)
+    s12 = vclp((s13 -% s12), lo, hi)
+    s13 = vclp((s18 +% s24), lo, hi)
+    s18 = vclp((s18 -% s24), lo, hi)
+    s24 = vclp((s29 +% s27), lo, hi)
+    s27 = vclp((s29 -% s27), lo, hi)
+    s29 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s31 +% s6), lo, hi)
+    s6 = vclp((s31 -% s6), lo, hi)
+    s31 = vclp((s0 +% s4), lo, hi)
+    s0 = vclp((s0 -% s4), lo, hi)
+    s4 = vclp((s22 +% s32), lo, hi)
+    s22 = vclp((s22 -% s32), lo, hi)
+    s32 = vclp((s1 +% s30), lo, hi)
+    s1 = vclp((s1 -% s30), lo, hi)
+    s30 = vclp((s9 +% s15), lo, hi)
+    s9 = vclp((s9 -% s15), lo, hi)
+    s15 = (((kp2048) +% (s12 *% kp2896)) -% (s8 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s12 *% kp2896)) +% (s8 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s7 *% kp2896)) -% (s5 *% kp2896)) >> 12u32
+    s5 = (((kp2048) +% (s7 *% kp2896)) +% (s5 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s14 *% kp2896)) -% (s21 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp2896)) +% (s21 *% kp2896)) >> 12u32
+    s21 = (((kp2048) +% (s11 *% kp2896)) -% (s16 *% kp2896)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp2896)) +% (s16 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s13 +% s17), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s24 +% s20), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s29 +% s23), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s3 +% s10), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s31 +% s8), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s4 +% s5), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s32 +% s14), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s30 +% s11), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s9 +% s21), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s1 +% s7), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s22 +% s12), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s0 +% s15), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s6 +% s19), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s2 +% s28), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s27 +% s26), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s18 +% s25), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s18 -% s25), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s27 -% s26), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s2 -% s28), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s6 -% s19), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 -% s15), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s22 -% s12), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s1 -% s7), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s9 -% s21), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s30 -% s11), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s32 -% s14), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s4 -% s5), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s31 -% s8), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s3 -% s10), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s29 -% s23), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s24 -% s20), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s13 -% s17), lo, hi)))
+    }
+}
+
+fn vidct64_k4(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp101 = vsp(101i32)
+    let kp4095 = vsp(4095i32)
+    let kp301 = vsp(301i32)
+    let kp4085 = vsp(4085i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2896 = vsp(2896i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 2usize * st)
+    var s2 = vld(t, off + 1usize * st)
+    var s3 = vld(t, off + 3usize * st)
+    var s4 = ((kp2048) +% (s2 *% kp101)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4095)) >> 12u32
+    var s5 = ((kp2048) -% (s3 *% kp301)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp4085)) >> 12u32
+    var s6 = ((kp2048) +% (s1 *% kp201)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4091)) >> 12u32
+    var s7 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s8 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s9 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s10 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s11 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s12 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s13 = (((kp2048) +% (s2 *% kp401)) -% (s4 *% kp4076)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp4076)) +% (s4 *% kp401)) >> 12u32
+    s4 = (((kp2048) -% (s3 *% kp1189)) -% (s5 *% kp3920)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp3920)) -% (s5 *% kp1189)) >> 12u32
+    s5 = (((kp2048) +% (s1 *% kp799)) -% (s6 *% kp4017)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp4017)) +% (s6 *% kp799)) >> 12u32
+    s6 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s14 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s15 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s16 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s17 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s18 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s19 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s20 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s21 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s22 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s23 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s24 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s25 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s26 = (((kp2048) +% (s2 *% kp799)) -% (s13 *% kp4017)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp4017)) +% (s13 *% kp799)) >> 12u32
+    s13 = (((kp2048) +% (s10 *% kp799)) -% (s7 *% kp4017)) >> 12u32
+    s7 = (((kp2048) +% (s10 *% kp4017)) +% (s7 *% kp799)) >> 12u32
+    s10 = (((kp2048) -% (s9 *% kp2276)) -% (s8 *% kp3406)) >> 12u32
+    s8 = (((kp2048) +% (s9 *% kp3406)) -% (s8 *% kp2276)) >> 12u32
+    s9 = (((kp2048) -% (s3 *% kp2276)) -% (s4 *% kp3406)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp3406)) -% (s4 *% kp2276)) >> 12u32
+    s4 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s27 = vclp(s21, lo, hi)
+    s21 = vclp(s21, lo, hi)
+    var s28 = (((kp2048) +% (s1 *% kp1567)) -% (s5 *% kp3784)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp3784)) +% (s5 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s12 *% kp1567)) -% (s11 *% kp3784)) >> 12u32
+    s11 = (((kp2048) +% (s12 *% kp3784)) +% (s11 *% kp1567)) >> 12u32
+    s12 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s29 = vclp(s14, lo, hi)
+    s14 = vclp(s14, lo, hi)
+    var s30 = vclp(s26, lo, hi)
+    s26 = vclp(s26, lo, hi)
+    var s31 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s32 = vclp(s15, lo, hi)
+    s15 = vclp(s15, lo, hi)
+    var s33 = vclp(s16, lo, hi)
+    s16 = vclp(s16, lo, hi)
+    var s34 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s35 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s36 = vclp(s17, lo, hi)
+    s17 = vclp(s17, lo, hi)
+    var s37 = vclp(s18, lo, hi)
+    s18 = vclp(s18, lo, hi)
+    var s38 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s39 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s40 = vclp(s19, lo, hi)
+    s19 = vclp(s19, lo, hi)
+    var s41 = vclp(s20, lo, hi)
+    s20 = vclp(s20, lo, hi)
+    var s42 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s43 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s44 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s45 = vclp(s27, lo, hi)
+    s27 = vclp(s27, lo, hi)
+    var s46 = vclp(s21, lo, hi)
+    s21 = vclp(s21, lo, hi)
+    var s47 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s48 = vclp(s22, lo, hi)
+    s22 = vclp(s22, lo, hi)
+    var s49 = vclp(s23, lo, hi)
+    s23 = vclp(s23, lo, hi)
+    var s50 = vclp(s28, lo, hi)
+    s28 = vclp(s28, lo, hi)
+    var s51 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s52 = vclp(s24, lo, hi)
+    s24 = vclp(s24, lo, hi)
+    var s53 = vclp(s25, lo, hi)
+    s25 = vclp(s25, lo, hi)
+    var s54 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s55 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s56 = (((kp2048) +% (s7 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp3784)) +% (s13 *% kp1567)) >> 12u32
+    s13 = (((kp2048) +% (s2 *% kp1567)) -% (s26 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s26 *% kp1567)) >> 12u32
+    s26 = (((kp2048) +% (s20 *% kp1567)) -% (s14 *% kp3784)) >> 12u32
+    s14 = (((kp2048) +% (s20 *% kp3784)) +% (s14 *% kp1567)) >> 12u32
+    s20 = (((kp2048) +% (s19 *% kp1567)) -% (s6 *% kp3784)) >> 12u32
+    s6 = (((kp2048) +% (s19 *% kp3784)) +% (s6 *% kp1567)) >> 12u32
+    s19 = (((kp2048) -% (s17 *% kp3784)) -% (s15 *% kp1567)) >> 12u32
+    s15 = (((kp2048) +% (s17 *% kp1567)) -% (s15 *% kp3784)) >> 12u32
+    s17 = (((kp2048) -% (s18 *% kp3784)) -% (s16 *% kp1567)) >> 12u32
+    s16 = (((kp2048) +% (s18 *% kp1567)) -% (s16 *% kp3784)) >> 12u32
+    s18 = (((kp2048) -% (s3 *% kp3784)) -% (s9 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s9 *% kp3784)) >> 12u32
+    s9 = (((kp2048) -% (s8 *% kp3784)) -% (s10 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp1567)) -% (s10 *% kp3784)) >> 12u32
+    s10 = vclp(s44, lo, hi)
+    s44 = vclp(s44, lo, hi)
+    var s57 = vclp(s45, lo, hi)
+    s45 = vclp(s45, lo, hi)
+    var s58 = vclp(s46, lo, hi)
+    s46 = vclp(s46, lo, hi)
+    var s59 = vclp(s47, lo, hi)
+    s47 = vclp(s47, lo, hi)
+    var s60 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s61 = vclp(s21, lo, hi)
+    s21 = vclp(s21, lo, hi)
+    var s62 = vclp(s27, lo, hi)
+    s27 = vclp(s27, lo, hi)
+    var s63 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s64 = (((kp2048) +% (s11 *% kp2896)) -% (s5 *% kp2896)) >> 12u32
+    s5 = (((kp2048) +% (s11 *% kp2896)) +% (s5 *% kp2896)) >> 12u32
+    s11 = (((kp2048) +% (s1 *% kp2896)) -% (s28 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s28 *% kp2896)) >> 12u32
+    s28 = (((kp2048) +% (s25 *% kp2896)) -% (s23 *% kp2896)) >> 12u32
+    s23 = (((kp2048) +% (s25 *% kp2896)) +% (s23 *% kp2896)) >> 12u32
+    s25 = (((kp2048) +% (s24 *% kp2896)) -% (s22 *% kp2896)) >> 12u32
+    s22 = (((kp2048) +% (s24 *% kp2896)) +% (s22 *% kp2896)) >> 12u32
+    s24 = vclp((s12 +% s32), lo, hi)
+    s12 = vclp((s12 -% s32), lo, hi)
+    s32 = vclp((s40 +% s36), lo, hi)
+    s36 = vclp((s40 -% s36), lo, hi)
+    s40 = vclp((s29 +% s33), lo, hi)
+    s29 = vclp((s29 -% s33), lo, hi)
+    s33 = vclp((s41 +% s37), lo, hi)
+    s37 = vclp((s41 -% s37), lo, hi)
+    s41 = vclp((s30 +% s34), lo, hi)
+    s30 = vclp((s30 -% s34), lo, hi)
+    s34 = vclp((s42 +% s38), lo, hi)
+    s38 = vclp((s42 -% s38), lo, hi)
+    s42 = vclp((s31 +% s35), lo, hi)
+    s31 = vclp((s31 -% s35), lo, hi)
+    s35 = vclp((s43 +% s39), lo, hi)
+    s39 = vclp((s43 -% s39), lo, hi)
+    s43 = vclp((s56 +% s9), lo, hi)
+    s9 = vclp((s56 -% s9), lo, hi)
+    s56 = vclp((s7 +% s8), lo, hi)
+    s7 = vclp((s7 -% s8), lo, hi)
+    s8 = vclp((s13 +% s18), lo, hi)
+    s13 = vclp((s13 -% s18), lo, hi)
+    s18 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s26 +% s17), lo, hi)
+    s17 = vclp((s26 -% s17), lo, hi)
+    s26 = vclp((s14 +% s16), lo, hi)
+    s14 = vclp((s14 -% s16), lo, hi)
+    s16 = vclp((s20 +% s19), lo, hi)
+    s19 = vclp((s20 -% s19), lo, hi)
+    s20 = vclp((s6 +% s15), lo, hi)
+    s6 = vclp((s6 -% s15), lo, hi)
+    s15 = vclp((s10 +% s52), lo, hi)
+    s10 = vclp((s10 -% s52), lo, hi)
+    s52 = vclp((s57 +% s53), lo, hi)
+    s53 = vclp((s57 -% s53), lo, hi)
+    s57 = vclp((s58 +% s54), lo, hi)
+    s54 = vclp((s58 -% s54), lo, hi)
+    s58 = vclp((s59 +% s55), lo, hi)
+    s55 = vclp((s59 -% s55), lo, hi)
+    s59 = vclp((s60 +% s5), lo, hi)
+    s5 = vclp((s60 -% s5), lo, hi)
+    s60 = vclp((s61 +% s1), lo, hi)
+    s1 = vclp((s61 -% s1), lo, hi)
+    s61 = vclp((s62 +% s23), lo, hi)
+    s23 = vclp((s62 -% s23), lo, hi)
+    s62 = vclp((s63 +% s22), lo, hi)
+    s22 = vclp((s63 -% s22), lo, hi)
+    s63 = vclp((s4 +% s25), lo, hi)
+    s4 = vclp((s4 -% s25), lo, hi)
+    s25 = vclp((s27 +% s28), lo, hi)
+    s27 = vclp((s27 -% s28), lo, hi)
+    s28 = vclp((s21 +% s11), lo, hi)
+    s11 = vclp((s21 -% s11), lo, hi)
+    s21 = vclp((s0 +% s64), lo, hi)
+    s0 = vclp((s0 -% s64), lo, hi)
+    s64 = vclp((s47 +% s51), lo, hi)
+    s47 = vclp((s47 -% s51), lo, hi)
+    s51 = vclp((s46 +% s50), lo, hi)
+    s46 = vclp((s46 -% s50), lo, hi)
+    s50 = vclp((s45 +% s49), lo, hi)
+    s45 = vclp((s45 -% s49), lo, hi)
+    s49 = vclp((s44 +% s48), lo, hi)
+    s44 = vclp((s44 -% s48), lo, hi)
+    s48 = (((kp2048) +% (s6 *% kp2896)) -% (s19 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s19 *% kp2896)) >> 12u32
+    s19 = (((kp2048) +% (s14 *% kp2896)) -% (s17 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp2896)) +% (s17 *% kp2896)) >> 12u32
+    s17 = (((kp2048) +% (s2 *% kp2896)) -% (s13 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s13 *% kp2896)) >> 12u32
+    s13 = (((kp2048) +% (s7 *% kp2896)) -% (s9 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp2896)) +% (s9 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s39 *% kp2896)) -% (s31 *% kp2896)) >> 12u32
+    s31 = (((kp2048) +% (s39 *% kp2896)) +% (s31 *% kp2896)) >> 12u32
+    s39 = (((kp2048) +% (s38 *% kp2896)) -% (s30 *% kp2896)) >> 12u32
+    s30 = (((kp2048) +% (s38 *% kp2896)) +% (s30 *% kp2896)) >> 12u32
+    s38 = (((kp2048) +% (s37 *% kp2896)) -% (s29 *% kp2896)) >> 12u32
+    s29 = (((kp2048) +% (s37 *% kp2896)) +% (s29 *% kp2896)) >> 12u32
+    s37 = (((kp2048) +% (s36 *% kp2896)) -% (s12 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s36 *% kp2896)) +% (s12 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s15 +% s32), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s52 +% s33), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s57 +% s34), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s58 +% s35), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s59 +% s56), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s60 +% s18), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s61 +% s26), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s62 +% s20), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s63 +% s6), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s25 +% s14), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s28 +% s2), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s21 +% s7), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s64 +% s31), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s51 +% s30), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s50 +% s29), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s49 +% s12), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s44 +% s37), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s45 +% s38), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s46 +% s39), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s47 +% s9), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 +% s13), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s11 +% s17), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s27 +% s19), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s4 +% s48), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s22 +% s16), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s23 +% s3), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s1 +% s8), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s5 +% s43), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s55 +% s42), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s54 +% s41), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s53 +% s40), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s10 +% s24), lo, hi)))
+    vst(t, off + 32usize * st, (vclp((s10 -% s24), lo, hi)))
+    vst(t, off + 33usize * st, (vclp((s53 -% s40), lo, hi)))
+    vst(t, off + 34usize * st, (vclp((s54 -% s41), lo, hi)))
+    vst(t, off + 35usize * st, (vclp((s55 -% s42), lo, hi)))
+    vst(t, off + 36usize * st, (vclp((s5 -% s43), lo, hi)))
+    vst(t, off + 37usize * st, (vclp((s1 -% s8), lo, hi)))
+    vst(t, off + 38usize * st, (vclp((s23 -% s3), lo, hi)))
+    vst(t, off + 39usize * st, (vclp((s22 -% s16), lo, hi)))
+    vst(t, off + 40usize * st, (vclp((s4 -% s48), lo, hi)))
+    vst(t, off + 41usize * st, (vclp((s27 -% s19), lo, hi)))
+    vst(t, off + 42usize * st, (vclp((s11 -% s17), lo, hi)))
+    vst(t, off + 43usize * st, (vclp((s0 -% s13), lo, hi)))
+    vst(t, off + 44usize * st, (vclp((s47 -% s9), lo, hi)))
+    vst(t, off + 45usize * st, (vclp((s46 -% s39), lo, hi)))
+    vst(t, off + 46usize * st, (vclp((s45 -% s38), lo, hi)))
+    vst(t, off + 47usize * st, (vclp((s44 -% s37), lo, hi)))
+    vst(t, off + 48usize * st, (vclp((s49 -% s12), lo, hi)))
+    vst(t, off + 49usize * st, (vclp((s50 -% s29), lo, hi)))
+    vst(t, off + 50usize * st, (vclp((s51 -% s30), lo, hi)))
+    vst(t, off + 51usize * st, (vclp((s64 -% s31), lo, hi)))
+    vst(t, off + 52usize * st, (vclp((s21 -% s7), lo, hi)))
+    vst(t, off + 53usize * st, (vclp((s28 -% s2), lo, hi)))
+    vst(t, off + 54usize * st, (vclp((s25 -% s14), lo, hi)))
+    vst(t, off + 55usize * st, (vclp((s63 -% s6), lo, hi)))
+    vst(t, off + 56usize * st, (vclp((s62 -% s20), lo, hi)))
+    vst(t, off + 57usize * st, (vclp((s61 -% s26), lo, hi)))
+    vst(t, off + 58usize * st, (vclp((s60 -% s18), lo, hi)))
+    vst(t, off + 59usize * st, (vclp((s59 -% s56), lo, hi)))
+    vst(t, off + 60usize * st, (vclp((s58 -% s35), lo, hi)))
+    vst(t, off + 61usize * st, (vclp((s57 -% s34), lo, hi)))
+    vst(t, off + 62usize * st, (vclp((s52 -% s33), lo, hi)))
+    vst(t, off + 63usize * st, (vclp((s15 -% s32), lo, hi)))
+    }
+}
+
+fn vidct64_k8(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp101 = vsp(101i32)
+    let kp4095 = vsp(4095i32)
+    let kp700 = vsp(700i32)
+    let kp4036 = vsp(4036i32)
+    let kp501 = vsp(501i32)
+    let kp4065 = vsp(4065i32)
+    let kp301 = vsp(301i32)
+    let kp4085 = vsp(4085i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp2598 = vsp(2598i32)
+    let kp3166 = vsp(3166i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp2276 = vsp(2276i32)
+    let kp3406 = vsp(3406i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 4usize * st)
+    var s2 = vld(t, off + 2usize * st)
+    var s3 = vld(t, off + 6usize * st)
+    var s4 = vld(t, off + 1usize * st)
+    var s5 = vld(t, off + 5usize * st)
+    var s6 = vld(t, off + 3usize * st)
+    var s7 = vld(t, off + 7usize * st)
+    var s8 = ((kp2048) +% (s4 *% kp101)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4095)) >> 12u32
+    var s9 = ((kp2048) -% (s7 *% kp700)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp4036)) >> 12u32
+    var s10 = ((kp2048) +% (s5 *% kp501)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp4065)) >> 12u32
+    var s11 = ((kp2048) -% (s6 *% kp301)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp4085)) >> 12u32
+    var s12 = ((kp2048) +% (s2 *% kp201)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4091)) >> 12u32
+    var s13 = ((kp2048) -% (s3 *% kp601)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp4052)) >> 12u32
+    var s14 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s15 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s16 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s17 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s18 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s19 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s20 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s21 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s22 = ((kp2048) +% (s1 *% kp401)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4076)) >> 12u32
+    var s23 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s24 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s25 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s26 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s27 = (((kp2048) +% (s4 *% kp401)) -% (s8 *% kp4076)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4076)) +% (s8 *% kp401)) >> 12u32
+    s8 = (((kp2048) -% (s7 *% kp2598)) -% (s9 *% kp3166)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp3166)) -% (s9 *% kp2598)) >> 12u32
+    s9 = (((kp2048) +% (s5 *% kp1931)) -% (s10 *% kp3612)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp3612)) +% (s10 *% kp1931)) >> 12u32
+    s10 = (((kp2048) -% (s6 *% kp1189)) -% (s11 *% kp3920)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp3920)) -% (s11 *% kp1189)) >> 12u32
+    s11 = vclp(s22, lo, hi)
+    s22 = vclp(s22, lo, hi)
+    var s28 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s29 = (((kp2048) +% (s2 *% kp799)) -% (s12 *% kp4017)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp4017)) +% (s12 *% kp799)) >> 12u32
+    s12 = (((kp2048) -% (s3 *% kp2276)) -% (s13 *% kp3406)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp3406)) -% (s13 *% kp2276)) >> 12u32
+    s13 = vclp(s14, lo, hi)
+    s14 = vclp(s14, lo, hi)
+    var s30 = vclp(s27, lo, hi)
+    s27 = vclp(s27, lo, hi)
+    var s31 = vclp(s15, lo, hi)
+    s15 = vclp(s15, lo, hi)
+    var s32 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s33 = vclp(s16, lo, hi)
+    s16 = vclp(s16, lo, hi)
+    var s34 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s35 = vclp(s17, lo, hi)
+    s17 = vclp(s17, lo, hi)
+    var s36 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s37 = vclp(s18, lo, hi)
+    s18 = vclp(s18, lo, hi)
+    var s38 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s39 = vclp(s19, lo, hi)
+    s19 = vclp(s19, lo, hi)
+    var s40 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s41 = vclp(s20, lo, hi)
+    s20 = vclp(s20, lo, hi)
+    var s42 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s43 = vclp(s21, lo, hi)
+    s21 = vclp(s21, lo, hi)
+    var s44 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s45 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s46 = (((kp2048) +% (s1 *% kp1567)) -% (s22 *% kp3784)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp3784)) +% (s22 *% kp1567)) >> 12u32
+    s22 = vclp(s23, lo, hi)
+    s23 = vclp(s23, lo, hi)
+    var s47 = vclp(s29, lo, hi)
+    s29 = vclp(s29, lo, hi)
+    var s48 = vclp(s24, lo, hi)
+    s24 = vclp(s24, lo, hi)
+    var s49 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s50 = vclp(s25, lo, hi)
+    s25 = vclp(s25, lo, hi)
+    var s51 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s52 = vclp(s26, lo, hi)
+    s26 = vclp(s26, lo, hi)
+    var s53 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s54 = (((kp2048) +% (s4 *% kp799)) -% (s27 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s27 *% kp799)) >> 12u32
+    s27 = (((kp2048) +% (s21 *% kp799)) -% (s14 *% kp4017)) >> 12u32
+    s14 = (((kp2048) +% (s21 *% kp4017)) +% (s14 *% kp799)) >> 12u32
+    s21 = (((kp2048) -% (s20 *% kp4017)) -% (s15 *% kp799)) >> 12u32
+    s15 = (((kp2048) +% (s20 *% kp799)) -% (s15 *% kp4017)) >> 12u32
+    s20 = (((kp2048) -% (s7 *% kp4017)) -% (s8 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp799)) -% (s8 *% kp4017)) >> 12u32
+    s8 = (((kp2048) +% (s5 *% kp3406)) -% (s9 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s9 *% kp3406)) >> 12u32
+    s9 = (((kp2048) +% (s19 *% kp3406)) -% (s16 *% kp2276)) >> 12u32
+    s16 = (((kp2048) +% (s19 *% kp2276)) +% (s16 *% kp3406)) >> 12u32
+    s19 = (((kp2048) -% (s18 *% kp2276)) -% (s17 *% kp3406)) >> 12u32
+    s17 = (((kp2048) +% (s18 *% kp3406)) -% (s17 *% kp2276)) >> 12u32
+    s18 = (((kp2048) -% (s6 *% kp2276)) -% (s10 *% kp3406)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp3406)) -% (s10 *% kp2276)) >> 12u32
+    s10 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s55 = vclp(s45, lo, hi)
+    s45 = vclp(s45, lo, hi)
+    var s56 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s57 = vclp(s46, lo, hi)
+    s46 = vclp(s46, lo, hi)
+    var s58 = vclp(s28, lo, hi)
+    s28 = vclp(s28, lo, hi)
+    var s59 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s60 = (((kp2048) +% (s2 *% kp1567)) -% (s29 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s29 *% kp1567)) >> 12u32
+    s29 = (((kp2048) +% (s26 *% kp1567)) -% (s23 *% kp3784)) >> 12u32
+    s23 = (((kp2048) +% (s26 *% kp3784)) +% (s23 *% kp1567)) >> 12u32
+    s26 = (((kp2048) -% (s25 *% kp3784)) -% (s24 *% kp1567)) >> 12u32
+    s24 = (((kp2048) +% (s25 *% kp1567)) -% (s24 *% kp3784)) >> 12u32
+    s25 = (((kp2048) -% (s3 *% kp3784)) -% (s12 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s12 *% kp3784)) >> 12u32
+    s12 = vclp((s13 +% s31), lo, hi)
+    s13 = vclp((s13 -% s31), lo, hi)
+    s31 = vclp((s30 +% s32), lo, hi)
+    s30 = vclp((s30 -% s32), lo, hi)
+    s32 = vclp((s54 +% s20), lo, hi)
+    s20 = vclp((s54 -% s20), lo, hi)
+    s54 = vclp((s27 +% s21), lo, hi)
+    s21 = vclp((s27 -% s21), lo, hi)
+    s27 = vclp((s35 +% s33), lo, hi)
+    s33 = vclp((s35 -% s33), lo, hi)
+    s35 = vclp((s36 +% s34), lo, hi)
+    s34 = vclp((s36 -% s34), lo, hi)
+    s36 = vclp((s18 +% s8), lo, hi)
+    s8 = vclp((s18 -% s8), lo, hi)
+    s18 = vclp((s19 +% s9), lo, hi)
+    s9 = vclp((s19 -% s9), lo, hi)
+    s19 = vclp((s37 +% s39), lo, hi)
+    s37 = vclp((s37 -% s39), lo, hi)
+    s39 = vclp((s38 +% s40), lo, hi)
+    s38 = vclp((s38 -% s40), lo, hi)
+    s40 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s17 +% s16), lo, hi)
+    s16 = vclp((s17 -% s16), lo, hi)
+    s17 = vclp((s43 +% s41), lo, hi)
+    s41 = vclp((s43 -% s41), lo, hi)
+    s43 = vclp((s44 +% s42), lo, hi)
+    s42 = vclp((s44 -% s42), lo, hi)
+    s44 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = vclp((s14 +% s15), lo, hi)
+    s14 = vclp((s14 -% s15), lo, hi)
+    s15 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s61 = vclp(s55, lo, hi)
+    s55 = vclp(s55, lo, hi)
+    var s62 = vclp(s45, lo, hi)
+    s45 = vclp(s45, lo, hi)
+    var s63 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s64 = (((kp2048) +% (s1 *% kp2896)) -% (s46 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s46 *% kp2896)) >> 12u32
+    s46 = (((kp2048) +% (s28 *% kp2896)) -% (s11 *% kp2896)) >> 12u32
+    s11 = (((kp2048) +% (s28 *% kp2896)) +% (s11 *% kp2896)) >> 12u32
+    s28 = vclp((s22 +% s48), lo, hi)
+    s22 = vclp((s22 -% s48), lo, hi)
+    s48 = vclp((s47 +% s49), lo, hi)
+    s47 = vclp((s47 -% s49), lo, hi)
+    s49 = vclp((s60 +% s25), lo, hi)
+    s25 = vclp((s60 -% s25), lo, hi)
+    s60 = vclp((s29 +% s26), lo, hi)
+    s26 = vclp((s29 -% s26), lo, hi)
+    s29 = vclp((s52 +% s50), lo, hi)
+    s50 = vclp((s52 -% s50), lo, hi)
+    s52 = vclp((s53 +% s51), lo, hi)
+    s51 = vclp((s53 -% s51), lo, hi)
+    s53 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = vclp((s23 +% s24), lo, hi)
+    s23 = vclp((s23 -% s24), lo, hi)
+    s24 = (((kp2048) +% (s14 *% kp1567)) -% (s21 *% kp3784)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp3784)) +% (s21 *% kp1567)) >> 12u32
+    s21 = (((kp2048) +% (s4 *% kp1567)) -% (s20 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s20 *% kp1567)) >> 12u32
+    s20 = (((kp2048) +% (s42 *% kp1567)) -% (s30 *% kp3784)) >> 12u32
+    s30 = (((kp2048) +% (s42 *% kp3784)) +% (s30 *% kp1567)) >> 12u32
+    s42 = (((kp2048) +% (s41 *% kp1567)) -% (s13 *% kp3784)) >> 12u32
+    s13 = (((kp2048) +% (s41 *% kp3784)) +% (s13 *% kp1567)) >> 12u32
+    s41 = (((kp2048) -% (s37 *% kp3784)) -% (s33 *% kp1567)) >> 12u32
+    s33 = (((kp2048) +% (s37 *% kp1567)) -% (s33 *% kp3784)) >> 12u32
+    s37 = (((kp2048) -% (s38 *% kp3784)) -% (s34 *% kp1567)) >> 12u32
+    s34 = (((kp2048) +% (s38 *% kp1567)) -% (s34 *% kp3784)) >> 12u32
+    s38 = (((kp2048) -% (s5 *% kp3784)) -% (s8 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s8 *% kp3784)) >> 12u32
+    s8 = (((kp2048) -% (s16 *% kp3784)) -% (s9 *% kp1567)) >> 12u32
+    s9 = (((kp2048) +% (s16 *% kp1567)) -% (s9 *% kp3784)) >> 12u32
+    s16 = vclp((s15 +% s58), lo, hi)
+    s15 = vclp((s15 -% s58), lo, hi)
+    s58 = vclp((s61 +% s59), lo, hi)
+    s59 = vclp((s61 -% s59), lo, hi)
+    s61 = vclp((s62 +% s1), lo, hi)
+    s1 = vclp((s62 -% s1), lo, hi)
+    s62 = vclp((s63 +% s11), lo, hi)
+    s11 = vclp((s63 -% s11), lo, hi)
+    s63 = vclp((s0 +% s46), lo, hi)
+    s0 = vclp((s0 -% s46), lo, hi)
+    s46 = vclp((s45 +% s64), lo, hi)
+    s45 = vclp((s45 -% s64), lo, hi)
+    s64 = vclp((s55 +% s57), lo, hi)
+    s55 = vclp((s55 -% s57), lo, hi)
+    s57 = vclp((s10 +% s56), lo, hi)
+    s10 = vclp((s10 -% s56), lo, hi)
+    s56 = (((kp2048) +% (s23 *% kp2896)) -% (s26 *% kp2896)) >> 12u32
+    s23 = (((kp2048) +% (s23 *% kp2896)) +% (s26 *% kp2896)) >> 12u32
+    s26 = (((kp2048) +% (s2 *% kp2896)) -% (s25 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s25 *% kp2896)) >> 12u32
+    s25 = (((kp2048) +% (s51 *% kp2896)) -% (s47 *% kp2896)) >> 12u32
+    s47 = (((kp2048) +% (s51 *% kp2896)) +% (s47 *% kp2896)) >> 12u32
+    s51 = (((kp2048) +% (s50 *% kp2896)) -% (s22 *% kp2896)) >> 12u32
+    s22 = (((kp2048) +% (s50 *% kp2896)) +% (s22 *% kp2896)) >> 12u32
+    s50 = vclp((s12 +% s27), lo, hi)
+    s12 = vclp((s12 -% s27), lo, hi)
+    s27 = vclp((s17 +% s19), lo, hi)
+    s17 = vclp((s17 -% s19), lo, hi)
+    s19 = vclp((s31 +% s35), lo, hi)
+    s31 = vclp((s31 -% s35), lo, hi)
+    s35 = vclp((s43 +% s39), lo, hi)
+    s39 = vclp((s43 -% s39), lo, hi)
+    s43 = vclp((s32 +% s36), lo, hi)
+    s32 = vclp((s32 -% s36), lo, hi)
+    s36 = vclp((s44 +% s40), lo, hi)
+    s40 = vclp((s44 -% s40), lo, hi)
+    s44 = vclp((s54 +% s18), lo, hi)
+    s18 = vclp((s54 -% s18), lo, hi)
+    s54 = vclp((s7 +% s6), lo, hi)
+    s6 = vclp((s7 -% s6), lo, hi)
+    s7 = vclp((s24 +% s8), lo, hi)
+    s8 = vclp((s24 -% s8), lo, hi)
+    s24 = vclp((s14 +% s9), lo, hi)
+    s9 = vclp((s14 -% s9), lo, hi)
+    s14 = vclp((s21 +% s38), lo, hi)
+    s21 = vclp((s21 -% s38), lo, hi)
+    s38 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s20 +% s37), lo, hi)
+    s20 = vclp((s20 -% s37), lo, hi)
+    s37 = vclp((s30 +% s34), lo, hi)
+    s30 = vclp((s30 -% s34), lo, hi)
+    s34 = vclp((s42 +% s41), lo, hi)
+    s41 = vclp((s42 -% s41), lo, hi)
+    s42 = vclp((s13 +% s33), lo, hi)
+    s13 = vclp((s13 -% s33), lo, hi)
+    s33 = vclp((s16 +% s29), lo, hi)
+    s16 = vclp((s16 -% s29), lo, hi)
+    s29 = vclp((s58 +% s52), lo, hi)
+    s52 = vclp((s58 -% s52), lo, hi)
+    s58 = vclp((s61 +% s53), lo, hi)
+    s53 = vclp((s61 -% s53), lo, hi)
+    s61 = vclp((s62 +% s3), lo, hi)
+    s3 = vclp((s62 -% s3), lo, hi)
+    s62 = vclp((s63 +% s23), lo, hi)
+    s23 = vclp((s63 -% s23), lo, hi)
+    s63 = vclp((s46 +% s2), lo, hi)
+    s2 = vclp((s46 -% s2), lo, hi)
+    s46 = vclp((s64 +% s47), lo, hi)
+    s47 = vclp((s64 -% s47), lo, hi)
+    s64 = vclp((s57 +% s22), lo, hi)
+    s22 = vclp((s57 -% s22), lo, hi)
+    s57 = vclp((s10 +% s51), lo, hi)
+    s10 = vclp((s10 -% s51), lo, hi)
+    s51 = vclp((s55 +% s25), lo, hi)
+    s25 = vclp((s55 -% s25), lo, hi)
+    s55 = vclp((s45 +% s26), lo, hi)
+    s26 = vclp((s45 -% s26), lo, hi)
+    s45 = vclp((s0 +% s56), lo, hi)
+    s0 = vclp((s0 -% s56), lo, hi)
+    s56 = vclp((s11 +% s60), lo, hi)
+    s11 = vclp((s11 -% s60), lo, hi)
+    s60 = vclp((s1 +% s49), lo, hi)
+    s1 = vclp((s1 -% s49), lo, hi)
+    s49 = vclp((s59 +% s48), lo, hi)
+    s48 = vclp((s59 -% s48), lo, hi)
+    s59 = vclp((s15 +% s28), lo, hi)
+    s15 = vclp((s15 -% s28), lo, hi)
+    s28 = (((kp2048) +% (s13 *% kp2896)) -% (s41 *% kp2896)) >> 12u32
+    s13 = (((kp2048) +% (s13 *% kp2896)) +% (s41 *% kp2896)) >> 12u32
+    s41 = (((kp2048) +% (s30 *% kp2896)) -% (s20 *% kp2896)) >> 12u32
+    s20 = (((kp2048) +% (s30 *% kp2896)) +% (s20 *% kp2896)) >> 12u32
+    s30 = (((kp2048) +% (s4 *% kp2896)) -% (s21 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp2896)) +% (s21 *% kp2896)) >> 12u32
+    s21 = (((kp2048) +% (s9 *% kp2896)) -% (s8 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s9 *% kp2896)) +% (s8 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s6 *% kp2896)) -% (s18 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s18 *% kp2896)) >> 12u32
+    s18 = (((kp2048) +% (s40 *% kp2896)) -% (s32 *% kp2896)) >> 12u32
+    s32 = (((kp2048) +% (s40 *% kp2896)) +% (s32 *% kp2896)) >> 12u32
+    s40 = (((kp2048) +% (s39 *% kp2896)) -% (s31 *% kp2896)) >> 12u32
+    s31 = (((kp2048) +% (s39 *% kp2896)) +% (s31 *% kp2896)) >> 12u32
+    s39 = (((kp2048) +% (s17 *% kp2896)) -% (s12 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s17 *% kp2896)) +% (s12 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s33 +% s27), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s29 +% s35), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s58 +% s36), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s61 +% s54), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s62 +% s24), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s63 +% s38), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s46 +% s37), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s64 +% s42), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s57 +% s13), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s51 +% s20), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s55 +% s4), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s45 +% s8), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s56 +% s6), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s60 +% s32), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s49 +% s31), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s59 +% s12), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s15 +% s39), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s48 +% s40), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s1 +% s18), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s11 +% s9), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 +% s21), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s26 +% s30), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s25 +% s41), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s10 +% s28), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s22 +% s34), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s47 +% s5), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s2 +% s14), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s23 +% s7), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s3 +% s44), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s53 +% s43), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s52 +% s19), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s16 +% s50), lo, hi)))
+    vst(t, off + 32usize * st, (vclp((s16 -% s50), lo, hi)))
+    vst(t, off + 33usize * st, (vclp((s52 -% s19), lo, hi)))
+    vst(t, off + 34usize * st, (vclp((s53 -% s43), lo, hi)))
+    vst(t, off + 35usize * st, (vclp((s3 -% s44), lo, hi)))
+    vst(t, off + 36usize * st, (vclp((s23 -% s7), lo, hi)))
+    vst(t, off + 37usize * st, (vclp((s2 -% s14), lo, hi)))
+    vst(t, off + 38usize * st, (vclp((s47 -% s5), lo, hi)))
+    vst(t, off + 39usize * st, (vclp((s22 -% s34), lo, hi)))
+    vst(t, off + 40usize * st, (vclp((s10 -% s28), lo, hi)))
+    vst(t, off + 41usize * st, (vclp((s25 -% s41), lo, hi)))
+    vst(t, off + 42usize * st, (vclp((s26 -% s30), lo, hi)))
+    vst(t, off + 43usize * st, (vclp((s0 -% s21), lo, hi)))
+    vst(t, off + 44usize * st, (vclp((s11 -% s9), lo, hi)))
+    vst(t, off + 45usize * st, (vclp((s1 -% s18), lo, hi)))
+    vst(t, off + 46usize * st, (vclp((s48 -% s40), lo, hi)))
+    vst(t, off + 47usize * st, (vclp((s15 -% s39), lo, hi)))
+    vst(t, off + 48usize * st, (vclp((s59 -% s12), lo, hi)))
+    vst(t, off + 49usize * st, (vclp((s49 -% s31), lo, hi)))
+    vst(t, off + 50usize * st, (vclp((s60 -% s32), lo, hi)))
+    vst(t, off + 51usize * st, (vclp((s56 -% s6), lo, hi)))
+    vst(t, off + 52usize * st, (vclp((s45 -% s8), lo, hi)))
+    vst(t, off + 53usize * st, (vclp((s55 -% s4), lo, hi)))
+    vst(t, off + 54usize * st, (vclp((s51 -% s20), lo, hi)))
+    vst(t, off + 55usize * st, (vclp((s57 -% s13), lo, hi)))
+    vst(t, off + 56usize * st, (vclp((s64 -% s42), lo, hi)))
+    vst(t, off + 57usize * st, (vclp((s46 -% s37), lo, hi)))
+    vst(t, off + 58usize * st, (vclp((s63 -% s38), lo, hi)))
+    vst(t, off + 59usize * st, (vclp((s62 -% s24), lo, hi)))
+    vst(t, off + 60usize * st, (vclp((s61 -% s54), lo, hi)))
+    vst(t, off + 61usize * st, (vclp((s58 -% s36), lo, hi)))
+    vst(t, off + 62usize * st, (vclp((s29 -% s35), lo, hi)))
+    vst(t, off + 63usize * st, (vclp((s33 -% s27), lo, hi)))
+    }
+}
+
+fn vidct64_k16(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
+    let hi = vsp(i32((1i64 << (r - 1u32)) - 1i64))
+    let lo = vsp(i32(0i64 - (1i64 << (r - 1u32))))
+    let kp2048 = vsp(2048i32)
+    let kp101 = vsp(101i32)
+    let kp4095 = vsp(4095i32)
+    let kp1474 = vsp(1474i32)
+    let kp3822 = vsp(3822i32)
+    let kp897 = vsp(897i32)
+    let kp3996 = vsp(3996i32)
+    let kp700 = vsp(700i32)
+    let kp4036 = vsp(4036i32)
+    let kp501 = vsp(501i32)
+    let kp4065 = vsp(4065i32)
+    let kp1092 = vsp(1092i32)
+    let kp3948 = vsp(3948i32)
+    let kp1285 = vsp(1285i32)
+    let kp3889 = vsp(3889i32)
+    let kp301 = vsp(301i32)
+    let kp4085 = vsp(4085i32)
+    let kp201 = vsp(201i32)
+    let kp4091 = vsp(4091i32)
+    let kp1380 = vsp(1380i32)
+    let kp3857 = vsp(3857i32)
+    let kp995 = vsp(995i32)
+    let kp3973 = vsp(3973i32)
+    let kp601 = vsp(601i32)
+    let kp4052 = vsp(4052i32)
+    let kp401 = vsp(401i32)
+    let kp4076 = vsp(4076i32)
+    let kp1189 = vsp(1189i32)
+    let kp3920 = vsp(3920i32)
+    let kp3166 = vsp(3166i32)
+    let kp2598 = vsp(2598i32)
+    let kp1931 = vsp(1931i32)
+    let kp3612 = vsp(3612i32)
+    let kp799 = vsp(799i32)
+    let kp4017 = vsp(4017i32)
+    let kp3406 = vsp(3406i32)
+    let kp2276 = vsp(2276i32)
+    let kp2896 = vsp(2896i32)
+    let kp1567 = vsp(1567i32)
+    let kp3784 = vsp(3784i32)
+    var s0 = vld(t, off + 0usize * st)
+    var s1 = vld(t, off + 8usize * st)
+    var s2 = vld(t, off + 4usize * st)
+    var s3 = vld(t, off + 12usize * st)
+    var s4 = vld(t, off + 2usize * st)
+    var s5 = vld(t, off + 10usize * st)
+    var s6 = vld(t, off + 6usize * st)
+    var s7 = vld(t, off + 14usize * st)
+    var s8 = vld(t, off + 1usize * st)
+    var s9 = vld(t, off + 9usize * st)
+    var s10 = vld(t, off + 5usize * st)
+    var s11 = vld(t, off + 13usize * st)
+    var s12 = vld(t, off + 3usize * st)
+    var s13 = vld(t, off + 11usize * st)
+    var s14 = vld(t, off + 7usize * st)
+    var s15 = vld(t, off + 15usize * st)
+    var s16 = ((kp2048) +% (s8 *% kp101)) >> 12u32
+    s8 = ((kp2048) +% (s8 *% kp4095)) >> 12u32
+    var s17 = ((kp2048) -% (s15 *% kp1474)) >> 12u32
+    s15 = ((kp2048) +% (s15 *% kp3822)) >> 12u32
+    var s18 = ((kp2048) +% (s9 *% kp897)) >> 12u32
+    s9 = ((kp2048) +% (s9 *% kp3996)) >> 12u32
+    var s19 = ((kp2048) -% (s14 *% kp700)) >> 12u32
+    s14 = ((kp2048) +% (s14 *% kp4036)) >> 12u32
+    var s20 = ((kp2048) +% (s10 *% kp501)) >> 12u32
+    s10 = ((kp2048) +% (s10 *% kp4065)) >> 12u32
+    var s21 = ((kp2048) -% (s13 *% kp1092)) >> 12u32
+    s13 = ((kp2048) +% (s13 *% kp3948)) >> 12u32
+    var s22 = ((kp2048) +% (s11 *% kp1285)) >> 12u32
+    s11 = ((kp2048) +% (s11 *% kp3889)) >> 12u32
+    var s23 = ((kp2048) -% (s12 *% kp301)) >> 12u32
+    s12 = ((kp2048) +% (s12 *% kp4085)) >> 12u32
+    var s24 = ((kp2048) +% (s4 *% kp201)) >> 12u32
+    s4 = ((kp2048) +% (s4 *% kp4091)) >> 12u32
+    var s25 = ((kp2048) -% (s7 *% kp1380)) >> 12u32
+    s7 = ((kp2048) +% (s7 *% kp3857)) >> 12u32
+    var s26 = ((kp2048) +% (s5 *% kp995)) >> 12u32
+    s5 = ((kp2048) +% (s5 *% kp3973)) >> 12u32
+    var s27 = ((kp2048) -% (s6 *% kp601)) >> 12u32
+    s6 = ((kp2048) +% (s6 *% kp4052)) >> 12u32
+    var s28 = vclp(s16, lo, hi)
+    s16 = vclp(s16, lo, hi)
+    var s29 = vclp(s17, lo, hi)
+    s17 = vclp(s17, lo, hi)
+    var s30 = vclp(s18, lo, hi)
+    s18 = vclp(s18, lo, hi)
+    var s31 = vclp(s19, lo, hi)
+    s19 = vclp(s19, lo, hi)
+    var s32 = vclp(s20, lo, hi)
+    s20 = vclp(s20, lo, hi)
+    var s33 = vclp(s21, lo, hi)
+    s21 = vclp(s21, lo, hi)
+    var s34 = vclp(s22, lo, hi)
+    s22 = vclp(s22, lo, hi)
+    var s35 = vclp(s23, lo, hi)
+    s23 = vclp(s23, lo, hi)
+    var s36 = vclp(s12, lo, hi)
+    s12 = vclp(s12, lo, hi)
+    var s37 = vclp(s11, lo, hi)
+    s11 = vclp(s11, lo, hi)
+    var s38 = vclp(s13, lo, hi)
+    s13 = vclp(s13, lo, hi)
+    var s39 = vclp(s10, lo, hi)
+    s10 = vclp(s10, lo, hi)
+    var s40 = vclp(s14, lo, hi)
+    s14 = vclp(s14, lo, hi)
+    var s41 = vclp(s9, lo, hi)
+    s9 = vclp(s9, lo, hi)
+    var s42 = vclp(s15, lo, hi)
+    s15 = vclp(s15, lo, hi)
+    var s43 = vclp(s8, lo, hi)
+    s8 = vclp(s8, lo, hi)
+    var s44 = ((kp2048) +% (s2 *% kp401)) >> 12u32
+    s2 = ((kp2048) +% (s2 *% kp4076)) >> 12u32
+    var s45 = ((kp2048) -% (s3 *% kp1189)) >> 12u32
+    s3 = ((kp2048) +% (s3 *% kp3920)) >> 12u32
+    var s46 = vclp(s24, lo, hi)
+    s24 = vclp(s24, lo, hi)
+    var s47 = vclp(s25, lo, hi)
+    s25 = vclp(s25, lo, hi)
+    var s48 = vclp(s26, lo, hi)
+    s26 = vclp(s26, lo, hi)
+    var s49 = vclp(s27, lo, hi)
+    s27 = vclp(s27, lo, hi)
+    var s50 = vclp(s6, lo, hi)
+    s6 = vclp(s6, lo, hi)
+    var s51 = vclp(s5, lo, hi)
+    s5 = vclp(s5, lo, hi)
+    var s52 = vclp(s7, lo, hi)
+    s7 = vclp(s7, lo, hi)
+    var s53 = vclp(s4, lo, hi)
+    s4 = vclp(s4, lo, hi)
+    var s54 = (((kp2048) +% (s8 *% kp401)) -% (s16 *% kp4076)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4076)) +% (s16 *% kp401)) >> 12u32
+    s16 = (((kp2048) -% (s15 *% kp4076)) -% (s17 *% kp401)) >> 12u32
+    s15 = (((kp2048) +% (s15 *% kp401)) -% (s17 *% kp4076)) >> 12u32
+    s17 = (((kp2048) +% (s9 *% kp3166)) -% (s18 *% kp2598)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2598)) +% (s18 *% kp3166)) >> 12u32
+    s18 = (((kp2048) -% (s14 *% kp2598)) -% (s19 *% kp3166)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp3166)) -% (s19 *% kp2598)) >> 12u32
+    s19 = (((kp2048) +% (s10 *% kp1931)) -% (s20 *% kp3612)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp3612)) +% (s20 *% kp1931)) >> 12u32
+    s20 = (((kp2048) -% (s13 *% kp3612)) -% (s21 *% kp1931)) >> 12u32
+    s13 = (((kp2048) +% (s13 *% kp1931)) -% (s21 *% kp3612)) >> 12u32
+    s21 = (((kp2048) +% (s11 *% kp3920)) -% (s22 *% kp1189)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp1189)) +% (s22 *% kp3920)) >> 12u32
+    s22 = (((kp2048) -% (s12 *% kp1189)) -% (s23 *% kp3920)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp3920)) -% (s23 *% kp1189)) >> 12u32
+    s23 = ((kp2048) +% (s1 *% kp799)) >> 12u32
+    s1 = ((kp2048) +% (s1 *% kp4017)) >> 12u32
+    var s55 = vclp(s44, lo, hi)
+    s44 = vclp(s44, lo, hi)
+    var s56 = vclp(s45, lo, hi)
+    s45 = vclp(s45, lo, hi)
+    var s57 = vclp(s3, lo, hi)
+    s3 = vclp(s3, lo, hi)
+    var s58 = vclp(s2, lo, hi)
+    s2 = vclp(s2, lo, hi)
+    var s59 = (((kp2048) +% (s4 *% kp799)) -% (s24 *% kp4017)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp4017)) +% (s24 *% kp799)) >> 12u32
+    s24 = (((kp2048) -% (s7 *% kp4017)) -% (s25 *% kp799)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp799)) -% (s25 *% kp4017)) >> 12u32
+    s25 = (((kp2048) +% (s5 *% kp3406)) -% (s26 *% kp2276)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp2276)) +% (s26 *% kp3406)) >> 12u32
+    s26 = (((kp2048) -% (s6 *% kp2276)) -% (s27 *% kp3406)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp3406)) -% (s27 *% kp2276)) >> 12u32
+    s27 = vclp((s28 +% s29), lo, hi)
+    s28 = vclp((s28 -% s29), lo, hi)
+    s29 = vclp((s54 +% s16), lo, hi)
+    s16 = vclp((s54 -% s16), lo, hi)
+    s54 = vclp((s31 +% s30), lo, hi)
+    s30 = vclp((s31 -% s30), lo, hi)
+    s31 = vclp((s18 +% s17), lo, hi)
+    s17 = vclp((s18 -% s17), lo, hi)
+    s18 = vclp((s32 +% s33), lo, hi)
+    s32 = vclp((s32 -% s33), lo, hi)
+    s33 = vclp((s19 +% s20), lo, hi)
+    s19 = vclp((s19 -% s20), lo, hi)
+    s20 = vclp((s35 +% s34), lo, hi)
+    s34 = vclp((s35 -% s34), lo, hi)
+    s35 = vclp((s22 +% s21), lo, hi)
+    s21 = vclp((s22 -% s21), lo, hi)
+    s22 = vclp((s36 +% s37), lo, hi)
+    s36 = vclp((s36 -% s37), lo, hi)
+    s37 = vclp((s12 +% s11), lo, hi)
+    s11 = vclp((s12 -% s11), lo, hi)
+    s12 = vclp((s39 +% s38), lo, hi)
+    s38 = vclp((s39 -% s38), lo, hi)
+    s39 = vclp((s10 +% s13), lo, hi)
+    s10 = vclp((s10 -% s13), lo, hi)
+    s13 = vclp((s40 +% s41), lo, hi)
+    s40 = vclp((s40 -% s41), lo, hi)
+    s41 = vclp((s14 +% s9), lo, hi)
+    s9 = vclp((s14 -% s9), lo, hi)
+    s14 = vclp((s43 +% s42), lo, hi)
+    s42 = vclp((s43 -% s42), lo, hi)
+    s43 = vclp((s8 +% s15), lo, hi)
+    s8 = vclp((s8 -% s15), lo, hi)
+    s15 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    s0 = ((kp2048) +% (s0 *% kp2896)) >> 12u32
+    var s60 = vclp(s23, lo, hi)
+    s23 = vclp(s23, lo, hi)
+    var s61 = vclp(s1, lo, hi)
+    s1 = vclp(s1, lo, hi)
+    var s62 = (((kp2048) +% (s2 *% kp1567)) -% (s44 *% kp3784)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp3784)) +% (s44 *% kp1567)) >> 12u32
+    s44 = (((kp2048) -% (s3 *% kp3784)) -% (s45 *% kp1567)) >> 12u32
+    s3 = (((kp2048) +% (s3 *% kp1567)) -% (s45 *% kp3784)) >> 12u32
+    s45 = vclp((s46 +% s47), lo, hi)
+    s46 = vclp((s46 -% s47), lo, hi)
+    s47 = vclp((s59 +% s24), lo, hi)
+    s24 = vclp((s59 -% s24), lo, hi)
+    s59 = vclp((s49 +% s48), lo, hi)
+    s48 = vclp((s49 -% s48), lo, hi)
+    s49 = vclp((s26 +% s25), lo, hi)
+    s25 = vclp((s26 -% s25), lo, hi)
+    s26 = vclp((s50 +% s51), lo, hi)
+    s50 = vclp((s50 -% s51), lo, hi)
+    s51 = vclp((s6 +% s5), lo, hi)
+    s5 = vclp((s6 -% s5), lo, hi)
+    s6 = vclp((s53 +% s52), lo, hi)
+    s52 = vclp((s53 -% s52), lo, hi)
+    s53 = vclp((s4 +% s7), lo, hi)
+    s4 = vclp((s4 -% s7), lo, hi)
+    s7 = (((kp2048) +% (s8 *% kp799)) -% (s16 *% kp4017)) >> 12u32
+    s8 = (((kp2048) +% (s8 *% kp4017)) +% (s16 *% kp799)) >> 12u32
+    s16 = (((kp2048) +% (s42 *% kp799)) -% (s28 *% kp4017)) >> 12u32
+    s28 = (((kp2048) +% (s42 *% kp4017)) +% (s28 *% kp799)) >> 12u32
+    s42 = (((kp2048) -% (s40 *% kp4017)) -% (s30 *% kp799)) >> 12u32
+    s30 = (((kp2048) +% (s40 *% kp799)) -% (s30 *% kp4017)) >> 12u32
+    s40 = (((kp2048) -% (s9 *% kp4017)) -% (s17 *% kp799)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp799)) -% (s17 *% kp4017)) >> 12u32
+    s17 = (((kp2048) +% (s10 *% kp3406)) -% (s19 *% kp2276)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp2276)) +% (s19 *% kp3406)) >> 12u32
+    s19 = (((kp2048) +% (s38 *% kp3406)) -% (s32 *% kp2276)) >> 12u32
+    s32 = (((kp2048) +% (s38 *% kp2276)) +% (s32 *% kp3406)) >> 12u32
+    s38 = (((kp2048) -% (s36 *% kp2276)) -% (s34 *% kp3406)) >> 12u32
+    s34 = (((kp2048) +% (s36 *% kp3406)) -% (s34 *% kp2276)) >> 12u32
+    s36 = (((kp2048) -% (s11 *% kp2276)) -% (s21 *% kp3406)) >> 12u32
+    s11 = (((kp2048) +% (s11 *% kp3406)) -% (s21 *% kp2276)) >> 12u32
+    s21 = vclp(s0, lo, hi)
+    s0 = vclp(s0, lo, hi)
+    var s63 = vclp(s15, lo, hi)
+    s15 = vclp(s15, lo, hi)
+    var s64 = (((kp2048) +% (s1 *% kp2896)) -% (s23 *% kp2896)) >> 12u32
+    s1 = (((kp2048) +% (s1 *% kp2896)) +% (s23 *% kp2896)) >> 12u32
+    s23 = vclp((s55 +% s56), lo, hi)
+    s55 = vclp((s55 -% s56), lo, hi)
+    s56 = vclp((s62 +% s44), lo, hi)
+    s44 = vclp((s62 -% s44), lo, hi)
+    s62 = vclp((s58 +% s57), lo, hi)
+    s57 = vclp((s58 -% s57), lo, hi)
+    s58 = vclp((s2 +% s3), lo, hi)
+    s2 = vclp((s2 -% s3), lo, hi)
+    s3 = (((kp2048) +% (s4 *% kp1567)) -% (s24 *% kp3784)) >> 12u32
+    s4 = (((kp2048) +% (s4 *% kp3784)) +% (s24 *% kp1567)) >> 12u32
+    s24 = (((kp2048) +% (s52 *% kp1567)) -% (s46 *% kp3784)) >> 12u32
+    s46 = (((kp2048) +% (s52 *% kp3784)) +% (s46 *% kp1567)) >> 12u32
+    s52 = (((kp2048) -% (s50 *% kp3784)) -% (s48 *% kp1567)) >> 12u32
+    s48 = (((kp2048) +% (s50 *% kp1567)) -% (s48 *% kp3784)) >> 12u32
+    s50 = (((kp2048) -% (s5 *% kp3784)) -% (s25 *% kp1567)) >> 12u32
+    s5 = (((kp2048) +% (s5 *% kp1567)) -% (s25 *% kp3784)) >> 12u32
+    s25 = vclp((s27 +% s54), lo, hi)
+    s27 = vclp((s27 -% s54), lo, hi)
+    s54 = vclp((s29 +% s31), lo, hi)
+    s29 = vclp((s29 -% s31), lo, hi)
+    s31 = vclp((s7 +% s40), lo, hi)
+    s7 = vclp((s7 -% s40), lo, hi)
+    s40 = vclp((s16 +% s42), lo, hi)
+    s16 = vclp((s16 -% s42), lo, hi)
+    s42 = vclp((s20 +% s18), lo, hi)
+    s18 = vclp((s20 -% s18), lo, hi)
+    s20 = vclp((s35 +% s33), lo, hi)
+    s33 = vclp((s35 -% s33), lo, hi)
+    s35 = vclp((s36 +% s17), lo, hi)
+    s17 = vclp((s36 -% s17), lo, hi)
+    s36 = vclp((s38 +% s19), lo, hi)
+    s19 = vclp((s38 -% s19), lo, hi)
+    s38 = vclp((s22 +% s12), lo, hi)
+    s12 = vclp((s22 -% s12), lo, hi)
+    s22 = vclp((s37 +% s39), lo, hi)
+    s37 = vclp((s37 -% s39), lo, hi)
+    s39 = vclp((s11 +% s10), lo, hi)
+    s10 = vclp((s11 -% s10), lo, hi)
+    s11 = vclp((s34 +% s32), lo, hi)
+    s32 = vclp((s34 -% s32), lo, hi)
+    s34 = vclp((s14 +% s13), lo, hi)
+    s13 = vclp((s14 -% s13), lo, hi)
+    s14 = vclp((s43 +% s41), lo, hi)
+    s41 = vclp((s43 -% s41), lo, hi)
+    s43 = vclp((s8 +% s9), lo, hi)
+    s8 = vclp((s8 -% s9), lo, hi)
+    s9 = vclp((s28 +% s30), lo, hi)
+    s28 = vclp((s28 -% s30), lo, hi)
+    s30 = vclp((s21 +% s61), lo, hi)
+    s21 = vclp((s21 -% s61), lo, hi)
+    s61 = vclp((s63 +% s1), lo, hi)
+    s1 = vclp((s63 -% s1), lo, hi)
+    s63 = vclp((s15 +% s64), lo, hi)
+    s15 = vclp((s15 -% s64), lo, hi)
+    s64 = vclp((s0 +% s60), lo, hi)
+    s0 = vclp((s0 -% s60), lo, hi)
+    s60 = (((kp2048) +% (s2 *% kp2896)) -% (s44 *% kp2896)) >> 12u32
+    s2 = (((kp2048) +% (s2 *% kp2896)) +% (s44 *% kp2896)) >> 12u32
+    s44 = (((kp2048) +% (s57 *% kp2896)) -% (s55 *% kp2896)) >> 12u32
+    s55 = (((kp2048) +% (s57 *% kp2896)) +% (s55 *% kp2896)) >> 12u32
+    s57 = vclp((s45 +% s59), lo, hi)
+    s45 = vclp((s45 -% s59), lo, hi)
+    s59 = vclp((s47 +% s49), lo, hi)
+    s47 = vclp((s47 -% s49), lo, hi)
+    s49 = vclp((s3 +% s50), lo, hi)
+    s3 = vclp((s3 -% s50), lo, hi)
+    s50 = vclp((s24 +% s52), lo, hi)
+    s24 = vclp((s24 -% s52), lo, hi)
+    s52 = vclp((s6 +% s26), lo, hi)
+    s6 = vclp((s6 -% s26), lo, hi)
+    s26 = vclp((s53 +% s51), lo, hi)
+    s51 = vclp((s53 -% s51), lo, hi)
+    s53 = vclp((s4 +% s5), lo, hi)
+    s4 = vclp((s4 -% s5), lo, hi)
+    s5 = vclp((s46 +% s48), lo, hi)
+    s46 = vclp((s46 -% s48), lo, hi)
+    s48 = (((kp2048) +% (s28 *% kp1567)) -% (s16 *% kp3784)) >> 12u32
+    s16 = (((kp2048) +% (s28 *% kp3784)) +% (s16 *% kp1567)) >> 12u32
+    s28 = (((kp2048) +% (s8 *% kp1567)) -% (s7 *% kp3784)) >> 12u32
+    s7 = (((kp2048) +% (s8 *% kp3784)) +% (s7 *% kp1567)) >> 12u32
+    s8 = (((kp2048) +% (s41 *% kp1567)) -% (s29 *% kp3784)) >> 12u32
+    s29 = (((kp2048) +% (s41 *% kp3784)) +% (s29 *% kp1567)) >> 12u32
+    s41 = (((kp2048) +% (s13 *% kp1567)) -% (s27 *% kp3784)) >> 12u32
+    s13 = (((kp2048) +% (s13 *% kp3784)) +% (s27 *% kp1567)) >> 12u32
+    s27 = (((kp2048) -% (s12 *% kp3784)) -% (s18 *% kp1567)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp1567)) -% (s18 *% kp3784)) >> 12u32
+    s18 = (((kp2048) -% (s37 *% kp3784)) -% (s33 *% kp1567)) >> 12u32
+    s33 = (((kp2048) +% (s37 *% kp1567)) -% (s33 *% kp3784)) >> 12u32
+    s37 = (((kp2048) -% (s10 *% kp3784)) -% (s17 *% kp1567)) >> 12u32
+    s10 = (((kp2048) +% (s10 *% kp1567)) -% (s17 *% kp3784)) >> 12u32
+    s17 = (((kp2048) -% (s32 *% kp3784)) -% (s19 *% kp1567)) >> 12u32
+    s19 = (((kp2048) +% (s32 *% kp1567)) -% (s19 *% kp3784)) >> 12u32
+    s32 = vclp((s30 +% s62), lo, hi)
+    s30 = vclp((s30 -% s62), lo, hi)
+    s62 = vclp((s61 +% s58), lo, hi)
+    s58 = vclp((s61 -% s58), lo, hi)
+    s61 = vclp((s63 +% s2), lo, hi)
+    s2 = vclp((s63 -% s2), lo, hi)
+    s63 = vclp((s64 +% s55), lo, hi)
+    s55 = vclp((s64 -% s55), lo, hi)
+    s64 = vclp((s0 +% s44), lo, hi)
+    s0 = vclp((s0 -% s44), lo, hi)
+    s44 = vclp((s15 +% s60), lo, hi)
+    s15 = vclp((s15 -% s60), lo, hi)
+    s60 = vclp((s1 +% s56), lo, hi)
+    s1 = vclp((s1 -% s56), lo, hi)
+    s56 = vclp((s21 +% s23), lo, hi)
+    s21 = vclp((s21 -% s23), lo, hi)
+    s23 = (((kp2048) +% (s46 *% kp2896)) -% (s24 *% kp2896)) >> 12u32
+    s24 = (((kp2048) +% (s46 *% kp2896)) +% (s24 *% kp2896)) >> 12u32
+    s46 = (((kp2048) +% (s4 *% kp2896)) -% (s3 *% kp2896)) >> 12u32
+    s3 = (((kp2048) +% (s4 *% kp2896)) +% (s3 *% kp2896)) >> 12u32
+    s4 = (((kp2048) +% (s51 *% kp2896)) -% (s47 *% kp2896)) >> 12u32
+    s47 = (((kp2048) +% (s51 *% kp2896)) +% (s47 *% kp2896)) >> 12u32
+    s51 = (((kp2048) +% (s6 *% kp2896)) -% (s45 *% kp2896)) >> 12u32
+    s6 = (((kp2048) +% (s6 *% kp2896)) +% (s45 *% kp2896)) >> 12u32
+    s45 = vclp((s25 +% s42), lo, hi)
+    s25 = vclp((s25 -% s42), lo, hi)
+    s42 = vclp((s34 +% s38), lo, hi)
+    s34 = vclp((s34 -% s38), lo, hi)
+    s38 = vclp((s54 +% s20), lo, hi)
+    s20 = vclp((s54 -% s20), lo, hi)
+    s54 = vclp((s14 +% s22), lo, hi)
+    s14 = vclp((s14 -% s22), lo, hi)
+    s22 = vclp((s31 +% s35), lo, hi)
+    s31 = vclp((s31 -% s35), lo, hi)
+    s35 = vclp((s43 +% s39), lo, hi)
+    s39 = vclp((s43 -% s39), lo, hi)
+    s43 = vclp((s40 +% s36), lo, hi)
+    s36 = vclp((s40 -% s36), lo, hi)
+    s40 = vclp((s9 +% s11), lo, hi)
+    s9 = vclp((s9 -% s11), lo, hi)
+    s11 = vclp((s48 +% s17), lo, hi)
+    s17 = vclp((s48 -% s17), lo, hi)
+    s48 = vclp((s16 +% s19), lo, hi)
+    s16 = vclp((s16 -% s19), lo, hi)
+    s19 = vclp((s28 +% s37), lo, hi)
+    s28 = vclp((s28 -% s37), lo, hi)
+    s37 = vclp((s7 +% s10), lo, hi)
+    s7 = vclp((s7 -% s10), lo, hi)
+    s10 = vclp((s8 +% s18), lo, hi)
+    s8 = vclp((s8 -% s18), lo, hi)
+    s18 = vclp((s29 +% s33), lo, hi)
+    s29 = vclp((s29 -% s33), lo, hi)
+    s33 = vclp((s41 +% s27), lo, hi)
+    s27 = vclp((s41 -% s27), lo, hi)
+    s41 = vclp((s13 +% s12), lo, hi)
+    s12 = vclp((s13 -% s12), lo, hi)
+    s13 = vclp((s32 +% s52), lo, hi)
+    s32 = vclp((s32 -% s52), lo, hi)
+    s52 = vclp((s62 +% s26), lo, hi)
+    s26 = vclp((s62 -% s26), lo, hi)
+    s62 = vclp((s61 +% s53), lo, hi)
+    s53 = vclp((s61 -% s53), lo, hi)
+    s61 = vclp((s63 +% s5), lo, hi)
+    s5 = vclp((s63 -% s5), lo, hi)
+    s63 = vclp((s64 +% s24), lo, hi)
+    s24 = vclp((s64 -% s24), lo, hi)
+    s64 = vclp((s44 +% s3), lo, hi)
+    s3 = vclp((s44 -% s3), lo, hi)
+    s44 = vclp((s60 +% s47), lo, hi)
+    s47 = vclp((s60 -% s47), lo, hi)
+    s60 = vclp((s56 +% s6), lo, hi)
+    s6 = vclp((s56 -% s6), lo, hi)
+    s56 = vclp((s21 +% s51), lo, hi)
+    s21 = vclp((s21 -% s51), lo, hi)
+    s51 = vclp((s1 +% s4), lo, hi)
+    s1 = vclp((s1 -% s4), lo, hi)
+    s4 = vclp((s15 +% s46), lo, hi)
+    s15 = vclp((s15 -% s46), lo, hi)
+    s46 = vclp((s0 +% s23), lo, hi)
+    s0 = vclp((s0 -% s23), lo, hi)
+    s23 = vclp((s55 +% s50), lo, hi)
+    s50 = vclp((s55 -% s50), lo, hi)
+    s55 = vclp((s2 +% s49), lo, hi)
+    s2 = vclp((s2 -% s49), lo, hi)
+    s49 = vclp((s58 +% s59), lo, hi)
+    s58 = vclp((s58 -% s59), lo, hi)
+    s59 = vclp((s30 +% s57), lo, hi)
+    s30 = vclp((s30 -% s57), lo, hi)
+    s57 = (((kp2048) +% (s12 *% kp2896)) -% (s27 *% kp2896)) >> 12u32
+    s12 = (((kp2048) +% (s12 *% kp2896)) +% (s27 *% kp2896)) >> 12u32
+    s27 = (((kp2048) +% (s29 *% kp2896)) -% (s8 *% kp2896)) >> 12u32
+    s8 = (((kp2048) +% (s29 *% kp2896)) +% (s8 *% kp2896)) >> 12u32
+    s29 = (((kp2048) +% (s7 *% kp2896)) -% (s28 *% kp2896)) >> 12u32
+    s7 = (((kp2048) +% (s7 *% kp2896)) +% (s28 *% kp2896)) >> 12u32
+    s28 = (((kp2048) +% (s16 *% kp2896)) -% (s17 *% kp2896)) >> 12u32
+    s16 = (((kp2048) +% (s16 *% kp2896)) +% (s17 *% kp2896)) >> 12u32
+    s17 = (((kp2048) +% (s9 *% kp2896)) -% (s36 *% kp2896)) >> 12u32
+    s9 = (((kp2048) +% (s9 *% kp2896)) +% (s36 *% kp2896)) >> 12u32
+    s36 = (((kp2048) +% (s39 *% kp2896)) -% (s31 *% kp2896)) >> 12u32
+    s31 = (((kp2048) +% (s39 *% kp2896)) +% (s31 *% kp2896)) >> 12u32
+    s39 = (((kp2048) +% (s14 *% kp2896)) -% (s20 *% kp2896)) >> 12u32
+    s14 = (((kp2048) +% (s14 *% kp2896)) +% (s20 *% kp2896)) >> 12u32
+    s20 = (((kp2048) +% (s34 *% kp2896)) -% (s25 *% kp2896)) >> 12u32
+    s25 = (((kp2048) +% (s34 *% kp2896)) +% (s25 *% kp2896)) >> 12u32
+    vst(t, off + 0usize * st, (vclp((s13 +% s42), lo, hi)))
+    vst(t, off + 1usize * st, (vclp((s52 +% s54), lo, hi)))
+    vst(t, off + 2usize * st, (vclp((s62 +% s35), lo, hi)))
+    vst(t, off + 3usize * st, (vclp((s61 +% s40), lo, hi)))
+    vst(t, off + 4usize * st, (vclp((s63 +% s48), lo, hi)))
+    vst(t, off + 5usize * st, (vclp((s64 +% s37), lo, hi)))
+    vst(t, off + 6usize * st, (vclp((s44 +% s18), lo, hi)))
+    vst(t, off + 7usize * st, (vclp((s60 +% s41), lo, hi)))
+    vst(t, off + 8usize * st, (vclp((s56 +% s12), lo, hi)))
+    vst(t, off + 9usize * st, (vclp((s51 +% s8), lo, hi)))
+    vst(t, off + 10usize * st, (vclp((s4 +% s7), lo, hi)))
+    vst(t, off + 11usize * st, (vclp((s46 +% s16), lo, hi)))
+    vst(t, off + 12usize * st, (vclp((s23 +% s9), lo, hi)))
+    vst(t, off + 13usize * st, (vclp((s55 +% s31), lo, hi)))
+    vst(t, off + 14usize * st, (vclp((s49 +% s14), lo, hi)))
+    vst(t, off + 15usize * st, (vclp((s59 +% s25), lo, hi)))
+    vst(t, off + 16usize * st, (vclp((s30 +% s20), lo, hi)))
+    vst(t, off + 17usize * st, (vclp((s58 +% s39), lo, hi)))
+    vst(t, off + 18usize * st, (vclp((s2 +% s36), lo, hi)))
+    vst(t, off + 19usize * st, (vclp((s50 +% s17), lo, hi)))
+    vst(t, off + 20usize * st, (vclp((s0 +% s28), lo, hi)))
+    vst(t, off + 21usize * st, (vclp((s15 +% s29), lo, hi)))
+    vst(t, off + 22usize * st, (vclp((s1 +% s27), lo, hi)))
+    vst(t, off + 23usize * st, (vclp((s21 +% s57), lo, hi)))
+    vst(t, off + 24usize * st, (vclp((s6 +% s33), lo, hi)))
+    vst(t, off + 25usize * st, (vclp((s47 +% s10), lo, hi)))
+    vst(t, off + 26usize * st, (vclp((s3 +% s19), lo, hi)))
+    vst(t, off + 27usize * st, (vclp((s24 +% s11), lo, hi)))
+    vst(t, off + 28usize * st, (vclp((s5 +% s43), lo, hi)))
+    vst(t, off + 29usize * st, (vclp((s53 +% s22), lo, hi)))
+    vst(t, off + 30usize * st, (vclp((s26 +% s38), lo, hi)))
+    vst(t, off + 31usize * st, (vclp((s32 +% s45), lo, hi)))
+    vst(t, off + 32usize * st, (vclp((s32 -% s45), lo, hi)))
+    vst(t, off + 33usize * st, (vclp((s26 -% s38), lo, hi)))
+    vst(t, off + 34usize * st, (vclp((s53 -% s22), lo, hi)))
+    vst(t, off + 35usize * st, (vclp((s5 -% s43), lo, hi)))
+    vst(t, off + 36usize * st, (vclp((s24 -% s11), lo, hi)))
+    vst(t, off + 37usize * st, (vclp((s3 -% s19), lo, hi)))
+    vst(t, off + 38usize * st, (vclp((s47 -% s10), lo, hi)))
+    vst(t, off + 39usize * st, (vclp((s6 -% s33), lo, hi)))
+    vst(t, off + 40usize * st, (vclp((s21 -% s57), lo, hi)))
+    vst(t, off + 41usize * st, (vclp((s1 -% s27), lo, hi)))
+    vst(t, off + 42usize * st, (vclp((s15 -% s29), lo, hi)))
+    vst(t, off + 43usize * st, (vclp((s0 -% s28), lo, hi)))
+    vst(t, off + 44usize * st, (vclp((s50 -% s17), lo, hi)))
+    vst(t, off + 45usize * st, (vclp((s2 -% s36), lo, hi)))
+    vst(t, off + 46usize * st, (vclp((s58 -% s39), lo, hi)))
+    vst(t, off + 47usize * st, (vclp((s30 -% s20), lo, hi)))
+    vst(t, off + 48usize * st, (vclp((s59 -% s25), lo, hi)))
+    vst(t, off + 49usize * st, (vclp((s49 -% s14), lo, hi)))
+    vst(t, off + 50usize * st, (vclp((s55 -% s31), lo, hi)))
+    vst(t, off + 51usize * st, (vclp((s23 -% s9), lo, hi)))
+    vst(t, off + 52usize * st, (vclp((s46 -% s16), lo, hi)))
+    vst(t, off + 53usize * st, (vclp((s4 -% s7), lo, hi)))
+    vst(t, off + 54usize * st, (vclp((s51 -% s8), lo, hi)))
+    vst(t, off + 55usize * st, (vclp((s56 -% s12), lo, hi)))
+    vst(t, off + 56usize * st, (vclp((s60 -% s41), lo, hi)))
+    vst(t, off + 57usize * st, (vclp((s44 -% s18), lo, hi)))
+    vst(t, off + 58usize * st, (vclp((s64 -% s37), lo, hi)))
+    vst(t, off + 59usize * st, (vclp((s63 -% s48), lo, hi)))
+    vst(t, off + 60usize * st, (vclp((s61 -% s40), lo, hi)))
+    vst(t, off + 61usize * st, (vclp((s62 -% s35), lo, hi)))
+    vst(t, off + 62usize * st, (vclp((s52 -% s54), lo, hi)))
+    vst(t, off + 63usize * st, (vclp((s13 -% s42), lo, hi)))
+    }
+}
+
+
+fn vld(t: []i32, o: usize) -> Vec[i32, 4] { ret simd.load[Vec[i32, 4]](t, o) }
+fn vst(t: []i32, o: usize, v: Vec[i32, 4]) { simd.store[Vec[i32, 4]](t, o, v) }
+fn vsp(c: i32) -> Vec[i32, 4] { ret simd.splat[Vec[i32, 4]](c) }
+fn vclp(x: Vec[i32, 4], lo: Vec[i32, 4], hi: Vec[i32, 4]) -> Vec[i32, 4] { ret simd.min[Vec[i32, 4]](simd.max[Vec[i32, 4]](x, lo), hi) }
+
+// ---- vector (SSE, 4 lanes of i32) path for 8-bit streams ----------------------------------------------------
+// The 1D transforms below run 4 independent transforms at once: element k of lane l is t[off + k * st + l].
+// The spec arithmetic is unchanged; for 8-bit input every intermediate is clamped or bounded to 16 bits
+// (times 2^12 constants, sums of two products) so it fits i32.
+
+fn viadst4(t: []i32, off: usize, st: usize) {
+    @nocheck {
+    let k1321 = simd.splat[Vec[i32, 4]](1321i32)
+    let k3803 = simd.splat[Vec[i32, 4]](3803i32)
+    let k2482 = simd.splat[Vec[i32, 4]](2482i32)
+    let k3344 = simd.splat[Vec[i32, 4]](3344i32)
+    let rnd = simd.splat[Vec[i32, 4]](2048i32)
+    let t0 = simd.load[Vec[i32, 4]](t, off)
+    let t1 = simd.load[Vec[i32, 4]](t, off + st)
+    let t2 = simd.load[Vec[i32, 4]](t, off + 2usize * st)
+    let t3 = simd.load[Vec[i32, 4]](t, off + 3usize * st)
+    let s0 = (t0 *% k1321) +% (t2 *% k3803) +% (t3 *% k2482)
+    let s1 = (t0 *% k2482) -% (t2 *% k1321) -% (t3 *% k3803)
+    let s2 = (t0 -% t2 +% t3) *% k3344
+    let s3 = t1 *% k3344
+    simd.store[Vec[i32, 4]](t, off, (s0 +% s3 +% rnd) >> 12u32)
+    simd.store[Vec[i32, 4]](t, off + st, (s1 +% s3 +% rnd) >> 12u32)
+    simd.store[Vec[i32, 4]](t, off + 2usize * st, (s2 +% rnd) >> 12u32)
+    simd.store[Vec[i32, 4]](t, off + 3usize * st, (s0 +% s1 -% s3 +% rnd) >> 12u32)
+    }
+}
+
+fn viidentity(t: []i32, off: usize, st: usize, n: i32) {
     @nocheck {
     let n0 = usize(1i32 << u32(n))
+    let rnd = simd.splat[Vec[i32, 4]](2048i32)
+    let k5793 = simd.splat[Vec[i32, 4]](5793i32)
+    let k11586 = simd.splat[Vec[i32, 4]](11586i32)
     var k = 0usize
     var p = off
     while k < n0 {
-        let v = i64(t[p])
-        if n == 2i32 { t[p] = i32((v * 5793i64 + 2048i64) >> 12u32) } else if n == 3i32 { t[p] = i32(v * 2i64) } else if n == 4i32 { t[p] = i32((v * 11586i64 + 2048i64) >> 12u32) } else { t[p] = i32(v * 4i64) }
+        let v = simd.load[Vec[i32, 4]](t, p)
+        if n == 2i32 { simd.store[Vec[i32, 4]](t, p, ((v *% k5793) +% rnd) >> 12u32) } else if n == 3i32 { simd.store[Vec[i32, 4]](t, p, v +% v) } else if n == 4i32 { simd.store[Vec[i32, 4]](t, p, ((v *% k11586) +% rnd) >> 12u32) } else { simd.store[Vec[i32, 4]](t, p, v << 2u32) }
         p += st
         k += 1usize
     }
     }
 }
 
-fn transform_nd(t: []i32, off: usize, st: usize, kind: u8, n: i32, r: u32) {
-    let guard = t[off + ((1usize << u32(n)) - 1usize) * st]
-    if kind == 0u8 { idct_nd(t, off, st, n, r) } else if kind == 1u8 {
-        if n == 2i32 { iadst4_nd(t, off, st) } else if n == 3i32 { fadst8(t, off, st, r) } else { fadst16(t, off, st, r) }
-    } else { iidentity_nd(t, off, st, n) }
+// The number of leading inputs a DCT of 2^n points reads when at most kin of them are non-zero.
+fn kbound(kin: usize, n: i32) -> usize {
+    let n0 = usize(1i32 << u32(n))
+    if n0 > 4usize && kin <= 4usize { ret 4usize }
+    if n0 > 8usize && kin <= 8usize { ret 8usize }
+    if n0 > 16usize && kin <= 16usize { ret 16usize }
+    if n0 > 32usize { ret 32usize }
+    ret n0
 }
 
-fn finish_block(out: []i32, w: usize, h: usize, flip_ud: bool, flip_lr: bool) {
-    @nocheck {
-    var y = 0usize
-    var x = 0usize
-    if flip_ud {
-        while y < h / 2usize {
-            let y2 = h - 1usize - y
-            x = 0usize
-            while x < w {
-                var sx = x
-                if flip_lr { sx = w - 1usize - x }
-                let a = out[y * w + x]
-                let b = out[y2 * w + sx]
-                out[y * w + x] = (b + 8i32) >> 4u32
-                out[y2 * w + sx] = (a + 8i32) >> 4u32
-                x += 1usize
-            }
-            y += 1usize
-        }
-    } else if flip_lr {
-        while y < h {
-            x = 0usize
-            while x < w / 2usize {
-                let a = out[y * w + x]
-                let b = out[y * w + w - 1usize - x]
-                out[y * w + x] = (b + 8i32) >> 4u32
-                out[y * w + w - 1usize - x] = (a + 8i32) >> 4u32
-                x += 1usize
-            }
-            y += 1usize
-        }
+fn vdct(t: []i32, off: usize, st: usize, n: i32, kb: usize, r: u32) {
+    if n == 2i32 {
+        vidct4(t, off, st, r)
+    } else if n == 3i32 {
+        if kb == 4usize { vidct8_k4(t, off, st, r) } else { vidct8(t, off, st, r) }
+    } else if n == 4i32 {
+        if kb == 4usize { vidct16_k4(t, off, st, r) } else if kb == 8usize { vidct16_k8(t, off, st, r) } else { vidct16(t, off, st, r) }
+    } else if n == 5i32 {
+        if kb == 4usize { vidct32_k4(t, off, st, r) } else if kb == 8usize { vidct32_k8(t, off, st, r) } else if kb == 16usize { vidct32_k16(t, off, st, r) } else { vidct32(t, off, st, r) }
     } else {
-        let n = w * h
-        var k = 0usize
-        while k < n {
-            out[k] = (out[k] + 8i32) >> 4u32
-            k += 1usize
-        }
-    }
+        if kb == 4usize { vidct64_k4(t, off, st, r) } else if kb == 8usize { vidct64_k8(t, off, st, r) } else if kb == 16usize { vidct64_k16(t, off, st, r) } else { vidct64(t, off, st, r) }
     }
 }
 
-// eob_row_limit / eob_col_limit: quant is zero outside its first eob_row_limit rows and eob_col_limit columns
-// (the last non-zero row / column plus one); larger values are clamped to the 32x32 corner.
-fn reconstruct_eob(quant: []const i32, tx_size: usize, tx_type: usize, lossless: bool, bit_depth: u32, dc_q: i32, ac_q: i32, eob_row_limit: usize, eob_col_limit: usize, out: []i32) -> err {
-    if tx_size >= 19usize || tx_type >= 16usize { ret Invalid }
-    if lossless { ret reconstruct_generic(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, out) }
+// kb: the kbound of the inputs for a DCT (ignored by the other kinds)
+fn vtransform(t: []i32, off: usize, st: usize, kind: u8, n: i32, kb: usize, r: u32) {
+    let guard = t[off + ((1usize << u32(n)) - 1usize) * st + 3usize]
+    if kind == 0u8 {
+        vdct(t, off, st, n, kb, r)
+    } else if kind == 1u8 {
+        if n == 2i32 { viadst4(t, off, st) } else if n == 3i32 { vfadst8(t, off, st, r) } else { vfadst16(t, off, st, r) }
+    } else { viidentity(t, off, st, n) }
+}
+
+// out[o + l * stride + c] = lane l of the c-th argument
+fn tr_store(out: []i32, o: usize, stride: usize, a: Vec[i32, 4], b: Vec[i32, 4], c: Vec[i32, 4], d: Vec[i32, 4]) {
+    let t0 = simd.unpack_lo[Vec[i32, 4]](a, b)
+    let t1 = simd.unpack_lo[Vec[i32, 4]](c, d)
+    let t2 = simd.unpack_hi[Vec[i32, 4]](a, b)
+    let t3 = simd.unpack_hi[Vec[i32, 4]](c, d)
+    simd.store[Vec[i32, 4]](out, o, mem.bitcast[Vec[i32, 4]](simd.unpack_lo[Vec[i64, 2]](mem.bitcast[Vec[i64, 2]](t0), mem.bitcast[Vec[i64, 2]](t1))))
+    simd.store[Vec[i32, 4]](out, o + stride, mem.bitcast[Vec[i32, 4]](simd.unpack_hi[Vec[i64, 2]](mem.bitcast[Vec[i64, 2]](t0), mem.bitcast[Vec[i64, 2]](t1))))
+    simd.store[Vec[i32, 4]](out, o + 2usize * stride, mem.bitcast[Vec[i32, 4]](simd.unpack_lo[Vec[i64, 2]](mem.bitcast[Vec[i64, 2]](t2), mem.bitcast[Vec[i64, 2]](t3))))
+    simd.store[Vec[i32, 4]](out, o + 3usize * stride, mem.bitcast[Vec[i32, 4]](simd.unpack_hi[Vec[i64, 2]](mem.bitcast[Vec[i64, 2]](t2), mem.bitcast[Vec[i64, 2]](t3))))
+}
+
+fn row_post(x: Vec[i32, 4], rnd: Vec[i32, 4], sh: u32, lo: Vec[i32, 4], hi: Vec[i32, 4]) -> Vec[i32, 4] {
+    ret simd.min[Vec[i32, 4]](simd.max[Vec[i32, 4]](((x +% rnd) >> sh), lo), hi)
+}
+
+// The 2D process for 8-bit, lossy, valid arguments, rl / cl >= 1 already clamped. On return out holds the
+// column-pass output before the final rounding (Round2(x, 4)) and before the FLIPUD row reversal; the FLIPLR
+// reversal is already applied. rb: scratch of at least 4 * w entries.
+fn core_vec(quant: []const i32, tx_size: usize, tx_type: usize, dc_q: i32, ac_q: i32, rl: usize, cl: usize, out: []i32, rb: []i32) {
     let log2_w = i32(log2_w_tab()[tx_size])
     let log2_h = i32(log2_h_tab()[tx_size])
     let row_kind = row_kind_tab()[tx_type]
     let col_kind = col_kind_tab()[tx_type]
-    if !kind_ok(row_kind, log2_w) || !kind_ok(col_kind, log2_h) { ret Invalid }
+    let w = usize(1i32 << u32(log2_w))
+    let h = usize(1i32 << u32(log2_h))
+    var tw = w
+    if tw > 32usize { tw = 32usize }
+    var dq_shift = 0u32
+    if tx_size == 3usize || tx_size == 9usize || tx_size == 10usize || tx_size == 17usize || tx_size == 18usize { dq_shift = 1u32 } else if tx_size == 4usize || tx_size == 11usize || tx_size == 12usize { dq_shift = 2u32 }
+    let row_shift = u32(row_shift_tab()[tx_size])
+    var rect = false
+    if log2_w - log2_h == 1i32 || log2_h - log2_w == 1i32 { rect = true }
+    var flip_lr = false
+    if tx_type == 5usize || tx_type == 7usize || tx_type == 15usize || tx_type == 6usize { flip_lr = true }
+    let vhi = simd.splat[Vec[i32, 4]](32767i32)
+    let vlo = simd.splat[Vec[i32, 4]](0i32 - 32768i32)
+    var rnd_s = 0i32
+    if row_shift != 0u32 { rnd_s = 1i32 << (row_shift - 1u32) }
+    let vrnd = simd.splat[Vec[i32, 4]](rnd_s)
+    let vz = simd.splat[Vec[i32, 4]](0i32)
+    var zw = w
+    if zw > 32usize { zw = 32usize }
+    var rkb = zw
+    if row_kind == 0u8 { rkb = kbound(cl, log2_w) }
+    let groups = (rl + 3usize) / 4usize
+    var g = 0usize
+    while g < groups {
+        var j = 0usize
+        while j < rkb {
+            simd.store[Vec[i32, 4]](rb, j * 4usize, vz)
+            j += 1usize
+        }
+        var l = 0usize
+        while l < 4usize {
+            let i = g * 4usize + l
+            if i < rl {
+                j = 0usize
+                while j < cl {
+                    let qv = quant[i * tw + j]
+                    if qv != 0i32 {
+                        var q = ac_q
+                        if i == 0usize && j == 0usize { q = dc_q }
+                        let dq = i64(qv) * i64(q)
+                        var mag = dq
+                        if dq < 0i64 { mag = 0i64 - dq }
+                        mag = (mag & 16777215i64) >> dq_shift
+                        if dq < 0i64 { mag = 0i64 - mag }
+                        if mag < -32768i64 { mag = -32768i64 } else if mag > 32767i64 { mag = 32767i64 }
+                        var v = i32(mag)
+                        if rect { v = i32((i64(v) * 2896i64 + 2048i64) >> 12u32) }
+                        rb[j * 4usize + l] = v
+                    }
+                    j += 1usize
+                }
+            }
+            l += 1usize
+        }
+        if cl == 1usize && row_kind == 0u8 {
+            let f = ((simd.load[Vec[i32, 4]](rb, 0usize) *% simd.splat[Vec[i32, 4]](2896i32)) +% simd.splat[Vec[i32, 4]](2048i32)) >> 12u32
+            j = 0usize
+            while j < w {
+                simd.store[Vec[i32, 4]](rb, j * 4usize, f)
+                j += 1usize
+            }
+        } else {
+            vtransform(rb, 0usize, 4usize, row_kind, log2_w, rkb, 16u32)
+        }
+        let o = g * 4usize * w
+        var jb = 0usize
+        while jb < w {
+            let a = row_post(simd.load[Vec[i32, 4]](rb, jb * 4usize), vrnd, row_shift, vlo, vhi)
+            let b = row_post(simd.load[Vec[i32, 4]](rb, jb * 4usize + 4usize), vrnd, row_shift, vlo, vhi)
+            let c = row_post(simd.load[Vec[i32, 4]](rb, jb * 4usize + 8usize), vrnd, row_shift, vlo, vhi)
+            let d = row_post(simd.load[Vec[i32, 4]](rb, jb * 4usize + 12usize), vrnd, row_shift, vlo, vhi)
+            if flip_lr {
+                tr_store(out, o + w - 4usize - jb, w, d, c, b, a)
+            } else {
+                tr_store(out, o + jb, w, a, b, c, d)
+            }
+            jb += 4usize
+        }
+        g += 1usize
+    }
+    var zh = h
+    if col_kind == 0u8 { zh = kbound(groups * 4usize, log2_h) }
+    var i = groups * 4usize
+    while i < zh {
+        var jb = 0usize
+        while jb < w {
+            simd.store[Vec[i32, 4]](out, i * w + jb, vz)
+            jb += 4usize
+        }
+        i += 1usize
+    }
+    var jb = 0usize
+    if rl == 1usize && col_kind == 0u8 {
+        let k2896 = simd.splat[Vec[i32, 4]](2896i32)
+        let k2048 = simd.splat[Vec[i32, 4]](2048i32)
+        while jb < w {
+            let f = ((simd.load[Vec[i32, 4]](out, jb) *% k2896) +% k2048) >> 12u32
+            i = 0usize
+            while i < h {
+                simd.store[Vec[i32, 4]](out, i * w + jb, f)
+                i += 1usize
+            }
+            jb += 4usize
+        }
+    } else {
+        while jb < w {
+            vtransform(out, jb, w, col_kind, log2_h, zh, 16u32)
+            jb += 4usize
+        }
+    }
+}
+
+fn finish_vec(out: []i32, w: usize, h: usize, flip_ud: bool) {
+    let k8 = simd.splat[Vec[i32, 4]](8i32)
+    var i = 0usize
+    var x = 0usize
+    if flip_ud {
+        while i < h / 2usize {
+            let i2 = h - 1usize - i
+            x = 0usize
+            while x < w {
+                let a = simd.load[Vec[i32, 4]](out, i * w + x)
+                let b = simd.load[Vec[i32, 4]](out, i2 * w + x)
+                simd.store[Vec[i32, 4]](out, i * w + x, (b +% k8) >> 4u32)
+                simd.store[Vec[i32, 4]](out, i2 * w + x, (a +% k8) >> 4u32)
+                x += 4usize
+            }
+            i += 1usize
+        }
+    } else {
+        let n = w * h
+        while x < n {
+            simd.store[Vec[i32, 4]](out, x, (simd.load[Vec[i32, 4]](out, x) +% k8) >> 4u32)
+            x += 4usize
+        }
+    }
+}
+
+fn add16(dst: []u8, o: usize, r0: Vec[i32, 4], r1: Vec[i32, 4], r2: Vec[i32, 4], r3: Vec[i32, 4]) {
+    let z = simd.splat[Vec[u8, 16]](0u8)
+    let a = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](r0, r1)
+    let b = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](r2, r3)
+    let p = simd.load[Vec[u8, 16]](dst, o)
+    let lo = mem.bitcast[Vec[i16, 8]](simd.unpack_lo[Vec[u8, 16]](p, z))
+    let hi = mem.bitcast[Vec[i16, 8]](simd.unpack_hi[Vec[u8, 16]](p, z))
+    simd.store[Vec[u8, 16]](dst, o, simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), simd.adds[Vec[i16, 8]](hi, b)))
+}
+
+// 8 pixels at o; reads and rewrites the 8 bytes that follow (unchanged), so dst.len >= o + 16
+fn add8(dst: []u8, o: usize, r0: Vec[i32, 4], r1: Vec[i32, 4]) {
+    let z = simd.splat[Vec[u8, 16]](0u8)
+    let a = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](r0, r1)
+    let p = simd.load[Vec[u8, 16]](dst, o)
+    let lo = mem.bitcast[Vec[i16, 8]](simd.unpack_lo[Vec[u8, 16]](p, z))
+    let hi = mem.bitcast[Vec[i16, 8]](simd.unpack_hi[Vec[u8, 16]](p, z))
+    simd.store[Vec[u8, 16]](dst, o, simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), hi))
+}
+
+// 4 pixels at o; same window rule as add8
+fn add4(dst: []u8, o: usize, r0: Vec[i32, 4]) {
+    add8(dst, o, r0, simd.splat[Vec[i32, 4]](0i32))
+}
+
+fn add_scalar(dst: []u8, o: usize, n: usize, res: []const i32, ro: usize, round: bool) {
+    var x = 0usize
+    while x < n {
+        var r = res[ro + x]
+        if round { r = (r + 8i32) >> 4u32 }
+        var v = i32(dst[o + x]) + r
+        if v < 0i32 { v = 0i32 } else if v > 255i32 { v = 255i32 }
+        dst[o + x] = u8(v)
+        x += 1usize
+    }
+}
+
+fn add_block(out: []const i32, w: usize, h: usize, flip_ud: bool, dst: []u8, stride: usize, x0: usize, y0: usize) {
+    let k8 = simd.splat[Vec[i32, 4]](8i32)
+    var i = 0usize
+    while i < h {
+        var s = i
+        if flip_ud { s = h - 1usize - i }
+        let o = (y0 + i) * stride + x0
+        let ro = s * w
+        if w >= 16usize {
+            var x = 0usize
+            while x < w {
+                add16(dst, o + x, (simd.load[Vec[i32, 4]](out, ro + x) +% k8) >> 4u32, (simd.load[Vec[i32, 4]](out, ro + x + 4usize) +% k8) >> 4u32, (simd.load[Vec[i32, 4]](out, ro + x + 8usize) +% k8) >> 4u32, (simd.load[Vec[i32, 4]](out, ro + x + 12usize) +% k8) >> 4u32)
+                x += 16usize
+            }
+        } else if o + 16usize <= dst.len {
+            if w == 8usize {
+                add8(dst, o, (simd.load[Vec[i32, 4]](out, ro) +% k8) >> 4u32, (simd.load[Vec[i32, 4]](out, ro + 4usize) +% k8) >> 4u32)
+            } else {
+                add4(dst, o, (simd.load[Vec[i32, 4]](out, ro) +% k8) >> 4u32)
+            }
+        } else {
+            add_scalar(dst, o, w, out, ro, true)
+        }
+        i += 1usize
+    }
+}
+
+fn add_const(c: i32, w: usize, h: usize, dst: []u8, stride: usize, x0: usize, y0: usize) {
+    let r = simd.splat[Vec[i32, 4]](c)
+    var i = 0usize
+    while i < h {
+        let o = (y0 + i) * stride + x0
+        if w >= 16usize {
+            var x = 0usize
+            while x < w {
+                add16(dst, o + x, r, r, r, r)
+                x += 16usize
+            }
+        } else if o + 16usize <= dst.len {
+            if w == 8usize { add8(dst, o, r, r) } else { add4(dst, o, r) }
+        } else {
+            var x = 0usize
+            while x < w {
+                var v = i32(dst[o + x]) + c
+                if v < 0i32 { v = 0i32 } else if v > 255i32 { v = 255i32 }
+                dst[o + x] = u8(v)
+                x += 1usize
+            }
+        }
+        i += 1usize
+    }
+}
+
+fn is_flip_ud(tx_type: usize) -> bool {
+    ret tx_type == 4usize || tx_type == 8usize || tx_type == 14usize || tx_type == 6usize
+}
+
+// Both 1D transforms DCT and only Quant[0] non-zero: the residual is one constant (final rounding included).
+fn dc_only_value(q0: i32, tx_size: usize, dc_q: i32) -> i32 {
+    var dq_shift = 0u32
+    if tx_size == 3usize || tx_size == 9usize || tx_size == 10usize || tx_size == 17usize || tx_size == 18usize { dq_shift = 1u32 } else if tx_size == 4usize || tx_size == 11usize || tx_size == 12usize { dq_shift = 2u32 }
+    let log2_w = i32(log2_w_tab()[tx_size])
+    let log2_h = i32(log2_h_tab()[tx_size])
+    var v = 0i64
+    if q0 != 0i32 {
+        let dq = i64(q0) * i64(dc_q)
+        var mag = dq
+        if dq < 0i64 { mag = 0i64 - dq }
+        mag = (mag & 16777215i64) >> dq_shift
+        if dq < 0i64 { mag = 0i64 - mag }
+        if mag < -32768i64 { mag = -32768i64 } else if mag > 32767i64 { mag = 32767i64 }
+        v = mag
+        if log2_w - log2_h == 1i32 || log2_h - log2_w == 1i32 { v = (v * 2896i64 + 2048i64) >> 12u32 }
+    }
+    var f = (v * 2896i64 + 2048i64) >> 12u32
+    let row_shift = u32(row_shift_tab()[tx_size])
+    if row_shift != 0u32 { f = (f + (1i64 << (row_shift - 1u32))) >> row_shift }
+    if f < -32768i64 { f = -32768i64 } else if f > 32767i64 { f = 32767i64 }
+    f = (f * 2896i64 + 2048i64) >> 12u32
+    ret i32((f + 8i64) >> 4u32)
+}
+
+fn reconstruct_eob(quant: []const i32, tx_size: usize, tx_type: usize, lossless: bool, bit_depth: u32, dc_q: i32, ac_q: i32, eob_row_limit: usize, eob_col_limit: usize, out: []i32) -> err {
+    if tx_size >= 19usize || tx_type >= 16usize { ret Invalid }
+    if lossless || bit_depth != 8u32 { ret reconstruct_generic(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, out) }
+    let log2_w = i32(log2_w_tab()[tx_size])
+    let log2_h = i32(log2_h_tab()[tx_size])
+    if !kind_ok(row_kind_tab()[tx_type], log2_w) || !kind_ok(col_kind_tab()[tx_type], log2_h) { ret Invalid }
     let w = usize(1i32 << u32(log2_w))
     let h = usize(1i32 << u32(log2_h))
     var tw = w
@@ -3557,106 +4477,62 @@ fn reconstruct_eob(quant: []const i32, tx_size: usize, tx_type: usize, lossless:
     var cl = eob_col_limit
     if cl > tw { cl = tw }
     var i = 0usize
-    var j = 0usize
-    let total = w * h
     if rl == 0usize || cl == 0usize {
-        while i < total {
-            out[i] = 0i32
+        let vz = simd.splat[Vec[i32, 4]](0i32)
+        while i < w * h {
+            simd.store[Vec[i32, 4]](out, i, vz)
+            i += 4usize
+        }
+        ret ok
+    }
+    var rb: [256]i32 = zero
+    core_vec(quant, tx_size, tx_type, dc_q, ac_q, rl, cl, out, rb[..])
+    finish_vec(out, w, h, is_flip_ud(tx_type))
+    ret ok
+}
+
+//   reconstruct_add(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, eob_row_limit, eob_col_limit,
+//                   dst, dst_stride, dst_x, dst_y, scratch) -> err
+//     reconstruct_eob followed by adding the residual to the 8-bit plane dst (row stride dst_stride) at
+//     (dst_x, dst_y), clamping to 0..255. bit_depth must be 8 (else Invalid). The whole w * h block must lie
+//     inside dst ((dst_y + h - 1) * dst_stride + dst_x + w <= dst.len). scratch needs w * h + 4 * w entries
+//     (4352 always suffice); its contents on return are unspecified.
+fn reconstruct_add(quant: []const i32, tx_size: usize, tx_type: usize, lossless: bool, bit_depth: u32, dc_q: i32, ac_q: i32, eob_row_limit: usize, eob_col_limit: usize, dst: []u8, dst_stride: usize, dst_x: usize, dst_y: usize, scratch: []i32) -> err {
+    if bit_depth != 8u32 || tx_size >= 19usize || tx_type >= 16usize { ret Invalid }
+    let log2_w = i32(log2_w_tab()[tx_size])
+    let log2_h = i32(log2_h_tab()[tx_size])
+    let w = usize(1i32 << u32(log2_w))
+    let h = usize(1i32 << u32(log2_h))
+    if (dst_y + h - 1usize) * dst_stride + dst_x + w > dst.len || dst_x + w > dst_stride { ret Invalid }
+    if lossless {
+        if scratch.len < w * h { ret Invalid }
+        try reconstruct_generic(quant, tx_size, tx_type, lossless, bit_depth, dc_q, ac_q, scratch)
+        var i = 0usize
+        while i < h {
+            add_scalar(dst, (dst_y + i) * dst_stride + dst_x, w, scratch, i * w, false)
             i += 1usize
         }
         ret ok
     }
-    var dq_shift = 0u32
-    if tx_size == 3usize || tx_size == 9usize || tx_size == 10usize || tx_size == 17usize || tx_size == 18usize { dq_shift = 1u32 } else if tx_size == 4usize || tx_size == 11usize || tx_size == 12usize { dq_shift = 2u32 }
-    let lim_hi = (1i64 << (7u32 + bit_depth)) - 1i64
-    let lim_lo = 0i64 - (1i64 << (7u32 + bit_depth))
-    let row_shift = u32(row_shift_tab()[tx_size])
-    let row_clamp = bit_depth + 8u32
-    var col_clamp = bit_depth + 6u32
-    if col_clamp < 16u32 { col_clamp = 16u32 }
-    let col_hi = (1i64 << (col_clamp - 1u32)) - 1i64
-    let col_lo = 0i64 - (1i64 << (col_clamp - 1u32))
-    var rect = false
-    if log2_w - log2_h == 1i32 || log2_h - log2_w == 1i32 { rect = true }
-    i = rl * w
-    while i < total {
-        out[i] = 0i32
-        i += 1usize
+    let row_kind = row_kind_tab()[tx_type]
+    let col_kind = col_kind_tab()[tx_type]
+    if !kind_ok(row_kind, log2_w) || !kind_ok(col_kind, log2_h) { ret Invalid }
+    var tw = w
+    if tw > 32usize { tw = 32usize }
+    var th = h
+    if th > 32usize { th = 32usize }
+    if quant.len < tw * th || scratch.len < w * h + 4usize * w { ret Invalid }
+    var rl = eob_row_limit
+    if rl > th { rl = th }
+    var cl = eob_col_limit
+    if cl > tw { cl = tw }
+    if rl == 0usize || cl == 0usize { ret ok }
+    if rl == 1usize && cl == 1usize && row_kind == 0u8 && col_kind == 0u8 {
+        add_const(dc_only_value(quant[0usize], tx_size, dc_q), w, h, dst, dst_stride, dst_x, dst_y)
+        ret ok
     }
-    i = 0usize
-    @nocheck {
-    while i < rl {
-        let base = i * w
-        var nz = false
-        j = 0usize
-        while j < cl {
-            var v = 0i32
-            let qv = quant[i * tw + j]
-            if qv != 0i32 {
-                var q = ac_q
-                if i == 0usize && j == 0usize { q = dc_q }
-                let dq = i64(qv) * i64(q)
-                var mag = dq
-                if dq < 0i64 { mag = 0i64 - dq }
-                mag = (mag & 16777215i64) >> dq_shift
-                if dq < 0i64 { mag = 0i64 - mag }
-                if mag < lim_lo { mag = lim_lo } else if mag > lim_hi { mag = lim_hi }
-                v = i32(mag)
-                if rect { v = i32((i64(v) * 2896i64 + 2048i64) >> 12u32) }
-                if v != 0i32 { nz = true }
-            }
-            out[base + j] = v
-            j += 1usize
-        }
-        while j < w {
-            out[base + j] = 0i32
-            j += 1usize
-        }
-        if nz {
-            if cl == 1usize && row_kind == 0u8 {
-                var f = (i64(out[base]) * 2896i64 + 2048i64) >> 12u32
-                if row_shift != 0u32 { f = (f + (1i64 << (row_shift - 1u32))) >> row_shift }
-                if f < col_lo { f = col_lo } else if f > col_hi { f = col_hi }
-                let fv = i32(f)
-                j = 0usize
-                while j < w {
-                    out[base + j] = fv
-                    j += 1usize
-                }
-            } else {
-                transform_nd(out, base, 1usize, row_kind, log2_w, row_clamp)
-                j = 0usize
-                while j < w {
-                    var s = i64(out[base + j])
-                    if row_shift != 0u32 { s = (s + (1i64 << (row_shift - 1u32))) >> row_shift }
-                    if s < col_lo { s = col_lo } else if s > col_hi { s = col_hi }
-                    out[base + j] = i32(s)
-                    j += 1usize
-                }
-            }
-        }
-        i += 1usize
-    }
-    j = 0usize
-    while j < w {
-        if rl == 1usize && col_kind == 0u8 {
-            let f = i32((i64(out[j]) * 2896i64 + 2048i64) >> 12u32)
-            i = 0usize
-            while i < h {
-                out[i * w + j] = f
-                i += 1usize
-            }
-        } else {
-            transform_nd(out, j, w, col_kind, log2_h, col_clamp)
-        }
-        j += 1usize
-    }
-    }
-    var flip_ud = false
-    var flip_lr = false
-    if tx_type == 4usize || tx_type == 8usize || tx_type == 14usize || tx_type == 6usize { flip_ud = true }
-    if tx_type == 5usize || tx_type == 7usize || tx_type == 15usize || tx_type == 6usize { flip_lr = true }
-    finish_block(out, w, h, flip_ud, flip_lr)
+    core_vec(quant, tx_size, tx_type, dc_q, ac_q, rl, cl, scratch[0usize..w * h], scratch[w * h..])
+    add_block(scratch[0usize..w * h], w, h, is_flip_ud(tx_type), dst, dst_stride, dst_x, dst_y)
     ret ok
 }
 

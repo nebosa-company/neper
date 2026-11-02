@@ -66,7 +66,7 @@ fn fill_neighbors(d: *D.Dec, plane: usize, sx: i32, sy: i32) {
     }
 }
 
-fn interintra_region(d: *D.Dec, plane: usize, g: IN.Geom, m0: IN.Motion, dst: []u16, stride: usize, sx: i32, sy: i32) -> err {
+fn interintra_region(d: *D.Dec, plane: usize, g: IN.Geom, m0: IN.Motion, dst: []u8, stride: usize, sx: i32, sy: i32) -> err {
     let b = &d.b
     var mode = D.DC_PRED
     if b.interintra_mode == 1usize { mode = D.V_PRED }
@@ -129,7 +129,7 @@ fn pred_ref(d: *D.Dec, g: IN.Geom, m: IN.Motion, ref_frame: i32, out: []i32, r0:
     ret IN.block_pred(d.iwk, m, g, g.x, g.y, g.w, g.h, r0, r1, out)
 }
 
-fn warp_region(d: *D.Dec, g: IN.Geom, m0: IN.Motion, m1: IN.Motion, ref0: i32, ref1: i32, compound: bool, dst: []u16, stride: usize) -> err {
+fn warp_region(d: *D.Dec, g: IN.Geom, m0: IN.Motion, m1: IN.Motion, ref0: i32, ref1: i32, compound: bool, dst: []u8, stride: usize) -> err {
     let (r0, r1) = IN.rounds(compound, g.bit_depth)
     let post = 14u32 - (r0 + r1)
     let maxv = (1i32 << g.bit_depth) - 1i32
@@ -142,7 +142,7 @@ fn warp_region(d: *D.Dec, g: IN.Geom, m0: IN.Motion, m1: IN.Motion, ref0: i32, r
             let k = usize(i * g.w + j)
             var v = d.iwk.p0[k]
             if compound { v = IN.round2(v + d.iwk.p1[k], 1u32 + post) }
-            dst[usize(i) * stride + usize(j)] = u16(D.clip3(0i32, maxv, v))
+            dst[usize(i) * stride + usize(j)] = u8(D.clip3(0i32, maxv, v))
             j += 1i32
         }
         i += 1i32

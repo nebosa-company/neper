@@ -5,7 +5,7 @@
 // find_warp_samples reads the same MI arrays as av1_mvp.find_mv_stack (`av1_mvp.Frame`, `av1_mvp.Block`, entry
 // (r, c) at r * mi_cols + c, ref_frames / mvs with their list and component interleaving, UNWRITTEN = -2 in list 0
 // of a position not decoded yet). Block.ref0 is RefFrame[0]; the candidate must have the same ref_frames[0] and
-// no second reference. Planes are `[]u16` with a stride, as in av1_inter (`av1_inter.Ref` holds LUMA sizes).
+// no second reference. Planes are `[]const u8` with a stride, as in av1_inter (`av1_inter.Ref` holds LUMA sizes).
 //
 //   find_warp_samples(f, b, avail_u, avail_l, mv_row, mv_col, cand_list) -> (NumSamples, err)
 //        cand_list holds CandList[i][j] at i * 4 + j (j: 0 srcY, 1 srcX, 2 dstY, 3 dstX, 1/8 luma sample), at least
@@ -331,6 +331,7 @@ fn warp_8(rf: av1_inter.Ref, params: []const i32, sh: Shear, sub_x: u32, sub_y: 
     let sy4 = i32(y4 & 65535i64)
     let t = warped_filters()
     var inter: [120]i32 = zero
+    let interior = ix4 >= 7i32 && ix4 + 7i32 <= last_x
     var i1 = -7i32
     while i1 < 8i32 {
         let row = usize(clip3(0i32, last_y, iy4 + i1)) * rf.stride
@@ -339,11 +340,16 @@ fn warp_8(rf: av1_inter.Ref, params: []const i32, sh: Shear, sub_x: u32, sub_y: 
             let sx = sx4 + sh.alpha * i2 + sh.beta * i1
             let offs = usize(round2(sx, 10u32) + 64i32) * 8usize
             var s = 0i32
-            var i3 = 0i32
-            while i3 < 8i32 {
-                let px = clip3(0i32, last_x, ix4 + i2 - 3i32 + i3)
-                s += (i32(t[offs + usize(i3)]) - 128i32) * i32(rf.data[row + usize(px)])
-                i3 += 1i32
+            if interior {
+                let p = row + usize(ix4 + i2 - 3i32)
+                s = (i32(t[offs]) - 128i32) * i32(rf.data[p]) + (i32(t[offs + 1usize]) - 128i32) * i32(rf.data[p + 1usize]) + (i32(t[offs + 2usize]) - 128i32) * i32(rf.data[p + 2usize]) + (i32(t[offs + 3usize]) - 128i32) * i32(rf.data[p + 3usize]) + (i32(t[offs + 4usize]) - 128i32) * i32(rf.data[p + 4usize]) + (i32(t[offs + 5usize]) - 128i32) * i32(rf.data[p + 5usize]) + (i32(t[offs + 6usize]) - 128i32) * i32(rf.data[p + 6usize]) + (i32(t[offs + 7usize]) - 128i32) * i32(rf.data[p + 7usize])
+            } else {
+                var i3 = 0i32
+                while i3 < 8i32 {
+                    let px = clip3(0i32, last_x, ix4 + i2 - 3i32 + i3)
+                    s += (i32(t[offs + usize(i3)]) - 128i32) * i32(rf.data[row + usize(px)])
+                    i3 += 1i32
+                }
             }
             inter[usize((i1 + 7i32) * 8i32 + i2 + 4i32)] = round2(s, round0)
             i2 += 1i32
@@ -358,12 +364,8 @@ fn warp_8(rf: av1_inter.Ref, params: []const i32, sh: Shear, sub_x: u32, sub_y: 
         while i2 < lim2 {
             let sy = sy4 + sh.gamma * i2 + sh.delta * i1
             let offs = usize(round2(sy, 10u32) + 64i32) * 8usize
-            var s = 0i32
-            var i3 = 0i32
-            while i3 < 8i32 {
-                s += (i32(t[offs + usize(i3)]) - 128i32) * inter[usize((i1 + i3 + 4i32) * 8i32 + i2 + 4i32)]
-                i3 += 1i32
-            }
+            let c = usize((i1 + 4i32) * 8i32 + i2 + 4i32)
+            let s = (i32(t[offs]) - 128i32) * inter[c] + (i32(t[offs + 1usize]) - 128i32) * inter[c + 8usize] + (i32(t[offs + 2usize]) - 128i32) * inter[c + 16usize] + (i32(t[offs + 3usize]) - 128i32) * inter[c + 24usize] + (i32(t[offs + 4usize]) - 128i32) * inter[c + 32usize] + (i32(t[offs + 5usize]) - 128i32) * inter[c + 40usize] + (i32(t[offs + 6usize]) - 128i32) * inter[c + 48usize] + (i32(t[offs + 7usize]) - 128i32) * inter[c + 56usize]
             out[usize(bi * 8i32 + i1 + 4i32) * usize(w) + usize(bj * 8i32 + i2 + 4i32)] = round2(s, round1)
             i2 += 1i32
         }

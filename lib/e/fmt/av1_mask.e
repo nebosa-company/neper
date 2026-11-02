@@ -24,7 +24,12 @@
 //
 // Block sizes are the BLOCK_* enum values (BLOCK_8X8 = 3 ... BLOCK_64X16 = 21).
 
+// Pixel planes (`dst`) are `[]u8` and only 8-bit video is supported: diffwtd_mask, blend_interintra and blend_compound
+// return Invalid for bit_depth != 8. Masks are 0..64. blend_compound needs p0 and p1 within the signed 16 bit range
+// (true for block_pred output at 8 bits); blend_interintra takes any pred.
+
 use e.mem
+use e.simd
 
 error Invalid
 
@@ -205,17 +210,54 @@ fn wedge_mask(m: *Masks, bsize: i32, wedge_sign: i32, wedge_index: i32) -> ([]co
     ret (m.data[at..at + n], ok)
 }
 
+type Pair = struct { lo: Vec[i16, 8], hi: Vec[i16, 8] }
+
+fn widen(v: Vec[u8, 16]) -> Pair {
+    let z = simd.splat[Vec[u8, 16]](0u8)
+    ret Pair { lo: mem.bitcast[Vec[i16, 8]](simd.unpack_lo[Vec[u8, 16]](v, z)), hi: mem.bitcast[Vec[i16, 8]](simd.unpack_hi[Vec[u8, 16]](v, z)) }
+}
+
+fn pack16(lo: Vec[i16, 8], hi: Vec[i16, 8]) -> Vec[u8, 16] {
+    ret simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](lo, hi)
+}
+
+fn round_bias(n: u32) -> i32 {
+    if n == 0u32 { ret 0i32 }
+    ret 1i32 << (n - 1u32)
+}
+
+fn dw4(p0: []const i32, p1: []const i32, at: usize, rnd: Vec[i32, 4], post: u32, top: Vec[i32, 4], flip: bool) -> Vec[i32, 4] {
+    let a = simd.load[Vec[i32, 4]](p0, at)
+    let b = simd.load[Vec[i32, 4]](p1, at)
+    let d = (simd.max[Vec[i32, 4]](a -% b, b -% a) +% rnd) >> post
+    let m = simd.min[Vec[i32, 4]]((d >> 4u32) +% simd.splat[Vec[i32, 4]](38i32), top)
+    if flip { ret top -% m }
+    ret m
+}
+
 fn diffwtd_mask(p0: []const i32, p1: []const i32, w: i32, h: i32, mask_type: i32, bit_depth: u32, post: u32, out: []u8) -> err {
+    if bit_depth != 8u32 { ret Invalid }
     if w < 1i32 || h < 1i32 { ret Invalid }
     let n = usize(w) * usize(h)
     if p0.len < n || p1.len < n || out.len < n { ret Invalid }
+    let rnd = simd.splat[Vec[i32, 4]](round_bias(post))
+    let top = simd.splat[Vec[i32, 4]](64i32)
+    let flip = mask_type != 0i32
     var k = 0usize
+    while k + 16usize <= n {
+        let m0 = dw4(p0, p1, k, rnd, post, top, flip)
+        let m1 = dw4(p0, p1, k + 4usize, rnd, post, top, flip)
+        let m2 = dw4(p0, p1, k + 8usize, rnd, post, top, flip)
+        let m3 = dw4(p0, p1, k + 12usize, rnd, post, top, flip)
+        simd.store[Vec[u8, 16]](out, k, pack16(simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](m0, m1), simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](m2, m3)))
+        k += 16usize
+    }
     while k < n {
         var diff = p0[k] - p1[k]
         if diff < 0i32 { diff = 0i32 - diff }
-        diff = round2(diff, (bit_depth - 8u32) + post)
+        diff = round2(diff, post)
         let m = clip3(0i32, 64i32, 38i32 + diff / 16i32)
-        if mask_type != 0i32 {
+        if flip {
             out[k] = u8(64i32 - m)
         } else {
             out[k] = u8(m)
@@ -274,42 +316,222 @@ fn mask_fits(mask: []const u8, ms: usize, w: i32, h: i32, sub_x: u32, sub_y: u32
     ret ms >= cols && mask.len >= (rows - 1usize) * ms + cols
 }
 
-fn blend_interintra(dst: []u16, dst_stride: usize, pred: []const i32, mask: []const u8, mask_stride: usize, w: i32, h: i32, sub_x: u32, sub_y: u32, wedge: bool, bit_depth: u32, post: u32) -> err {
+// 0: mask sample as is, 1: horizontal pair average, 2: 2x2 average
+fn mask_mode(sub_x: u32, sub_y: u32, direct: bool) -> u32 {
+    if (sub_x == 0u32 && sub_y == 0u32) || direct { ret 0u32 }
+    if sub_x != 0u32 && sub_y == 0u32 { ret 1u32 }
+    ret 2u32
+}
+
+// 8 averaged mask samples (mode 1 or 2) for output columns x .. x + 8 of output row y, in 16 bit lanes
+fn mask8(mask: []const u8, ms: usize, y: usize, x: usize, mode: u32) -> Vec[i16, 8] {
+    let ff = simd.splat[Vec[i16, 8]](255i16)
+    if mode == 1u32 {
+        let a = mem.bitcast[Vec[i16, 8]](simd.load[Vec[u8, 16]](mask, y * ms + 2usize * x))
+        ret ((a & ff) +% ((a >> 8u32) & ff) +% simd.splat[Vec[i16, 8]](1i16)) >> 1u32
+    }
+    let r0 = 2usize * y * ms + 2usize * x
+    let a = mem.bitcast[Vec[i16, 8]](simd.load[Vec[u8, 16]](mask, r0))
+    let b = mem.bitcast[Vec[i16, 8]](simd.load[Vec[u8, 16]](mask, r0 + ms))
+    ret ((a & ff) +% ((a >> 8u32) & ff) +% (b & ff) +% ((b >> 8u32) & ff) +% simd.splat[Vec[i16, 8]](2i16)) >> 2u32
+}
+
+fn mask16(mask: []const u8, ms: usize, y: usize, x: usize, mode: u32) -> Vec[u8, 16] {
+    if mode == 0u32 { ret simd.load[Vec[u8, 16]](mask, y * ms + x) }
+    ret pack16(mask8(mask, ms, y, x, mode), mask8(mask, ms, y, x + 8usize, mode))
+}
+
+// pred rounded by post and clipped to a pixel, 16 samples
+fn pred16(pred: []const i32, at: usize, rnd: i32, post: u32) -> Vec[u8, 16] {
+    let r = simd.splat[Vec[i32, 4]](rnd)
+    let a0 = (simd.load[Vec[i32, 4]](pred, at) +% r) >> post
+    let a1 = (simd.load[Vec[i32, 4]](pred, at + 4usize) +% r) >> post
+    let a2 = (simd.load[Vec[i32, 4]](pred, at + 8usize) +% r) >> post
+    let a3 = (simd.load[Vec[i32, 4]](pred, at + 12usize) +% r) >> post
+    ret pack16(simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](a0, a1), simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](a2, a3))
+}
+
+// Round2(m * d + (64 - m) * p, 6) on 16 pixels; the sum is at most 64 * 255, so it fits 16 bit lanes
+fn ii_kernel(d: Vec[u8, 16], p: Vec[u8, 16], m: Vec[u8, 16]) -> Vec[u8, 16] {
+    let dw = widen(d)
+    let pw = widen(p)
+    let mw = widen(m)
+    let c64 = simd.splat[Vec[i16, 8]](64i16)
+    let c32 = simd.splat[Vec[i16, 8]](32i16)
+    let lo = (mw.lo *% dw.lo +% (c64 -% mw.lo) *% pw.lo +% c32) >> 6u32
+    let hi = (mw.hi *% dw.hi +% (c64 -% mw.hi) *% pw.hi +% c32) >> 6u32
+    ret pack16(lo, hi)
+}
+
+fn cp4(a: Vec[i16, 8], b: Vec[i16, 8], rnd: Vec[i32, 4], sh: u32) -> Vec[i32, 4] {
+    ret (simd.madd_i16[Vec[i16, 8]](a, b) +% rnd) >> sh
+}
+
+// Round2(m * p0 + (64 - m) * p1, 6 + post) clipped to a pixel, 16 samples; p0 and p1 must fit 16 bit signed
+fn cp_kernel(p0: []const i32, p1: []const i32, at: usize, m: Vec[u8, 16], rnd: i32, sh: u32) -> Vec[u8, 16] {
+    let mw = widen(m)
+    let c64 = simd.splat[Vec[i16, 8]](64i16)
+    let nlo = c64 -% mw.lo
+    let nhi = c64 -% mw.hi
+    let r = simd.splat[Vec[i32, 4]](rnd)
+    let a0 = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](simd.load[Vec[i32, 4]](p0, at), simd.load[Vec[i32, 4]](p0, at + 4usize))
+    let a1 = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](simd.load[Vec[i32, 4]](p0, at + 8usize), simd.load[Vec[i32, 4]](p0, at + 12usize))
+    let b0 = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](simd.load[Vec[i32, 4]](p1, at), simd.load[Vec[i32, 4]](p1, at + 4usize))
+    let b1 = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](simd.load[Vec[i32, 4]](p1, at + 8usize), simd.load[Vec[i32, 4]](p1, at + 12usize))
+    let s0 = cp4(simd.unpack_lo[Vec[i16, 8]](a0, b0), simd.unpack_lo[Vec[i16, 8]](mw.lo, nlo), r, sh)
+    let s1 = cp4(simd.unpack_hi[Vec[i16, 8]](a0, b0), simd.unpack_hi[Vec[i16, 8]](mw.lo, nlo), r, sh)
+    let s2 = cp4(simd.unpack_lo[Vec[i16, 8]](a1, b1), simd.unpack_lo[Vec[i16, 8]](mw.hi, nhi), r, sh)
+    let s3 = cp4(simd.unpack_hi[Vec[i16, 8]](a1, b1), simd.unpack_hi[Vec[i16, 8]](mw.hi, nhi), r, sh)
+    ret pack16(simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](s0, s1), simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](s2, s3))
+}
+
+// copy a 4 or 8 byte row
+fn copy_narrow(dst: []u8, d: usize, src: []const u8, s: usize, w: usize) {
+    if w == 8usize {
+        *mem.cast[*u64](&dst[d]) = *mem.cast[*u64](&src[s])
+    } else {
+        *mem.cast[*u32](&dst[d]) = *mem.cast[*u32](&src[s])
+    }
+}
+
+// row y of the effective (luma resolution reduced) mask, w samples, into mrow at off
+fn mask_row(mrow: []u8, off: usize, mask: []const u8, ms: usize, y: usize, w: usize, sub_x: u32, sub_y: u32, direct: bool, mode: u32) {
+    if mode == 0u32 {
+        copy_narrow(mrow, off, mask, y * ms, w)
+        ret
+    }
+    var need = y * ms + 16usize
+    if mode == 2u32 { need = (2usize * y + 1usize) * ms + 16usize }
+    if need <= mask.len && mrow.len >= off + 16usize {
+        let v = mask8(mask, ms, y, 0usize, mode)
+        simd.store[Vec[u8, 16]](mrow, off, pack16(v, v))
+        ret
+    }
+    var x = 0usize
+    while x < w {
+        mrow[off + x] = u8(mask_value(mask, ms, x, y, sub_x, sub_y, direct))
+        x += 1usize
+    }
+}
+
+fn ii_scalar(dst: []u8, dst_stride: usize, pred: []const i32, mask: []const u8, ms: usize, w: usize, y: usize, x0: usize, sub_x: u32, sub_y: u32, direct: bool, post: u32) {
+    var x = x0
+    while x < w {
+        let m = mask_value(mask, ms, x, y, sub_x, sub_y, direct)
+        let p0 = clip3(0i32, 255i32, round2(pred[y * w + x], post))
+        let at = y * dst_stride + x
+        dst[at] = u8(round2(m * i32(dst[at]) + (64i32 - m) * p0, 6u32))
+        x += 1usize
+    }
+}
+
+fn blend_interintra(dst: []u8, dst_stride: usize, pred: []const i32, mask: []const u8, mask_stride: usize, w: i32, h: i32, sub_x: u32, sub_y: u32, wedge: bool, bit_depth: u32, post: u32) -> err {
+    if bit_depth != 8u32 { ret Invalid }
     if w < 1i32 || h < 1i32 { ret Invalid }
     let direct = !wedge
     if pred.len < usize(w) * usize(h) || dst_stride < usize(w) || dst.len < (usize(h) - 1usize) * dst_stride + usize(w) { ret Invalid }
     if !mask_fits(mask, mask_stride, w, h, sub_x, sub_y, direct) { ret Invalid }
-    let maxv = (1i32 << bit_depth) - 1i32
+    let mode = mask_mode(sub_x, sub_y, direct)
+    let wu = usize(w)
+    let hu = usize(h)
+    let rnd = round_bias(post)
     var y = 0usize
-    while y < usize(h) {
-        var x = 0usize
-        while x < usize(w) {
-            let m = mask_value(mask, mask_stride, x, y, sub_x, sub_y, direct)
-            let p0 = clip3(0i32, maxv, round2(pred[y * usize(w) + x], post))
-            let at = y * dst_stride + x
-            dst[at] = u16(round2(m * i32(dst[at]) + (64i32 - m) * p0, 6u32))
-            x += 1usize
+    if wu >= 16usize {
+        while y < hu {
+            var x = 0usize
+            while x + 16usize <= wu {
+                let at = y * dst_stride + x
+                simd.store[Vec[u8, 16]](dst, at, ii_kernel(simd.load[Vec[u8, 16]](dst, at), pred16(pred, y * wu + x, rnd, post), mask16(mask, mask_stride, y, x, mode)))
+                x += 16usize
+            }
+            ii_scalar(dst, dst_stride, pred, mask, mask_stride, wu, y, x, sub_x, sub_y, direct, post)
+            y += 1usize
         }
+        ret ok
+    }
+    if wu == 8usize || wu == 4usize {
+        let g = 16usize / wu
+        var mrow: [32]u8 = zero
+        var dsc: [16]u8 = zero
+        while y + g <= hu {
+            var k = 0usize
+            while k < g {
+                mask_row(mrow[..], k * wu, mask, mask_stride, y + k, wu, sub_x, sub_y, direct, mode)
+                copy_narrow(dsc[..], k * wu, dst, (y + k) * dst_stride, wu)
+                k += 1usize
+            }
+            let r = ii_kernel(simd.load[Vec[u8, 16]](dsc[..], 0usize), pred16(pred, y * wu, rnd, post), simd.load[Vec[u8, 16]](mrow[..], 0usize))
+            simd.store[Vec[u8, 16]](dsc[..], 0usize, r)
+            k = 0usize
+            while k < g {
+                copy_narrow(dst, (y + k) * dst_stride, dsc[..], k * wu, wu)
+                k += 1usize
+            }
+            y += g
+        }
+    }
+    while y < hu {
+        ii_scalar(dst, dst_stride, pred, mask, mask_stride, wu, y, 0usize, sub_x, sub_y, direct, post)
         y += 1usize
     }
     ret ok
 }
 
-fn blend_compound(dst: []u16, dst_stride: usize, p0: []const i32, p1: []const i32, mask: []const u8, mask_stride: usize, w: i32, h: i32, sub_x: u32, sub_y: u32, bit_depth: u32, post: u32) -> err {
+fn cp_scalar(dst: []u8, dst_stride: usize, p0: []const i32, p1: []const i32, mask: []const u8, ms: usize, w: usize, y: usize, x0: usize, sub_x: u32, sub_y: u32, post: u32) {
+    var x = x0
+    while x < w {
+        let m = mask_value(mask, ms, x, y, sub_x, sub_y, false)
+        let k = y * w + x
+        dst[y * dst_stride + x] = u8(clip3(0i32, 255i32, round2(m * p0[k] + (64i32 - m) * p1[k], 6u32 + post)))
+        x += 1usize
+    }
+}
+
+fn blend_compound(dst: []u8, dst_stride: usize, p0: []const i32, p1: []const i32, mask: []const u8, mask_stride: usize, w: i32, h: i32, sub_x: u32, sub_y: u32, bit_depth: u32, post: u32) -> err {
+    if bit_depth != 8u32 { ret Invalid }
     if w < 1i32 || h < 1i32 { ret Invalid }
     let n = usize(w) * usize(h)
     if p0.len < n || p1.len < n || dst_stride < usize(w) || dst.len < (usize(h) - 1usize) * dst_stride + usize(w) { ret Invalid }
     if !mask_fits(mask, mask_stride, w, h, sub_x, sub_y, false) { ret Invalid }
-    let maxv = (1i32 << bit_depth) - 1i32
+    let mode = mask_mode(sub_x, sub_y, false)
+    let wu = usize(w)
+    let hu = usize(h)
+    let sh = 6u32 + post
+    let rnd = round_bias(sh)
     var y = 0usize
-    while y < usize(h) {
-        var x = 0usize
-        while x < usize(w) {
-            let m = mask_value(mask, mask_stride, x, y, sub_x, sub_y, false)
-            let k = y * usize(w) + x
-            dst[y * dst_stride + x] = u16(clip3(0i32, maxv, round2(m * p0[k] + (64i32 - m) * p1[k], 6u32 + post)))
-            x += 1usize
+    if wu >= 16usize {
+        while y < hu {
+            var x = 0usize
+            while x + 16usize <= wu {
+                simd.store[Vec[u8, 16]](dst, y * dst_stride + x, cp_kernel(p0, p1, y * wu + x, mask16(mask, mask_stride, y, x, mode), rnd, sh))
+                x += 16usize
+            }
+            cp_scalar(dst, dst_stride, p0, p1, mask, mask_stride, wu, y, x, sub_x, sub_y, post)
+            y += 1usize
         }
+        ret ok
+    }
+    if wu == 8usize || wu == 4usize {
+        let g = 16usize / wu
+        var mrow: [32]u8 = zero
+        var dsc: [16]u8 = zero
+        while y + g <= hu {
+            var k = 0usize
+            while k < g {
+                mask_row(mrow[..], k * wu, mask, mask_stride, y + k, wu, sub_x, sub_y, false, mode)
+                k += 1usize
+            }
+            simd.store[Vec[u8, 16]](dsc[..], 0usize, cp_kernel(p0, p1, y * wu, simd.load[Vec[u8, 16]](mrow[..], 0usize), rnd, sh))
+            k = 0usize
+            while k < g {
+                copy_narrow(dst, (y + k) * dst_stride, dsc[..], k * wu, wu)
+                k += 1usize
+            }
+            y += g
+        }
+    }
+    while y < hu {
+        cp_scalar(dst, dst_stride, p0, p1, mask, mask_stride, wu, y, 0usize, sub_x, sub_y, post)
         y += 1usize
     }
     ret ok

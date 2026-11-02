@@ -113,25 +113,25 @@ type CdefJob = struct {
     dst: av1_cdef.Planes,
     from: usize,
     to: usize,
+    result: err,
 }
 
 fn cdef_work(job: *CdefJob) {
-    av1_cdef.cdef_rows(job.p, job.idx, job.skips, job.src, job.dst, job.from, job.to)
+    job.result = av1_cdef.cdef_rows(job.p, job.idx, job.skips, job.src, job.dst, job.from, job.to)
 }
 
 fn cdef_threads(a: *mem.Arena, p: av1_cdef.CdefParams, idx: []const i8, skips: []const u8, src: av1_cdef.Planes, dst: av1_cdef.Planes, sb_rows: usize, workers: usize) -> err {
     var n = workers
     if n > sb_rows { n = sb_rows }
     if n < 2usize {
-        av1_cdef.cdef_rows(p, idx, skips, src, dst, 0usize, sb_rows)
-        ret ok
+        ret av1_cdef.cdef_rows(p, idx, skips, src, dst, 0usize, sb_rows)
     }
     let mark = mem.mark(a)
     let (jobs, jobs_error) = mem.alloc[CdefJob](a, n)
     if jobs_error != ok { ret jobs_error }
     var i = 0usize
     while i < n {
-        jobs[i] = CdefJob { p: p, idx: idx, skips: skips, src: src, dst: dst, from: i * sb_rows / n, to: (i + 1usize) * sb_rows / n }
+        jobs[i] = CdefJob { p: p, idx: idx, skips: skips, src: src, dst: dst, from: i * sb_rows / n, to: (i + 1usize) * sb_rows / n, result: ok }
         i += 1usize
     }
     let (group, group_error) = thread.spawn_all[CdefJob](a, cdef_work, jobs, 1048576usize)
@@ -140,8 +140,14 @@ fn cdef_threads(a: *mem.Arena, p: av1_cdef.CdefParams, idx: []const i8, skips: [
         ret group_error
     }
     let joined = thread.join_all(group)
+    var result = joined
+    i = 0usize
+    while i < n {
+        if jobs[i].result != ok { result = jobs[i].result }
+        i += 1usize
+    }
     mem.reset(a, mark)
-    ret joined
+    ret result
 }
 
 type LrJob = struct {
@@ -150,9 +156,9 @@ type LrJob = struct {
     sub_y: u32,
     w: u32,
     h: u32,
-    pre: []const u16,
-    cdef: []const u16,
-    out: []u16,
+    pre: []const u8,
+    cdef: []const u8,
+    out: []u8,
     stride: usize,
     unit: u32,
     units: []const av1_lr.LrUnit,
@@ -167,7 +173,7 @@ fn lr_work(job: *LrJob) {
     job.result = av1_lr.restore_rows(&arena, job.bit_depth, job.sub_x, job.sub_y, job.w, job.h, job.pre, job.cdef, job.out, job.stride, job.unit, job.units, job.from, job.to)
 }
 
-fn lr_threads(a: *mem.Arena, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, pre: []const u16, cdef: []const u16, out: []u16, stride: usize, unit: u32, units: []const av1_lr.LrUnit, workers: usize) -> err {
+fn lr_threads(a: *mem.Arena, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, pre: []const u8, cdef: []const u8, out: []u8, stride: usize, unit: u32, units: []const av1_lr.LrUnit, workers: usize) -> err {
     let stripes = av1_lr.count_stripes(h, sy)
     var n = workers
     if usize(stripes) < n { n = usize(stripes) }
@@ -275,7 +281,7 @@ fn cdef_active(h: *const av1.Hdr) -> bool {
 
 // Runs the filters on d.frame (in place for deblocking). Returns which plane set holds the result: 0 the frame itself,
 // 1 `w1`, 2 `w2`.
-fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16) -> (usize, err) {
+fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u8, w2: [3][]u8) -> (usize, err) {
     let h = &d.st.h
     let seq = &d.st.seq
     gather(d, s)

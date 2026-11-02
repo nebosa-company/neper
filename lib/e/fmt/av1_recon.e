@@ -304,34 +304,36 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
     ret reconstruct_with(d, plane, start_x, start_y, tx, tx_type, d.quant, dcq, acq, d.b.lossless)
 }
 
-fn reconstruct_with(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usize, tx_type: usize, quant: []const i32, dcq: i32, acq: i32, lossless: bool) -> err {
-    let bd = u32(d.st.seq.bit_depth)
-    let (tx0, txc0) = time.monotonic()
-    try TX.reconstruct(quant, tx, tx_type, lossless, bd, dcq, acq, d.resid)
-    let w = usize(D.tx_w(d, tx))
-    let hh = usize(D.tx_h(d, tx))
-    let stride = d.stride[plane]
-    let (tx1, txc1) = time.monotonic()
-    d.ns_txfm += tx1.nanos - tx0.nanos
-    let mx = i32((1u32 << bd) - 1u32)
-    let last = (start_y + hh - 1usize) * stride + start_x + w
-    if last > d.frame[plane].len || d.resid.len < w * hh { ret Invalid }
-    let fr = d.frame[plane]
+// the last non-zero row and column of the coefficient block, plus one, so the transform can skip the empty part
+fn nonzero_limits(q: []const i32, tw: usize, th: usize) -> (usize, usize) {
+    var rows = 0usize
+    var cols = 0usize
     var y = 0usize
-    @nocheck {
-    while y < hh {
-        let row = (start_y + y) * stride + start_x
+    while y < th {
         var x = 0usize
-        while x < w {
-            var v = i32(fr[row + x]) + d.resid[y * w + x]
-            if v < 0i32 { v = 0i32 }
-            if v > mx { v = mx }
-            fr[row + x] = u16(v)
+        while x < tw {
+            if q[y * tw + x] != 0i32 {
+                if y + 1usize > rows { rows = y + 1usize }
+                if x + 1usize > cols { cols = x + 1usize }
+            }
             x += 1usize
         }
         y += 1usize
     }
-    }
+    ret (rows, cols)
+}
+
+fn reconstruct_with(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usize, tx_type: usize, quant: []const i32, dcq: i32, acq: i32, lossless: bool) -> err {
+    var tw = usize(D.tx_w(d, tx))
+    var th = usize(D.tx_h(d, tx))
+    if tw > 32usize { tw = 32usize }
+    if th > 32usize { th = 32usize }
+    if quant.len < tw * th { ret Invalid }
+    let (rows, cols) = nonzero_limits(quant, tw, th)
+    let (tx0, txc0) = time.monotonic()
+    try TX.reconstruct_add(quant, tx, tx_type, lossless, u32(d.st.seq.bit_depth), dcq, acq, rows, cols, d.frame[plane], d.stride[plane], start_x, start_y, d.resid)
+    let (tx1, txc1) = time.monotonic()
+    d.ns_txfm += tx1.nanos - tx0.nanos
     ret ok
 }
 
@@ -387,7 +389,7 @@ fn replay_tx(d: *D.Dec, r: *D.TxRec) -> err {
         let lh = u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx])
         try IN.predict_intra(d.frame[plane], d.stride[plane], usize(r.x), usize(r.y), lw, lh, r.p)
         if r.is_cfl {
-            IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(r.x), usize(r.y), lw, lh, sx, sy, r.alpha, r.mlw, r.mlh, u32(d.st.seq.bit_depth))
+            try IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(r.x), usize(r.y), lw, lh, sx, sy, r.alpha, r.mlw, r.mlh, u32(d.st.seq.bit_depth))
         }
     }
     if r.eob > 0u16 {
@@ -557,7 +559,7 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         if is_cfl {
             var alpha = b.cfl_alpha_u
             if plane == 2usize { alpha = b.cfl_alpha_v }
-            IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), u32(sx), u32(sy), alpha, d.max_luma_w, d.max_luma_h, u32(seq.bit_depth))
+            try IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), u32(sx), u32(sy), alpha, d.max_luma_w, d.max_luma_h, u32(seq.bit_depth))
         }
         let (in1, inc1) = time.monotonic()
         d.ns_intra += in1.nanos - in0.nanos

@@ -20,7 +20,7 @@ error Unsupported
 error Invalid
 
 // one reference slot / output frame: three planes with a border big enough for blocks that overhang the frame
-type Plane = struct { data: []u16, stride: usize, w: usize, h: usize }
+type Plane = struct { data: []u8, stride: usize, w: usize, h: usize }
 
 type Slot = struct {
     buf: i32,
@@ -63,7 +63,7 @@ fn alloc_plane(a: *mem.Arena, w: usize, h: usize) -> (Plane, err) {
     var p: Plane = zero
     let stride = ((w + 63usize) & ~63usize) + PAD
     let rows = ((h + 63usize) & ~63usize) + PAD
-    let (data, e) = mem.alloc[u16](a, stride * rows)
+    let (data, e) = mem.alloc[u8](a, stride * rows)
     if e != ok { ret (p, e) }
     p.data = data
     p.stride = stride
@@ -102,7 +102,7 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     dc.d.mvp = mvp
     let (q, qe) = mem.alloc[i32](a, 1024usize)
     if qe != ok { ret (dc, qe) }
-    let (r, re) = mem.alloc[i32](a, 4096usize)
+    let (r, re) = mem.alloc[i32](a, 8192usize)
     if re != ok { ret (dc, re) }
     dc.d.quant = q
     dc.d.resid = r
@@ -175,7 +175,7 @@ fn alloc_frame_state(dc: *Decoder) -> err {
         if w_oae != ok { ret w_oae }
         let (w_ol, w_ole) = mem.alloc[av1_inter.Neighbor](a, 32usize)
         if w_ole != ok { ret w_ole }
-        let (w_rs, w_rse) = mem.alloc[i32](a, 4096usize)
+        let (w_rs, w_rse) = mem.alloc[i32](a, 8192usize)
         if w_rse != ok { ret w_rse }
         d.w_oa[wi] = w_oa
         d.w_ol[wi] = w_ol
@@ -275,8 +275,8 @@ fn acquire(dc: *Decoder) -> usize {
     ret 0usize
 }
 
-fn planes_of(dc: *Decoder, k: usize) -> [3][]u16 {
-    var out: [3][]u16 = zero
+fn planes_of(dc: *Decoder, k: usize) -> [3][]u8 {
+    var out: [3][]u8 = zero
     out[0usize] = dc.pool[k][0usize].data
     out[1usize] = dc.pool[k][1usize].data
     out[2usize] = dc.pool[k][2usize].data
