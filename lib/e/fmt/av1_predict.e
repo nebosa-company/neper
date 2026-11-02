@@ -1,6 +1,7 @@
 // AV1 inter prediction glue: builds the arguments of e.fmt.av1_inter from the decoder state for the blocks of the
 // compute_prediction process of the specification.
 
+use e.time
 use e.fmt.av1
 use e.fmt.av1_dec as D
 use e.fmt.av1_inter as IN
@@ -173,6 +174,7 @@ fn predict_region(d: *D.Dec, plane: usize, x: i32, y: i32, w: i32, h: i32, cand_
     let dst = d.frame[plane][start..d.frame[plane].len]
     var needs_warp = b.motion_mode == D.LOCALWARP
     if (b.y_mode == D.GLOBALMV || b.y_mode == D.GLOBAL_GLOBALMV) && (d.st.h.gm_type[usize(mi.ref0)] > av1.TRANSLATION || (compound && d.st.h.gm_type[usize(mi.ref1)] > av1.TRANSLATION)) { needs_warp = true }
+    let (q0, qc0) = time.monotonic()
     if b.interintra {
         try interintra_region(d, plane, g, m0, dst, stride, sx, sy)
     } else if needs_warp {
@@ -180,6 +182,9 @@ fn predict_region(d: *D.Dec, plane: usize, x: i32, y: i32, w: i32, h: i32, cand_
     } else {
         try IN.predict_inter(d.iwk, g, m0, m1, compound, blend, dst, stride)
     }
+    let (q1, qc1) = time.monotonic()
+    if b.interintra { d.ns_p_ii += q1.nanos - q0.nanos } else if needs_warp { d.ns_p_warp += q1.nanos - q0.nanos } else { d.ns_p_plain += q1.nanos - q0.nanos }
+    d.n_p_plain += 1i64
     if b.motion_mode == D.OBMC {
         var info: IN.ObmcInfo = zero
         info.w4 = b.bw4
@@ -192,7 +197,11 @@ fn predict_region(d: *D.Dec, plane: usize, x: i32, y: i32, w: i32, h: i32, cand_
         info.avail_u = b.avail_u
         info.avail_l = b.avail_l
         fill_neighbors(d, plane, sx, sy)
+        let (o0, oc0) = time.monotonic()
         try IN.overlap(d.iwk, g, info, d.obmc_above, d.obmc_left, dst, stride)
+        let (o1, oc1) = time.monotonic()
+        d.ns_p_obmc += o1.nanos - o0.nanos
+        d.n_p_obmc += 1i64
     }
     ret ok
 }

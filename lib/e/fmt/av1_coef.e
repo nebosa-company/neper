@@ -13,6 +13,7 @@
 // `(row << bwl) + col` where bwl is Tx_Width_Log2 of Adjusted_Tx_Size (so 64-sample sizes use a 32 sample stride); it must hold
 // at least 1024 entries, the first segEob of which are cleared and written.
 
+use e.mem
 use e.fmt.av1_sym
 use e.fmt.av1_cdf
 use e.fmt.av1_tables
@@ -360,38 +361,6 @@ fn dc_sign_ctx(p: *CoefParams, x4: usize, y4: usize, w4: usize, h4: usize) -> us
     ret 0usize
 }
 
-// get_coeff_base_ctx for isEob = 0
-fn coeff_base_ctx(tab: []const i32, quant: []i32, tx_size: usize, tx_class: usize, pos: usize) -> usize {
-    let adj = tv(tab, av1_tables.T_ADJUSTED_TX_SIZE, tx_size)
-    let bwl = tv(tab, av1_tables.T_TX_WIDTH_LOG2, adj)
-    let width = 1usize << bwl
-    let height = tv(tab, av1_tables.T_TX_HEIGHT, adj)
-    let row = pos >> bwl
-    let col = pos - (row << bwl)
-    var mag = 0i32
-    var idx = 0usize
-    while idx < 5usize {
-        let o = av1_tables.T_SIG_REF_DIFF_OFFSET + (tx_class * 5usize + idx) * 2usize
-        let ref_row = i32(row) + tab[o]
-        let ref_col = i32(col) + tab[o + 1usize]
-        if ref_row >= 0i32 && ref_col >= 0i32 && ref_row < i32(height) && ref_col < i32(width) {
-            var q = quant[(usize(ref_row) << bwl) + usize(ref_col)]
-            if q < 0i32 { q = 0i32 - q }
-            if q > 3i32 { q = 3i32 }
-            mag += q
-        }
-        idx += 1usize
-    }
-    var cx = usize((mag + 1i32) >> 1u32)
-    if cx > 4usize { cx = 4usize }
-    if tx_class == TX_CLASS_2D {
-        if row == 0usize && col == 0usize { ret 0usize }
-        ret cx + tv(tab, av1_tables.T_COEFF_BASE_CTX_OFFSET, tx_size * 25usize + umin(row, 4usize) * 5usize + umin(col, 4usize))
-    }
-    var k = col
-    if tx_class == TX_CLASS_VERT { k = row }
-    ret cx + tv(tab, av1_tables.T_COEFF_BASE_POS_CTX_OFFSET, umin(k, 2usize))
-}
 
 // get_coeff_base_ctx for isEob = 1, already reduced by SIG_COEF_CONTEXTS - SIG_COEF_CONTEXTS_EOB
 fn coeff_base_eob_ctx(tab: []const i32, tx_size: usize, c: usize) -> usize {
@@ -404,41 +373,6 @@ fn coeff_base_eob_ctx(tab: []const i32, tx_size: usize, c: usize) -> usize {
     ret 3usize
 }
 
-// the ctx of coeff_br
-fn coeff_br_ctx(tab: []const i32, quant: []i32, tx_size: usize, tx_class: usize, pos: usize) -> usize {
-    let adj = tv(tab, av1_tables.T_ADJUSTED_TX_SIZE, tx_size)
-    let bwl = tv(tab, av1_tables.T_TX_WIDTH_LOG2, adj)
-    let txw = tv(tab, av1_tables.T_TX_WIDTH, adj)
-    let txh = tv(tab, av1_tables.T_TX_HEIGHT, adj)
-    let row = pos >> bwl
-    let col = pos - (row << bwl)
-    var mag = 0i32
-    var idx = 0usize
-    while idx < 3usize {
-        let o = av1_tables.T_MAG_REF_OFFSET_WITH_TX_CLASS + (tx_class * 3usize + idx) * 2usize
-        let ref_row = i32(row) + tab[o]
-        let ref_col = i32(col) + tab[o + 1usize]
-        if ref_row >= 0i32 && ref_col >= 0i32 && ref_row < i32(txh) && ref_col < i32(1usize << bwl) {
-            var q = quant[usize(ref_row) * txw + usize(ref_col)]
-            if q > COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1i32 { q = COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1i32 }
-            mag += q
-        }
-        idx += 1usize
-    }
-    var m = usize((mag + 1i32) >> 1u32)
-    if m > 6usize { m = 6usize }
-    if pos == 0usize { ret m }
-    if tx_class == TX_CLASS_2D {
-        if row < 2usize && col < 2usize { ret m + 7usize }
-        ret m + 14usize
-    }
-    if tx_class == TX_CLASS_HORIZ {
-        if col == 0usize { ret m + 7usize }
-        ret m + 14usize
-    }
-    if row == 0usize { ret m + 7usize }
-    ret m + 14usize
-}
 
 // eob_pt_*: the symbol (eobPt - 1) for eobMultisize `ms` (0 to 6)
 fn read_eob_pt(sd: *av1_sym.Sym, ctx: []u16, ms: usize, ptype: usize, tx_class: usize) -> usize {
@@ -484,34 +418,121 @@ fn set_contexts(p: *CoefParams, x4: usize, y4: usize, w4: usize, h4: usize, cul_
     }
 }
 
-// Reads the levels of the coefficients of coeffs() (Quant before the signs).
+// Reads the levels of the coefficients of coeffs() (Quant before the signs). The levels already read live in padded
+// arrays (`lv` the level, `l3` the level capped at 3) whose zero margins stand for the neighbours outside the block, so the
+// neighbour sums need no bounds tests; every neighbour offset of the specification points right or down.
 fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant: []i32, scan: []const i32, eob: usize, tx_class: usize, tx_sz_ctx: usize, ptype: usize) {
-    var c = eob
-    while c > 0usize {
-        c -= 1usize
-        let pos = usize(scan[c])
-        var level = 0i32
-        if c == eob - 1usize {
-            let cx = coeff_base_eob_ctx(tab, p.tx_size, c)
-            let off = av1_cdf.C_COEFFBASEEOB + ((tx_sz_ctx * 2usize + ptype) * 4usize + cx) * 4usize
-            level = i32(av1_sym.read_symbol(sd, ctx[off..off + 4usize], 3usize)) + 1i32
-        } else {
-            let cx = coeff_base_ctx(tab, quant, p.tx_size, tx_class, pos)
-            let off = av1_cdf.C_COEFFBASE + ((tx_sz_ctx * 2usize + ptype) * SIG_COEF_CONTEXTS + cx) * 5usize
-            level = i32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
+    let adj = tv(tab, av1_tables.T_ADJUSTED_TX_SIZE, p.tx_size)
+    let bwl = tv(tab, av1_tables.T_TX_WIDTH_LOG2, adj)
+    let width = 1usize << bwl
+    let height = tv(tab, av1_tables.T_TX_HEIGHT, adj)
+    let stride = width + 4usize
+    var lv: [1296]u8 = undef
+    var l3: [1296]u8 = undef
+    let padded = ((height + 4usize) * stride + 7usize) & ~7usize
+    if eob == 0usize || eob > scan.len || quant.len < (height << bwl) || padded > 1296usize { ret }
+    var d: [5]usize = zero
+    var m: [3]usize = zero
+    var i = 0usize
+    while i < 5usize {
+        let o = av1_tables.T_SIG_REF_DIFF_OFFSET + (tx_class * 5usize + i) * 2usize
+        d[i] = usize(tab[o]) * stride + usize(tab[o + 1usize])
+        i += 1usize
+    }
+    i = 0usize
+    while i < 3usize {
+        let o = av1_tables.T_MAG_REF_OFFSET_WITH_TX_CLASS + (tx_class * 3usize + i) * 2usize
+        m[i] = usize(tab[o]) * stride + usize(tab[o + 1usize])
+        i += 1usize
+    }
+    let d0 = d[0usize]
+    let d1 = d[1usize]
+    let d2 = d[2usize]
+    let d3 = d[3usize]
+    let d4 = d[4usize]
+    let m0 = m[0usize]
+    let m1 = m[1usize]
+    let m2 = m[2usize]
+    let base_off = av1_cdf.C_COEFFBASE + (tx_sz_ctx * 2usize + ptype) * SIG_COEF_CONTEXTS * 5usize
+    let br_off = av1_cdf.C_COEFFBR + (umin(tx_sz_ctx, TX_32X32) * 2usize + ptype) * 21usize * 5usize
+    let eob_off = av1_cdf.C_COEFFBASEEOB + (tx_sz_ctx * 2usize + ptype) * 16usize
+    let pos_ctx_off = av1_tables.T_COEFF_BASE_POS_CTX_OFFSET
+    let ctx_2d_off = av1_tables.T_COEFF_BASE_CTX_OFFSET + p.tx_size * 25usize
+    let wmask = width - 1usize
+    @nocheck {
+        i = 0usize
+        while i < padded {
+            *mem.cast[*u64](&lv[i]) = 0u64
+            *mem.cast[*u64](&l3[i]) = 0u64
+            i += 8usize
         }
-        if level > NUM_BASE_LEVELS {
-            let cx = coeff_br_ctx(tab, quant, p.tx_size, tx_class, pos)
-            let off = av1_cdf.C_COEFFBR + ((umin(tx_sz_ctx, TX_32X32) * 2usize + ptype) * 21usize + cx) * 5usize
-            var idx = 0i32
-            while idx < COEFF_BASE_RANGE / 3i32 {
-                let br = i32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
-                level += br
-                if br < 3i32 { break }
-                idx += 1i32
+        var c = eob
+        while c > 0usize {
+            c -= 1usize
+            let pos = usize(scan[c])
+            let row = pos >> bwl
+            let col = pos & wmask
+            let pi = row * stride + col
+            var level = 0u32
+            if c == eob - 1usize {
+                var cx = 3usize
+                if c == 0usize {
+                    cx = 0usize
+                } else if c <= (height << bwl) / 8usize {
+                    cx = 1usize
+                } else if c <= (height << bwl) / 4usize {
+                    cx = 2usize
+                }
+                let off = eob_off + cx * 4usize
+                level = u32(av1_sym.read_symbol(sd, ctx[off..off + 4usize], 3usize)) + 1u32
+            } else {
+                let mag = u32(l3[pi + d0]) + u32(l3[pi + d1]) + u32(l3[pi + d2]) + u32(l3[pi + d3]) + u32(l3[pi + d4])
+                var cx = usize((mag + 1u32) >> 1u32)
+                if cx > 4usize { cx = 4usize }
+                if tx_class == TX_CLASS_2D {
+                    if pos == 0usize {
+                        cx = 0usize
+                    } else {
+                        cx += usize(tab[ctx_2d_off + umin(row, 4usize) * 5usize + umin(col, 4usize)])
+                    }
+                } else if tx_class == TX_CLASS_VERT {
+                    cx += usize(tab[pos_ctx_off + umin(row, 2usize)])
+                } else {
+                    cx += usize(tab[pos_ctx_off + umin(col, 2usize)])
+                }
+                let off = base_off + cx * 5usize
+                level = u32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
             }
+            if level > 2u32 {
+                let mag = u32(lv[pi + m0]) + u32(lv[pi + m1]) + u32(lv[pi + m2])
+                var cx = usize((mag + 1u32) >> 1u32)
+                if cx > 6usize { cx = 6usize }
+                if pos != 0usize {
+                    var near = false
+                    if tx_class == TX_CLASS_2D {
+                        near = row < 2usize && col < 2usize
+                    } else if tx_class == TX_CLASS_HORIZ {
+                        near = col == 0usize
+                    } else {
+                        near = row == 0usize
+                    }
+                    if near { cx += 7usize } else { cx += 14usize }
+                }
+                let off = br_off + cx * 5usize
+                var idx = 0u32
+                while idx < 4u32 {
+                    let br = u32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
+                    level += br
+                    if br < 3u32 { break }
+                    idx += 1u32
+                }
+            }
+            lv[pi] = u8(level)
+            var capped = level
+            if capped > 3u32 { capped = 3u32 }
+            l3[pi] = u8(capped)
+            quant[pos] = i32(level)
         }
-        quant[pos] = level
     }
 }
 
@@ -528,9 +549,11 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
     if p.tx_size == TX_16X64 || p.tx_size == TX_64X16 { seg_eob = 512usize }
     if quant.len < seg_eob || p.tx_size > TX_64X16 { ret (zero, Invalid) }
     var c0 = 0usize
-    while c0 < seg_eob {
-        quant[c0] = 0i32
-        c0 += 1usize
+    @nocheck {
+        while c0 < seg_eob {
+            *mem.cast[*u64](&quant[c0]) = 0u64
+            c0 += 2usize
+        }
     }
     var res = CoefResult { eob: 0usize, tx_type: DCT_DCT, cul_level: 0u32, dc_category: 0u32 }
 
@@ -560,7 +583,7 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
             if extra == 1usize { eob += 1usize << (eob_pt - 3usize) }
             var i = 1usize
             while i < eob_pt - 2usize {
-                let bit = av1_sym.read_literal(sd, 1u32)
+                let bit = av1_sym.read_bool(sd)
                 if bit == 1u32 { eob += 1usize << (eob_pt - 3usize - i) }
                 i += 1usize
             }
@@ -579,7 +602,7 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
                     let doff = av1_cdf.C_DCSIGN + (ptype * 3usize + dcx) * 3usize
                     sign = u32(av1_sym.read_symbol(sd, ctx[doff..doff + 3usize], 2usize))
                 } else {
-                    sign = av1_sym.read_literal(sd, 1u32)
+                    sign = av1_sym.read_bool(sd)
                 }
             }
             if quant[pos] > NUM_BASE_LEVELS + COEFF_BASE_RANGE {
@@ -587,12 +610,12 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
                 var done = false
                 while !done {
                     length += 1u32
-                    if av1_sym.read_literal(sd, 1u32) == 1u32 { done = true } else if length >= 20u32 { ret (zero, Invalid) }
+                    if av1_sym.read_bool(sd) == 1u32 { done = true } else if length >= 20u32 { ret (zero, Invalid) }
                 }
                 var x = 1i32
                 var i = 0u32
                 while i + 1u32 < length {
-                    x = (x << 1u32) | i32(av1_sym.read_literal(sd, 1u32))
+                    x = (x << 1u32) | i32(av1_sym.read_bool(sd))
                     i += 1u32
                 }
                 quant[pos] = x + COEFF_BASE_RANGE + NUM_BASE_LEVELS

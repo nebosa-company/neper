@@ -14,6 +14,7 @@ use e.fmt.av1_lr
 use e.fmt.av1_predict as P
 
 error Unsupported
+error Invalid
 
 // ------------------------------------------------------------------ tile level resets
 
@@ -312,16 +313,23 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
     let (tx1, txc1) = time.monotonic()
     d.ns_txfm += tx1.nanos - tx0.nanos
     let mx = i32((1u32 << bd) - 1u32)
+    let last = (start_y + hh - 1usize) * stride + start_x + w
+    if last > d.frame[plane].len || d.resid.len < w * hh { ret Invalid }
+    let fr = d.frame[plane]
     var y = 0usize
+    @nocheck {
     while y < hh {
+        let row = (start_y + y) * stride + start_x
         var x = 0usize
         while x < w {
-            let at = (start_y + y) * stride + start_x + x
-            let v = i32(d.frame[plane][at]) + d.resid[y * w + x]
-            d.frame[plane][at] = u16(D.clip3(0i32, mx, v))
+            var v = i32(fr[row + x]) + d.resid[y * w + x]
+            if v < 0i32 { v = 0i32 }
+            if v > mx { v = mx }
+            fr[row + x] = u16(v)
             x += 1usize
         }
         y += 1usize
+    }
     }
     ret ok
 }
