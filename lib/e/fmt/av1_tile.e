@@ -205,9 +205,22 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     }
     store_block(d)
     let (tm1, cm1) = time.monotonic()
-    try R.compute_prediction(d)
+    if d.deferred {
+        if d.brec_n >= d.brecs.len { ret Unsupported }
+        let br = &d.brecs[d.brec_n]
+        d.brec_n += 1usize
+        br.b = d.b
+        br.first = u32(d.rec_n)
+        br.kind = 1u8
+        if b.is_inter { br.kind = 0u8 }
+        if b.interintra { br.kind = 2u8 }
+        try R.residual(d)
+        br.count = u32(d.rec_n) - br.first
+    } else {
+        try R.compute_prediction(d)
+    }
     let (tm2, cm2) = time.monotonic()
-    try R.residual(d)
+    if !d.deferred { try R.residual(d) }
     let (tm3, cm3) = time.monotonic()
     d.ns_mode += tm1.nanos - tm0.nanos
     d.ns_pred += tm2.nanos - tm1.nanos

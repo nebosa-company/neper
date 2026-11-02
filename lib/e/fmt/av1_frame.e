@@ -9,6 +9,7 @@ use e.fmt.av1_tables
 use e.fmt.av1_cdf as CDF
 use e.fmt.av1_dec as D
 use e.fmt.av1_tile as T
+use e.fmt.av1_recon as R
 use e.fmt.av1_mvp
 use e.fmt.av1_lr
 use e.fmt.av1_post
@@ -151,6 +152,35 @@ fn alloc_frame_state(dc: *Decoder) -> err {
         dc.slots[sl].saved_mvs = smv
         dc.slots[sl].saved_refs = srf
         sl += 1usize
+    }
+    let mi_count = usize(h.mi_rows * h.mi_cols)
+    let (recs, recs_error) = mem.alloc[D.TxRec](a, mi_count * 3usize / 2usize + 1024usize)
+    if recs_error != ok { ret recs_error }
+    d.recs = recs
+    let (brecs, brecs_error) = mem.alloc[D.BRec](a, mi_count + 16usize)
+    if brecs_error != ok { ret brecs_error }
+    d.brecs = brecs
+    let (qpool, qpool_error) = mem.alloc[i32](a, mi_count * 24usize + 4096usize)
+    if qpool_error != ok { ret qpool_error }
+    d.qpool = qpool
+    let (views, views_error) = mem.alloc[D.Dec](a, 8usize)
+    if views_error != ok { ret views_error }
+    d.views = views
+    var wi = 0usize
+    while wi < 8usize {
+        let (w_wk, w_wke) = av1_inter.new_work(a)
+        if w_wke != ok { ret w_wke }
+        d.w_work[wi] = w_wk
+        let (w_oa, w_oae) = mem.alloc[av1_inter.Neighbor](a, 32usize)
+        if w_oae != ok { ret w_oae }
+        let (w_ol, w_ole) = mem.alloc[av1_inter.Neighbor](a, 32usize)
+        if w_ole != ok { ret w_ole }
+        let (w_rs, w_rse) = mem.alloc[i32](a, 4096usize)
+        if w_rse != ok { ret w_rse }
+        d.w_oa[wi] = w_oa
+        d.w_ol[wi] = w_ol
+        d.w_resid[wi] = w_rs
+        wi += 1usize
     }
     let (wk, wke) = av1_inter.new_work(a)
     if wke != ok { ret wke }
@@ -411,6 +441,10 @@ fn setup_frame(dc: *Decoder) -> err {
         zero_counters(dc.ctx, dc.tab)
     }
     dc.tile_num = 0i32
+    d.deferred = !h.frame_is_intra && d.threads > 1usize
+    d.rec_n = 0usize
+    d.brec_n = 0usize
+    d.q_n = 0usize
     ret ok
 }
 
@@ -503,6 +537,10 @@ fn tile_group(dc: *Decoder, data: []const u8) -> err {
             }
         }
         dc.frame_open = false
+        if dc.d.deferred {
+            let replayed = R.replay(&dc.d, dc.a, dc.d.threads)
+            if replayed != ok { ret replayed }
+        }
         ret finish_frame(dc)
     }
     ret ok

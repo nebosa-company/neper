@@ -154,6 +154,36 @@ type Block = struct {
     above_single: bool,
 }
 
+// A transform block whose pixels are made after the whole frame is parsed: the intra prediction it needs (if any), the
+// quantised coefficients (kept in Dec.qpool) and the dequantisation values of the time it was parsed.
+type TxRec = struct {
+    plane: u8,
+    tx: u8,
+    tx_type: u8,
+    has_intra: bool,
+    is_cfl: bool,
+    lossless: bool,
+    eob: u16,
+    x: i32,
+    y: i32,
+    qoff: u32,
+    dcq: i32,
+    acq: i32,
+    alpha: i32,
+    mlw: i32,
+    mlh: i32,
+    p: av1_intra.IntraParams,
+}
+
+// A decoded block of a deferred frame: its mode info and the transform blocks recs[first .. first + count). kind 0 is an
+// inter block (its pixels do not depend on the other blocks of the frame), 1 an intra block and 2 an inter-intra block.
+type BRec = struct {
+    b: Block,
+    first: u32,
+    count: u32,
+    kind: u8,
+}
+
 type Dec = struct {
     st: *av1.State,
     tab: []const i32,
@@ -191,6 +221,18 @@ type Dec = struct {
     ns_pred: i64,
     ns_resid: i64,
     threads: usize,
+    deferred: bool,
+    recs: []TxRec,
+    rec_n: usize,
+    brecs: []BRec,
+    brec_n: usize,
+    qpool: []i32,
+    q_n: usize,
+    views: []Dec,
+    w_work: [8]av1_inter.Work,
+    w_oa: [8][]av1_inter.Neighbor,
+    w_ol: [8][]av1_inter.Neighbor,
+    w_resid: [8][]i32,
     ns_mode: i64,
     ns_coef: i64,
     ns_txfm: i64,

@@ -2,6 +2,8 @@
 // to the frame), the tile level context resets and the loop restoration unit syntax of the specification.
 
 use e.time
+use e.thread
+use e.mem
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -288,25 +290,24 @@ fn get_tx_size(d: *D.Dec, plane: usize, tx: usize) -> usize {
     ret uv_tx
 }
 
-fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usize, tx_type: usize) -> err {
-    let b = &d.b
+// the dequantisation values of the plane at the current block
+fn quant_values(d: *D.Dec, plane: usize) -> (i32, i32) {
     let h = &d.st.h
+    let qindex = get_qindex(d, false, d.b.segment_id)
+    if plane == 0usize { ret (dc_q(d, qindex + h.delta_q_y_dc), ac_q(d, qindex)) }
+    if plane == 1usize { ret (dc_q(d, qindex + h.delta_q_u_dc), ac_q(d, qindex + h.delta_q_u_ac)) }
+    ret (dc_q(d, qindex + h.delta_q_v_dc), ac_q(d, qindex + h.delta_q_v_ac))
+}
+
+fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usize, tx_type: usize) -> err {
+    let (dcq, acq) = quant_values(d, plane)
+    ret reconstruct_with(d, plane, start_x, start_y, tx, tx_type, d.quant, dcq, acq, d.b.lossless)
+}
+
+fn reconstruct_with(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usize, tx_type: usize, quant: []const i32, dcq: i32, acq: i32, lossless: bool) -> err {
     let bd = u32(d.st.seq.bit_depth)
-    let qindex = get_qindex(d, false, b.segment_id)
-    var dcq = 0i32
-    var acq = 0i32
-    if plane == 0usize {
-        dcq = dc_q(d, qindex + h.delta_q_y_dc)
-        acq = ac_q(d, qindex)
-    } else if plane == 1usize {
-        dcq = dc_q(d, qindex + h.delta_q_u_dc)
-        acq = ac_q(d, qindex + h.delta_q_u_ac)
-    } else {
-        dcq = dc_q(d, qindex + h.delta_q_v_dc)
-        acq = ac_q(d, qindex + h.delta_q_v_ac)
-    }
     let (tx0, txc0) = time.monotonic()
-    try TX.reconstruct(d.quant, tx, tx_type, b.lossless, bd, dcq, acq, d.resid)
+    try TX.reconstruct(quant, tx, tx_type, lossless, bd, dcq, acq, d.resid)
     let w = usize(D.tx_w(d, tx))
     let hh = usize(D.tx_h(d, tx))
     let stride = d.stride[plane]
@@ -334,6 +335,154 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
     ret ok
 }
 
+fn push_rec(d: *D.Dec, plane: usize, x: i32, y: i32, tx: usize, tx_type: usize, eob: usize, has_intra: bool, p: IN.IntraParams, is_cfl: bool, alpha: i32, mlw: i32, mlh: i32) -> err {
+    if d.rec_n >= d.recs.len { ret Unsupported }
+    let r = &d.recs[d.rec_n]
+    r.plane = u8(plane)
+    r.tx = u8(tx)
+    r.tx_type = u8(tx_type)
+    r.has_intra = has_intra
+    r.is_cfl = is_cfl
+    r.lossless = d.b.lossless
+    r.eob = u16(eob)
+    r.x = x
+    r.y = y
+    r.alpha = alpha
+    r.mlw = mlw
+    r.mlh = mlh
+    r.p = p
+    let (dcq, acq) = quant_values(d, plane)
+    r.dcq = dcq
+    r.acq = acq
+    r.qoff = u32(d.q_n)
+    if eob > 0usize {
+        var tw = usize(D.tx_w(d, tx))
+        var th = usize(D.tx_h(d, tx))
+        if tw > 32usize { tw = 32usize }
+        if th > 32usize { th = 32usize }
+        if d.q_n + tw * th > d.qpool.len { ret Unsupported }
+        var i = 0usize
+        while i < tw * th {
+            d.qpool[d.q_n + i] = d.quant[i]
+            i += 1usize
+        }
+        d.q_n += tw * th
+    }
+    d.rec_n += 1usize
+    ret ok
+}
+
+// The pixels of one recorded transform block: its intra prediction (and chroma from luma), then the residual.
+fn replay_tx(d: *D.Dec, r: *D.TxRec) -> err {
+    let plane = usize(r.plane)
+    let tx = usize(r.tx)
+    var sx = 0u32
+    var sy = 0u32
+    if plane > 0usize {
+        sx = u32(d.st.seq.subsampling_x)
+        sy = u32(d.st.seq.subsampling_y)
+    }
+    if r.has_intra {
+        let lw = u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx])
+        let lh = u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx])
+        try IN.predict_intra(d.frame[plane], d.stride[plane], usize(r.x), usize(r.y), lw, lh, r.p)
+        if r.is_cfl {
+            IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(r.x), usize(r.y), lw, lh, sx, sy, r.alpha, r.mlw, r.mlh, u32(d.st.seq.bit_depth))
+        }
+    }
+    if r.eob > 0u16 {
+        var tw = usize(D.tx_w(d, tx))
+        var th = usize(D.tx_h(d, tx))
+        if tw > 32usize { tw = 32usize }
+        if th > 32usize { th = 32usize }
+        let q = d.qpool[usize(r.qoff)..usize(r.qoff) + tw * th]
+        try reconstruct_with(d, plane, usize(r.x), usize(r.y), tx, usize(r.tx_type), q, r.dcq, r.acq, r.lossless)
+    }
+    ret ok
+}
+
+fn replay_block(d: *D.Dec, br: *D.BRec) -> err {
+    d.b = br.b
+    if br.kind != 1u8 { try P.predict_inter_block(d) }
+    var i = usize(br.first)
+    while i < usize(br.first + br.count) {
+        try replay_tx(d, &d.recs[i])
+        i += 1usize
+    }
+    ret ok
+}
+
+type BJob = struct {
+    view: *D.Dec,
+    from: usize,
+    to: usize,
+    result: err,
+}
+
+fn b_work(job: *BJob) {
+    let v = job.view
+    var i = job.from
+    while i < job.to {
+        if v.brecs[i].kind == 0u8 {
+            let e = replay_block(v, &v.brecs[i])
+            if e != ok {
+                job.result = e
+                ret
+            }
+        }
+        i += 1usize
+    }
+}
+
+// Makes the pixels of a frame parsed with d.deferred: the inter blocks first, on several threads (they read only reference
+// frames), then the intra and inter-intra blocks in decode order (they read their neighbours).
+fn replay(d: *D.Dec, a: *mem.Arena, workers: usize) -> err {
+    var n = workers
+    if n > 8usize { n = 8usize }
+    if n > d.brec_n { n = d.brec_n }
+    if n < 2usize {
+        var i = 0usize
+        while i < d.brec_n {
+            if d.brecs[i].kind == 0u8 { try replay_block(d, &d.brecs[i]) }
+            i += 1usize
+        }
+    } else {
+        let mark = mem.mark(a)
+        let (jobs, jobs_error) = mem.alloc[BJob](a, n)
+        if jobs_error != ok { ret jobs_error }
+        var i = 0usize
+        while i < n {
+            d.views[i] = *d
+            d.views[i].iwk = d.w_work[i]
+            d.views[i].obmc_above = d.w_oa[i]
+            d.views[i].obmc_left = d.w_ol[i]
+            d.views[i].resid = d.w_resid[i]
+            jobs[i] = BJob { view: &d.views[i], from: i * d.brec_n / n, to: (i + 1usize) * d.brec_n / n, result: ok }
+            i += 1usize
+        }
+        let (group, group_error) = thread.spawn_all[BJob](a, b_work, jobs, 4194304usize)
+        if group_error != ok {
+            mem.reset(a, mark)
+            ret group_error
+        }
+        let joined = thread.join_all(group)
+        var failed = joined
+        i = 0usize
+        while i < n {
+            if jobs[i].result != ok { failed = jobs[i].result }
+            i += 1usize
+        }
+        mem.reset(a, mark)
+        if failed != ok { ret failed }
+    }
+    var k = 0usize
+    while k < d.brec_n {
+        if d.brecs[k].kind != 0u8 { try replay_block(d, &d.brecs[k]) }
+        k += 1usize
+    }
+    ret ok
+}
+
 fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize, x: i32, y: i32) -> err {
     let b = &d.b
     let seq = &d.st.seq
@@ -356,6 +505,12 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
     let max_x = (d.mi_cols * 4i32) >> u32(sx)
     let max_y = (d.mi_rows * 4i32) >> u32(sy)
     if start_x >= max_x || start_y >= max_y { ret ok }
+    var rec_intra: IN.IntraParams = zero
+    var rec_cfl = false
+    var rec_alpha = 0i32
+    var rec_mlw = 0i32
+    var rec_mlh = 0i32
+    var rec_has_intra = false
     if !b.is_inter {
         let is_cfl = plane > 0usize && b.uv_mode == D.UV_CFL_PRED
         var mode = b.y_mode
@@ -387,6 +542,16 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
             p.above_smooth = D.is_smooth_above(d, plane, avail_u)
             p.left_smooth = D.is_smooth_left(d, plane, avail_l)
         }
+        var intra_alpha = b.cfl_alpha_u
+        if plane == 2usize { intra_alpha = b.cfl_alpha_v }
+        if d.deferred {
+            rec_intra = p
+            rec_cfl = is_cfl
+            rec_alpha = intra_alpha
+            rec_mlw = d.max_luma_w
+            rec_mlh = d.max_luma_h
+            rec_has_intra = true
+        } else {
         let (in0, inc0) = time.monotonic()
         try IN.predict_intra(d.frame[plane], d.stride[plane], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), p)
         if is_cfl {
@@ -396,11 +561,14 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         }
         let (in1, inc1) = time.monotonic()
         d.ns_intra += in1.nanos - in0.nanos
+        }
         if plane == 0usize {
             d.max_luma_w = start_x + step_x * 4i32
             d.max_luma_h = start_y + step_y * 4i32
         }
     }
+    var rec_eob = 0usize
+    var rec_type = 0usize
     if !b.skip {
         var cp: CO.CoefParams = zero
         cp.plane = plane
@@ -433,7 +601,12 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         let (cf1, cfc1) = time.monotonic()
         d.ns_coef += cf1.nanos - cf0.nanos
         if coef_error != ok { ret coef_error }
-        if res.eob > 0usize { try reconstruct(d, plane, usize(start_x), usize(start_y), tx, res.tx_type) }
+        rec_eob = res.eob
+        rec_type = res.tx_type
+        if !d.deferred && res.eob > 0usize { try reconstruct(d, plane, usize(start_x), usize(start_y), tx, res.tx_type) }
+    }
+    if d.deferred && (rec_has_intra || rec_eob > 0usize) {
+        try push_rec(d, plane, start_x, start_y, tx, rec_type, rec_eob, rec_has_intra, rec_intra, rec_cfl, rec_alpha, rec_mlw, rec_mlh)
     }
     var i = 0i32
     while i < step_y {
