@@ -33,12 +33,13 @@ export function libraries(index, load) {
   }
 }
 
-export async function compile(compiler, source, fetchLib) {
+// extra: more flags for the compiler (the page's ?args=); what it printed comes back as `said`.
+export async function compile(compiler, source, fetchLib, extra = []) {
   const files = { 'main.e': enc.encode(source) }
   for (let round = 0; round < 200; round++) {
     let said = ''
-    const r = await run(compiler, { args: ['emit-executable', 'main.e', '.', 'wasm32', 'wasi', 'main.wasm', '--release'], files, stdout: (s) => (said += text(s)), stderr: (s) => (said += text(s)) })
-    if (r.exitCode === 0) return { wasm: r.files['/main.wasm'], libraries: Object.keys(files).filter((p) => p.startsWith('lib/')) }
+    const r = await run(compiler, { args: ['emit-executable', 'main.e', '.', 'wasm32', 'wasi', 'main.wasm', '--release', ...extra], files, stdout: (s) => (said += text(s)), stderr: (s) => (said += text(s)) })
+    if (r.exitCode === 0) return { wasm: r.files['/main.wasm'], said: said.trim(), libraries: Object.keys(files).filter((p) => p.startsWith('lib/')) }
     const m = said.match(MISSING)
     if (!m || !(await fetchLib(m[1], files))) return { error: said.trim() || 'the compiler exited with status ' + r.exitCode }
   }

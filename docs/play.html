@@ -267,6 +267,12 @@
     const status = (t) => { $('status').textContent = t }
     const show = (t, err) => { $('out').textContent = t; $('out').className = err ? 'err' : '' }
     const bytes = async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer())
+    // Troubleshooting: ?debug adds the browser and the full error to the output; ?args=--time passes flags to the compiler.
+    const query = new URLSearchParams(location.search)
+    const extra = (query.get('args') || '').split(/\s+/).filter((a) => /^--[a-z0-9-]+$/.test(a))
+    const debug = query.has('debug') || extra.length > 0
+    const environment = () => ['userAgent: ' + navigator.userAgent, 'crossOriginIsolated: ' + globalThis.crossOriginIsolated, 'deviceMemory: ' + navigator.deviceMemory, 'Atomics.waitAsync: ' + typeof Atomics.waitAsync, 'compileStreaming: ' + typeof WebAssembly.compileStreaming, 'args: ' + extra.join(' ')].join('\n')
+    const fail = (e) => (e && e.stack ? e.name + ': ' + e.message + '\n' + e.stack : String(e))
     let compiler, fetchLib, downloadUrl
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
     const highlight = (text) => esc(text).replace(/(\/\/[^\n]*)|("(?:\\.|[^"\\\n])*")|\b(fn)(\s+)([A-Za-z_]\w*)|\b(as|break|case|const|continue|default|defer|else|enum|error|extern|false|for|if|in|let|nil|nocheck|own|ok|resource|ret|shared|struct|switch|true|try|type|undef|union|use|var|when|while|zero|fn)\b/g,
@@ -287,25 +293,26 @@
       await first
       $('run').disabled = false
       status('Ready.')
-    } catch (e) { status('Could not load the compiler: ' + e.message) }
+    } catch (e) { status('Could not load the compiler: ' + e.message); if (debug) show(fail(e) + '\n\n' + environment(), true) }
     $('sample').onchange = (e) => load(e.target.value)
     $('run').onclick = async () => {
       $('run').disabled = true; $('stop').hidden = false; $('download').hidden = true; show(''); status('Compiling…')
       let out = ''
       try {
         const t0 = performance.now()
-        const r = await guarded(() => compile(compiler, $('src').value, fetchLib), COMPILE_SECONDS, 'The compiler')
-        if (r.error) { show(r.error, true); status('The compiler refused the source.'); return }
+        const r = await guarded(() => compile(compiler, $('src').value, fetchLib, extra), COMPILE_SECONDS, 'The compiler')
+        if (r.error) { show(r.error + (debug ? '\n\n' + environment() : ''), true); status('The compiler refused the source.'); return }
         const ms = Math.round(performance.now() - t0)
         if (downloadUrl) URL.revokeObjectURL(downloadUrl)
         downloadUrl = URL.createObjectURL(new Blob([r.wasm], { type: 'application/wasm' }))
         $('download').href = downloadUrl; $('download').hidden = false
         status('Running…')
+        if (debug && r.said) { out = 'compiler: ' + r.said + '\n'; show(out) }
         const code = await guarded(() => execute(r.wasm, (s) => {
           if (out.length < OUTPUT_LIMIT) { out += s; show(out) } else if (cancel) cancel()
         }), RUN_SECONDS, 'The program')
         status('Compiled in ' + ms + ' ms to ' + r.wasm.length.toLocaleString() + ' bytes. Exit status ' + code + '.')
-      } catch (e) { show(out + (out ? '\n' : '') + String(e.message || e), true); status('Did not finish.') } finally { $('run').disabled = false; $('stop').hidden = true }
+      } catch (e) { show(out + (out ? '\n' : '') + (debug ? fail(e) + '\n\n' + environment() : String(e.message || e)), true); status('Did not finish.') } finally { $('run').disabled = false; $('stop').hidden = true }
     }
   </script>
 </body>
