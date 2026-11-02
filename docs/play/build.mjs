@@ -1,5 +1,5 @@
 // Rebuilds play/neper.wasm and the library subset the samples need, from the repository root:
-//   neper emit-executable src/main.e . wasm32 wasi docs/play/neper.wasm --release   (done here)
+//   neper emit-executable src/main.e . wasm32 wasi docs/play/neper.wasm --release --arena 192m   (done here)
 //   node docs/play/build.mjs [path-to-neper]
 // Each sample is compiled and run with the same code the page uses; the lib files it fetched are copied
 // to docs/play/lib, with index.json listing them.
@@ -12,7 +12,7 @@ const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, 
 const root = path.resolve(here, '..', '..')
 const neper = process.argv[2] || process.env.NEPER || 'neper'
 const wasmPath = path.join(here, 'neper.wasm')
-const built = spawnSync(neper, ['emit-executable', 'src/main.e', '.', 'wasm32', 'wasi', wasmPath, '--release'], { cwd: root, encoding: 'utf8' })
+const built = spawnSync(neper, ['emit-executable', 'src/main.e', '.', 'wasm32', 'wasi', wasmPath, '--release', '--arena', '192m'], { cwd: root, encoding: 'utf8' })
 if (built.status !== 0) { console.error(built.stdout, built.stderr); process.exit(1) }
 
 const everything = []

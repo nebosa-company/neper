@@ -10,7 +10,11 @@ fn jobs(asked: usize) -> usize { ret 1usize }
 fn reservation(root_capacity: usize) -> usize {
     if root_capacity >= 4294901760usize { ret 0usize }
     let left = 4294901760usize - root_capacity
-    ret left / 4usize
+    let quarter = left / 4usize
+    // The engine's memory grows to the highest byte touched, so a small build (--arena) keeps its
+    // reservations as small as its root: that is what lets a phone's browser run the compiler.
+    if root_capacity < quarter { ret root_capacity }
+    ret quarter
 }
 
 fn triple() -> str { ret "wasm32-wasi" }
