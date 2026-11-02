@@ -660,16 +660,28 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
     let st = st_of(dc, x)
     let h = &st.h
     let d = dec_of(dc, x)
-    save_motion(dc, d, st)
-    av1.save_refs(st)
+    // the vectors are made straight into the first slot the frame refreshes and copied to the others
+    var first = 8usize
     var i = 0usize
+    while i < 8usize {
+        if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 && first == 8usize { first = i }
+        i += 1usize
+    }
+    if first < 8usize {
+        let nf = d.mi.len
+        save_motion(dc, d, st, dc.slots[first].saved_refs[0usize..nf], dc.slots[first].saved_mvs[0usize..nf * 2usize])
+    }
+    av1.save_refs(st)
+    i = 0usize
     while i < 8usize {
         if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 {
             dc.slots[i].mi_rows = h.mi_rows
             dc.slots[i].mi_cols = h.mi_cols
             let nm = d.mi.len
-            mem.copy[i8](dc.slots[i].saved_refs[0usize..nm], d.mf_refs[0usize..nm])
-            mem.copy[i16](dc.slots[i].saved_mvs[0usize..nm * 2usize], d.mf_mvs[0usize..nm * 2usize])
+            if i != first {
+                mem.copy[i8](dc.slots[i].saved_refs[0usize..nm], dc.slots[first].saved_refs[0usize..nm])
+                mem.copy[i16](dc.slots[i].saved_mvs[0usize..nm * 2usize], dc.slots[first].saved_mvs[0usize..nm * 2usize])
+            }
             var k = 0usize
             while k < CDF.SAVED_COUNT {
                 dc.slots[i].ctx[k] = dc.ctx[k]
@@ -763,7 +775,7 @@ fn finish_frame(dc: *Decoder, x: usize) -> err {
     ret ok
 }
 
-fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State) {
+fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State, out_refs: []i8, out_mvs: []i16) {
     let h = &st.h
     let n = d.mi.len
     // a reference's vectors are kept when it lies in the past
@@ -794,9 +806,9 @@ fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State) {
             }
             list += 1usize
         }
-        d.mf_refs[i] = ref_out
-        d.mf_mvs[i * 2usize] = mv_row
-        d.mf_mvs[i * 2usize + 1usize] = mv_col
+        out_refs[i] = ref_out
+        out_mvs[i * 2usize] = mv_row
+        out_mvs[i * 2usize + 1usize] = mv_col
         i += 1usize
     }
     }
