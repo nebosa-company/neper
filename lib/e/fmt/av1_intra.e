@@ -25,6 +25,7 @@
 //   alpha is CflAlphaU or CflAlphaV; max_luma_w / max_luma_h the spec's MaxLumaW / MaxLumaH.
 
 error BadMode
+error Invalid
 
 type IntraParams = struct {
     mode: u32,
@@ -115,70 +116,97 @@ fn put(plane: []u16, stride: usize, xx: i32, yy: i32, v: i32) {
     plane[usize(yy) * stride + usize(xx)] = u16(v)
 }
 
-// AboveRow / LeftCol of the general intra process, indices -1..w+h-1
-fn prepare(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p: IntraParams, above: []i32, left: []i32) {
-    let n = w + h
-    let mid = 1i32 << (p.bit_depth - 1u32)
+// AboveRow[0..cnt) of the general intra process for a block of width w
+fn edge_above(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, cnt: i32, p: IntraParams, above: []i32) {
     var i = 0i32
     if !p.have_above && p.have_left {
         let v = pix(plane, stride, xi - 1i32, yi)
-        while i < n { above[ei(i)] = v
+        while i < cnt { above[ei(i)] = v
             i += 1i32 }
     } else if !p.have_above {
-        while i < n { above[ei(i)] = mid - 1i32
+        let v = (1i32 << (p.bit_depth - 1u32)) - 1i32
+        while i < cnt { above[ei(i)] = v
             i += 1i32 }
     } else {
         var span = w
         if p.have_above_right { span = 2i32 * w }
         let limit = min_i(p.max_x, xi + span - 1i32)
-        while i < n { above[ei(i)] = pix(plane, stride, min_i(limit, xi + i), yi - 1i32)
+        let row = usize(yi - 1i32) * stride
+        while i < cnt { above[ei(i)] = i32(plane[row + usize(min_i(limit, xi + i))])
             i += 1i32 }
     }
-    i = 0i32
+}
+
+// LeftCol[0..cnt) for a block of height h
+fn edge_left(plane: []u16, stride: usize, xi: i32, yi: i32, h: i32, cnt: i32, p: IntraParams, left: []i32) {
+    var i = 0i32
     if !p.have_left && p.have_above {
         let v = pix(plane, stride, xi, yi - 1i32)
-        while i < n { left[ei(i)] = v
+        while i < cnt { left[ei(i)] = v
             i += 1i32 }
     } else if !p.have_left {
-        while i < n { left[ei(i)] = mid + 1i32
+        let v = (1i32 << (p.bit_depth - 1u32)) + 1i32
+        while i < cnt { left[ei(i)] = v
             i += 1i32 }
     } else {
         var span = h
         if p.have_below_left { span = 2i32 * h }
         let limit = min_i(p.max_y, yi + span - 1i32)
-        while i < n { left[ei(i)] = pix(plane, stride, xi - 1i32, min_i(limit, yi + i))
+        let col = usize(xi - 1i32)
+        while i < cnt { left[ei(i)] = i32(plane[usize(min_i(limit, yi + i)) * stride + col])
             i += 1i32 }
     }
-    var corner = mid
-    if p.have_above && p.have_left {
-        corner = pix(plane, stride, xi - 1i32, yi - 1i32)
-    } else if p.have_above {
-        corner = pix(plane, stride, xi, yi - 1i32)
-    } else if p.have_left {
-        corner = pix(plane, stride, xi - 1i32, yi)
-    }
+}
+
+fn corner_of(plane: []u16, stride: usize, xi: i32, yi: i32, p: IntraParams) -> i32 {
+    if p.have_above && p.have_left { ret pix(plane, stride, xi - 1i32, yi - 1i32) }
+    if p.have_above { ret pix(plane, stride, xi, yi - 1i32) }
+    if p.have_left { ret pix(plane, stride, xi - 1i32, yi) }
+    ret 1i32 << (p.bit_depth - 1u32)
+}
+
+// AboveRow / LeftCol of the general intra process, indices -1..w+h-1
+fn prepare(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p: IntraParams, above: []i32, left: []i32) {
+    edge_above(plane, stride, xi, yi, w, w + h, p, above)
+    edge_left(plane, stride, xi, yi, h, w + h, p, left)
+    let corner = corner_of(plane, stride, xi, yi, p)
     above[ei(-1i32)] = corner
     left[ei(-1i32)] = corner
 }
 
-fn paeth(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, above: []i32, left: []i32) {
+// Sets n samples from pos to v; predict_intra has checked that the block lies inside the plane.
+fn fill_run(plane: []u16, pos: usize, n: usize, v: u16) {
+    var j = 0usize
+    @nocheck {
+    while j < n {
+        plane[pos + j] = v
+        j += 1usize
+    }
+    }
+}
+
+// The block at pos lies inside the plane (checked by predict_intra) and the loops index the edge arrays below 64.
+fn paeth(plane: []u16, stride: usize, pos: usize, w: i32, h: i32, above: []i32, left: []i32) {
     let tl = above[ei(-1i32)]
     var i = 0i32
+    @nocheck {
     while i < h {
+        let l = left[ei(i)]
+        let row = pos + usize(i) * stride
         var j = 0i32
         while j < w {
             let a = above[ei(j)]
-            let l = left[ei(i)]
             let base = a + l - tl
             let p_left = abs_i(base - l)
             let p_top = abs_i(base - a)
             let p_top_left = abs_i(base - tl)
             var v = tl
             if p_left <= p_top && p_left <= p_top_left { v = l } else if p_top <= p_top_left { v = a }
-            put(plane, stride, xi + j, yi + i, v)
+            plane[row + usize(j)] = u16(v)
             j += 1i32
         }
         i += 1i32
+    }
     }
 }
 
@@ -232,7 +260,7 @@ fn recursive(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p: I
     }
 }
 
-fn dc(plane: []u16, stride: usize, xi: i32, yi: i32, log2w: u32, log2h: u32, p: IntraParams, above: []i32, left: []i32) {
+fn dc(plane: []u16, stride: usize, pos: usize, log2w: u32, log2h: u32, p: IntraParams, above: []i32, left: []i32) {
     let w = 1i32 << log2w
     let h = 1i32 << log2h
     var sum = 0i32
@@ -255,41 +283,66 @@ fn dc(plane: []u16, stride: usize, xi: i32, yi: i32, log2w: u32, log2h: u32, p: 
             k += 1i32 }
         v = clip1((sum + (w >> 1u32)) >> log2w, p.bit_depth)
     }
+    var i = 0usize
+    while i < usize(h) {
+        fill_run(plane, pos + i * stride, usize(w), u16(v))
+        i += 1usize
+    }
+}
+
+fn vert(plane: []u16, stride: usize, pos: usize, w: i32, h: i32, above: []i32) {
     var i = 0i32
+    @nocheck {
     while i < h {
+        let row = pos + usize(i) * stride
         var j = 0i32
         while j < w {
-            put(plane, stride, xi + j, yi + i, v)
+            plane[row + usize(j)] = u16(above[ei(j)])
             j += 1i32
         }
         i += 1i32
     }
+    }
 }
 
-fn smooth(plane: []u16, stride: usize, xi: i32, yi: i32, log2w: u32, log2h: u32, mode: u32, above: []i32, left: []i32) {
+fn horz(plane: []u16, stride: usize, pos: usize, w: i32, h: i32, left: []i32) {
+    var i = 0i32
+    while i < h {
+        fill_run(plane, pos + usize(i) * stride, usize(w), u16(left[ei(i)]))
+        i += 1i32
+    }
+}
+
+fn smooth(plane: []u16, stride: usize, pos: usize, log2w: u32, log2h: u32, mode: u32, above: []i32, left: []i32) {
     let wt = sm_weights()
     let w = 1i32 << log2w
     let h = 1i32 << log2h
     let ox = usize(w - 4i32)
     let oy = usize(h - 4i32)
+    let bl = left[ei(h - 1i32)]
+    let tr = above[ei(w - 1i32)]
     var i = 0i32
+    @nocheck {
     while i < h {
+        let wy = i32(wt[oy + usize(i)])
+        let l = left[ei(i)]
+        let row = pos + usize(i) * stride
         var j = 0i32
         while j < w {
-            let wy = i32(wt[oy + usize(i)])
             let wx = i32(wt[ox + usize(j)])
             var v = 0i32
             if mode == 9u32 {
-                v = round2(wy * above[ei(j)] + (256i32 - wy) * left[ei(h - 1i32)] + wx * left[ei(i)] + (256i32 - wx) * above[ei(w - 1i32)], 9u32)
+                v = (wy * above[ei(j)] + (256i32 - wy) * bl + wx * l + (256i32 - wx) * tr + 256i32) >> 9u32
             } else if mode == 10u32 {
-                v = round2(wy * above[ei(j)] + (256i32 - wy) * left[ei(h - 1i32)], 8u32)
+                v = (wy * above[ei(j)] + (256i32 - wy) * bl + 128i32) >> 8u32
             } else {
-                v = round2(wx * left[ei(i)] + (256i32 - wx) * above[ei(w - 1i32)], 8u32)
+                v = (wx * l + (256i32 - wx) * tr + 128i32) >> 8u32
             }
-            put(plane, stride, xi + j, yi + i, v)
+            plane[row + usize(j)] = u16(v)
             j += 1i32
         }
         i += 1i32
+    }
     }
 }
 
@@ -378,7 +431,7 @@ fn upsample(buf: []i32, num_px: i32, bd: u32) {
     }
 }
 
-fn directional(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p: IntraParams, above: []i32, left: []i32) {
+fn directional(plane: []u16, stride: usize, pos: usize, xi: i32, yi: i32, w: i32, h: i32, p: IntraParams, above: []i32, left: []i32) {
     let p_angle = mode_to_angle(p.mode) + p.angle_delta * 3i32
     var up_a = 0u32
     var up_l = 0u32
@@ -417,13 +470,24 @@ fn directional(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p:
             upsample(left, h + extra, p.bit_depth)
         }
     }
+    var dx0 = 0i32
+    var dy0 = 0i32
+    if p_angle < 90i32 {
+        dx0 = derivative(p_angle)
+    } else if p_angle > 90i32 && p_angle < 180i32 {
+        dx0 = derivative(180i32 - p_angle)
+        dy0 = derivative(p_angle - 90i32)
+    } else if p_angle > 180i32 {
+        dy0 = derivative(270i32 - p_angle)
+    }
     var i = 0i32
     while i < h {
+        let row = pos + usize(i) * stride
         var j = 0i32
         while j < w {
             var v = 0i32
             if p_angle < 90i32 {
-                let dx = derivative(p_angle)
+                let dx = dx0
                 let idx = (i + 1i32) * dx
                 let base = (idx >> (6u32 - up_a)) + (j << up_a)
                 let shift = ((idx << up_a) >> 1u32) & 31i32
@@ -434,8 +498,8 @@ fn directional(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p:
                     v = above[ei(max_base)]
                 }
             } else if p_angle > 90i32 && p_angle < 180i32 {
-                let dx = derivative(180i32 - p_angle)
-                let dy = derivative(p_angle - 90i32)
+                let dx = dx0
+                let dy = dy0
                 let idx = (j << 6u32) - (i + 1i32) * dx
                 let base = idx >> (6u32 - up_a)
                 if base >= 0i32 - (1i32 << up_a) {
@@ -448,7 +512,7 @@ fn directional(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p:
                     v = round2(left[ei(base_l)] * (32i32 - shift) + left[ei(base_l + 1i32)] * shift, 5u32)
                 }
             } else if p_angle > 180i32 {
-                let dy = derivative(270i32 - p_angle)
+                let dy = dy0
                 let idx = (j + 1i32) * dy
                 let base = (idx >> (6u32 - up_l)) + (i << up_l)
                 let shift = ((idx << up_l) >> 1u32) & 31i32
@@ -458,11 +522,22 @@ fn directional(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p:
             } else {
                 v = left[ei(i)]
             }
-            put(plane, stride, xi + j, yi + i, v)
+            @nocheck { plane[row + usize(j)] = u16(v) }
             j += 1i32
         }
         i += 1i32
     }
+}
+
+// Whether the w x h block at (xi, yi) and the edge samples the availability flags promise lie inside the plane.
+fn extents_ok(plane: []u16, stride: usize, xi: i32, yi: i32, w: i32, h: i32, p: IntraParams) -> bool {
+    if xi < 0i32 || yi < 0i32 || usize(xi + w) > stride { ret false }
+    if plane.len < usize(yi + h - 1i32) * stride + usize(xi + w) { ret false }
+    if p.have_above && yi < 1i32 { ret false }
+    if p.have_left && xi < 1i32 { ret false }
+    if p.max_x < 0i32 || p.max_y < 0i32 || usize(p.max_x) >= stride { ret false }
+    if (p.have_above || p.have_left) && plane.len < (usize(p.max_y) + 1usize) * stride { ret false }
+    ret true
 }
 
 fn predict_intra(plane: []u16, stride: usize, x: usize, y: usize, log2w: u32, log2h: u32, p: IntraParams) -> err {
@@ -471,19 +546,40 @@ fn predict_intra(plane: []u16, stride: usize, x: usize, y: usize, log2w: u32, lo
     let yi = i32(y)
     let w = 1i32 << log2w
     let h = 1i32 << log2h
-    var above: [192]i32 = zero
-    var left: [192]i32 = zero
-    prepare(plane, stride, xi, yi, w, h, p, above[..], left[..])
-    if p.use_filter_intra {
-        recursive(plane, stride, xi, yi, w, h, p, above[..], left[..])
-    } else if p.mode >= 1u32 && p.mode <= 8u32 {
-        directional(plane, stride, xi, yi, w, h, p, above[..], left[..])
-    } else if p.mode >= 9u32 && p.mode <= 11u32 {
-        smooth(plane, stride, xi, yi, log2w, log2h, p.mode, above[..], left[..])
-    } else if p.mode == 0u32 {
-        dc(plane, stride, xi, yi, log2w, log2h, p, above[..], left[..])
+    if !extents_ok(plane, stride, xi, yi, w, h, p) { ret Invalid }
+    let pos = y * stride + x
+    if p.use_filter_intra || (p.mode >= 3u32 && p.mode <= 8u32) || ((p.mode == 1u32 || p.mode == 2u32) && p.angle_delta != 0i32) {
+        var above: [192]i32 = zero
+        var left: [192]i32 = zero
+        prepare(plane, stride, xi, yi, w, h, p, above[..], left[..])
+        if p.use_filter_intra {
+            recursive(plane, stride, xi, yi, w, h, p, above[..], left[..])
+        } else {
+            directional(plane, stride, pos, xi, yi, w, h, p, above[..], left[..])
+        }
+        ret ok
+    }
+    var above: [96]i32 = undef
+    var left: [96]i32 = undef
+    if p.mode == 0u32 {
+        if p.have_above { edge_above(plane, stride, xi, yi, w, w, p, above[..]) }
+        if p.have_left { edge_left(plane, stride, xi, yi, h, h, p, left[..]) }
+        dc(plane, stride, pos, log2w, log2h, p, above[..], left[..])
+    } else if p.mode == 1u32 {
+        edge_above(plane, stride, xi, yi, w, w, p, above[..])
+        vert(plane, stride, pos, w, h, above[..])
+    } else if p.mode == 2u32 {
+        edge_left(plane, stride, xi, yi, h, h, p, left[..])
+        horz(plane, stride, pos, w, h, left[..])
     } else {
-        paeth(plane, stride, xi, yi, w, h, above[..], left[..])
+        edge_above(plane, stride, xi, yi, w, w, p, above[..])
+        edge_left(plane, stride, xi, yi, h, h, p, left[..])
+        if p.mode == 12u32 {
+            above[ei(-1i32)] = corner_of(plane, stride, xi, yi, p)
+            paeth(plane, stride, pos, w, h, above[..], left[..])
+        } else {
+            smooth(plane, stride, pos, log2w, log2h, p.mode, above[..], left[..])
+        }
     }
     ret ok
 }
@@ -493,28 +589,30 @@ fn predict_palette(plane: []u16, stride: usize, start_x: usize, start_y: usize, 
     let h = usize(1u32 << log2h)
     var i = 0usize
     while i < h {
+        let dst = (start_y + i) * stride + start_x
+        let src = (map_y * 4usize + i) * map_stride + map_x * 4usize
+        let last = dst + w - 1usize
+        plane[last] = plane[last]
         var j = 0usize
         while j < w {
-            plane[(start_y + i) * stride + start_x + j] = palette[usize(map[(map_y * 4usize + i) * map_stride + map_x * 4usize + j])]
+            let c = palette[usize(map[src + j])]
+            @nocheck { plane[dst + j] = c }
             j += 1usize
         }
         i += 1usize
     }
 }
 
-// subsampled luma with 3 fractional bits for chroma sample (j, i) of the block at (start_x, start_y)
+// subsampled luma with 3 fractional bits for chroma sample (xx, yy)
 fn cfl_luma(luma: []u16, luma_stride: usize, xx: i32, yy: i32, sub_x: u32, sub_y: u32, max_w: i32, max_h: i32) -> i32 {
     let ly = min_i(yy << sub_y, max_h - (1i32 << sub_y))
     let lx = min_i(xx << sub_x, max_w - (1i32 << sub_x))
-    var t = 0i32
-    var ddy = 0i32
-    while ddy <= i32(sub_y) {
-        var ddx = 0i32
-        while ddx <= i32(sub_x) {
-            t = t + pix(luma, luma_stride, lx + ddx, ly + ddy)
-            ddx += 1i32
-        }
-        ddy += 1i32
+    let at = usize(ly) * luma_stride + usize(lx)
+    var t = i32(luma[at])
+    if sub_x == 1u32 { t = t + i32(luma[at + 1usize]) }
+    if sub_y == 1u32 {
+        t = t + i32(luma[at + luma_stride])
+        if sub_x == 1u32 { t = t + i32(luma[at + luma_stride + 1usize]) }
     }
     ret t << (3u32 - sub_x - sub_y)
 }
@@ -524,12 +622,15 @@ fn predict_cfl(plane: []u16, stride: usize, luma: []u16, luma_stride: usize, sta
     let sy = i32(start_y)
     let w = 1i32 << log2w
     let h = 1i32 << log2h
+    var lum: [1024]i32 = undef
     var avg = 0i32
     var i = 0i32
     while i < h {
         var j = 0i32
         while j < w {
-            avg = avg + cfl_luma(luma, luma_stride, sx + j, sy + i, sub_x, sub_y, max_luma_w, max_luma_h)
+            let l = cfl_luma(luma, luma_stride, sx + j, sy + i, sub_x, sub_y, max_luma_w, max_luma_h)
+            lum[usize(i * w + j)] = l
+            avg = avg + l
             j += 1i32
         }
         i += 1i32
@@ -538,10 +639,10 @@ fn predict_cfl(plane: []u16, stride: usize, luma: []u16, luma_stride: usize, sta
     i = 0i32
     while i < h {
         var j = 0i32
+        let row = usize(sy + i) * stride + usize(sx)
         while j < w {
-            let l = cfl_luma(luma, luma_stride, sx + j, sy + i, sub_x, sub_y, max_luma_w, max_luma_h)
-            let dcv = pix(plane, stride, sx + j, sy + i)
-            put(plane, stride, sx + j, sy + i, clip1(dcv + round2_signed(alpha * (l - avg), 6u32), bit_depth))
+            let dcv = i32(plane[row + usize(j)])
+            plane[row + usize(j)] = u16(clip1(dcv + round2_signed(alpha * (lum[usize(i * w + j)] - avg), 6u32), bit_depth))
             j += 1i32
         }
         i += 1i32

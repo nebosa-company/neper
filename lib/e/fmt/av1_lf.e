@@ -168,6 +168,7 @@ fn level_of(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tab
 }
 
 fn wide8(buf: []u16, pos: usize, step: usize) {
+    @nocheck {
     let q0 = i32(buf[pos])
     let q1 = i32(buf[pos + step])
     let p0 = i32(buf[pos - step])
@@ -182,6 +183,7 @@ fn wide8(buf: []u16, pos: usize, step: usize) {
     buf[pos] = u16((p2 + p1 + p0 + q0 * 2i32 + q1 + q2 + q3 + 4i32) >> 3u32)
     buf[pos + step] = u16((p1 + p0 + q0 + q1 * 2i32 + q2 + q3 * 2i32 + 4i32) >> 3u32)
     buf[pos + 2usize * step] = u16((p0 + q0 + q1 + q2 * 2i32 + q3 * 3i32 + 4i32) >> 3u32)
+    }
 }
 
 // The sample filtering process (7.14.6) for the 4 samples of one edge segment. `pos` is q0 of the first
@@ -197,6 +199,7 @@ fn filt(buf: []u16, pos0: usize, step: usize, adv: usize, cnt: i32, lim: i32, bl
     let hi = (1i32 << (bd - 1u32)) - 1i32
     var pos = pos0
     var n = 0i32
+    @nocheck {
     while n < cnt {
         let q0 = i32(buf[pos])
         let q1 = i32(buf[pos + step])
@@ -266,10 +269,20 @@ fn filt(buf: []u16, pos0: usize, step: usize, adv: usize, cnt: i32, lim: i32, bl
         pos += adv
         n += 1i32
     }
+    }
+}
+
+// Whether filt with length ln at cnt positions stays inside a buffer of len samples.
+fn reach_ok(len: usize, pos: usize, step: usize, adv: usize, cnt: i32, ln: i32) -> bool {
+    var back = 2usize
+    if ln >= 16i32 { back = 7usize } else if ln >= 8i32 { back = 4usize } else if ln >= 6i32 { back = 3usize }
+    if pos < back * step { ret false }
+    ret pos + usize(cnt - 1i32) * adv + (back - 1usize) * step < len
 }
 
 // Luma filter length 16 on a flat position: the 14-tap filter when the outer samples are flat too, else the 8-tap.
 fn wide16(buf: []u16, pos: usize, step: usize, one: i32) {
+    @nocheck {
     let q0 = i32(buf[pos])
     let q1 = i32(buf[pos + step])
     let p0 = i32(buf[pos - step])
@@ -325,6 +338,7 @@ fn wide16(buf: []u16, pos: usize, step: usize, one: i32) {
     w = w + q6 - p1
     t = t + q6 - q3
     buf[pos + 5usize * step] = u16((w + t) >> 4u32)
+    }
 }
 
 // The sample filtering process (7.14.6) at one position of the boundary: `pos` is the index of q0, `step` the
@@ -333,6 +347,7 @@ fn filter_sample(buf: []u16, pos: usize, step: usize, chroma: bool, st: Strength
     let sh = bd - 8u32
     var ln = 16i32
     if filter_size == 4i32 { ln = 4i32 } else if chroma { ln = 6i32 } else if filter_size == 8i32 { ln = 8i32 }
+    if !reach_ok(buf.len, pos, step, 0usize, 1i32, ln) { ret }
     filt(buf, pos, step, 0usize, 1i32, st.limit << sh, st.blimit << sh, st.thresh << sh, 1i32 << sh, bd, ln)
 }
 
@@ -343,7 +358,7 @@ fn tx_sizes_of(f: *const LoopFilterFrame, plane: u32) -> []u8 {
 }
 
 // The edge loop filter process (7.14.2) for one 4x4 luma position; the frame and pass invariants are in c and t.
-fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c: *const Ctx, row0: usize, col0: usize) {
+fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c: *const Ctx, row0: usize, col0: usize) -> bool {
     let row = row0 | usize(c.sub_y)
     let col = col0 | usize(c.sub_x)
     let mi = row * f.mi_cols + col
@@ -359,15 +374,15 @@ fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c
         prev_ti = ti - c.mc
     }
     let tdim = t.td[usize(c.txs[ti])]
-    if (i32(cpos) & (tdim - 1i32)) != 0i32 { ret }
-    if (i32(cpos) & t.bm[usize(f.mi_sizes[mi])]) != 0i32 && f.skips[mi] != 0u8 && f.ref_frames[mi] > 0i8 { ret }
+    if (i32(cpos) & (tdim - 1i32)) != 0i32 { ret true }
+    if (i32(cpos) & t.bm[usize(f.mi_sizes[mi])]) != 0i32 && f.skips[mi] != 0u8 && f.ref_frames[mi] > 0i8 { ret true }
     var fs = tdim
     let pdim = t.td[usize(c.txs[prev_ti])]
     if pdim < fs { fs = pdim }
     if fs > c.maxfs { fs = c.maxfs }
     var lvl = level_of(p, f, t, c, mi)
     if lvl == 0i32 { lvl = level_of(p, f, t, c, prev_mi) }
-    if lvl <= 0i32 { ret }
+    if lvl <= 0i32 { ret true }
     let lim = t.lim[usize(lvl)]
     let blim = t.blim[usize(lvl)]
     let thr = t.thr[usize(lvl)]
@@ -379,7 +394,10 @@ fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c
     }
     var ln = fs
     if fs == 8i32 && c.chroma { ln = 6i32 }
-    filt(c.buf, yp * c.stride + xp, step, adv, 4i32, lim, blim, thr, c.one, c.bd, ln)
+    let pos = yp * c.stride + xp
+    if !reach_ok(c.buf.len, pos, step, adv, 4i32, ln) { ret false }
+    filt(c.buf, pos, step, adv, 4i32, lim, blim, thr, c.one, c.bd, ln)
+    ret true
 }
 
 fn check_dims(f: *const LoopFilterFrame, plane: u32) -> bool {
@@ -437,7 +455,7 @@ fn fill_tabs(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, c:
     }
 }
 
-fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, plane: u32, pass: u32) {
+fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, plane: u32, pass: u32) -> bool {
     var sub_x = 0u32
     var sub_y = 0u32
     var buf = f.p0
@@ -469,11 +487,12 @@ fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, 
     while row < row_end {
         var col = col_start
         while col < col_end {
-            edge(p, f, t, &c, row, col)
+            if !edge(p, f, t, &c, row, col) { ret false }
             col += col_step
         }
         row += row_step
     }
+    ret true
 }
 
 // Filters the whole frame in place (7.14.1). Invalid: the sample planes or MI arrays are too small.
@@ -491,8 +510,7 @@ fn loop_filter(p: *const LoopFilterParams, f: *const LoopFilterFrame) -> err {
     plane = 0u32
     while plane < f.num_planes {
         if plane == 0u32 || p.levels[usize(1u32 + plane)] != 0i32 {
-            filter_pass(p, f, &t, plane, 0u32)
-            filter_pass(p, f, &t, plane, 1u32)
+            if !filter_pass(p, f, &t, plane, 0u32) || !filter_pass(p, f, &t, plane, 1u32) { ret Invalid }
         }
         plane += 1u32
     }

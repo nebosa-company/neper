@@ -705,6 +705,7 @@ fn reconstruct_generic(quant: []const i32, tx_size: usize, tx_type: usize, lossl
 }
 
 fn idct4(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -737,9 +738,11 @@ fn idct4(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 1usize * st] = i32(v1)
     t[off + 2usize * st] = i32(v2)
     t[off + 3usize * st] = i32(v3)
+    }
 }
 
 fn idct8(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -828,9 +831,11 @@ fn idct8(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 5usize * st] = i32(v5)
     t[off + 6usize * st] = i32(v6)
     t[off + 7usize * st] = i32(v7)
+    }
 }
 
 fn idct16(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -1063,9 +1068,11 @@ fn idct16(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 13usize * st] = i32(v13)
     t[off + 14usize * st] = i32(v14)
     t[off + 15usize * st] = i32(v15)
+    }
 }
 
 fn idct32(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -1650,9 +1657,11 @@ fn idct32(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 29usize * st] = i32(v29)
     t[off + 30usize * st] = i32(v30)
     t[off + 31usize * st] = i32(v31)
+    }
 }
 
 fn idct64_k32(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -3069,9 +3078,11 @@ fn idct64_k32(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 61usize * st] = i32(v61)
     t[off + 62usize * st] = i32(v62)
     t[off + 63usize * st] = i32(v63)
+    }
 }
 
 fn fadst8(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -3172,9 +3183,11 @@ fn fadst8(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 5usize * st] = i32(0i64 - v7)
     t[off + 6usize * st] = i32(v5)
     t[off + 7usize * st] = i32(0i64 - v1)
+    }
 }
 
 fn fadst16(t: []i32, off: usize, st: usize, r: u32) {
+    @nocheck {
     let hi: i64 = (1i64 << (r - 1u32)) - 1i64
     let lo: i64 = 0i64 - (1i64 << (r - 1u32))
     var tx: i64 = 0i64
@@ -3435,6 +3448,7 @@ fn fadst16(t: []i32, off: usize, st: usize, r: u32) {
     t[off + 13usize * st] = i32(0i64 - v13)
     t[off + 14usize * st] = i32(v9)
     t[off + 15usize * st] = i32(0i64 - v1)
+    }
 }
 
 fn idct_nd(t: []i32, off: usize, st: usize, n: i32, r: u32) {
@@ -3442,6 +3456,7 @@ fn idct_nd(t: []i32, off: usize, st: usize, n: i32, r: u32) {
 }
 
 fn iadst4_nd(t: []i32, off: usize, st: usize) {
+    @nocheck {
     let t0 = i64(t[off])
     let t1 = i64(t[off + st])
     let t2 = i64(t[off + 2usize * st])
@@ -3454,9 +3469,11 @@ fn iadst4_nd(t: []i32, off: usize, st: usize) {
     t[off + st] = i32((s1 + s3 + 2048i64) >> 12u32)
     t[off + 2usize * st] = i32((s2 + 2048i64) >> 12u32)
     t[off + 3usize * st] = i32((s0 + s1 - s3 + 2048i64) >> 12u32)
+    }
 }
 
 fn iidentity_nd(t: []i32, off: usize, st: usize, n: i32) {
+    @nocheck {
     let n0 = usize(1i32 << u32(n))
     var k = 0usize
     var p = off
@@ -3466,15 +3483,18 @@ fn iidentity_nd(t: []i32, off: usize, st: usize, n: i32) {
         p += st
         k += 1usize
     }
+    }
 }
 
 fn transform_nd(t: []i32, off: usize, st: usize, kind: u8, n: i32, r: u32) {
+    let guard = t[off + ((1usize << u32(n)) - 1usize) * st]
     if kind == 0u8 { idct_nd(t, off, st, n, r) } else if kind == 1u8 {
         if n == 2i32 { iadst4_nd(t, off, st) } else if n == 3i32 { fadst8(t, off, st, r) } else { fadst16(t, off, st, r) }
     } else { iidentity_nd(t, off, st, n) }
 }
 
 fn finish_block(out: []i32, w: usize, h: usize, flip_ud: bool, flip_lr: bool) {
+    @nocheck {
     var y = 0usize
     var x = 0usize
     if flip_ud {
@@ -3511,6 +3531,7 @@ fn finish_block(out: []i32, w: usize, h: usize, flip_ud: bool, flip_lr: bool) {
             out[k] = (out[k] + 8i32) >> 4u32
             k += 1usize
         }
+    }
     }
 }
 
@@ -3563,6 +3584,7 @@ fn reconstruct_eob(quant: []const i32, tx_size: usize, tx_type: usize, lossless:
         i += 1usize
     }
     i = 0usize
+    @nocheck {
     while i < rl {
         let base = i * w
         var nz = false
@@ -3628,6 +3650,7 @@ fn reconstruct_eob(quant: []const i32, tx_size: usize, tx_type: usize, lossless:
             transform_nd(out, j, w, col_kind, log2_h, col_clamp)
         }
         j += 1usize
+    }
     }
     var flip_ud = false
     var flip_lr = false
