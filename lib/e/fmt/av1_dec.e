@@ -193,6 +193,13 @@ type Pipe = struct {
     published: Atomic[u32],
     stop: Atomic[u32],
     failed: Atomic[u32],
+    wf_next: Atomic[u32],
+    wf_cols: u32,
+    wf_total: u32,
+    wf_start: []u32,
+    wf_idx: []u32,
+    wf_order: []u32,
+    wf_done: []Atomic[u32],
 }
 
 type PipeJob = struct {
@@ -255,6 +262,7 @@ type Dec = struct {
     w_oa: [8][]av1_inter.Neighbor,
     w_ol: [8][]av1_inter.Neighbor,
     w_resid: [8][]i32,
+    w_iim: [8][]u8,
     ns_join: i64,
     ns_c: i64,
     ns_mode: i64,

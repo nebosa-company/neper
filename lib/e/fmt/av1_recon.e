@@ -467,6 +467,7 @@ fn pipe_start(d: *D.Dec) -> err {
         d.views[i].obmc_above = d.w_oa[i]
         d.views[i].obmc_left = d.w_ol[i]
         d.views[i].resid = d.w_resid[i]
+        d.views[i].ii_mask = d.w_iim[i]
         i += 1usize
     }
     av1_pool.submit(d.wp, n, pipe_work, mem.cast[*void](d))
@@ -491,6 +492,125 @@ fn pipe_finish(d: *D.Dec) -> err {
     ret ok
 }
 
+// Waits until the counter reaches `need`.
+fn wf_wait(c: *Atomic[u32], need: u32) {
+    while true {
+        let v = atomic.load(c, .Acquire)
+        if v >= need { ret }
+        let waited = os.wait_u32(c, v, 100000i64)
+    }
+}
+
+// A worker of the wavefront over the superblocks: a superblock is made after the one to its left and the ones above and to
+// the above right, which its intra edges read.
+fn wf_work(ctx: *void, i: usize) {
+    let d = mem.cast[*D.Dec](ctx)
+    let v = &d.views[i]
+    let p = d.pipe
+    let cols = p.wf_cols
+    while true {
+        var s = 0u32
+        while true {
+            let seen = atomic.load(&p.wf_next, .Acquire)
+            if seen >= p.wf_total { ret }
+            let (won, was) = atomic.cas(&p.wf_next, seen, seen + 1u32, .AcqRel, .Acquire)
+            if won {
+                s = seen
+                break
+            }
+        }
+        let sb = p.wf_order[usize(s)]
+        let r = usize(sb / cols)
+        let c = sb % cols
+        s = sb
+        wf_wait(&p.wf_done[r], c)
+        if r > 0usize {
+            var need = c + 2u32
+            if need > cols { need = cols }
+            wf_wait(&p.wf_done[r - 1usize], need)
+        }
+        var k = 0usize
+        if s > 0u32 { k = usize(p.wf_start[usize(s) - 1usize]) }
+        let end = usize(p.wf_start[usize(s)])
+        while k < end {
+            let e = replay_block(v, &v.brecs[usize(p.wf_idx[k])])
+            if e != ok { atomic.store(&p.failed, 1u32, .Release) }
+            k += 1usize
+        }
+        atomic.store(&p.wf_done[r], c + 1u32, .Release)
+        os.wake_all_u32(&p.wf_done[r])
+    }
+}
+
+// The intra and inter-intra blocks, a superblock at a time along the wavefront.
+fn replay_wavefront(d: *D.Dec) -> err {
+    let p = d.pipe
+    var sb4 = 16i32
+    if d.st.seq.use_128x128_superblock { sb4 = 32i32 }
+    let cols = usize((d.mi_cols + sb4 - 1i32) / sb4)
+    let rows = usize((d.mi_rows + sb4 - 1i32) / sb4)
+    let total = cols * rows
+    if total + 2usize > p.wf_start.len || rows + 2usize > p.wf_done.len || d.brec_n > p.wf_idx.len { ret Unsupported }
+    var s = 0usize
+    while s < total {
+        p.wf_start[s] = 0u32
+        s += 1usize
+    }
+    var k = 0usize
+    while k < d.brec_n {
+        let br = &d.brecs[k]
+        if br.kind != 0u8 {
+            s = usize(br.b.mi_row / sb4) * cols + usize(br.b.mi_col / sb4)
+            p.wf_start[s] += 1u32
+        }
+        k += 1usize
+    }
+    var run = 0u32
+    s = 0usize
+    while s < total {
+        let n = p.wf_start[s]
+        p.wf_start[s] = run
+        run += n
+        s += 1usize
+    }
+    k = 0usize
+    while k < d.brec_n {
+        let br = &d.brecs[k]
+        if br.kind != 0u8 {
+            s = usize(br.b.mi_row / sb4) * cols + usize(br.b.mi_col / sb4)
+            p.wf_idx[usize(p.wf_start[s])] = u32(k)
+            p.wf_start[s] += 1u32
+        }
+        k += 1usize
+    }
+    var r = 0usize
+    while r < rows {
+        atomic.store(&p.wf_done[r], 0u32, .Release)
+        r += 1usize
+    }
+    var n = 0usize
+    var t = 0usize
+    while t < cols + 2usize * rows {
+        r = 0usize
+        while r < rows && 2usize * r <= t {
+            let c = t - 2usize * r
+            if c < cols {
+                p.wf_order[n] = u32(r * cols + c)
+                n += 1usize
+            }
+            r += 1usize
+        }
+        t += 1usize
+    }
+    p.wf_cols = u32(cols)
+    p.wf_total = u32(total)
+    atomic.store(&p.wf_next, 0u32, .Release)
+    atomic.store(&p.failed, 0u32, .Release)
+    av1_pool.run(d.wp, d.pipe_n, wf_work, mem.cast[*void](d))
+    if atomic.load(&p.failed, .Acquire) == 1u32 { ret Invalid }
+    ret ok
+}
+
 // Makes the pixels of a frame parsed with d.deferred. The inter blocks were made by the pipeline while it was parsed (or are
 // made here, in one thread, when no pipeline ran); then the intra and inter-intra blocks in decode order, which read
 // their neighbours.
@@ -506,10 +626,14 @@ fn replay(d: *D.Dec, a: *mem.Arena, workers: usize) -> err {
             i += 1usize
         }
     }
-    var k = 0usize
-    while k < d.brec_n {
-        if d.brecs[k].kind != 0u8 { try replay_block(d, &d.brecs[k]) }
-        k += 1usize
+    if d.pipe_n >= 2usize {
+        try replay_wavefront(d)
+    } else {
+        var k = 0usize
+        while k < d.brec_n {
+            if d.brecs[k].kind != 0u8 { try replay_block(d, &d.brecs[k]) }
+            k += 1usize
+        }
     }
     let (j2, jc2) = time.monotonic()
     d.ns_c += j2.nanos - j1.nanos

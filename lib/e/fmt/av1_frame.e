@@ -223,6 +223,19 @@ fn alloc_frame_state(dc: *Decoder, d: *D.Dec, h: *const av1.Hdr, with_slots: boo
     let (pipes, pipes_error) = mem.alloc[D.Pipe](a, 1usize)
     if pipes_error != ok { ret pipes_error }
     d.pipe = &pipes[0usize]
+    let sbs = usize((h.mi_rows + 15i32) >> 4u32) * usize((h.mi_cols + 15i32) >> 4u32) + 2usize
+    let (wfs, wfs_error) = mem.alloc[u32](a, sbs)
+    if wfs_error != ok { ret wfs_error }
+    d.pipe.wf_start = wfs
+    let (wfo, wfo_error) = mem.alloc[u32](a, sbs)
+    if wfo_error != ok { ret wfo_error }
+    d.pipe.wf_order = wfo
+    let (wfi, wfi_error) = mem.alloc[u32](a, mi_count + 16usize)
+    if wfi_error != ok { ret wfi_error }
+    d.pipe.wf_idx = wfi
+    let (wfd, wfd_error) = mem.alloc[Atomic[u32]](a, usize((h.mi_rows + 15i32) >> 4u32) + 2usize)
+    if wfd_error != ok { ret wfd_error }
+    d.pipe.wf_done = wfd
     let (pjobs, pjobs_error) = mem.alloc[D.PipeJob](a, 8usize)
     if pjobs_error != ok { ret pjobs_error }
     d.pipe_jobs = pjobs
@@ -246,6 +259,9 @@ fn alloc_frame_state(dc: *Decoder, d: *D.Dec, h: *const av1.Hdr, with_slots: boo
         d.w_oa[wi] = w_oa
         d.w_ol[wi] = w_ol
         d.w_resid[wi] = w_rs
+        let (w_im, w_ime) = mem.alloc[u8](a, 16384usize)
+        if w_ime != ok { ret w_ime }
+        d.w_iim[wi] = w_im
         wi += 1usize
     }
     let (wk, wke) = av1_inter.new_work(a)
