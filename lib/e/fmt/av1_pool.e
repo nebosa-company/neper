@@ -58,7 +58,7 @@ fn work_some(p: *Pool) {
 
 fn worker_main(w: *Worker) {
     let p = w.p
-    var seen = atomic.load(&p.gen, .Acquire)
+    var seen = 0u32
     while true {
         var g = atomic.load(&p.gen, .Acquire)
         while g == seen {

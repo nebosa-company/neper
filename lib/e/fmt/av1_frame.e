@@ -836,3 +836,12 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
 fn flush(dc: *Decoder) -> err {
     ret finish_backend(dc)
 }
+
+// Ends the decoder: the backend thread and the worker pool are stopped. Call it before the decoder's arena is reset or
+// released.
+fn close(dc: *Decoder) -> err {
+    let flushed = finish_backend(dc)
+    let closed = av1_pool.close(dc.d.wp)
+    if flushed != ok { ret flushed }
+    ret closed
+}
