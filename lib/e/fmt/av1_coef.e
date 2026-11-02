@@ -466,6 +466,11 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
             *mem.cast[*u64](&l3[i]) = 0u64
             i += 8usize
         }
+        // the state of the symbol decoder lives in locals for the whole loop; it is written back to sd for a refill or a call
+        var dif = sd.dif
+        var rng = sd.range
+        var cnt = sd.cnt
+        let adapt = sd.adapt
         var c = eob
         while c > 0usize {
             c -= 1usize
@@ -474,6 +479,9 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
             let col = pos & wmask
             let pi = row * stride + col
             var level = 0u32
+            var off = 0usize
+            var phase = 0u32
+            var more = true
             if c == eob - 1usize {
                 var cx = 3usize
                 if c == 0usize {
@@ -483,8 +491,15 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
                 } else if c <= (height << bwl) / 4usize {
                     cx = 2usize
                 }
-                let off = eob_off + cx * 4usize
-                level = u32(av1_sym.read_symbol(sd, ctx[off..off + 4usize], 3usize)) + 1u32
+                let eoff = eob_off + cx * 4usize
+                sd.dif = dif
+                sd.range = rng
+                sd.cnt = cnt
+                level = u32(av1_sym.read_symbol(sd, ctx[eoff..eoff + 4usize], 3usize)) + 1u32
+                dif = sd.dif
+                rng = sd.range
+                cnt = sd.cnt
+                phase = 1u32
             } else {
                 let mag = u32(l3[pi + d0]) + u32(l3[pi + d1]) + u32(l3[pi + d2]) + u32(l3[pi + d3]) + u32(l3[pi + d4])
                 var cx = usize((mag + 1u32) >> 1u32)
@@ -500,31 +515,127 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
                 } else {
                     cx += usize(tab[pos_ctx_off + umin(col, 2usize)])
                 }
-                let off = base_off + cx * 5usize
-                level = u32(av1_sym.read_symbol4(sd, ctx, off))
+                off = base_off + cx * 5usize
             }
-            if level > 2u32 {
-                let mag = u32(lv[pi + m0]) + u32(lv[pi + m1]) + u32(lv[pi + m2])
-                var cx = usize((mag + 1u32) >> 1u32)
-                if cx > 6usize { cx = 6usize }
-                if pos != 0usize {
-                    var near = false
-                    if tx_class == TX_CLASS_2D {
-                        near = row < 2usize && col < 2usize
-                    } else if tx_class == TX_CLASS_HORIZ {
-                        near = col == 0usize
-                    } else {
-                        near = row == 0usize
+            if phase == 1u32 {
+                if level > 2u32 {
+                    let mag = u32(lv[pi + m0]) + u32(lv[pi + m1]) + u32(lv[pi + m2])
+                    var cx = usize((mag + 1u32) >> 1u32)
+                    if cx > 6usize { cx = 6usize }
+                    if pos != 0usize {
+                        var near = false
+                        if tx_class == TX_CLASS_2D {
+                            near = row < 2usize && col < 2usize
+                        } else if tx_class == TX_CLASS_HORIZ {
+                            near = col == 0usize
+                        } else {
+                            near = row == 0usize
+                        }
+                        if near { cx += 7usize } else { cx += 14usize }
                     }
-                    if near { cx += 7usize } else { cx += 14usize }
+                    off = br_off + cx * 5usize
+                } else {
+                    more = false
                 }
-                let off = br_off + cx * 5usize
-                var idx = 0u32
-                while idx < 4u32 {
-                    let br = u32(av1_sym.read_symbol4(sd, ctx, off))
-                    level += br
-                    if br < 3u32 { break }
-                    idx += 1u32
+            }
+            while more {
+                // one symbol of four values at ctx[off..]: the work of av1_sym.read_symbol4 with the state in locals
+                if cnt < 16i32 {
+                    sd.dif = dif
+                    sd.cnt = cnt
+                    av1_sym.refill(sd)
+                    dif = sd.dif
+                    cnt = sd.cnt
+                }
+                let v = u32(dif >> 48u32)
+                let r8 = rng >> 8u32
+                var symbol = 3usize
+                var prev = rng
+                var cur = 0u32
+                let c0 = ((r8 * ((32768u32 - u32(ctx[off])) >> 6u32)) >> 1u32) + 12u32
+                if v >= c0 {
+                    symbol = 0usize
+                    cur = c0
+                } else {
+                    let c1 = ((r8 * ((32768u32 - u32(ctx[off + 1usize])) >> 6u32)) >> 1u32) + 8u32
+                    if v >= c1 {
+                        symbol = 1usize
+                        cur = c1
+                        prev = c0
+                    } else {
+                        let c2 = ((r8 * ((32768u32 - u32(ctx[off + 2usize])) >> 6u32)) >> 1u32) + 4u32
+                        prev = c1
+                        if v >= c2 {
+                            symbol = 2usize
+                            cur = c2
+                        } else {
+                            prev = c2
+                        }
+                    }
+                }
+                let range = prev - cur
+                var nb = 0u32
+                var x = range
+                if x < 256u32 {
+                    x = x << 8u32
+                    nb = 8u32
+                }
+                if x < 4096u32 {
+                    x = x << 4u32
+                    nb += 4u32
+                }
+                if x < 16384u32 {
+                    x = x << 2u32
+                    nb += 2u32
+                }
+                if x < 32768u32 { nb += 1u32 }
+                rng = range << nb
+                dif = (dif - (u64(cur) << 48u32)) << nb
+                cnt -= i32(nb)
+                if adapt {
+                    let cn = ctx[off + 4usize]
+                    var rate = 5u32
+                    if cn > 15u16 { rate += 1u32 }
+                    if cn > 31u16 { rate += 1u32 }
+                    var k = 0usize
+                    while k < symbol {
+                        let cv = u32(ctx[off + k])
+                        ctx[off + k] = u16(cv - (cv >> rate))
+                        k += 1usize
+                    }
+                    while k < 3usize {
+                        let cv = u32(ctx[off + k])
+                        ctx[off + k] = u16(cv + ((32768u32 - cv) >> rate))
+                        k += 1usize
+                    }
+                    if cn < 32u16 { ctx[off + 4usize] = cn + 1u16 }
+                }
+                if phase == 0u32 {
+                    level = u32(symbol)
+                    phase = 1u32
+                    if level > 2u32 {
+                        let mag = u32(lv[pi + m0]) + u32(lv[pi + m1]) + u32(lv[pi + m2])
+                        var cx = usize((mag + 1u32) >> 1u32)
+                        if cx > 6usize { cx = 6usize }
+                        if pos != 0usize {
+                            var near = false
+                            if tx_class == TX_CLASS_2D {
+                                near = row < 2usize && col < 2usize
+                            } else if tx_class == TX_CLASS_HORIZ {
+                                near = col == 0usize
+                            } else {
+                                near = row == 0usize
+                            }
+                            if near { cx += 7usize } else { cx += 14usize }
+                        }
+                        off = br_off + cx * 5usize
+                    } else {
+                        more = false
+                    }
+                } else {
+                    level += u32(symbol)
+                    if symbol < 3usize || phase == 4u32 { more = false }
+                    phase += 1u32
                 }
             }
             lv[pi] = u8(level)
@@ -533,6 +644,9 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
             l3[pi] = u8(capped)
             quant[pos] = i32(level)
         }
+        sd.dif = dif
+        sd.range = rng
+        sd.cnt = cnt
     }
 }
 
