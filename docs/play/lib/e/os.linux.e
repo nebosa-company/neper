@@ -1,0 +1,5952 @@
+// `e.os` on Linux. D32 makes `e.os` the sole OS surface of `lib/e` and says it is
+// written per target: here over raw system calls through the `os.syscall` intrinsic,
+// which exists on Linux alone. `project.select_source` picks this file for a Linux
+// target, `os.windows.e` for a Windows one, and `lib/e/os.e` for anything else --
+// which is also the file the C bootstrap reads, since it knows nothing about variants.
+//
+// One module is one file, so the type block below is a copy of the one in those two
+// files rather than something shared: the language has no way to say otherwise. The
+// errors are not declared here at all -- `NotFound` and the rest are seeded by the
+// compiler into this module, and declaring them again would be a second `NotFound`.
+//
+// The functions the compiler supplies as intrinsics -- open, read, write, close, seek,
+// readdir, spawn, wait, the threads, the futex, the clock, args, exit -- appear in no
+// `.e` file and are not written here either. What is here is what a system call is
+// enough for now that `mem.address_of` can hand the kernel an address.
+
+use e.mem
+
+// The separator this target's paths are written with. `e.path` is pure -- it applies
+// whatever `Style` it is handed and asks the host nothing -- and no comptime query
+// names the target, so a portable module has no other way to learn which convention it
+// is running under. It is here because this file is the one that is chosen per target.
+const NATIVE_SEPARATOR: u8 = 47u8
+
+type File = struct { raw: usize }
+type Proc = struct { raw: usize }
+// What `wait_usage` answers (D311): the exit code `wait` would, and the most memory the
+// process ever had resident, in bytes.
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
+type Thread = struct { raw: usize }
+type Clock = enum u8 { Wall, Monotonic }
+type SeekWhence = enum u8 { Start, Current, End }
+type EntryKind = enum u8 { File, Dir, Symlink, Other }
+type DirEntry = struct { name: str, kind: EntryKind }
+type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
+type Handle = struct { raw: usize }
+type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
+// `mode` is the POSIX permission bits as the kernel keeps them. `file_id` is the
+// inode and `file_volume` is st_dev; together they identify a file across mounts.
+// `created_ns` is `-1` here -- `struct stat` has no creation time, and reading one needs
+// `statx`, which is a primitive of its own rather than a field of this one.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, file_volume: u64, link_count: u64 }
+
+// The kernel's `struct stat` for x86-64, field for field. `newfstatat` writes 144
+// bytes at the address it is given, so this layout is the ABI rather than a choice --
+// every field is here, named or reserved, because the size is part of the contract.
+type StatBuffer = struct { device: u64, inode: u64, link_count: u64, mode: u32, user: u32, group: u32, padding: u32, represented_device: u64, size: i64, block_size: i64, blocks: i64, accessed: i64, accessed_ns: i64, modified: i64, modified_ns: i64, changed: i64, changed_ns: i64, reserved0: i64, reserved1: i64, reserved2: i64 }
+
+const SYS_NEWFSTATAT: usize = 262usize
+const SYS_MKDIRAT: usize = 258usize
+const SYS_UNLINKAT: usize = 263usize
+const SYS_RENAMEAT: usize = 264usize
+const SYS_FCHMODAT: usize = 268usize
+const SYS_UTIMENSAT: usize = 280usize
+const SYS_SYMLINKAT: usize = 266usize
+const SYS_READLINKAT: usize = 267usize
+const SYS_GETCWD: usize = 79usize
+const SYS_CHDIR: usize = 80usize
+const SYS_READ: usize = 0usize
+const SYS_WRITE: usize = 1usize
+const SYS_CLOSE: usize = 3usize
+const SYS_OPENAT: usize = 257usize
+
+// O_RDONLY with O_CLOEXEC, so a spawn between here and there does not inherit it.
+const OPEN_READ_ONLY: usize = 524288usize
+
+// O_PATH with O_CLOEXEC: it opens the name and nothing else, so no permission to read is
+// needed and a directory opens as readily as a file.
+const OPEN_PATH_ONLY: usize = 2621440usize
+
+// O_RDWR with O_CREAT, O_EXCL and O_CLOEXEC: the exclusive bit is what makes creating a
+// name and finding out it was taken one operation rather than two.
+const OPEN_CREATE_NEW: usize = 524482usize
+
+// 0o600. A file nobody has seen yet belongs to whoever made it.
+const CREATE_MODE: usize = 384usize
+
+const SYS_GETRANDOM: usize = 318usize
+const SYS_FSYNC: usize = 74usize
+const SYS_LINKAT: usize = 265usize
+const SYS_RENAMEAT2: usize = 316usize
+const SYS_OPENAT2: usize = 437usize
+const SYS_SOCKET: usize = 41usize
+const SYS_CONNECT: usize = 42usize
+const SYS_SENDTO: usize = 44usize
+const SYS_RECVFROM: usize = 45usize
+const SYS_SHUTDOWN: usize = 48usize
+const SYS_BIND: usize = 49usize
+const SYS_LISTEN: usize = 50usize
+const SYS_GETSOCKNAME: usize = 51usize
+const SYS_SETSOCKOPT: usize = 54usize
+const SYS_GETTID: usize = 186usize
+const SYS_MMAP: usize = 9usize
+const SYS_NANOSLEEP: usize = 35usize
+const SYS_KILL: usize = 62usize
+const SYS_WAIT4: usize = 61usize
+const SYS_GETRUSAGE: usize = 98usize
+const RUSAGE_SELF: usize = 0usize
+const SYS_FLOCK: usize = 73usize
+const SYS_DUP: usize = 32usize
+const SYS_DUP2: usize = 33usize
+const SYS_FORK: usize = 57usize
+const SYS_EXECVE: usize = 59usize
+const SYS_SETPGID: usize = 109usize
+const SYS_EXIT_GROUP: usize = 231usize
+const SYS_PIPE2: usize = 293usize
+const SYS_MUNMAP: usize = 11usize
+const SYS_MSYNC: usize = 26usize
+const SYS_INOTIFY_ADD_WATCH: usize = 254usize
+const SYS_INOTIFY_INIT1: usize = 294usize
+const SYS_FCNTL: usize = 72usize
+const SYS_POLL: usize = 7usize
+const SYS_ACCEPT4: usize = 288usize
+const SYS_EPOLL_WAIT: usize = 232usize
+const SYS_EPOLL_CTL: usize = 233usize
+const SYS_EVENTFD2: usize = 290usize
+const SYS_EPOLL_CREATE1: usize = 291usize
+
+// The flag that makes a rename refuse an existing destination instead of replacing it.
+const RENAME_NOREPLACE: usize = 1usize
+
+// O_RDONLY with O_DIRECTORY and O_CLOEXEC, which is how a directory is opened to be
+// flushed rather than read.
+const OPEN_DIRECTORY: usize = 589824usize
+
+// The resolve flags `openat2` takes, which are the whole reason it is used instead of
+// `openat`: the kernel enforces them while it walks, where a check made here would be a
+// guess about a path that can change underneath it.
+const RESOLVE_NO_SYMLINKS: u64 = 4u64
+const RESOLVE_BENEATH: u64 = 8u64
+
+// The access modes and the four bits `OpenFlags` carries.
+const O_RDONLY: u64 = 0u64
+const O_WRONLY: u64 = 1u64
+const O_RDWR: u64 = 2u64
+const O_CREAT: u64 = 64u64
+const O_TRUNC: u64 = 512u64
+const O_APPEND: u64 = 1024u64
+const O_CLOEXEC: u64 = 524288u64
+
+// 0o644 for anything this creates, which the umask narrows.
+const FILE_MODE: u64 = 420u64
+
+const AF_INET: usize = 2usize
+const AF_INET6: usize = 10usize
+const SOCK_STREAM: usize = 1usize
+const SOCK_DGRAM: usize = 2usize
+
+// Every socket this opens is close-on-exec, for the same reason every file is.
+const SOCK_CLOEXEC: usize = 524288usize
+
+const F_GETFL: usize = 3usize
+const F_SETFL: usize = 4usize
+const O_NONBLOCK: usize = 2048usize
+
+const PROT_READ: usize = 1usize
+const PROT_WRITE: usize = 2usize
+const MAP_SHARED: usize = 1usize
+
+// The flag that puts a mapping exactly where it is told, replacing whatever was there.
+const MAP_FIXED: usize = 16usize
+
+const MS_SYNC: usize = 4usize
+
+// The same bit as `O_CLOEXEC`, which is a `u64` here because `openat2` reads its flags from a
+// structure while every other call takes them in a register. Each API names it for itself,
+// which is what the several spellings of 524288 in this file are.
+const PIPE_CLOEXEC: usize = 524288usize
+
+// The signal that cannot be caught or ignored, which is what `kill` means here.
+const SIGKILL: usize = 9usize
+const SIGTERM: usize = 15usize
+
+// What a child exits with when the program it was told to become could not be reached. The
+// shell's number for the same thing, so it is not a new convention to learn.
+const EXEC_FAILED: usize = 127usize
+
+// ponytail: an argument or environment list longer than this is refused rather than growing
+// the arrays; a caller with more than a thousand of either is doing something this is not for.
+const SPAWN_LIST_MAX: usize = 1024usize
+
+const LOCK_SH: usize = 1usize
+const LOCK_EX: usize = 2usize
+const LOCK_NB: usize = 4usize
+const LOCK_UN: usize = 8usize
+
+// ponytail: a timeout is polled, because neither host offers one -- ten milliseconds between
+// tries, which is a compromise between waking up for nothing and waiting past the deadline.
+// A host call that took a deadline would replace the loop entirely.
+const LOCK_POLL_NS: i64 = 10000000i64
+
+// The page size for this architecture. Every syscall number in this file already pins it to
+// x86-64, where the base page is four kilobytes whatever else the kernel maps in larger ones,
+// so there is nothing to ask -- and no way to ask without reading the startup stack, which a
+// library does not have.
+const PAGE_SIZE: usize = 4096usize
+
+const IN_CLOEXEC: usize = 524288usize
+
+// What a change to a directory's contents looks like: something appeared, went, was written
+// to, or was moved in or out. The two move halves are reported separately, which is why a
+// rename arrives as a removal and an addition rather than as one event.
+const IN_MODIFY: u32 = 2u32
+const IN_MOVED_FROM: u32 = 64u32
+const IN_MOVED_TO: u32 = 128u32
+const IN_CREATE: u32 = 256u32
+const IN_DELETE: u32 = 512u32
+const IN_Q_OVERFLOW: u32 = 16384u32
+const WATCH_MASK: usize = 962usize
+
+// ponytail: one read takes at most this much at a time, so a burst larger than it arrives
+// across successive reads rather than being lost.
+const WATCH_BUFFER: usize = 8192usize
+
+const EPOLL_CLOEXEC: usize = 524288usize
+const EFD_CLOEXEC: usize = 524288usize
+
+const EPOLL_CTL_ADD: usize = 1usize
+const EPOLL_CTL_DEL: usize = 2usize
+const EPOLL_CTL_MOD: usize = 3usize
+
+const EPOLLIN: u32 = 1u32
+const EPOLLOUT: u32 = 4u32
+const EPOLLERR: u32 = 8u32
+const EPOLLHUP: u32 = 16u32
+const EPOLLRDHUP: u32 = 8192u32
+
+// The largest `usize`, used as the token of the poller's own wake descriptor. A caller
+// that hands this in as a token of its own will not see those events, which is the one
+// value it may not use.
+const WAKE_TOKEN: usize = 18446744073709551615usize
+
+// ponytail: one wait returns at most this many at a time, because the buffer it reads into
+// is a frame local; a caller asking for more gets them across successive waits.
+const POLL_BATCH: usize = 64usize
+
+// `epoll_wait` accepts a signed C `int` timeout. Larger finite waits are retried by the
+// caller's deadline loop, rather than narrowing into a different timeout in the syscall.
+const EPOLL_TIMEOUT_MAX: isize = 2147483647isize
+
+// The kernel caps the environment well below this.
+const MAX_ENVIRONMENT: usize = 2097152usize
+
+// A target longer than this is not a link anyone meant to write.
+const MAX_LINK_LENGTH: usize = 65536usize
+
+// AT_FDCWD is -100: every path here is relative to the process's own directory, which
+// is what the plain `stat`/`mkdir` names mean. It is a `usize` because every argument
+// of `os.syscall` is one.
+const AT_FDCWD: usize = 18446744073709551516usize
+const AT_SYMLINK_NOFOLLOW: usize = 256usize
+const AT_REMOVEDIR: usize = 512usize
+
+// 0o777, which the process umask narrows -- the same default a shell `mkdir` gets.
+const DIRECTORY_MODE: usize = 511usize
+
+const NANOSECONDS_PER_SECOND: i64 = 1000000000i64
+
+// `UTIME_OMIT` in the nanosecond field of a `timespec` means "leave this stamp alone",
+// which is what a negative nanosecond count asks for.
+const UTIME_OMIT: i64 = 1073741822i64
+
+// The bits `e.fs.Permissions` is made of, plus setuid, setgid and sticky above them.
+// Anything higher in the mode is the format, which `kind` already carries.
+const PERMISSION_MASK: u32 = 4095u32
+
+const FORMAT_MASK: u32 = 61440u32
+const FORMAT_FILE: u32 = 32768u32
+const FORMAT_DIRECTORY: u32 = 16384u32
+const FORMAT_SYMLINK: u32 = 40960u32
+
+// A kernel path is NUL-terminated bytes and a neper `str` is a pointer and a length,
+// so every call that takes one copies it into the arena first. The caller marks the
+// arena and resets it, so the copy lasts exactly as long as the call.
+fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
+    var scan = 0usize
+    while scan < text.len {
+        // Passing an interior NUL would make the kernel act on only the prefix.
+        if text[scan] == 0u8 { ret (0usize, Unsupported) }
+        scan += 1usize
+    }
+    let (bytes, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
+    if allocation_error != ok { ret (0usize, OutOfMemory) }
+    var at = 0usize
+    while at < text.len {
+        bytes[at] = text[at]
+        at += 1usize
+    }
+    bytes[text.len] = 0u8
+    ret (mem.address_of(&bytes[0usize]), ok)
+}
+
+// The kernel returns its errno negated in the result register. Only the codes the
+// fence names are distinguished; everything else is `Failed`, which is what an
+// `ErrorDetail` is for once `last_error_detail` exists.
+fn current_thread_id() -> usize {
+    let answer = syscall(SYS_GETTID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if answer < 0isize { ret 0usize }
+    ret usize(answer)
+}
+
+// The same classification `from_errno` makes, as the enum the fence names. The two are written
+// apart because one answers with an `err` a caller matches on and the other with a kind a caller
+// prints, and neither is derivable from the other.
+fn error_kind_of(code: i32) -> ErrorKind {
+    if code == 1i32 { ret .Denied }
+    if code == 2i32 { ret .NotFound }
+    if code == 4i32 { ret .Interrupted }
+    if code == 11i32 { ret .WouldBlock }
+    if code == 12i32 { ret .OutOfMemory }
+    if code == 17i32 { ret .Exists }
+    if code == 22i32 { ret .Unsupported }
+    if code == 38i32 { ret .Unsupported }
+    if code == 40i32 { ret .Denied }
+    if code == 110i32 { ret .Timeout }
+    ret .Other
+}
+
+// Section 5's per-thread error detail, which is the one piece of ambient state `e.os` keeps.
+// `docs/modules.md` names it an explicit exception rather than an invisible guarantee, and D109
+// spells out that H07 is chartered to delete it -- so it is written to be replaceable and to fail
+// by saying nothing rather than by saying something another thread's.
+//
+// A slot per thread, keyed by the thread's own identifier. `e.os` may depend on `e.mem` and
+// nothing else (docs/modules.json), so there are no atomics to claim a slot with; two threads
+// whose identifiers land on the same slot overwrite each other. That is why a read requires the
+// identifier to match exactly and answers `Other` with no code when it does not: a detail that is
+// absent costs a caller a diagnostic, and one belonging to another thread costs it the truth.
+//
+// ponytail: sixty-four slots, no eviction, no atomics. A program with more live threads than that
+// loses details it would otherwise keep, which is a diagnostic and never a wrong answer. Real
+// thread-local storage would replace the whole of it, and H07 is where that belongs.
+const ERROR_SLOTS: usize = 64usize
+
+var error_slot_thread: [64]usize
+var error_slot_code: [64]i32
+// 0 is unused, 1 derives the kind from the native code, 2 is a contextual `Denied`
+// and 3 is a contextual `Timeout`.
+var error_slot_used: [64]u8
+// Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
+// then leaves the slot alone, so the primary failure's detail is what
+// `last_error_detail` finds after the cleanup.
+var error_slot_fresh: [64]u8
+
+// The code is written first and the identifier last, so a reader that sees its own identifier is
+// looking at a slot whose code was already stored. Without atomics that is the most that can be
+// said, and it is enough for the only failure that matters here.
+fn record_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
+}
+
+// A cleanup's failure is recorded only when no primary failure waits to be read.
+fn record_cleanup_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
+    record_error_detail(code)
+}
+
+// The checked path with the caller's detail (D417, H07): the failure's detail is
+// written into `detail` at the failing call, before any cleanup on the way out can
+// record over it, and the caller holds it as ordinary data -- `kind`,
+// `native_code`, the operation and the subject -- with no slot to read later and no
+// order to keep. On success `detail` is not written. The same `err` comes back
+// as from the plain call, so `try` and the affine rules see nothing new.
+fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = stat(a, path)
+    if stat_error != ok {
+        *detail = last_error_detail("stat", path)
+        ret (info, stat_error)
+    }
+    ret (info, ok)
+}
+
+fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
+    let (dir, open_error) = dir_open(a, path)
+    if open_error != ok {
+        *detail = last_error_detail("dir_open", path)
+        ret (dir, open_error)
+    }
+    ret (dir, ok)
+}
+
+fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err) {
+    let (file, open_error) = open(a, path, flags)
+    if open_error != ok {
+        *detail = last_error_detail("open", path)
+        ret (file, open_error)
+    }
+    ret (file, ok)
+}
+
+// The rest of the path-taking surface in the `_detail` form (D443, H07): each
+// writes its own failure into the caller's value at the call, as `stat_detail`
+// does, so no order with a later failing operation is the caller's to keep.
+fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = lstat(a, path)
+    if stat_error != ok {
+        *detail = last_error_detail("lstat", path)
+        ret (info, stat_error)
+    }
+    ret (info, ok)
+}
+
+fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let made = mkdir(a, path)
+    if made != ok { *detail = last_error_detail("mkdir", path) }
+    ret made
+}
+
+fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let removed = remove_file(a, path)
+    if removed != ok { *detail = last_error_detail("remove_file", path) }
+    ret removed
+}
+
+fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let removed = remove_dir(a, path)
+    if removed != ok { *detail = last_error_detail("remove_dir", path) }
+    ret removed
+}
+
+fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err {
+    let renamed = rename(a, src, dst)
+    if renamed != ok { *detail = last_error_detail("rename", src) }
+    ret renamed
+}
+
+fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
+    let (file, create_error) = create_new(a, path)
+    if create_error != ok {
+        *detail = last_error_detail("create_new", path)
+        ret (file, create_error)
+    }
+    ret (file, ok)
+}
+
+fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
+    let (points_to, link_error) = read_link(a, path)
+    if link_error != ok {
+        *detail = last_error_detail("read_link", path)
+        ret (points_to, link_error)
+    }
+    ret (points_to, ok)
+}
+
+fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
+    let (resolved, canonical_error) = canonical(a, path)
+    if canonical_error != ok {
+        *detail = last_error_detail("canonical", path)
+        ret (resolved, canonical_error)
+    }
+    ret (resolved, ok)
+}
+
+// The intrinsic `read` and `write` keep the bootstrap ABI compact and return only
+// portable `err`. These checked forms make the host code ordinary caller-owned data
+// at the same call. An unnamed handle has no stable path, so `subject` is empty.
+// The count is still the exact progress result: zero on this host when the syscall
+// fails, and the short count when it succeeds.
+fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(SYS_READ, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize {
+        let code = i32(0isize - taken)
+        *detail = detail_from_code(code, "read", "")
+        ret (0usize, error_of_result(taken))
+    }
+    ret (usize(taken), ok)
+}
+
+fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let written = syscall(SYS_WRITE, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if written < 0isize {
+        let code = i32(0isize - written)
+        *detail = detail_from_code(code, "write", "")
+        ret (0usize, error_of_result(written))
+    }
+    ret (usize(written), ok)
+}
+
+fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = error_kind_of(code)
+    detail.native_code = code
+    detail.operation = operation
+    detail.subject = subject
+    ret detail
+}
+
+fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = .Other
+    detail.operation = operation
+    detail.subject = subject
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    // Another thread's slot, or one nothing has written, is no detail at all.
+    let used = error_slot_used[slot]
+    if used == 0u8 { ret detail }
+    if error_slot_thread[slot] != thread { ret detail }
+    let code = error_slot_code[slot]
+    error_slot_fresh[slot] = 0u8
+    detail = detail_from_code(code, operation, subject)
+    if used == 2u8 { detail.kind = .Denied }
+    if used == 3u8 { detail.kind = .Timeout }
+    ret detail
+}
+
+fn from_errno(result: isize) -> err {
+    if result >= 0isize { ret ok }
+    // Every failing syscall in this file is classified here, which is why the detail is kept here
+    // and not at forty call sites.
+    record_error_detail(i32(0isize - result))
+    ret error_of_result(result)
+}
+
+// A cleanup's failure (D360): classified the same, recorded only over no unread
+// primary failure.
+fn from_errno_cleanup(result: isize) -> err {
+    if result >= 0isize { ret ok }
+    record_cleanup_error_detail(i32(0isize - result))
+    ret error_of_result(result)
+}
+
+fn error_of_result(result: isize) -> err {
+    if result == -1isize { ret Denied }
+    if result == -2isize { ret NotFound }
+    if result == -4isize { ret Interrupted }
+    if result == -11isize { ret WouldBlock }
+    if result == -12isize { ret OutOfMemory }
+    if result == -13isize { ret Denied }
+    if result == -17isize { ret Exists }
+    // EADDRINUSE: a name already taken, which is what `Exists` means for a path too.
+    if result == -98isize { ret Exists }
+    if result == -110isize { ret Timeout }
+    // EXDEV: a rename across filesystems, which the kernel will not do at all. EINVAL is
+    // the same shape of answer -- the request cannot be honoured as asked, which is what
+    // reading a link from something that is not one gets.
+    if result == -18isize { ret Unsupported }
+    if result == -22isize { ret Unsupported }
+    if result == -38isize { ret Unsupported }
+    // ELOOP: under `RESOLVE_NO_SYMLINKS` this is a link that was refused, not a cycle.
+    if result == -40isize { ret Denied }
+    ret Failed
+}
+
+// S_IFMT is the top four bits of the mode. A socket, a fifo and a device are all
+// `Other`: the fence distinguishes only what a directory walk has to act on.
+fn kind_from_mode(mode: u32) -> EntryKind {
+    let format = mode & FORMAT_MASK
+    if format == FORMAT_FILE { ret .File }
+    if format == FORMAT_DIRECTORY { ret .Dir }
+    if format == FORMAT_SYMLINK { ret .Symlink }
+    ret .Other
+}
+
+fn stat_with_flags(a: *mem.Arena, path: str, flags: usize) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (info, path_error)
+    }
+    // The buffer is a local, so the kernel writes into this frame and the arena copy
+    // of the path is the only thing that has to outlive the call.
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_NEWFSTATAT, AT_FDCWD, path_address, mem.address_of(&buffer), flags, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if result < 0isize { ret (info, from_errno(result)) }
+    info.kind = kind_from_mode(buffer.mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = -1i64
+    info.mode = buffer.mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.file_volume = buffer.device
+    info.link_count = buffer.link_count
+    ret (info, ok)
+}
+
+fn stat(a: *mem.Arena, path: str) -> (FileInfo, err) {
+    let (info, stat_error) = stat_with_flags(a, path, 0usize)
+    ret (info, stat_error)
+}
+
+// The link itself rather than what it points at, which is the whole difference: a
+// dangling symlink has an `lstat` and no `stat`.
+fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
+    let (info, stat_error) = stat_with_flags(a, path, AT_SYMLINK_NOFOLLOW)
+    ret (info, stat_error)
+}
+
+// What `utimensat` writes: two `timespec`s, the accessed stamp first. The layout is the
+// ABI, so the kernel reads 32 bytes at the address this is handed by.
+type TimeSpec = struct { seconds: i64, nanoseconds: i64 }
+type TimeSpecPair = struct { accessed: TimeSpec, modified: TimeSpec }
+
+fn to_timespec(value: i64) -> TimeSpec {
+    var spec: TimeSpec = zero
+    if value < 0i64 {
+        spec.nanoseconds = UTIME_OMIT
+        ret spec
+    }
+    spec.seconds = value / NANOSECONDS_PER_SECOND
+    spec.nanoseconds = value % NANOSECONDS_PER_SECOND
+    ret spec
+}
+
+// `mkdirat` and `unlinkat` have the same shape: the directory a path is relative to,
+// the path, and one modifier -- a mode for one, a flag for the other.
+fn path_syscall(a: *mem.Arena, number: usize, path: str, modifier: usize) -> err {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret path_error
+    }
+    let result = syscall(number, AT_FDCWD, path_address, modifier, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+fn mkdir(a: *mem.Arena, path: str) -> err {
+    ret path_syscall(a, SYS_MKDIRAT, path, DIRECTORY_MODE)
+}
+
+// A symlink is removed as itself: `unlinkat` never follows the final component.
+fn remove_file(a: *mem.Arena, path: str) -> err {
+    ret path_syscall(a, SYS_UNLINKAT, path, 0usize)
+}
+
+fn remove_dir(a: *mem.Arena, path: str) -> err {
+    ret path_syscall(a, SYS_UNLINKAT, path, AT_REMOVEDIR)
+}
+
+// The kernel offers no way to ask how long a link is: `readlinkat` fills what it is given
+// and a full buffer cannot be told from an exact fit. `lstat` reports a symbolic link's
+// size as the length of its target, so that is the first guess; the buffer doubles from
+// there for the filesystems that report zero.
+fn read_link(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    let (described, described_error) = lstat(a, path)
+    var capacity = 256usize
+    if described_error == ok && described.size != 0u64 { capacity = usize(described.size) + 1usize }
+    while capacity <= MAX_LINK_LENGTH {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = syscall(SYS_READLINKAT, AT_FDCWD, path_address, mem.address_of(&buffer[0usize]), capacity, 0usize, 0usize)
+        if written < 0isize {
+            let call_error = from_errno(written)
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        // A result shorter than the buffer is the whole of it. The answer and the scratch
+        // the search for its length needed both stay in the caller's arena, which is what
+        // `mem.mark` around the call is for.
+        if usize(written) < capacity { ret (buffer[0usize..usize(written)], ok) }
+        capacity = capacity * 2usize
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+// `symlinkat` is the one call here whose directory argument is not first: the target is a
+// string the kernel stores rather than a path it resolves, so nothing is relative to
+// anything until the link is read.
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (target_address, target_error) = c_string(a, target_path)
+    if target_error != ok {
+        mem.reset(a, checkpoint)
+        ret target_error
+    }
+    let (link_address, link_error) = c_string(a, link)
+    if link_error != ok {
+        mem.reset(a, checkpoint)
+        ret link_error
+    }
+    let result = syscall(SYS_SYMLINKAT, target_address, AT_FDCWD, link_address, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+// `getcwd` fills the buffer and returns what it filled, the terminator included, or
+// `-ERANGE` when the buffer is too small -- so unlike `readlinkat` there is no ambiguity
+// about a full one and the loop is only about finding a size that fits.
+fn current_dir(a: *mem.Arena) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    var capacity = 256usize
+    while capacity <= MAX_LINK_LENGTH {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = syscall(SYS_GETCWD, mem.address_of(&buffer[0usize]), capacity, 0usize, 0usize, 0usize, 0usize)
+        // ERANGE, and the only failure a bigger buffer answers.
+        if written == -34isize {
+            capacity = capacity * 2usize
+            continue
+        }
+        if written < 0isize {
+            let call_error = from_errno(written)
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        if written == 0isize {
+            mem.reset(a, checkpoint)
+            ret ("", Failed)
+        }
+        // The count includes the NUL, which a `str` does not carry.
+        ret (buffer[0usize..usize(written) - 1usize], ok)
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+// The kernel keeps the running image as a symbolic link, so this is `read_link` and
+// nothing else. What comes back has its links already resolved -- that is what the kernel
+// stores, not a choice made here -- and it needs `/proc` mounted, without which it is the
+// `NotFound` that any missing path is.
+// One NAME=VALUE record at a time. The name has to match to its whole length and end at
+// the `=`, or a lookup of `PAT` would be answered by `PATH`.
+fn environment_value(block: str, name: str) -> (str, bool) {
+    var at = 0usize
+    while at < block.len {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        if end > at + name.len && block[at + name.len] == 61u8 {
+            var matched = true
+            var offset = 0usize
+            while offset < name.len {
+                if block[at + offset] != name[offset] { matched = false }
+                offset += 1usize
+            }
+            if matched { ret (block[at + name.len + 1usize..end], true) }
+        }
+        at = end + 1usize
+    }
+    ret ("", false)
+}
+
+// The environment the process was started with, which is what `/proc/self/environ` holds:
+// NAME=VALUE records separated by NUL bytes. Nothing in this language changes an
+// environment, so a snapshot taken at exec is the whole truth.
+//
+// Every file under `/proc` reports a size of zero, so there is no asking how much to
+// allocate: a buffer that filled exactly may have been cut short, and only a short read
+// proves the whole of it is here.
+fn environment_bytes(a: *mem.Arena) -> (str, err) {
+    let (path_address, path_error) = c_string(a, "/proc/self/environ")
+    if path_error != ok { ret ("", path_error) }
+    var capacity = 8192usize
+    while capacity <= MAX_ENVIRONMENT {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok { ret ("", OutOfMemory) }
+        let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+        if descriptor < 0isize { ret ("", from_errno(descriptor)) }
+        var filled = 0usize
+        var failure = ok
+        while filled < capacity {
+            let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&buffer[filled]), capacity - filled, 0usize, 0usize, 0usize)
+            if taken < 0isize {
+                failure = from_errno(taken)
+                break
+            }
+            if taken == 0isize { break }
+            filled += usize(taken)
+        }
+        let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        if failure != ok { ret ("", failure) }
+        if filled < capacity { ret (buffer[0usize..filled], ok) }
+        capacity = capacity * 2usize
+    }
+    ret ("", Failed)
+}
+
+fn env(a: *mem.Arena, name: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (block, block_error) = environment_bytes(a)
+    if block_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", block_error)
+    }
+    let (value, found) = environment_value(block, name)
+    if !found {
+        mem.reset(a, checkpoint)
+        ret ("", NotFound)
+    }
+    ret (value, ok)
+}
+
+// A descriptor number as decimal, which is the only formatting this file needs -- and the
+// reason it does not reach for `e.str`, since `e.os` may depend on `e.mem` and nothing
+// else.
+// `getrandom` may return fewer bytes than were asked for, and may be interrupted before
+// it returns any, so the loop is not decoration. A zero-length request is not a failure.
+fn random(buffer: []u8) -> err {
+    var filled = 0usize
+    while filled < buffer.len {
+        let taken = syscall(SYS_GETRANDOM, mem.address_of(&buffer[filled]), buffer.len - filled, 0usize, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            // EINTR: a signal arrived before anything was written, so ask again.
+            if taken == -4isize { continue }
+            ret from_errno(taken)
+        }
+        if taken == 0isize { ret Failed }
+        filled += usize(taken)
+    }
+    ret ok
+}
+
+// The file must not be there, and finding out is the same operation as creating it. That
+// is the whole point: a name checked and then opened is a name something else can take in
+// between.
+fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    let (file, create_error) = create_new_with_mode(a, path, u32(CREATE_MODE))
+    ret (file, create_error)
+}
+
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err) {
+    var file: File = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_CREATE_NEW, usize(mode & PERMISSION_MASK), 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (file, from_errno(descriptor)) }
+    file.raw = usize(descriptor)
+    ret (file, ok)
+}
+
+fn descriptor_path(a: *mem.Arena, descriptor: usize) -> (str, err) {
+    let prefix = "/proc/self/fd/"
+    let (bytes, allocation_error) = mem.alloc[u8](a, prefix.len + 20usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < prefix.len {
+        bytes[at] = prefix[at]
+        at += 1usize
+    }
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var value = descriptor
+    if value == 0usize {
+        digits[0usize] = 48u8
+        count = 1usize
+    }
+    while value != 0usize {
+        digits[count] = 48u8 + u8(value % 10usize)
+        value = value / 10usize
+        count += 1usize
+    }
+    var placed = 0usize
+    while placed < count {
+        bytes[at + placed] = digits[count - 1usize - placed]
+        placed += 1usize
+    }
+    ret (bytes[0usize..at + count], ok)
+}
+
+// The kernel resolves a path once and for all when it opens it, and then keeps the result
+// where it can be read back. So this is an open and a `read_link` rather than an
+// implementation of `realpath`: every symbolic link, `.` and `..` is already gone by the
+// time the descriptor exists, and the answer is absolute because the kernel's own record
+// of it is.
+fn canonical(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_PATH_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        let open_error = from_errno(descriptor)
+        mem.reset(a, checkpoint)
+        ret ("", open_error)
+    }
+    let (name, name_error) = descriptor_path(a, usize(descriptor))
+    if name_error != ok {
+        let unused_close = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        mem.reset(a, checkpoint)
+        ret ("", name_error)
+    }
+    // A `/proc` symbolic link reports a fixed size rather than its target's length, so
+    // `read_link` finds the real one by growing -- which it already does.
+    let (resolved, resolved_error) = read_link(a, name)
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if resolved_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", resolved_error)
+    }
+    ret (resolved, ok)
+}
+
+fn executable_path(a: *mem.Arena) -> (str, err) {
+    let (image, image_error) = read_link(a, "/proc/self/exe")
+    ret (image, image_error)
+}
+
+fn set_current_dir(a: *mem.Arena, path: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret path_error
+    }
+    let result = syscall(SYS_CHDIR, path_address, 0usize, 0usize, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+// `fchmodat` takes no flag this host honours -- it rejects `AT_SYMLINK_NOFOLLOW` rather
+// than changing a link's own bits -- so the modifier slot carries the mode itself.
+fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err {
+    ret path_syscall(a, SYS_FCHMODAT, path, usize(mode & PERMISSION_MASK))
+}
+
+// Whether the stamps are kept at all is the filesystem's business: this call succeeds on
+// one that stores no times of its own and reading them back is the only way to tell.
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret path_error
+    }
+    var times: TimeSpecPair = zero
+    times.accessed = to_timespec(accessed_ns)
+    times.modified = to_timespec(modified_ns)
+    let result = syscall(SYS_UTIMENSAT, AT_FDCWD, path_address, mem.address_of(&times), 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+type Dir = resource(dir_close) struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+
+// `openat2` reads this rather than taking flags in registers, which is what lets it grow
+// resolve rules without a new call. The size is passed alongside it and the kernel checks
+// both, so the layout is the ABI.
+type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+type Watch = resource(watch_close) struct { state: *void }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+
+// `struct inotify_event`: sixteen bytes and then the name, whose length the header carries
+// and which the kernel pads so the next one starts aligned. The four fields are all
+// four-byte, so this needs no padding of its own.
+type InotifyHeader = struct { descriptor: i32, mask: u32, cookie: u32, name_length: u32 }
+
+// What a watch remembers: the descriptor to read from, and the directory it is watching --
+// because the kernel reports a name relative to that and `WatchEvent` wants a path.
+type WatchState = struct { descriptor: usize, base: str }
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var watch: Watch = zero
+    // A recursive watch here is a watch per directory plus a table mapping each descriptor
+    // back to its path, and adding one whenever a directory appears. Until that is written
+    // this refuses, rather than watching only the top and looking like it did more.
+    if recursive { ret (watch, Unsupported) }
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (watch, path_error)
+    }
+    let descriptor = syscall(SYS_INOTIFY_INIT1, IN_CLOEXEC, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        mem.reset(a, checkpoint)
+        ret (watch, from_errno(descriptor))
+    }
+    let added = syscall(SYS_INOTIFY_ADD_WATCH, usize(descriptor), path_address, WATCH_MASK, 0usize, 0usize, 0usize)
+    if added < 0isize {
+        let call_error = from_errno(added)
+        let unused = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        mem.reset(a, checkpoint)
+        ret (watch, call_error)
+    }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok {
+        let unused = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, OutOfMemory)
+    }
+    holder[0usize].descriptor = usize(descriptor)
+    holder[0usize].base = path
+    watch.state = mem.cast[*void](&holder[0usize])
+    ret (watch, ok)
+}
+
+fn action_from_mask(mask: u32) -> WatchAction {
+    if mask & IN_Q_OVERFLOW != 0u32 { ret .Overflow }
+    if mask & IN_CREATE != 0u32 { ret .Added }
+    if mask & IN_MOVED_TO != 0u32 { ret .Added }
+    if mask & IN_DELETE != 0u32 { ret .Removed }
+    if mask & IN_MOVED_FROM != 0u32 { ret .Removed }
+    ret .Modified
+}
+
+// The name and the watched directory joined, in the caller's arena. The separator is written
+// here rather than through `e.path`, which `e.os` may not depend on.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+// One read returns as many whole events as fit, and the kernel never splits one, so the walk
+// is over a buffer that always ends on a boundary.
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    let state = mem.cast[*WatchState](w.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, WATCH_BUFFER)
+    if allocation_error != ok { ret (0usize, OutOfMemory) }
+    let taken = syscall(SYS_READ, state.descriptor, mem.address_of(&buffer[0usize]), WATCH_BUFFER, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    var produced = 0usize
+    var at = 0usize
+    while at + 16usize <= usize(taken) {
+        let header = mem.cast[*InotifyHeader](&buffer[at])
+        let name_length = usize(header.name_length)
+        let mask = header.mask
+        at += 16usize
+        // The name is NUL-padded inside the length the header gave, so its own end is the
+        // first NUL rather than that length.
+        var name_end = 0usize
+        while name_end < name_length && buffer[at + name_end] != 0u8 { name_end += 1usize }
+        if produced < events.len {
+            var entry: WatchEvent = zero
+            entry.action = action_from_mask(mask)
+            if name_end != 0usize {
+                let (joined, join_error) = watch_path(a, state.base, buffer[at..at + name_end])
+                if join_error != ok { ret (produced, join_error) }
+                entry.path = joined
+            } else {
+                entry.path = state.base
+            }
+            events[produced] = entry
+            produced += 1usize
+        }
+        at += name_length
+    }
+    ret (produced, ok)
+}
+
+fn watch_close(w: own Watch) -> err {
+    let state = mem.cast[*WatchState](w.state)
+    ret from_errno_cleanup(syscall(SYS_CLOSE, state.descriptor, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
+
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
+
+// `raw` carries whether the mapping may be written and nothing else. This host needs no
+// handle to keep a mapping alive, and the other closes its mapping object as soon as the
+// view exists, so the field is free -- and something has to remember, because
+// `mapping_bytes_mut` must refuse rather than let a write fault.
+const MAPPING_READ_ONLY: usize = 0usize
+const MAPPING_WRITABLE: usize = 1usize
+
+// A file mapping has to arrive as a `*u8`, and `mmap` answers with an address. D96 leaves no
+// way from one to the other, so the pointer comes from `os.reserve` -- which returns a real
+// one over a `PROT_NONE` region -- and `MAP_FIXED` then replaces that reservation with the
+// file at the same address. The pointer already held is the mapping afterwards, so nothing
+// has to invent one and this host needs no assembly of its own.
+//
+// The offset is the caller's to page-align; the kernel refuses anything else.
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
+    var mapping: Mapping = zero
+    if len == 0usize { ret (mapping, Failed) }
+    let (address, reserve_error) = reserve(len)
+    if reserve_error != ok { ret (mapping, reserve_error) }
+    var protection = PROT_READ
+    if writable { protection = PROT_READ | PROT_WRITE }
+    let placed = syscall(SYS_MMAP, mem.address_of(address), len, protection, MAP_SHARED | MAP_FIXED, f.raw, usize(offset))
+    if placed < 0isize {
+        let unused = syscall(SYS_MUNMAP, mem.address_of(address), len, 0usize, 0usize, 0usize, 0usize)
+        ret (mapping, from_errno(placed))
+    }
+    mapping.raw = MAPPING_READ_ONLY
+    if writable { mapping.raw = MAPPING_WRITABLE }
+    mapping.address = address
+    mapping.len = len
+    ret (mapping, ok)
+}
+
+// `mem.view` is the one operation that turns a base pointer and a length into a slice, which
+// is the whole reason an `Arena` is built here: not to allocate out of, but because naming a
+// region is what an `Arena` is and `view` is the only thing that will describe one.
+fn mapping_region(m: Mapping) -> []u8 {
+    var region: mem.Arena = zero
+    region.base = m.address
+    region.cap = m.len
+    region.off = 0usize
+    ret mem.view(&region, 0usize, m.len)
+}
+
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    ret mapping_region(m)
+}
+
+// A mapping opened for reading refuses rather than handing back a slice whose first write
+// would fault: the refusal is an error a caller can act on and the fault is not.
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    if m.raw != MAPPING_WRITABLE { ret (nothing, Unsupported) }
+    ret (mapping_region(m), ok)
+}
+
+fn mapping_flush(m: Mapping) -> err {
+    ret from_errno(syscall(SYS_MSYNC, mem.address_of(m.address), m.len, MS_SYNC, 0usize, 0usize, 0usize))
+}
+
+fn mapping_close(m: own Mapping) -> err {
+    ret from_errno_cleanup(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
+}
+
+type Poller = resource(poller_close) struct { state: *void }
+type PollInterest = struct { readable: bool, writable: bool }
+type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+
+// The kernel's `struct epoll_event` is **packed** on this architecture: the 64-bit datum
+// follows the 32-bit mask with no padding between them, so the whole thing is twelve bytes
+// and not sixteen. Writing the datum as two halves is what keeps that true -- a `u64` field
+// here would be eight-byte aligned and every entry after the first would be read from the
+// wrong offset.
+type RawPollEvent = struct { events: u32, token_low: u32, token_high: u32 }
+
+// What a poller retains: the set is the kernel's, and this is the pair of descriptors that
+// reaches it. It lives in the arena the poller was opened with.
+type PollerState = struct { epoll: usize, wake: usize }
+
+fn interest_mask(interest: PollInterest) -> u32 {
+    var mask = 0u32
+    if interest.readable { mask = mask | EPOLLIN }
+    if interest.writable { mask = mask | EPOLLOUT }
+    // A peer that closed is worth hearing about whatever was asked for: a caller waiting to
+    // read would otherwise wait for a write that will never come.
+    ret mask | EPOLLRDHUP
+}
+
+fn control_epoll(state: *PollerState, operation: usize, handle: Handle, token: usize, interest: PollInterest) -> err {
+    var raw: RawPollEvent = zero
+    raw.events = interest_mask(interest)
+    raw.token_low = u32(token % 4294967296usize)
+    raw.token_high = u32(token / 4294967296usize)
+    ret from_errno(syscall(SYS_EPOLL_CTL, state.epoll, operation, handle.raw, mem.address_of(&raw), 0usize, 0usize))
+}
+
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let epoll = syscall(SYS_EPOLL_CREATE1, EPOLL_CLOEXEC, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if epoll < 0isize { ret (poller, from_errno(epoll)) }
+    let wake = syscall(SYS_EVENTFD2, 0usize, EFD_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if wake < 0isize {
+        let unused = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, from_errno(wake))
+    }
+    let (holder, holder_error) = mem.alloc[PollerState](a, 1usize)
+    if holder_error != ok {
+        let unused_wake = syscall(SYS_CLOSE, usize(wake), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let unused_epoll = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    holder[0usize].epoll = usize(epoll)
+    holder[0usize].wake = usize(wake)
+    var wake_handle: Handle = zero
+    wake_handle.raw = usize(wake)
+    var wake_interest: PollInterest = zero
+    wake_interest.readable = true
+    let register_error = control_epoll(&holder[0usize], EPOLL_CTL_ADD, wake_handle, WAKE_TOKEN, wake_interest)
+    if register_error != ok {
+        let unused_wake = syscall(SYS_CLOSE, usize(wake), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let unused_epoll = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, register_error)
+    }
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_ADD, handle, token, interest)
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_MOD, handle, token, interest)
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    var nothing: PollInterest = zero
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_DEL, handle, 0usize, nothing)
+}
+
+// One eight-byte write is what an event descriptor counts, and one read drains it however
+// many wakes arrived, so a burst of them costs one wakeup rather than one each.
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    var one: [8]u8 = zero
+    one[0usize] = 1u8
+    let written = syscall(SYS_WRITE, state.wake, mem.address_of(&one[0usize]), 8usize, 0usize, 0usize, 0usize)
+    if written < 0isize { ret from_errno(written) }
+    ret ok
+}
+
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    let state = mem.cast[*PollerState](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var capacity = events.len
+    if capacity > POLL_BATCH { capacity = POLL_BATCH }
+    // A negative timeout waits forever; anything positive but shorter than the kernel's
+    // millisecond is rounded up, so asking for a little time never means asking for none.
+    var milliseconds = -1isize
+    if timeout_ns == 0i64 { milliseconds = 0isize }
+    if timeout_ns > 0i64 {
+        milliseconds = isize(timeout_ns / 1000000i64)
+        if milliseconds == 0isize { milliseconds = 1isize }
+        if milliseconds > EPOLL_TIMEOUT_MAX { milliseconds = EPOLL_TIMEOUT_MAX }
+    }
+    var raw: [64]RawPollEvent = zero
+    // The kernel reads the timeout as an int, so -1 crosses as all ones; finite values were
+    // bounded above before this register-width conversion.
+    let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, mem.bitcast[usize](milliseconds), 0usize, 0usize)
+    if ready < 0isize { ret (0usize, from_errno(ready)) }
+    var produced = 0usize
+    var at = 0usize
+    while at < usize(ready) {
+        let token = usize(raw[at].token_low) + usize(raw[at].token_high) * 4294967296usize
+        if token == WAKE_TOKEN {
+            // The poller's own descriptor: drained here so the next wait does not see it
+            // again, and never reported, because it is not the caller's.
+            var drain: [8]u8 = zero
+            let taken = syscall(SYS_READ, state.wake, mem.address_of(&drain[0usize]), 8usize, 0usize, 0usize, 0usize)
+        } else {
+            events[produced].token = token
+            events[produced].readable = raw[at].events & EPOLLIN != 0u32
+            events[produced].writable = raw[at].events & EPOLLOUT != 0u32
+            events[produced].closed = raw[at].events & (EPOLLHUP | EPOLLRDHUP) != 0u32
+            events[produced].failed = raw[at].events & EPOLLERR != 0u32
+            produced += 1usize
+        }
+        at += 1usize
+    }
+    ret (produced, ok)
+}
+
+fn poller_close(p: own Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    let wake_result = syscall(SYS_CLOSE, state.wake, 0usize, 0usize, 0usize, 0usize, 0usize)
+    let epoll_result = syscall(SYS_CLOSE, state.epoll, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if epoll_result < 0isize { ret from_errno_cleanup(epoll_result) }
+    ret from_errno_cleanup(wake_result)
+}
+
+type Socket = resource(socket_close) struct { raw: usize }
+type SocketFamily = enum u8 { Ip4, Ip6 }
+type SocketKind = enum u8 { Stream, Datagram }
+type SocketShutdown = enum u8 { Read, Write, Both }
+type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
+
+// The kernel's `sockaddr_in` and `sockaddr_in6` agree on their first four bytes -- the
+// family then the port -- and diverge after, so one buffer holds either and the length
+// passed alongside says which. It is written by index rather than as typed fields because
+// the port and the address are big-endian on the wire whatever the host is, while the
+// family is in the host's own order: mixing the two in one struct would hide exactly the
+// distinction that matters.
+type RawAddress = struct { bytes: [28]u8 }
+
+// `struct timeval`, which is how a receive deadline is spelled here.
+type TimeVal = struct { seconds: i64, microseconds: i64 }
+
+const SOL_SOCKET: usize = 1usize
+const SO_RCVTIMEO: usize = 20usize
+
+const DNS_PORT: u16 = 53u16
+const DNS_TYPE_A: usize = 1usize
+const DNS_TYPE_AAAA: usize = 28usize
+const DNS_CLASS_IN: usize = 1usize
+
+// ponytail: plain 512-byte UDP DNS -- no EDNS0, and no retry over TCP when an answer is
+// truncated. A truncated answer is used for whatever it did carry, which for a name with a
+// handful of addresses is all of them. A name behind dozens wants EDNS0 first.
+const DNS_MESSAGE_MAX: usize = 512usize
+
+// ponytail: how many addresses one name may answer with, and how many resolvers are asked. Both
+// are what a caller about to connect to one of them actually uses.
+const RESOLVE_ADDRESS_MAX: usize = 8usize
+const RESOLVE_SERVER_MAX: usize = 3usize
+const RESOLVE_ATTEMPTS: usize = 2usize
+const RESOLVE_TIMEOUT_SECONDS: i64 = 2i64
+
+const HOSTS_MAX: usize = 262144usize
+const RESOLV_CONF_MAX: usize = 8192usize
+
+const RAW_IP4_SIZE: usize = 16usize
+const RAW_IP6_SIZE: usize = 28usize
+
+fn family_value(family: SocketFamily) -> usize {
+    if family == .Ip6 { ret AF_INET6 }
+    ret AF_INET
+}
+
+fn encode_address(address: SocketAddress) -> (RawAddress, usize) {
+    var raw: RawAddress = zero
+    let value = family_value(address.family)
+    raw.bytes[0usize] = u8(value % 256usize)
+    raw.bytes[1usize] = u8(value / 256usize)
+    // Network order: the high byte first, whatever this host stores integers as.
+    raw.bytes[2usize] = u8(usize(address.port) / 256usize)
+    raw.bytes[3usize] = u8(usize(address.port) % 256usize)
+    if address.family == .Ip6 {
+        var at = 0usize
+        while at < 16usize {
+            raw.bytes[8usize + at] = address.bytes[at]
+            at += 1usize
+        }
+        raw.bytes[24usize] = u8(address.scope % 256u32)
+        raw.bytes[25usize] = u8(address.scope / 256u32 % 256u32)
+        raw.bytes[26usize] = u8(address.scope / 65536u32 % 256u32)
+        raw.bytes[27usize] = u8(address.scope / 16777216u32)
+        ret (raw, RAW_IP6_SIZE)
+    }
+    // Section 5: an IPv4 address is the first four bytes and the rest are zero.
+    var at = 0usize
+    while at < 4usize {
+        raw.bytes[4usize + at] = address.bytes[at]
+        at += 1usize
+    }
+    ret (raw, RAW_IP4_SIZE)
+}
+
+fn decode_address(raw: RawAddress) -> SocketAddress {
+    var address: SocketAddress = zero
+    let value = usize(raw.bytes[0usize]) + usize(raw.bytes[1usize]) * 256usize
+    address.port = u16(usize(raw.bytes[2usize]) * 256usize + usize(raw.bytes[3usize]))
+    if value == AF_INET6 {
+        address.family = .Ip6
+        var at = 0usize
+        while at < 16usize {
+            address.bytes[at] = raw.bytes[8usize + at]
+            at += 1usize
+        }
+        address.scope = u32(raw.bytes[24usize]) + u32(raw.bytes[25usize]) * 256u32 + u32(raw.bytes[26usize]) * 65536u32 + u32(raw.bytes[27usize]) * 16777216u32
+        ret address
+    }
+    address.family = .Ip4
+    var at = 0usize
+    while at < 4usize {
+        address.bytes[at] = raw.bytes[4usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
+
+// The two strings are the caller's, borrowed rather than copied: they name the operation and
+// its subject, and nothing here needs them to outlive the call that supplied them.
+type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
+
+type Lib = resource(dlclose) struct { raw: usize }
+
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
+type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
+
+// `execve` wants an array of addresses ending in a zero, which is what this builds: each string
+// copied with a terminator, and then a vector of where each landed. Both live in the arena,
+// because the child may not allocate -- everything it needs has to exist before the fork.
+fn c_string_vector(a: *mem.Arena, items: []const str) -> (usize, err) {
+    if items.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (vector, vector_error) = mem.alloc[usize](a, items.len + 1usize)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var at = 0usize
+    while at < items.len {
+        let (address, address_error) = c_string(a, items[at])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[at] = address
+        at += 1usize
+    }
+    vector[items.len] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+// Everything the child will need, prepared while it is still safe to allocate. After the fork
+// the child does nothing but a handful of syscalls: a language runtime in a forked child is only
+// safe if it never touches anything, and the way to keep that true is to leave it nothing to do.
+type SpawnPlan = struct { argv: usize, envp: usize, program: usize, directory: usize, grouped: bool }
+
+fn spawn_plan(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (SpawnPlan, err) {
+    var plan: SpawnPlan = zero
+    plan.grouped = grouped
+    if options.argv.len == 0usize { ret (plan, Failed) }
+    let (program, program_error) = c_string(a, options.argv[0usize])
+    if program_error != ok { ret (plan, program_error) }
+    plan.program = program
+    let (argv, argv_error) = c_string_vector(a, options.argv)
+    if argv_error != ok { ret (plan, argv_error) }
+    plan.argv = argv
+    // `inherit_env` overlays: the parent's environment with these entries over it. Without it
+    // they are the whole of the child's environment, which is what an empty vector says.
+    if options.inherit_env {
+        let (inherited, inherited_error) = environment_vector(a, options.env)
+        if inherited_error != ok { ret (plan, inherited_error) }
+        plan.envp = inherited
+    } else {
+        let (envp, envp_error) = c_string_vector(a, options.env)
+        if envp_error != ok { ret (plan, envp_error) }
+        plan.envp = envp
+    }
+    if options.cwd.len != 0usize {
+        let (directory, directory_error) = c_string(a, options.cwd)
+        if directory_error != ok { ret (plan, directory_error) }
+        plan.directory = directory
+    }
+    ret (plan, ok)
+}
+
+// The name a `NAME=VALUE` record sets. A record with no `=` in it is its own name, which is
+// not a shape the host produces but is one a caller can pass.
+fn entry_name(entry: str) -> str {
+    var at = 0usize
+    while at < entry.len {
+        if entry[at] == 61u8 { ret entry[0usize..at] }
+        at += 1usize
+    }
+    ret entry
+}
+
+fn same_bytes(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn overridden(entry: str, additions: []const str) -> bool {
+    let name = entry_name(entry)
+    var at = 0usize
+    while at < additions.len {
+        if same_bytes(name, entry_name(additions[at])) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The parent's environment with the caller's entries laid over it: a record the caller also
+// sets is dropped in favour of theirs, and the rest are kept. That is what `inherit_env` means,
+// and it has to be built here because nothing appends to an environment.
+fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
+    if additions.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (block, block_error) = environment_bytes(a)
+    if block_error != ok { ret (0usize, block_error) }
+    let (vector, vector_error) = mem.alloc[usize](a, SPAWN_LIST_MAX)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < block.len && count + additions.len + 1usize < SPAWN_LIST_MAX {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        // The records are NUL-terminated where they lie, so a kept one is pointed at rather
+        // than copied.
+        if end > at && !overridden(block[at..end], additions) {
+            vector[count] = mem.address_of(&block[at])
+            count += 1usize
+        }
+        at = end + 1usize
+    }
+    var added = 0usize
+    while added < additions.len {
+        let (address, address_error) = c_string(a, additions[added])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[count] = address
+        count += 1usize
+        added += 1usize
+    }
+    vector[count] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+// Between the fork and the exec, and nothing else. Each step is one syscall and none of them
+// allocates, which is the only way this is safe in a forked child.
+fn become_child(plan: SpawnPlan, stdio: Stdio) {
+    if plan.grouped {
+        // Its own group, set by the child so that it is true before it can spawn anything --
+        // the parent doing it afterwards is a race against the child's own children.
+        let grouped = syscall(SYS_SETPGID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    }
+    if plan.directory != 0usize {
+        let moved = syscall(SYS_CHDIR, plan.directory, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if moved < 0isize { let failed = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize) }
+    }
+    if stdio.stdin.raw != 0usize { let bound = syscall(SYS_DUP2, stdio.stdin.raw, 0usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stdout.raw != 0usize && stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stderr.raw != 0usize && stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
+    let replaced = syscall(SYS_EXECVE, plan.program, plan.argv, plan.envp, 0usize, 0usize, 0usize)
+    // `execve` only returns when it failed, and there is nothing to report it to.
+    let gone = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize)
+}
+
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    let (plan, plan_error) = spawn_plan(a, options, false)
+    if plan_error != ok { ret (child, plan_error) }
+    let forked = syscall(SYS_FORK, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if forked < 0isize { ret (child, from_errno(forked)) }
+    if forked == 0isize {
+        become_child(plan, options.stdio)
+        ret (child, Failed)
+    }
+    child.raw = usize(forked)
+    ret (child, ok)
+}
+
+// The group is the child's own, and its identifier is the child's own process. Containment is
+// what the host gives and no more: a descendant that starts a new group of its own leaves it,
+// which is why the fence calls this containment rather than a sandbox.
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var group: ProcGroup = zero
+    var child: Proc = zero
+    let (plan, plan_error) = spawn_plan(a, options, true)
+    if plan_error != ok { ret (group, child, plan_error) }
+    let forked = syscall(SYS_FORK, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if forked < 0isize { ret (group, child, from_errno(forked)) }
+    if forked == 0isize {
+        become_child(plan, options.stdio)
+        ret (group, child, Failed)
+    }
+    // The parent sets it as well: whichever wins, the group exists before either returns, and
+    // the loser's attempt is harmless.
+    let grouped = syscall(SYS_SETPGID, usize(forked), usize(forked), 0usize, 0usize, 0usize, 0usize)
+    group.raw = usize(forked)
+    child.raw = usize(forked)
+    ret (group, child, ok)
+}
+
+// A negative process identifier is the whole group, which is what `killpg` is.
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    // Not `signal`: that is the name of a module-scope function here now.
+    var number = SIGTERM
+    if force { number = SIGKILL }
+    let negated = 0usize -% group.raw
+    let result = syscall(SYS_KILL, negated, number, 0usize, 0usize, 0usize, 0usize)
+    // ESRCH means the group is already empty, so termination has achieved its postcondition.
+    if result == -3isize { ret ok }
+    ret from_errno(result)
+}
+
+// A group identifier is not a handle here, so there is nothing to give back. The call exists
+// because on the other host there is.
+fn proc_group_close(group: own ProcGroup) -> err {
+    ret ok
+}
+
+type FileLock = resource(file_unlock) struct { raw: usize }
+
+// `flock` is per open file description, so two `open` calls on one path contend and two
+// handles from one call do not -- which is what makes a lock worth having between processes
+// and nearly meaningless within one.
+//
+// These locks are advisory: nothing stops a reader that never asked. The fence says as much,
+// and this host is the reason it is worded that way.
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
+    var lock: FileLock = zero
+    var operation = LOCK_SH
+    if exclusive { operation = LOCK_EX }
+    // A negative timeout waits, which the host does natively.
+    if timeout_ns < 0i64 {
+        let waited = syscall(SYS_FLOCK, file.raw, operation, 0usize, 0usize, 0usize, 0usize)
+        if waited < 0isize { ret (lock, from_errno(waited)) }
+        lock.raw = file.raw
+        ret (lock, ok)
+    }
+    var remaining = timeout_ns
+    while true {
+        let result = syscall(SYS_FLOCK, file.raw, operation | LOCK_NB, 0usize, 0usize, 0usize, 0usize)
+        if result >= 0isize {
+            lock.raw = file.raw
+            ret (lock, ok)
+        }
+        // Anything but "someone else holds it" is the caller's answer rather than another try.
+        if result != -11isize { ret (lock, from_errno(result)) }
+        if remaining <= 0i64 {
+            // Zero asked for one attempt, which is `WouldBlock`; a deadline that ran out is a
+            // `Timeout`. Two different questions deserve two different answers.
+            record_error_detail(11i32)
+            if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            let thread = current_thread_id()
+            error_slot_used[thread % ERROR_SLOTS] = 3u8
+            ret (lock, Timeout)
+        }
+        var slice = LOCK_POLL_NS
+        if remaining < slice { slice = remaining }
+        var pause: TimeSpec = zero
+        pause.seconds = slice / NANOSECONDS_PER_SECOND
+        pause.nanoseconds = slice % NANOSECONDS_PER_SECOND
+        let slept = syscall(SYS_NANOSLEEP, mem.address_of(&pause), 0usize, 0usize, 0usize, 0usize, 0usize)
+        remaining = remaining - slice
+    }
+    ret (lock, Failed)
+}
+
+fn file_unlock(lock: own FileLock) -> err {
+    ret from_errno_cleanup(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
+}
+
+fn page_size() -> usize {
+    ret PAGE_SIZE
+}
+
+// Both ends at once, close-on-exec for the same reason every other descriptor here is: a
+// pipe that leaked into an unrelated child would keep its write end open and the reader would
+// never see the end of it.
+fn pipe() -> (File, File, err) {
+    var reading: File = zero
+    var writing: File = zero
+    var pair: [2]i32 = zero
+    let result = syscall(SYS_PIPE2, mem.address_of(&pair[0usize]), PIPE_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (reading, writing, from_errno(result)) }
+    reading.raw = usize(pair[0usize])
+    writing.raw = usize(pair[1usize])
+    ret (reading, writing, ok)
+}
+
+// `pollfd` is two u32 words on x64: fd, then the input and output u16 masks. Keeping the
+// temporary in words avoids exporting a host-layout type for one zero-time readiness probe.
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(f.raw)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, 0usize, 0usize, 0usize, 0usize)
+    if ready < 0isize { ret (0usize, from_errno(ready)) }
+    if ready == 0isize { ret (0usize, WouldBlock) }
+    let taken = syscall(SYS_READ, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
+}
+
+// A second identity for the same open file (D349): the OS's duplication, owed its own
+// close; copying the bits of `f` would not be. The duplicate inherits the description's
+// offset and flags, as `dup(2)` says, and is not close-on-exec.
+fn dup(f: File) -> (File, err) {
+    var second: File = zero
+    let result = syscall(SYS_DUP, f.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (second, from_errno(result)) }
+    second.raw = usize(result)
+    ret (second, ok)
+}
+
+// `struct rusage`: two `timeval`s and then fourteen longs, of which `ru_maxrss` is the first
+// -- kilobytes, the only peak the kernel keeps. The layout is the ABI.
+type Rusage = struct { words: [18]i64 }
+
+fn peak_memory() -> (usize, err) {
+    var usage: Rusage = zero
+    let result = syscall(SYS_GETRUSAGE, RUSAGE_SELF, mem.address_of(&usage), 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (0usize, from_errno(result)) }
+    ret (usize(usage.words[4usize]) * 1024usize, ok)
+}
+
+// `wait`, and what the child's peak was: `wait4` hands both back at once, and after the
+// reap there is nowhere else to ask (D311).
+@unsafe
+fn wait_usage(p: own Proc) -> (ProcUsage, err) {
+    var usage: ProcUsage = zero
+    usage.exit_code = -1i32
+    var status = 0u32
+    var used: Rusage = zero
+    let result = syscall(SYS_WAIT4, p.raw, mem.address_of(&status), 0usize, mem.address_of(&used), 0usize, 0usize)
+    if result < 0isize { ret (usage, from_errno_cleanup(result)) }
+    if status & 127u32 == 0u32 {
+        usage.exit_code = i32((status >> 8u32) & 255u32)
+    } else {
+        usage.exit_code = i32(128u32 + (status & 127u32))
+    }
+    usage.peak_memory = usize(used.words[4usize]) * 1024usize
+    ret (usage, ok)
+}
+
+// `SIGKILL`, so this is not a request. What `wait` then reports is 128 plus the signal, which
+// is the fence's rule and not this call's choice.
+fn kill(p: Proc) -> err {
+    ret from_errno(syscall(SYS_KILL, p.raw, SIGKILL, 0usize, 0usize, 0usize, 0usize))
+}
+
+// The other half of `reserve`. The length matters here, unlike on the host where a release
+// takes the whole reservation and rejects a size.
+fn release(p: *u8, n: usize) -> err {
+    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(p), n, 0usize, 0usize, 0usize, 0usize))
+}
+
+// The system's own wording for a code, which is the one thing a table here could not keep in step
+// with: it is per host and per locale, and libc already has it. Reached the same way the loader is,
+// and costing the same nothing until it is called.
+@import("libc.so.6", "strerror")
+extern fn raw_strerror(code: i32) -> *u8
+
+// ponytail: how far a message is read before it is taken as unterminated. No `strerror` text comes
+// close, and the alternative is trusting a foreign string with no bound at all.
+const MESSAGE_MAX: usize = 1024usize
+
+// The message for a code, copied into the caller's arena. `detail` carries the code, so this asks
+// for no ambient state and is exact whatever the last failing call was -- which is why it is
+// written while `last_error_detail` is not.
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
+    let text = raw_strerror(detail.native_code)
+    if mem.address_of(text) == 0usize { ret ("", Failed) }
+    // `mem.view` names the region without reading it, and the scan below stops at the terminator,
+    // so nothing past the string libc owns is touched.
+    var region: mem.Arena = zero
+    region.base = text
+    region.cap = MESSAGE_MAX
+    region.off = 0usize
+    let bytes = mem.view(&region, 0usize, MESSAGE_MAX)
+    var length = 0usize
+    while length < MESSAGE_MAX && bytes[length] != 0u8 { length += 1usize }
+    if length == 0usize { ret ("", NotFound) }
+    let (copy, copy_error) = mem.alloc[u8](a, length)
+    if copy_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < length {
+        copy[at] = bytes[at]
+        at += 1usize
+    }
+    ret (copy[0usize..length], ok)
+}
+
+// The one place this file names a library rather than a syscall number. There is no system call
+// that loads a shared object: that is the dynamic linker's work, and `dlopen` is how it is asked.
+// D32 keeps `e.os` on Linux over raw syscalls so that a neper binary needs no loader, and this
+// does not spend that -- an `@import` that is never called adds neither `PT_INTERP` nor
+// `DT_NEEDED`, so only a program that actually opens a library pays for one, which it must.
+@import("libc.so.6", "dlopen")
+extern fn raw_dlopen(name: *const u8, flags: i32) -> usize
+
+@import("libc.so.6", "dlsym")
+extern fn raw_dlsym(handle: usize, symbol: *const u8) -> usize
+
+@import("libc.so.6", "dlclose")
+extern fn raw_dlclose(handle: usize) -> i32
+
+// `RTLD_NOW`: every symbol resolved when the object is opened rather than at first use, so a
+// missing one is this call's failure and not a crash somewhere later.
+const RTLD_NOW: i32 = 2i32
+
+// A NUL-terminated copy as a slice rather than as an address: `c_string` answers with an address
+// for the syscalls, and a foreign declaration wants a pointer, which only a slice can spell.
+fn c_string_bytes(a: *mem.Arena, text: str) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
+    if allocation_error != ok { ret (nothing, OutOfMemory) }
+    var at = 0usize
+    while at < text.len {
+        buffer[at] = text[at]
+        at += 1usize
+    }
+    buffer[text.len] = 0u8
+    ret (buffer, ok)
+}
+
+// The name is passed as it was given, which is what the fence means by "as in `@import`": that
+// takes `libc.so.6` and `kernel32` alike and adds nothing to either, so neither does this.
+fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) {
+    var library: Lib = zero
+    if name.len == 0usize { ret (library, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, name)
+    if bytes_error != ok { ret (library, bytes_error) }
+    let handle = raw_dlopen(&bytes[0usize], RTLD_NOW)
+    // `dlerror` says why, and there is nowhere to keep it (D109): a name that will not load is
+    // reported as one that was not found.
+    if handle == 0usize { ret (library, NotFound) }
+    library.raw = handle
+    ret (library, ok)
+}
+
+// The address of a symbol, which is all a library can answer with. Turning it into something
+// callable is `dlsym`'s, and only the compiler can do that.
+fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
+    if sym.len == 0usize { ret (0usize, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, sym)
+    if bytes_error != ok { ret (0usize, bytes_error) }
+    let address = raw_dlsym(l.raw, &bytes[0usize])
+    // A symbol may legitimately resolve to zero on this host, and `dlerror` is the only way to
+    // tell that from a failure -- there is nowhere to keep it (D109), so zero is not found.
+    if address == 0usize { ret (0usize, NotFound) }
+    ret (address, ok)
+}
+
+fn dlclose(l: own Lib) -> err {
+    if raw_dlclose(l.raw) != 0i32 { ret Failed }
+    ret ok
+}
+
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var socket: Socket = zero
+    var type_bits = SOCK_STREAM
+    if kind == .Datagram { type_bits = SOCK_DGRAM }
+    let descriptor = syscall(SYS_SOCKET, family_value(family), type_bits | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (socket, from_errno(descriptor)) }
+    socket.raw = usize(descriptor)
+    ret (socket, ok)
+}
+
+fn socket_close(s: own Socket) -> err {
+    ret from_errno_cleanup(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
+
+// Read the flags before changing them: setting the whole word would drop whatever else the
+// descriptor carries.
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    let current = syscall(SYS_FCNTL, s.raw, F_GETFL, 0usize, 0usize, 0usize, 0usize)
+    if current < 0isize { ret from_errno(current) }
+    var wanted = usize(current) | O_NONBLOCK
+    if !enabled {
+        wanted = usize(current)
+        if usize(current) & O_NONBLOCK != 0usize { wanted = usize(current) - O_NONBLOCK }
+    }
+    ret from_errno(syscall(SYS_FCNTL, s.raw, F_SETFL, wanted, 0usize, 0usize, 0usize))
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    ret from_errno(syscall(SYS_BIND, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize))
+}
+
+// The address a socket is actually bound to. With port zero the host chose one and this is
+// the only way to learn it; with a port the caller named it reports that one back, which
+// makes the two cases the same call rather than two.
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var address: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let result = syscall(SYS_GETSOCKNAME, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
+    if result < 0isize { ret (address, from_errno(result)) }
+    ret (decode_address(raw), ok)
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    ret from_errno(syscall(SYS_LISTEN, s.raw, usize(backlog), 0usize, 0usize, 0usize, 0usize))
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    let result = syscall(SYS_CONNECT, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize)
+    // EINPROGRESS on a socket that was made non-blocking is the connect having started,
+    // which is what `WouldBlock` means for every other call here.
+    if result == -115isize { ret WouldBlock }
+    ret from_errno(result)
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var accepted: Socket = zero
+    var peer: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let descriptor = syscall(SYS_ACCEPT4, s.raw, mem.address_of(&raw), mem.address_of(&length), SOCK_CLOEXEC, 0usize, 0usize)
+    if descriptor < 0isize { ret (accepted, peer, from_errno(descriptor)) }
+    accepted.raw = usize(descriptor)
+    ret (accepted, decode_address(raw), ok)
+}
+
+// A connected socket is `sendto` and `recvfrom` with no address, which is one pair of
+// syscalls for both the connected and the unconnected form.
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    // MSG_NOSIGNAL (0x4000): a peer that has gone is the error EPIPE, not SIGPIPE ending the process.
+    let sent = syscall(SYS_SENDTO, s.raw, mem.address_of(&src[0usize]), src.len, 16384usize, 0usize, 0usize)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var (raw, length) = encode_address(dst)
+    var source_address = 0usize
+    if src.len != 0usize { source_address = mem.address_of(&src[0usize]) }
+    let sent = syscall(SYS_SENDTO, s.raw, source_address, src.len, 0usize, mem.address_of(&raw), length)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, mem.address_of(&raw), mem.address_of(&length))
+    if taken < 0isize { ret (0usize, peer, from_errno(taken)) }
+    ret (usize(taken), decode_address(raw), ok)
+}
+
+// A whole file, up to a limit, which is how both of the resolver's configuration files are
+// read. `environment_bytes` cannot be reused for this: a `/proc` file reports a size of zero and
+// has to be read until a short read proves the end, where an ordinary file does not.
+fn read_text_file(a: *mem.Arena, path: str, cap: usize) -> (str, err) {
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok { ret ("", path_error) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, cap)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret ("", from_errno(descriptor)) }
+    var filled = 0usize
+    var failure = ok
+    while filled < cap {
+        let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&buffer[filled]), cap - filled, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            failure = from_errno(taken)
+            break
+        }
+        if taken == 0isize { break }
+        filled += usize(taken)
+    }
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if failure != ok { ret ("", failure) }
+    ret (buffer[0usize..filled], ok)
+}
+
+// Host names do not distinguish case, wherever they are written down, so the hosts file is read
+// the way a resolver would answer.
+fn folded(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+fn same_folded(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if folded(left[at]) != folded(right[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn hex_value(byte: u8) -> (usize, bool) {
+    if byte >= 48u8 && byte <= 57u8 { ret (usize(byte - 48u8), true) }
+    if byte >= 97u8 && byte <= 102u8 { ret (usize(byte - 97u8) + 10usize, true) }
+    if byte >= 65u8 && byte <= 70u8 { ret (usize(byte - 65u8) + 10usize, true) }
+    ret (0usize, false)
+}
+
+// A dotted quad and nothing else: four parts, each of one to three digits and none above 255,
+// with no room left over. A resolver that accepted `1.2.3` or `1.2.3.4.5` would be answering a
+// question nobody asked.
+fn parse_ip4(text: str) -> (SocketAddress, bool) {
+    var address: SocketAddress = zero
+    address.family = .Ip4
+    var at = 0usize
+    var part = 0usize
+    while part < 4usize {
+        var value = 0usize
+        var digits = 0usize
+        while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 {
+            value = value * 10usize + usize(text[at] - 48u8)
+            digits += 1usize
+            at += 1usize
+        }
+        if digits == 0usize || digits > 3usize || value > 255usize { ret (address, false) }
+        address.bytes[part] = u8(value)
+        part += 1usize
+        if part < 4usize {
+            if at >= text.len || text[at] != 46u8 { ret (address, false) }
+            at += 1usize
+        }
+    }
+    if at != text.len { ret (address, false) }
+    ret (address, true)
+}
+
+// The groups before a `::` and the groups after it: the first go at the front, the last at the
+// back, and whatever is between them stays zero. A group followed by a dot is where the two
+// syntaxes meet -- the rest of the address is a dotted quad, as in `::ffff:127.0.0.1`.
+//
+// ponytail: a zone suffix (`fe80::1%eth0`) is not accepted. Naming an interface means asking the
+// host for its index, which is a syscall family this file does not otherwise touch.
+fn parse_ip6(text: str) -> (SocketAddress, bool) {
+    var address: SocketAddress = zero
+    address.family = .Ip6
+    var head: [16]u8 = zero
+    var tail: [16]u8 = zero
+    var head_len = 0usize
+    var tail_len = 0usize
+    var compressed = false
+    var at = 0usize
+    if text.len < 2usize { ret (address, false) }
+    if text[0usize] == 58u8 {
+        if text[1usize] != 58u8 { ret (address, false) }
+        compressed = true
+        at = 2usize
+        // `::` on its own is every byte zero, and there is nothing more to read.
+        if at == text.len { ret (address, true) }
+    }
+    while at < text.len {
+        var value = 0usize
+        var digits = 0usize
+        var scan = at
+        while scan < text.len {
+            let (nibble, is_hex) = hex_value(text[scan])
+            if !is_hex { break }
+            value = value * 16usize + nibble
+            digits += 1usize
+            scan += 1usize
+        }
+        if digits == 0usize || digits > 4usize { ret (address, false) }
+        if scan < text.len && text[scan] == 46u8 {
+            let (embedded, is_embedded) = parse_ip4(text[at..text.len])
+            if !is_embedded { ret (address, false) }
+            var quad = 0usize
+            while quad < 4usize {
+                if compressed {
+                    if tail_len >= 16usize { ret (address, false) }
+                    tail[tail_len] = embedded.bytes[quad]
+                    tail_len += 1usize
+                } else {
+                    if head_len >= 16usize { ret (address, false) }
+                    head[head_len] = embedded.bytes[quad]
+                    head_len += 1usize
+                }
+                quad += 1usize
+            }
+            at = text.len
+            break
+        }
+        at = scan
+        if compressed {
+            if tail_len + 2usize > 16usize { ret (address, false) }
+            tail[tail_len] = u8(value / 256usize)
+            tail[tail_len + 1usize] = u8(value % 256usize)
+            tail_len += 2usize
+        } else {
+            if head_len + 2usize > 16usize { ret (address, false) }
+            head[head_len] = u8(value / 256usize)
+            head[head_len + 1usize] = u8(value % 256usize)
+            head_len += 2usize
+        }
+        if at == text.len { break }
+        if text[at] != 58u8 { ret (address, false) }
+        at += 1usize
+        if at < text.len && text[at] == 58u8 {
+            // One `::` and no more, or the length it stands for is not decidable.
+            if compressed { ret (address, false) }
+            compressed = true
+            at += 1usize
+            if at == text.len { break }
+        } else {
+            // A single colon at the end is not an address.
+            if at == text.len { ret (address, false) }
+        }
+    }
+    if !compressed && head_len != 16usize { ret (address, false) }
+    if head_len + tail_len > 16usize { ret (address, false) }
+    var index = 0usize
+    while index < head_len {
+        address.bytes[index] = head[index]
+        index += 1usize
+    }
+    index = 0usize
+    while index < tail_len {
+        address.bytes[16usize - tail_len + index] = tail[index]
+        index += 1usize
+    }
+    ret (address, true)
+}
+
+fn parse_literal(text: str, family: SocketFamily) -> (SocketAddress, bool) {
+    if family == .Ip6 {
+        let (six, is_six) = parse_ip6(text)
+        ret (six, is_six)
+    }
+    let (four, is_four) = parse_ip4(text)
+    ret (four, is_four)
+}
+
+// One field of a configuration line, and where to look for the next. Fields are separated by
+// spaces and tabs, and a `#` ends the line wherever it stands.
+fn next_field(line: str, from: usize) -> (str, usize) {
+    var start = from
+    while start < line.len && (line[start] == 32u8 || line[start] == 9u8 || line[start] == 13u8) { start += 1usize }
+    if start >= line.len || line[start] == 35u8 { ret ("", line.len) }
+    var end = start
+    while end < line.len {
+        if line[end] == 32u8 || line[end] == 9u8 || line[end] == 13u8 || line[end] == 35u8 { break }
+        end += 1usize
+    }
+    ret (line[start..end], end)
+}
+
+fn line_end(text: str, from: usize) -> usize {
+    var end = from
+    while end < text.len && text[end] != 10u8 { end += 1usize }
+    ret end
+}
+
+// `/etc/hosts`: an address, then every name it answers to. This is what makes `localhost`
+// resolvable with no network at all, and it is the only part of the resolver that works when
+// there is none.
+fn hosts_lookup(a: *mem.Arena, host: str, family: SocketFamily, port: u16, out: []SocketAddress) -> usize {
+    let (text, text_error) = read_text_file(a, "/etc/hosts", HOSTS_MAX)
+    if text_error != ok { ret 0usize }
+    var found = 0usize
+    var at = 0usize
+    while at < text.len && found < out.len {
+        let end = line_end(text, at)
+        let line = text[at..end]
+        let (address_text, after_address) = next_field(line, 0usize)
+        if address_text.len != 0usize {
+            let (address, is_address) = parse_literal(address_text, family)
+            // A line whose address is of the other family answers a different question.
+            if is_address {
+                var cursor = after_address
+                while cursor < line.len {
+                    let (name, after_name) = next_field(line, cursor)
+                    if name.len == 0usize { break }
+                    if same_folded(name, host) {
+                        out[found] = address
+                        out[found].port = port
+                        found += 1usize
+                        break
+                    }
+                    cursor = after_name
+                }
+            }
+        }
+        at = end + 1usize
+    }
+    ret found
+}
+
+// `/etc/resolv.conf`, for the `nameserver` lines and nothing else. `search` and `options` are
+// not read: a suffix list turns one question into several, and this asks the one it was given.
+fn resolv_servers(a: *mem.Arena, out: []SocketAddress) -> usize {
+    let (text, text_error) = read_text_file(a, "/etc/resolv.conf", RESOLV_CONF_MAX)
+    if text_error != ok { ret 0usize }
+    var found = 0usize
+    var at = 0usize
+    while at < text.len && found < out.len {
+        let end = line_end(text, at)
+        let line = text[at..end]
+        let (keyword, after_keyword) = next_field(line, 0usize)
+        if same_bytes(keyword, "nameserver") {
+            let (address_text, after_address) = next_field(line, after_keyword)
+            if address_text.len != 0usize {
+                // A resolver's own family has nothing to do with the family being asked about.
+                let (four, is_four) = parse_ip4(address_text)
+                let (six, is_six) = parse_ip6(address_text)
+                if is_four {
+                    out[found] = four
+                    out[found].port = DNS_PORT
+                    found += 1usize
+                } else {
+                    if is_six {
+                        out[found] = six
+                        out[found].port = DNS_PORT
+                        found += 1usize
+                    }
+                }
+            }
+        }
+        at = end + 1usize
+    }
+    ret found
+}
+
+// A name on the wire is its labels, each with its length in front, ending in a zero length. A
+// trailing dot is the root and is already what the terminator says.
+fn dns_write_name(message: []u8, at: usize, host: str) -> (usize, bool) {
+    var cursor = at
+    var start = 0usize
+    while start <= host.len {
+        var end = start
+        while end < host.len && host[end] != 46u8 { end += 1usize }
+        let length = end - start
+        // An empty label in the middle of a name is not a name.
+        if length == 0usize && end < host.len { ret (0usize, false) }
+        if length > 63usize { ret (0usize, false) }
+        if length > 0usize {
+            if cursor + 1usize + length >= message.len { ret (0usize, false) }
+            message[cursor] = u8(length)
+            cursor += 1usize
+            var index = 0usize
+            while index < length {
+                message[cursor] = host[start + index]
+                cursor += 1usize
+                index += 1usize
+            }
+        }
+        if end >= host.len { break }
+        start = end + 1usize
+    }
+    if cursor >= message.len { ret (0usize, false) }
+    message[cursor] = 0u8
+    cursor += 1usize
+    ret (cursor, true)
+}
+
+fn dns_build_query(message: []u8, identifier: u16, host: str, kind: usize) -> (usize, bool) {
+    if message.len < 12usize { ret (0usize, false) }
+    var index = 0usize
+    while index < 12usize {
+        message[index] = 0u8
+        index += 1usize
+    }
+    message[0usize] = u8(usize(identifier) / 256usize)
+    message[1usize] = u8(usize(identifier) % 256usize)
+    // Recursion desired: this asks a resolver for the answer rather than walking the tree
+    // itself, which is the difference between a stub and a resolver.
+    message[2usize] = 1u8
+    // One question.
+    message[5usize] = 1u8
+    let (after_name, named) = dns_write_name(message, 12usize, host)
+    if !named { ret (0usize, false) }
+    if after_name + 4usize > message.len { ret (0usize, false) }
+    message[after_name] = u8(kind / 256usize)
+    message[after_name + 1usize] = u8(kind % 256usize)
+    message[after_name + 2usize] = u8(DNS_CLASS_IN / 256usize)
+    message[after_name + 3usize] = u8(DNS_CLASS_IN % 256usize)
+    ret (after_name + 4usize, true)
+}
+
+// Any label in a name may be a pointer to a name earlier in the message instead of a label, and
+// a pointer is the end of the name that holds it. Only where the name ends matters here, so no
+// pointer is ever followed and a message cannot make this loop.
+fn dns_skip_name(message: []const u8, at: usize) -> (usize, bool) {
+    var cursor = at
+    while cursor < message.len {
+        let length = usize(message[cursor])
+        if length == 0usize { ret (cursor + 1usize, true) }
+        if length >= 192usize { ret (cursor + 2usize, true) }
+        if length > 63usize { ret (0usize, false) }
+        cursor = cursor + 1usize + length
+    }
+    ret (0usize, false)
+}
+
+fn dns_parse(message: []const u8, kind: usize, port: u16, out: []SocketAddress) -> (usize, err) {
+    if message.len < 12usize { ret (0usize, Failed) }
+    // The response bit. A query coming back as a query is not an answer.
+    if message[2usize] / 128u8 != 1u8 { ret (0usize, Failed) }
+    let code = message[3usize] % 16u8
+    // NXDOMAIN: the name does not exist. That is an answer, not a failure to get one, and it is
+    // why asking a second resolver would be asking the same question twice.
+    if code == 3u8 { ret (0usize, NotFound) }
+    if code != 0u8 { ret (0usize, Failed) }
+    let questions = usize(message[4usize]) * 256usize + usize(message[5usize])
+    let answers = usize(message[6usize]) * 256usize + usize(message[7usize])
+    var cursor = 12usize
+    var asked = 0usize
+    while asked < questions {
+        let (after, skipped) = dns_skip_name(message, cursor)
+        if !skipped { ret (0usize, Failed) }
+        cursor = after + 4usize
+        asked += 1usize
+    }
+    var found = 0usize
+    var index = 0usize
+    while index < answers && found < out.len {
+        let (after, skipped) = dns_skip_name(message, cursor)
+        if !skipped { ret (0usize, Failed) }
+        cursor = after
+        if cursor + 10usize > message.len { ret (0usize, Failed) }
+        let record = usize(message[cursor]) * 256usize + usize(message[cursor + 1usize])
+        let class = usize(message[cursor + 2usize]) * 256usize + usize(message[cursor + 3usize])
+        let length = usize(message[cursor + 8usize]) * 256usize + usize(message[cursor + 9usize])
+        cursor += 10usize
+        if cursor + length > message.len { ret (0usize, Failed) }
+        // A `CNAME` is not followed. A resolver asked to recurse puts the target's addresses in
+        // the same message, and those are the records this picks up; whose name each one is
+        // under was already decided on the far side of the socket.
+        if record == kind && class == DNS_CLASS_IN {
+            var width = 4usize
+            var family: SocketFamily = .Ip4
+            if kind == DNS_TYPE_AAAA {
+                width = 16usize
+                family = .Ip6
+            }
+            if length == width {
+                var address: SocketAddress = zero
+                address.family = family
+                address.port = port
+                var byte = 0usize
+                while byte < width {
+                    address.bytes[byte] = message[cursor + byte]
+                    byte += 1usize
+                }
+                out[found] = address
+                found += 1usize
+            }
+        }
+        cursor += length
+        index += 1usize
+    }
+    // A name that exists with nothing of the family that was asked about is the same answer as
+    // a name that does not exist: there is nothing here to connect to.
+    if found == 0usize { ret (0usize, NotFound) }
+    ret (found, ok)
+}
+
+fn dns_ask(server: SocketAddress, query: []const u8, response: []u8, identifier: u16, kind: usize, port: u16, out: []SocketAddress) -> (usize, err) {
+    let (socket, open_error) = socket_open(server.family, .Datagram)
+    if open_error != ok { ret (0usize, open_error) }
+    // Connected rather than sent to: the host then drops anything arriving from anywhere else,
+    // which is the cheap half of not believing a stranger. The identifier below is the other.
+    let connect_error = socket_connect(socket, server)
+    if connect_error != ok {
+        let unused = socket_close(socket)
+        ret (0usize, connect_error)
+    }
+    var window: TimeVal = zero
+    window.seconds = RESOLVE_TIMEOUT_SECONDS
+    let timed = syscall(SYS_SETSOCKOPT, socket.raw, SOL_SOCKET, SO_RCVTIMEO, mem.address_of(&window), 16usize, 0usize)
+    if timed < 0isize {
+        let deadline_error = from_errno(timed)
+        let unused = socket_close(socket)
+        ret (0usize, deadline_error)
+    }
+    let (sent, send_error) = socket_send(socket, query)
+    if send_error != ok {
+        let unused = socket_close(socket)
+        ret (0usize, send_error)
+    }
+    let (taken, receive_error) = socket_receive(socket, response)
+    let closed = socket_close(socket)
+    if receive_error != ok {
+        // The deadline running out arrives as "nothing to read", which here means the resolver
+        // never answered rather than that the caller should ask again immediately.
+        if receive_error == WouldBlock { ret (0usize, Timeout) }
+        ret (0usize, receive_error)
+    }
+    if taken < 12usize { ret (0usize, Failed) }
+    // An answer to a different question is not an answer.
+    if usize(response[0usize]) * 256usize + usize(response[1usize]) != usize(identifier) { ret (0usize, Failed) }
+    let (found, parse_error) = dns_parse(response[0usize..taken], kind, port, out)
+    ret (found, parse_error)
+}
+
+// The other host has a resolver behind one call. This one has no libc to ask and no syscall that
+// resolves a name, so the three steps are here: a literal, the hosts file, and DNS over UDP.
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_ADDRESS_MAX)
+    if results_error != ok { ret (nothing, OutOfMemory) }
+    // A literal is not a name: nothing is read and nobody is asked.
+    let (literal, is_literal) = parse_literal(host, family)
+    if is_literal {
+        results[0usize] = literal
+        results[0usize].port = port
+        ret (results[0usize..1usize], ok)
+    }
+    // A literal of the other family is not a name either. Sending it to a resolver would ask the
+    // network about an address it can only say no to.
+    var other: SocketFamily = .Ip6
+    if family == .Ip6 { other = .Ip4 }
+    let (crossed, is_crossed) = parse_literal(host, other)
+    if is_crossed { ret (nothing, NotFound) }
+
+    let checkpoint = mem.mark(a)
+    // The hosts file first, because that is what it is for, and because it is the only answer
+    // available when there is no network at all. The addresses are copied out, so the file's
+    // bytes are given back before anything else is allocated.
+    let found = hosts_lookup(a, host, family, port, results)
+    if found != 0usize { ret (results[0usize..found], ok) }
+    mem.reset(a, checkpoint)
+
+    let (servers, servers_error) = mem.alloc[SocketAddress](a, RESOLVE_SERVER_MAX)
+    if servers_error != ok { ret (nothing, OutOfMemory) }
+    let server_count = resolv_servers(a, servers)
+    // Nothing configured is not a failure to reach anyone; there is nobody to reach.
+    if server_count == 0usize { ret (nothing, NotFound) }
+    let (query, query_error) = mem.alloc[u8](a, DNS_MESSAGE_MAX)
+    if query_error != ok { ret (nothing, OutOfMemory) }
+    let (response, response_error) = mem.alloc[u8](a, DNS_MESSAGE_MAX)
+    if response_error != ok { ret (nothing, OutOfMemory) }
+    // A predictable identifier is an invitation: an answer counts only if it carries the one it
+    // was asked with, and the one it was asked with is not guessable.
+    var identifier_bytes: [2]u8 = zero
+    let identifier_error = random(identifier_bytes[..])
+    if identifier_error != ok { ret (nothing, identifier_error) }
+    let identifier = u16(usize(identifier_bytes[0usize]) * 256usize + usize(identifier_bytes[1usize]))
+    var kind = DNS_TYPE_A
+    if family == .Ip6 { kind = DNS_TYPE_AAAA }
+    let (query_length, built) = dns_build_query(query, identifier, host, kind)
+    // A name too long to ask about is a name nothing has.
+    if !built { ret (nothing, NotFound) }
+    var outcome = Timeout
+    var attempt = 0usize
+    while attempt < RESOLVE_ATTEMPTS {
+        var index = 0usize
+        while index < server_count {
+            let (answered, ask_error) = dns_ask(servers[index], query[0usize..query_length], response, identifier, kind, port, results)
+            if ask_error == ok { ret (results[0usize..answered], ok) }
+            // A resolver that said the name does not exist has answered the question.
+            if ask_error == NotFound { ret (nothing, NotFound) }
+            outcome = ask_error
+            index += 1usize
+        }
+        attempt += 1usize
+    }
+    ret (nothing, outcome)
+}
+
+fn shutdown_value(how: SocketShutdown) -> usize {
+    if how == .Write { ret 1usize }
+    if how == .Both { ret 2usize }
+    ret 0usize
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    ret from_errno(syscall(SYS_SHUTDOWN, s.raw, shutdown_value(how), 0usize, 0usize, 0usize, 0usize))
+}
+
+// Descriptor zero, which is what the host started this process with. `stdout` and `stderr` are
+// intrinsics from before `e.os` was written as source; this one never was, so it is written here
+// rather than added to the runtime on two platforms.
+fn stdin() -> File {
+    var file: File = zero
+    file.raw = 0usize
+    ret file
+}
+
+// A poller takes a `Handle`, and a `File` and a `Socket` are different types with the same
+// thing inside them. These two are the whole of the conversion.
+fn file_handle(f: File) -> Handle {
+    var handle: Handle = zero
+    handle.raw = f.raw
+    ret handle
+}
+
+fn socket_handle(s: Socket) -> Handle {
+    var handle: Handle = zero
+    handle.raw = s.raw
+    ret handle
+}
+
+// A directory-relative path is a name under that directory and nothing else. An absolute
+// one would ignore the directory it was given, `..` would leave it, and an embedded NUL
+// would make the kernel see a shorter path than the caller wrote -- the classic way a
+// check and the thing checked come apart. Each is refused rather than interpreted.
+fn relative_path_ok(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 0u8 { ret false }
+        if path[at] == 47u8 {
+            if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
+fn open_bits(flags: OpenFlags) -> u64 {
+    var bits = O_RDONLY
+    if flags.read && flags.write { bits = O_RDWR }
+    if !flags.read && flags.write { bits = O_WRONLY }
+    if flags.create { bits = bits | O_CREAT }
+    if flags.truncate { bits = bits | O_TRUNC }
+    if flags.append { bits = bits | O_APPEND }
+    ret bits | O_CLOEXEC
+}
+
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
+    var dir: Dir = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (dir, path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_DIRECTORY, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (dir, from_errno(descriptor)) }
+    dir.raw = usize(descriptor)
+    ret (dir, ok)
+}
+
+fn dir_close(dir: own Dir) -> err {
+    let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    ret from_errno_cleanup(result)
+}
+
+// The policy is the kernel's to enforce, not this file's. `RESOLVE_BENEATH` refuses any
+// step that would leave the directory, and `RESOLVE_NO_SYMLINKS` refuses any link at all,
+// both while the walk is happening -- which is the difference between a guarantee and a
+// check made before a path that something else can change.
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) {
+    var file: File = zero
+    if !relative_path_ok(relative_path) { ret (file, Denied) }
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, relative_path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
+    }
+    var how: OpenHow = zero
+    how.flags = open_bits(flags)
+    // `openat2` insists the mode be zero unless something is being created, and rejects
+    // the whole call with EINVAL otherwise -- so this is not a default that can be set
+    // once and left.
+    if flags.create { how.mode = FILE_MODE }
+    how.resolve = RESOLVE_BENEATH
+    if policy == .NoSymlinks { how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_BENEATH }
+    let descriptor = syscall(SYS_OPENAT2, dir.raw, path_address, mem.address_of(&how), 24usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize {
+        // EXDEV here is the resolve policy refusing a step that would leave the directory,
+        // not a device boundary -- a different thing from what `rename` means by it, which
+        // is why it is read here rather than in `from_errno`.
+        if descriptor == -18isize {
+            record_error_detail(18i32)
+            let thread = current_thread_id()
+            error_slot_used[thread % ERROR_SLOTS] = 2u8
+            ret (file, Denied)
+        }
+        ret (file, from_errno(descriptor))
+    }
+    file.raw = usize(descriptor)
+    ret (file, ok)
+}
+
+// The parent of the final component, opened under the policy so every step but the last is
+// walked with links refused. The last component is then acted on by name relative to that.
+// This is how "do not follow a link on the way there, but do act on the link that is
+// there" gets said: neither host has a single call that means both, and removing a
+// symbolic link has to remove the link rather than what it points at.
+//
+// The returned handle is the caller's to close only when it is not the one passed in,
+// which is what comparing the two raw values says.
+fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
+    var parent: Dir = zero
+    parent.raw = dir.raw
+    var cut = 0usize
+    var found = false
+    var at = 0usize
+    while at < relative_path.len {
+        if relative_path[at] == 47u8 {
+            cut = at
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret (parent, relative_path, ok) }
+    let head = relative_path[0usize..cut]
+    let tail = relative_path[cut + 1usize..relative_path.len]
+    // A name ending in a separator names no final component to act on.
+    if tail.len == 0usize { ret (parent, "", Denied) }
+    let checkpoint = mem.mark(a)
+    let (head_address, head_error) = c_string(a, head)
+    if head_error != ok {
+        mem.reset(a, checkpoint)
+        ret (parent, "", head_error)
+    }
+    var how: OpenHow = zero
+    how.flags = u64(OPEN_DIRECTORY)
+    how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_BENEATH
+    let descriptor = syscall(SYS_OPENAT2, dir.raw, head_address, mem.address_of(&how), 24usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize {
+        if descriptor == -18isize { ret (parent, "", Denied) }
+        ret (parent, "", from_errno(descriptor))
+    }
+    parent.raw = usize(descriptor)
+    ret (parent, tail, ok)
+}
+
+// The parent is the caller's own directory or one opened for the walk (D350): it is
+// taken either way, and closed by raw means only when it is the latter.
+@unsafe
+fn release_parent(parent: own Dir, dir: Dir) {
+    if parent.raw != dir.raw {
+        let closed = syscall(SYS_CLOSE, parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    }
+}
+
+// `fstatat` describes the final name without following it. Its parent came from
+// `openat2` with NoSymlinks+Beneath, so no component can redirect the lookup.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    if !relative_path_ok(relative_path) { ret (info, Denied) }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret (info, parent_error) }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret (info, name_error)
+    }
+    var buffer: StatBuffer = zero
+    let result = syscall(SYS_NEWFSTATAT, parent.raw, name_address, mem.address_of(&buffer), AT_SYMLINK_NOFOLLOW, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    if result < 0isize { ret (info, from_errno(result)) }
+    info.kind = kind_from_mode(buffer.mode)
+    info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = -1i64
+    info.mode = buffer.mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.file_volume = buffer.device
+    info.link_count = buffer.link_count
+    ret (info, ok)
+}
+
+// `mkdirat` acts on one name in the securely opened parent, never on a path joined to root.
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    let result = syscall(SYS_MKDIRAT, parent.raw, name_address, DIRECTORY_MODE, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
+// `unlinkat` never follows the final component, which is what makes removing a symbolic
+// link remove the link.
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    var modifier = 0usize
+    if directory { modifier = AT_REMOVEDIR }
+    let result = syscall(SYS_UNLINKAT, parent.raw, name_address, modifier, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
+// The same two-step as `remove_at`, on both sides: each parent is resolved under the
+// policy and the rename is then between two final names. `RENAME_NOREPLACE` and its
+// `linkat` fallback are the same pair `replace` uses, for the same reason -- a filesystem
+// that does not know the flag rejects the call rather than the destination.
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err {
+    if !relative_path_ok(src_path) { ret Denied }
+    if !relative_path_ok(dst_path) { ret Denied }
+    let (src_parent, src_name, src_parent_error) = open_parent(a, src_dir, src_path)
+    if src_parent_error != ok { ret src_parent_error }
+    let (dst_parent, dst_name, dst_parent_error) = open_parent(a, dst_dir, dst_path)
+    if dst_parent_error != ok {
+        release_parent(src_parent, src_dir)
+        ret dst_parent_error
+    }
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src_name)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst_name)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret to_error
+    }
+    var result = 0isize
+    if overwrite {
+        result = syscall(SYS_RENAMEAT, src_parent.raw, from_address, dst_parent.raw, to_address, 0usize, 0usize)
+    } else {
+        result = syscall(SYS_RENAMEAT2, src_parent.raw, from_address, dst_parent.raw, to_address, RENAME_NOREPLACE, 0usize)
+        if result == -22isize || result == -38isize || result == -95isize {
+            result = syscall(SYS_LINKAT, src_parent.raw, from_address, dst_parent.raw, to_address, 0usize, 0usize)
+            if result >= 0isize {
+                result = syscall(SYS_UNLINKAT, src_parent.raw, from_address, 0usize, 0usize, 0usize, 0usize)
+            }
+        }
+    }
+    var answer = ok
+    if result < 0isize { answer = from_errno(result) }
+    // The directory the name landed in is what has to reach the disk for the name to
+    // survive; the bytes were already the caller's to have flushed.
+    if answer == ok && durable {
+        let flushed = syscall(SYS_FSYNC, dst_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if flushed < 0isize { answer = from_errno(flushed) }
+    }
+    mem.reset(a, checkpoint)
+    release_parent(src_parent, src_dir)
+    release_parent(dst_parent, dst_dir)
+    ret answer
+}
+
+// The directory part of a path, `.` when it has none. Not `e.path`: `e.os` may depend on
+// `e.mem` and nothing else, and all this has to find is the last separator.
+fn parent_of(path: str) -> str {
+    var cut = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 { cut = at }
+        at += 1usize
+    }
+    if cut == 0usize {
+        if path.len != 0usize && path[0usize] == 47u8 { ret "/" }
+        ret "."
+    }
+    ret path[0usize..cut]
+}
+
+// `fsync` on the file puts its bytes on the disk; `fsync` on the directory puts the name
+// there. Both are needed, because a name that survives a crash pointing at bytes that did
+// not is worse than losing both.
+fn flush_path(a: *mem.Arena, path: str) -> err {
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok { ret path_error }
+    let file = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if file < 0isize { ret from_errno(file) }
+    let flushed = syscall(SYS_FSYNC, usize(file), 0usize, 0usize, 0usize, 0usize, 0usize)
+    let file_closed = syscall(SYS_CLOSE, usize(file), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if flushed < 0isize { ret from_errno(flushed) }
+    let (parent_address, parent_error) = c_string(a, parent_of(path))
+    if parent_error != ok { ret parent_error }
+    let directory = syscall(SYS_OPENAT, AT_FDCWD, parent_address, OPEN_DIRECTORY, 0usize, 0usize, 0usize)
+    if directory < 0isize { ret from_errno(directory) }
+    let directory_flushed = syscall(SYS_FSYNC, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
+    let directory_closed = syscall(SYS_CLOSE, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if directory_flushed < 0isize { ret from_errno(directory_flushed) }
+    ret ok
+}
+
+// Replacing is what `rename` already does, so the interesting half is refusing to.
+// `RENAME_NOREPLACE` is the one call that decides and acts at once, but a filesystem that
+// does not know the flag rejects the call rather than the destination -- the 9p mount this
+// is tested over is one. The answer there is what every Unix could always do: a hard link
+// fails if the name is taken, and the old name goes afterwards. It is two operations, so a
+// failure between them leaves both names; the destination still never appears half made,
+// which is the guarantee that matters.
+fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err {
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        ret to_error
+    }
+    var result = 0isize
+    if overwrite {
+        result = syscall(SYS_RENAMEAT, AT_FDCWD, from_address, AT_FDCWD, to_address, 0usize, 0usize)
+    } else {
+        result = syscall(SYS_RENAMEAT2, AT_FDCWD, from_address, AT_FDCWD, to_address, RENAME_NOREPLACE, 0usize)
+        // EINVAL, ENOSYS, EOPNOTSUPP: the flag was refused, not the rename.
+        if result == -22isize || result == -38isize || result == -95isize {
+            result = syscall(SYS_LINKAT, AT_FDCWD, from_address, AT_FDCWD, to_address, 0usize, 0usize)
+            if result >= 0isize {
+                result = syscall(SYS_UNLINKAT, AT_FDCWD, from_address, 0usize, 0usize, 0usize, 0usize)
+            }
+        }
+    }
+    if result < 0isize {
+        let call_error = from_errno(result)
+        mem.reset(a, checkpoint)
+        ret call_error
+    }
+    var durability = ok
+    if durable { durability = flush_path(a, dst) }
+    mem.reset(a, checkpoint)
+    ret durability
+}
+
+fn rename(a: *mem.Arena, src: str, dst: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        ret to_error
+    }
+    let result = syscall(SYS_RENAMEAT, AT_FDCWD, from_address, AT_FDCWD, to_address, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+// ------------------------------------------------------------------ windows (D803)
+//
+// The native window primitives over the X11 protocol spoken directly on the display's
+// Unix socket -- no Xlib, no xcb, as `e.os` reaches every host through raw syscalls:
+// the setup handshake with the cookie from `~/.Xauthority`, one top-level window per
+// `window_open` with the WM_DELETE_WINDOW protocol so a close is reported and not
+// done, events read in their 32-byte units into the same ring the Windows variant
+// fills, a frame shown by `PutImage` in row bands under the request-size ceiling,
+// the pointer grabbed and released, the root screen as the one monitor. The
+// keyboard mapping is fetched once; a key event carries the keysym of its keycode
+// as `key`, and a Latin-1 keysym under the shift state is the text.
+//
+// Not here: the cursor shape (accepted, not shown -- a glyph cursor needs the cursor
+// font), the clipboard (a selection protocol of its own; `Unsupported`), DPI (100),
+// and a second screen. Wayland is not spoken: a display without an X socket is
+// `Unsupported` at `window_open`.
+
+type Window = struct { raw: usize }
+type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+
+// (L182, D5910) Another host's windows in place of X11's: Android's NativeActivity, whose window and input arrive through
+// callbacks `x.android.activity` turns into these. Installed, every `window_*` call goes to it; title, visibility, cursor
+// and capture mean nothing there and answer ok.
+type WindowHost = struct {
+    open: fn(*mem.Arena, WindowOptions) -> (Window, err),
+    close: fn(Window) -> err,
+    poll: fn(i64) -> (WindowEvent, bool, err),
+    metrics: fn(Window) -> (WindowMetrics, err),
+    present: fn(Window, []const u32, u32, u32) -> err,
+    native: fn(Window) -> (usize, usize, err),
+}
+
+var window_host: WindowHost = zero
+var has_window_host: bool = false
+
+fn set_window_host(host: WindowHost) {
+    window_host = host
+    has_window_host = true
+}
+
+// Whether the windows are another host's (D5910): its `window_native` answers that host's window, not an X11 id.
+fn window_hosted() -> bool { ret has_window_host }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
+
+const WINDOW_RING: usize = 256usize
+const WINDOW_TABLE: usize = 16usize
+const X_UNIT: usize = 32usize
+
+var window_events: [256]WindowEvent = zero
+var window_event_head: usize = 0usize
+var window_event_count: usize = 0usize
+var window_ids: [16]u32 = zero
+var window_gcs: [16]u32 = zero
+var window_widths: [16]u32 = zero
+var window_heights: [16]u32 = zero
+var window_mapped: [16]bool = zero
+var window_focused: [16]bool = zero
+var x_connected: bool = zero
+var x_failed: bool = zero
+var x_socket: usize = 0usize
+var x_sequence: u32 = 0u32
+var x_resource_base: u32 = 0u32
+var x_resource_mask: u32 = 0u32
+var x_next_resource: u32 = 0u32
+var x_root: u32 = 0u32
+var x_root_depth: u8 = 0u8
+var x_screen_width: u32 = 0u32
+var x_screen_height: u32 = 0u32
+var x_atom_protocols: u32 = 0u32
+var x_atom_delete: u32 = 0u32
+var x_min_keycode: u32 = 0u32
+var x_keysyms_per: u32 = 0u32
+var x_keysyms: [2048]u32 = zero
+var x_keysym_count: usize = 0usize
+var x_incoming: [4096]u8 = zero
+var x_incoming_len: usize = 0usize
+var x_reply: [64]u8 = zero
+var x_reply_extra: [8192]u8 = zero
+var x_reply_extra_len: usize = 0usize
+var x_pending_reply: bool = zero
+
+fn x_put16(d: []u8, at: usize, v: u32) {
+    d[at] = u8(v & 255u32)
+    d[at + 1usize] = u8((v >> 8u32) & 255u32)
+}
+
+fn x_put32(d: []u8, at: usize, v: u32) {
+    x_put16(d, at, v & 65535u32)
+    x_put16(d, at + 2usize, v >> 16u32)
+}
+
+fn x_get16(d: []const u8, at: usize) -> u32 {
+    ret u32(d[at]) | (u32(d[at + 1usize]) << 8u32)
+}
+
+fn x_get32(d: []const u8, at: usize) -> u32 {
+    ret x_get16(d, at) | (x_get16(d, at + 2usize) << 16u32)
+}
+
+fn x_pad4(n: usize) -> usize {
+    ret (n + 3usize) / 4usize * 4usize
+}
+
+// Every byte of `bytes` onto the socket, in as many writes as it takes.
+fn x_send(bytes: []const u8) -> err {
+    var sent = 0usize
+    while sent < bytes.len {
+        let written = syscall(SYS_WRITE, x_socket, mem.address_of(&bytes[sent]), bytes.len - sent, 0usize, 0usize, 0usize)
+        if written < 0isize {
+            x_failed = true
+            ret from_errno(written)
+        }
+        sent += usize(written)
+    }
+    x_sequence += 1u32
+    x_pending_reply = false
+    ret ok
+}
+
+// Exactly `count` bytes into `into`, blocking.
+fn x_receive_exact(into: []u8, count: usize) -> err {
+    var filled = 0usize
+    while filled < count {
+        let taken = syscall(SYS_READ, x_socket, mem.address_of(&into[filled]), count - filled, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            x_failed = true
+            ret from_errno(taken)
+        }
+        if taken == 0isize {
+            x_failed = true
+            ret Failed
+        }
+        filled += usize(taken)
+    }
+    ret ok
+}
+
+fn window_slot(id: u32) -> usize {
+    var at = 0usize
+    while at < WINDOW_TABLE {
+        if window_ids[at] == id && id != 0u32 { ret at }
+        at += 1usize
+    }
+    ret WINDOW_TABLE
+}
+
+fn window_push(event: WindowEvent) {
+    if window_event_count >= WINDOW_RING { ret }
+    window_events[(window_event_head + window_event_count) % WINDOW_RING] = event
+    window_event_count += 1usize
+}
+
+fn x_modifiers(state: u32) -> u8 {
+    var bits = 0u8
+    if state & 1u32 != 0u32 { bits = bits | 1u8 }
+    if state & 4u32 != 0u32 { bits = bits | 2u8 }
+    if state & 8u32 != 0u32 { bits = bits | 4u8 }
+    if state & 64u32 != 0u32 { bits = bits | 8u8 }
+    if state & 2u32 != 0u32 { bits = bits | 16u8 }
+    if state & 16u32 != 0u32 { bits = bits | 32u8 }
+    ret bits
+}
+
+fn x_keysym(keycode: u32, column: u32) -> u32 {
+    if x_keysyms_per == 0u32 || keycode < x_min_keycode { ret 0u32 }
+    let index = usize((keycode - x_min_keycode) * x_keysyms_per + column)
+    if index >= x_keysym_count { ret 0u32 }
+    ret x_keysyms[index]
+}
+
+// One 32-byte unit from the server that is an event: into the ring.
+fn x_event(unit: []const u8) {
+    let kind = u32(unit[0usize]) & 127u32
+    let sequence_window = x_get32(unit, 4usize)
+    var event: WindowEvent = zero
+    if kind == 12u32 {
+        let slot = window_slot(sequence_window)
+        if slot >= WINDOW_TABLE { ret }
+        event.kind = .Paint
+        event.window = Window { raw: usize(sequence_window) }
+        window_push(event)
+        ret
+    }
+    if kind == 22u32 {
+        let id = x_get32(unit, 4usize)
+        let slot = window_slot(id)
+        if slot >= WINDOW_TABLE { ret }
+        let width = x_get16(unit, 20usize)
+        let height = x_get16(unit, 22usize)
+        if width == window_widths[slot] && height == window_heights[slot] { ret }
+        window_widths[slot] = width
+        window_heights[slot] = height
+        event.kind = .Resize
+        event.window = Window { raw: usize(id) }
+        event.width = width
+        event.height = height
+        window_push(event)
+        ret
+    }
+    if kind == 9u32 || kind == 10u32 {
+        let id = x_get32(unit, 4usize)
+        let slot = window_slot(id)
+        if slot >= WINDOW_TABLE { ret }
+        window_focused[slot] = kind == 9u32
+        event.kind = .Focus
+        if kind == 10u32 { event.kind = .Blur }
+        event.window = Window { raw: usize(id) }
+        window_push(event)
+        ret
+    }
+    if kind == 4u32 || kind == 5u32 || kind == 6u32 {
+        let id = x_get32(unit, 12usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        event.window = Window { raw: usize(id) }
+        event.x = i32(mem.bitcast[i16](u16(x_get16(unit, 24usize))))
+        event.y = i32(mem.bitcast[i16](u16(x_get16(unit, 26usize))))
+        event.modifiers = x_modifiers(x_get16(unit, 28usize))
+        let detail = u32(unit[1usize])
+        if kind == 6u32 {
+            event.kind = .PointerMove
+            window_push(event)
+            ret
+        }
+        // Buttons 4 and 5 are the wheel; 1, 2, 3 are primary, middle, secondary; 8
+        // and 9 back and forward. 6 and 7 are the wheel's horizontal steps, which
+        // Windows does not report either, and 10 on are buttons with no name here:
+        // none of them is a press, least of all a primary one (a sideways nudge of
+        // a trackpad was a click).
+        if detail == 6u32 || detail == 7u32 || detail > 9u32 { ret }
+        if detail == 4u32 || detail == 5u32 {
+            if kind != 4u32 { ret }
+            event.kind = .Scroll
+            event.delta = 120i32
+            if detail == 5u32 { event.delta = -120i32 }
+            window_push(event)
+            ret
+        }
+        event.kind = .PointerDown
+        if kind == 5u32 { event.kind = .PointerUp }
+        event.button = 0u8
+        if detail == 3u32 { event.button = 1u8 }
+        if detail == 2u32 { event.button = 2u8 }
+        if detail == 8u32 { event.button = 3u8 }
+        if detail == 9u32 { event.button = 4u8 }
+        window_push(event)
+        ret
+    }
+    if kind == 2u32 || kind == 3u32 {
+        let id = x_get32(unit, 12usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        let keycode = u32(unit[1usize])
+        let state = x_get16(unit, 28usize)
+        event.window = Window { raw: usize(id) }
+        event.modifiers = x_modifiers(state)
+        event.key = x_keysym(keycode, 0u32)
+        event.kind = .KeyDown
+        if kind == 3u32 { event.kind = .KeyUp }
+        window_push(event)
+        if kind == 2u32 {
+            var column = 0u32
+            if state & 1u32 != 0u32 || state & 2u32 != 0u32 { column = 1u32 }
+            var sym = x_keysym(keycode, column)
+            if sym == 0u32 { sym = event.key }
+            if sym >= 32u32 && sym < 256u32 {
+                var text: WindowEvent = zero
+                text.kind = .Text
+                text.window = event.window
+                text.modifiers = event.modifiers
+                text.codepoint = sym
+                window_push(text)
+            }
+        }
+        ret
+    }
+    if kind == 33u32 {
+        let id = x_get32(unit, 4usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        if x_get32(unit, 8usize) == x_atom_protocols && x_get32(unit, 12usize) == x_atom_delete {
+            event.kind = .Close
+            event.window = Window { raw: usize(id) }
+            window_push(event)
+        }
+        ret
+    }
+}
+
+// Whatever the socket holds, parsed: events into the ring, a reply kept aside for
+// the request waiting on it, an error unit dropped.
+fn x_drain(wait_ms: u32) -> err {
+    // The display, and (D1603) the accessibility bus beside it: a pollfd is the
+    // descriptor, then the events asked and the events returned as two halves.
+    var descriptor: [4]u32 = zero
+    descriptor[0usize] = u32(x_socket)
+    descriptor[1usize] = 1u32
+    var watched = 1usize
+    if atspi_state == ATSPI_CONNECTED {
+        descriptor[2usize] = u32(atspi_socket)
+        descriptor[3usize] = 1u32
+        watched = 2usize
+    }
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), watched, usize(wait_ms), 0usize, 0usize, 0usize)
+    if ready < 0isize { ret from_errno(ready) }
+    if ready == 0isize { ret ok }
+    if watched == 2usize && (descriptor[3usize] >> 16u32) != 0u32 { atspi_service() }
+    if (descriptor[1usize] >> 16u32) == 0u32 { ret ok }
+    let taken = syscall(SYS_READ, x_socket, mem.address_of(&x_incoming[x_incoming_len]), x_incoming.len - x_incoming_len, 0usize, 0usize, 0usize)
+    if taken < 0isize {
+        x_failed = true
+        ret from_errno(taken)
+    }
+    if taken == 0isize {
+        x_failed = true
+        ret Failed
+    }
+    x_incoming_len += usize(taken)
+    ret x_parse_incoming()
+}
+
+fn x_parse_incoming() -> err {
+    var at = 0usize
+    while at + X_UNIT <= x_incoming_len {
+        let kind = u32(x_incoming[at]) & 127u32
+        if kind == 1u32 {
+            // A reply: its extra length in units follows; the whole reply must be here.
+            let extra = usize(x_get32(x_incoming[at..at + X_UNIT], 4usize)) * 4usize
+            if at + X_UNIT + extra > x_incoming_len {
+                // A reply that does not fit the buffer is read straight off the
+                // socket, keeping what the reply buffer holds.
+                if at + X_UNIT + extra > x_incoming.len { ret x_skip_reply(at, extra) }
+                break
+            }
+            var i = 0usize
+            while i < X_UNIT {
+                x_reply[i] = x_incoming[at + i]
+                i += 1usize
+            }
+            var extra_kept = extra
+            if extra_kept > x_reply_extra.len { extra_kept = x_reply_extra.len }
+            i = 0usize
+            while i < extra_kept {
+                x_reply_extra[i] = x_incoming[at + X_UNIT + i]
+                i += 1usize
+            }
+            x_reply_extra_len = extra_kept
+            x_pending_reply = true
+            at += X_UNIT + extra
+        } else {
+            if kind != 0u32 { x_event(x_incoming[at..at + X_UNIT]) }
+            at += X_UNIT
+        }
+    }
+    // The unconsumed tail moves to the front.
+    var rest = 0usize
+    while at + rest < x_incoming_len {
+        x_incoming[rest] = x_incoming[at + rest]
+        rest += 1usize
+    }
+    x_incoming_len = rest
+    ret ok
+}
+
+// A reply larger than the extra buffer: read past it on the socket, keeping only
+// what fits, so the stream stays aligned.
+fn x_skip_reply(at: usize, extra: usize) -> err {
+    var i = 0usize
+    while i < X_UNIT {
+        x_reply[i] = x_incoming[at + i]
+        i += 1usize
+    }
+    var have = x_incoming_len - at - X_UNIT
+    var kept = 0usize
+    while kept < have && kept < x_reply_extra.len {
+        x_reply_extra[kept] = x_incoming[at + X_UNIT + kept]
+        kept += 1usize
+    }
+    x_incoming_len = 0usize
+    var remaining = extra - have
+    var scratch: [4096]u8 = zero
+    while remaining > 0usize {
+        var chunk = remaining
+        if chunk > scratch.len { chunk = scratch.len }
+        try x_receive_exact(scratch[..], chunk)
+        var c = 0usize
+        while c < chunk && kept < x_reply_extra.len {
+            x_reply_extra[kept] = scratch[c]
+            kept += 1usize
+            c += 1usize
+        }
+        remaining = remaining - chunk
+    }
+    x_reply_extra_len = kept
+    x_pending_reply = true
+    ret ok
+}
+
+// Blocks until the reply to the request just sent is in `x_reply`.
+fn x_await_reply() -> err {
+    x_pending_reply = false
+    var rounds = 0usize
+    while !x_pending_reply {
+        if rounds > 4000usize { ret Timeout }
+        try x_drain(5000u32)
+        rounds += 1usize
+    }
+    ret ok
+}
+
+fn x_resource() -> u32 {
+    let id = x_resource_base | (x_next_resource & x_resource_mask)
+    x_next_resource += 1u32
+    ret id
+}
+
+// The cookie: the MIT-MAGIC-COOKIE-1 entry of `~/.Xauthority`, any address.
+fn x_cookie(a: *mem.Arena, cookie: []u8) -> (usize, err) {
+    let checkpoint = mem.mark(a)
+    let (home, home_error) = env(a, "HOME")
+    if home_error != ok {
+        mem.reset(a, checkpoint)
+        ret (0usize, ok)
+    }
+    let (path, path_error) = mem.alloc[u8](a, home.len + 13usize)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (0usize, OutOfMemory)
+    }
+    copy_bytes(path[0usize..home.len], home)
+    let suffix = "/.Xauthority"
+    copy_bytes(path[home.len..home.len + 12usize], suffix)
+    path[home.len + 12usize] = 0u8
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, mem.address_of(&path[0usize]), OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        mem.reset(a, checkpoint)
+        ret (0usize, ok)
+    }
+    var file: [4096]u8 = zero
+    var filled = 0usize
+    while filled < file.len {
+        let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&file[filled]), file.len - filled, 0usize, 0usize, 0usize)
+        if taken <= 0isize { break }
+        filled += usize(taken)
+    }
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    // Entries: family u16, then four big-endian length-prefixed fields.
+    var at = 0usize
+    while at + 2usize <= filled {
+        at += 2usize
+        var field = 0usize
+        var name_at = 0usize
+        var name_len = 0usize
+        var data_at = 0usize
+        var data_len = 0usize
+        var broken = false
+        while field < 4usize {
+            if at + 2usize > filled {
+                broken = true
+                break
+            }
+            let len = (usize(file[at]) << 8usize) | usize(file[at + 1usize])
+            at += 2usize
+            if at + len > filled {
+                broken = true
+                break
+            }
+            if field == 2usize {
+                name_at = at
+                name_len = len
+            }
+            if field == 3usize {
+                data_at = at
+                data_len = len
+            }
+            at += len
+            field += 1usize
+        }
+        if broken { break }
+        let wanted = "MIT-MAGIC-COOKIE-1"
+        if name_len == wanted.len && data_len <= cookie.len {
+            var same_name = true
+            var i = 0usize
+            while i < name_len {
+                if file[name_at + i] != wanted[i] { same_name = false }
+                i += 1usize
+            }
+            if same_name {
+                i = 0usize
+                while i < data_len {
+                    cookie[i] = file[data_at + i]
+                    i += 1usize
+                }
+                ret (data_len, ok)
+            }
+        }
+    }
+    ret (0usize, ok)
+}
+
+// The display number of `$DISPLAY` (`:0`, `:0.0`, `host:1`), 0 when unset.
+fn x_display_number(a: *mem.Arena) -> usize {
+    let checkpoint = mem.mark(a)
+    let (display, display_error) = env(a, "DISPLAY")
+    var number = 0usize
+    if display_error == ok {
+        var at = 0usize
+        while at < display.len && display[at] != 58u8 { at += 1usize }
+        at += 1usize
+        while at < display.len && display[at] >= 48u8 && display[at] <= 57u8 {
+            number = number * 10usize + usize(display[at] - 48u8)
+            at += 1usize
+        }
+    }
+    mem.reset(a, checkpoint)
+    ret number
+}
+
+// The connection: the socket, the handshake, the atoms and the keyboard mapping.
+fn x_connect(a: *mem.Arena) -> err {
+    if x_connected { ret ok }
+    if x_failed { ret Unsupported }
+    let descriptor = syscall(SYS_SOCKET, 1usize, SOCK_STREAM | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret Unsupported }
+    // sockaddr_un: family 1, then the path.
+    var address: [110]u8 = zero
+    address[0usize] = 1u8
+    let prefix = "/tmp/.X11-unix/X"
+    copy_bytes(address[2usize..2usize + prefix.len], prefix)
+    var number = x_display_number(a)
+    var digits: [8]u8 = zero
+    var digit_count = 0usize
+    if number == 0usize {
+        digits[0] = 48u8
+        digit_count = 1usize
+    }
+    while number > 0usize && digit_count < 8usize {
+        digits[digit_count] = u8(48usize + number % 10usize)
+        number = number / 10usize
+        digit_count += 1usize
+    }
+    var d = 0usize
+    while d < digit_count {
+        address[2usize + prefix.len + d] = digits[digit_count - 1usize - d]
+        d += 1usize
+    }
+    let connected = syscall(SYS_CONNECT, usize(descriptor), mem.address_of(&address[0usize]), 2usize + prefix.len + digit_count + 1usize, 0usize, 0usize, 0usize)
+    if connected < 0isize {
+        let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        x_failed = true
+        ret Unsupported
+    }
+    x_socket = usize(descriptor)
+    // The setup request with the cookie.
+    var cookie: [64]u8 = zero
+    let (cookie_len, cookie_error) = x_cookie(a, cookie[..])
+    if cookie_error != ok { ret cookie_error }
+    var setup: [64]u8 = zero
+    setup[0usize] = 108u8
+    x_put16(setup[..], 2usize, 11u32)
+    x_put16(setup[..], 4usize, 0u32)
+    var name_len = 0usize
+    let name = "MIT-MAGIC-COOKIE-1"
+    if cookie_len != 0usize { name_len = name.len }
+    x_put16(setup[..], 6usize, u32(name_len))
+    x_put16(setup[..], 8usize, u32(cookie_len))
+    var at = 12usize
+    if name_len != 0usize {
+        copy_bytes(setup[at..at + name_len], name)
+        at += x_pad4(name_len)
+        copy_bytes(setup[at..at + cookie_len], cookie[0usize..cookie_len])
+        at += x_pad4(cookie_len)
+    }
+    try x_send(setup[0usize..at])
+    x_sequence = 0u32
+    var head: [8]u8 = zero
+    try x_receive_exact(head[..], 8usize)
+    let extra = usize(x_get16(head[..], 6usize)) * 4usize
+    var reply: [8192]u8 = zero
+    if head[0usize] != 1u8 || extra > reply.len {
+        x_failed = true
+        ret Unsupported
+    }
+    try x_receive_exact(reply[..], extra)
+    x_resource_base = x_get32(reply[..], 4usize)
+    x_resource_mask = x_get32(reply[..], 8usize)
+    let vendor_len = usize(x_get16(reply[..], 16usize))
+    let format_count = usize(reply[21usize])
+    x_min_keycode = u32(reply[26usize])
+    let max_keycode = u32(reply[27usize])
+    var screen_at = 32usize + x_pad4(vendor_len) + 8usize * format_count
+    if screen_at + 40usize > extra {
+        x_failed = true
+        ret Unsupported
+    }
+    x_root = x_get32(reply[..], screen_at)
+    x_screen_width = x_get16(reply[..], screen_at + 20usize)
+    x_screen_height = x_get16(reply[..], screen_at + 22usize)
+    x_root_depth = reply[screen_at + 38usize]
+    x_next_resource = 1u32
+    x_connected = true
+    // The two atoms and the keyboard mapping.
+    let (protocols, protocols_error) = x_intern_atom("WM_PROTOCOLS")
+    if protocols_error != ok { ret protocols_error }
+    x_atom_protocols = protocols
+    let (delete, delete_error) = x_intern_atom("WM_DELETE_WINDOW")
+    if delete_error != ok { ret delete_error }
+    x_atom_delete = delete
+    ret x_keyboard_mapping(x_min_keycode, max_keycode)
+}
+
+fn x_intern_atom(name: str) -> (u32, err) {
+    var request: [64]u8 = zero
+    let units = 2usize + x_pad4(name.len) / 4usize
+    request[0usize] = 16u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, u32(units))
+    x_put16(request[..], 4usize, u32(name.len))
+    copy_bytes(request[8usize..8usize + name.len], name)
+    let send_error = x_send(request[0usize..units * 4usize])
+    if send_error != ok { ret (0u32, send_error) }
+    let reply_error = x_await_reply()
+    if reply_error != ok { ret (0u32, reply_error) }
+    ret (x_get32(x_reply[..], 8usize), ok)
+}
+
+fn x_keyboard_mapping(first: u32, last: u32) -> err {
+    if last < first { ret ok }
+    var request: [8]u8 = zero
+    request[0usize] = 101u8
+    x_put16(request[..], 2usize, 2u32)
+    request[4usize] = u8(first)
+    request[5usize] = u8(last - first + 1u32)
+    try x_send(request[..])
+    try x_await_reply()
+    x_keysyms_per = u32(x_reply[1usize])
+    var count = x_reply_extra_len / 4usize
+    if count > x_keysyms.len { count = x_keysyms.len }
+    var i = 0usize
+    while i < count {
+        x_keysyms[i] = x_get32(x_reply_extra[..], i * 4usize)
+        i += 1usize
+    }
+    x_keysym_count = count
+    ret ok
+}
+
+fn x_change_property(window: u32, property: u32, kind: u32, format: u32, data: []const u8, count: usize) -> err {
+    var request: [1024]u8 = zero
+    if 24usize + data.len > request.len { ret Unsupported }
+    let units = 6usize + x_pad4(data.len) / 4usize
+    request[0usize] = 18u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, u32(units))
+    x_put32(request[..], 4usize, window)
+    x_put32(request[..], 8usize, property)
+    x_put32(request[..], 12usize, kind)
+    request[16usize] = u8(format)
+    x_put32(request[..], 20usize, u32(count))
+    copy_bytes(request[24usize..24usize + data.len], data)
+    ret x_send(request[0usize..units * 4usize])
+}
+
+fn x_window_mode(window: u32, mode: WindowMode) -> err {
+    if mode == .Windowed { ret ok }
+    let (state, state_error) = x_intern_atom("_NET_WM_STATE")
+    if state_error != ok { ret state_error }
+    var values: [8]u8 = zero
+    var count = 1usize
+    var name = "_NET_WM_STATE_FULLSCREEN"
+    if mode == .Maximized { name = "_NET_WM_STATE_MAXIMIZED_VERT" }
+    let (first, first_error) = x_intern_atom(name)
+    if first_error != ok { ret first_error }
+    x_put32(values[..], 0usize, first)
+    if mode == .Maximized {
+        let (second, second_error) = x_intern_atom("_NET_WM_STATE_MAXIMIZED_HORZ")
+        if second_error != ok { ret second_error }
+        x_put32(values[..], 4usize, second)
+        count = 2usize
+    }
+    ret x_change_property(window, state, 4u32, 32u32, values[0usize..count * 4usize], count)
+}
+
+fn x_cardinals(property: u32, offset: u32, count: u32) -> (usize, err) {
+    var request: [24]u8 = zero
+    request[0usize] = 20u8
+    x_put16(request[..], 2usize, 6u32)
+    x_put32(request[..], 4usize, x_root)
+    x_put32(request[..], 8usize, property)
+    x_put32(request[..], 12usize, 6u32)
+    x_put32(request[..], 16usize, offset)
+    x_put32(request[..], 20usize, count)
+    let send_error = x_send(request[..])
+    if send_error != ok { ret (0usize, send_error) }
+    let reply_error = x_await_reply()
+    if reply_error != ok { ret (0usize, reply_error) }
+    if x_reply[1usize] != 32u8 || x_get32(x_reply[..], 8usize) != 6u32 { ret (0usize, ok) }
+    var found = usize(x_get32(x_reply[..], 16usize))
+    if found > x_reply_extra_len / 4usize { found = x_reply_extra_len / 4usize }
+    ret (found, ok)
+}
+
+fn x_work_area() -> (i32, i32, u32, u32, bool) {
+    var desktop = 0u32
+    let (current_atom, current_atom_error) = x_intern_atom("_NET_CURRENT_DESKTOP")
+    if current_atom_error == ok {
+        let (current_count, current_error) = x_cardinals(current_atom, 0u32, 1u32)
+        if current_error == ok && current_count == 1usize { desktop = x_get32(x_reply_extra[..], 0usize) }
+    }
+    let (work_atom, work_atom_error) = x_intern_atom("_NET_WORKAREA")
+    if work_atom_error != ok { ret (0i32, 0i32, 0u32, 0u32, false) }
+    let (work_count, work_error) = x_cardinals(work_atom, desktop * 4u32, 4u32)
+    if work_error != ok || work_count != 4usize { ret (0i32, 0i32, 0u32, 0u32, false) }
+    let width = x_get32(x_reply_extra[..], 8usize)
+    let height = x_get32(x_reply_extra[..], 12usize)
+    if width == 0u32 || height == 0u32 { ret (0i32, 0i32, 0u32, 0u32, false) }
+    ret (mem.bitcast[i32](x_get32(x_reply_extra[..], 0usize)), mem.bitcast[i32](x_get32(x_reply_extra[..], 4usize)), width, height, true)
+}
+
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.open(a, options)
+        ret (hosted, hosted_error)
+    }
+    var none: Window = zero
+    if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
+    let connect_error = x_connect(a)
+    if connect_error != ok { ret (none, connect_error) }
+    var slot = 0usize
+    while slot < WINDOW_TABLE && window_ids[slot] != 0u32 { slot += 1usize }
+    if slot >= WINDOW_TABLE { ret (none, OutOfMemory) }
+    let id = x_resource()
+    // CreateWindow with an event mask: key press/release, button press/release,
+    // pointer motion, exposure, structure notify, focus change.
+    var request: [40]u8 = zero
+    request[0usize] = 1u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, 9u32)
+    x_put32(request[..], 4usize, id)
+    x_put32(request[..], 8usize, x_root)
+    x_put16(request[..], 12usize, 0u32)
+    x_put16(request[..], 14usize, 0u32)
+    x_put16(request[..], 16usize, options.width)
+    x_put16(request[..], 18usize, options.height)
+    x_put16(request[..], 20usize, 0u32)
+    x_put16(request[..], 22usize, 1u32)
+    x_put32(request[..], 24usize, 0u32)
+    x_put32(request[..], 28usize, 2048u32)
+    x_put32(request[..], 32usize, 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 32768u32 | 131072u32 | 2097152u32)
+    let create_error = x_send(request[0usize..36usize])
+    if create_error != ok { ret (none, Failed) }
+    var atoms: [4]u8 = zero
+    x_put32(atoms[..], 0usize, x_atom_delete)
+    let protocol_error = x_change_property(id, x_atom_protocols, 4u32, 32u32, atoms[..], 1usize)
+    if protocol_error != ok { ret (none, Failed) }
+    if options.title.len != 0usize {
+        let title_error = x_change_property(id, 39u32, 31u32, 8u32, options.title, options.title.len)
+        if title_error != ok { ret (none, Failed) }
+    }
+    if x_window_mode(id, options.mode) != ok { ret (none, Failed) }
+    // A graphics context for the presents.
+    let gc = x_resource()
+    var gc_request: [16]u8 = zero
+    gc_request[0usize] = 55u8
+    x_put16(gc_request[..], 2usize, 4u32)
+    x_put32(gc_request[..], 4usize, gc)
+    x_put32(gc_request[..], 8usize, id)
+    x_put32(gc_request[..], 12usize, 0u32)
+    let gc_error = x_send(gc_request[..])
+    if gc_error != ok { ret (none, Failed) }
+    window_ids[slot] = id
+    window_gcs[slot] = gc
+    window_widths[slot] = options.width
+    window_heights[slot] = options.height
+    window_mapped[slot] = false
+    window_focused[slot] = false
+    // (D1603) The accessibility bus, once, and the frame's name for it.
+    atspi_set_title(slot, options.title)
+    atspi_connect(a)
+    if options.visible {
+        let shown = window_visible(Window { raw: usize(id) }, true)
+        if shown != ok { ret (none, Failed) }
+    }
+    ret (Window { raw: usize(id) }, ok)
+}
+
+fn x_simple(opcode: u8, window: u32) -> err {
+    var request: [8]u8 = zero
+    request[0usize] = opcode
+    x_put16(request[..], 2usize, 2u32)
+    x_put32(request[..], 4usize, window)
+    ret x_send(request[..])
+}
+
+fn window_close(w: Window) -> err {
+    if has_window_host { ret window_host.close(w) }
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    atspi_release(slot)
+    window_ids[slot] = 0u32
+    var kept = 0usize
+    var at = 0usize
+    while at < window_event_count {
+        let event = window_events[(window_event_head + at) % WINDOW_RING]
+        if event.window.raw != w.raw {
+            window_events[(window_event_head + kept) % WINDOW_RING] = event
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    window_event_count = kept
+    let freed = x_simple(60u8, window_gcs[slot])
+    let destroyed = x_simple(4u8, u32(w.raw))
+    if destroyed != ok { ret Failed }
+    ret ok
+}
+
+fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    if has_window_host {
+        let (hosted, any, hosted_error) = window_host.poll(timeout_ns)
+        ret (hosted, any, hosted_error)
+    }
+    var none: WindowEvent = zero
+    if !x_connected { ret (none, false, Unsupported) }
+    if window_event_count == 0usize {
+        var wait_ms = 0u32
+        if timeout_ns > 0i64 {
+            wait_ms = u32(timeout_ns / 1000000i64)
+            if timeout_ns % 1000000i64 != 0i64 { wait_ms += 1u32 }
+        }
+        let drain_error = x_drain(wait_ms)
+        if drain_error != ok { ret (none, false, drain_error) }
+    }
+    if window_event_count == 0usize { ret (none, false, ok) }
+    let event = window_events[window_event_head]
+    window_event_head = (window_event_head + 1usize) % WINDOW_RING
+    window_event_count = window_event_count - 1usize
+    ret (event, true, ok)
+}
+
+fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    if has_window_host {
+        let (hosted, hosted_error) = window_host.metrics(w)
+        ret (hosted, hosted_error)
+    }
+    var metrics: WindowMetrics = zero
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret (metrics, NotFound) }
+    // Whatever the server has said since: a resize or a focus change lands first.
+    let drained = x_drain(0u32)
+    metrics.width = window_widths[slot]
+    metrics.height = window_heights[slot]
+    metrics.scale_percent = 100u32
+    metrics.focused = window_focused[slot]
+    metrics.visible = window_mapped[slot]
+    ret (metrics, ok)
+}
+
+fn window_title(w: Window, value: str) -> err {
+    if has_window_host { ret ok }
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    if x_change_property(u32(w.raw), 39u32, 31u32, 8u32, value, value.len) != ok { ret Failed }
+    atspi_set_title(window_slot(u32(w.raw)), value)
+    ret ok
+}
+
+fn window_visible(w: Window, value: bool) -> err {
+    if has_window_host { ret ok }
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    var opcode = 10u8
+    if value { opcode = 8u8 }
+    if x_simple(opcode, u32(w.raw)) != ok { ret Failed }
+    window_mapped[slot] = value
+    ret ok
+}
+
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    if has_window_host { ret ok }
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    ret ok
+}
+
+fn window_capture(w: Window, on: bool) -> err {
+    if has_window_host { ret ok }
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    if !on {
+        var ungrab: [8]u8 = zero
+        ungrab[0usize] = 27u8
+        x_put16(ungrab[..], 2usize, 2u32)
+        if x_send(ungrab[..]) != ok { ret Failed }
+        ret ok
+    }
+    // GrabPointer: owner-events, the button and motion masks, asynchronous modes,
+    // no confinement, no cursor, current time; its reply is consumed.
+    var grab: [24]u8 = zero
+    grab[0usize] = 26u8
+    grab[1usize] = 1u8
+    x_put16(grab[..], 2usize, 6u32)
+    x_put32(grab[..], 4usize, u32(w.raw))
+    x_put16(grab[..], 8usize, 4u32 | 8u32 | 64u32)
+    grab[10usize] = 1u8
+    grab[11usize] = 1u8
+    if x_send(grab[..]) != ok { ret Failed }
+    if x_await_reply() != ok { ret Failed }
+    ret ok
+}
+
+// PutImage of BGRX rows in bands under the request-size ceiling.
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if has_window_host { ret window_host.present(w, pixels, width, height) }
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    let row_bytes = usize(width) * 4usize
+    var rows_per_band = 200000usize / row_bytes
+    if rows_per_band == 0usize { ret Unsupported }
+    var row = 0usize
+    while row < usize(height) {
+        var rows = rows_per_band
+        if row + rows > usize(height) { rows = usize(height) - row }
+        let bytes = rows * row_bytes
+        var header: [24]u8 = zero
+        header[0usize] = 72u8
+        header[1usize] = 2u8
+        x_put16(header[..], 2usize, u32(6usize + bytes / 4usize))
+        x_put32(header[..], 4usize, u32(w.raw))
+        x_put32(header[..], 8usize, window_gcs[slot])
+        x_put16(header[..], 12usize, width)
+        x_put16(header[..], 14usize, u32(rows))
+        x_put16(header[..], 16usize, 0u32)
+        x_put16(header[..], 18usize, u32(row))
+        header[20usize] = 0u8
+        header[21usize] = x_root_depth
+        if x_send(header[..]) != ok { ret Failed }
+        // The pixel words are the bytes the server wants: little-endian BGRX.
+        let first = row * usize(width)
+        let view = mem.cast[*const u8](&pixels[first])
+        var sent = 0usize
+        while sent < bytes {
+            let written = syscall(SYS_WRITE, x_socket, mem.address_of(view) + sent, bytes - sent, 0usize, 0usize, 0usize)
+            if written < 0isize {
+                x_failed = true
+                ret Failed
+            }
+            sent += usize(written)
+        }
+        row += rows
+    }
+    ret ok
+}
+
+// Live resize is the macOS host's: a poll-model host sees every size as a Resize event (D5856).
+fn window_on_resize(w: Window, handler: fn(Window, u32, u32)) -> err { ret Unsupported }
+
+fn window_native(w: Window) -> (usize, usize, err) {
+    if has_window_host {
+        let (hosted, extra, hosted_error) = window_host.native(w)
+        ret (hosted, extra, hosted_error)
+    }
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
+    ret (w.raw, x_socket, ok)
+}
+
+fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
+    var nothing: []const MonitorInfo = zero
+    if limit == 0usize { ret (nothing, Unsupported) }
+    let connect_error = x_connect(a)
+    if connect_error != ok { ret (nothing, connect_error) }
+    let (found, found_error) = mem.alloc[MonitorInfo](a, 1usize)
+    if found_error != ok { ret (nothing, OutOfMemory) }
+    var work_x = 0i32
+    var work_y = 0i32
+    var work_width = x_screen_width
+    var work_height = x_screen_height
+    let (reported_x, reported_y, reported_width, reported_height, reported) = x_work_area()
+    if reported {
+        work_x = reported_x
+        work_y = reported_y
+        work_width = reported_width
+        work_height = reported_height
+    }
+    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: x_screen_width, height: x_screen_height, work_x: work_x, work_y: work_y, work_width: work_width, work_height: work_height, scale_percent: 100u32, primary: true }
+    ret (found[0usize..1usize], ok)
+}
+
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    ret ("", Unsupported)
+}
+
+fn set_clipboard_text(value: str) -> err {
+    ret Unsupported
+}
+
+// The accessibility bridge (D802, D1603): the semantic tree a window publishes to
+// the host's assistive technology, one flat record per node with its parent, in
+// tree order. Here it answers AT-SPI over D-Bus, spoken on a raw AF_UNIX socket as
+// the X client above speaks X: when a window opens, the session bus names the
+// accessibility bus (`org.a11y.Bus.GetAddress`), and the process connects to it,
+// authenticates as its user, and embeds its application object under the
+// registry's desktop (`org.a11y.atspi.Socket.Embed`). From then on `x_drain` polls
+// that socket beside the display's and answers each method call as it comes:
+// the application at `.../accessible/root`, a frame per window at
+// `.../accessible/<window>`, and a node at `.../accessible/<window>_<slot>_<generation>`,
+// through Accessible, Component, Action, Text, EditableText, Application and
+// Properties. The first call makes the program publish -- until one arrives,
+// `accessibility_listening` is false and a publish keeps nothing -- and each
+// publish copies the records and their text into the window's store and signals
+// the focus change. What the person does through a node is queued as a request
+// `accessibility_take` hands the program, as on Windows.
+// ponytail: extents are window-relative in every coordinate space (the window's
+// place on the screen is not asked of X); text answers every granularity with the
+// whole text; slots past ATSPI_SLOTS and nodes past ATSPI_NODES are not
+// published; no Value or Selection interface, and no name or value change events.
+type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
+// What an assistive technology asked of a node: `action` is `e.ui.accessibility`'s
+// Action in declaration order, `value` the text a SetValue or SetSelection carries.
+type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
+
+type AtspiStore = struct { ready: bool, count: usize, focus: u32, root_first: u32, root_last: u32, nodes: []AccessibleNode, text: []u8, index_of: []u32, parent: []u32, first: []u32, last: []u32, next: []u32, previous: []u32 }
+// A message as it arrived: its header fields, and where its body starts and ends.
+type DMessage = struct { kind: u8, flags: u8, serial: u32, reply_serial: u32, path: str, called: str, member: str, sender: str, signature: str, error_name: str, body: usize, end: usize }
+// A reading position in a message; alignment counts from the message's start.
+type DCursor = struct { base: usize, at: usize, end: usize }
+// What a path names: 0 the application, 1 a window's frame, 2 a node, 3 nothing.
+type AtspiTarget = struct { kind: u8, window: usize, index: usize }
+type AtspiRequest = struct { window: u32, id: u32, generation: u32, action: u8, length: usize, text: [512]u8 }
+type AtspiCount = struct { value: usize }
+
+const ATSPI_NODES: usize = 8192usize
+const ATSPI_SLOTS: usize = 16384usize
+const ATSPI_TEXT: usize = 1048576usize
+const ATSPI_STORE_BYTES: usize = 4194304usize
+const ATSPI_BUFFER: usize = 262144usize
+const ATSPI_REQUESTS: usize = 8usize
+const SYS_GETUID: usize = 102usize
+const ATSPI_UNTRIED: u8 = 0u8
+const ATSPI_CONNECTED: u8 = 1u8
+const ATSPI_ABSENT: u8 = 2u8
+// The bits of `e.ui.accessibility`'s flags and actions the bridge reads.
+const ATSPI_DISABLED: u16 = 1u16
+const ATSPI_FOCUSED: u16 = 2u16
+const ATSPI_SELECTED: u16 = 4u16
+const ATSPI_CHECKED: u16 = 8u16
+const ATSPI_EXPANDED: u16 = 16u16
+const ATSPI_HIDDEN: u16 = 32u16
+const ATSPI_MIXED: u16 = 64u16
+const ATSPI_BUSY: u16 = 128u16
+const ATSPI_INVALID: u16 = 256u16
+const ATSPI_REQUIRED: u16 = 512u16
+const ATSPI_READ_ONLY: u16 = 1024u16
+const ATSPI_MODAL: u16 = 2048u16
+const ATSPI_SECRET: u16 = 8192u16
+const ATSPI_ACTION_FOCUS: u32 = 1u32
+const ATSPI_ACTION_SET_VALUE: u32 = 16u32
+const ATSPI_ACTION_EXPAND: u32 = 128u32
+const ATSPI_ACTION_COLLAPSE: u32 = 256u32
+const ATSPI_ACTION_SELECT: u32 = 512u32
+
+var atspi_state: u8 = 0u8
+var atspi_socket: usize = 0usize
+var atspi_serial: u32 = 0u32
+var atspi_asked: bool = zero
+var atspi_out: []u8 = zero
+var atspi_out_len: usize = 0usize
+var atspi_body: usize = 0usize
+var atspi_overflow: bool = zero
+var atspi_in: []u8 = zero
+var atspi_in_len: usize = 0usize
+var atspi_name: [64]u8 = zero
+var atspi_name_len: usize = 0usize
+var atspi_parent_name: [64]u8 = zero
+var atspi_parent_name_len: usize = 0usize
+var atspi_parent_path: [128]u8 = zero
+var atspi_parent_path_len: usize = 0usize
+var atspi_path_bytes: [128]u8 = zero
+var atspi_stores: [16]AtspiStore = zero
+var atspi_titles: [2048]u8 = zero
+var atspi_title_lengths: [16]usize = zero
+var atspi_app_id: u32 = 0u32
+var atspi_requests: [8]AtspiRequest = zero
+var atspi_request_head: usize = 0usize
+var atspi_request_count: usize = 0usize
+var atspi_taken: [512]u8 = zero
+
+// ---------------------------------------------------------------- writing
+
+fn d_put(value: u8) {
+    if atspi_out_len >= atspi_out.len {
+        atspi_overflow = true
+        ret
+    }
+    atspi_out[atspi_out_len] = value
+    atspi_out_len += 1usize
+}
+
+fn d_pad(align: usize) {
+    while atspi_out_len % align != 0usize && !atspi_overflow { d_put(0u8) }
+}
+
+fn d_u32(value: u32) {
+    d_pad(4usize)
+    d_put(u8(value & 255u32))
+    d_put(u8((value >> 8u32) & 255u32))
+    d_put(u8((value >> 16u32) & 255u32))
+    d_put(u8(value >> 24u32))
+}
+
+fn d_i32(value: i32) {
+    d_u32(mem.bitcast[u32](value))
+}
+
+fn d_u64(value: u64) {
+    d_pad(8usize)
+    var at = 0u64
+    while at < 64u64 {
+        d_put(u8((value >> at) & 255u64))
+        at += 8u64
+    }
+}
+
+// `s` and `o`: a length, the bytes and a terminating zero.
+fn d_text(value: str) {
+    d_u32(u32(value.len))
+    var at = 0usize
+    while at < value.len {
+        d_put(value[at])
+        at += 1usize
+    }
+    d_put(0u8)
+}
+
+fn d_signature(value: str) {
+    d_put(u8(value.len))
+    var at = 0usize
+    while at < value.len {
+        d_put(value[at])
+        at += 1usize
+    }
+    d_put(0u8)
+}
+
+fn d_bool(value: bool) {
+    if value { d_u32(1u32) } else { d_u32(0u32) }
+}
+
+fn d_patch(at: usize, value: u32) {
+    if at + 4usize > atspi_out_len { ret }
+    atspi_out[at] = u8(value & 255u32)
+    atspi_out[at + 1usize] = u8((value >> 8u32) & 255u32)
+    atspi_out[at + 2usize] = u8((value >> 16u32) & 255u32)
+    atspi_out[at + 3usize] = u8(value >> 24u32)
+}
+
+// An array: its length word, patched at the end, then padding to its elements'
+// alignment, which is there even when the array is empty.
+fn d_array_begin(element_align: usize) -> usize {
+    d_pad(4usize)
+    let at = atspi_out_len
+    d_u32(0u32)
+    d_pad(element_align)
+    ret at
+}
+
+fn d_array_end(at: usize, element_align: usize) {
+    var start = at + 4usize
+    while start % element_align != 0usize { start += 1usize }
+    d_patch(at, u32(atspi_out_len - start))
+}
+
+// A message's fixed header -- little-endian, its kind, version 1 -- and the start
+// of its field array; the body length is patched by `d_finish`.
+fn d_begin(kind: u8) -> usize {
+    atspi_out_len = 0usize
+    atspi_overflow = false
+    atspi_serial += 1u32
+    d_put(108u8)
+    d_put(kind)
+    d_put(0u8)
+    d_put(1u8)
+    d_u32(0u32)
+    d_u32(atspi_serial)
+    ret d_array_begin(8usize)
+}
+
+fn d_field_text(code: u8, kind: str, value: str) {
+    d_pad(8usize)
+    d_put(code)
+    d_signature(kind)
+    d_text(value)
+}
+
+fn d_field_u32(code: u8, value: u32) {
+    d_pad(8usize)
+    d_put(code)
+    d_signature("u")
+    d_u32(value)
+}
+
+fn d_field_signature(value: str) {
+    d_pad(8usize)
+    d_put(8u8)
+    d_signature("g")
+    d_signature(value)
+}
+
+fn d_body(fields: usize) {
+    d_array_end(fields, 8usize)
+    d_pad(8usize)
+    atspi_body = atspi_out_len
+}
+
+fn d_finish() {
+    d_patch(4usize, u32(atspi_out_len - atspi_body))
+}
+
+fn d_call(destination: str, object: str, called: str, member: str, signature: str) {
+    let fields = d_begin(1u8)
+    d_field_text(1u8, "o", object)
+    d_field_text(2u8, "s", called)
+    d_field_text(3u8, "s", member)
+    d_field_text(6u8, "s", destination)
+    if signature.len != 0usize { d_field_signature(signature) }
+    d_body(fields)
+}
+
+fn d_reply(m: *const DMessage, signature: str) {
+    let fields = d_begin(2u8)
+    d_field_u32(5u8, m.serial)
+    if m.sender.len != 0usize { d_field_text(6u8, "s", m.sender) }
+    if signature.len != 0usize { d_field_signature(signature) }
+    d_body(fields)
+}
+
+fn d_signal(object: str, called: str, member: str, signature: str) {
+    let fields = d_begin(4u8)
+    d_field_text(1u8, "o", object)
+    d_field_text(2u8, "s", called)
+    d_field_text(3u8, "s", member)
+    d_field_signature(signature)
+    d_body(fields)
+}
+
+fn d_write(fd: usize, bytes: []const u8) -> err {
+    var sent = 0usize
+    while sent < bytes.len {
+        let written = syscall(SYS_WRITE, fd, mem.address_of(&bytes[sent]), bytes.len - sent, 0usize, 0usize, 0usize)
+        if written < 0isize { ret from_errno(written) }
+        sent += usize(written)
+    }
+    ret ok
+}
+
+// The finished message to `fd`; one that overflowed the buffer is not sent.
+fn d_send(fd: usize) -> err {
+    d_finish()
+    if atspi_overflow { ret OutOfMemory }
+    ret d_write(fd, atspi_out[0usize..atspi_out_len])
+}
+
+// A reply, error or signal to the bus; without a bus it stays in the buffer.
+fn d_answer() {
+    d_finish()
+    if atspi_state != ATSPI_CONNECTED || atspi_overflow { ret }
+    if d_write(atspi_socket, atspi_out[0usize..atspi_out_len]) != ok { atspi_drop() }
+}
+
+fn d_error(m: *const DMessage, name: str) {
+    let fields = d_begin(3u8)
+    d_field_text(4u8, "s", name)
+    d_field_u32(5u8, m.serial)
+    if m.sender.len != 0usize { d_field_text(6u8, "s", m.sender) }
+    d_body(fields)
+    d_answer()
+}
+
+// ---------------------------------------------------------------- reading
+
+fn r_u32_at(buffer: []const u8, at: usize) -> u32 {
+    ret u32(buffer[at]) | (u32(buffer[at + 1usize]) << 8u32) | (u32(buffer[at + 2usize]) << 16u32) | (u32(buffer[at + 3usize]) << 24u32)
+}
+
+fn r_pad(c: *DCursor, align: usize) {
+    while (c.at - c.base) % align != 0usize { c.at += 1usize }
+}
+
+fn r_u32(buffer: []const u8, c: *DCursor) -> u32 {
+    r_pad(c, 4usize)
+    if c.at + 4usize > c.end {
+        c.at = c.end
+        ret 0u32
+    }
+    let value = r_u32_at(buffer, c.at)
+    c.at += 4usize
+    ret value
+}
+
+fn r_i32(buffer: []const u8, c: *DCursor) -> i32 {
+    ret mem.bitcast[i32](r_u32(buffer, c))
+}
+
+fn r_text(buffer: []const u8, c: *DCursor) -> str {
+    let length = usize(r_u32(buffer, c))
+    if c.at + length + 1usize > c.end {
+        c.at = c.end
+        ret ""
+    }
+    let value = buffer[c.at..c.at + length]
+    c.at += length + 1usize
+    ret value
+}
+
+fn r_signature(buffer: []const u8, c: *DCursor) -> str {
+    if c.at >= c.end { ret "" }
+    let length = usize(buffer[c.at])
+    if c.at + length + 2usize > c.end {
+        c.at = c.end
+        ret ""
+    }
+    let value = buffer[c.at + 1usize..c.at + 1usize + length]
+    c.at += length + 2usize
+    ret value
+}
+
+// The body of a message, to read its arguments from.
+fn r_body(m: *const DMessage) -> DCursor {
+    ret DCursor { base: m.body, at: m.body, end: m.end }
+}
+
+// The message starting at `start`, if all of it is here; `kind` 255 is a message
+// this client cannot read -- big-endian, or longer than its buffer.
+fn d_parse(buffer: []const u8, start: usize, length: usize) -> (DMessage, usize, bool) {
+    var m: DMessage = zero
+    if length < start + 16usize { ret (m, 0usize, false) }
+    let fields_length = usize(r_u32_at(buffer, start + 12usize))
+    var header = 16usize + fields_length
+    while header % 8usize != 0usize { header += 1usize }
+    let total = header + usize(r_u32_at(buffer, start + 4usize))
+    if buffer[start] != 108u8 || total > buffer.len {
+        m.kind = 255u8
+        ret (m, length - start, true)
+    }
+    if length < start + total { ret (m, 0usize, false) }
+    m.kind = buffer[start + 1usize]
+    m.flags = buffer[start + 2usize]
+    m.serial = r_u32_at(buffer, start + 8usize)
+    var c = DCursor { base: start, at: start + 16usize, end: start + 16usize + fields_length }
+    while c.at < c.end {
+        r_pad(&c, 8usize)
+        if c.at >= c.end { break }
+        let code = buffer[c.at]
+        c.at += 1usize
+        let kind = r_signature(buffer, &c)
+        if kind.len != 1usize {
+            m.kind = 255u8
+            ret (m, total, true)
+        }
+        if kind[0usize] == 115u8 || kind[0usize] == 111u8 {
+            let value = r_text(buffer, &c)
+            if code == 1u8 { m.path = value }
+            if code == 2u8 { m.called = value }
+            if code == 3u8 { m.member = value }
+            if code == 4u8 { m.error_name = value }
+            if code == 7u8 { m.sender = value }
+        } else if kind[0usize] == 117u8 {
+            let value = r_u32(buffer, &c)
+            if code == 5u8 { m.reply_serial = value }
+        } else if kind[0usize] == 103u8 {
+            let value = r_signature(buffer, &c)
+            if code == 8u8 { m.signature = value }
+        } else {
+            m.kind = 255u8
+            ret (m, total, true)
+        }
+    }
+    m.body = start + header
+    m.end = start + total
+    ret (m, total, true)
+}
+
+fn atspi_consume(count: usize) {
+    var at = 0usize
+    while count + at < atspi_in_len {
+        atspi_in[at] = atspi_in[count + at]
+        at += 1usize
+    }
+    atspi_in_len = at
+}
+
+// Whatever `fd` holds, into the input, waiting up to `wait_ms` for it.
+fn atspi_fill(fd: usize, wait_ms: u32) -> bool {
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(fd)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, usize(wait_ms), 0usize, 0usize, 0usize)
+    if ready <= 0isize || atspi_in_len >= atspi_in.len { ret false }
+    let taken = syscall(SYS_READ, fd, mem.address_of(&atspi_in[atspi_in_len]), atspi_in.len - atspi_in_len, 0usize, 0usize, 0usize)
+    if taken <= 0isize { ret false }
+    atspi_in_len += usize(taken)
+    ret true
+}
+
+// The reply to `serial`, left at the start of the input for the caller to read and
+// consume; a call that arrives meanwhile on the accessibility bus is answered.
+fn atspi_await(fd: usize, serial: u32) -> (DMessage, usize, bool) {
+    var none: DMessage = zero
+    var rounds = 0usize
+    while rounds < 8usize {
+        let (m, total, complete) = d_parse(atspi_in, 0usize, atspi_in_len)
+        if complete {
+            if m.kind == 255u8 { ret (none, 0usize, false) }
+            if (m.kind == 2u8 || m.kind == 3u8) && m.reply_serial == serial { ret (m, total, true) }
+            if m.kind == 1u8 && atspi_state == ATSPI_CONNECTED && fd == atspi_socket { atspi_dispatch(&m) }
+            atspi_consume(total)
+            continue
+        }
+        if !atspi_fill(fd, 2000u32) { ret (none, 0usize, false) }
+        rounds += 1usize
+    }
+    ret (none, 0usize, false)
+}
+
+// ---------------------------------------------------------------- connecting
+
+fn atspi_copy(into: []u8, value: str) -> usize {
+    var at = 0usize
+    while at < value.len && at < into.len {
+        into[at] = value[at]
+        at += 1usize
+    }
+    ret at
+}
+
+fn atspi_digits(into: []u8, from: usize, value: u64) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    while true {
+        digits[count] = u8(48u64 + rest % 10u64)
+        count += 1usize
+        rest = rest / 10u64
+        if rest == 0u64 { break }
+    }
+    var at = from
+    while count > 0usize && at < into.len {
+        count -= 1usize
+        into[at] = digits[count]
+        at += 1usize
+    }
+    ret at
+}
+
+// A bus address's first unix socket: `unix:path=...` or `unix:abstract=...`, then
+// SASL EXTERNAL as this user, whose id goes as the hex of its decimal digits.
+fn atspi_dial(address: str) -> (usize, bool) {
+    var socket_address: [110]u8 = zero
+    socket_address[0usize] = 1u8
+    var address_length = 0usize
+    var at = 0usize
+    while at < address.len && address[at] != 59u8 {
+        var key_end = at
+        while key_end < address.len && address[key_end] != 61u8 && address[key_end] != 44u8 && address[key_end] != 59u8 { key_end += 1usize }
+        var value_end = key_end
+        if value_end < address.len && address[value_end] == 61u8 { value_end += 1usize }
+        let value_start = value_end
+        while value_end < address.len && address[value_end] != 44u8 && address[value_end] != 59u8 { value_end += 1usize }
+        let key = address[at..key_end]
+        let value = address[value_start..value_end]
+        if value.len < 100usize && (same_bytes(key, "unix:path") || same_bytes(key, "path")) {
+            address_length = 2usize + atspi_copy(socket_address[2usize..106usize], value) + 1usize
+        }
+        if value.len < 100usize && (same_bytes(key, "unix:abstract") || same_bytes(key, "abstract")) {
+            address_length = 3usize + atspi_copy(socket_address[3usize..106usize], value)
+        }
+        at = value_end
+        if at < address.len && address[at] == 44u8 { at += 1usize }
+    }
+    if address_length == 0usize { ret (0usize, false) }
+    let descriptor = syscall(SYS_SOCKET, 1usize, SOCK_STREAM | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (0usize, false) }
+    let fd = usize(descriptor)
+    let connected = syscall(SYS_CONNECT, fd, mem.address_of(&socket_address[0usize]), address_length, 0usize, 0usize, 0usize)
+    var line: [96]u8 = zero
+    var uid: [20]u8 = zero
+    let uid_length = atspi_digits(uid[0usize..], 0usize, u64(syscall(SYS_GETUID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)))
+    var length = atspi_copy(line[1usize..], "AUTH EXTERNAL ") + 1usize
+    var d = 0usize
+    while d < uid_length {
+        line[length] = u8(51u8)
+        line[length + 1usize] = uid[d]
+        length += 2usize
+        d += 1usize
+    }
+    line[length] = 13u8
+    line[length + 1usize] = 10u8
+    length += 2usize
+    if connected < 0isize || d_write(fd, line[0usize..length]) != ok {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    atspi_in_len = 0usize
+    var seen_line = false
+    var rounds = 0usize
+    while !seen_line && rounds < 8usize {
+        if !atspi_fill(fd, 2000u32) {
+            atspi_hang_up(fd)
+            ret (0usize, false)
+        }
+        var i = 0usize
+        while i + 1usize < atspi_in_len {
+            if atspi_in[i] == 13u8 && atspi_in[i + 1usize] == 10u8 { seen_line = true }
+            i += 1usize
+        }
+        rounds += 1usize
+    }
+    if !seen_line || atspi_in_len < 2usize || atspi_in[0usize] != 79u8 || atspi_in[1usize] != 75u8 {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    atspi_in_len = 0usize
+    if d_write(fd, "BEGIN\r\n") != ok {
+        atspi_hang_up(fd)
+        ret (0usize, false)
+    }
+    ret (fd, true)
+}
+
+fn atspi_hang_up(fd: usize) {
+    let closed = syscall(SYS_CLOSE, fd, 0usize, 0usize, 0usize, 0usize, 0usize)
+}
+
+// A method call whose reply is one string, copied into `into`; its length.
+fn atspi_ask_text(fd: usize, destination: str, object: str, called: str, member: str, into: []u8) -> (usize, bool) {
+    d_call(destination, object, called, member, "")
+    if d_send(fd) != ok { ret (0usize, false) }
+    let (m, total, found) = atspi_await(fd, atspi_serial)
+    if !found { ret (0usize, false) }
+    if m.kind != 2u8 {
+        atspi_consume(total)
+        ret (0usize, false)
+    }
+    var c = r_body(&m)
+    let length = atspi_copy(into, r_text(atspi_in, &c))
+    atspi_consume(total)
+    ret (length, true)
+}
+
+fn atspi_hello(fd: usize) -> bool {
+    let (length, found) = atspi_ask_text(fd, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello", atspi_name[0usize..])
+    atspi_name_len = length
+    ret found && length != 0usize
+}
+
+fn atspi_buffers() -> bool {
+    if atspi_in.len != 0usize { ret true }
+    let (base, reserve_error) = reserve(2usize * ATSPI_BUFFER)
+    if reserve_error != ok { ret false }
+    if commit(base, 2usize * ATSPI_BUFFER) != ok { ret false }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = 2usize * ATSPI_BUFFER
+    region.off = 0usize
+    let (output, output_error) = mem.alloc[u8](&region, ATSPI_BUFFER)
+    let (input, input_error) = mem.alloc[u8](&region, ATSPI_BUFFER)
+    if output_error != ok || input_error != ok { ret false }
+    atspi_out = output
+    atspi_in = input
+    ret true
+}
+
+// Once, when the first window opens: the accessibility bus, and the application
+// embedded in the registry's desktop. Any failure leaves the bridge absent.
+fn atspi_connect(a: *mem.Arena) {
+    if atspi_state != ATSPI_UNTRIED { ret }
+    atspi_state = ATSPI_ABSENT
+    if !atspi_buffers() { ret }
+    let checkpoint = mem.mark(a)
+    // NO_AT_BRIDGE=1 keeps the bridge off, as it does for GTK and Qt.
+    let (bridge_switch, switch_error) = env(a, "NO_AT_BRIDGE")
+    if switch_error == ok && same_bytes(bridge_switch, "1") {
+        mem.reset(a, checkpoint)
+        ret
+    }
+    let (session, session_error) = env(a, "DBUS_SESSION_BUS_ADDRESS")
+    var address: [512]u8 = zero
+    var address_length = 0usize
+    if session_error == ok { address_length = atspi_copy(address[0usize..], session) }
+    mem.reset(a, checkpoint)
+    if address_length == 0usize { ret }
+    let (session_fd, dialled) = atspi_dial(address[0usize..address_length])
+    if !dialled { ret }
+    var a11y_length = 0usize
+    var a11y_found = false
+    if atspi_hello(session_fd) {
+        let (length, found) = atspi_ask_text(session_fd, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Bus", "GetAddress", address[0usize..])
+        a11y_length = length
+        a11y_found = found
+    }
+    atspi_hang_up(session_fd)
+    if !a11y_found || a11y_length == 0usize { ret }
+    let (fd, a11y_dialled) = atspi_dial(address[0usize..a11y_length])
+    if !a11y_dialled { ret }
+    if !atspi_hello(fd) {
+        atspi_hang_up(fd)
+        ret
+    }
+    // Embed((so)) under the registry's root; the reply is the desktop, our parent.
+    d_call("org.a11y.atspi.Registry", "/org/a11y/atspi/accessible/root", "org.a11y.atspi.Socket", "Embed", "(so)")
+    d_pad(8usize)
+    d_text(atspi_own_name())
+    d_text("/org/a11y/atspi/accessible/root")
+    if d_send(fd) != ok {
+        atspi_hang_up(fd)
+        ret
+    }
+    atspi_socket = fd
+    atspi_state = ATSPI_CONNECTED
+    let (m, total, found) = atspi_await(fd, atspi_serial)
+    if !found || m.kind != 2u8 {
+        atspi_drop()
+        ret
+    }
+    var c = r_body(&m)
+    r_pad(&c, 8usize)
+    atspi_parent_name_len = atspi_copy(atspi_parent_name[0usize..], r_text(atspi_in, &c))
+    atspi_parent_path_len = atspi_copy(atspi_parent_path[0usize..], r_text(atspi_in, &c))
+    atspi_consume(total)
+}
+
+fn atspi_drop() {
+    if atspi_state == ATSPI_CONNECTED { atspi_hang_up(atspi_socket) }
+    atspi_state = ATSPI_ABSENT
+    atspi_asked = false
+}
+
+fn atspi_own_name() -> str {
+    ret atspi_name[0usize..atspi_name_len]
+}
+
+// Every call the socket holds, answered; a socket that closes or garbles ends
+// the bridge. A client walking the tree sends its next call as soon as the last
+// is answered, so the burst is served here while it keeps coming -- a millisecond
+// apart, up to 64 more reads -- rather than one call per frame.
+fn atspi_service() {
+    if !atspi_fill(atspi_socket, 0u32) {
+        atspi_drop()
+        ret
+    }
+    atspi_answer_all(true)
+}
+
+// Bytes as if the socket had delivered them, answered as they would be; what a
+// test drives the objects with while the bridge is off.
+fn atspi_receive(bytes: []const u8) {
+    var at = 0usize
+    while at < bytes.len && atspi_in_len < atspi_in.len {
+        atspi_in[atspi_in_len] = bytes[at]
+        atspi_in_len += 1usize
+        at += 1usize
+    }
+    atspi_answer_all(false)
+}
+
+fn atspi_answer_all(connected: bool) {
+    var reads = 0usize
+    while !connected || atspi_state == ATSPI_CONNECTED {
+        let (m, total, complete) = d_parse(atspi_in, 0usize, atspi_in_len)
+        if complete {
+            if m.kind == 255u8 {
+                atspi_drop()
+                ret
+            }
+            if m.kind == 1u8 { atspi_dispatch(&m) }
+            atspi_consume(total)
+            continue
+        }
+        if !connected || reads >= 64usize || !atspi_fill(atspi_socket, 1u32) { break }
+        reads += 1usize
+    }
+}
+
+// ---------------------------------------------------------------- the objects
+
+fn atspi_prefix() -> str {
+    ret "/org/a11y/atspi/accessible/"
+}
+
+// A window's frame, or a node of it, as its object path, in a buffer the next
+// call reuses.
+fn atspi_path(window: usize, node: bool, slot: u32, generation: u32) -> str {
+    var at = atspi_copy(atspi_path_bytes[0usize..], atspi_prefix())
+    at = atspi_digits(atspi_path_bytes[0usize..], at, u64(window))
+    if node {
+        atspi_path_bytes[at] = 95u8
+        at = atspi_digits(atspi_path_bytes[0usize..], at + 1usize, u64(slot))
+        atspi_path_bytes[at] = 95u8
+        at = atspi_digits(atspi_path_bytes[0usize..], at + 1usize, u64(generation))
+    }
+    ret atspi_path_bytes[0usize..at]
+}
+
+fn atspi_number(text: str, from: usize) -> (u64, usize) {
+    var value = 0u64
+    var at = from
+    while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 && at - from < 12usize {
+        value = value * 10u64 + u64(text[at] - 48u8)
+        at += 1usize
+    }
+    ret (value, at)
+}
+
+fn atspi_target(object: str) -> AtspiTarget {
+    var t: AtspiTarget = zero
+    t.kind = 3u8
+    let prefix = atspi_prefix()
+    if object.len <= prefix.len || !same_bytes(object[0usize..prefix.len], prefix) { ret t }
+    let rest = object[prefix.len..object.len]
+    if same_bytes(rest, "root") {
+        t.kind = 0u8
+        ret t
+    }
+    let (window, after_window) = atspi_number(object, prefix.len)
+    if after_window == prefix.len || window >= u64(WINDOW_TABLE) || window_ids[usize(window)] == 0u32 { ret t }
+    t.window = usize(window)
+    if after_window == object.len {
+        t.kind = 1u8
+        ret t
+    }
+    if object[after_window] != 95u8 { ret t }
+    let (slot, after_slot) = atspi_number(object, after_window + 1usize)
+    if after_slot >= object.len || object[after_slot] != 95u8 { ret t }
+    let (generation, after_generation) = atspi_number(object, after_slot + 1usize)
+    if after_generation != object.len || slot >= u64(ATSPI_SLOTS) { ret t }
+    let s = &atspi_stores[t.window]
+    if !s.ready { ret t }
+    let at = s.index_of[usize(slot)]
+    if at == 0u32 || u64(s.nodes[usize(at - 1u32)].generation) != generation { ret t }
+    t.kind = 2u8
+    t.index = usize(at - 1u32)
+    ret t
+}
+
+// References, `(so)`: this connection's name and a path.
+fn d_reference(object: str) {
+    d_pad(8usize)
+    d_text(atspi_own_name())
+    d_text(object)
+}
+
+fn d_reference_node(window: usize, link: u32) {
+    if link == 0u32 {
+        d_reference("/org/a11y/atspi/null")
+        ret
+    }
+    let n = &atspi_stores[window].nodes[usize(link - 1u32)]
+    d_reference(atspi_path(window, true, n.id, n.generation))
+}
+
+fn d_reference_parent(t: AtspiTarget) {
+    if t.kind == 0u8 {
+        d_pad(8usize)
+        d_text(atspi_parent_name[0usize..atspi_parent_name_len])
+        if atspi_parent_path_len == 0usize { d_text("/org/a11y/atspi/null") } else { d_text(atspi_parent_path[0usize..atspi_parent_path_len]) }
+        ret
+    }
+    if t.kind == 1u8 {
+        d_reference("/org/a11y/atspi/accessible/root")
+        ret
+    }
+    let s = &atspi_stores[t.window]
+    if s.parent[t.index] == 0u32 {
+        d_reference(atspi_path(t.window, false, 0u32, 0u32))
+        ret
+    }
+    d_reference_node(t.window, s.parent[t.index])
+}
+
+// The first child of a target as a link (an index plus one, or a window plus one
+// for the application's), and the next after a link.
+fn atspi_first(t: AtspiTarget) -> u32 {
+    if t.kind == 0u8 { ret atspi_next_window(0usize) }
+    let s = &atspi_stores[t.window]
+    if t.kind == 1u8 {
+        if !s.ready { ret 0u32 }
+        ret s.root_first
+    }
+    ret s.first[t.index]
+}
+
+fn atspi_next_window(from: usize) -> u32 {
+    var w = from
+    while w < WINDOW_TABLE {
+        if window_ids[w] != 0u32 { ret u32(w) + 1u32 }
+        w += 1usize
+    }
+    ret 0u32
+}
+
+fn atspi_after(t: AtspiTarget, link: u32) -> u32 {
+    if t.kind == 0u8 { ret atspi_next_window(usize(link)) }
+    ret atspi_stores[t.window].next[usize(link - 1u32)]
+}
+
+fn d_reference_child(t: AtspiTarget, link: u32) {
+    if t.kind == 0u8 {
+        d_reference(atspi_path(usize(link - 1u32), false, 0u32, 0u32))
+        ret
+    }
+    d_reference_node(t.window, link)
+}
+
+fn atspi_child_count(t: AtspiTarget) -> i32 {
+    var count = 0i32
+    var link = atspi_first(t)
+    while link != 0u32 && count < 100000i32 {
+        count += 1i32
+        link = atspi_after(t, link)
+    }
+    ret count
+}
+
+fn atspi_index_in_parent(t: AtspiTarget) -> i32 {
+    if t.kind == 0u8 { ret -1i32 }
+    if t.kind == 1u8 {
+        var count = 0i32
+        var w = 0usize
+        while w < t.window {
+            if window_ids[w] != 0u32 { count += 1i32 }
+            w += 1usize
+        }
+        ret count
+    }
+    let s = &atspi_stores[t.window]
+    var count = 0i32
+    var link = s.previous[t.index]
+    while link != 0u32 && count < 100000i32 {
+        count += 1i32
+        link = s.previous[usize(link - 1u32)]
+    }
+    ret count
+}
+
+fn atspi_title(window: usize) -> str {
+    ret atspi_titles[window * 128usize..window * 128usize + atspi_title_lengths[window]]
+}
+
+fn atspi_is_text(n: *const AccessibleNode) -> bool {
+    ret n.role == 7u8 || n.role == 38u8 || n.role == 44u8
+}
+
+fn atspi_name_of(t: AtspiTarget) -> str {
+    if t.kind == 0u8 {
+        let first = atspi_next_window(0usize)
+        if first != 0u32 && atspi_title_lengths[usize(first - 1u32)] != 0usize { ret atspi_title(usize(first - 1u32)) }
+        ret "neper"
+    }
+    if t.kind == 1u8 { ret atspi_title(t.window) }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    // A node with no name and a value no text interface reads is named by the value.
+    if n.label.len == 0usize && !atspi_is_text(n) { ret n.value }
+    ret n.label
+}
+
+// The AT-SPI role of an `e.ui.accessibility` role code.
+fn atspi_role_of(n: *const AccessibleNode) -> u32 {
+    let role = n.role
+    if role == 3u8 { ret 43u32 }
+    if role == 4u8 { ret 7u32 }
+    if role == 5u8 { ret 44u32 }
+    if role == 6u8 { ret 29u32 }
+    if role == 7u8 {
+        if n.flags & ATSPI_SECRET != 0u16 { ret 40u32 }
+        ret 79u32
+    }
+    if role == 8u8 { ret 27u32 }
+    if role == 9u8 { ret 88u32 }
+    if role == 10u8 { ret 31u32 }
+    if role == 11u8 || role == 36u8 { ret 32u32 }
+    if role == 12u8 || role == 30u8 { ret 55u32 }
+    if role == 13u8 { ret 90u32 }
+    if role == 14u8 { ret 56u32 }
+    if role == 15u8 { ret 51u32 }
+    if role == 16u8 { ret 42u32 }
+    if role == 17u8 { ret 48u32 }
+    if role == 18u8 { ret 62u32 }
+    if role == 19u8 { ret 37u32 }
+    if role == 20u8 { ret 38u32 }
+    if role == 21u8 { ret 33u32 }
+    if role == 22u8 { ret 35u32 }
+    if role == 23u8 || role == 34u8 { ret 16u32 }
+    if role == 24u8 { ret 2u32 }
+    if role == 25u8 { ret 83u32 }
+    if role == 26u8 { ret 54u32 }
+    if role == 27u8 { ret 64u32 }
+    if role == 28u8 { ret 65u32 }
+    if role == 29u8 { ret 91u32 }
+    if role == 31u8 { ret 58u32 }
+    if role == 32u8 { ret 57u32 }
+    if role == 33u8 { ret 50u32 }
+    if role == 35u8 { ret 98u32 }
+    if role == 37u8 { ret 8u32 }
+    if role == 38u8 { ret 11u32 }
+    if role == 39u8 || role == 40u8 { ret 110u32 }
+    if role == 41u8 { ret 34u32 }
+    if role == 42u8 { ret 45u32 }
+    if role == 43u8 { ret 66u32 }
+    if role == 44u8 { ret 52u32 }
+    ret 39u32
+}
+
+fn atspi_role(t: AtspiTarget) -> u32 {
+    if t.kind == 0u8 { ret 75u32 }
+    if t.kind == 1u8 { ret 23u32 }
+    ret atspi_role_of(&atspi_stores[t.window].nodes[t.index])
+}
+
+fn atspi_bit(bits: u64, state: u64) -> u64 {
+    ret bits | (1u64 << state)
+}
+
+// The state set as its 64 bits, AtspiStateType numbering.
+fn atspi_states(t: AtspiTarget) -> u64 {
+    var bits = 0u64
+    if t.kind == 0u8 { ret bits }
+    // Enabled, sensitive, visible, showing.
+    bits = atspi_bit(atspi_bit(atspi_bit(atspi_bit(bits, 8u64), 24u64), 30u64), 25u64)
+    if t.kind == 1u8 {
+        if window_focused[t.window] { bits = atspi_bit(bits, 1u64) }
+        ret bits
+    }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if n.flags & ATSPI_DISABLED != 0u16 { bits = bits & (18446744073709551615u64 ^ ((1u64 << 8u64) | (1u64 << 24u64))) }
+    if n.flags & ATSPI_HIDDEN != 0u16 { bits = bits & (18446744073709551615u64 ^ ((1u64 << 30u64) | (1u64 << 25u64))) }
+    if n.actions & (4294967295u32 ^ ATSPI_ACTION_FOCUS) != 0u32 || n.flags & ATSPI_FOCUSED != 0u16 { bits = atspi_bit(bits, 11u64) }
+    if n.flags & ATSPI_FOCUSED != 0u16 { bits = atspi_bit(bits, 12u64) }
+    if n.flags & ATSPI_SELECTED != 0u16 { bits = atspi_bit(bits, 23u64) }
+    if n.actions & ATSPI_ACTION_SELECT != 0u32 || n.role == 19u8 || n.role == 36u8 { bits = atspi_bit(bits, 22u64) }
+    if n.role == 4u8 || n.role == 18u8 || n.role == 37u8 || n.role == 42u8 { bits = atspi_bit(bits, 41u64) }
+    if n.flags & ATSPI_CHECKED != 0u16 { bits = atspi_bit(bits, 4u64) }
+    if n.flags & ATSPI_MIXED != 0u16 { bits = atspi_bit(bits, 32u64) }
+    if n.actions & (ATSPI_ACTION_EXPAND | ATSPI_ACTION_COLLAPSE) != 0u32 { bits = atspi_bit(bits, 9u64) }
+    if n.flags & ATSPI_EXPANDED != 0u16 { bits = atspi_bit(bits, 10u64) }
+    if n.flags & ATSPI_BUSY != 0u16 { bits = atspi_bit(bits, 3u64) }
+    if n.flags & ATSPI_INVALID != 0u16 { bits = atspi_bit(bits, 36u64) }
+    if n.flags & ATSPI_REQUIRED != 0u16 { bits = atspi_bit(bits, 33u64) }
+    if n.flags & ATSPI_MODAL != 0u16 { bits = atspi_bit(bits, 16u64) }
+    if n.flags & ATSPI_READ_ONLY != 0u16 { bits = atspi_bit(bits, 43u64) }
+    if atspi_is_text(n) {
+        bits = atspi_bit(bits, 26u64)
+        if n.actions & ATSPI_ACTION_SET_VALUE != 0u32 && n.flags & ATSPI_READ_ONLY == 0u16 { bits = atspi_bit(bits, 7u64) }
+    }
+    ret bits
+}
+
+// The actions DoAction numbers, in this order: press, increment, decrement,
+// scroll, dismiss, expand, collapse, select, show menu, copy.
+fn atspi_action(n: *const AccessibleNode, wanted: i32) -> (u8, str, bool) {
+    var index = 0i32
+    var code = 1u8
+    while code <= 12u8 {
+        if code != 4u8 && code != 11u8 && n.actions & (1u32 << u32(code)) != 0u32 {
+            if index == wanted { ret (code, atspi_action_name(code), true) }
+            index += 1i32
+        }
+        code += 1u8
+    }
+    ret (0u8, "", false)
+}
+
+fn atspi_action_count(t: AtspiTarget) -> i32 {
+    if t.kind != 2u8 { ret 0i32 }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    var count = 0i32
+    while count < 16i32 {
+        let (_, _, found) = atspi_action(n, count)
+        if !found { break }
+        count += 1i32
+    }
+    ret count
+}
+
+fn atspi_action_name(code: u8) -> str {
+    if code == 1u8 { ret "click" }
+    if code == 2u8 { ret "increment" }
+    if code == 3u8 { ret "decrement" }
+    if code == 5u8 { ret "scroll" }
+    if code == 6u8 { ret "dismiss" }
+    if code == 7u8 { ret "expand" }
+    if code == 8u8 { ret "collapse" }
+    if code == 9u8 { ret "select" }
+    if code == 10u8 { ret "showmenu" }
+    ret "copy"
+}
+
+// UTF-8 text by characters, which is how AT-SPI counts.
+fn atspi_characters(text: str) -> i32 {
+    var count = 0i32
+    var at = 0usize
+    while at < text.len {
+        if text[at] & 192u8 != 128u8 { count += 1i32 }
+        at += 1usize
+    }
+    ret count
+}
+
+fn atspi_byte_at(text: str, characters: i32) -> usize {
+    var seen = 0i32
+    var at = 0usize
+    while at < text.len {
+        if text[at] & 192u8 != 128u8 {
+            if seen == characters { ret at }
+            seen += 1i32
+        }
+        at += 1usize
+    }
+    ret text.len
+}
+
+fn atspi_node_text(t: AtspiTarget) -> str {
+    if t.kind != 2u8 { ret "" }
+    ret atspi_stores[t.window].nodes[t.index].value
+}
+
+fn atspi_interfaces(t: AtspiTarget) {
+    let array = d_array_begin(4usize)
+    d_text("org.a11y.atspi.Accessible")
+    if t.kind == 0u8 { d_text("org.a11y.atspi.Application") } else { d_text("org.a11y.atspi.Component") }
+    if atspi_action_count(t) > 0i32 { d_text("org.a11y.atspi.Action") }
+    if t.kind == 2u8 && atspi_is_text(&atspi_stores[t.window].nodes[t.index]) {
+        d_text("org.a11y.atspi.Text")
+        d_text("org.a11y.atspi.EditableText")
+    }
+    d_array_end(array, 4usize)
+}
+
+// A property as a variant, when the interface has it.
+fn atspi_property(t: AtspiTarget, called: str, property: str) -> bool {
+    if same_bytes(called, "org.a11y.atspi.Accessible") {
+        if same_bytes(property, "Name") {
+            d_signature("s")
+            d_text(atspi_name_of(t))
+            ret true
+        }
+        if same_bytes(property, "Description") || same_bytes(property, "HelpText") {
+            d_signature("s")
+            if t.kind == 2u8 { d_text(atspi_stores[t.window].nodes[t.index].hint) } else { d_text("") }
+            ret true
+        }
+        if same_bytes(property, "Parent") {
+            d_signature("(so)")
+            d_reference_parent(t)
+            ret true
+        }
+        if same_bytes(property, "ChildCount") {
+            d_signature("i")
+            d_i32(atspi_child_count(t))
+            ret true
+        }
+        if same_bytes(property, "Locale") || same_bytes(property, "AccessibleId") {
+            d_signature("s")
+            d_text("")
+            ret true
+        }
+        ret false
+    }
+    if same_bytes(called, "org.a11y.atspi.Application") && t.kind == 0u8 {
+        if same_bytes(property, "ToolkitName") {
+            d_signature("s")
+            d_text("neper")
+            ret true
+        }
+        if same_bytes(property, "Version") {
+            d_signature("s")
+            d_text("1")
+            ret true
+        }
+        if same_bytes(property, "AtspiVersion") {
+            d_signature("s")
+            d_text("2.1")
+            ret true
+        }
+        if same_bytes(property, "Id") {
+            d_signature("i")
+            d_u32(atspi_app_id)
+            ret true
+        }
+        ret false
+    }
+    if same_bytes(called, "org.a11y.atspi.Action") && same_bytes(property, "NActions") {
+        d_signature("i")
+        d_i32(atspi_action_count(t))
+        ret true
+    }
+    if same_bytes(called, "org.a11y.atspi.Text") && t.kind == 2u8 {
+        let n = &atspi_stores[t.window].nodes[t.index]
+        if same_bytes(property, "CharacterCount") {
+            d_signature("i")
+            d_i32(atspi_characters(n.value))
+            ret true
+        }
+        if same_bytes(property, "CaretOffset") {
+            d_signature("i")
+            var caret = n.selection_end
+            if caret > n.value.len { caret = n.value.len }
+            d_i32(atspi_characters(n.value[0usize..caret]))
+            ret true
+        }
+    }
+    ret false
+}
+
+fn atspi_all_properties(t: AtspiTarget, called: str) {
+    let array = d_array_begin(8usize)
+    atspi_entry(t, called, "Name")
+    atspi_entry(t, called, "Description")
+    atspi_entry(t, called, "Parent")
+    atspi_entry(t, called, "ChildCount")
+    atspi_entry(t, called, "Locale")
+    atspi_entry(t, called, "AccessibleId")
+    atspi_entry(t, called, "ToolkitName")
+    atspi_entry(t, called, "Version")
+    atspi_entry(t, called, "AtspiVersion")
+    atspi_entry(t, called, "Id")
+    atspi_entry(t, called, "NActions")
+    atspi_entry(t, called, "CharacterCount")
+    atspi_entry(t, called, "CaretOffset")
+    d_array_end(array, 8usize)
+}
+
+// A dictionary entry, taken back when the interface has no such property.
+fn atspi_entry(t: AtspiTarget, called: str, property: str) {
+    d_pad(8usize)
+    let mark = atspi_out_len
+    d_text(property)
+    if !atspi_property(t, called, property) { atspi_out_len = mark }
+}
+
+// The deepest published node under a window-relative point: the last in tree order.
+fn atspi_at_point(window: usize, x: i32, y: i32) -> u32 {
+    let s = &atspi_stores[window]
+    if !s.ready { ret 0u32 }
+    let px = f32(x)
+    let py = f32(y)
+    var found = 0u32
+    var i = 0usize
+    while i < s.count {
+        let n = &s.nodes[i]
+        if n.flags & ATSPI_HIDDEN == 0u16 && px >= n.x && py >= n.y && px < n.x + n.width && py < n.y + n.height { found = u32(i) + 1u32 }
+        i += 1usize
+    }
+    ret found
+}
+
+fn atspi_extents(t: AtspiTarget) -> (i32, i32, i32, i32) {
+    if t.kind == 1u8 { ret (0i32, 0i32, i32(window_widths[t.window]), i32(window_heights[t.window])) }
+    if t.kind != 2u8 { ret (0i32, 0i32, 0i32, 0i32) }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    ret (i32(n.x), i32(n.y), i32(n.width), i32(n.height))
+}
+
+// A request for the program, and a Paint to wake its wait.
+fn atspi_request(t: AtspiTarget, action: u8, text: str) -> bool {
+    if t.kind != 2u8 || atspi_request_count >= ATSPI_REQUESTS { ret false }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if n.flags & ATSPI_DISABLED != 0u16 && action != 0u8 { ret false }
+    let r = &atspi_requests[(atspi_request_head + atspi_request_count) % ATSPI_REQUESTS]
+    r.window = window_ids[t.window]
+    r.id = n.id
+    r.generation = n.generation
+    r.action = action
+    r.length = atspi_copy(r.text[0usize..], text)
+    atspi_request_count += 1usize
+    var wake: WindowEvent = zero
+    wake.kind = .Paint
+    wake.window = Window { raw: usize(window_ids[t.window]) }
+    window_push(wake)
+    ret true
+}
+
+// The first call from an assistive technology: every window publishes from now on.
+fn atspi_first_ask() {
+    if atspi_asked { ret }
+    atspi_asked = true
+    var w = 0usize
+    while w < WINDOW_TABLE {
+        if window_ids[w] != 0u32 {
+            var wake: WindowEvent = zero
+            wake.kind = .Paint
+            wake.window = Window { raw: usize(window_ids[w]) }
+            window_push(wake)
+        }
+        w += 1usize
+    }
+}
+
+fn atspi_dispatch(m: *const DMessage) {
+    let t = atspi_target(m.path)
+    let called = m.called
+    let member = m.member
+    if same_bytes(called, "org.freedesktop.DBus.Peer") {
+        d_reply(m, "")
+        d_answer()
+        ret
+    }
+    if t.kind == 3u8 {
+        d_error(m, "org.freedesktop.DBus.Error.UnknownObject")
+        ret
+    }
+    atspi_first_ask()
+    var c = r_body(m)
+    if same_bytes(called, "org.freedesktop.DBus.Properties") {
+        let wanted_interface = r_text(atspi_in, &c)
+        if same_bytes(member, "Get") {
+            let property = r_text(atspi_in, &c)
+            d_reply(m, "v")
+            if atspi_property(t, wanted_interface, property) {
+                d_answer()
+                ret
+            }
+            d_error(m, "org.freedesktop.DBus.Error.UnknownProperty")
+            ret
+        }
+        if same_bytes(member, "GetAll") {
+            d_reply(m, "a{sv}")
+            atspi_all_properties(t, wanted_interface)
+            d_answer()
+            ret
+        }
+        if same_bytes(member, "Set") {
+            let property = r_text(atspi_in, &c)
+            let kind = r_signature(atspi_in, &c)
+            if t.kind == 0u8 && same_bytes(property, "Id") && same_bytes(kind, "i") { atspi_app_id = r_u32(atspi_in, &c) }
+            d_reply(m, "")
+            d_answer()
+            ret
+        }
+    }
+    if same_bytes(called, "org.a11y.atspi.Accessible") {
+        if atspi_accessible(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Component") && t.kind != 0u8 {
+        if atspi_component(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Action") && t.kind == 2u8 {
+        if atspi_actions(m, t, member, &c) { ret }
+    }
+    if (same_bytes(called, "org.a11y.atspi.Text") || same_bytes(called, "org.a11y.atspi.EditableText")) && t.kind == 2u8 {
+        if atspi_text(m, t, member, &c) { ret }
+    }
+    if same_bytes(called, "org.a11y.atspi.Application") && same_bytes(member, "GetLocale") {
+        d_reply(m, "s")
+        d_text("")
+        d_answer()
+        ret
+    }
+    d_error(m, "org.freedesktop.DBus.Error.UnknownMethod")
+}
+
+fn atspi_accessible(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    if same_bytes(member, "GetChildren") {
+        d_reply(m, "a(so)")
+        let array = d_array_begin(8usize)
+        var link = atspi_first(t)
+        var count = 0usize
+        while link != 0u32 && count < 100000usize {
+            d_reference_child(t, link)
+            link = atspi_after(t, link)
+            count += 1usize
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetChildAtIndex") {
+        let wanted = r_i32(atspi_in, c)
+        var link = atspi_first(t)
+        var index = 0i32
+        while link != 0u32 && index < wanted {
+            link = atspi_after(t, link)
+            index += 1i32
+        }
+        d_reply(m, "(so)")
+        if link == 0u32 || wanted < 0i32 { d_reference("/org/a11y/atspi/null") } else { d_reference_child(t, link) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetIndexInParent") {
+        d_reply(m, "i")
+        d_i32(atspi_index_in_parent(t))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRole") {
+        d_reply(m, "u")
+        d_u32(atspi_role(t))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRoleName") || same_bytes(member, "GetLocalizedRoleName") {
+        d_reply(m, "s")
+        d_text("")
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetState") {
+        let bits = atspi_states(t)
+        d_reply(m, "au")
+        let array = d_array_begin(4usize)
+        d_u32(u32(bits & 4294967295u64))
+        d_u32(u32(bits >> 32u64))
+        d_array_end(array, 4usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAttributes") {
+        d_reply(m, "a{ss}")
+        let array = d_array_begin(8usize)
+        if t.kind == 2u8 {
+            let n = &atspi_stores[t.window].nodes[t.index]
+            if n.role == 25u8 && n.level > 0u8 {
+                var digits: [4]u8 = zero
+                let length = atspi_digits(digits[0usize..], 0usize, u64(n.level))
+                d_pad(8usize)
+                d_text("level")
+                d_text(digits[0usize..length])
+            }
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetApplication") {
+        d_reply(m, "(so)")
+        d_reference("/org/a11y/atspi/accessible/root")
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetInterfaces") {
+        d_reply(m, "as")
+        atspi_interfaces(t)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetRelationSet") {
+        d_reply(m, "a(ua(so))")
+        let array = d_array_begin(8usize)
+        if t.kind == 2u8 {
+            let s = &atspi_stores[t.window]
+            let n = &s.nodes[t.index]
+            // LABELLED_BY 2, DESCRIBED_BY 18, CONTROLLER_FOR 3, ERROR_MESSAGE 21.
+            if n.relation_flags & 1u8 != 0u8 { atspi_relation(t.window, 2u32, n.labelled_by, n.labelled_by_generation) }
+            if n.relation_flags & 2u8 != 0u8 { atspi_relation(t.window, 18u32, n.described_by, n.described_by_generation) }
+            if n.relation_flags & 8u8 != 0u8 { atspi_relation(t.window, 3u32, n.controls, n.controls_generation) }
+            if n.relation_flags & 4u8 != 0u8 { atspi_relation(t.window, 21u32, n.error_by, n.error_by_generation) }
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+// One relation to a published node, when it is published.
+fn atspi_relation(window: usize, kind: u32, slot: u32, generation: u32) {
+    let s = &atspi_stores[window]
+    if usize(slot) >= ATSPI_SLOTS { ret }
+    let at = s.index_of[usize(slot)]
+    if at == 0u32 || s.nodes[usize(at - 1u32)].generation != generation { ret }
+    d_pad(8usize)
+    d_u32(kind)
+    let targets = d_array_begin(8usize)
+    d_reference_node(window, at)
+    d_array_end(targets, 8usize)
+}
+
+fn atspi_component(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let (x, y, width, height) = atspi_extents(t)
+    if same_bytes(member, "GetExtents") {
+        d_reply(m, "(iiii)")
+        d_pad(8usize)
+        d_i32(x)
+        d_i32(y)
+        d_i32(width)
+        d_i32(height)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetPosition") || same_bytes(member, "GetSize") {
+        d_reply(m, "ii")
+        if same_bytes(member, "GetSize") {
+            d_i32(width)
+            d_i32(height)
+        } else {
+            d_i32(x)
+            d_i32(y)
+        }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "Contains") {
+        let px = r_i32(atspi_in, c)
+        let py = r_i32(atspi_in, c)
+        d_reply(m, "b")
+        d_bool(px >= x && py >= y && px < x + width && py < y + height)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAccessibleAtPoint") {
+        let px = r_i32(atspi_in, c)
+        let py = r_i32(atspi_in, c)
+        d_reply(m, "(so)")
+        d_reference_node(t.window, atspi_at_point(t.window, px, py))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetLayer") {
+        d_reply(m, "u")
+        if t.kind == 1u8 { d_u32(7u32) } else { d_u32(3u32) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetMDIZOrder") {
+        d_reply(m, "n")
+        d_put(255u8)
+        d_put(255u8)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetAlpha") {
+        d_reply(m, "d")
+        d_u64(4607182418800017408u64)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GrabFocus") {
+        d_reply(m, "b")
+        d_bool(atspi_request(t, 0u8, ""))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "ScrollTo") || same_bytes(member, "ScrollToPoint") || same_bytes(member, "SetExtents") || same_bytes(member, "SetPosition") || same_bytes(member, "SetSize") {
+        d_reply(m, "b")
+        d_bool(false)
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+fn atspi_actions(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let n = &atspi_stores[t.window].nodes[t.index]
+    if same_bytes(member, "GetActions") {
+        d_reply(m, "a(sss)")
+        let array = d_array_begin(8usize)
+        var index = 0i32
+        while index < 16i32 {
+            let (_, action_name, found) = atspi_action(n, index)
+            if !found { break }
+            d_pad(8usize)
+            d_text(action_name)
+            d_text("")
+            d_text("")
+            index += 1i32
+        }
+        d_array_end(array, 8usize)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetName") || same_bytes(member, "GetLocalizedName") || same_bytes(member, "GetDescription") || same_bytes(member, "GetKeyBinding") {
+        let wanted = r_i32(atspi_in, c)
+        let (_, action_name, found) = atspi_action(n, wanted)
+        d_reply(m, "s")
+        if found && (same_bytes(member, "GetName") || same_bytes(member, "GetLocalizedName")) { d_text(action_name) } else { d_text("") }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "DoAction") {
+        let wanted = r_i32(atspi_in, c)
+        let (code, _, found) = atspi_action(n, wanted)
+        d_reply(m, "b")
+        d_bool(found && atspi_request(t, code, ""))
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+fn atspi_text(m: *const DMessage, t: AtspiTarget, member: str, c: *DCursor) -> bool {
+    let text = atspi_node_text(t)
+    let count = atspi_characters(text)
+    if same_bytes(member, "GetText") {
+        var start = r_i32(atspi_in, c)
+        var end = r_i32(atspi_in, c)
+        if end < 0i32 || end > count { end = count }
+        if start < 0i32 { start = 0i32 }
+        if start > end { start = end }
+        d_reply(m, "s")
+        d_text(text[atspi_byte_at(text, start)..atspi_byte_at(text, end)])
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetCharacterAtOffset") {
+        let offset = r_i32(atspi_in, c)
+        var character = 0i32
+        if offset >= 0i32 && offset < count {
+            let at = atspi_byte_at(text, offset)
+            character = i32(text[at])
+            if text[at] >= 128u8 {
+                // The code point of a multi-byte sequence.
+                var length = 1usize
+                var value = u32(text[at])
+                if value >= 240u32 {
+                    value = value & 7u32
+                    length = 4usize
+                } else if value >= 224u32 {
+                    value = value & 15u32
+                    length = 3usize
+                } else {
+                    value = value & 31u32
+                    length = 2usize
+                }
+                var k = 1usize
+                while k < length && at + k < text.len {
+                    value = (value << 6u32) | (u32(text[at + k]) & 63u32)
+                    k += 1usize
+                }
+                character = i32(value)
+            }
+        }
+        d_reply(m, "i")
+        d_i32(character)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetStringAtOffset") || same_bytes(member, "GetTextAtOffset") {
+        d_reply(m, "sii")
+        d_text(text)
+        d_i32(0i32)
+        d_i32(count)
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetTextBeforeOffset") || same_bytes(member, "GetTextAfterOffset") {
+        d_reply(m, "sii")
+        d_text("")
+        d_i32(0i32)
+        d_i32(0i32)
+        d_answer()
+        ret true
+    }
+    let n = &atspi_stores[t.window].nodes[t.index]
+    var low = n.selection_start
+    var high = n.selection_end
+    if low > high {
+        low = n.selection_end
+        high = n.selection_start
+    }
+    if high > text.len { high = text.len }
+    if low > high { low = high }
+    if same_bytes(member, "GetNSelections") {
+        d_reply(m, "i")
+        if low != high { d_i32(1i32) } else { d_i32(0i32) }
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "GetSelection") {
+        d_reply(m, "ii")
+        d_i32(atspi_characters(text[0usize..low]))
+        d_i32(atspi_characters(text[0usize..high]))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "SetCaretOffset") || same_bytes(member, "SetSelection") || same_bytes(member, "AddSelection") {
+        if same_bytes(member, "SetSelection") { let which = r_i32(atspi_in, c) }
+        let first = r_i32(atspi_in, c)
+        var second = first
+        if !same_bytes(member, "SetCaretOffset") { second = r_i32(atspi_in, c) }
+        // SetSelection's value is "start:end" in bytes.
+        var range: [48]u8 = zero
+        var at = atspi_digits(range[0usize..], 0usize, u64(atspi_byte_at(text, first)))
+        range[at] = 58u8
+        at = atspi_digits(range[0usize..], at + 1usize, u64(atspi_byte_at(text, second)))
+        d_reply(m, "b")
+        d_bool(first >= 0i32 && second >= 0i32 && atspi_request(t, 11u8, range[0usize..at]))
+        d_answer()
+        ret true
+    }
+    if same_bytes(member, "SetTextContents") {
+        let wanted = r_text(atspi_in, c)
+        d_reply(m, "b")
+        d_bool(n.actions & ATSPI_ACTION_SET_VALUE != 0u32 && atspi_request(t, 4u8, wanted))
+        d_answer()
+        ret true
+    }
+    ret false
+}
+
+// ---------------------------------------------------------------- publishing
+
+fn atspi_prepare(slot: usize) -> bool {
+    let s = &atspi_stores[slot]
+    if s.nodes.len != 0usize { ret true }
+    let (base, reserve_error) = reserve(ATSPI_STORE_BYTES)
+    if reserve_error != ok { ret false }
+    if commit(base, ATSPI_STORE_BYTES) != ok { ret false }
+    var region: mem.Arena = zero
+    region.base = base
+    region.cap = ATSPI_STORE_BYTES
+    region.off = 0usize
+    let (nodes, nodes_error) = mem.alloc[AccessibleNode](&region, ATSPI_NODES)
+    let (text, text_error) = mem.alloc[u8](&region, ATSPI_TEXT)
+    let (index_of, index_error) = mem.alloc[u32](&region, ATSPI_SLOTS)
+    let (parents, parents_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (firsts, firsts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (lasts, lasts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (nexts, nexts_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    let (previouses, previouses_error) = mem.alloc[u32](&region, ATSPI_NODES)
+    if nodes_error != ok || text_error != ok || index_error != ok || parents_error != ok || firsts_error != ok || lasts_error != ok || nexts_error != ok || previouses_error != ok { ret false }
+    s.nodes = nodes
+    s.text = text
+    s.index_of = index_of
+    s.parent = parents
+    s.first = firsts
+    s.last = lasts
+    s.next = nexts
+    s.previous = previouses
+    ret true
+}
+
+// Copied into the store's text; what does not fit is published empty.
+fn atspi_keep(s: *AtspiStore, used: *AtspiCount, text: str) -> str {
+    if text.len == 0usize || used.value + text.len > s.text.len { ret "" }
+    let start = used.value
+    var at = 0usize
+    while at < text.len {
+        s.text[start + at] = text[at]
+        at += 1usize
+    }
+    used.value = start + text.len
+    ret s.text[start..start + text.len]
+}
+
+// A closing window's store forgets its nodes, so their paths answer that they are gone.
+fn atspi_release(slot: usize) {
+    let s = &atspi_stores[slot]
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    s.count = 0usize
+    s.focus = 0u32
+    s.root_first = 0u32
+    s.root_last = 0u32
+    s.ready = false
+    atspi_title_lengths[slot] = 0usize
+}
+
+fn atspi_set_title(slot: usize, value: str) {
+    atspi_title_lengths[slot] = atspi_copy(atspi_titles[slot * 128usize..slot * 128usize + 128usize], value)
+}
+
+// Whether an assistive technology has called on the application; until one has,
+// a publish keeps nothing.
+fn accessibility_listening(w: Window) -> bool {
+    ret atspi_asked && w.raw != 0usize && window_slot(u32(w.raw)) < WINDOW_TABLE
+}
+
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    if !atspi_asked { ret ok }
+    if !atspi_prepare(slot) { ret OutOfMemory }
+    let s = &atspi_stores[slot]
+    var i = 0usize
+    while i < s.count {
+        s.index_of[usize(s.nodes[i].id)] = 0u32
+        i += 1usize
+    }
+    var used = AtspiCount { value: 0usize }
+    var count = 0usize
+    var focused = 0u32
+    i = 0usize
+    while i < nodes.len && count < ATSPI_NODES {
+        if usize(nodes[i].id) < ATSPI_SLOTS {
+            var copied = nodes[i]
+            copied.label = atspi_keep(s, &used, nodes[i].label)
+            copied.value = atspi_keep(s, &used, nodes[i].value)
+            copied.hint = atspi_keep(s, &used, nodes[i].hint)
+            s.nodes[count] = copied
+            s.index_of[usize(copied.id)] = u32(count) + 1u32
+            if copied.flags & ATSPI_FOCUSED != 0u16 { focused = u32(count) + 1u32 }
+            count += 1usize
+        }
+        i += 1usize
+    }
+    s.count = count
+    s.root_first = 0u32
+    s.root_last = 0u32
+    i = 0usize
+    while i < count {
+        s.first[i] = 0u32
+        s.last[i] = 0u32
+        s.next[i] = 0u32
+        s.previous[i] = 0u32
+        i += 1usize
+    }
+    // Children in the order the records come, which is the tree's.
+    i = 0usize
+    while i < count {
+        let n = &s.nodes[i]
+        var owner = 0u32
+        if n.has_parent && usize(n.parent) < ATSPI_SLOTS {
+            let at = s.index_of[usize(n.parent)]
+            if at != 0u32 && s.nodes[usize(at - 1u32)].generation == n.parent_generation { owner = at }
+        }
+        s.parent[i] = owner
+        let own = u32(i) + 1u32
+        if owner == 0u32 {
+            if s.root_last == 0u32 { s.root_first = own } else {
+                s.next[usize(s.root_last - 1u32)] = own
+                s.previous[i] = s.root_last
+            }
+            s.root_last = own
+        } else {
+            let p = usize(owner - 1u32)
+            if s.last[p] == 0u32 { s.first[p] = own } else {
+                s.next[usize(s.last[p] - 1u32)] = own
+                s.previous[i] = s.last[p]
+            }
+            s.last[p] = own
+        }
+        i += 1usize
+    }
+    let first_publish = !s.ready
+    let moved = focused != s.focus
+    s.focus = focused
+    s.ready = true
+    if atspi_state == ATSPI_CONNECTED {
+        // The frame's children came into being: ChildrenChanged, "add", the first.
+        if first_publish && s.root_first != 0u32 {
+            d_signal(atspi_path(slot, false, 0u32, 0u32), "org.a11y.atspi.Event.Object", "ChildrenChanged", "siiva{sv}")
+            d_text("add")
+            d_i32(0i32)
+            d_i32(0i32)
+            d_signature("(so)")
+            d_reference_node(slot, s.root_first)
+            let properties = d_array_begin(8usize)
+            d_array_end(properties, 8usize)
+            d_answer()
+        }
+        // The focus moved: StateChanged, "focused", 1, on the node that has it.
+        if moved && focused != 0u32 {
+            let n = &s.nodes[usize(focused - 1u32)]
+            d_signal(atspi_path(slot, true, n.id, n.generation), "org.a11y.atspi.Event.Object", "StateChanged", "siiva{sv}")
+            d_text("focused")
+            d_i32(1i32)
+            d_i32(0i32)
+            d_signature("i")
+            d_i32(0i32)
+            let properties = d_array_begin(8usize)
+            d_array_end(properties, 8usize)
+            d_answer()
+        }
+    }
+    ret ok
+}
+
+// The oldest request for this window, its value copied out; a request for a
+// window that has closed is dropped on the way.
+fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
+    var request: AccessibleRequest = zero
+    while atspi_request_count > 0usize {
+        let r = &atspi_requests[atspi_request_head]
+        if usize(r.window) != w.raw && window_slot(r.window) < WINDOW_TABLE { ret (request, false) }
+        atspi_request_head = (atspi_request_head + 1usize) % ATSPI_REQUESTS
+        atspi_request_count -= 1usize
+        if usize(r.window) == w.raw {
+            var at = 0usize
+            while at < r.length {
+                atspi_taken[at] = r.text[at]
+                at += 1usize
+            }
+            request.id = r.id
+            request.generation = r.generation
+            request.action = r.action
+            request.value = atspi_taken[0usize..r.length]
+            ret (request, true)
+        }
+    }
+    ret (request, false)
+}
+
+// A file's bytes handed to a socket without passing through this process (#1290): the
+// kernel moves them from the page cache into the socket, so nothing is copied into a
+// buffer here and back out again. The offset is the file's own and the descriptor's
+// cursor is not touched, so one open file can serve several transfers at once.
+//
+// A short answer is ordinary -- the socket took what fitted -- and so is zero: the offset
+// is at or past the end of the file, or the socket is non-blocking and full. The two are
+// not told apart, for the reason `socket_send` does not tell a zero-length send from a
+// full buffer either: a caller with more to send asks again, and one without stops.
+const SYS_SENDFILE: usize = 40usize
+
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    if count == 0usize { ret (0usize, ok) }
+    // The offset rides in memory rather than in a register, which is what keeps the
+    // file's own cursor out of it.
+    var position = mem.bitcast[i64](offset)
+    let moved = syscall(SYS_SENDFILE, destination.raw, source.raw, mem.address_of(&position), count, 0usize, 0usize)
+    // EAGAIN on a socket that was made non-blocking: nothing moved, which is progress of
+    // zero and not a failure.
+    if moved == -11isize { ret (0usize, ok) }
+    if moved < 0isize { ret (0usize, from_errno(moved)) }
+    ret (usize(moved), ok)
+}
+
+// The six signals a portable program has anything to say about (#1642). Everything else
+// the kernel can deliver is left to its default, which is what a program that did not ask
+// for a signal wants.
+//
+// On this host all six are real signals and all six are delivered: `Interrupt` and
+// `Terminate` asynchronously, `Abort`, `SegmentFault`, `FloatingPoint` and `Illegal` on
+// the faulting thread at the faulting instruction. A handler for one of the last four
+// returns into the instruction that faulted, so unless it has fixed what faulted the
+// program will fault again -- a handler there is for reporting, and `os.exit` is how it
+// ends.
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+
+// The caller's handler as bits, which is the only way to keep one in a table: a slot is a
+// `usize` and a function is not.
+type SignalHandler = union { function: fn(Signal), bits: usize }
+type SignalEntry = union { function: fn(i32, usize, usize), bits: usize }
+
+// The kernel's `struct sigaction`, which is not libc's: four words, and the mask is the
+// kernel's eight bytes rather than libc's hundred and twenty-eight.
+type KernelSigAction = struct { handler: usize, flags: u64, restorer: usize, mask: u64 }
+
+const SYS_RT_SIGACTION: usize = 13usize
+const SYS_GETPID: usize = 39usize
+const SYS_MPROTECT: usize = 10usize
+
+const SA_RESTORER: u64 = 67108864u64
+const SA_SIGINFO: u64 = 4u64
+const KERNEL_SIGSET_SIZE: usize = 8usize
+
+const SIGINT: usize = 2usize
+const SIGILL: usize = 4usize
+const SIGABRT: usize = 6usize
+const SIGFPE: usize = 8usize
+const SIGSEGV: usize = 11usize
+
+const PROT_EXEC: usize = 4usize
+
+var signal_slot: [6]usize
+var signal_restorer_code: [16]u8
+var signal_restorer_ready: u8
+
+fn signal_number(which: Signal) -> usize {
+    if which == .Interrupt { ret SIGINT }
+    if which == .Terminate { ret SIGTERM }
+    if which == .Abort { ret SIGABRT }
+    if which == .SegmentFault { ret SIGSEGV }
+    if which == .FloatingPoint { ret SIGFPE }
+    ret SIGILL
+}
+
+fn signal_index(which: Signal) -> usize {
+    if which == .Interrupt { ret 0usize }
+    if which == .Terminate { ret 1usize }
+    if which == .Abort { ret 2usize }
+    if which == .SegmentFault { ret 3usize }
+    if which == .FloatingPoint { ret 4usize }
+    ret 5usize
+}
+
+fn signal_of_number(number: i32) -> (Signal, bool) {
+    var which: Signal = .Interrupt
+    if number == 2i32 { ret (which, true) }
+    which = .Terminate
+    if number == 15i32 { ret (which, true) }
+    which = .Abort
+    if number == 6i32 { ret (which, true) }
+    which = .SegmentFault
+    if number == 11i32 { ret (which, true) }
+    which = .FloatingPoint
+    if number == 8i32 { ret (which, true) }
+    which = .Illegal
+    if number == 4i32 { ret (which, true) }
+    ret (which, false)
+}
+
+// The one place a caller's handler is reached from. A slot that is zero is a signal whose
+// handler was taken back between the kernel's decision to deliver and this call, which is
+// nothing to do rather than a call through zero.
+fn signal_dispatch(which: Signal) {
+    let bits = signal_slot[signal_index(which)]
+    if bits == 0usize { ret }
+    var entry: SignalHandler = zero
+    entry.bits = bits
+    entry.function(which)
+}
+
+// What the kernel actually enters, in the C convention it calls with. `SA_SIGINFO` makes
+// it three arguments; the second and third are the `siginfo` and the `ucontext`, which
+// nothing here reads -- the fence answers with a `Signal` and not with a machine state.
+@cc(c)
+fn signal_entry(number: i32, information: usize, context: usize) {
+    let (which, known) = signal_of_number(number)
+    if !known { ret }
+    signal_dispatch(which)
+}
+
+// `rt_sigreturn` reads the signal frame from the stack pointer exactly as the kernel left
+// it, so the restorer cannot be an ordinary function: one pushed register in a prologue
+// moves the frame out from under it. It is nine bytes -- `mov rax, 15` then `syscall` --
+// written into a static buffer whose pages are then made executable. That is the same
+// trampoline libc carries, and the only way to spell one in a language with no inline
+// assembly.
+//
+// ponytail: the page the buffer shares with whatever else the linker put beside it becomes
+// writable and executable, because `mprotect` works in pages and this file cannot ask for
+// one of its own. A program that installs no handler never reaches here, and one that does
+// pays a single page. A section attribute would replace it.
+fn signal_restorer() -> (usize, err) {
+    let address = mem.address_of(&signal_restorer_code[0usize])
+    if signal_restorer_ready == 1u8 { ret (address, ok) }
+    signal_restorer_code[0usize] = 72u8
+    signal_restorer_code[1usize] = 199u8
+    signal_restorer_code[2usize] = 192u8
+    signal_restorer_code[3usize] = 15u8
+    signal_restorer_code[4usize] = 0u8
+    signal_restorer_code[5usize] = 0u8
+    signal_restorer_code[6usize] = 0u8
+    signal_restorer_code[7usize] = 15u8
+    signal_restorer_code[8usize] = 5u8
+    let first = address & ~(PAGE_SIZE - 1usize)
+    let last = (address + 16usize + PAGE_SIZE - 1usize) & ~(PAGE_SIZE - 1usize)
+    let protected = syscall(SYS_MPROTECT, first, last - first, PROT_READ | PROT_WRITE | PROT_EXEC, 0usize, 0usize, 0usize)
+    if protected < 0isize { ret (0usize, from_errno(protected)) }
+    signal_restorer_ready = 1u8
+    ret (address, ok)
+}
+
+fn signal_install(which: Signal, handler: usize, flags: u64) -> err {
+    let (restorer, restorer_error) = signal_restorer()
+    if restorer_error != ok { ret restorer_error }
+    var action: KernelSigAction = zero
+    action.handler = handler
+    action.flags = flags
+    action.restorer = restorer
+    action.mask = 0u64
+    ret from_errno(syscall(SYS_RT_SIGACTION, signal_number(which), mem.address_of(&action), 0usize, KERNEL_SIGSET_SIZE, 0usize, 0usize))
+}
+
+// The slot is written before the kernel is told, so a signal that arrives between the two
+// finds a handler rather than a zero; a failed install takes it back.
+fn signal(which: Signal, handler: fn(Signal)) -> err {
+    var entry: SignalHandler = zero
+    entry.function = handler
+    if entry.bits == 0usize { ret Failed }
+    var trampoline: SignalEntry = zero
+    trampoline.function = signal_entry
+    let slot = signal_index(which)
+    let previous = signal_slot[slot]
+    signal_slot[slot] = entry.bits
+    let install_error = signal_install(which, trampoline.bits, SA_RESTORER | SA_SIGINFO)
+    if install_error != ok {
+        signal_slot[slot] = previous
+        ret install_error
+    }
+    ret ok
+}
+
+// `SIG_DFL` is a handler of zero, which is what the kernel reads it as.
+fn signal_default(which: Signal) -> err {
+    signal_slot[signal_index(which)] = 0usize
+    ret signal_install(which, 0usize, SA_RESTORER)
+}
+
+// A real signal to this process, so it takes the same path as one the kernel decided to
+// send: a handler runs, and with none installed the default action applies -- which for
+// four of the six is the end of the process.
+fn signal_raise(which: Signal) -> err {
+    let identity = syscall(SYS_GETPID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if identity < 0isize { ret from_errno(identity) }
+    ret from_errno(syscall(SYS_KILL, usize(identity), signal_number(which), 0usize, 0usize, 0usize, 0usize))
+}
+
+// What a process gives up for the rest of its life (#1618). Irreversible on purpose: a
+// sandbox that can be lifted is not one, and every host that offers this offers it as a
+// one-way door.
+//
+// `allow_syscalls` is a list of this architecture's system call numbers. Empty means the
+// syscall table is not filtered at all, which is the only way to say "deny nothing" --
+// an empty allow-list that denied everything would deny the exit that reports it.
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
+
+// One classic BPF instruction, which is what a seccomp filter is made of.
+type BpfInstruction = struct { code: u16, jump_true: u8, jump_false: u8, value: u32 }
+// `struct sock_fprog`: a count and a pointer, with the pointer at the word boundary.
+type BpfProgram = struct { count: u16, padding: u16, padding2: u32, filter: usize }
+
+const SYS_PRCTL: usize = 157usize
+const PR_SET_NO_NEW_PRIVS: usize = 38usize
+const PR_SET_SECCOMP: usize = 22usize
+const SECCOMP_MODE_FILTER: usize = 2usize
+
+const BPF_LOAD_WORD: u16 = 32u16
+const BPF_JUMP_EQUAL: u16 = 21u16
+const BPF_JUMP_ALWAYS: u16 = 5u16
+const BPF_RETURN: u16 = 6u16
+
+// The offsets of `nr` and `arch` in `struct seccomp_data`, which is what an instruction
+// loads from.
+const SECCOMP_DATA_NR: u32 = 0u32
+const SECCOMP_DATA_ARCH: u32 = 4u32
+
+const AUDIT_ARCH_X86_64: u32 = 3221225534u32
+const SECCOMP_RET_ALLOW: u32 = 2147418112u32
+const SECCOMP_RET_KILL_PROCESS: u32 = 2147483648u32
+const SECCOMP_RET_ERRNO_PERM: u32 = 327681u32
+
+// ponytail: a jump in classic BPF is a byte, so nothing may be more than 255 instructions
+// away; two hundred allowed calls with the preamble and the child-process denials stays
+// well inside that. A longer list wants the numbers sorted and compared by halving, which
+// is a different filter and not a longer one.
+const SANDBOX_ALLOW_MAX: usize = 200usize
+var sandbox_filter: [212]BpfInstruction
+
+// The calls that make another process. `clone3` and `execveat` are here for the same
+// reason `clone` and `execve` are: a denial that names only the old spelling is not one.
+const SANDBOX_CHILD_CALLS: usize = 6usize
+
+fn sandbox_child_call(index: usize) -> u32 {
+    if index == 0usize { ret 56u32 }
+    if index == 1usize { ret 57u32 }
+    if index == 2usize { ret 58u32 }
+    if index == 3usize { ret 59u32 }
+    if index == 4usize { ret 322u32 }
+    ret 435u32
+}
+
+// `PR_SET_NO_NEW_PRIVS` first, always: without it an unprivileged process may not install
+// a filter at all, and with it no execve can gain privilege past the filter.
+//
+// The filter reads: refuse anything that is not this architecture, then refuse the calls
+// that make a child if that was asked, then allow what the list names and refuse the rest
+// -- or, with no list, allow everything the child-process denials did not catch.
+//
+// ponytail: `deny_dynamic_code` is not enforced here. Saying it in seccomp means filtering
+// `mprotect` and `mmap` on their protection argument rather than on their number, which is
+// a second kind of filter; until it is written the policy is applied as far as it goes and
+// the answer says the rest was not. The upgrade path is argument filtering on `PROT_EXEC`.
+fn sandbox(policy: *const SandboxPolicy) -> err {
+    let privileged = syscall(SYS_PRCTL, PR_SET_NO_NEW_PRIVS, 1usize, 0usize, 0usize, 0usize, 0usize)
+    if privileged < 0isize { ret from_errno(privileged) }
+    let allowed = policy.allow_syscalls
+    if allowed.len > SANDBOX_ALLOW_MAX { ret Unsupported }
+    var children = 0usize
+    if policy.deny_child_processes { children = SANDBOX_CHILD_CALLS }
+    if children != 0usize || allowed.len != 0usize {
+        var body = allowed.len
+        if allowed.len == 0usize { body = 1usize }
+        let total = 5usize + children + body
+        let deny_at = total - 2usize
+        let allow_at = total - 1usize
+        var deny_value = SECCOMP_RET_ERRNO_PERM
+        if policy.kill_on_violation { deny_value = SECCOMP_RET_KILL_PROCESS }
+        sandbox_filter[0usize] = BpfInstruction { code: BPF_LOAD_WORD, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_DATA_ARCH }
+        sandbox_filter[1usize] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: 0u8, jump_false: u8(deny_at - 2usize), value: AUDIT_ARCH_X86_64 }
+        sandbox_filter[2usize] = BpfInstruction { code: BPF_LOAD_WORD, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_DATA_NR }
+        var slot = 3usize
+        var which = 0usize
+        while which < children {
+            sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: u8(deny_at - slot - 1usize), jump_false: 0u8, value: sandbox_child_call(which) }
+            slot += 1usize
+            which += 1usize
+        }
+        if allowed.len == 0usize {
+            sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_ALWAYS, jump_true: 0u8, jump_false: 0u8, value: u32(allow_at - slot - 1usize) }
+            slot += 1usize
+        } else {
+            which = 0usize
+            while which < allowed.len {
+                sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: u8(allow_at - slot - 1usize), jump_false: 0u8, value: allowed[which] }
+                slot += 1usize
+                which += 1usize
+            }
+        }
+        sandbox_filter[slot] = BpfInstruction { code: BPF_RETURN, jump_true: 0u8, jump_false: 0u8, value: deny_value }
+        slot += 1usize
+        sandbox_filter[slot] = BpfInstruction { code: BPF_RETURN, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_RET_ALLOW }
+        var program: BpfProgram = zero
+        program.count = u16(total)
+        program.filter = mem.address_of(&sandbox_filter[0usize])
+        let filtered = syscall(SYS_PRCTL, PR_SET_SECCOMP, SECCOMP_MODE_FILTER, mem.address_of(&program), 0usize, 0usize, 0usize)
+        if filtered < 0isize { ret from_errno(filtered) }
+    }
+    if policy.deny_dynamic_code { ret Unsupported }
+    ret ok
+}
+
+// A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
+// such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
+fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }
