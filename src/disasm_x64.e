@@ -711,7 +711,7 @@ fn two_byte(c: *Cursor, second: usize, repeat: usize, operand16: bool, rex: bool
     }
     if second == 215usize && operand16 {
         if !okay(puts(c, "pmovmskb ")) { ret false }
-        ret two_operands(c, true, 2usize, rex_r, rex_x, rex_b, rex, 4usize)
+        ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 2usize)
     }
     if second == 112usize && repeat == 242usize {
         if !okay(puts(c, "pshuflw ")) { ret false }

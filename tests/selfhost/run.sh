@@ -815,6 +815,17 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# `e.simd`'s codec operations (D5960) against reference loops at every instruction level,
+# in debug and release: packed instructions where the level has them, the lane loops where
+# it has not.
+for simd_codec_level in x64-v1 x64-v2 x64-v3; do
+    for simd_codec_mode in "" --release; do
+        simd_codec_path="$test_build/simd-codec-$simd_codec_level$simd_codec_mode"
+        [ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_codec/src/main.e" "$repo" x64 linux "$simd_codec_path" --cpu $simd_codec_level $simd_codec_mode)" = 'executable written' ]
+        chmod +x "$simd_codec_path"
+        "$simd_codec_path"
+    done
+done
 # `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
 # call reach its explicit contract trap, while an equal-lane conversion remains valid.
 for simd_convert_build in debug release; do
@@ -8752,6 +8763,9 @@ cmp "$test_build/conformance-tools-dis-follow.jsonl" "$conformance_root/tools/di
 # `dis` decodes the VEX forms of `--cpu x64-v3` (D1705).
 $test_build/neper-self dis-file "$conformance_root/tools/dis_vex.e" "$repo" x64 linux --json --release --cpu x64-v3 > "$test_build/conformance-tools-dis-vex.jsonl"
 cmp "$test_build/conformance-tools-dis-vex.jsonl" "$conformance_root/tools/dis_vex.x64-linux.expected.jsonl"
+# `dis` shows the packed instructions of `e.simd`'s codec operations (D5960).
+$test_build/neper-self dis-file "$conformance_root/tools/dis_simd.e" "$repo" x64 linux --json --release --cpu x64-v2 > "$test_build/conformance-tools-dis-simd.jsonl"
+cmp "$test_build/conformance-tools-dis-simd.jsonl" "$conformance_root/tools/dis_simd.x64-linux.expected.jsonl"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
 ' "dis --json differs from the conformance corpus" >&2; exit 1; }
 # `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);

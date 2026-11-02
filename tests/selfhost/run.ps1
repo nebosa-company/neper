@@ -849,6 +849,19 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# `e.simd`'s codec operations (D5960) against reference loops at every instruction level,
+# in debug and release.
+foreach ($simdCodecLevel in @('x64-v1', 'x64-v2', 'x64-v3')) {
+    foreach ($simdCodecMode in @('--debug', '--release')) {
+        $simdCodecPath = Join-Path $testBuild "simd-codec-$simdCodecLevel$simdCodecMode.exe"
+        $simdCodecArgs = @('--cpu', $simdCodecLevel)
+        if ($simdCodecMode -eq '--release') { $simdCodecArgs += '--release' }
+        $simdCodecWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_codec\src\main.e') $repo 'x64' 'windows' $simdCodecPath @simdCodecArgs
+        if ($LASTEXITCODE -ne 0 -or $simdCodecWritten -ne 'executable written') { throw "simd_codec emission failed ($simdCodecLevel $simdCodecMode)" }
+        & $simdCodecPath
+        if ($LASTEXITCODE -ne 0) { throw "an e.simd codec check failed ($simdCodecLevel $simdCodecMode): exit $LASTEXITCODE" }
+    }
+}
 # `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
 # call reach its explicit contract trap, while an equal-lane conversion remains valid.
 foreach ($simdConvertBuild in @(@('debug', @()), @('release', @('--release')))) {
@@ -9664,6 +9677,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disFollowActual).Hash -ne (Get
 $disVexActual = Join-Path $testBuild 'conformance-tools-dis-vex.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_vex.e')`" `"$repo`" x64 windows --json --release --cpu x64-v3 > `"$disVexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disVexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_vex.x64-windows.expected.jsonl')).Hash) { throw "dis VEX forms differ from the conformance corpus" }
+# `dis` shows the packed instructions of `e.simd`'s codec operations (D5960).
+$disSimdActual = Join-Path $testBuild 'conformance-tools-dis-simd.jsonl'
+cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_simd.e')`" `"$repo`" x64 windows --json --release --cpu x64-v2 > `"$disSimdActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disSimdActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_simd.x64-windows.expected.jsonl')).Hash) { throw "dis of the e.simd codec operations differs from the conformance corpus" }
 # `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $disInlinedActual = Join-Path $testBuild 'conformance-tools-dis-inlined.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_inlined.e')`" `"$repo`" x64 windows --json --release > `"$disInlinedActual`""
