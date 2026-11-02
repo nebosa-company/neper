@@ -592,9 +592,31 @@ fn selects_7(state: *u64, base: i32) {
     }
 }
 
+// A packed store writes memory the scalar code around it also reads: nothing may be
+// carried across it from before.
+fn aliasing() {
+    var buf: [32]u8 = zero
+    buf[3] = 9u8
+    let before = buf[3]
+    simd.store[Vec[u8, 16]](buf[0..], 0usize, simd.splat[Vec[u8, 16]](7u8))
+    if before != 9u8 || buf[3] != 7u8 { os.exit(240) }
+    buf[5] = 1u8
+    let again = simd.load[Vec[u8, 16]](buf[0..], 0usize)
+    if again.lanes[5] != 1u8 || again.lanes[4] != 7u8 { os.exit(241) }
+    simd.store[Vec[u8, 16]](buf[0..], 4usize, simd.splat[Vec[u8, 16]](2u8))
+    var total = 0u32
+    var i = 0usize
+    while i < 32usize {
+        total += u32(buf[i])
+        i += 1usize
+    }
+    if total != 4u32 * 7u32 + 16u32 * 2u32 + 12u32 * 0u32 + 0u32 + 0u32 { os.exit(242) }
+}
+
 fn main() {
     var state = 0x9e3779b97f4a7c15u64
     moves()
+    aliasing()
     min_max[Vec[u8, 16]](&state, 20)
     min_max[Vec[i16, 8]](&state, 22)
     min_max[Vec[u16, 8]](&state, 24)
