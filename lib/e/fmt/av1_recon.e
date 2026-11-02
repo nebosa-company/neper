@@ -3,6 +3,8 @@
 
 use e.time
 use e.thread
+use e.atomic
+use e.os
 use e.mem
 use e.fmt.av1
 use e.fmt.av1_sym
@@ -414,74 +416,130 @@ fn replay_block(d: *D.Dec, br: *D.BRec) -> err {
     ret ok
 }
 
-type BJob = struct {
-    view: *D.Dec,
-    from: usize,
-    to: usize,
-    result: err,
-}
+const CHUNK: u32 = 8u32
 
-fn b_work(job: *BJob) {
+// A worker of the pipeline: it takes blocks in chunks as the parse thread publishes them and makes the inter ones.
+fn pipe_work(job: *D.PipeJob) {
     let v = job.view
-    var i = job.from
-    while i < job.to {
-        if v.brecs[i].kind == 0u8 {
-            let e = replay_block(v, &v.brecs[i])
-            if e != ok {
-                job.result = e
-                ret
+    let p = job.pipe
+    while true {
+        var first = 0u32
+        while true {
+            let seen = atomic.load(&p.claim, .Acquire)
+            let (won, was) = atomic.cas(&p.claim, seen, seen + CHUNK, .AcqRel, .Acquire)
+            if won {
+                first = seen
+                break
             }
         }
-        i += 1usize
+        var last = first + CHUNK
+        while true {
+            let published = atomic.load(&p.published, .Acquire)
+            if last <= published { break }
+            if atomic.load(&p.stop, .Acquire) == 1u32 {
+                let final = atomic.load(&p.published, .Acquire)
+                if first >= final { ret }
+                if last > final { last = final }
+                break
+            }
+            let waited = os.wait_u32(&p.published, published, 100000i64)
+        }
+        var i = usize(first)
+        while i < usize(last) {
+            if v.brecs[i].kind == 0u8 {
+                let e = replay_block(v, &v.brecs[i])
+                if e != ok { atomic.store(&p.failed, 1u32, .Release) }
+            }
+            i += 1usize
+        }
     }
 }
 
-// Makes the pixels of a frame parsed with d.deferred: the inter blocks first, on several threads (they read only reference
-// frames), then the intra and inter-intra blocks in decode order (they read their neighbours).
-fn replay(d: *D.Dec, a: *mem.Arena, workers: usize) -> err {
-    var n = workers
+// Starts the pipeline for a frame about to be parsed with d.deferred: workers make its inter blocks while the parse goes on.
+fn pipe_start(d: *D.Dec) -> err {
+    d.pipe_on = false
+    var n = d.threads
     if n > 8usize { n = 8usize }
-    if n > d.brec_n { n = d.brec_n }
-    if n < 2usize {
+    if n < 3usize { ret ok }
+    n = n - 1usize
+    atomic.store(&d.pipe.claim, 0u32, .Release)
+    atomic.store(&d.pipe.published, 0u32, .Release)
+    atomic.store(&d.pipe.stop, 0u32, .Release)
+    atomic.store(&d.pipe.failed, 0u32, .Release)
+    var i = 0usize
+    while i < n {
+        d.views[i] = *d
+        d.views[i].iwk = d.w_work[i]
+        d.views[i].obmc_above = d.w_oa[i]
+        d.views[i].obmc_left = d.w_ol[i]
+        d.views[i].resid = d.w_resid[i]
+        d.pipe_jobs[i] = D.PipeJob { view: &d.views[i], pipe: d.pipe }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let (th, spawn_error) = thread.spawn[D.PipeJob](pipe_work, &d.pipe_jobs[i], 4194304usize)
+        if spawn_error != ok {
+            atomic.store(&d.pipe.stop, 1u32, .Release)
+            var k = 0usize
+            while k < i {
+                let joined = thread.join(d.pipe_threads[k])
+                k += 1usize
+            }
+            ret spawn_error
+        }
+        d.pipe_threads[i] = th
+        i += 1usize
+    }
+    d.pipe_n = n
+    d.pipe_on = true
+    ret ok
+}
+
+// Called after every parsed block: lets the workers see it.
+fn pipe_publish(d: *D.Dec) {
+    atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
+}
+
+// Ends the pipeline: the workers finish what was published and are joined.
+fn pipe_finish(d: *D.Dec) -> err {
+    if !d.pipe_on { ret ok }
+    atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
+    atomic.store(&d.pipe.stop, 1u32, .Release)
+    var i = 0usize
+    var first = ok
+    while i < d.pipe_n {
+        let joined = thread.join(d.pipe_threads[i])
+        if joined != ok && first == ok { first = joined }
+        i += 1usize
+    }
+    d.pipe_on = false
+    if atomic.load(&d.pipe.failed, .Acquire) == 1u32 { ret Invalid }
+    ret first
+}
+
+// Makes the pixels of a frame parsed with d.deferred. The inter blocks were made by the pipeline while it was parsed (or are
+// made here, in one thread, when no pipeline ran); then the intra and inter-intra blocks in decode order, which read
+// their neighbours.
+fn replay(d: *D.Dec, a: *mem.Arena, workers: usize) -> err {
+    let (j0, jc0) = time.monotonic()
+    try pipe_finish(d)
+    let (j1, jc1) = time.monotonic()
+    d.ns_join += j1.nanos - j0.nanos
+    if d.pipe_n == 0usize {
         var i = 0usize
         while i < d.brec_n {
             if d.brecs[i].kind == 0u8 { try replay_block(d, &d.brecs[i]) }
             i += 1usize
         }
-    } else {
-        let mark = mem.mark(a)
-        let (jobs, jobs_error) = mem.alloc[BJob](a, n)
-        if jobs_error != ok { ret jobs_error }
-        var i = 0usize
-        while i < n {
-            d.views[i] = *d
-            d.views[i].iwk = d.w_work[i]
-            d.views[i].obmc_above = d.w_oa[i]
-            d.views[i].obmc_left = d.w_ol[i]
-            d.views[i].resid = d.w_resid[i]
-            jobs[i] = BJob { view: &d.views[i], from: i * d.brec_n / n, to: (i + 1usize) * d.brec_n / n, result: ok }
-            i += 1usize
-        }
-        let (group, group_error) = thread.spawn_all[BJob](a, b_work, jobs, 4194304usize)
-        if group_error != ok {
-            mem.reset(a, mark)
-            ret group_error
-        }
-        let joined = thread.join_all(group)
-        var failed = joined
-        i = 0usize
-        while i < n {
-            if jobs[i].result != ok { failed = jobs[i].result }
-            i += 1usize
-        }
-        mem.reset(a, mark)
-        if failed != ok { ret failed }
     }
     var k = 0usize
     while k < d.brec_n {
         if d.brecs[k].kind != 0u8 { try replay_block(d, &d.brecs[k]) }
         k += 1usize
     }
+    let (j2, jc2) = time.monotonic()
+    d.ns_c += j2.nanos - j1.nanos
     ret ok
 }
 

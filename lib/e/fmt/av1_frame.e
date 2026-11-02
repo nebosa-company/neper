@@ -2,6 +2,8 @@
 // tile groups and the sample (temporal unit) loop.
 
 use e.mem
+use e.os
+use e.thread
 use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
@@ -77,6 +79,8 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     dc.a = a
     dc.hold = 0i32 - 1i32
     dc.d.threads = 8usize
+    let (tenv, tenv_error) = os.env(a, "AV1_THREADS")
+    if tenv_error == ok && tenv.len > 0usize && tenv[0usize] >= 49u8 && tenv[0usize] <= 57u8 { dc.d.threads = usize(tenv[0usize] - 48u8) }
     let (tab, tab_error) = av1_tables.load(a)
     if tab_error != ok { ret (dc, tab_error) }
     dc.tab = tab
@@ -163,6 +167,15 @@ fn alloc_frame_state(dc: *Decoder) -> err {
     let (qpool, qpool_error) = mem.alloc[i32](a, mi_count * 24usize + 4096usize)
     if qpool_error != ok { ret qpool_error }
     d.qpool = qpool
+    let (pipes, pipes_error) = mem.alloc[D.Pipe](a, 1usize)
+    if pipes_error != ok { ret pipes_error }
+    d.pipe = &pipes[0usize]
+    let (pjobs, pjobs_error) = mem.alloc[D.PipeJob](a, 8usize)
+    if pjobs_error != ok { ret pjobs_error }
+    d.pipe_jobs = pjobs
+    let (pthreads, pthreads_error) = mem.alloc[thread.Thread](a, 8usize)
+    if pthreads_error != ok { ret pthreads_error }
+    d.pipe_threads = pthreads
     let (views, views_error) = mem.alloc[D.Dec](a, 8usize)
     if views_error != ok { ret views_error }
     d.views = views
@@ -445,6 +458,8 @@ fn setup_frame(dc: *Decoder) -> err {
     d.rec_n = 0usize
     d.brec_n = 0usize
     d.q_n = 0usize
+    d.pipe_n = 0usize
+    if d.deferred { try R.pipe_start(d) }
     ret ok
 }
 
@@ -515,7 +530,11 @@ fn tile_group(dc: *Decoder, data: []const u8) -> err {
         d.ctx = dc.tile_ctx
         d.sd = av1_sym.init_symbol(data[at..at + size], h.disable_cdf_update)
         let (t0, c0) = time.monotonic()
-        try T.decode_tile(d)
+        let tile_result = T.decode_tile(d)
+        if tile_result != ok {
+            let stopped = R.pipe_finish(d)
+            ret tile_result
+        }
         let (t1, c1) = time.monotonic()
         dc.ns_tile += t1.nanos - t0.nanos
         if !h.disable_frame_end_update_cdf && tile == h.context_update_tile_id {

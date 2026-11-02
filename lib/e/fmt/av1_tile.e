@@ -216,6 +216,7 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
         if b.interintra { br.kind = 2u8 }
         try R.residual(d)
         br.count = u32(d.rec_n) - br.first
+        if d.pipe_on { R.pipe_publish(d) }
     } else {
         try R.compute_prediction(d)
     }

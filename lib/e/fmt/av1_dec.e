@@ -3,6 +3,8 @@
 // Spec numbering is kept for block sizes, prediction modes, reference frames and transform sizes.
 
 use e.mem
+use e.atomic
+use e.thread
 use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
@@ -184,6 +186,19 @@ type BRec = struct {
     kind: u8,
 }
 
+// Shared by the parse thread and the threads that make the inter blocks while the frame is still being parsed.
+type Pipe = struct {
+    claim: Atomic[u32],
+    published: Atomic[u32],
+    stop: Atomic[u32],
+    failed: Atomic[u32],
+}
+
+type PipeJob = struct {
+    view: *Dec,
+    pipe: *Pipe,
+}
+
 type Dec = struct {
     st: *av1.State,
     tab: []const i32,
@@ -222,6 +237,11 @@ type Dec = struct {
     ns_resid: i64,
     threads: usize,
     deferred: bool,
+    pipe: *Pipe,
+    pipe_on: bool,
+    pipe_n: usize,
+    pipe_jobs: []PipeJob,
+    pipe_threads: []thread.Thread,
     recs: []TxRec,
     rec_n: usize,
     brecs: []BRec,
@@ -233,6 +253,8 @@ type Dec = struct {
     w_oa: [8][]av1_inter.Neighbor,
     w_ol: [8][]av1_inter.Neighbor,
     w_resid: [8][]i32,
+    ns_join: i64,
+    ns_c: i64,
     ns_mode: i64,
     ns_coef: i64,
     ns_txfm: i64,

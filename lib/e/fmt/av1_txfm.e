@@ -4350,19 +4350,25 @@ fn add16(dst: []u8, o: usize, r0: Vec[i32, 4], r1: Vec[i32, 4], r2: Vec[i32, 4],
     simd.store[Vec[u8, 16]](dst, o, simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), simd.adds[Vec[i16, 8]](hi, b)))
 }
 
-// 8 pixels at o; reads and rewrites the 8 bytes that follow (unchanged), so dst.len >= o + 16
+// 8 pixels at o. The window read is 16 bytes (dst.len >= o + 16) but only the 8 bytes of the block are written back: the
+// bytes after them belong to the next block, which another thread may be writing at the same time.
 fn add8(dst: []u8, o: usize, r0: Vec[i32, 4], r1: Vec[i32, 4]) {
     let z = simd.splat[Vec[u8, 16]](0u8)
     let a = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](r0, r1)
     let p = simd.load[Vec[u8, 16]](dst, o)
     let lo = mem.bitcast[Vec[i16, 8]](simd.unpack_lo[Vec[u8, 16]](p, z))
-    let hi = mem.bitcast[Vec[i16, 8]](simd.unpack_hi[Vec[u8, 16]](p, z))
-    simd.store[Vec[u8, 16]](dst, o, simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), hi))
+    let packed = mem.bitcast[Vec[u64, 2]](simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), a))
+    *mem.cast[*u64](&dst[o]) = packed.lanes[0usize]
 }
 
-// 4 pixels at o; same window rule as add8
+// 4 pixels at o; same rule as add8
 fn add4(dst: []u8, o: usize, r0: Vec[i32, 4]) {
-    add8(dst, o, r0, simd.splat[Vec[i32, 4]](0i32))
+    let z = simd.splat[Vec[u8, 16]](0u8)
+    let a = simd.pack_sat[Vec[i16, 8], Vec[i32, 4]](r0, r0)
+    let p = simd.load[Vec[u8, 16]](dst, o)
+    let lo = mem.bitcast[Vec[i16, 8]](simd.unpack_lo[Vec[u8, 16]](p, z))
+    let packed = mem.bitcast[Vec[u32, 4]](simd.pack_sat[Vec[u8, 16], Vec[i16, 8]](simd.adds[Vec[i16, 8]](lo, a), a))
+    *mem.cast[*u32](&dst[o]) = packed.lanes[0usize]
 }
 
 fn add_scalar(dst: []u8, o: usize, n: usize, res: []const i32, ro: usize, round: bool) {
