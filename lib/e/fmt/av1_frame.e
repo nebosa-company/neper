@@ -75,7 +75,7 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     var dc: Decoder = zero
     dc.a = a
     dc.hold = 0i32 - 1i32
-    dc.d.threads = 4usize
+    dc.d.threads = 8usize
     let (tab, tab_error) = av1_tables.load(a)
     if tab_error != ok { ret (dc, tab_error) }
     dc.tab = tab
