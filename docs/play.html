@@ -279,11 +279,12 @@
       paint()
       show('')
     }
+    const first = load('hello') // the editor fills while the 4.4 MB compiler is still loading
     try {
       const [index, wasm] = await Promise.all([fetch('play/lib/index.json').then((r) => r.json()), WebAssembly.compileStreaming(fetch('play/neper.wasm'))])
       compiler = wasm
       fetchLib = libraries(index, (p) => bytes('play/' + p))
-      await load('hello')
+      await first
       $('run').disabled = false
       status('Ready.')
     } catch (e) { status('Could not load the compiler: ' + e.message) }
