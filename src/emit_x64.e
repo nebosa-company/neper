@@ -233,6 +233,46 @@ fn shift_immediate(buffer: *Buffer, destination: usize, left: bool, count: usize
     ret byte(buffer, count)
 }
 
+// `shl`, `shr` or `sar r64, imm8` for a count below 64.
+fn shift_constant(buffer: *Buffer, destination: usize, left: bool, signed: bool, count: usize) -> err {
+    try check_register(destination)
+    if count >= 64usize { ret InvalidByte }
+    var extension = 5usize
+    if left { extension = 4usize }
+    if !left && signed { extension = 7usize }
+    try rex(buffer, extension, destination)
+    try byte(buffer, 193usize)
+    try modrm(buffer, extension, destination)
+    ret byte(buffer, count)
+}
+
+// `add`, `or`, `and`, `sub`, `xor` or `cmp r64, imm` (extension 0, 1, 4, 5, 6, 7), the value sign-extended from 32 bits: a
+// value below 2^31 is what the register forms get from a zero-extended constant.
+fn binary_immediate(buffer: *Buffer, extension: usize, destination: usize, value: usize) -> err {
+    try check_register(destination)
+    if value > 2147483647usize { ret InvalidByte }
+    try rex(buffer, extension, destination)
+    if value < 128usize {
+        try byte(buffer, 131usize)
+        try modrm(buffer, extension, destination)
+        ret byte(buffer, value)
+    }
+    try byte(buffer, 129usize)
+    try modrm(buffer, extension, destination)
+    ret little_u32(buffer, value)
+}
+
+// `lea destination, [source + displacement]` for a source that is not rsp or r12 (which take a SIB byte).
+fn lea_offset(buffer: *Buffer, destination: usize, source: usize, displacement: usize) -> err {
+    try check_register(destination)
+    try check_register(source)
+    if source % 8usize == 4usize || displacement > 2147483647usize { ret InvalidByte }
+    try rex(buffer, destination, source)
+    try byte(buffer, 141usize)
+    try byte(buffer, 128usize + destination % 8usize * 8usize + source % 8usize)
+    ret little_u32(buffer, displacement)
+}
+
 fn compare_register(buffer: *Buffer, left: usize, right: usize) -> err {
     ret binary_register(buffer, 57usize, left, right)
 }
@@ -673,6 +713,49 @@ fn memory_modrm(buffer: *Buffer, reg: usize, address: usize) -> err {
         ret byte(buffer, 0usize)
     }
     ret byte(buffer, reg % 8usize * 8usize + address % 8usize)
+}
+
+// `[address + offset]`: an eight-bit displacement under 128, else a thirty-two-bit one. rsp and r12 name a SIB byte.
+fn memory_modrm_offset(buffer: *Buffer, reg: usize, address: usize, offset: usize) -> err {
+    try check_register(reg)
+    try check_register(address)
+    if offset > 2147483647usize { ret InvalidByte }
+    if offset == 0usize { ret memory_modrm(buffer, reg, address) }
+    var mode = 128usize
+    if offset < 128usize { mode = 64usize }
+    try byte(buffer, mode + reg % 8usize * 8usize + address % 8usize)
+    if address % 8usize == 4usize { try byte(buffer, 36usize) }
+    if offset < 128usize { ret byte(buffer, offset) }
+    ret little_u32(buffer, offset)
+}
+
+// `load_memory` from `[address + offset]`.
+fn load_memory_offset(buffer: *Buffer, destination: usize, address: usize, offset: usize, width: usize, signed: bool) -> err {
+    if width == 64usize {
+        try rex(buffer, destination, address)
+        try byte(buffer, 139usize)
+        ret memory_modrm_offset(buffer, destination, address, offset)
+    }
+    if width == 32usize && !signed {
+        try rex32(buffer, destination, address)
+        try byte(buffer, 139usize)
+        ret memory_modrm_offset(buffer, destination, address, offset)
+    }
+    try rex(buffer, destination, address)
+    if width == 32usize {
+        try byte(buffer, 99usize)
+        ret memory_modrm_offset(buffer, destination, address, offset)
+    }
+    try byte(buffer, 15usize)
+    if width == 8usize {
+        if signed { try byte(buffer, 190usize) } else { try byte(buffer, 182usize) }
+        ret memory_modrm_offset(buffer, destination, address, offset)
+    }
+    if width == 16usize {
+        if signed { try byte(buffer, 191usize) } else { try byte(buffer, 183usize) }
+        ret memory_modrm_offset(buffer, destination, address, offset)
+    }
+    ret InvalidByte
 }
 
 fn load_memory(buffer: *Buffer, destination: usize, address: usize, width: usize, signed: bool) -> err {

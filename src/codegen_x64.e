@@ -107,6 +107,11 @@ type FunctionContext = struct {
     // Each call's window with registers in their preserve slots: start, end, mask.
     debug_windows: []usize,
     debug_window_count: usize,
+    // A field address whose only use is the load right after it is not made: the load reads [base + offset].
+    field_fused: bool,
+    field_result: usize,
+    field_base: usize,
+    field_offset: usize,
 }
 
 const TRAP_RECORDS: usize = 64usize
@@ -305,6 +310,17 @@ fn store_result(allocations: []regalloc.Allocation, value: usize, source: usize,
     if value >= allocations.len { ret Unsupported }
     if allocations[value].kind == .Stack { ret emit_x64.store_stack(output, allocations[value].index, source) }
     ret ok
+}
+
+// Whether `value` is defined by an integer constant, and which. A constant used as an operand of an immediate form is not read
+// from its register or slot.
+fn constant_value(builder: *nir.Builder, context: *FunctionContext, value: usize) -> (bool, usize) {
+    if value >= context.ranges.len { ret (false, 0usize) }
+    let def = context.ranges[value].first
+    if def >= builder.instruction_count { ret (false, 0usize) }
+    let d = builder.instructions[def]
+    if d.opcode == .ConstInteger && d.has_result && d.result == value { ret (true, d.immediate) }
+    ret (false, 0usize)
 }
 
 fn comparison(opcode: nir.Opcode) -> bool {
@@ -2493,7 +2509,7 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
         let opcode = builder.instructions[at].opcode
         if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call || opcode == .IndirectCall { ret true }
         // An unsigned 64-bit `*` is checked through `mul`, which answers in rdx:rax (D202).
-        if opcode == .Multiply && unsigned_wide(builder.instructions[at].ty) { ret true }
+        if opcode == .Multiply && unsigned_wide(builder.instructions[at].ty) && !builder.instructions[at].nocheck && !builder.release { ret true }
         // The read-modify-write forms need rax, and the retried ones rcx as well.
         if opcode == .AtomicRmw || opcode == .AtomicCas { ret true }
         at += 1usize
@@ -3816,23 +3832,50 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let address = builder.operands[instruction.first_operand]
                 let width = storage_width(instruction)
                 if width == 0usize { ret InvalidLoadWidth }
-                let (address_register, address_error) = read_value(allocations, address, 10usize, output)
+                var load_value = address
+                var load_offset = 0usize
+                if context.field_fused && context.field_result == address {
+                    load_value = context.field_base
+                    load_offset = context.field_offset
+                }
+                context.field_fused = false
+                let (address_register, address_error) = read_value(allocations, load_value, 10usize, output)
                 if address_error != ok { ret InvalidMemoryAddress }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
                 if destination_error != ok { ret destination_error }
-                try emit_x64.load_memory(output, destination, address_register, width, signed_integer(instruction.ty))
+                if load_offset != 0usize {
+                    try emit_x64.load_memory_offset(output, destination, address_register, load_offset, width, signed_integer(instruction.ty))
+                } else {
+                    try emit_x64.load_memory(output, destination, address_register, width, signed_integer(instruction.ty))
+                }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
             if instruction.opcode == .FieldAddress {
                 if !instruction.has_result || instruction.operand_count != 1usize { ret InvalidFieldAddress }
                 let address = builder.operands[instruction.first_operand]
+                var fusable = false
+                if at + 1usize < end && instruction.immediate != 0usize && instruction.immediate <= 2147483647usize && instruction.result < context.ranges.len && context.ranges[instruction.result].first == at && context.ranges[instruction.result].last == at + 1usize && (next_block >= current.block_count || builder.blocks[current.first_block + next_block].first_instruction != at + 1usize) {
+                    let following = builder.instructions[at + 1usize]
+                    if following.opcode == .Load && following.operand_count == 1usize && builder.operands[following.first_operand] == instruction.result && following.has_result && !float_operation(builder, current, following) { fusable = true }
+                }
+                if fusable {
+                    context.field_fused = true
+                    context.field_result = instruction.result
+                    context.field_base = address
+                    context.field_offset = instruction.immediate
+                } else {
                 let (source, source_error) = read_value(allocations, address, 10usize, output)
                 if source_error != ok { ret source_error }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
-                if destination != source { try emit_x64.mov_register(output, destination, source) }
-                if instruction.immediate != 0usize { try emit_x64.add_immediate(output, destination, instruction.immediate) }
+                if instruction.immediate != 0usize && destination != source && source % 8usize != 4usize && instruction.immediate <= 2147483647usize {
+                    try emit_x64.lea_offset(output, destination, source, instruction.immediate)
+                } else {
+                    if destination != source { try emit_x64.mov_register(output, destination, source) }
+                    if instruction.immediate != 0usize { try emit_x64.add_immediate(output, destination, instruction.immediate) }
+                }
                 try store_result(allocations, instruction.result, destination, output)
+                }
             } else {
             if instruction.opcode == .AtomicLoad || instruction.opcode == .AtomicStore || instruction.opcode == .AtomicRmw || instruction.opcode == .AtomicCas || instruction.opcode == .AtomicFence {
                 try select_atomic(builder, current, instruction, allocations, preserve_base, preserve_count, context)
@@ -3914,6 +3957,15 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let right_value = builder.operands[instruction.first_operand + 1usize]
                 let (left_type, left_type_error) = value_type(builder, current, left_value)
                 if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
+                // A constant count below the width is an immediate: no cl, so no live register is saved around it and no
+                // count is masked or checked.
+                let (count_known, count_value) = constant_value(builder, context, right_value)
+                if count_known && count_value < integer_width(left_type) {
+                    let (left, left_error) = read_value(allocations, left_value, 10usize, output)
+                    if left_error != ok { ret left_error }
+                    if left != 10usize { try emit_x64.mov_register(output, 10usize, left) }
+                    try emit_x64.shift_constant(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type), count_value)
+                } else {
                 let shift_mask = preserve_mask(builder, current, instruction, 2usize, false, context)
                 try save_live_registers(output, shift_mask, preserve_base, preserve_count, context)
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
@@ -3926,12 +3978,13 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
                 try restore_live_registers(output, shift_mask, preserve_base, preserve_count, context)
+                }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
                 try store_result(allocations, instruction.result, destination, output)
             } else {
-            if instruction.opcode == .Divide || instruction.opcode == .Remainder || (instruction.opcode == .Multiply && unsigned_wide(instruction.ty)) {
+            if instruction.opcode == .Divide || instruction.opcode == .Remainder || (instruction.opcode == .Multiply && unsigned_wide(instruction.ty) && !instruction.nocheck && !builder.release) {
                 if instruction.operand_count != 2usize || instruction.ty.kind != .Integer { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
                 let right_value = builder.operands[instruction.first_operand + 1usize]
@@ -3982,15 +4035,29 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if destination_error != ok { ret destination_error }
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
-                let (right, right_error) = read_value(allocations, right_value, 11usize, output)
-                if right_error != ok { ret right_error }
+                // A constant right operand below 2^31 is an immediate (not for `*`, which the register form keeps)
+                var immediate_known = false
+                var immediate_value = 0usize
+                if instruction.opcode != .Multiply && instruction.opcode != .MultiplyWrap {
+                    let (known, constant) = constant_value(builder, context, right_value)
+                    if known && constant <= 2147483647usize {
+                        immediate_known = true
+                        immediate_value = constant
+                    }
+                }
+                var right = 0usize
+                if !immediate_known {
+                    let (right_read, right_error) = read_value(allocations, right_value, 11usize, output)
+                    if right_error != ok { ret right_error }
+                    right = right_read
+                }
                 if comparison(instruction.opcode) {
                     let (operand_type, operand_type_error) = value_type(builder, current, left_value)
                     if operand_type_error != ok { ret operand_type_error }
                     let unsigned = operand_type.kind == .Integer && operand_type.name.len > 0usize && operand_type.name[0usize] == 117u8
                     let (condition, condition_error) = comparison_condition(instruction.opcode, unsigned)
                     if condition_error != ok { ret condition_error }
-                    try emit_x64.compare_register(output, left, right)
+                    if immediate_known { try emit_x64.binary_immediate(output, 7usize, left, immediate_value) } else { try emit_x64.compare_register(output, left, right) }
                     var fuse = false
                     if at + 1usize < end && instruction.result < context.ranges.len && context.ranges[instruction.result].first == at && context.ranges[instruction.result].last == at + 1usize {
                         let next = builder.instructions[at + 1usize]
@@ -4006,12 +4073,21 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     }
                 } else {
                     if destination != left { try emit_x64.mov_register(output, destination, left) }
+                    if immediate_known {
+                        var extension = 0usize
+                        if instruction.opcode == .Subtract || instruction.opcode == .SubtractWrap { extension = 5usize }
+                        if instruction.opcode == .BitAnd { extension = 4usize }
+                        if instruction.opcode == .BitXor { extension = 6usize }
+                        if instruction.opcode == .BitOr { extension = 1usize }
+                        try emit_x64.binary_immediate(output, extension, destination, immediate_value)
+                    } else {
                     if instruction.opcode == .Add || instruction.opcode == .AddWrap { try emit_x64.add_register(output, destination, right) }
                     if instruction.opcode == .Subtract || instruction.opcode == .SubtractWrap { try emit_x64.subtract_register(output, destination, right) }
                     if instruction.opcode == .Multiply || instruction.opcode == .MultiplyWrap { try emit_x64.multiply_register(output, destination, right) }
                     if instruction.opcode == .BitAnd { try emit_x64.bit_and_register(output, destination, right) }
                     if instruction.opcode == .BitXor { try emit_x64.bit_xor_register(output, destination, right) }
                     if instruction.opcode == .BitOr { try emit_x64.bit_or_register(output, destination, right) }
+                    }
                     let checked = instruction.ty.kind == .Integer && !instruction.nocheck && !builder.release && (instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply)
                     if checked {
                         var operator = " + overflows"
@@ -4445,7 +4521,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
