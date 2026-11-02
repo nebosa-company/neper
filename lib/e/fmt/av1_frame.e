@@ -413,6 +413,21 @@ fn alloc_pool(dc: *Decoder, h: *const av1.Hdr) -> err {
 }
 
 // per frame state x: arrays at MI resolution and the contexts of the tile
+fn clear_mi(d: *D.Dec) {
+    let n = d.mi.len
+    var zero_mi: D.Mi = zero
+    var i = 0usize
+    while i < n {
+        d.mi[i] = zero_mi
+        d.s_size[i] = 0u8
+        d.s_ymode[i] = 0u8
+        d.s_inter[i] = 0u8
+        d.s_ref[i * 2usize] = i8(0i32 - 2i32)
+        d.s_ref[i * 2usize + 1usize] = i8(0i32 - 2i32)
+        i += 1usize
+    }
+}
+
 fn setup_frame(dc: *Decoder, x: usize) -> err {
     let st = st_of(dc, x)
     let h = &st.h
@@ -435,18 +450,8 @@ fn setup_frame(dc: *Decoder, x: usize) -> err {
     d.mi_rows = h.mi_rows
     d.mi_cols = h.mi_cols
     d.cdef_stride = (h.mi_cols + 15i32) >> 4u32
-    let n = d.mi.len
-    var zero_mi: D.Mi = zero
+    clear_mi(d)
     var i = 0usize
-    while i < n {
-        d.mi[i] = zero_mi
-        d.s_size[i] = 0u8
-        d.s_ymode[i] = 0u8
-        d.s_inter[i] = 0u8
-        d.s_ref[i * 2usize] = i8(0i32 - 2i32)
-        d.s_ref[i * 2usize + 1usize] = i8(0i32 - 2i32)
-        i += 1usize
-    }
     // loop restoration units
     var p = 0usize
     while p < usize(seq.num_planes) {
@@ -646,13 +651,9 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
         if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 {
             dc.slots[i].mi_rows = h.mi_rows
             dc.slots[i].mi_cols = h.mi_cols
-            var q = 0usize
-            while q < d.mi.len {
-                dc.slots[i].saved_refs[q] = d.mf_refs[q]
-                dc.slots[i].saved_mvs[q * 2usize] = d.mf_mvs[q * 2usize]
-                dc.slots[i].saved_mvs[q * 2usize + 1usize] = d.mf_mvs[q * 2usize + 1usize]
-                q += 1usize
-            }
+            let nm = d.mi.len
+            mem.copy[i8](dc.slots[i].saved_refs[0usize..nm], d.mf_refs[0usize..nm])
+            mem.copy[i16](dc.slots[i].saved_mvs[0usize..nm * 2usize], d.mf_mvs[0usize..nm * 2usize])
             var k = 0usize
             while k < CDF.SAVED_COUNT {
                 dc.slots[i].ctx[k] = dc.ctx[k]
@@ -749,30 +750,39 @@ fn finish_frame(dc: *Decoder, x: usize) -> err {
 fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State) {
     let h = &st.h
     let n = d.mi.len
+    // a reference's vectors are kept when it lies in the past
+    var keep: [8]bool = zero
+    var r = 1usize
+    while r < 8usize {
+        let ref_idx = usize(h.ref_frame_idx[r - av1.LAST_FRAME])
+        keep[r] = av1.get_relative_dist(&st.seq, st.refs[ref_idx].order_hint, h.order_hint) < 0i32
+        r += 1usize
+    }
     var i = 0usize
+    @nocheck {
     while i < n {
-        d.mf_refs[i] = i8(0i32 - 1i32)
-        d.mf_mvs[i * 2usize] = 0i16
-        d.mf_mvs[i * 2usize + 1usize] = 0i16
+        var ref_out = i8(0i32 - 1i32)
+        var mv_row = 0i16
+        var mv_col = 0i16
         var list = 0usize
         while list < 2usize {
-            var r = i32(d.s_ref[i * 2usize + list])
-            if r > i32(av1.INTRA_FRAME) {
-                let ref_idx = usize(h.ref_frame_idx[usize(r) - av1.LAST_FRAME])
-                let dist = av1.get_relative_dist(&st.seq, st.refs[ref_idx].order_hint, h.order_hint)
-                if dist < 0i32 {
-                    let mr = i32(d.s_mv[i * 4usize + list * 2usize])
-                    let mc = i32(d.s_mv[i * 4usize + list * 2usize + 1usize])
-                    if D.abs_i(mr) <= 4095i32 && D.abs_i(mc) <= 4095i32 {
-                        d.mf_refs[i] = i8(r)
-                        d.mf_mvs[i * 2usize] = i16(mr)
-                        d.mf_mvs[i * 2usize + 1usize] = i16(mc)
-                    }
+            let rf = i32(d.s_ref[i * 2usize + list])
+            if rf > i32(av1.INTRA_FRAME) && keep[usize(rf)] {
+                let mr = i32(d.s_mv[i * 4usize + list * 2usize])
+                let mc = i32(d.s_mv[i * 4usize + list * 2usize + 1usize])
+                if D.abs_i(mr) <= 4095i32 && D.abs_i(mc) <= 4095i32 {
+                    ref_out = i8(rf)
+                    mv_row = i16(mr)
+                    mv_col = i16(mc)
                 }
             }
             list += 1usize
         }
+        d.mf_refs[i] = ref_out
+        d.mf_mvs[i * 2usize] = mv_row
+        d.mf_mvs[i * 2usize + 1usize] = mv_col
         i += 1usize
+    }
     }
 }
 
