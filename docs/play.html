@@ -161,7 +161,8 @@
     textarea, #hl { position: absolute; inset: 0; height: 100%; white-space: pre; overflow: auto; resize: none; }
     #hl { pointer-events: none; }
     textarea { background: transparent; color: transparent; caret-color: var(--on-surface); }
-    textarea::selection { background: var(--primary-container); color: transparent; }
+    textarea::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: transparent; }
+    .note { margin-top: var(--space-6); }
     #hl .kw { color: var(--primary); }
     #hl .fn { color: var(--primary); font-weight: 600; }
     #hl .str { color: var(--tertiary); }
