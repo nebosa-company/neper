@@ -5,6 +5,7 @@
 use e.mem
 use e.atomic
 use e.thread
+use e.fmt.av1_pool
 use e.time
 use e.fmt.av1
 use e.fmt.av1_sym
@@ -237,6 +238,7 @@ type Dec = struct {
     ns_resid: i64,
     threads: usize,
     deferred: bool,
+    wp: *av1_pool.Pool,
     pipe: *Pipe,
     pipe_on: bool,
     pipe_n: usize,

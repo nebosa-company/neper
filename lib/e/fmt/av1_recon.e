@@ -2,7 +2,7 @@
 // to the frame), the tile level context resets and the loop restoration unit syntax of the specification.
 
 use e.time
-use e.thread
+use e.fmt.av1_pool
 use e.atomic
 use e.os
 use e.mem
@@ -418,10 +418,12 @@ fn replay_block(d: *D.Dec, br: *D.BRec) -> err {
 
 const CHUNK: u32 = 8u32
 
-// A worker of the pipeline: it takes blocks in chunks as the parse thread publishes them and makes the inter ones.
-fn pipe_work(job: *D.PipeJob) {
-    let v = job.view
-    let p = job.pipe
+// A worker of the pipeline: it takes blocks in chunks as the parse thread publishes them and makes the inter ones. The
+// pool runs one of these jobs per worker thread; `i` selects the view that thread uses.
+fn pipe_work(ctx: *void, i: usize) {
+    let d = mem.cast[*D.Dec](ctx)
+    let v = &d.views[i]
+    let p = d.pipe
     while true {
         var first = 0u32
         while true {
@@ -444,24 +446,24 @@ fn pipe_work(job: *D.PipeJob) {
             }
             let waited = os.wait_u32(&p.published, published, 100000i64)
         }
-        var i = usize(first)
-        while i < usize(last) {
-            if v.brecs[i].kind == 0u8 {
-                let e = replay_block(v, &v.brecs[i])
+        var k = usize(first)
+        while k < usize(last) {
+            if v.brecs[k].kind == 0u8 {
+                let e = replay_block(v, &v.brecs[k])
                 if e != ok { atomic.store(&p.failed, 1u32, .Release) }
             }
-            i += 1usize
+            k += 1usize
         }
     }
 }
 
-// Starts the pipeline for a frame about to be parsed with d.deferred: workers make its inter blocks while the parse goes on.
+// Starts the pipeline for a frame about to be parsed with d.deferred: the pool's workers make its inter blocks while the
+// parse goes on.
 fn pipe_start(d: *D.Dec) -> err {
     d.pipe_on = false
-    var n = d.threads
+    var n = d.wp.n
     if n > 8usize { n = 8usize }
-    if n < 3usize { ret ok }
-    n = n - 1usize
+    if n < 2usize { ret ok }
     atomic.store(&d.pipe.claim, 0u32, .Release)
     atomic.store(&d.pipe.published, 0u32, .Release)
     atomic.store(&d.pipe.stop, 0u32, .Release)
@@ -473,24 +475,9 @@ fn pipe_start(d: *D.Dec) -> err {
         d.views[i].obmc_above = d.w_oa[i]
         d.views[i].obmc_left = d.w_ol[i]
         d.views[i].resid = d.w_resid[i]
-        d.pipe_jobs[i] = D.PipeJob { view: &d.views[i], pipe: d.pipe }
         i += 1usize
     }
-    i = 0usize
-    while i < n {
-        let (th, spawn_error) = thread.spawn[D.PipeJob](pipe_work, &d.pipe_jobs[i], 4194304usize)
-        if spawn_error != ok {
-            atomic.store(&d.pipe.stop, 1u32, .Release)
-            var k = 0usize
-            while k < i {
-                let joined = thread.join(d.pipe_threads[k])
-                k += 1usize
-            }
-            ret spawn_error
-        }
-        d.pipe_threads[i] = th
-        i += 1usize
-    }
+    av1_pool.submit(d.wp, n, pipe_work, mem.cast[*void](d))
     d.pipe_n = n
     d.pipe_on = true
     ret ok
@@ -501,21 +488,15 @@ fn pipe_publish(d: *D.Dec) {
     atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
 }
 
-// Ends the pipeline: the workers finish what was published and are joined.
+// Ends the pipeline: the workers finish what was published and are waited for.
 fn pipe_finish(d: *D.Dec) -> err {
     if !d.pipe_on { ret ok }
     atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
     atomic.store(&d.pipe.stop, 1u32, .Release)
-    var i = 0usize
-    var first = ok
-    while i < d.pipe_n {
-        let joined = thread.join(d.pipe_threads[i])
-        if joined != ok && first == ok { first = joined }
-        i += 1usize
-    }
+    av1_pool.wait(d.wp)
     d.pipe_on = false
     if atomic.load(&d.pipe.failed, .Acquire) == 1u32 { ret Invalid }
-    ret first
+    ret ok
 }
 
 // Makes the pixels of a frame parsed with d.deferred. The inter blocks were made by the pipeline while it was parsed (or are

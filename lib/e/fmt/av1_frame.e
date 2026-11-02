@@ -17,6 +17,7 @@ use e.fmt.av1_lr
 use e.fmt.av1_post
 use e.fmt.av1_inter
 use e.fmt.av1_mask
+use e.fmt.av1_pool
 
 error Unsupported
 error Invalid
@@ -143,6 +144,10 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
         dc.slots[i].ctx = sc
         i += 1usize
     }
+    let (wpool, wpool_error) = av1_pool.new_pool(a, threads - 1usize)
+    if wpool_error != ok { ret (dc, wpool_error) }
+    dc.d.wp = wpool
+    dc.d2.wp = wpool
     let init0 = init_dec(a, &dc.d, threads)
     if init0 != ok { ret (dc, init0) }
     let init1 = init_dec(a, &dc.d2, threads)

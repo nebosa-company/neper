@@ -3,7 +3,7 @@
 
 use e.mem
 use e.time
-use e.thread
+use e.fmt.av1_pool
 use e.fmt.av1
 use e.fmt.av1_dec as D
 use e.fmt.av1_lf
@@ -62,7 +62,11 @@ type LfJob = struct {
     result: err,
 }
 
-fn lf_work(job: *LfJob) {
+type LfBatch = struct { jobs: []LfJob }
+
+fn lf_work(ctx: *void, i: usize) {
+    let batch = mem.cast[*LfBatch](ctx)
+    let job = &batch.jobs[i]
     if job.cols {
         job.result = av1_lf.filter_pass_cols(job.p, job.f, job.pr, job.from, job.to)
     } else {
@@ -70,8 +74,8 @@ fn lf_work(job: *LfJob) {
     }
 }
 
-// One plane and pass of the deblocking filter split into `workers` ranges of 4x4 rows or columns run on that many threads.
-fn lf_pass(a: *mem.Arena, p: *const av1_lf.LoopFilterParams, f: *const av1_lf.LoopFilterFrame, plane: u32, pass: u32, workers: usize) -> err {
+// One plane and pass of the deblocking filter split into `workers` ranges of 4x4 rows or columns run on the pool.
+fn lf_pass(a: *mem.Arena, wp: *av1_pool.Pool, p: *const av1_lf.LoopFilterParams, f: *const av1_lf.LoopFilterFrame, plane: u32, pass: u32, workers: usize) -> err {
     let pr = av1_lf.loop_filter_plane_prepare(p, f, plane, pass)
     var count = pr.rows4
     if pass == 1u32 { count = pr.cols4 }
@@ -89,13 +93,9 @@ fn lf_pass(a: *mem.Arena, p: *const av1_lf.LoopFilterParams, f: *const av1_lf.Lo
         jobs[i] = LfJob { p: p, f: f, pr: &pr, from: i * count / n, to: (i + 1usize) * count / n, cols: pass == 1u32, result: ok }
         i += 1usize
     }
-    let (group, group_error) = thread.spawn_all[LfJob](a, lf_work, jobs, 1048576usize)
-    if group_error != ok {
-        mem.reset(a, mark)
-        ret group_error
-    }
-    let joined = thread.join_all(group)
-    var result = joined
+    var batch = LfBatch { jobs: jobs }
+    av1_pool.run(wp, n, lf_work, mem.cast[*void](&batch))
+    var result = ok
     i = 0usize
     while i < n {
         if jobs[i].result != ok { result = jobs[i].result }
@@ -116,11 +116,15 @@ type CdefJob = struct {
     result: err,
 }
 
-fn cdef_work(job: *CdefJob) {
+type CdefBatch = struct { jobs: []CdefJob }
+
+fn cdef_work(ctx: *void, i: usize) {
+    let batch = mem.cast[*CdefBatch](ctx)
+    let job = &batch.jobs[i]
     job.result = av1_cdef.cdef_rows(job.p, job.idx, job.skips, job.src, job.dst, job.from, job.to)
 }
 
-fn cdef_threads(a: *mem.Arena, p: av1_cdef.CdefParams, idx: []const i8, skips: []const u8, src: av1_cdef.Planes, dst: av1_cdef.Planes, sb_rows: usize, workers: usize) -> err {
+fn cdef_threads(a: *mem.Arena, wp: *av1_pool.Pool, p: av1_cdef.CdefParams, idx: []const i8, skips: []const u8, src: av1_cdef.Planes, dst: av1_cdef.Planes, sb_rows: usize, workers: usize) -> err {
     var n = workers
     if n > sb_rows { n = sb_rows }
     if n < 2usize {
@@ -134,13 +138,9 @@ fn cdef_threads(a: *mem.Arena, p: av1_cdef.CdefParams, idx: []const i8, skips: [
         jobs[i] = CdefJob { p: p, idx: idx, skips: skips, src: src, dst: dst, from: i * sb_rows / n, to: (i + 1usize) * sb_rows / n, result: ok }
         i += 1usize
     }
-    let (group, group_error) = thread.spawn_all[CdefJob](a, cdef_work, jobs, 1048576usize)
-    if group_error != ok {
-        mem.reset(a, mark)
-        ret group_error
-    }
-    let joined = thread.join_all(group)
-    var result = joined
+    var batch = CdefBatch { jobs: jobs }
+    av1_pool.run(wp, n, cdef_work, mem.cast[*void](&batch))
+    var result = ok
     i = 0usize
     while i < n {
         if jobs[i].result != ok { result = jobs[i].result }
@@ -168,12 +168,16 @@ type LrJob = struct {
     result: err,
 }
 
-fn lr_work(job: *LrJob) {
+type LrBatch = struct { jobs: []LrJob }
+
+fn lr_work(ctx: *void, i: usize) {
+    let batch = mem.cast[*LrBatch](ctx)
+    let job = &batch.jobs[i]
     var arena = mem.arena_from(job.scratch)
     job.result = av1_lr.restore_rows(&arena, job.bit_depth, job.sub_x, job.sub_y, job.w, job.h, job.pre, job.cdef, job.out, job.stride, job.unit, job.units, job.from, job.to)
 }
 
-fn lr_threads(a: *mem.Arena, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, pre: []const u8, cdef: []const u8, out: []u8, stride: usize, unit: u32, units: []const av1_lr.LrUnit, workers: usize) -> err {
+fn lr_threads(a: *mem.Arena, wp: *av1_pool.Pool, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, pre: []const u8, cdef: []const u8, out: []u8, stride: usize, unit: u32, units: []const av1_lr.LrUnit, workers: usize) -> err {
     let stripes = av1_lr.count_stripes(h, sy)
     var n = workers
     if usize(stripes) < n { n = usize(stripes) }
@@ -191,13 +195,9 @@ fn lr_threads(a: *mem.Arena, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, p
         jobs[i] = LrJob { bit_depth: bit_depth, sub_x: sx, sub_y: sy, w: w, h: h, pre: pre, cdef: cdef, out: out, stride: stride, unit: unit, units: units, from: u32(usize(stripes) * i / n), to: u32(usize(stripes) * (i + 1usize) / n), scratch: scratch, result: ok }
         i += 1usize
     }
-    let (group, group_error) = thread.spawn_all[LrJob](a, lr_work, jobs, 1048576usize)
-    if group_error != ok {
-        mem.reset(a, mark)
-        ret group_error
-    }
-    let joined = thread.join_all(group)
-    var result = joined
+    var batch = LrBatch { jobs: jobs }
+    av1_pool.run(wp, n, lr_work, mem.cast[*void](&batch))
+    var result = ok
     i = 0usize
     while i < n {
         if jobs[i].result != ok { result = jobs[i].result }
@@ -262,8 +262,8 @@ fn deblock(d: *D.Dec, s: *Scratch, a: *mem.Arena, workers: usize) -> err {
     var plane = 0u32
     while plane < u32(d.st.seq.num_planes) {
         if av1_lf.plane_enabled(&p, plane) {
-            try lf_pass(a, &p, &f, plane, 0u32, workers)
-            try lf_pass(a, &p, &f, plane, 1u32, workers)
+            try lf_pass(a, d.wp, &p, &f, plane, 0u32, workers)
+            try lf_pass(a, d.wp, &p, &f, plane, 1u32, workers)
         }
         plane += 1u32
     }
@@ -323,7 +323,7 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u8, w2: [3][]u8) 
         dst.stride_y = d.stride[0usize]
         dst.stride_uv = d.stride[1usize]
         let (c0, cc0) = time.monotonic()
-        let cdef_error = cdef_threads(a, p, d.cdef_idx, s.skips, src, dst, usize((d.mi_rows + 15i32) >> 4u32), d.threads)
+        let cdef_error = cdef_threads(a, d.wp, p, d.cdef_idx, s.skips, src, dst, usize((d.mi_rows + 15i32) >> 4u32), d.threads)
         if cdef_error != ok { ret (0usize, cdef_error) }
         let (c1, cc1) = time.monotonic()
         d.ns_cdef += c1.nanos - c0.nanos
@@ -343,7 +343,7 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u8, w2: [3][]u8) 
                     sx = u32(seq.subsampling_x)
                     sy = u32(seq.subsampling_y)
                 }
-                let e = lr_threads(a, u32(seq.bit_depth), sx, sy, u32(h.upscaled_width), u32(h.frame_height), d.frame[plane], cdef_src[plane], out[plane], d.stride[plane], u32(h.loop_restoration_size[plane]), d.lr_units[plane], d.threads)
+                let e = lr_threads(a, d.wp, u32(seq.bit_depth), sx, sy, u32(h.upscaled_width), u32(h.frame_height), d.frame[plane], cdef_src[plane], out[plane], d.stride[plane], u32(h.loop_restoration_size[plane]), d.lr_units[plane], d.threads)
                 if e != ok { ret (0usize, e) }
             } else {
                 var i = 0usize
