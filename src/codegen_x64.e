@@ -3692,7 +3692,23 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let (source, source_error) = read_value(allocations, source_value, 11usize, output)
                 if source_error != ok { ret source_error }
                 if source != 11usize { try emit_x64.mov_register(output, 11usize, source) }
-                try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
+                let vector_copy = instruction.ty.kind == .Named && check.same(instruction.ty.name, "Vec") && instruction.immediate % 16usize == 0usize && instruction.immediate <= 64usize
+                if vector_copy {
+                    // A vector moves as it is operated on, in sixteen-byte pieces: two eight-byte stores
+                    // followed by a sixteen-byte load is a store-forwarding stall (D5960).
+                    var moved = 0usize
+                    while moved < instruction.immediate {
+                        try emit_x64.vector_load(output, 0usize, 11usize, 16usize, 9usize)
+                        try emit_x64.vector_store(output, 10usize, 0usize, 16usize, 9usize)
+                        moved += 16usize
+                        if moved < instruction.immediate {
+                            try emit_x64.add_immediate(output, 10usize, 16usize)
+                            try emit_x64.add_immediate(output, 11usize, 16usize)
+                        }
+                    }
+                } else {
+                    try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
+                }
                 try restore_live_registers(output, copy_mask, preserve_base, preserve_count, context)
             } else {
             if instruction.opcode == .Load {

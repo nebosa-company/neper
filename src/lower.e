@@ -554,26 +554,30 @@ fn emit_simd_ext(ext: usize, lane_size: usize, chunk_bytes: usize, chunks: usize
 
 // The address of element `index` of a slice, bounds-checked: the slice's data and
 // length loaded, then `IndexAddress` as `s[i]` is.
-fn simd_slice_lane(slice: usize, index: usize, element_size: usize, element_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+fn simd_slice_parts(slice: usize, element_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, usize, err) {
     let module_index = element_type.module_index
     let pointer_type = check.make_type(.Pointer, "", module_index)
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
-    if data_address_error != ok { ret (0usize, data_address_error) }
+    if data_address_error != ok { ret (0usize, 0usize, data_address_error) }
     let operand_error1 = nir.add_operand(builder, data_address_instruction, slice)
-    if operand_error1 != ok { ret (0usize, operand_error1) }
+    if operand_error1 != ok { ret (0usize, 0usize, operand_error1) }
     let (data_load, data, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
-    if data_load_error != ok { ret (0usize, data_load_error) }
+    if data_load_error != ok { ret (0usize, 0usize, data_load_error) }
     let operand_error2 = nir.add_operand(builder, data_load, data_address)
-    if operand_error2 != ok { ret (0usize, operand_error2) }
+    if operand_error2 != ok { ret (0usize, 0usize, operand_error2) }
     let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, token)
-    if length_address_error != ok { ret (0usize, length_address_error) }
+    if length_address_error != ok { ret (0usize, 0usize, length_address_error) }
     let operand_error3 = nir.add_operand(builder, length_address_instruction, slice)
-    if operand_error3 != ok { ret (0usize, operand_error3) }
+    if operand_error3 != ok { ret (0usize, 0usize, operand_error3) }
     let (length_load, length, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
-    if length_load_error != ok { ret (0usize, length_load_error) }
+    if length_load_error != ok { ret (0usize, 0usize, length_load_error) }
     let operand_error4 = nir.add_operand(builder, length_load, length_address)
-    if operand_error4 != ok { ret (0usize, operand_error4) }
+    if operand_error4 != ok { ret (0usize, 0usize, operand_error4) }
+    ret (data, length, ok)
+}
+
+fn simd_index_address(data: usize, length: usize, index: usize, element_size: usize, element_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_size, token)
     if address_error != ok { ret (0usize, address_error) }
     let operand_error5 = nir.add_operand(builder, address_instruction, data)
@@ -606,7 +610,9 @@ fn lower_simd_move(c: *check.Checker, call: check.CallInfo, storing: bool, argum
     let (element_type, element_error) = check.index_element_type(c, slice_type, module_index)
     if element_error != ok { ret element_error }
     let offset = arguments[1usize]
-    let (first, first_error) = simd_slice_lane(arguments[0usize], offset, size, element_type, builder, token)
+    let (data, length, parts_error) = simd_slice_parts(arguments[0usize], element_type, builder, token)
+    if parts_error != ok { ret parts_error }
+    let (first, first_error) = simd_index_address(data, length, offset, size, element_type, builder, token)
     if first_error != ok { ret first_error }
     let (last_count_instruction, last_count, last_count_error) = nir.emit(builder, .ConstInteger, usize_type, true, count - 1usize, token)
     if last_count_error != ok { ret last_count_error }
@@ -614,7 +620,7 @@ fn lower_simd_move(c: *check.Checker, call: check.CallInfo, storing: bool, argum
     if sum_error != ok { ret sum_error }
     try nir.add_operand(builder, sum_instruction, offset)
     try nir.add_operand(builder, sum_instruction, last_count)
-    let (last, last_error) = simd_slice_lane(arguments[0usize], last_index, size, element_type, builder, token)
+    let (last, last_error) = simd_index_address(data, length, last_index, size, element_type, builder, token)
     if last_error != ok { ret last_error }
     if storing {
         try emit_simd_ext(nir.EXT_STORE, size, chunk_bytes, chunks, vector_type, first, arguments[2usize], arguments[2usize], false, chunk_bytes, builder, token)
