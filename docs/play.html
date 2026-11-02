@@ -6,6 +6,7 @@
   <title>Try Neper in your browser</title>
   <meta name="description" content="Edit Neper source and compile it to WebAssembly in your browser with neper.wasm, the compiler itself running as WebAssembly. Nothing is uploaded.">
   <link rel="canonical" href="https://neper.dev/play.html">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Neper">
@@ -200,6 +201,7 @@
           <option value="math">math.e</option>
         </select>
         <button class="button nu-btn lg" id="run" type="button" disabled>Compile and run ▶</button>
+        <button class="button secondary nu-btn tonal lg" id="stop" type="button" hidden>Stop ■</button>
         <a id="download" class="button secondary nu-btn tonal lg" hidden download="main.wasm">Download .wasm</a>
         <span id="status" role="status">Loading the compiler…</span>
       </div>
@@ -219,8 +221,18 @@
     </footer>
   </div>
   <script type="module">
-    import { compile, execute, libraries } from './play/playground.js'
+    import { compile, execute, libraries, stopAll } from './play/playground.js'
+    const COMPILE_SECONDS = 30, RUN_SECONDS = 10, OUTPUT_LIMIT = 100000
+    let cancel
+    // Races a job against its time limit and the Stop button; either ends the Workers, which never answer again.
+    const guarded = (job, seconds, what) => new Promise((resolve, reject) => {
+      const stop = (why) => { clearTimeout(timer); stopAll(); reject(new Error(why)) }
+      const timer = setTimeout(() => stop(what + ' stopped after ' + seconds + ' seconds.'), seconds * 1000)
+      cancel = () => stop(what + ' stopped.')
+      job().then(resolve, reject).finally(() => clearTimeout(timer))
+    })
     const $ = (id) => document.getElementById(id)
+    $('stop').onclick = () => cancel && cancel()
     const status = (t) => { $('status').textContent = t }
     const show = (t, err) => { $('out').textContent = t; $('out').className = err ? 'err' : '' }
     const bytes = async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer())
@@ -246,19 +258,22 @@
     } catch (e) { status('Could not load the compiler: ' + e.message) }
     $('sample').onchange = (e) => load(e.target.value)
     $('run').onclick = async () => {
-      $('run').disabled = true; $('download').hidden = true; show(''); status('Compiling…')
+      $('run').disabled = true; $('stop').hidden = false; $('download').hidden = true; show(''); status('Compiling…')
+      let out = ''
       try {
         const t0 = performance.now()
-        const r = await compile(compiler, $('src').value, fetchLib)
+        const r = await guarded(() => compile(compiler, $('src').value, fetchLib), COMPILE_SECONDS, 'The compiler')
         if (r.error) { show(r.error, true); status('The compiler refused the source.'); return }
         const ms = Math.round(performance.now() - t0)
         if (downloadUrl) URL.revokeObjectURL(downloadUrl)
         downloadUrl = URL.createObjectURL(new Blob([r.wasm], { type: 'application/wasm' }))
         $('download').href = downloadUrl; $('download').hidden = false
-        let out = ''
-        const code = await execute(r.wasm, (s) => { out += s; show(out) })
+        status('Running…')
+        const code = await guarded(() => execute(r.wasm, (s) => {
+          if (out.length < OUTPUT_LIMIT) { out += s; show(out) } else if (cancel) cancel()
+        }), RUN_SECONDS, 'The program')
         status('Compiled in ' + ms + ' ms to ' + r.wasm.length.toLocaleString() + ' bytes. Exit status ' + code + '.')
-      } catch (e) { show(String(e.message || e), true); status('Failed.') } finally { $('run').disabled = false }
+      } catch (e) { show(out + (out ? '\n' : '') + String(e.message || e), true); status('Did not finish.') } finally { $('run').disabled = false; $('stop').hidden = true }
     }
   </script>
 </body>

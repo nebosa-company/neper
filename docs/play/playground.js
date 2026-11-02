@@ -3,6 +3,17 @@
 // fetched from play/lib and the compile is repeated. Used by play.html and by build.mjs.
 import { run } from './neper-host.js'
 
+// neper-host.js starts a Worker per run and offers no way to cancel it, so the page keeps them and ends them.
+const workers = new Set()
+export function stopAll() { for (const w of workers) w.terminate(); workers.clear() }
+if (globalThis.Worker) {
+  const Native = globalThis.Worker
+  globalThis.Worker = class extends Native {
+    constructor(...args) { super(...args); workers.add(this) }
+    terminate() { workers.delete(this); super.terminate() }
+  }
+}
+
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 const text = (s) => (typeof s === 'string' ? s : dec.decode(s))
