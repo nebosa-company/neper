@@ -58,21 +58,36 @@ type LoopFilterFrame = struct {
 
 type Strength = struct { lvl: i32, limit: i32, blimit: i32, thresh: i32 }
 
+type Tabs = struct {
+    lim: [64]i32,
+    blim: [64]i32,
+    thr: [64]i32,
+    lv: [128]i32,
+    td: [19]i32,
+    bm: [22]i32
+}
+
+type Ctx = struct {
+    plane: u32,
+    pass: u32,
+    sub_x: u32,
+    sub_y: u32,
+    mc: usize,
+    stride: usize,
+    which: usize,
+    maxfs: i32,
+    chroma: bool,
+    bd: u32,
+    one: i32,
+    buf: []u16,
+    txs: []u8
+}
+
 error Invalid
 
-fn iabs(x: i32) -> i32 {
-    if x < 0i32 { ret 0i32 - x }
-    ret x
-}
-
-fn imin(a: i32, b: i32) -> i32 {
-    if a < b { ret a }
-    ret b
-}
-
-fn imax(a: i32, b: i32) -> i32 {
-    if a > b { ret a }
-    ret b
+fn ab(x: i32) -> i32 {
+    let m = x >> 31u32
+    ret (x ^ m) - m
 }
 
 fn clip3(lo: i32, hi: i32, x: i32) -> i32 {
@@ -114,126 +129,211 @@ fn filter_level(p: *const LoopFilterParams, segment: usize, ref_frame: i32, mode
 fn strength(sharpness: i32, lvl: i32) -> Strength {
     var shift = 0u32
     if sharpness > 4i32 { shift = 2u32 } else if sharpness > 0i32 { shift = 1u32 }
-    var limit = imax(1i32, lvl >> shift)
+    var limit = lvl >> shift
+    if limit < 1i32 { limit = 1i32 }
     if sharpness > 0i32 { limit = clip3(1i32, 9i32 - sharpness, lvl >> shift) }
     ret Strength { lvl: lvl, limit: limit, blimit: 2i32 * (lvl + 2i32) + limit, thresh: lvl >> 4u32 }
 }
 
-fn at(pos: usize, step: usize, k: i32) -> usize {
-    if k < 0i32 { ret pos - usize(0i32 - k) * step }
-    ret pos + usize(k) * step
+fn mode_type_of(mode: i32) -> usize {
+    if mode >= 14i32 && mode != 16i32 && mode != 24i32 { ret 1usize }
+    ret 0usize
 }
 
-fn narrow(buf: []u16, pos: usize, step: usize, hev: bool, bd: u32) {
+fn delta_index(p: *const LoopFilterParams, plane: u32, pass: u32) -> usize {
+    if !p.delta_lf_multi { ret 0usize }
+    if plane > 0u32 { ret usize(plane) + 1usize }
+    ret usize(pass)
+}
+
+fn level_mi(p: *const LoopFilterParams, f: *const LoopFilterFrame, mi: usize, plane: u32, pass: u32) -> i32 {
+    let d = i32(f.delta_lfs[mi * 4usize + delta_index(p, plane, pass)])
+    ret filter_level(p, usize(f.segment_ids[mi]), i32(f.ref_frames[mi]), mode_type_of(i32(f.y_modes[mi])), d, plane, pass)
+}
+
+fn level_at(p: *const LoopFilterParams, f: *const LoopFilterFrame, row: usize, col: usize, plane: u32, pass: u32) -> i32 {
+    ret level_mi(p, f, row * f.mi_cols + col, plane, pass)
+}
+
+// The table holds filter_level for delta_lf == 0; any other value goes through level_mi.
+fn level_of(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c: *const Ctx, mi: usize) -> i32 {
+    let seg = usize(f.segment_ids[mi])
+    let rf = i32(f.ref_frames[mi])
+    var rc = 0usize
+    if rf > 0i32 { rc = usize(rf) }
+    if f.delta_lfs[mi * 4usize + c.which] == 0i8 && seg < 8usize && rc < 8usize {
+        ret t.lv[(seg * 8usize + rc) * 2usize + mode_type_of(i32(f.y_modes[mi]))]
+    }
+    ret level_mi(p, f, mi, c.plane, c.pass)
+}
+
+fn wide8(buf: []u16, pos: usize, step: usize) {
+    let q0 = i32(buf[pos])
+    let q1 = i32(buf[pos + step])
+    let p0 = i32(buf[pos - step])
+    let p1 = i32(buf[pos - 2usize * step])
+    let q2 = i32(buf[pos + 2usize * step])
+    let p2 = i32(buf[pos - 3usize * step])
+    let q3 = i32(buf[pos + 3usize * step])
+    let p3 = i32(buf[pos - 4usize * step])
+    buf[pos - 3usize * step] = u16((p3 * 3i32 + p2 * 2i32 + p1 + p0 + q0 + 4i32) >> 3u32)
+    buf[pos - 2usize * step] = u16((p3 * 2i32 + p2 + p1 * 2i32 + p0 + q0 + q1 + 4i32) >> 3u32)
+    buf[pos - step] = u16((p3 + p2 + p1 + p0 * 2i32 + q0 + q1 + q2 + 4i32) >> 3u32)
+    buf[pos] = u16((p2 + p1 + p0 + q0 * 2i32 + q1 + q2 + q3 + 4i32) >> 3u32)
+    buf[pos + step] = u16((p1 + p0 + q0 + q1 * 2i32 + q2 + q3 * 2i32 + 4i32) >> 3u32)
+    buf[pos + 2usize * step] = u16((p0 + q0 + q1 + q2 * 2i32 + q3 * 3i32 + 4i32) >> 3u32)
+}
+
+// The sample filtering process (7.14.6) for the 4 samples of one edge segment. `pos` is q0 of the first
+// sample, `step` the distance across the edge, `adv` the distance along it; ln is the filter length
+// (4, 6, 8 or 16). limit, blimit and thresh arrive already scaled to the bit depth. The masks use the
+// sign bit: lim - |d| is negative exactly when |d| > lim.
+fn filt(buf: []u16, pos0: usize, step: usize, adv: usize, cnt: i32, lim: i32, blim: i32, thr: i32, one: i32, bd: u32, ln: i32) {
+    let s2 = 2usize * step
+    let s3 = 3usize * step
+    let s4 = 4usize * step
     let off = 128i32 << (bd - 8u32)
     let lo = 0i32 - (1i32 << (bd - 1u32))
     let hi = (1i32 << (bd - 1u32)) - 1i32
-    let ps1 = i32(buf[at(pos, step, -2i32)]) - off
-    let ps0 = i32(buf[at(pos, step, -1i32)]) - off
-    let qs0 = i32(buf[pos]) - off
-    let qs1 = i32(buf[at(pos, step, 1i32)]) - off
-    var filter = 0i32
-    if hev { filter = clip3(lo, hi, ps1 - qs1) }
-    filter = clip3(lo, hi, filter + 3i32 * (qs0 - ps0))
-    let filter1 = clip3(lo, hi, filter + 4i32) >> 3u32
-    let filter2 = clip3(lo, hi, filter + 3i32) >> 3u32
-    buf[pos] = u16(clip3(lo, hi, qs0 - filter1) + off)
-    buf[at(pos, step, -1i32)] = u16(clip3(lo, hi, ps0 + filter2) + off)
-    if !hev {
-        let f3 = (filter1 + 1i32) >> 1u32
-        buf[at(pos, step, 1i32)] = u16(clip3(lo, hi, qs1 - f3) + off)
-        buf[at(pos, step, -2i32)] = u16(clip3(lo, hi, ps1 + f3) + off)
-    }
-}
-
-fn wide(buf: []u16, pos: usize, step: usize, chroma: bool, log2_size: u32) {
-    var n = 3i32
-    if log2_size == 4u32 { n = 6i32 } else if chroma { n = 2i32 }
-    var n2 = 1i32
-    if log2_size == 3u32 && !chroma { n2 = 0i32 }
-    var s: [14]i32 = zero
-    var k = 0i32 - (n + 1i32)
-    while k <= n {
-        s[usize(k + 7i32)] = i32(buf[at(pos, step, k)])
-        k += 1i32
-    }
-    var out: [14]i32 = zero
-    var i = 0i32 - n
-    while i < n {
-        var t = 0i32
-        var j = 0i32 - n
-        while j <= n {
-            let q = clip3(0i32 - (n + 1i32), n, i + j)
-            var tap = 1i32
-            if iabs(j) <= n2 { tap = 2i32 }
-            t = t + s[usize(q + 7i32)] * tap
-            j += 1i32
+    var pos = pos0
+    var n = 0i32
+    while n < cnt {
+        let q0 = i32(buf[pos])
+        let q1 = i32(buf[pos + step])
+        let p0 = i32(buf[pos - step])
+        let p1 = i32(buf[pos - s2])
+        let e1 = p1 - p0
+        let m1 = e1 >> 31u32
+        let dp = (e1 ^ m1) - m1
+        let e2 = q1 - q0
+        let m2 = e2 >> 31u32
+        let dq = (e2 ^ m2) - m2
+        let e3 = p0 - q0
+        let m3 = e3 >> 31u32
+        let e4 = p1 - q1
+        let m4 = e4 >> 31u32
+        var bad = (lim - dp) | (lim - dq) | (blim - (((e3 ^ m3) - m3) * 2i32 + ((((e4 ^ m4) - m4)) >> 1u32)))
+        var q2 = 0i32
+        var p2 = 0i32
+        var q3 = 0i32
+        var p3 = 0i32
+        if ln >= 6i32 {
+            q2 = i32(buf[pos + s2])
+            p2 = i32(buf[pos - s3])
+            bad = bad | (lim - ab(p2 - p1)) | (lim - ab(q2 - q1))
         }
-        out[usize(i + 7i32)] = (t + (1i32 << (log2_size - 1u32))) >> log2_size
-        i += 1i32
-    }
-    i = 0i32 - n
-    while i < n {
-        buf[at(pos, step, i)] = u16(out[usize(i + 7i32)])
-        i += 1i32
+        if ln >= 8i32 {
+            q3 = i32(buf[pos + s3])
+            p3 = i32(buf[pos - s4])
+            bad = bad | (lim - ab(p3 - p2)) | (lim - ab(q3 - q2))
+        }
+        if bad >= 0i32 {
+            var flat = false
+            if ln >= 6i32 {
+                var fl = (one - dp) | (one - dq) | (one - ab(p2 - p0)) | (one - ab(q2 - q0))
+                if ln >= 8i32 { fl = fl | (one - ab(p3 - p0)) | (one - ab(q3 - q0)) }
+                flat = fl >= 0i32
+            }
+            if !flat {
+                let hev = ((thr - dp) | (thr - dq)) < 0i32
+                let ps1 = p1 - off
+                let ps0 = p0 - off
+                let qs0 = q0 - off
+                let qs1 = q1 - off
+                var filter = 0i32
+                if hev { filter = clip3(lo, hi, ps1 - qs1) }
+                filter = clip3(lo, hi, filter + 3i32 * (qs0 - ps0))
+                let filter1 = clip3(lo, hi, filter + 4i32) >> 3u32
+                let filter2 = clip3(lo, hi, filter + 3i32) >> 3u32
+                buf[pos] = u16(clip3(lo, hi, qs0 - filter1) + off)
+                buf[pos - step] = u16(clip3(lo, hi, ps0 + filter2) + off)
+                if !hev {
+                    let f3 = (filter1 + 1i32) >> 1u32
+                    buf[pos + step] = u16(clip3(lo, hi, qs1 - f3) + off)
+                    buf[pos - s2] = u16(clip3(lo, hi, ps1 + f3) + off)
+                }
+            } else if ln == 6i32 {
+                buf[pos - s2] = u16((p2 * 3i32 + p1 * 2i32 + p0 * 2i32 + q0 + 4i32) >> 3u32)
+                buf[pos - step] = u16((p2 + p1 * 2i32 + p0 * 2i32 + q0 * 2i32 + q1 + 4i32) >> 3u32)
+                buf[pos] = u16((p1 + p0 * 2i32 + q0 * 2i32 + q1 * 2i32 + q2 + 4i32) >> 3u32)
+                buf[pos + step] = u16((p0 + q0 * 2i32 + q1 * 2i32 + q2 * 3i32 + 4i32) >> 3u32)
+            } else if ln == 8i32 {
+                wide8(buf, pos, step)
+            } else {
+                wide16(buf, pos, step, one)
+            }
+        }
+        pos += adv
+        n += 1i32
     }
 }
 
-// The sample filtering process (7.14.6) at one position of the boundary: `pos` is the index of q0,
-// `step` the distance between samples across the edge (1 for a vertical edge, the stride for a
-// horizontal one), filter_size is 4, 8 or 16.
-fn filter_sample(buf: []u16, pos: usize, step: usize, chroma: bool, st: Strength, filter_size: i32, bd: u32) {
-    let sh = bd - 8u32
+// Luma filter length 16 on a flat position: the 14-tap filter when the outer samples are flat too, else the 8-tap.
+fn wide16(buf: []u16, pos: usize, step: usize, one: i32) {
     let q0 = i32(buf[pos])
-    let q1 = i32(buf[at(pos, step, 1i32)])
-    let p0 = i32(buf[at(pos, step, -1i32)])
-    let p1 = i32(buf[at(pos, step, -2i32)])
-    let thresh_bd = st.thresh << sh
-    let hev = iabs(p1 - p0) > thresh_bd || iabs(q1 - q0) > thresh_bd
-    var filter_len = 16i32
-    if filter_size == 4i32 { filter_len = 4i32 } else if chroma { filter_len = 6i32 } else if filter_size == 8i32 { filter_len = 8i32 }
-    let limit_bd = st.limit << sh
-    let blimit_bd = st.blimit << sh
-    var bad = iabs(p1 - p0) > limit_bd || iabs(q1 - q0) > limit_bd || iabs(p0 - q0) * 2i32 + iabs(p1 - q1) / 2i32 > blimit_bd
-    var q2 = 0i32
-    var p2 = 0i32
-    var q3 = 0i32
-    var p3 = 0i32
-    if filter_len >= 6i32 {
-        q2 = i32(buf[at(pos, step, 2i32)])
-        p2 = i32(buf[at(pos, step, -3i32)])
-        if iabs(p2 - p1) > limit_bd || iabs(q2 - q1) > limit_bd { bad = true }
-    }
-    if filter_len >= 8i32 {
-        q3 = i32(buf[at(pos, step, 3i32)])
-        p3 = i32(buf[at(pos, step, -4i32)])
-        if iabs(p3 - p2) > limit_bd || iabs(q3 - q2) > limit_bd { bad = true }
-    }
-    if bad { ret }
-    let one = 1i32 << sh
-    var flat = false
-    if filter_size >= 8i32 {
-        flat = iabs(p1 - p0) <= one && iabs(q1 - q0) <= one && iabs(p2 - p0) <= one && iabs(q2 - q0) <= one
-        if filter_len >= 8i32 && (iabs(p3 - p0) > one || iabs(q3 - q0) > one) { flat = false }
-    }
-    if filter_size == 4i32 || !flat {
-        narrow(buf, pos, step, hev, bd)
+    let q1 = i32(buf[pos + step])
+    let p0 = i32(buf[pos - step])
+    let p1 = i32(buf[pos - 2usize * step])
+    let q2 = i32(buf[pos + 2usize * step])
+    let p2 = i32(buf[pos - 3usize * step])
+    let q3 = i32(buf[pos + 3usize * step])
+    let p3 = i32(buf[pos - 4usize * step])
+    let q4 = i32(buf[pos + 4usize * step])
+    let p4 = i32(buf[pos - 5usize * step])
+    let q5 = i32(buf[pos + 5usize * step])
+    let p5 = i32(buf[pos - 6usize * step])
+    let q6 = i32(buf[pos + 6usize * step])
+    let p6 = i32(buf[pos - 7usize * step])
+    let fl = (one - ab(p4 - p0)) | (one - ab(q4 - q0)) | (one - ab(p5 - p0)) | (one - ab(q5 - q0)) | (one - ab(p6 - p0)) | (one - ab(q6 - q0))
+    if fl < 0i32 {
+        wide8(buf, pos, step)
         ret
     }
-    var flat2 = false
-    if filter_size >= 16i32 {
-        flat2 = true
-        var m = 4i32
-        while m <= 6i32 {
-            if iabs(i32(buf[at(pos, step, 0i32 - (m + 1i32))]) - p0) > one || iabs(i32(buf[at(pos, step, m)]) - q0) > one { flat2 = false }
-            m += 1i32
-        }
-    }
-    if filter_size == 8i32 || !flat2 {
-        wide(buf, pos, step, chroma, 3u32)
-    } else {
-        wide(buf, pos, step, chroma, 4u32)
-    }
+    var w = p6 * 6i32 + p5 + p4 + p3 + p2 + p1 + p0 + q0 + 8i32
+    var t = p6 + p5 + p4
+    buf[pos - 6usize * step] = u16((w + t) >> 4u32)
+    w = w + q1 - p6
+    t = t + p3 - p6
+    buf[pos - 5usize * step] = u16((w + t) >> 4u32)
+    w = w + q2 - p6
+    t = t + p2 - p5
+    buf[pos - 4usize * step] = u16((w + t) >> 4u32)
+    w = w + q3 - p6
+    t = t + p1 - p4
+    buf[pos - 3usize * step] = u16((w + t) >> 4u32)
+    w = w + q4 - p6
+    t = t + p0 - p3
+    buf[pos - 2usize * step] = u16((w + t) >> 4u32)
+    w = w + q5 - p6
+    t = t + q0 - p2
+    buf[pos - step] = u16((w + t) >> 4u32)
+    w = w + q6 - p6
+    t = t + q1 - p1
+    buf[pos] = u16((w + t) >> 4u32)
+    w = w + q6 - p5
+    t = t + q2 - p0
+    buf[pos + step] = u16((w + t) >> 4u32)
+    w = w + q6 - p4
+    t = t + q3 - q0
+    buf[pos + 2usize * step] = u16((w + t) >> 4u32)
+    w = w + q6 - p3
+    t = t + q4 - q1
+    buf[pos + 3usize * step] = u16((w + t) >> 4u32)
+    w = w + q6 - p2
+    t = t + q5 - q2
+    buf[pos + 4usize * step] = u16((w + t) >> 4u32)
+    w = w + q6 - p1
+    t = t + q6 - q3
+    buf[pos + 5usize * step] = u16((w + t) >> 4u32)
+}
+
+// The sample filtering process (7.14.6) at one position of the boundary: `pos` is the index of q0, `step` the
+// distance between samples across the edge, filter_size is 4, 8 or 16.
+fn filter_sample(buf: []u16, pos: usize, step: usize, chroma: bool, st: Strength, filter_size: i32, bd: u32) {
+    let sh = bd - 8u32
+    var ln = 16i32
+    if filter_size == 4i32 { ln = 4i32 } else if chroma { ln = 6i32 } else if filter_size == 8i32 { ln = 8i32 }
+    filt(buf, pos, step, 0usize, 1i32, st.limit << sh, st.blimit << sh, st.thresh << sh, 1i32 << sh, bd, ln)
 }
 
 fn tx_sizes_of(f: *const LoopFilterFrame, plane: u32) -> []u8 {
@@ -242,90 +342,44 @@ fn tx_sizes_of(f: *const LoopFilterFrame, plane: u32) -> []u8 {
     ret f.tx_sizes2
 }
 
-fn level_at(p: *const LoopFilterParams, f: *const LoopFilterFrame, row: usize, col: usize, plane: u32, pass: u32) -> i32 {
+// The edge loop filter process (7.14.2) for one 4x4 luma position; the frame and pass invariants are in c and t.
+fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *const Tabs, c: *const Ctx, row0: usize, col0: usize) {
+    let row = row0 | usize(c.sub_y)
+    let col = col0 | usize(c.sub_x)
     let mi = row * f.mi_cols + col
-    let mode = i32(f.y_modes[mi])
-    var mode_type = 0usize
-    if mode >= 14i32 && mode != 16i32 && mode != 24i32 { mode_type = 1usize }
-    var which = 0usize
-    if p.delta_lf_multi {
-        which = usize(pass)
-        if plane > 0u32 { which = usize(plane) + 1usize }
+    let ti = (row >> c.sub_y) * c.mc + (col >> c.sub_x)
+    let xp = (col0 * 4usize) >> c.sub_x
+    let yp = (row0 * 4usize) >> c.sub_y
+    var cpos = xp
+    var prev_mi = mi - (1usize << c.sub_x)
+    var prev_ti = ti - 1usize
+    if c.pass == 1u32 {
+        cpos = yp
+        prev_mi = mi - (f.mi_cols << c.sub_y)
+        prev_ti = ti - c.mc
     }
-    let d = i32(f.delta_lfs[mi * 4usize + which])
-    ret filter_level(p, usize(f.segment_ids[mi]), i32(f.ref_frames[mi]), mode_type, d, plane, pass)
-}
-
-// The edge loop filter process (7.14.2) for one 4x4 luma position.
-fn edge(p: *const LoopFilterParams, f: *const LoopFilterFrame, plane: u32, pass: u32, row0: usize, col0: usize) {
-    var sub_x = 0u32
-    var sub_y = 0u32
-    if plane > 0u32 {
-        sub_x = f.sub_x
-        sub_y = f.sub_y
-    }
-    let x = col0 * 4usize
-    let y = row0 * 4usize
-    let row = row0 | usize(sub_y)
-    let col = col0 | usize(sub_x)
-    if x >= f.frame_width || y >= f.frame_height { ret }
-    if pass == 0u32 && x == 0usize { ret }
-    if pass == 1u32 && y == 0usize { ret }
-    var dx = 1usize
-    var dy = 0usize
-    if pass == 1u32 {
-        dx = 0usize
-        dy = 1usize
-    }
-    let xp = x >> sub_x
-    let yp = y >> sub_y
-    let prev_row = row - (dy << sub_y)
-    let prev_col = col - (dx << sub_x)
-    let mi = row * f.mi_cols + col
-    let txs = tx_sizes_of(f, plane)
-    let tx = usize(txs[(row >> sub_y) * f.mi_cols + (col >> sub_x)])
-    let prev_tx = usize(txs[(prev_row >> sub_y) * f.mi_cols + (prev_col >> sub_x)])
-    let size = usize(f.mi_sizes[mi])
-    let bw = imax(4i32, (4i32 * i32(blk_w4()[size])) >> sub_x)
-    let bh = imax(4i32, (4i32 * i32(blk_h4()[size])) >> sub_y)
-    let skip = f.skips[mi] != 0u8
-    let intra = f.ref_frames[mi] <= 0i8
-    var block_edge = false
-    var tx_edge = false
-    var base_size = 0i32
-    if pass == 0u32 {
-        block_edge = i32(xp) % bw == 0i32
-        tx_edge = i32(xp) % i32(tx_w()[tx]) == 0i32
-        base_size = imin(i32(tx_w()[prev_tx]), i32(tx_w()[tx]))
-    } else {
-        block_edge = i32(yp) % bh == 0i32
-        tx_edge = i32(yp) % i32(tx_h()[tx]) == 0i32
-        base_size = imin(i32(tx_h()[prev_tx]), i32(tx_h()[tx]))
-    }
-    if !tx_edge { ret }
-    if !(block_edge || !skip || intra) { ret }
-    var filter_size = imin(16i32, base_size)
-    if plane > 0u32 { filter_size = imin(8i32, base_size) }
-    var lvl = level_at(p, f, row, col, plane, pass)
-    if lvl == 0i32 { lvl = level_at(p, f, prev_row, prev_col, plane, pass) }
+    let tdim = t.td[usize(c.txs[ti])]
+    if (i32(cpos) & (tdim - 1i32)) != 0i32 { ret }
+    if (i32(cpos) & t.bm[usize(f.mi_sizes[mi])]) != 0i32 && f.skips[mi] != 0u8 && f.ref_frames[mi] > 0i8 { ret }
+    var fs = tdim
+    let pdim = t.td[usize(c.txs[prev_ti])]
+    if pdim < fs { fs = pdim }
+    if fs > c.maxfs { fs = c.maxfs }
+    var lvl = level_of(p, f, t, c, mi)
+    if lvl == 0i32 { lvl = level_of(p, f, t, c, prev_mi) }
     if lvl <= 0i32 { ret }
-    let st = strength(p.sharpness, lvl)
-    var stride = f.stride0
-    if plane == 1u32 { stride = f.stride1 } else if plane == 2u32 { stride = f.stride2 }
+    let lim = t.lim[usize(lvl)]
+    let blim = t.blim[usize(lvl)]
+    let thr = t.thr[usize(lvl)]
     var step = 1usize
-    if pass == 1u32 { step = stride }
-    var i = 0usize
-    while i < 4usize {
-        let pos = (yp + dx * i) * stride + xp + dy * i
-        if plane == 0u32 {
-            filter_sample(f.p0, pos, step, false, st, filter_size, f.bit_depth)
-        } else if plane == 1u32 {
-            filter_sample(f.p1, pos, step, true, st, filter_size, f.bit_depth)
-        } else {
-            filter_sample(f.p2, pos, step, true, st, filter_size, f.bit_depth)
-        }
-        i += 1usize
+    var adv = c.stride
+    if c.pass == 1u32 {
+        step = c.stride
+        adv = 1usize
     }
+    var ln = fs
+    if fs == 8i32 && c.chroma { ln = 6i32 }
+    filt(c.buf, yp * c.stride + xp, step, adv, 4i32, lim, blim, thr, c.one, c.bd, ln)
 }
 
 fn check_dims(f: *const LoopFilterFrame, plane: u32) -> bool {
@@ -348,6 +402,80 @@ fn check_dims(f: *const LoopFilterFrame, plane: u32) -> bool {
     ret stride >= w && len >= (h - 1usize) * stride + w
 }
 
+fn fill_tabs(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, c: *const Ctx) {
+    let sh = f.bit_depth - 8u32
+    var l = 0i32
+    while l < 64i32 {
+        let st = strength(p.sharpness, l)
+        t.lim[usize(l)] = st.limit << sh
+        t.blim[usize(l)] = st.blimit << sh
+        t.thr[usize(l)] = st.thresh << sh
+        l += 1i32
+    }
+    var k = 0usize
+    while k < 128usize {
+        let mt = k & 1usize
+        let rc = (k >> 1u32) & 7usize
+        let seg = k >> 4u32
+        var rf = 0i32
+        if rc > 0usize { rf = i32(rc) }
+        t.lv[k] = filter_level(p, seg, rf, mt, 0i32, c.plane, c.pass)
+        k += 1usize
+    }
+    k = 0usize
+    while k < 19usize {
+        if c.pass == 0u32 { t.td[k] = i32(tx_w()[k]) } else { t.td[k] = i32(tx_h()[k]) }
+        k += 1usize
+    }
+    k = 0usize
+    while k < 22usize {
+        var b = 0i32
+        if c.pass == 0u32 { b = (4i32 * i32(blk_w4()[k])) >> c.sub_x } else { b = (4i32 * i32(blk_h4()[k])) >> c.sub_y }
+        if b < 4i32 { b = 4i32 }
+        t.bm[k] = b - 1i32
+        k += 1usize
+    }
+}
+
+fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, plane: u32, pass: u32) {
+    var sub_x = 0u32
+    var sub_y = 0u32
+    var buf = f.p0
+    var stride = f.stride0
+    if plane > 0u32 {
+        sub_x = f.sub_x
+        sub_y = f.sub_y
+        buf = f.p1
+        stride = f.stride1
+        if plane == 2u32 {
+            buf = f.p2
+            stride = f.stride2
+        }
+    }
+    let which = delta_index(p, plane, pass)
+    var maxfs = 16i32
+    if plane > 0u32 { maxfs = 8i32 }
+    let c = Ctx { plane: plane, pass: pass, sub_x: sub_x, sub_y: sub_y, mc: f.mi_cols, stride: stride, which: which, maxfs: maxfs, chroma: plane > 0u32, bd: f.bit_depth, one: 1i32 << (f.bit_depth - 8u32), buf: buf, txs: tx_sizes_of(f, plane) }
+    fill_tabs(p, f, t, &c)
+    let row_step = 1usize << sub_y
+    let col_step = 1usize << sub_x
+    var row_end = (f.frame_height + 3usize) >> 2u32
+    var col_end = (f.frame_width + 3usize) >> 2u32
+    if row_end > f.mi_rows { row_end = f.mi_rows }
+    if col_end > f.mi_cols { col_end = f.mi_cols }
+    var row = 0usize
+    var col_start = 0usize
+    if pass == 0u32 { col_start = col_step } else { row = row_step }
+    while row < row_end {
+        var col = col_start
+        while col < col_end {
+            edge(p, f, t, &c, row, col)
+            col += col_step
+        }
+        row += row_step
+    }
+}
+
 // Filters the whole frame in place (7.14.1). Invalid: the sample planes or MI arrays are too small.
 fn loop_filter(p: *const LoopFilterParams, f: *const LoopFilterFrame) -> err {
     let mis = f.mi_rows * f.mi_cols
@@ -359,28 +487,12 @@ fn loop_filter(p: *const LoopFilterParams, f: *const LoopFilterFrame) -> err {
         if !check_dims(f, plane) || tx_sizes_of(f, plane).len < mis { ret Invalid }
         plane += 1u32
     }
+    var t: Tabs = zero
     plane = 0u32
     while plane < f.num_planes {
         if plane == 0u32 || p.levels[usize(1u32 + plane)] != 0i32 {
-            var row_step = 1usize
-            var col_step = 1usize
-            if plane > 0u32 {
-                row_step = 1usize << f.sub_y
-                col_step = 1usize << f.sub_x
-            }
-            var pass = 0u32
-            while pass < 2u32 {
-                var row = 0usize
-                while row < f.mi_rows {
-                    var col = 0usize
-                    while col < f.mi_cols {
-                        edge(p, f, plane, pass, row, col)
-                        col += col_step
-                    }
-                    row += row_step
-                }
-                pass += 1u32
-            }
+            filter_pass(p, f, &t, plane, 0u32)
+            filter_pass(p, f, &t, plane, 1u32)
         }
         plane += 1u32
     }
