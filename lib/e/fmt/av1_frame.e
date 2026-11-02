@@ -35,11 +35,32 @@ type Slot = struct {
 
 const POOL: usize = 14usize
 
+// What the backend thread of a frame needs: the decoder and which of the two frame states it works on.
+type BkJob = struct {
+    dc: *Decoder,
+    x: usize,
+    result: err,
+}
+
 type Decoder = struct {
     a: *mem.Arena,
     tab: []const i32,
     st: av1.State,
     d: D.Dec,
+    st2: av1.State,
+    d2: D.Dec,
+    async_on: bool,
+    nx: usize,
+    last: usize,
+    bk_running: bool,
+    bk_x: usize,
+    bk_job: []BkJob,
+    bk_threads: []thread.Thread,
+    bk_arena: mem.Arena,
+    emit_on: bool,
+    emit_ctx: *void,
+    emit: fn(*void, usize),
+    pending_shown: bool,
     ctx: []u16,
     tile_ctx: []u16,
     saved_ctx: []u16,
@@ -74,13 +95,34 @@ fn alloc_plane(a: *mem.Arena, w: usize, h: usize) -> (Plane, err) {
     ret (p, ok)
 }
 
+fn init_dec(a: *mem.Arena, d: *D.Dec, threads: usize) -> err {
+    d.threads = threads
+    let (mvp, mvp_error) = av1_mvp.new_mvp(a)
+    if mvp_error != ok { ret mvp_error }
+    d.mvp = mvp
+    let (q, qe) = mem.alloc[i32](a, 1024usize)
+    if qe != ok { ret qe }
+    let (r, re) = mem.alloc[i32](a, 8192usize)
+    if re != ok { ret re }
+    d.quant = q
+    d.resid = r
+    var p = 0usize
+    while p < 3usize {
+        let (bd, be) = mem.alloc[u8](a, 35usize * 35usize)
+        if be != ok { ret be }
+        d.block_decoded[p] = bd
+        p += 1usize
+    }
+    ret ok
+}
+
 fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     var dc: Decoder = zero
     dc.a = a
     dc.hold = 0i32 - 1i32
-    dc.d.threads = 8usize
+    var threads = 8usize
     let (tenv, tenv_error) = os.env(a, "AV1_THREADS")
-    if tenv_error == ok && tenv.len > 0usize && tenv[0usize] >= 49u8 && tenv[0usize] <= 57u8 { dc.d.threads = usize(tenv[0usize] - 48u8) }
+    if tenv_error == ok && tenv.len > 0usize && tenv[0usize] >= 49u8 && tenv[0usize] <= 57u8 { threads = usize(tenv[0usize] - 48u8) }
     let (tab, tab_error) = av1_tables.load(a)
     if tab_error != ok { ret (dc, tab_error) }
     dc.tab = tab
@@ -101,30 +143,36 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
         dc.slots[i].ctx = sc
         i += 1usize
     }
-    let (mvp, mvp_error) = av1_mvp.new_mvp(a)
-    if mvp_error != ok { ret (dc, mvp_error) }
-    dc.d.mvp = mvp
-    let (q, qe) = mem.alloc[i32](a, 1024usize)
-    if qe != ok { ret (dc, qe) }
-    let (r, re) = mem.alloc[i32](a, 8192usize)
-    if re != ok { ret (dc, re) }
-    dc.d.quant = q
-    dc.d.resid = r
-    var p = 0usize
-    while p < 3usize {
-        let (bd, be) = mem.alloc[u8](a, 35usize * 35usize)
-        if be != ok { ret (dc, be) }
-        dc.d.block_decoded[p] = bd
-        p += 1usize
-    }
+    let init0 = init_dec(a, &dc.d, threads)
+    if init0 != ok { ret (dc, init0) }
+    let init1 = init_dec(a, &dc.d2, threads)
+    if init1 != ok { ret (dc, init1) }
+    let (jobs, jobs_error) = mem.alloc[BkJob](a, 1usize)
+    if jobs_error != ok { ret (dc, jobs_error) }
+    dc.bk_job = jobs
+    let (bthreads, bthreads_error) = mem.alloc[thread.Thread](a, 1usize)
+    if bthreads_error != ok { ret (dc, bthreads_error) }
+    dc.bk_threads = bthreads
+    let (bk_bytes, bk_error) = mem.alloc[u8](a, 8388608usize)
+    if bk_error != ok { ret (dc, bk_error) }
+    dc.bk_arena = mem.arena_from(bk_bytes)
     ret (dc, ok)
 }
 
+// The frame state number x (0 or 1): its decoder state and its header state.
+fn dec_of(dc: *Decoder, x: usize) -> *D.Dec {
+    if x == 0usize { ret &dc.d }
+    ret &dc.d2
+}
+
+fn st_of(dc: *Decoder, x: usize) -> *av1.State {
+    if x == 0usize { ret &dc.st }
+    ret &dc.st2
+}
+
 // arrays that live as long as the stream: the frame size is fixed for now
-fn alloc_frame_state(dc: *Decoder) -> err {
+fn alloc_frame_state(dc: *Decoder, d: *D.Dec, h: *const av1.Hdr, with_slots: bool) -> err {
     let a = dc.a
-    let h = &dc.st.h
-    let d = &dc.d
     var p = 0usize
     let n = usize(h.mi_rows * h.mi_cols)
     let (mi, mie) = mem.alloc[D.Mi](a, n)
@@ -148,7 +196,7 @@ fn alloc_frame_state(dc: *Decoder) -> err {
     if mfielde != ok { ret mfielde }
     d.motion_field = mfield
     var sl = 0usize
-    while sl < 8usize {
+    while sl < 8usize && with_slots {
         let (smv, smve) = mem.alloc[i16](a, n * 2usize)
         if smve != ok { ret smve }
         let (srf, srfe) = mem.alloc[i8](a, n)
@@ -257,9 +305,11 @@ fn alloc_frame_state(dc: *Decoder) -> err {
         d.lr_units[p] = lu
         p += 1usize
     }
-    let (sc, sce) = av1_post.new_scratch(a, n)
-    if sce != ok { ret sce }
-    dc.scratch = sc
+    if with_slots {
+        let (sc, sce) = av1_post.new_scratch(a, n)
+        if sce != ok { ret sce }
+        dc.scratch = sc
+    }
     ret ok
 }
 
@@ -296,20 +346,86 @@ fn planes_of(dc: *Decoder, k: usize) -> [3][]u8 {
     ret out
 }
 
-// per frame state: arrays at MI resolution, the new frame's planes and the contexts of the tile
-fn setup_frame(dc: *Decoder) -> err {
+// Gives the frame about to be made its pixel buffer and the reference planes it predicts from.
+fn bind_buffers(dc: *Decoder, d: *D.Dec) {
+    dc.cur_buf = acquire(dc)
+    var p = 0usize
+    while p < 3usize {
+        d.frame[p] = dc.pool[dc.cur_buf][p].data
+        d.stride[p] = dc.pool[dc.cur_buf][p].stride
+        p += 1usize
+    }
+    var rs = 0usize
+    while rs < 8usize {
+        if dc.slots[rs].buf >= 0i32 {
+            var q = 0usize
+            while q < 3usize {
+                d.ref_planes[rs][q] = dc.pool[usize(dc.slots[rs].buf)][q].data
+                q += 1usize
+            }
+        }
+        rs += 1usize
+    }
+    d.ref_stride[0usize] = dc.pool[dc.cur_buf][0usize].stride
+    d.ref_stride[1usize] = dc.pool[dc.cur_buf][1usize].stride
+    d.ref_stride[2usize] = dc.pool[dc.cur_buf][2usize].stride
+}
+
+fn alloc_pool(dc: *Decoder, h: *const av1.Hdr) -> err {
     let a = dc.a
-    let st = &dc.st
+    var k = 0usize
+    while k < POOL {
+        var q = 0usize
+        while q < 3usize {
+            var pw = usize(h.mi_cols) * 4usize
+            var ph = usize(h.mi_rows) * 4usize
+            if q > 0usize {
+                pw = pw / 2usize
+                ph = ph / 2usize
+            }
+            let (pl, ple) = alloc_plane(a, pw, ph)
+            if ple != ok { ret ple }
+            dc.pool[k][q] = pl
+            dc.pool[k][q].w = usize(h.frame_width)
+            dc.pool[k][q].h = usize(h.frame_height)
+            if q > 0usize {
+                dc.pool[k][q].w = (usize(h.frame_width) + 1usize) >> 1u32
+                dc.pool[k][q].h = (usize(h.frame_height) + 1usize) >> 1u32
+            }
+            q += 1usize
+        }
+        dc.pool_ref[k] = 0i32
+        k += 1usize
+    }
+    k = 0usize
+    while k < 8usize {
+        dc.slots[k].buf = 0i32 - 1i32
+        k += 1usize
+    }
+    dc.pool_ready = true
+    dc.hold = 0i32 - 1i32
+    ret ok
+}
+
+// per frame state x: arrays at MI resolution and the contexts of the tile
+fn setup_frame(dc: *Decoder, x: usize) -> err {
+    let st = st_of(dc, x)
     let h = &st.h
     let seq = &st.seq
-    let d = &dc.d
+    let d = dec_of(dc, x)
     if seq.bit_depth != 8i32 || seq.subsampling_x != 1i32 || seq.subsampling_y != 1i32 || seq.mono_chrome { ret Unsupported }
     if h.using_qmatrix || h.use_superres || h.apply_grain { ret Unsupported }
     d.st = st
     d.tab = dc.tab
     d.mi_rows = h.mi_rows
     d.mi_cols = h.mi_cols
-    if d.mi.len == 0usize { try alloc_frame_state(dc) }
+    if d.mi.len == 0usize {
+        try alloc_frame_state(dc, d, h, dc.d.mi.len == 0usize && dc.d2.mi.len == 0usize)
+        if dc.async_on {
+            let other = dec_of(dc, 1usize - x)
+            if other.mi.len == 0usize { try alloc_frame_state(dc, other, h, false) }
+        }
+    }
     if usize(h.mi_rows * h.mi_cols) != d.mi.len { ret Unsupported }
     d.mi_rows = h.mi_rows
     d.mi_cols = h.mi_cols
@@ -344,60 +460,7 @@ fn setup_frame(dc: *Decoder) -> err {
         }
         p += 1usize
     }
-    if !dc.pool_ready {
-        var k = 0usize
-        while k < POOL {
-            var q = 0usize
-            while q < 3usize {
-                var pw = usize(h.mi_cols) * 4usize
-                var ph = usize(h.mi_rows) * 4usize
-                if q > 0usize {
-                    pw = pw / 2usize
-                    ph = ph / 2usize
-                }
-                let (pl, ple) = alloc_plane(a, pw, ph)
-                if ple != ok { ret ple }
-                dc.pool[k][q] = pl
-                dc.pool[k][q].w = usize(h.frame_width)
-                dc.pool[k][q].h = usize(h.frame_height)
-                if q > 0usize {
-                    dc.pool[k][q].w = (usize(h.frame_width) + 1usize) >> 1u32
-                    dc.pool[k][q].h = (usize(h.frame_height) + 1usize) >> 1u32
-                }
-                q += 1usize
-            }
-            dc.pool_ref[k] = 0i32
-            k += 1usize
-        }
-        k = 0usize
-        while k < 8usize {
-            dc.slots[k].buf = 0i32 - 1i32
-            k += 1usize
-        }
-        dc.pool_ready = true
-        dc.hold = 0i32 - 1i32
-    }
-    dc.cur_buf = acquire(dc)
-    p = 0usize
-    while p < 3usize {
-        d.frame[p] = dc.pool[dc.cur_buf][p].data
-        d.stride[p] = dc.pool[dc.cur_buf][p].stride
-        p += 1usize
-    }
-    var rs = 0usize
-    while rs < 8usize {
-        if dc.slots[rs].buf >= 0i32 {
-            var q = 0usize
-            while q < 3usize {
-                d.ref_planes[rs][q] = dc.pool[usize(dc.slots[rs].buf)][q].data
-                q += 1usize
-            }
-        }
-        rs += 1usize
-    }
-    d.ref_stride[0usize] = dc.pool[dc.cur_buf][0usize].stride
-    d.ref_stride[1usize] = dc.pool[dc.cur_buf][1usize].stride
-    d.ref_stride[2usize] = dc.pool[dc.cur_buf][2usize].stride
+    if !dc.pool_ready { try alloc_pool(dc, h) }
     // the mv prediction view of the frame
     let m = &d.mvf
     m.mi_rows = h.mi_rows
@@ -454,12 +517,16 @@ fn setup_frame(dc: *Decoder) -> err {
         zero_counters(dc.ctx, dc.tab)
     }
     dc.tile_num = 0i32
-    d.deferred = !h.frame_is_intra && d.threads > 1usize
+    d.deferred = d.threads > 1usize
     d.rec_n = 0usize
     d.brec_n = 0usize
     d.q_n = 0usize
     d.pipe_n = 0usize
-    if d.deferred { try R.pipe_start(d) }
+    d.pipe_on = false
+    if !dc.async_on {
+        bind_buffers(dc, d)
+        if d.deferred { try R.pipe_start(d) }
+    }
     ret ok
 }
 
@@ -487,8 +554,9 @@ fn le_bytes(d: []const u8, at: usize, n: usize) -> usize {
 }
 
 // a tile group OBU payload (after the frame header for OBU_FRAME): decodes its tiles
-fn tile_group(dc: *Decoder, data: []const u8) -> err {
-    let h = &dc.st.h
+fn tile_group(dc: *Decoder, x: usize, data: []const u8) -> err {
+    let h = &st_of(dc, x).h
+    let d = dec_of(dc, x)
     let num_tiles = h.tile_cols * h.tile_rows
     var b = av1.bits_of(data)
     var tg_start = 0i32
@@ -511,7 +579,6 @@ fn tile_group(dc: *Decoder, data: []const u8) -> err {
             at += usize(h.tile_size_bytes)
         }
         if at + size > data.len { ret Invalid }
-        let d = &dc.d
         d.row_start = h.mi_row_starts[usize(tile_row)]
         d.row_end = h.mi_row_starts[usize(tile_row + 1i32)]
         d.col_start = h.mi_col_starts[usize(tile_col)]
@@ -556,43 +623,22 @@ fn tile_group(dc: *Decoder, data: []const u8) -> err {
             }
         }
         dc.frame_open = false
-        if dc.d.deferred {
-            let replayed = R.replay(&dc.d, dc.a, dc.d.threads)
-            if replayed != ok { ret replayed }
-        }
-        ret finish_frame(dc)
+        ret frame_parsed(dc, x)
     }
     ret ok
 }
 
-// motion field motion vector storage (7.19) and the reference update: the finished frame goes into the slots named by
-// refresh_frame_flags
-fn finish_frame(dc: *Decoder) -> err {
-    let h = &dc.st.h
-    let d = &dc.d
-    let w1 = acquire(dc)
-    let w2 = acquire(dc)
-    let (p0, pc0) = time.monotonic()
-    let (which, post_error) = av1_post.post_filter(d, dc.a, &dc.scratch, planes_of(dc, w1), planes_of(dc, w2))
-    let (p1, pc1) = time.monotonic()
-    dc.ns_post += p1.nanos - p0.nanos
-    if post_error != ok { ret post_error }
-    var final = dc.cur_buf
-    if which == 1usize { final = w1 }
-    if which == 2usize { final = w2 }
-    if w1 != final { dc.pool_ref[w1] = 0i32 }
-    if w2 != final { dc.pool_ref[w2] = 0i32 }
-    if dc.cur_buf != final { dc.pool_ref[dc.cur_buf] = 0i32 }
-    dc.out_buf = final
-    save_motion(dc)
-    av1.save_refs(&dc.st)
+// The frame is parsed: what the next frame's parse needs (cdfs, motion vectors, reference header state) is saved now,
+// then the pixels are made and filtered: at once, or on a backend thread while the next frame is parsed.
+fn frame_parsed(dc: *Decoder, x: usize) -> err {
+    let st = st_of(dc, x)
+    let h = &st.h
+    let d = dec_of(dc, x)
+    save_motion(dc, d, st)
+    av1.save_refs(st)
     var i = 0usize
     while i < 8usize {
         if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 {
-            let old = dc.slots[i].buf
-            if old >= 0i32 { dc.pool_ref[usize(old)] -= 1i32 }
-            dc.slots[i].buf = i32(final)
-            dc.pool_ref[final] += 1i32
             dc.slots[i].mi_rows = h.mi_rows
             dc.slots[i].mi_cols = h.mi_cols
             var q = 0usize
@@ -610,6 +656,84 @@ fn finish_frame(dc: *Decoder) -> err {
         }
         i += 1usize
     }
+    dc.last = x
+    if !dc.async_on {
+        ret backend(dc, x)
+    }
+    try finish_backend(dc)
+    dc.bk_job[0usize] = BkJob { dc: dc, x: x, result: ok }
+    let (th, spawn_error) = thread.spawn[BkJob](bk_main, &dc.bk_job[0usize], 8388608usize)
+    if spawn_error != ok { ret spawn_error }
+    dc.bk_threads[0usize] = th
+    dc.bk_running = true
+    dc.bk_x = x
+    ret ok
+}
+
+fn bk_main(job: *BkJob) {
+    job.result = backend(job.dc, job.x)
+}
+
+// Waits for the backend thread, if one runs, and hands over the finished frame.
+fn finish_backend(dc: *Decoder) -> err {
+    if !dc.bk_running { ret ok }
+    let joined = thread.join(dc.bk_threads[0usize])
+    dc.bk_running = false
+    if joined != ok { ret joined }
+    if dc.bk_job[0usize].result != ok { ret dc.bk_job[0usize].result }
+    if dc.shown && dc.emit_on { dc.emit(dc.emit_ctx, dc.out_buf) }
+    ret ok
+}
+
+// Makes the pixels of the frame in state x, filters them and puts it into its reference slots.
+fn backend(dc: *Decoder, x: usize) -> err {
+    let st = st_of(dc, x)
+    let d = dec_of(dc, x)
+    if dc.async_on {
+        dc.hold = 0i32 - 1i32
+        recount(dc)
+        bind_buffers(dc, d)
+        if d.deferred {
+            try R.pipe_start(d)
+            R.pipe_publish(d)
+        }
+    }
+    if d.deferred {
+        let replayed = R.replay(d, dc.a, d.threads)
+        if replayed != ok { ret replayed }
+    }
+    ret finish_frame(dc, x)
+}
+
+// motion field motion vector storage (7.19) and the reference update: the finished frame goes into the slots named by
+// refresh_frame_flags
+fn finish_frame(dc: *Decoder, x: usize) -> err {
+    let h = &st_of(dc, x).h
+    let d = dec_of(dc, x)
+    let w1 = acquire(dc)
+    let w2 = acquire(dc)
+    let (p0, pc0) = time.monotonic()
+    let (which, post_error) = av1_post.post_filter(d, dc.a, &dc.scratch, planes_of(dc, w1), planes_of(dc, w2))
+    let (p1, pc1) = time.monotonic()
+    dc.ns_post += p1.nanos - p0.nanos
+    if post_error != ok { ret post_error }
+    var final = dc.cur_buf
+    if which == 1usize { final = w1 }
+    if which == 2usize { final = w2 }
+    if w1 != final { dc.pool_ref[w1] = 0i32 }
+    if w2 != final { dc.pool_ref[w2] = 0i32 }
+    if dc.cur_buf != final { dc.pool_ref[dc.cur_buf] = 0i32 }
+    dc.out_buf = final
+    var i = 0usize
+    while i < 8usize {
+        if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 {
+            let old = dc.slots[i].buf
+            if old >= 0i32 { dc.pool_ref[usize(old)] -= 1i32 }
+            dc.slots[i].buf = i32(final)
+            dc.pool_ref[final] += 1i32
+        }
+        i += 1usize
+    }
     recount(dc)
     dc.pool_ref[final] += 1i32
     dc.hold = i32(final)
@@ -617,9 +741,8 @@ fn finish_frame(dc: *Decoder) -> err {
     ret ok
 }
 
-fn save_motion(dc: *Decoder) {
-    let h = &dc.st.h
-    let d = &dc.d
+fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State) {
+    let h = &st.h
     let n = d.mi.len
     var i = 0usize
     while i < n {
@@ -631,7 +754,7 @@ fn save_motion(dc: *Decoder) {
             var r = i32(d.s_ref[i * 2usize + list])
             if r > i32(av1.INTRA_FRAME) {
                 let ref_idx = usize(h.ref_frame_idx[usize(r) - av1.LAST_FRAME])
-                let dist = av1.get_relative_dist(&dc.st.seq, dc.st.refs[ref_idx].order_hint, h.order_hint)
+                let dist = av1.get_relative_dist(&st.seq, st.refs[ref_idx].order_hint, h.order_hint)
                 if dist < 0i32 {
                     let mr = i32(d.s_mv[i * 4usize + list * 2usize])
                     let mc = i32(d.s_mv[i * 4usize + list * 2usize + 1usize])
@@ -648,43 +771,63 @@ fn save_motion(dc: *Decoder) {
     }
 }
 
-// one temporal unit's worth of OBUs (an MP4 sample). Sets dc.shown when a frame is output.
+// one temporal unit's worth of OBUs (an MP4 sample). In the plain mode it sets dc.shown when a frame is output; in the async
+// mode (dc.async_on) the frames come out through dc.emit as their backends finish, and flush ends the stream.
 fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
     var at = 0usize
-    dc.shown = false
-    dc.hold = 0i32 - 1i32
-    recount(dc)
+    if !dc.async_on {
+        dc.shown = false
+        dc.hold = 0i32 - 1i32
+        recount(dc)
+    }
+    var x = 0usize
+    if dc.async_on { x = dc.nx }
     while at < sample.len {
         let (o, next, obu_error) = av1.read_obu(sample, at)
         if obu_error != ok { ret obu_error }
         at = next
         if o.kind == av1.OBU_SEQUENCE_HEADER {
             var b = av1.bits_of(o.payload)
-            try av1.sequence_header(&b, &dc.st.seq)
+            try av1.sequence_header(&b, &st_of(dc, dc.last).seq)
         } else if o.kind == av1.OBU_FRAME || o.kind == av1.OBU_FRAME_HEADER {
-            dc.st.temporal_id = o.temporal_id
-            dc.st.spatial_id = o.spatial_id
+            if dc.async_on {
+                x = dc.nx
+                st_of(dc, x).seq = st_of(dc, dc.last).seq
+                st_of(dc, x).refs = st_of(dc, dc.last).refs
+                st_of(dc, x).h = st_of(dc, dc.last).h
+            }
+            let st = st_of(dc, x)
+            st.temporal_id = o.temporal_id
+            st.spatial_id = o.spatial_id
             var b = av1.bits_of(o.payload)
-            try av1.uncompressed_header(&b, &dc.st)
-            if dc.st.h.show_existing_frame {
-                if dc.st.h.frame_type == av1.KEY_FRAME { ret Unsupported }
-                let shown_buf = dc.slots[usize(dc.st.h.frame_to_show_map_idx)].buf
+            try av1.uncompressed_header(&b, st)
+            if st.h.show_existing_frame {
+                if st.h.frame_type == av1.KEY_FRAME { ret Unsupported }
+                try finish_backend(dc)
+                let shown_buf = dc.slots[usize(st.h.frame_to_show_map_idx)].buf
                 if shown_buf < 0i32 { ret Invalid }
                 dc.out_buf = usize(shown_buf)
                 dc.pool_ref[dc.out_buf] += 1i32
                 dc.hold = shown_buf
                 dc.shown = true
+                if dc.async_on && dc.emit_on { dc.emit(dc.emit_ctx, dc.out_buf) }
                 continue
             }
-            try setup_frame(dc)
+            try setup_frame(dc, x)
             dc.frame_open = true
+            if dc.async_on { dc.nx = 1usize - x }
             if o.kind == av1.OBU_FRAME {
                 let off = (b.at + 7usize) >> 3u32
-                try tile_group(dc, o.payload[off..o.payload.len])
+                try tile_group(dc, x, o.payload[off..o.payload.len])
             }
         } else if o.kind == av1.OBU_TILE_GROUP {
-            try tile_group(dc, o.payload)
+            try tile_group(dc, x, o.payload)
         }
     }
     ret ok
+}
+
+// Ends an async stream: the last frame is finished and handed over.
+fn flush(dc: *Decoder) -> err {
+    ret finish_backend(dc)
 }
