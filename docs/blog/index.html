@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blog — Neper</title>
+  <meta name="description" content="Notes from measuring Neper: memory, WebAssembly, desktop toolchains, text rendering, charts, databases and what it costs an LLM, with the columns where it loses.">
+  <link rel="canonical" href="https://neper.dev/blog/">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Neper blog">
+  <meta property="og:url" content="https://neper.dev/blog/">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
+    main { padding: var(--space-12) 0 var(--space-16); }
+    main > p { color: var(--on-surface-variant); }
+    .blog-card { display: grid; grid-template-columns: 1.1fr 1fr; overflow: hidden; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); box-shadow: var(--elevation-1); color: inherit; text-decoration: none; }
+    .blog-card:hover, .blog-card:focus-visible { border-color: var(--primary); }
+    .blog-card + .blog-card { margin-top: var(--space-6); }
+    .blog-card img { display: block; width: 100%; height: 100%; object-fit: cover; border-right: 1px solid var(--outline-variant); }
+    .blog-card-body { display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); padding: var(--space-8); }
+    .blog-card-meta { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .blog-card-title { font: 400 24px/32px var(--font-display); }
+    .blog-card-excerpt { color: var(--on-surface-variant); }
+    .blog-card-more { color: var(--primary); font: 600 13px/20px var(--font-sans); }
+    @media (max-width: 599px) {
+      main { padding-top: var(--space-8); }
+      .blog-card { grid-template-columns: 1fr; }
+      .blog-card img { border-right: 0; border-bottom: 1px solid var(--outline-variant); }
+      .blog-card-body { padding: var(--space-6); }
+    }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../get-started.html">get started</a>
+        <a href="../">home</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <main>
+      <div class="eyebrow">&gt; blog_</div>
+      <h1>Notes from measuring Neper.</h1>
+      <p class="lede">We hold the language to its claims with numbers from real sessions, including the columns where it loses.</p>
+        <a class="blog-card" href="compiler-memory.html">
+          <img src="img/compiler-memory.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 30, 2026 · memory</span>
+            <span class="blog-card-title">A 1 TiB ceiling that costs 3 MiB</span>
+            <span class="blog-card-excerpt">A program now takes the memory it needs with no flag, gives it back, and can free one object with use-after-free refused at compile time. Windows, Linux and macOS, measured, with how it compares to Go, Rust, C++ and Node.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="neper-webassembly.html">
+          <img src="img/neper-webassembly.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 27, 2026 · target</span>
+            <span class="blog-card-title">Neper writes WebAssembly itself</span>
+            <span class="blog-card-excerpt">The same compiler that writes PE, ELF and Mach-O writes wasm32-wasi: an 18 KB hello world, a 1.7 MB window, the compiler itself running as WebAssembly, and a phone keyboard in a canvas. Measured, with the limits listed.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="desktop-toolchains.html">
+          <img src="img/desktop-toolchains.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 23, 2026 · comparison</span>
+            <span class="blog-card-title">Ten languages, one window: what you install</span>
+            <span class="blog-card-excerpt">One compiler builds Windows and Linux desktop programs from one machine, the user installs nothing to run them, and the window is 2.7 MiB. Set against the install guides of ten popular desktop languages, with the limits listed.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="why-neper-is-optimized-for-llms.html">
+          <img src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 21, 2026 · design</span>
+            <span class="blog-card-title">Why Neper is built for the agent loop</span>
+            <span class="blog-card-excerpt">Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics that make each one cheaper, including the claims we have not yet proved.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="cleartype-text.html">
+          <img src="img/cleartype-text.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 18, 2026 · engineering</span>
+            <span class="blog-card-title">Text the way Windows draws it: ClearType in Neper</span>
+            <span class="blog-card-excerpt">Neper's Windows look now draws hinted ClearType text, with its own TrueType bytecode interpreter and a GDI-style rasteriser. Against 77 native Windows captures the off pixels fell from 30,800 to 11,321. It is not pixel-exact yet, and the post says by how much.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="charts-speed-and-png-size.html">
+          <img src="img/charts-speed-and-png-size.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 13, 2026 · engineering</span>
+            <span class="blog-card-title">Faster charts, smaller SVG, and what we are doing about PNG size</span>
+            <span class="blog-card-excerpt">The same chart drawn by Neper, base R, lattice, ggplot2 and matplotlib: 3.4 to 73 times faster as SVG, 2 to 24 times faster as PNG, SVG 28 to 32 percent smaller. Neper's PNG is three times larger than R's, and the post says why, what we measured, and the lossy step that cuts it by 47 percent.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="charts-field-guide.html">
+          <img src="img/charts-field-guide.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 4, 2026 · library</span>
+            <span class="blog-card-title">234 charts, and when to use each</span>
+            <span class="blog-card-excerpt">A field guide to every chart Neper draws, from bars and box plots to Laney control charts, Kaplan-Meier curves, Sankeys and Nyquist plots: the question each one answers, when to reach for another, and how fast it is against matplotlib.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="sc1m-eight-compilers.html">
+          <img src="img/sc1m-eight-compilers.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">October 2, 2026 · measurement</span>
+            <span class="blog-card-title">A million lines, eight compilers</span>
+            <span class="blog-card-excerpt">Neper's sc1m scale program ported to seven languages with checked answers. Neper's binary runs it in 47 ms from 2.73 MiB, Dart compiles it fastest cold — and Zig 0.16 never finishes.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="six-algorithms.html">
+          <img src="img/six-algorithms.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">September 29, 2026 · library</span>
+            <span class="blog-card-title">Six algorithms we first skipped</span>
+            <span class="blog-card-excerpt">A backtracking regex engine with a step budget, mixed-integer programming by branch and cut, model checking that returns the shortest counterexample, AC-2001, crash dumps from both operating systems, and sign-on as the user who is already signed in: what each is for, and a program for each.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="sqlserver-openssl.html">
+          <img src="img/sqlserver-openssl.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">September 29, 2026 · engineering</span>
+            <span class="blog-card-title">Bring your own OpenSSL: SQL Server scans, three times faster</span>
+            <span class="blog-card-excerpt">Neper's SQL Server driver can hand its TLS record cipher to the host's OpenSSL, looked up at run time and never shipped, while the handshake and certificate checks stay Neper's. Scans get 3.2–3.6 times faster, and on Windows Neper's scan becomes the fastest of Neper, C, Go and Rust.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="e-db-drivers.html">
+          <img src="img/e-db-drivers.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">September 28, 2026 · engineering</span>
+            <span class="blog-card-title">One SQL contract, five drivers</span>
+            <span class="blog-card-excerpt">How e.db works, how to write a driver, and what differs between SQLite, PostgreSQL, MySQL, ODBC and SQL Server, whose TDS protocol Neper speaks itself inside TLS 1.3 — then the same workload in Neper, C, Go and Rust on Windows and Linux. C wins, Rust is second, Neper third ahead of Go, and scans are still where Neper loses.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+        <a class="blog-card" href="neper-vs-dart-llm-cost.html">
+          <img src="img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="" loading="lazy">
+          <span class="blog-card-body">
+            <span class="blog-card-meta">September 27, 2026 · measurement</span>
+            <span class="blog-card-title">Neper vs Dart: what it costs an LLM to write each one</span>
+            <span class="blog-card-excerpt">Seven days of Claude transcripts, measured byte by byte. The same cost per KB, 43% cheaper direct edits and more first-try builds for Neper — and 2.2× the context, which is what we fix next.</span>
+            <span class="blog-card-more">Read the post →</span>
+          </span>
+        </a>
+    </main>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../">← home</a>
+    </footer>
+  </div>
+</body>
+</html>

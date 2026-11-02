@@ -283,7 +283,7 @@
         <a href="#speed">speed</a>
         <a href="#gpu">cpu + gpu</a>
         <a href="#llm">llm stack</a>
-        <a href="#blog">blog</a>
+        <a href="blog/">blog</a>
         <a href="https://discord.gg/AdRneEsbCu">discord ↗</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
       </div>
@@ -330,18 +330,32 @@ Hello, Neper</code></pre>
       </div>
 
       <section id="start">
-        <div class="eyebrow">&gt; your first program_</div>
-        <h2>Run one in a minute.</h2>
-        <p class="section-intro">Three small steps. Each one is yours to take, and none needs an account.</p>
+        <div class="eyebrow">&gt; get started_</div>
+        <h2>Get started in three steps.</h2>
+        <p class="section-intro">No account to create, and <strong>no third-party toolchain to cross compile for any OS</strong>: no LLVM, MSVC or MinGW, no Xcode or macOS SDK, no system linker, no Docker. One machine writes the Windows, Linux and macOS executables itself.</p>
         <div class="terminal">
-          <div class="terminal-bar">first run</div>
+          <div class="terminal-bar">1 · get it</div>
           <pre><code><span class="prompt">$</span> git clone https://github.com/nebosa-company/neper
-<span class="prompt">$</span> <span class="str"># save the hello.e example above as hello.e</span>
-<span class="prompt">$</span> neper run hello.e
+<span class="prompt">$</span> scripts/build-selfhost.ps1   <span class="str"># Linux, macOS: scripts/build-selfhost.sh</span>
+<span class="prompt">$</span> neper run hello.e          <span class="str"># the hello.e example above</span>
 Hello, Neper</code></pre>
         </div>
+        <div class="terminal" style="margin-top: var(--space-4)">
+          <div class="terminal-bar">2 · submit this prompt to your coding agent</div>
+          <pre><code>Read docs/llm-neper-card.md first. Then write a Neper command-line
+program, wordfreq.e, that reads a text file and prints its ten most
+frequent words. Add @test functions, run them, and fix every
+diagnostic by its code and span. Then build it for x64 windows,
+x64 linux and aarch64 macos with emit-executable.</code></pre>
+        </div>
+        <div class="terminal" style="margin-top: var(--space-4)">
+          <div class="terminal-bar">3 · cross compile, nothing else installed</div>
+          <pre><code><span class="prompt">$</span> neper emit-executable wordfreq.e . x64 windows   wordfreq.exe   --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . x64 linux     wordfreq-linux --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . aarch64 macos wordfreq-mac   --release</code></pre>
+        </div>
         <div class="actions">
-          <a class="button nu-btn lg" href="get-started.html">Get started: prompt, video, any OS →</a>
+          <a class="button nu-btn lg" href="get-started.html">Full guide + 30-second video →</a>
           <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper#readme">Setup notes in the README</a>
           <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper/discussions/new?category=show-and-tell">Tell us what you'll build</a>
         </div>
@@ -530,96 +544,9 @@ Hello, Neper</code></pre>
             <span class="blog-card-more">Read the post →</span>
           </span>
         </a>
-        <a class="blog-card" href="blog/desktop-toolchains.html">
-          <img src="blog/img/desktop-toolchains.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 23, 2026 · comparison</span>
-            <span class="blog-card-title">Ten languages, one window: what you install</span>
-            <span class="blog-card-excerpt">One compiler builds Windows and Linux desktop programs from one machine, the user installs nothing to run them, and the window is 2.7 MiB. Set against the install guides of ten popular desktop languages, with the limits listed.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/why-neper-is-optimized-for-llms.html">
-          <img src="blog/img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 21, 2026 · design</span>
-            <span class="blog-card-title">Why Neper is built for the agent loop</span>
-            <span class="blog-card-excerpt">Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics that make each one cheaper, including the claims we have not yet proved.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/cleartype-text.html">
-          <img src="blog/img/cleartype-text.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 18, 2026 · engineering</span>
-            <span class="blog-card-title">Text the way Windows draws it: ClearType in Neper</span>
-            <span class="blog-card-excerpt">Neper's Windows look now draws hinted ClearType text, with its own TrueType bytecode interpreter and a GDI-style rasteriser. Against 77 native Windows captures the off pixels fell from 30,800 to 11,321. It is not pixel-exact yet, and the post says by how much.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/charts-speed-and-png-size.html">
-          <img src="blog/img/charts-speed-and-png-size.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 13, 2026 · engineering</span>
-            <span class="blog-card-title">Faster charts, smaller SVG, and what we are doing about PNG size</span>
-            <span class="blog-card-excerpt">The same chart drawn by Neper, base R, lattice, ggplot2 and matplotlib: 3.4 to 73 times faster as SVG, 2 to 24 times faster as PNG, SVG 28 to 32 percent smaller. Neper's PNG is three times larger than R's, and the post says why, what we measured, and the lossy step that cuts it by 47 percent.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/charts-field-guide.html">
-          <img src="blog/img/charts-field-guide.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 4, 2026 · library</span>
-            <span class="blog-card-title">234 charts, and when to use each</span>
-            <span class="blog-card-excerpt">A field guide to every chart Neper draws, from bars and box plots to Laney control charts, Kaplan-Meier curves, Sankeys and Nyquist plots: the question each one answers, when to reach for another, and how fast it is against matplotlib.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/sc1m-eight-compilers.html">
-          <img src="blog/img/sc1m-eight-compilers.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 2, 2026 · measurement</span>
-            <span class="blog-card-title">A million lines, eight compilers</span>
-            <span class="blog-card-excerpt">Neper's sc1m scale program ported to seven languages with checked answers. Neper's binary runs it in 47 ms from 2.73 MiB, Dart compiles it fastest cold — and Zig 0.16 never finishes.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/six-algorithms.html">
-          <img src="blog/img/six-algorithms.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 29, 2026 · library</span>
-            <span class="blog-card-title">Six algorithms we first skipped</span>
-            <span class="blog-card-excerpt">A backtracking regex engine with a step budget, mixed-integer programming by branch and cut, model checking that returns the shortest counterexample, AC-2001, crash dumps from both operating systems, and sign-on as the user who is already signed in: what each is for, and a program for each.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/sqlserver-openssl.html">
-          <img src="blog/img/sqlserver-openssl.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 29, 2026 · engineering</span>
-            <span class="blog-card-title">Bring your own OpenSSL: SQL Server scans, three times faster</span>
-            <span class="blog-card-excerpt">Neper's SQL Server driver can hand its TLS record cipher to the host's OpenSSL, looked up at run time and never shipped, while the handshake and certificate checks stay Neper's. Scans get 3.2–3.6 times faster, and on Windows Neper's scan becomes the fastest of Neper, C, Go and Rust.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/e-db-drivers.html">
-          <img src="blog/img/e-db-drivers.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 28, 2026 · engineering</span>
-            <span class="blog-card-title">One SQL contract, five drivers</span>
-            <span class="blog-card-excerpt">How e.db works, how to write a driver, and what differs between SQLite, PostgreSQL, MySQL, ODBC and SQL Server, whose TDS protocol Neper speaks itself inside TLS 1.3 — then the same workload in Neper, C, Go and Rust on Windows and Linux. C wins, Rust is second, Neper third ahead of Go, and scans are still where Neper loses.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/neper-vs-dart-llm-cost.html">
-          <img src="blog/img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 27, 2026 · measurement</span>
-            <span class="blog-card-title">Neper vs Dart: what it costs an LLM to write each one</span>
-            <span class="blog-card-excerpt">Seven days of Claude transcripts, measured byte by byte. The same cost per KB, 43% cheaper direct edits and more first-try builds for Neper — and 2.2× the context, which is what we fix next.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
+        <div class="actions" style="margin-top: var(--space-6)">
+          <a class="button nu-btn lg" href="blog/">All 12 posts →</a>
+        </div>
       </section>
 
       <section class="final">
