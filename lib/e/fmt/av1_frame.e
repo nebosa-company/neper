@@ -72,6 +72,8 @@ type Decoder = struct {
     scratch: av1_post.Scratch,
     cur_buf: usize,
     out_buf: usize,
+    pend_out: usize,
+    pend_shown: bool,
     hold: i32,
     ns_tile: i64,
     ns_post: i64,
@@ -692,7 +694,9 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
     }
     dc.last = x
     if !dc.async_on {
-        ret backend(dc, x)
+        let made = backend(dc, x)
+        take_pending(dc)
+        ret made
     }
     try finish_backend(dc)
     dc.bk_job[0usize] = BkJob { dc: dc, x: x, result: ok }
@@ -715,6 +719,7 @@ fn finish_backend(dc: *Decoder) -> err {
     dc.bk_running = false
     if joined != ok { ret joined }
     if dc.bk_job[0usize].result != ok { ret dc.bk_job[0usize].result }
+    take_pending(dc)
     if dc.shown && dc.emit_on { dc.emit(dc.emit_ctx, dc.out_buf) }
     ret ok
 }
@@ -757,7 +762,7 @@ fn finish_frame(dc: *Decoder, x: usize) -> err {
     if w1 != final { dc.pool_ref[w1] = 0i32 }
     if w2 != final { dc.pool_ref[w2] = 0i32 }
     if dc.cur_buf != final { dc.pool_ref[dc.cur_buf] = 0i32 }
-    dc.out_buf = final
+    dc.pend_out = final
     var i = 0usize
     while i < 8usize {
         if ((h.refresh_frame_flags >> u32(i)) & 1i32) != 0i32 {
@@ -771,8 +776,15 @@ fn finish_frame(dc: *Decoder, x: usize) -> err {
     recount(dc)
     dc.pool_ref[final] += 1i32
     dc.hold = i32(final)
-    dc.shown = h.show_frame
+    dc.pend_shown = h.show_frame
     ret ok
+}
+
+// The backend leaves the frame it made in pend_out and pend_shown; out_buf and shown change only on the thread that calls the decoder, so
+// a picture emitted while a backend still runs is not disturbed by it.
+fn take_pending(dc: *Decoder) {
+    dc.out_buf = dc.pend_out
+    dc.shown = dc.pend_shown
 }
 
 fn save_motion(dc: *Decoder, d: *D.Dec, st: *av1.State, out_refs: []i8, out_mvs: []i16) {
@@ -846,6 +858,19 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
             try av1.uncompressed_header(&b, st)
             if st.h.show_existing_frame {
                 if st.h.frame_type == av1.KEY_FRAME { ret Unsupported }
+                // A hidden frame still being made emits nothing and leaves the slot shown alone, so the slot's picture can go out
+                // at once, without waiting for that frame; the shared state (hold, out_buf, shown) is not touched.
+                if dc.async_on && dc.bk_running {
+                    let busy = &st_of(dc, dc.last).h
+                    let slot = usize(st.h.frame_to_show_map_idx)
+                    if !busy.show_frame && ((busy.refresh_frame_flags >> u32(slot)) & 1i32) == 0i32 && dc.slots[slot].buf >= 0i32 {
+                        if dc.emit_on {
+                            dc.out_buf = usize(dc.slots[slot].buf)
+                            dc.emit(dc.emit_ctx, dc.out_buf)
+                        }
+                        continue
+                    }
+                }
                 try finish_backend(dc)
                 let shown_buf = dc.slots[usize(st.h.frame_to_show_map_idx)].buf
                 if shown_buf < 0i32 { ret Invalid }
