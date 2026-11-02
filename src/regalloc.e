@@ -704,17 +704,92 @@ fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize,
     if capacity > 18446744073709551614usize / (register_count * 2usize) { ret (0usize, Capacity) }
     let (heaps, heaps_error) = mem.alloc[usize](a, register_count * capacity * 2usize + 1usize)
     if heaps_error != ok { ret (0usize, heaps_error) }
-    let (slots, allocate_error) = allocate_with(builder, function, register_count, ranges, allocations, heaps, capacity)
+    let (weights, weights_error) = mem.alloc[usize](a, capacity + 2usize * function.instruction_count + 5usize)
+    if weights_error != ok { ret (0usize, weights_error) }
+    let (slots, allocate_error) = allocate_with(builder, function, register_count, ranges, allocations, heaps, capacity, weights)
     mem.reset(a, mark)
     ret (slots, allocate_error)
 }
 
-fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: usize, ranges: []LiveRange, allocations: []Allocation, heaps: []usize, capacity: usize) -> (usize, err) {
+// How much each value is used, each use counted eight times for every loop it sits in (to five deep): what the allocator
+// keeps in a register when there are not enough. `scratch` holds the values' weights, then two tables of the function's
+// instruction count plus two for the loops' openings and closings.
+fn value_weights(builder: *nir.Builder, function: nir.Function, scratch: []usize) -> err {
+    let count = function.instruction_count
+    if scratch.len < function.value_count + 2usize * count + 4usize { ret Capacity }
+    let weights = scratch[0usize..function.value_count]
+    let opens = scratch[function.value_count..function.value_count + count + 2usize]
+    let closes = scratch[function.value_count + count + 2usize..function.value_count + 2usize * count + 4usize]
+    var at = 0usize
+    while at < function.value_count {
+        weights[at] = 0usize
+        at += 1usize
+    }
+    at = 0usize
+    while at < count + 2usize {
+        opens[at] = 0usize
+        closes[at] = 0usize
+        at += 1usize
+    }
+    var block_at = function.first_block
+    while block_at < function.first_block + function.block_count {
+        let block = builder.blocks[block_at]
+        if block.instruction_count == 0usize { ret InvalidIR }
+        let terminator_index = block.first_instruction + block.instruction_count - 1usize
+        if terminator_index >= builder.instruction_count || terminator_index < function.first_instruction { ret InvalidIR }
+        let terminator = builder.instructions[terminator_index]
+        if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+            try note_loop(builder, function, opens, closes, terminator_index, terminator.target)
+            if terminator.opcode == .BranchIf { try note_loop(builder, function, opens, closes, terminator_index, terminator.target2) }
+        }
+        block_at += 1usize
+    }
+    var depth = 0usize
+    at = 0usize
+    while at < count {
+        depth = depth + opens[at] - closes[at]
+        var shown = depth
+        if shown > 5usize { shown = 5usize }
+        let weight = 1usize << (3usize * shown)
+        let instruction = builder.instructions[function.first_instruction + at]
+        if instruction.has_result && instruction.result < function.value_count { weights[instruction.result] += weight }
+        var operand_at = instruction.first_operand
+        while operand_at < instruction.first_operand + instruction.operand_count {
+            if operand_at >= builder.operand_count { ret InvalidIR }
+            let value = builder.operands[operand_at]
+            if value < function.value_count { weights[value] += weight }
+            operand_at += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn note_loop(builder: *nir.Builder, function: nir.Function, opens: []usize, closes: []usize, source_instruction: usize, target_block: usize) -> err {
+    if target_block < function.first_block || target_block >= function.first_block + function.block_count { ret InvalidIR }
+    let target_instruction = builder.blocks[target_block].first_instruction
+    if target_instruction > source_instruction { ret ok }
+    if target_instruction < function.first_instruction { ret InvalidIR }
+    opens[target_instruction - function.first_instruction] += 1usize
+    closes[source_instruction - function.first_instruction + 1usize] += 1usize
+    ret ok
+}
+
+// What a register is worth to a value: its weight over the instructions it spans. The lowest is what goes to the stack.
+fn density(ranges: []LiveRange, weights: []usize, value: usize) -> usize {
+    let span = ranges[value].last - ranges[value].first + 1usize
+    ret weights[value] * 4096usize / span
+}
+
+fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: usize, ranges: []LiveRange, allocations: []Allocation, heaps: []usize, capacity: usize, scratch: []usize) -> (usize, err) {
     let promotion_error = promote_locals(builder, function, heaps)
     if promotion_error != ok { ret (0usize, promotion_error) }
     // The heaps are the ranges' scratch until the allocation below fills them.
     let ranges_error = build_ranges(builder, function, ranges, heaps)
     if ranges_error != ok { ret (0usize, ranges_error) }
+    let weights_error = value_weights(builder, function, scratch)
+    if weights_error != ok { ret (0usize, weights_error) }
+    let weights = scratch[0usize..function.value_count]
     var counts: [16]usize = zero
     var value_at = 0usize
     var stack_slots = 0usize
@@ -747,29 +822,30 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
             if push_error != ok { ret (0usize, push_error) }
             allocations[value_at] = Allocation { kind: .Register, index: register }
         } else {
-            // Every register's top ends at or after this value starts; the latest of them,
-            // ties to the higher value, is what the scan found.
-            var spill_register = 0usize
-            var spill_last = 0usize
-            var spill_value = 0usize
-            var found_candidate = false
+            // Every register's top ends at or after this value starts: these and the value itself are who wants a register,
+            // and the one a register is worth least to (its weight over its span, the later end on a tie) goes to the stack.
+            var spill_register = register_count
+            var spill_value = value_at
+            var spill_cost = density(ranges, weights, value_at)
+            var spill_last = last
             register = 0usize
             while register < register_count {
                 if counts[register] != 0usize {
                     let top_last = heaps[register * capacity * 2usize]
                     let top_value = heaps[register * capacity * 2usize + 1usize]
                     if top_last >= first {
-                        if !found_candidate || top_last > spill_last || (top_last == spill_last && top_value > spill_value) {
+                        let cost = density(ranges, weights, top_value)
+                        if cost < spill_cost || (cost == spill_cost && top_last > spill_last) || (cost == spill_cost && top_last == spill_last && spill_register != register_count && top_value > spill_value) {
                             spill_register = register
-                            spill_last = top_last
                             spill_value = top_value
-                            found_candidate = true
+                            spill_cost = cost
+                            spill_last = top_last
                         }
                     }
                 }
                 register += 1usize
             }
-            if found_candidate && spill_last > last {
+            if spill_register != register_count {
                 heap_pop(heaps, counts[..], capacity, spill_register)
                 allocations[spill_value] = Allocation { kind: .Stack, index: stack_slots }
                 stack_slots += 1usize
@@ -828,8 +904,9 @@ fn self_test() -> err {
     var arena = mem.arena_from(scratch[..])
     let (stack_slots, allocation_error) = allocate(&builder, 0usize, 2usize, ranges[..], allocations[..], &arena)
     if allocation_error != ok || stack_slots != 1usize { ret InvalidIR }
-    if allocations[0usize].kind != .Register || allocations[0usize].index != 0usize { ret InvalidIR }
+    // three values of one use each, two registers: the longest-lived is the one the stack gets
+    if allocations[0usize].kind != .Stack || allocations[0usize].index != 0usize { ret InvalidIR }
     if allocations[1usize].kind != .Register || allocations[1usize].index != 1usize { ret InvalidIR }
-    if allocations[2usize].kind != .Stack || allocations[2usize].index != 0usize { ret InvalidIR }
+    if allocations[2usize].kind != .Register || allocations[2usize].index != 0usize { ret InvalidIR }
     ret ok
 }

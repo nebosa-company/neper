@@ -4585,7 +4585,8 @@ fn self_test() -> err {
     var saw_conditional = false
     var scan_at = 0usize
     while scan_at + 1usize < branch_output.count {
-        if branch_output.bytes[scan_at] == 57u8 { saw_compare = true }
+        // `cmp r/m64, r64`, or `cmp r/m64, imm` when the right operand is a constant
+        if branch_output.bytes[scan_at] == 57u8 || branch_output.bytes[scan_at] == 131u8 || branch_output.bytes[scan_at] == 129u8 { saw_compare = true }
         if branch_output.bytes[scan_at] == 15u8 && branch_output.bytes[scan_at + 1usize] == 140u8 { saw_conditional = true }
         scan_at += 1usize
     }
