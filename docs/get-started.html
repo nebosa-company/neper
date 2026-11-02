@@ -116,6 +116,10 @@
       th, td { padding: var(--space-2) var(--space-3); }
       footer { flex-direction: column; }
     }
+    .yt { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; padding: 0; cursor: pointer; color: #fff; font: inherit; background: #0c0e14 center / cover no-repeat; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); }
+    .yt span { display: grid; place-items: center; gap: 12px; text-align: center; padding: 0 16px; text-shadow: 0 1px 6px #000; }
+    .yt span::before { content: "\25B6"; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 28px; padding-left: 4px; }
+    .yt:hover span::before, .yt:focus-visible span::before { background: #c00; }
     figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
     .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
     .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
@@ -168,7 +172,7 @@
       <p class="lede">Clone the repository, build the compiler once, then hand your coding agent one prompt. The same machine produces Windows, Linux and macOS executables, and <strong>none of it needs a third-party toolchain.</strong></p>
 
       <figure>
-        <iframe src="https://www.youtube-nocookie.com/embed/cls4S3nBWBM?rel=0" title="Get started with Neper in 30 seconds" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <button type="button" class="yt" data-yt="cls4S3nBWBM" data-title="Get started with Neper in 30 seconds" style="background-image:url(gtm/get-started-poster.jpg)"><span>Play: get started with Neper in 30 seconds</span></button>
         <figcaption>30 seconds: clone, prompt, cross compile. Narrated with a Windows voice.</figcaption>
       </figure>
 
@@ -230,5 +234,6 @@ x64 linux and aarch64 macos with emit-executable.</code></pre>
       <a href="./">← home</a>
     </footer>
   </div>
+  <script src="yt.js" defer></script>
 </body>
 </html>
