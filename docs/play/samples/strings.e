@@ -18,7 +18,7 @@ fn describe(a: *mem.Arena, name: str, count: u32) -> (str, err) {
 
 // main receives the root arena (spec §13); nothing here carves its own.
 fn main(a: *mem.Arena, args: []str) -> err {
-    let greeting = "hello" // []const u8, len 5, read-only
+    let greeting = "hello " // []const u8, len 6, read-only
     let name: str = "neper"
 
     // Two parts.
