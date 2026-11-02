@@ -501,7 +501,7 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
                     cx += usize(tab[pos_ctx_off + umin(col, 2usize)])
                 }
                 let off = base_off + cx * 5usize
-                level = u32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
+                level = u32(av1_sym.read_symbol4(sd, ctx, off))
             }
             if level > 2u32 {
                 let mag = u32(lv[pi + m0]) + u32(lv[pi + m1]) + u32(lv[pi + m2])
@@ -521,7 +521,7 @@ fn read_levels(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, q
                 let off = br_off + cx * 5usize
                 var idx = 0u32
                 while idx < 4u32 {
-                    let br = u32(av1_sym.read_symbol(sd, ctx[off..off + 5usize], 4usize))
+                    let br = u32(av1_sym.read_symbol4(sd, ctx, off))
                     level += br
                     if br < 3u32 { break }
                     idx += 1u32
@@ -593,10 +593,13 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
         read_levels(sd, ctx, tab, p, quant, scan, eob, tx_class, tx_sz_ctx, ptype)
         var cul = 0u32
         var c = 0usize
-        while c < eob {
+        var bad = false
+        @nocheck {
+        while c < eob && !bad {
             let pos = usize(scan[c])
-            var sign = 0u32
-            if quant[pos] != 0i32 {
+            var q = quant[pos]
+            if q != 0i32 {
+                var sign = 0u32
                 if c == 0usize {
                     let dcx = dc_sign_ctx(p, x4, y4, w4, h4)
                     let doff = av1_cdf.C_DCSIGN + (ptype * 3usize + dcx) * 3usize
@@ -604,30 +607,36 @@ fn coeffs(sd: *av1_sym.Sym, ctx: []u16, tab: []const i32, p: *CoefParams, quant:
                 } else {
                     sign = av1_sym.read_bool(sd)
                 }
-            }
-            if quant[pos] > NUM_BASE_LEVELS + COEFF_BASE_RANGE {
-                var length = 0u32
-                var done = false
-                while !done {
-                    length += 1u32
-                    if av1_sym.read_bool(sd) == 1u32 { done = true } else if length >= 20u32 { ret (zero, Invalid) }
+                if q > NUM_BASE_LEVELS + COEFF_BASE_RANGE {
+                    var length = 0u32
+                    var done = false
+                    while !done {
+                        length += 1u32
+                        if av1_sym.read_bool(sd) == 1u32 { done = true } else if length >= 20u32 {
+                            bad = true
+                            done = true
+                        }
+                    }
+                    var x = 1i32
+                    var i = 0u32
+                    while i + 1u32 < length {
+                        x = (x << 1u32) | i32(av1_sym.read_bool(sd))
+                        i += 1u32
+                    }
+                    q = x + COEFF_BASE_RANGE + NUM_BASE_LEVELS
                 }
-                var x = 1i32
-                var i = 0u32
-                while i + 1u32 < length {
-                    x = (x << 1u32) | i32(av1_sym.read_bool(sd))
-                    i += 1u32
+                if pos == 0usize && q > 0i32 {
+                    if sign == 1u32 { res.dc_category = 1u32 } else { res.dc_category = 2u32 }
                 }
-                quant[pos] = x + COEFF_BASE_RANGE + NUM_BASE_LEVELS
+                q = q & 0xFFFFFi32
+                cul += u32(q)
+                if sign == 1u32 { q = 0i32 - q }
+                quant[pos] = q
             }
-            if pos == 0usize && quant[pos] > 0i32 {
-                if sign == 1u32 { res.dc_category = 1u32 } else { res.dc_category = 2u32 }
-            }
-            quant[pos] = quant[pos] & 0xFFFFFi32
-            cul += u32(quant[pos])
-            if sign == 1u32 { quant[pos] = 0i32 - quant[pos] }
             c += 1usize
         }
+        }
+        if bad { ret (zero, Invalid) }
         if cul > 63u32 { cul = 63u32 }
         res.cul_level = cul
     }

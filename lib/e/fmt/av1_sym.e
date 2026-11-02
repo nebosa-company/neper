@@ -120,6 +120,66 @@ fn read_symbol(s: *Sym, cdf: []u16, n: usize) -> usize {
     ret symbol
 }
 
+// read_symbol for an alphabet of 4 (a cdf of 5 values at ctx[off..]): the same decoding and adaptation, unrolled.
+fn read_symbol4(s: *Sym, ctx: []u16, off: usize) -> usize {
+    if off + 5usize > ctx.len { ret 0usize }
+    if s.cnt < 16i32 { refill(s) }
+    let v = u32(s.dif >> 48u32)
+    let r8 = s.range >> 8u32
+    var symbol = 3usize
+    var prev = s.range
+    var cur = 0u32
+    @nocheck {
+        let c0 = ((r8 * ((32768u32 - u32(ctx[off])) >> 6u32)) >> 1u32) + 12u32
+        if v >= c0 {
+            symbol = 0usize
+            cur = c0
+        } else {
+            let c1 = ((r8 * ((32768u32 - u32(ctx[off + 1usize])) >> 6u32)) >> 1u32) + 8u32
+            if v >= c1 {
+                symbol = 1usize
+                cur = c1
+                prev = c0
+            } else {
+                let c2 = ((r8 * ((32768u32 - u32(ctx[off + 2usize])) >> 6u32)) >> 1u32) + 4u32
+                prev = c1
+                if v >= c2 {
+                    symbol = 2usize
+                    cur = c2
+                } else {
+                    prev = c2
+                }
+            }
+        }
+    }
+    let range = prev - cur
+    let bits = norm_bits(range)
+    s.range = range << bits
+    s.dif = (s.dif - (u64(cur) << 48u32)) << bits
+    s.cnt -= i32(bits)
+    if s.adapt {
+        @nocheck {
+            let cn = ctx[off + 4usize]
+            var rate = 5u32
+            if cn > 15u16 { rate += 1u32 }
+            if cn > 31u16 { rate += 1u32 }
+            var i = 0usize
+            while i < symbol {
+                let c = u32(ctx[off + i])
+                ctx[off + i] = u16(c - (c >> rate))
+                i += 1usize
+            }
+            while i < 3usize {
+                let c = u32(ctx[off + i])
+                ctx[off + i] = u16(c + ((32768u32 - c) >> rate))
+                i += 1usize
+            }
+            if cn < 32u16 { ctx[off + 4usize] = cn + 1u16 }
+        }
+    }
+    ret symbol
+}
+
 fn read_bool(s: *Sym) -> u32 {
     if s.cnt < 16i32 { refill(s) }
     let v = u32(s.dif >> 48u32)

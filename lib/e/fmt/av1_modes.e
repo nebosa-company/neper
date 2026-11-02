@@ -274,14 +274,23 @@ fn find_tx_size(d: *D.Dec, w: i32, h: i32) -> usize {
 }
 
 fn set_inter_tx(d: *D.Dec, row: i32, col: i32, w4: i32, h4: i32, tx: usize) {
+    var ye = h4
+    if row + ye > d.mi_rows { ye = d.mi_rows - row }
+    var xe = w4
+    if col + xe > d.mi_cols { xe = d.mi_cols - col }
+    let t = u8(tx)
     var y = 0i32
-    while y < h4 {
+    @nocheck {
+    while y < ye {
+        var at = D.mi_at(d, row + y, col)
         var x = 0i32
-        while x < w4 {
-            if row + y < d.mi_rows && col + x < d.mi_cols { d.mi[D.mi_at(d, row + y, col + x)].inter_tx_size = u8(tx) }
+        while x < xe {
+            d.mi[at].inter_tx_size = t
+            at += 1usize
             x += 1i32
         }
         y += 1i32
+    }
     }
 }
 
