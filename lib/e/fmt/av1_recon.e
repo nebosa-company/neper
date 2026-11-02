@@ -479,6 +479,7 @@ fn pipe_start(d: *D.Dec) -> err {
 // Called after every parsed block: lets the workers see it.
 fn pipe_publish(d: *D.Dec) {
     atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
+    if d.brec_n % usize(CHUNK) == 0usize { os.wake_all_u32(&d.pipe.published) }
 }
 
 // Ends the pipeline: the workers finish what was published and are waited for.
@@ -486,6 +487,7 @@ fn pipe_finish(d: *D.Dec) -> err {
     if !d.pipe_on { ret ok }
     atomic.store(&d.pipe.published, u32(d.brec_n), .Release)
     atomic.store(&d.pipe.stop, 1u32, .Release)
+    os.wake_all_u32(&d.pipe.published)
     av1_pool.wait(d.wp)
     d.pipe_on = false
     if atomic.load(&d.pipe.failed, .Acquire) == 1u32 { ret Invalid }
