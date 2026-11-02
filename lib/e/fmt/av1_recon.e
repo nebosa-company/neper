@@ -332,10 +332,7 @@ fn reconstruct_with(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx:
     if th > 32usize { th = 32usize }
     if quant.len < tw * th { ret Invalid }
     let (rows, cols) = nonzero_limits(quant, tw, th)
-    let (tx0, txc0) = time.monotonic()
     try TX.reconstruct_add(quant, tx, tx_type, lossless, u32(d.st.seq.bit_depth), dcq, acq, rows, cols, d.frame[plane], d.stride[plane], start_x, start_y, d.resid)
-    let (tx1, txc1) = time.monotonic()
-    d.ns_txfm += tx1.nanos - tx0.nanos
     ret ok
 }
 
@@ -365,11 +362,6 @@ fn push_rec(d: *D.Dec, plane: usize, x: i32, y: i32, tx: usize, tx_type: usize, 
         if tw > 32usize { tw = 32usize }
         if th > 32usize { th = 32usize }
         if d.q_n + tw * th > d.qpool.len { ret Unsupported }
-        var i = 0usize
-        while i < tw * th {
-            d.qpool[d.q_n + i] = d.quant[i]
-            i += 1usize
-        }
         d.q_n += tw * th
     }
     d.rec_n += 1usize
@@ -593,15 +585,12 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
             rec_mlh = d.max_luma_h
             rec_has_intra = true
         } else {
-        let (in0, inc0) = time.monotonic()
         try IN.predict_intra(d.frame[plane], d.stride[plane], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), p)
         if is_cfl {
             var alpha = b.cfl_alpha_u
             if plane == 2usize { alpha = b.cfl_alpha_v }
             try IN.predict_cfl(d.frame[plane], d.stride[plane], d.frame[0usize], d.stride[0usize], usize(start_x), usize(start_y), u32(d.tab[av1_tables.T_TX_WIDTH_LOG2 + tx]), u32(d.tab[av1_tables.T_TX_HEIGHT_LOG2 + tx]), u32(sx), u32(sy), alpha, d.max_luma_w, d.max_luma_h, u32(seq.bit_depth))
         }
-        let (in1, inc1) = time.monotonic()
-        d.ns_intra += in1.nanos - in0.nanos
         }
         if plane == 0usize {
             d.max_luma_w = start_x + step_x * 4i32
@@ -637,10 +626,12 @@ fn transform_block(d: *D.Dec, plane: usize, base_x: i32, base_y: i32, tx: usize,
         cp.left_dc = d.left_dc[plane]
         cp.tx_types = d.tx_types
         cp.tx_stride = usize(d.mi_cols)
-        let (cf0, cfc0) = time.monotonic()
-        let (res, coef_error) = CO.coeffs(&d.sd, d.ctx, d.tab, &cp, d.quant)
-        let (cf1, cfc1) = time.monotonic()
-        d.ns_coef += cf1.nanos - cf0.nanos
+        var qv = d.quant
+        if d.deferred {
+            if d.q_n + 1024usize > d.qpool.len { ret Unsupported }
+            qv = d.qpool[d.q_n..d.q_n + 1024usize]
+        }
+        let (res, coef_error) = CO.coeffs(&d.sd, d.ctx, d.tab, &cp, qv)
         if coef_error != ok { ret coef_error }
         rec_eob = res.eob
         rec_type = res.tx_type

@@ -64,56 +64,85 @@ fn read_partition(d: *D.Dec, r: i32, c: i32, bsize: usize, has_rows: bool, has_c
 
 fn store_block(d: *D.Dec) {
     let b = &d.b
+    var ye = b.bh4
+    if b.mi_row + ye > d.mi_rows { ye = d.mi_rows - b.mi_row }
+    var xe = b.bw4
+    if b.mi_col + xe > d.mi_cols { xe = d.mi_cols - b.mi_col }
+    let y_mode = u8(b.y_mode)
+    let uv_mode = u8(b.uv_mode)
+    let set_uv = b.ref_frame0 == i32(av1.INTRA_FRAME) && b.has_chroma
+    let ref0 = i8(b.ref_frame0)
+    let ref1 = i8(b.ref_frame1)
+    let is_inter = b.is_inter
+    let cgi = u8(b.comp_group_idx)
+    let cpi = u8(b.compound_idx)
+    let ip0 = u8(b.interp0)
+    let ip1 = u8(b.interp1)
+    let m0r = i16(b.mv0_row)
+    let m0c = i16(b.mv0_col)
+    let m1r = i16(b.mv1_row)
+    let m1c = i16(b.mv1_col)
+    var inter8 = 0u8
+    if is_inter { inter8 = 1u8 }
+    var skm = 0u8
+    if b.skip_mode { skm = 1u8 }
+    var sk = 0u8
+    if b.skip { sk = 1u8 }
+    let tx = u8(b.tx_size)
+    var mm = u8(b.motion_mode)
+    if b.interintra { mm = 9u8 }
+    let size = u8(b.mi_size)
+    let seg = u8(b.segment_id)
+    let dl0 = i8(d.delta_lf[0usize])
+    let dl1 = i8(d.delta_lf[1usize])
+    let dl2 = i8(d.delta_lf[2usize])
+    let dl3 = i8(d.delta_lf[3usize])
     var y = 0i32
-    while y < b.bh4 {
+    @nocheck {
+    while y < ye {
+        var at = D.mi_at(d, b.mi_row + y, b.mi_col)
         var x = 0i32
-        while x < b.bw4 {
-            let rr = b.mi_row + y
-            let cc = b.mi_col + x
-            if rr < d.mi_rows && cc < d.mi_cols {
-                let m = &d.mi[D.mi_at(d, rr, cc)]
-                m.y_mode = u8(b.y_mode)
-                if b.ref_frame0 == i32(av1.INTRA_FRAME) && b.has_chroma { m.uv_mode = u8(b.uv_mode) }
-                m.ref0 = i8(b.ref_frame0)
-                m.ref1 = i8(b.ref_frame1)
-                if b.is_inter {
-                    m.comp_group_idx = u8(b.comp_group_idx)
-                    m.compound_idx = u8(b.compound_idx)
-                    m.interp0 = u8(b.interp0)
-                    m.interp1 = u8(b.interp1)
-                    m.mv0_row = i16(b.mv0_row)
-                    m.mv0_col = i16(b.mv0_col)
-                    m.mv1_row = i16(b.mv1_row)
-                    m.mv1_col = i16(b.mv1_col)
-                }
-                if b.is_inter { m.is_inter = 1u8 } else { m.is_inter = 0u8 }
-                if b.skip_mode { m.skip_mode = 1u8 } else { m.skip_mode = 0u8 }
-                if b.skip { m.skip = 1u8 } else { m.skip = 0u8 }
-                let at = D.mi_at(d, rr, cc)
-                d.s_size[at] = u8(b.mi_size)
-                d.s_ymode[at] = u8(b.y_mode)
-                if b.is_inter { d.s_inter[at] = 1u8 } else { d.s_inter[at] = 0u8 }
-                d.s_ref[at * 2usize] = i8(b.ref_frame0)
-                d.s_ref[at * 2usize + 1usize] = i8(b.ref_frame1)
-                if b.is_inter {
-                    d.s_mv[at * 4usize] = i16(b.mv0_row)
-                    d.s_mv[at * 4usize + 1usize] = i16(b.mv0_col)
-                    d.s_mv[at * 4usize + 2usize] = i16(b.mv1_row)
-                    d.s_mv[at * 4usize + 3usize] = i16(b.mv1_col)
-                }
-                m.tx_size = u8(b.tx_size)
-                m.mmode = u8(b.motion_mode)
-                if b.interintra { m.mmode = 9u8 }
-                m.size = u8(b.mi_size)
-                m.segment_id = u8(b.segment_id)
-                m.delta_lf0 = i8(d.delta_lf[0usize])
-                m.delta_lf1 = i8(d.delta_lf[1usize])
-                m.delta_lf2 = i8(d.delta_lf[2usize])
-                m.delta_lf3 = i8(d.delta_lf[3usize])
+        while x < xe {
+            let m = &d.mi[at]
+            m.y_mode = y_mode
+            if set_uv { m.uv_mode = uv_mode }
+            m.ref0 = ref0
+            m.ref1 = ref1
+            if is_inter {
+                m.comp_group_idx = cgi
+                m.compound_idx = cpi
+                m.interp0 = ip0
+                m.interp1 = ip1
+                m.mv0_row = m0r
+                m.mv0_col = m0c
+                m.mv1_row = m1r
+                m.mv1_col = m1c
+                d.s_mv[at * 4usize] = m0r
+                d.s_mv[at * 4usize + 1usize] = m0c
+                d.s_mv[at * 4usize + 2usize] = m1r
+                d.s_mv[at * 4usize + 3usize] = m1c
             }
+            m.is_inter = inter8
+            m.skip_mode = skm
+            m.skip = sk
+            d.s_size[at] = size
+            d.s_ymode[at] = y_mode
+            d.s_inter[at] = inter8
+            d.s_ref[at * 2usize] = ref0
+            d.s_ref[at * 2usize + 1usize] = ref1
+            m.tx_size = tx
+            m.mmode = mm
+            m.size = size
+            m.segment_id = seg
+            m.delta_lf0 = dl0
+            m.delta_lf1 = dl1
+            m.delta_lf2 = dl2
+            m.delta_lf3 = dl3
+            at += 1usize
             x += 1i32
         }
         y += 1i32
+    }
     }
 }
 
@@ -184,7 +213,6 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     b.mv0_col = 0i32
     b.mv1_row = 0i32
     b.mv1_col = 0i32
-    let (tm0, cm0) = time.monotonic()
     if d.st.h.frame_is_intra {
         try M.intra_frame_mode_info(d)
     } else {
@@ -192,19 +220,7 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     }
     M.read_block_tx_size(d)
     if b.skip { reset_block_context(d) }
-    if b.mi_col >= 48i32 && b.mi_row < 16i32 && b.mi_col < 64i32 && d.dbg_n < 4000usize {
-        d.dbg[d.dbg_n] = b.mi_row
-        d.dbg[d.dbg_n + 1usize] = b.mi_col
-        d.dbg[d.dbg_n + 2usize] = i32(b.mi_size)
-        d.dbg[d.dbg_n + 3usize] = i32(b.y_mode)
-        d.dbg[d.dbg_n + 4usize] = b.ref_frame0
-        d.dbg[d.dbg_n + 5usize] = i32(b.motion_mode)
-        d.dbg[d.dbg_n + 6usize] = b.mv0_row
-        d.dbg[d.dbg_n + 7usize] = b.mv0_col
-        d.dbg_n += 8usize
-    }
     store_block(d)
-    let (tm1, cm1) = time.monotonic()
     if d.deferred {
         if d.brec_n >= d.brecs.len { ret Unsupported }
         let br = &d.brecs[d.brec_n]
@@ -220,12 +236,7 @@ fn decode_block(d: *D.Dec, r: i32, c: i32, sub: usize) -> err {
     } else {
         try R.compute_prediction(d)
     }
-    let (tm2, cm2) = time.monotonic()
     if !d.deferred { try R.residual(d) }
-    let (tm3, cm3) = time.monotonic()
-    d.ns_mode += tm1.nanos - tm0.nanos
-    d.ns_pred += tm2.nanos - tm1.nanos
-    d.ns_resid += tm3.nanos - tm2.nanos
     ret ok
 }
 
