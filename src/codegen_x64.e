@@ -951,6 +951,105 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
         try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
         ret vex_done(output)
     }
+    if nir.EXT_CMP_EQ <= ext && nir.EXT_FCMP_NE >= ext {
+        // A comparison in one sixteen-byte register: the lanes come out as all ones or
+        // zero, are narrowed to bytes by `packss*`, and `0 - byte` makes the mask's
+        // `1`. Equal and greater-than are the instructions; the unsigned order is the
+        // signed one on lanes with the sign bit flipped (the bytes use `pminub`), and
+        // `!=` and `<=` are the complements.
+        let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+        if left_error != ok { ret left_error }
+        try emit_x64.vector_load(output, 0usize, left, 16usize, 11usize)
+        let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
+        if right_error != ok { ret right_error }
+        try emit_x64.vector_load(output, 1usize, right, 16usize, 11usize)
+        let size = packed_lane_size(lane)
+        var invert = nir.EXT_CMP_NE == ext || nir.EXT_CMP_LE_S == ext
+        if nir.EXT_FCMP_EQ <= ext {
+            var predicate = 0usize
+            if nir.EXT_FCMP_LT == ext { predicate = 1usize }
+            if nir.EXT_FCMP_LE == ext { predicate = 2usize }
+            if nir.EXT_FCMP_NE == ext { predicate = 4usize }
+            var mandatory = 0usize
+            if lane == 5usize { mandatory = 102usize }
+            try emit_x64.sse(output, mandatory, false, 0usize, 1usize, 194usize)
+            try emit_x64.byte(output, predicate)
+        } else {
+            if nir.EXT_CMP_EQ == ext || nir.EXT_CMP_NE == ext {
+                try emit_x64.vector_op(output, 102usize, 0usize, 1usize, 116usize + lane)
+            }
+            if nir.EXT_CMP_GT_S == ext || nir.EXT_CMP_LE_S == ext {
+                try emit_x64.vector_op(output, 102usize, 0usize, 1usize, 100usize + lane)
+            }
+            if nir.EXT_CMP_GT_U == ext || nir.EXT_CMP_LE_U == ext {
+                invert = nir.EXT_CMP_GT_U == ext
+                if lane == 0usize {
+                    // a <= b unsigned is min(a, b) == a.
+                    try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+                    try emit_x64.vector_op(output, 102usize, 2usize, 1usize, 218usize)
+                    try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 116usize)
+                    try emit_x64.vector_op(output, 0usize, 0usize, 2usize, 40usize)
+                } else {
+                    // The sign bit of every lane, made without a constant, flipped in both.
+                    try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 118usize)
+                    try emit_x64.vector_shift(output, 6usize, 3usize, size * 8usize - 1usize, 112usize + lane)
+                    try emit_x64.vector_op(output, 102usize, 0usize, 3usize, 239usize)
+                    try emit_x64.vector_op(output, 102usize, 1usize, 3usize, 239usize)
+                    try emit_x64.vector_op(output, 102usize, 0usize, 1usize, 100usize + lane)
+                    invert = nir.EXT_CMP_LE_U == ext
+                }
+            }
+            if invert {
+                try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 118usize)
+                try emit_x64.vector_op(output, 102usize, 0usize, 3usize, 239usize)
+            }
+        }
+        if size == 8usize { try emit_x64.vector_shuffle(output, 0usize, 0usize, 8usize) }
+        if size >= 4usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 107usize) }
+        if size >= 2usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 99usize) }
+        try emit_x64.vector_op(output, 102usize, 2usize, 2usize, 239usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 248usize)
+        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.vector_store(output, destination, 2usize, 16usize / size, 11usize)
+        ret vex_done(output)
+    }
+    if nir.EXT_SELECT == ext {
+        // `select(m, yes, no)`: the mask's bytes of 0 or 1 widened to full lanes of
+        // all ones or zero, then `(yes & m) | (no & !m)`.
+        let size = packed_lane_size(lane)
+        let (mask_address, mask_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+        if mask_error != ok { ret mask_error }
+        try emit_x64.vector_load(output, 2usize, mask_address, 16usize / size, 11usize)
+        if size == 1usize {
+            try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 239usize)
+            try emit_x64.vector_op(output, 102usize, 3usize, 2usize, 248usize)
+            try emit_x64.vector_op(output, 0usize, 2usize, 3usize, 40usize)
+        } else {
+            try emit_x64.vector_op(output, 102usize, 2usize, 2usize, 96usize)
+            if size >= 4usize { try emit_x64.vector_op(output, 102usize, 2usize, 2usize, 97usize) }
+            var shift_opcode = 113usize
+            if size >= 4usize { shift_opcode = 114usize }
+            var width_bits = 15usize
+            if size >= 4usize { width_bits = 31usize }
+            try emit_x64.vector_shift(output, 6usize, 2usize, width_bits, shift_opcode)
+            try emit_x64.vector_shift(output, 4usize, 2usize, width_bits, shift_opcode)
+            if size == 8usize { try emit_x64.vector_shuffle(output, 2usize, 2usize, 80usize) }
+        }
+        let (yes, yes_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
+        if yes_error != ok { ret yes_error }
+        try emit_x64.vector_load(output, 0usize, yes, 16usize, 11usize)
+        let (no, no_error) = read_value(allocations, builder.operands[instruction.first_operand + 3usize], 10usize, output)
+        if no_error != ok { ret no_error }
+        try emit_x64.vector_load(output, 1usize, no, 16usize, 11usize)
+        try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 219usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 1usize, 223usize)
+        try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 235usize)
+        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.vector_store(output, destination, 0usize, 16usize, 11usize)
+        ret vex_done(output)
+    }
     if nir.EXT_SPLAT == ext {
         let (scalar, scalar_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
         if scalar_error != ok { ret scalar_error }
@@ -1024,8 +1123,9 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
 // ponytail: four scratch xmm registers per operation; a second register class in
 // `regalloc` keeps a vector live across operations and drops the two moves.
 fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
-    if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
+    if instruction.has_result { ret Unsupported }
     if nir.vector_ext(instruction.immediate) != 0usize { ret select_vector_ext(builder, current, instruction, allocations, output, context) }
+    if instruction.operand_count != 3usize { ret Unsupported }
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
     if operation >= 12usize { ret select_vector_shift(builder, current, instruction, allocations, output, context) }

@@ -524,8 +524,9 @@ fn simd_chunk_address(base: usize, offset: usize, ty: check.Type, builder: *nir.
 
 // One extended `VectorBinary` per chunk. `lane_size` is the operation's lane (the
 // source's); `scalar_b` says the second operand is a value and not an address.
-fn emit_simd_ext(ext: usize, lane_size: usize, chunk_bytes: usize, chunks: usize, ty: check.Type, dest: usize, a: usize, b: usize, scalar_b: bool, dest_step: usize, builder: *nir.Builder, token: lex.Token) -> err {
-    let packed = nir.vector_ext_immediate(ext, simd_lane_code(lane_size), chunk_bytes / lane_size)
+fn emit_simd_ext(ext: usize, lane_code: usize, chunk_bytes: usize, chunks: usize, ty: check.Type, dest: usize, a: usize, b: usize, scalar_b: bool, dest_step: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let lane_size = simd_code_size(lane_code)
+    let packed = nir.vector_ext_immediate(ext, lane_code, chunk_bytes / lane_size)
     var chunk = 0usize
     while chunk < chunks {
         let (dest_at, dest_error) = simd_chunk_address(dest, chunk * dest_step, ty, builder, token)
@@ -623,13 +624,13 @@ fn lower_simd_move(c: *check.Checker, call: check.CallInfo, storing: bool, argum
     let (last, last_error) = simd_index_address(data, length, last_index, size, element_type, builder, token)
     if last_error != ok { ret last_error }
     if storing {
-        try emit_simd_ext(nir.EXT_STORE, size, chunk_bytes, chunks, vector_type, first, arguments[2usize], arguments[2usize], false, chunk_bytes, builder, token)
+        try emit_simd_ext(nir.EXT_STORE, simd_lane_code(size), chunk_bytes, chunks, vector_type, first, arguments[2usize], arguments[2usize], false, chunk_bytes, builder, token)
         *handled = true
         ret ok
     }
     let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
     if slot_error != ok { ret slot_error }
-    try emit_simd_ext(nir.EXT_LOAD, size, chunk_bytes, chunks, vector_type, slot, first, first, false, chunk_bytes, builder, token)
+    try emit_simd_ext(nir.EXT_LOAD, simd_lane_code(size), chunk_bytes, chunks, vector_type, slot, first, first, false, chunk_bytes, builder, token)
     finish_simd_result(call, slot, true, results)
     *handled = true
         ret ok
@@ -642,7 +643,7 @@ fn lower_simd_splat(c: *check.Checker, call: check.CallInfo, arguments: []usize,
     if bytes < 16usize || bytes > 64usize || bytes % 16usize != 0usize { ret ok }
     let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
     if slot_error != ok { ret slot_error }
-    try emit_simd_ext(nir.EXT_SPLAT, size, 16usize, bytes / 16usize, vector_type, slot, arguments[0usize], arguments[0usize], true, 16usize, builder, token)
+    try emit_simd_ext(nir.EXT_SPLAT, simd_lane_code(size), 16usize, bytes / 16usize, vector_type, slot, arguments[0usize], arguments[0usize], true, 16usize, builder, token)
     finish_simd_result(call, slot, true, results)
     *handled = true
         ret ok
@@ -736,6 +737,104 @@ fn lower_simd_movemask(c: *check.Checker, call: check.CallInfo, arguments: []usi
         ret ok
 }
 
+fn simd_code_size(code: usize) -> usize {
+    if code == 0usize { ret 1usize }
+    if code == 1usize { ret 2usize }
+    if code == 2usize || code == 4usize { ret 4usize }
+    ret 8usize
+}
+
+// `cmp_*`: the lanes compared in sixteen-byte registers and each result lane narrowed to
+// the mask's byte of 0 or 1, so a chunk stores `16 / size` mask bytes. The six orders
+// are the instruction forms equal, not equal and greater (or its complement, less or
+// equal) with the operands swapped for the other two; a float lane has the four
+// predicates `cmpps` has, whose unordered answer is the IEEE one (false except `!=`).
+fn lower_simd_compare(c: *check.Checker, call: check.CallInfo, arguments: []usize, vector_type: check.Type, mask_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    if integer && size > 4usize { ret ok }
+    if float && size != 4usize && size != 8usize { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    let name = call.function.name
+    var swap = false
+    var ext = 0usize
+    if float {
+        if check.same(name, "cmp_eq") { ext = nir.EXT_FCMP_EQ }
+        if check.same(name, "cmp_ne") { ext = nir.EXT_FCMP_NE }
+        if check.same(name, "cmp_lt") { ext = nir.EXT_FCMP_LT }
+        if check.same(name, "cmp_le") { ext = nir.EXT_FCMP_LE }
+        if check.same(name, "cmp_gt") {
+            ext = nir.EXT_FCMP_LT
+            swap = true
+        }
+        if check.same(name, "cmp_ge") {
+            ext = nir.EXT_FCMP_LE
+            swap = true
+        }
+    } else {
+        if check.same(name, "cmp_eq") { ext = nir.EXT_CMP_EQ }
+        if check.same(name, "cmp_ne") { ext = nir.EXT_CMP_NE }
+        if check.same(name, "cmp_gt") || check.same(name, "cmp_lt") {
+            ext = nir.EXT_CMP_GT_U
+            if signed { ext = nir.EXT_CMP_GT_S }
+        }
+        if check.same(name, "cmp_le") || check.same(name, "cmp_ge") {
+            ext = nir.EXT_CMP_LE_U
+            if signed { ext = nir.EXT_CMP_LE_S }
+        }
+        if check.same(name, "cmp_lt") || check.same(name, "cmp_ge") { swap = true }
+    }
+    if ext == 0usize { ret ok }
+    var lane_code = simd_lane_code(size)
+    if float && size == 4usize { lane_code = 4usize }
+    if float && size == 8usize { lane_code = 5usize }
+    let (slot, slot_error) = vector_slot(c, mask_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    var left = arguments[0usize]
+    var right = arguments[1usize]
+    if swap {
+        left = arguments[1usize]
+        right = arguments[0usize]
+    }
+    try emit_simd_ext(ext, lane_code, 16usize, bytes / 16usize, vector_type, slot, left, right, false, 16usize / size, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
+// `select(m, yes, no)`: the mask's bytes widened to full lanes and a bitwise blend.
+fn lower_simd_select(c: *check.Checker, call: check.CallInfo, arguments: []usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    let packed = nir.vector_ext_immediate(nir.EXT_SELECT, simd_lane_code(size), 16usize / size)
+    var chunk = 0usize
+    while chunk < bytes / 16usize {
+        let (dest_at, dest_error) = simd_chunk_address(slot, chunk * 16usize, vector_type, builder, token)
+        if dest_error != ok { ret dest_error }
+        let (mask_at, mask_error) = simd_chunk_address(arguments[0usize], chunk * (16usize / size), vector_type, builder, token)
+        if mask_error != ok { ret mask_error }
+        let (yes_at, yes_error) = simd_chunk_address(arguments[1usize], chunk * 16usize, vector_type, builder, token)
+        if yes_error != ok { ret yes_error }
+        let (no_at, no_error) = simd_chunk_address(arguments[2usize], chunk * 16usize, vector_type, builder, token)
+        if no_error != ok { ret no_error }
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, vector_type, false, packed, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, dest_at)
+        try nir.add_operand(builder, instruction, mask_at)
+        try nir.add_operand(builder, instruction, yes_at)
+        try nir.add_operand(builder, instruction, no_at)
+        chunk += 1usize
+    }
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
 // The packed form of a call into `e.simd`, if it has one at this instruction level.
 // Returns whether it did; on `false` nothing was emitted.
 fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
@@ -760,9 +859,16 @@ fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arg
         ret lower_simd_splat(c, call, arguments, c.return_types[call.function.first_return], builder, token, results, handled)
     }
     if call.function.return_count != 1usize { ret ok }
+    if check.same(name, "select") {
+        if argument_count != 3usize { ret ok }
+        ret lower_simd_select(c, call, arguments, c.parameters[call.function.first_parameter + 1usize].ty, builder, token, results, handled)
+    }
     if check.same(name, "movemask") { ret lower_simd_movemask(c, call, arguments, argument_count, first, builder, token, results, handled) }
     if argument_count != 2usize { ret ok }
     let result_type = c.return_types[call.function.first_return]
+    if check.same(name, "cmp_eq") || check.same(name, "cmp_ne") || check.same(name, "cmp_lt") || check.same(name, "cmp_le") || check.same(name, "cmp_gt") || check.same(name, "cmp_ge") {
+        ret lower_simd_compare(c, call, arguments, first, result_type, builder, token, results, handled)
+    }
     let (lane_count, lane_size, signed, integer, float) = simd_lane_facts(c, first)
     if !integer { ret ok }
     var ext = 0usize
@@ -784,7 +890,7 @@ fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arg
     if chunks == 0usize { ret ok }
     let (slot, slot_error) = vector_slot(c, result_type, builder, token)
     if slot_error != ok { ret slot_error }
-    try emit_simd_ext(ext, lane_size, chunk_bytes, chunks, result_type, slot, arguments[0usize], arguments[1usize], false, chunk_bytes, builder, token)
+    try emit_simd_ext(ext, simd_lane_code(lane_size), chunk_bytes, chunks, result_type, slot, arguments[0usize], arguments[1usize], false, chunk_bytes, builder, token)
     finish_simd_result(call, slot, true, results)
     *handled = true
         ret ok

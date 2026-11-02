@@ -174,6 +174,17 @@ const EXT_SHUFFLE: usize = 22usize
 const EXT_MOVEMASK: usize = 23usize
 const EXT_ABSDIFF_U: usize = 24usize
 const EXT_ABSDIFF_S: usize = 25usize
+const EXT_CMP_EQ: usize = 26usize
+const EXT_CMP_NE: usize = 27usize
+const EXT_CMP_GT_S: usize = 28usize
+const EXT_CMP_LE_S: usize = 29usize
+const EXT_CMP_GT_U: usize = 30usize
+const EXT_CMP_LE_U: usize = 31usize
+const EXT_FCMP_EQ: usize = 32usize
+const EXT_FCMP_LT: usize = 33usize
+const EXT_FCMP_LE: usize = 34usize
+const EXT_FCMP_NE: usize = 35usize
+const EXT_SELECT: usize = 36usize
 
 fn vector_ext_immediate(ext: usize, lane: usize, lanes: usize) -> usize {
     ret ext * 8388608usize + lane * 256usize + lanes
@@ -207,6 +218,9 @@ fn vector_ext_supported(ext: usize, lane: usize, cpu_level: usize) -> bool {
     if EXT_SHUFFLE == ext { ret lane == 0usize && cpu_level >= 2usize }
     if EXT_ABSDIFF_U == ext { ret lane <= 1usize }
     if EXT_ABSDIFF_S == ext { ret lane == 1usize }
+    if EXT_CMP_EQ <= ext && EXT_CMP_LE_U >= ext { ret lane <= 2usize }
+    if EXT_FCMP_EQ <= ext && EXT_FCMP_NE >= ext { ret lane == 4usize || lane == 5usize }
+    if EXT_SELECT == ext { ret true }
     ret false
 }
 

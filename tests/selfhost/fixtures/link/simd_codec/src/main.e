@@ -315,7 +315,11 @@ fn shuffles[V: type](state: *u64, base: i32) {
             let block = i / 16usize * 16usize
             var want = 0u8
             if index.lanes[i] < 128u8 { want = a.lanes[block + usize(index.lanes[i] & 15u8)] }
-            if r.lanes[i] != want { os.exit(base) }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
             i += 1usize
         }
         round += 1usize
@@ -334,6 +338,256 @@ fn masks[V: type](state: *u64, base: i32) {
             i += 1usize
         }
         if bits != want { os.exit(base) }
+        round += 1usize
+    }
+}
+
+fn randomf[V: type](state: *u64) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        let r = next(state) % 6u64
+        var x = 0.0f64
+        if r == 1u64 { x = 1.5f64 }
+        if r == 2u64 { x = -1.5f64 }
+        if r == 3u64 { x = 2.0f64 }
+        if r == 4u64 { x = -0.0f64 }
+        v.lanes[i] = meta.element_type[V]()(x)
+        if r == 5u64 {
+            if mem.size_of[meta.element_type[V]()]() == 4usize {
+                v.lanes[i] = mem.bitcast[meta.element_type[V]()](2143289344u32)
+            } else {
+                v.lanes[i] = mem.bitcast[meta.element_type[V]()](9221120237041090560u64)
+            }
+        }
+        i += 1usize
+    }
+    ret v
+}
+
+fn compare_lanes[V: type](a: V, b: V, base: i32) {
+    let eq = simd.cmp_eq[V](a, b)
+    let ne = simd.cmp_ne[V](a, b)
+    let lt = simd.cmp_lt[V](a, b)
+    let le = simd.cmp_le[V](a, b)
+    let gt = simd.cmp_gt[V](a, b)
+    let ge = simd.cmp_ge[V](a, b)
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        if eq.lanes[i] != (a.lanes[i] == b.lanes[i]) { os.exit(base) }
+        if ne.lanes[i] != (a.lanes[i] != b.lanes[i]) { os.exit(base + 1) }
+        if lt.lanes[i] != (a.lanes[i] < b.lanes[i]) { os.exit(base + 2) }
+        if le.lanes[i] != (a.lanes[i] <= b.lanes[i]) { os.exit(base + 3) }
+        if gt.lanes[i] != (a.lanes[i] > b.lanes[i]) { os.exit(base + 4) }
+        if ge.lanes[i] != (a.lanes[i] >= b.lanes[i]) { os.exit(base + 5) }
+        i += 1usize
+    }
+}
+
+fn compares[V: type](state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[V](state)
+        var b = random[V](state)
+        if round % 4usize == 0usize { b = a }
+        compare_lanes[V](a, b, base)
+        round += 1usize
+    }
+}
+
+fn compares_float[V: type](state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        compare_lanes[V](randomf[V](state), randomf[V](state), base)
+        round += 1usize
+    }
+}
+
+fn selects_1(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[Vec[u8, 16]](state)
+        let b = random[Vec[u8, 16]](state)
+        var m: Mask[u8, 16] = zero
+        var i = 0usize
+        while i < 16usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[u8, 16]](m, a, b)
+        i = 0usize
+        while i < 16usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_2(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[Vec[i16, 8]](state)
+        let b = random[Vec[i16, 8]](state)
+        var m: Mask[i16, 8] = zero
+        var i = 0usize
+        while i < 8usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[i16, 8]](m, a, b)
+        i = 0usize
+        while i < 8usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_3(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[Vec[u32, 4]](state)
+        let b = random[Vec[u32, 4]](state)
+        var m: Mask[u32, 4] = zero
+        var i = 0usize
+        while i < 4usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[u32, 4]](m, a, b)
+        i = 0usize
+        while i < 4usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_4(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = randomf[Vec[f64, 2]](state)
+        let b = randomf[Vec[f64, 2]](state)
+        var m: Mask[f64, 2] = zero
+        var i = 0usize
+        while i < 2usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[f64, 2]](m, a, b)
+        i = 0usize
+        while i < 2usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_5(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[Vec[i64, 2]](state)
+        let b = random[Vec[i64, 2]](state)
+        var m: Mask[i64, 2] = zero
+        var i = 0usize
+        while i < 2usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[i64, 2]](m, a, b)
+        i = 0usize
+        while i < 2usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_6(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = random[Vec[u8, 64]](state)
+        let b = random[Vec[u8, 64]](state)
+        var m: Mask[u8, 64] = zero
+        var i = 0usize
+        while i < 64usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[u8, 64]](m, a, b)
+        i = 0usize
+        while i < 64usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
+        round += 1usize
+    }
+}
+
+fn selects_7(state: *u64, base: i32) {
+    var round = 0usize
+    while round < 200usize {
+        let a = randomf[Vec[f32, 8]](state)
+        let b = randomf[Vec[f32, 8]](state)
+        var m: Mask[f32, 8] = zero
+        var i = 0usize
+        while i < 8usize {
+            m.lanes[i] = (next(state) & 1u64) != 0u64
+            i += 1usize
+        }
+        let r = simd.select[Vec[f32, 8]](m, a, b)
+        i = 0usize
+        while i < 8usize {
+            var want = b.lanes[i]
+            if m.lanes[i] { want = a.lanes[i] }
+            if want == want {
+                if r.lanes[i] != want { os.exit(base) }
+            } else {
+                if r.lanes[i] == r.lanes[i] { os.exit(base) }
+            }
+            i += 1usize
+        }
         round += 1usize
     }
 }
@@ -383,5 +637,25 @@ fn main() {
     masks[Vec[u8, 16]](&state, 140)
     masks[Vec[u8, 32]](&state, 141)
     masks[Vec[u8, 64]](&state, 142)
+    compares[Vec[u8, 16]](&state, 150)
+    compares[Vec[i8, 16]](&state, 156)
+    compares[Vec[u16, 8]](&state, 162)
+    compares[Vec[i16, 8]](&state, 168)
+    compares[Vec[u32, 4]](&state, 174)
+    compares[Vec[i32, 4]](&state, 180)
+    compares[Vec[u8, 64]](&state, 186)
+    compares[Vec[i16, 32]](&state, 192)
+    compares[Vec[u32, 16]](&state, 198)
+    compares[Vec[i64, 2]](&state, 204)
+    compares_float[Vec[f32, 4]](&state, 210)
+    compares_float[Vec[f64, 2]](&state, 216)
+    compares_float[Vec[f32, 16]](&state, 222)
+    selects_1(&state, 230)
+    selects_2(&state, 231)
+    selects_3(&state, 232)
+    selects_4(&state, 233)
+    selects_5(&state, 234)
+    selects_6(&state, 235)
+    selects_7(&state, 236)
     os.exit(0)
 }

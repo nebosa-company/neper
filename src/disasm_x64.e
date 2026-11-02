@@ -928,6 +928,9 @@ fn packed_integer_mnemonic(second: usize) -> str {
     if second == 235usize { ret "por " }
     if second == 239usize { ret "pxor " }
     if second == 118usize { ret "pcmpeqd " }
+    if second == 100usize { ret "pcmpgtb " }
+    if second == 101usize { ret "pcmpgtw " }
+    if second == 102usize { ret "pcmpgtd " }
     if second == 116usize { ret "pcmpeqb " }
     if second == 117usize { ret "pcmpeqw " }
     // The multiplies the baseline builds out of, and the lanes moved between widths.
