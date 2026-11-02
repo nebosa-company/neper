@@ -24,7 +24,9 @@
 //   block_pred(wk, m, g, x, y, w, h, round0, round1, out)
 //        the scaling + block inter prediction of one reference into `out` (w*h, row major, unclipped values).
 //
-// Invalid: a block larger than 128, an empty frame, or a reference outside the 1/16 .. 2x scale range.
+// Invalid: a block larger than 128, an empty frame, a reference outside the 1/16 .. 2x scale range, or a slice
+// (reference data, destination, mask-free scratch) too short for the block: the hot loops run under @nocheck
+// after those extents were validated once per call.
 
 use e.mem
 
@@ -107,78 +109,356 @@ fn block_pred(wk: Work, m: Motion, g: Geom, x: i32, y: i32, w: i32, h: i32, roun
     let x_scale = ((i64(m.frame.width) << 14u32) + i64(g.cur_w / 2i32)) / i64(g.cur_w)
     let y_scale = ((i64(m.frame.height) << 14u32) + i64(g.cur_h / 2i32)) / i64(g.cur_h)
     if x_scale > 32768i64 || y_scale > 32768i64 || x_scale < 1024i64 || y_scale < 1024i64 { ret Invalid }
-    if x_scale == 16384i64 && y_scale == 16384i64 && round0 >= 1u32 && round0 <= 7u32 && round1 >= 1u32 && round0 + round1 <= 14u32 {
+    if x_scale == 16384i64 && y_scale == 16384i64 && g.bit_depth <= 12u32 && round0 >= 1u32 && round0 <= 7u32 && round1 >= 1u32 && round0 + round1 <= 14u32 {
         if usize(h + 7i32) * usize(w) > wk.inter.len || usize(w) * usize(h) > out.len { ret Invalid }
-        block_pred_unscaled(wk, m, g, x, y, w, h, round0, round1, out)
-        ret ok
+        ret block_pred_unscaled(wk.taps, wk.inter, m.frame.data, m.frame.stride, m.frame.width, m.frame.height, m.mv_row, m.mv_col, m.filter_y, m.filter_x, g.sub_x, g.sub_y, x, y, w, h, round0, round1, out)
     }
     ret block_pred_scaled(wk, m, g, x, y, w, h, round0, round1, out, x_scale, y_scale)
 }
 
+// The intermediate rows hold sample values plus a bias, so that two adjacent values can be read as
+// one i64 and multiplied by a tap in a single instruction: value + value' * 2^32 with both lanes
+// positive. A pass over rows (taps sum to 128) leaves lane = result + 128 * bias, which the caller
+// removes together with the rounding constant. Samples are at most 12 bits, so |result| < 2^21.
+const BIAS_H: i32 = 4194304i32
+const OFF_H: i32 = 536870912i32
+const BIAS_W: i32 = 131072i32
+const OFF_W: i32 = 16777216i32
+
 // With equal sizes the position is exact: start = P * 64 + 32 (P in 1/16 sample), step 1024, so the
-// taps are the same for every sample of the block and the whole-sample part is P >> 4.
-fn block_pred_unscaled(wk: Work, m: Motion, g: Geom, x: i32, y: i32, w: i32, h: i32, round0: u32, round1: u32, out: []i32) {
-    let px = (x << 4u32) + ((2i32 * m.mv_col) >> g.sub_x)
-    let py = (y << 4u32) + ((2i32 * m.mv_row) >> g.sub_y)
+// taps are the same for every sample of the block and the whole-sample part is P >> 4. The fast row
+// functions run without bounds checks; the extents they touch are validated here, once per call.
+fn block_pred_unscaled(taps: []i32, inter: []i32, data: []const u16, stride: usize, fw: i32, fh: i32, mv_row: i32, mv_col: i32, filter_y: i32, filter_x: i32, sub_x: u32, sub_y: u32, x: i32, y: i32, w: i32, h: i32, round0: u32, round1: u32, out: []i32) -> err {
+    let px = (x << 4u32) + ((2i32 * mv_col) >> sub_x)
+    let py = (y << 4u32) + ((2i32 * mv_row) >> sub_y)
     let ix = px >> 4u32
     let iy = py >> 4u32
     let fx = px & 15i32
     let fy = py & 15i32
-    let last_x = ((m.frame.width + i32(g.sub_x)) >> g.sub_x) - 1i32
-    let last_y = ((m.frame.height + i32(g.sub_y)) >> g.sub_y) - 1i32
-    let tbx = usize(small_filter(m.filter_x, w)) * 128usize + usize(fx) * 8usize
-    let tby = usize(small_filter(m.filter_y, h)) * 128usize + usize(fy) * 8usize
-    let data = m.frame.data
-    let stride = m.frame.stride
+    let last_x = ((fw + i32(sub_x)) >> sub_x) - 1i32
+    let last_y = ((fh + i32(sub_y)) >> sub_y) - 1i32
+    if usize(last_y) * stride + usize(last_x) + 1usize > data.len || taps.len < 768usize { ret Invalid }
+    if filter_x < 0i32 || filter_x > 5i32 || filter_y < 0i32 || filter_y > 5i32 { ret Invalid }
+    let fxi = small_filter(filter_x, w)
+    let fyi = small_filter(filter_y, h)
+    let tbx = usize(fxi) * 128usize + usize(fx) * 8usize
+    let tby = usize(fyi) * 128usize + usize(fy) * 8usize
     let sh0 = 7u32 - round0
     let add1 = 1i32 << (round1 - 1u32)
     let add0 = 1i32 << (round0 - 1u32)
     let wu = usize(w)
+    let x_in = ix >= 3i32 && ix + w + 3i32 <= last_x
     if fx == 0i32 && fy == 0i32 {
         let sh = 14u32 - round0 - round1
-        var r = 0i32
-        while r < h {
-            let row = usize(clip3(0i32, last_y, iy + r)) * stride
-            copy_row(data, row, ix, last_x, w, sh, out, usize(r) * wu)
-            r += 1i32
+        if ix >= 0i32 && ix + w - 1i32 <= last_x {
+            copy_rows(data, stride, last_y, ix, iy, wu, usize(h), sh, out)
+        } else {
+            var r = 0i32
+            while r < h {
+                let row = usize(clip3(0i32, last_y, iy + r)) * stride
+                copy_row(data, row, ix, last_x, w, sh, out, usize(r) * wu)
+                r += 1i32
+            }
         }
     } else if fy == 0i32 {
-        var r = 0i32
-        while r < h {
-            let row = usize(clip3(0i32, last_y, iy + r)) * stride
-            let o = usize(r) * wu
-            hrow_frac(data, row, ix, last_x, w, wk.taps, tbx, add0, round0, out, o)
-            var c = 0usize
-            while c < wu {
-                out[o + c] = ((out[o + c] << 7u32) + add1) >> round1
-                c += 1usize
-            }
-            r += 1i32
+        if x_in {
+            hpass_fast(data, stride, last_y, ix, iy, 0i32, h, wu, taps, tbx, fxi >= 4i32, add0, round0, out)
+        } else {
+            hpass_edge(data, stride, last_x, last_y, ix, iy, 0i32, h, w, taps, tbx, add0, round0, out)
         }
+        finish_h(out, wu * usize(h), add1, round1)
     } else if fx == 0i32 {
-        var rows: [8]usize = zero
-        var r = 0i32
-        while r < h {
-            var t = 0i32
-            while t < 8i32 {
-                rows[usize(t)] = usize(clip3(0i32, last_y, iy + r + t - 3i32)) * stride
-                t += 1i32
+        let xi = ix >= 0i32 && ix + w - 1i32 <= last_x
+        let y_in = iy >= 3i32 && iy + h + 3i32 <= last_y
+        if xi && y_in {
+            let v4 = fyi >= 4i32
+            var t_lo = 0i32
+            var t_hi = h + 7i32
+            if v4 {
+                t_lo = 2i32
+                t_hi = h + 5i32
             }
-            vsrc_row(data, rows[..], ix, last_x, w, wk.taps, tby, sh0, add1, round1, out, usize(r) * wu)
-            r += 1i32
+            widen_rows(data, stride, ix, iy - 3i32, t_lo, t_hi, wu, inter)
+            vinter_all(inter, wu, usize(h), taps, tby, v4, OFF_W, sh0, add1, round1, out)
+        } else {
+            var rows: [8]usize = zero
+            var r = 0i32
+            while r < h {
+                var t = 0i32
+                while t < 8i32 {
+                    rows[usize(t)] = usize(clip3(0i32, last_y, iy + r + t - 3i32)) * stride
+                    t += 1i32
+                }
+                vsrc_row(data, rows[..], ix, last_x, w, taps, tby, sh0, add1, round1, out, usize(r) * wu)
+                r += 1i32
+            }
         }
     } else {
-        var r = 0i32
-        while r < h + 7i32 {
-            let row = usize(clip3(0i32, last_y, iy + r - 3i32)) * stride
-            hrow_frac(data, row, ix, last_x, w, wk.taps, tbx, add0, round0, wk.inter, usize(r) * wu)
-            r += 1i32
+        var t_lo = 0i32
+        var t_hi = h + 7i32
+        let v4 = fyi >= 4i32
+        if v4 {
+            t_lo = 2i32
+            t_hi = h + 5i32
         }
-        var rr = 0i32
-        while rr < h {
-            vinter_row(wk.inter, wu, usize(rr), wk.taps, tby, add1, round1, out, usize(rr) * wu)
-            rr += 1i32
+        if x_in {
+            hpass_fast(data, stride, last_y, ix, iy - 3i32, t_lo, t_hi, wu, taps, tbx, fxi >= 4i32, add0, round0, inter)
+        } else {
+            hpass_edge(data, stride, last_x, last_y, ix, iy - 3i32, t_lo, t_hi, w, taps, tbx, add0, round0, inter)
         }
+        vinter_all(inter, wu, usize(h), taps, tby, v4, OFF_H, 0u32, add1, round1, out)
+    }
+    ret ok
+}
+
+fn hpass_edge(src: []const u16, stride: usize, last_x: i32, last_y: i32, ix: i32, y0: i32, t_lo: i32, t_hi: i32, w: i32, taps: []i32, tb: usize, add0: i32, r0: u32, dst: []i32) {
+    var t = t_lo
+    while t < t_hi {
+        let row = usize(clip3(0i32, last_y, y0 + t)) * stride
+        hrow_frac(src, row, ix, last_x, w, taps, tb, add0, r0, BIAS_H, dst, usize(t - t_lo) * usize(w))
+        t += 1i32
+    }
+}
+
+fn copy_rows(src: []const u16, stride: usize, last_y: i32, ix: i32, iy: i32, w: usize, h: usize, sh: u32, dst: []i32) {
+    var r = 0usize
+    while r < h {
+        let b = usize(clip3(0i32, last_y, iy + i32(r))) * stride + usize(ix)
+        let s = src[b..b + w]
+        let d = dst[r * w..r * w + w]
+        var c = 0usize
+        @nocheck {
+        while c + 4usize <= w {
+            d[c] = i32(s[c]) << sh
+            d[c + 1usize] = i32(s[c + 1usize]) << sh
+            d[c + 2usize] = i32(s[c + 2usize]) << sh
+            d[c + 3usize] = i32(s[c + 3usize]) << sh
+            c += 4usize
+        }
+        while c < w {
+            d[c] = i32(s[c]) << sh
+            c += 1usize
+        }
+        }
+        r += 1usize
+    }
+}
+
+fn widen_rows(src: []const u16, stride: usize, ix: i32, y0: i32, t_lo: i32, t_hi: i32, w: usize, dst: []i32) {
+    var t = t_lo
+    while t < t_hi {
+        let b = usize(y0 + t) * stride + usize(ix)
+        let s = src[b..b + w]
+        let d = dst[usize(t - t_lo) * w..usize(t - t_lo) * w + w]
+        var c = 0usize
+        @nocheck {
+        while c + 4usize <= w {
+            d[c] = i32(s[c]) + BIAS_W
+            d[c + 1usize] = i32(s[c + 1usize]) + BIAS_W
+            d[c + 2usize] = i32(s[c + 2usize]) + BIAS_W
+            d[c + 3usize] = i32(s[c + 3usize]) + BIAS_W
+            c += 4usize
+        }
+        while c < w {
+            d[c] = i32(s[c]) + BIAS_W
+            c += 1usize
+        }
+        }
+        t += 1i32
+    }
+}
+
+// (the vertical filter of a whole-sample row is the single tap 128)
+fn finish_h(buf: []i32, n: usize, add1: i32, r1: u32) {
+    let k = add1 - (BIAS_H << 7u32)
+    var c = 0usize
+    @nocheck {
+    while c + 4usize <= n {
+        buf[c] = ((buf[c] << 7u32) + k) >> r1
+        buf[c + 1usize] = ((buf[c + 1usize] << 7u32) + k) >> r1
+        buf[c + 2usize] = ((buf[c + 2usize] << 7u32) + k) >> r1
+        buf[c + 3usize] = ((buf[c + 3usize] << 7u32) + k) >> r1
+        c += 4usize
+    }
+    while c < n {
+        buf[c] = ((buf[c] << 7u32) + k) >> r1
+        c += 1usize
+    }
+    }
+}
+// Rows t_lo .. t_hi - 1 (source row y0 + t, clamped) of w outputs each, written to dst at (t - t_lo) * w as
+// value + BIAS_H. The columns ix - 3 .. ix + w + 3 must be inside the frame. tap4: only taps 2..5 are nonzero.
+// Two outputs per 64-bit product: output c needs tap k on sample c + k, output c + 1 needs tap k - 1 on
+// that same sample, so sample c + m is multiplied by (t_m | t_(m-1) << 32).
+fn hpass_fast(src: []const u16, stride: usize, last_y: i32, ix: i32, y0: i32, t_lo: i32, t_hi: i32, w: usize, taps: []i32, tb: usize, tap4: bool, add0: i32, r0: u32, dst: []i32) {
+    let t0 = i64(taps[tb])
+    let t1 = i64(taps[tb + 1usize])
+    let t2 = i64(taps[tb + 2usize])
+    let t3 = i64(taps[tb + 3usize])
+    let t4 = i64(taps[tb + 4usize])
+    let t5 = i64(taps[tb + 5usize])
+    let t6 = i64(taps[tb + 6usize])
+    let t7 = i64(taps[tb + 7usize])
+    let ini = i64(add0 + (BIAS_H << r0))
+    let init = ini + (ini << 32u32)
+    let col = usize(ix - 3i32)
+    var t = t_lo
+    if tap4 {
+        let p2 = t2
+        let p3 = t3 + (t2 << 32u32)
+        let p4 = t4 + (t3 << 32u32)
+        let p5 = t5 + (t4 << 32u32)
+        let p6 = t5 << 32u32
+        let u2 = taps[tb + 2usize]
+        let u3 = taps[tb + 3usize]
+        let u4 = taps[tb + 4usize]
+        let u5 = taps[tb + 5usize]
+        while t < t_hi {
+            let b0 = usize(clip3(0i32, last_y, y0 + t)) * stride + col
+            let s = src[b0..b0 + w + 7usize]
+            let o = usize(t - t_lo) * w
+            let d = dst[o..o + w]
+            var c = 0usize
+            @nocheck {
+            while c + 4usize <= w {
+                let a2 = i64(s[c + 2usize])
+                let a3 = i64(s[c + 3usize])
+                let a4 = i64(s[c + 4usize])
+                let a5 = i64(s[c + 5usize])
+                let a6 = i64(s[c + 6usize])
+                let a7 = i64(s[c + 7usize])
+                let a8 = i64(s[c + 8usize])
+                let q = init + p2 * a2 + p3 * a3 + p4 * a4 + p5 * a5 + p6 * a6
+                let r = init + p2 * a4 + p3 * a5 + p4 * a6 + p5 * a7 + p6 * a8
+                d[c] = i32(q) >> r0
+                d[c + 1usize] = i32(q >> 32u32) >> r0
+                d[c + 2usize] = i32(r) >> r0
+                d[c + 3usize] = i32(r >> 32u32) >> r0
+                c += 4usize
+            }
+            while c + 2usize <= w {
+                let q = init + p2 * i64(s[c + 2usize]) + p3 * i64(s[c + 3usize]) + p4 * i64(s[c + 4usize]) + p5 * i64(s[c + 5usize]) + p6 * i64(s[c + 6usize])
+                d[c] = i32(q) >> r0
+                d[c + 1usize] = i32(q >> 32u32) >> r0
+                c += 2usize
+            }
+            if c < w {
+                let u = u2 * i32(s[c + 2usize]) + u3 * i32(s[c + 3usize]) + u4 * i32(s[c + 4usize]) + u5 * i32(s[c + 5usize])
+                d[c] = ((u + add0) >> r0) + BIAS_H
+            }
+            }
+            t += 1i32
+        }
+    } else {
+        let p0 = t0
+        let p1 = t1 + (t0 << 32u32)
+        let p2 = t2 + (t1 << 32u32)
+        let p3 = t3 + (t2 << 32u32)
+        let p4 = t4 + (t3 << 32u32)
+        let p5 = t5 + (t4 << 32u32)
+        let p6 = t6 + (t5 << 32u32)
+        let p7 = t7 + (t6 << 32u32)
+        let p8 = t7 << 32u32
+        let u0 = taps[tb]
+        let u1 = taps[tb + 1usize]
+        let u2 = taps[tb + 2usize]
+        let u3 = taps[tb + 3usize]
+        let u4 = taps[tb + 4usize]
+        let u5 = taps[tb + 5usize]
+        let u6 = taps[tb + 6usize]
+        let u7 = taps[tb + 7usize]
+        while t < t_hi {
+            let b0 = usize(clip3(0i32, last_y, y0 + t)) * stride + col
+            let s = src[b0..b0 + w + 7usize]
+            let o = usize(t - t_lo) * w
+            let d = dst[o..o + w]
+            var c = 0usize
+            @nocheck {
+            while c + 4usize <= w {
+                let a0 = i64(s[c])
+                let a1 = i64(s[c + 1usize])
+                let a2 = i64(s[c + 2usize])
+                let a3 = i64(s[c + 3usize])
+                let a4 = i64(s[c + 4usize])
+                let a5 = i64(s[c + 5usize])
+                let a6 = i64(s[c + 6usize])
+                let a7 = i64(s[c + 7usize])
+                let a8 = i64(s[c + 8usize])
+                let a9 = i64(s[c + 9usize])
+                let a10 = i64(s[c + 10usize])
+                let q = init + p0 * a0 + p1 * a1 + p2 * a2 + p3 * a3 + p4 * a4 + p5 * a5 + p6 * a6 + p7 * a7 + p8 * a8
+                let r = init + p0 * a2 + p1 * a3 + p2 * a4 + p3 * a5 + p4 * a6 + p5 * a7 + p6 * a8 + p7 * a9 + p8 * a10
+                d[c] = i32(q) >> r0
+                d[c + 1usize] = i32(q >> 32u32) >> r0
+                d[c + 2usize] = i32(r) >> r0
+                d[c + 3usize] = i32(r >> 32u32) >> r0
+                c += 4usize
+            }
+            while c + 2usize <= w {
+                let q = init + p0 * i64(s[c]) + p1 * i64(s[c + 1usize]) + p2 * i64(s[c + 2usize]) + p3 * i64(s[c + 3usize]) + p4 * i64(s[c + 4usize]) + p5 * i64(s[c + 5usize]) + p6 * i64(s[c + 6usize]) + p7 * i64(s[c + 7usize]) + p8 * i64(s[c + 8usize])
+                d[c] = i32(q) >> r0
+                d[c + 1usize] = i32(q >> 32u32) >> r0
+                c += 2usize
+            }
+            if c < w {
+                let u = u0 * i32(s[c]) + u1 * i32(s[c + 1usize]) + u2 * i32(s[c + 2usize]) + u3 * i32(s[c + 3usize]) + u4 * i32(s[c + 4usize]) + u5 * i32(s[c + 5usize]) + u6 * i32(s[c + 6usize]) + u7 * i32(s[c + 7usize])
+                d[c] = ((u + add0) >> r0) + BIAS_H
+            }
+            }
+            t += 1i32
+        }
+    }
+}
+
+// inter: h + 7 rows (8-tap) or h + 3 rows starting at tap row 2 (4-tap) of w biased values (bias * 128 == off).
+// Result: (((sum - off) << sh) + add1) >> r1
+fn vinter_all(inter: []i32, w: usize, h: usize, taps: []i32, tb: usize, tap4: bool, off: i32, sh: u32, add1: i32, r1: u32, dst: []i32) {
+    let t0 = i64(taps[tb])
+    let t1 = i64(taps[tb + 1usize])
+    let t2 = i64(taps[tb + 2usize])
+    let t3 = i64(taps[tb + 3usize])
+    let t4 = i64(taps[tb + 4usize])
+    let t5 = i64(taps[tb + 5usize])
+    let t6 = i64(taps[tb + 6usize])
+    let t7 = i64(taps[tb + 7usize])
+    let k = add1 - (off << sh)
+    var rr = 0usize
+    @nocheck {
+    while rr < h {
+        let b0 = rr * w
+        let b1 = b0 + w
+        let b2 = b1 + w
+        let b3 = b2 + w
+        var c = 0usize
+        if tap4 {
+            while c + 2usize <= w {
+                let a = t2 * *mem.cast[*i64](&inter[b0 + c]) + t3 * *mem.cast[*i64](&inter[b1 + c]) + t4 * *mem.cast[*i64](&inter[b2 + c]) + t5 * *mem.cast[*i64](&inter[b3 + c])
+                dst[b0 + c] = ((i32(a) << sh) + k) >> r1
+                dst[b0 + c + 1usize] = ((i32(a >> 32u32) << sh) + k) >> r1
+                c += 2usize
+            }
+            if c < w {
+                let s = taps[tb + 2usize] * inter[b0 + c] + taps[tb + 3usize] * inter[b1 + c] + taps[tb + 4usize] * inter[b2 + c] + taps[tb + 5usize] * inter[b3 + c]
+                dst[b0 + c] = ((s << sh) + k) >> r1
+            }
+        } else {
+            let b4 = b3 + w
+            let b5 = b4 + w
+            let b6 = b5 + w
+            let b7 = b6 + w
+            while c + 2usize <= w {
+                let a = t0 * *mem.cast[*i64](&inter[b0 + c]) + t1 * *mem.cast[*i64](&inter[b1 + c]) + t2 * *mem.cast[*i64](&inter[b2 + c]) + t3 * *mem.cast[*i64](&inter[b3 + c]) + t4 * *mem.cast[*i64](&inter[b4 + c]) + t5 * *mem.cast[*i64](&inter[b5 + c]) + t6 * *mem.cast[*i64](&inter[b6 + c]) + t7 * *mem.cast[*i64](&inter[b7 + c])
+                dst[b0 + c] = ((i32(a) << sh) + k) >> r1
+                dst[b0 + c + 1usize] = ((i32(a >> 32u32) << sh) + k) >> r1
+                c += 2usize
+            }
+            if c < w {
+                let s = taps[tb] * inter[b0 + c] + taps[tb + 1usize] * inter[b1 + c] + taps[tb + 2usize] * inter[b2 + c] + taps[tb + 3usize] * inter[b3 + c] + taps[tb + 4usize] * inter[b4 + c] + taps[tb + 5usize] * inter[b5 + c] + taps[tb + 6usize] * inter[b6 + c] + taps[tb + 7usize] * inter[b7 + c]
+                dst[b0 + c] = ((s << sh) + k) >> r1
+            }
+        }
+        rr += 1usize
+    }
     }
 }
 
@@ -201,7 +481,7 @@ fn copy_row(src: []const u16, row: usize, ix: i32, last_x: i32, w: i32, sh: u32,
     }
 }
 
-fn hrow_frac(src: []const u16, row: usize, ix: i32, last_x: i32, w: i32, taps: []i32, tb: usize, add0: i32, r0: u32, dst: []i32, doff: usize) {
+fn hrow_frac(src: []const u16, row: usize, ix: i32, last_x: i32, w: i32, taps: []i32, tb: usize, add0: i32, r0: u32, bias: i32, dst: []i32, doff: usize) {
     let t0 = taps[tb]
     let t1 = taps[tb + 1usize]
     let t2 = taps[tb + 2usize]
@@ -218,7 +498,7 @@ fn hrow_frac(src: []const u16, row: usize, ix: i32, last_x: i32, w: i32, taps: [
             var b = row + usize(ix + c - 3i32)
             while c < cr {
                 let s = t0 * i32(src[b]) + t1 * i32(src[b + 1usize]) + t2 * i32(src[b + 2usize]) + t3 * i32(src[b + 3usize]) + t4 * i32(src[b + 4usize]) + t5 * i32(src[b + 5usize]) + t6 * i32(src[b + 6usize]) + t7 * i32(src[b + 7usize])
-                dst[doff + usize(c)] = (s + add0) >> r0
+                dst[doff + usize(c)] = ((s + add0) >> r0) + bias
                 b += 1usize
                 c += 1i32
             }
@@ -229,12 +509,11 @@ fn hrow_frac(src: []const u16, row: usize, ix: i32, last_x: i32, w: i32, taps: [
                 s += taps[tb + usize(t)] * i32(src[row + usize(clip3(0i32, last_x, ix + c - 3i32 + t))])
                 t += 1i32
             }
-            dst[doff + usize(c)] = (s + add0) >> r0
+            dst[doff + usize(c)] = ((s + add0) >> r0) + bias
             c += 1i32
         }
     }
 }
-
 fn vsrc_row(src: []const u16, rows: []usize, ix: i32, last_x: i32, w: i32, taps: []i32, tb: usize, sh: u32, add1: i32, r1: u32, dst: []i32, doff: usize) {
     let t0 = taps[tb]
     let t1 = taps[tb + 1usize]
@@ -271,32 +550,6 @@ fn vsrc_row(src: []const u16, rows: []usize, ix: i32, last_x: i32, w: i32, taps:
         }
     }
 }
-
-fn vinter_row(inter: []i32, w: usize, rr: usize, taps: []i32, tb: usize, add1: i32, r1: u32, dst: []i32, doff: usize) {
-    let t0 = taps[tb]
-    let t1 = taps[tb + 1usize]
-    let t2 = taps[tb + 2usize]
-    let t3 = taps[tb + 3usize]
-    let t4 = taps[tb + 4usize]
-    let t5 = taps[tb + 5usize]
-    let t6 = taps[tb + 6usize]
-    let t7 = taps[tb + 7usize]
-    let b0 = rr * w
-    let b1 = b0 + w
-    let b2 = b1 + w
-    let b3 = b2 + w
-    let b4 = b3 + w
-    let b5 = b4 + w
-    let b6 = b5 + w
-    let b7 = b6 + w
-    var c = 0usize
-    while c < w {
-        let s = t0 * inter[b0 + c] + t1 * inter[b1 + c] + t2 * inter[b2 + c] + t3 * inter[b3 + c] + t4 * inter[b4 + c] + t5 * inter[b5 + c] + t6 * inter[b6 + c] + t7 * inter[b7 + c]
-        dst[doff + c] = (s + add1) >> r1
-        c += 1usize
-    }
-}
-
 fn block_pred_scaled(wk: Work, m: Motion, g: Geom, x: i32, y: i32, w: i32, h: i32, round0: u32, round1: u32, out: []i32, x_scale: i64, y_scale: i64) -> err {
     let orig_x = (x << 4u32) + ((2i32 * m.mv_col) >> g.sub_x) + 8i32
     let orig_y = (y << 4u32) + ((2i32 * m.mv_row) >> g.sub_y) + 8i32
@@ -392,49 +645,194 @@ fn distance_weights(dist0: i32, dist1: i32) -> (i32, i32) {
     ret (i32(lk[i * 2usize + order]), i32(lk[i * 2usize + 1usize - order]))
 }
 
+// When the block is an exact copy of the reference (no scaling, whole-sample vector, inside the frame)
+// answers (true, index of the first sample in the reference data).
+fn int_src(len: usize, stride: usize, fw: i32, fh: i32, mv_row: i32, mv_col: i32, g: Geom) -> (bool, usize) {
+    if g.cur_w < 1i32 || g.cur_h < 1i32 || fw < 1i32 || fh < 1i32 { ret (false, 0usize) }
+    if fw != g.cur_w || fh != g.cur_h { ret (false, 0usize) }
+    let px = (g.x << 4u32) + ((2i32 * mv_col) >> g.sub_x)
+    let py = (g.y << 4u32) + ((2i32 * mv_row) >> g.sub_y)
+    if (px & 15i32) != 0i32 || (py & 15i32) != 0i32 { ret (false, 0usize) }
+    let ix = px >> 4u32
+    let iy = py >> 4u32
+    let last_x = ((fw + i32(g.sub_x)) >> g.sub_x) - 1i32
+    let last_y = ((fh + i32(g.sub_y)) >> g.sub_y) - 1i32
+    if ix < 0i32 || iy < 0i32 || ix + g.w - 1i32 > last_x || iy + g.h - 1i32 > last_y { ret (false, 0usize) }
+    if usize(last_y) * stride + usize(last_x) + 1usize > len { ret (false, 0usize) }
+    ret (true, usize(iy) * stride + usize(ix))
+}
+
+fn copy_block(src: []const u16, s0: usize, s_stride: usize, dst: []u16, dst_stride: usize, w: usize, h: usize, maxv: i32) {
+    var i = 0usize
+    while i < h {
+        let s = src[s0 + i * s_stride..s0 + i * s_stride + w]
+        let d = dst[i * dst_stride..i * dst_stride + w]
+        var j = 0usize
+        @nocheck {
+        while j + 4usize <= w {
+            d[j] = u16(clip3(0i32, maxv, i32(s[j])))
+            d[j + 1usize] = u16(clip3(0i32, maxv, i32(s[j + 1usize])))
+            d[j + 2usize] = u16(clip3(0i32, maxv, i32(s[j + 2usize])))
+            d[j + 3usize] = u16(clip3(0i32, maxv, i32(s[j + 3usize])))
+            j += 4usize
+        }
+        while j < w {
+            d[j] = u16(clip3(0i32, maxv, i32(s[j])))
+            j += 1usize
+        }
+        }
+        i += 1usize
+    }
+}
+
+// both whole-sample sources: the average / distance weighted blend reduces to plain shifts of the samples
+fn blend_int(a: []const u16, a0: usize, a_stride: usize, b: []const u16, b0: usize, b_stride: usize, dst: []u16, dst_stride: usize, w: usize, h: usize, maxv: i32, kind: i32, fwd: i32, bck: i32) {
+    var i = 0usize
+    while i < h {
+        let sa = a[a0 + i * a_stride..a0 + i * a_stride + w]
+        let sb = b[b0 + i * b_stride..b0 + i * b_stride + w]
+        let d = dst[i * dst_stride..i * dst_stride + w]
+        var j = 0usize
+        @nocheck {
+        if kind == KIND_AVERAGE {
+            while j + 4usize <= w {
+                d[j] = u16(clip3(0i32, maxv, (i32(sa[j]) + i32(sb[j]) + 1i32) >> 1u32))
+                d[j + 1usize] = u16(clip3(0i32, maxv, (i32(sa[j + 1usize]) + i32(sb[j + 1usize]) + 1i32) >> 1u32))
+                d[j + 2usize] = u16(clip3(0i32, maxv, (i32(sa[j + 2usize]) + i32(sb[j + 2usize]) + 1i32) >> 1u32))
+                d[j + 3usize] = u16(clip3(0i32, maxv, (i32(sa[j + 3usize]) + i32(sb[j + 3usize]) + 1i32) >> 1u32))
+                j += 4usize
+            }
+            while j < w {
+                d[j] = u16(clip3(0i32, maxv, (i32(sa[j]) + i32(sb[j]) + 1i32) >> 1u32))
+                j += 1usize
+            }
+        } else {
+            while j < w {
+                d[j] = u16(clip3(0i32, maxv, (fwd * i32(sa[j]) + bck * i32(sb[j]) + 8i32) >> 4u32))
+                j += 1usize
+            }
+        }
+        }
+        i += 1usize
+    }
+}
+
+fn comb_single(p0: []i32, w: usize, h: usize, maxv: i32, dst: []u16, dst_stride: usize) {
+    var i = 0usize
+    while i < h {
+        let s = p0[i * w..i * w + w]
+        let d = dst[i * dst_stride..i * dst_stride + w]
+        var j = 0usize
+        @nocheck {
+        while j + 4usize <= w {
+            d[j] = u16(clip3(0i32, maxv, s[j]))
+            d[j + 1usize] = u16(clip3(0i32, maxv, s[j + 1usize]))
+            d[j + 2usize] = u16(clip3(0i32, maxv, s[j + 2usize]))
+            d[j + 3usize] = u16(clip3(0i32, maxv, s[j + 3usize]))
+            j += 4usize
+        }
+        while j < w {
+            d[j] = u16(clip3(0i32, maxv, s[j]))
+            j += 1usize
+        }
+        }
+        i += 1usize
+    }
+}
+
+fn comb_avg(p0: []i32, p1: []i32, w: usize, h: usize, sh: u32, maxv: i32, dst: []u16, dst_stride: usize) {
+    let add = 1i32 << (sh - 1u32)
+    var i = 0usize
+    while i < h {
+        let s0 = p0[i * w..i * w + w]
+        let s1 = p1[i * w..i * w + w]
+        let d = dst[i * dst_stride..i * dst_stride + w]
+        var j = 0usize
+        @nocheck {
+        while j + 4usize <= w {
+            d[j] = u16(clip3(0i32, maxv, (s0[j] + s1[j] + add) >> sh))
+            d[j + 1usize] = u16(clip3(0i32, maxv, (s0[j + 1usize] + s1[j + 1usize] + add) >> sh))
+            d[j + 2usize] = u16(clip3(0i32, maxv, (s0[j + 2usize] + s1[j + 2usize] + add) >> sh))
+            d[j + 3usize] = u16(clip3(0i32, maxv, (s0[j + 3usize] + s1[j + 3usize] + add) >> sh))
+            j += 4usize
+        }
+        while j < w {
+            d[j] = u16(clip3(0i32, maxv, (s0[j] + s1[j] + add) >> sh))
+            j += 1usize
+        }
+        }
+        i += 1usize
+    }
+}
+
+fn comb_dist(p0: []i32, p1: []i32, w: usize, h: usize, sh: u32, fwd: i32, bck: i32, maxv: i32, dst: []u16, dst_stride: usize) {
+    let add = 1i32 << (sh - 1u32)
+    var i = 0usize
+    while i < h {
+        let s0 = p0[i * w..i * w + w]
+        let s1 = p1[i * w..i * w + w]
+        let d = dst[i * dst_stride..i * dst_stride + w]
+        var j = 0usize
+        @nocheck {
+        while j + 4usize <= w {
+            d[j] = u16(clip3(0i32, maxv, (fwd * s0[j] + bck * s1[j] + add) >> sh))
+            d[j + 1usize] = u16(clip3(0i32, maxv, (fwd * s0[j + 1usize] + bck * s1[j + 1usize] + add) >> sh))
+            d[j + 2usize] = u16(clip3(0i32, maxv, (fwd * s0[j + 2usize] + bck * s1[j + 2usize] + add) >> sh))
+            d[j + 3usize] = u16(clip3(0i32, maxv, (fwd * s0[j + 3usize] + bck * s1[j + 3usize] + add) >> sh))
+            j += 4usize
+        }
+        while j < w {
+            d[j] = u16(clip3(0i32, maxv, (fwd * s0[j] + bck * s1[j] + add) >> sh))
+            j += 1usize
+        }
+        }
+        i += 1usize
+    }
+}
+
 fn predict_inter(wk: Work, g: Geom, m0: Motion, m1: Motion, compound: bool, blend: Blend, dst: []u16, dst_stride: usize) -> err {
     let (r0, r1) = rounds(compound, g.bit_depth)
     let post = 14u32 - (r0 + r1)
     let maxv = (1i32 << g.bit_depth) - 1i32
-    try block_pred(wk, m0, g, g.x, g.y, g.w, g.h, r0, r1, wk.p0)
-    if compound { try block_pred(wk, m1, g, g.x, g.y, g.w, g.h, r0, r1, wk.p1) }
     let w = usize(g.w)
     let hh = usize(g.h)
+    if g.w >= 1i32 && g.h >= 1i32 && g.w <= 128i32 && g.h <= 128i32 && (hh - 1usize) * dst_stride + w <= dst.len && g.bit_depth <= 12u32 {
+        let (k0, a0) = int_src(m0.frame.data.len, m0.frame.stride, m0.frame.width, m0.frame.height, m0.mv_row, m0.mv_col, g)
+        if k0 && !compound {
+            copy_block(m0.frame.data, a0, m0.frame.stride, dst, dst_stride, w, hh, maxv)
+            ret ok
+        }
+        if k0 && compound && (blend.kind == KIND_AVERAGE || blend.kind == KIND_DISTANCE) {
+            let (k1, b0) = int_src(m1.frame.data.len, m1.frame.stride, m1.frame.width, m1.frame.height, m1.mv_row, m1.mv_col, g)
+            if k1 {
+                blend_int(m0.frame.data, a0, m0.frame.stride, m1.frame.data, b0, m1.frame.stride, dst, dst_stride, w, hh, maxv, blend.kind, blend.fwd, blend.bck)
+                ret ok
+            }
+        }
+    }
+    try block_pred(wk, m0, g, g.x, g.y, g.w, g.h, r0, r1, wk.p0)
+    if compound { try block_pred(wk, m1, g, g.x, g.y, g.w, g.h, r0, r1, wk.p1) }
+    if hh > 0usize && (hh - 1usize) * dst_stride + w > dst.len { ret Invalid }
     let p0 = wk.p0
     let p1 = wk.p1
-    let sx = g.sub_x != 0u32
-    let sy = g.sub_y != 0u32
-    var i = 0usize
-    while i < hh {
-        let o = i * w
-        let d = i * dst_stride
-        var j = 0usize
-        if !compound {
-            while j < w {
-                dst[d + j] = u16(clip3(0i32, maxv, p0[o + j]))
-                j += 1usize
-            }
-        } else if blend.kind == KIND_AVERAGE {
-            let sh = 1u32 + post
-            let add = 1i32 << (sh - 1u32)
-            while j < w {
-                dst[d + j] = u16(clip3(0i32, maxv, (p0[o + j] + p1[o + j] + add) >> sh))
-                j += 1usize
-            }
-        } else if blend.kind == KIND_DISTANCE {
-            let sh = 4u32 + post
-            let add = 1i32 << (sh - 1u32)
-            let fwd = blend.fwd
-            let bck = blend.bck
-            while j < w {
-                dst[d + j] = u16(clip3(0i32, maxv, (fwd * p0[o + j] + bck * p1[o + j] + add) >> sh))
-                j += 1usize
-            }
-        } else {
-            let sh = 6u32 + post
-            let add = 1i32 << (sh - 1u32)
-            let ms = blend.mask_stride
-            let mk_data = blend.mask
+    if !compound {
+        comb_single(p0, w, hh, maxv, dst, dst_stride)
+    } else if blend.kind == KIND_AVERAGE {
+        comb_avg(p0, p1, w, hh, 1u32 + post, maxv, dst, dst_stride)
+    } else if blend.kind == KIND_DISTANCE {
+        comb_dist(p0, p1, w, hh, 4u32 + post, blend.fwd, blend.bck, maxv, dst, dst_stride)
+    } else {
+        let sx = g.sub_x != 0u32
+        let sy = g.sub_y != 0u32
+        let sh = 6u32 + post
+        let add = 1i32 << (sh - 1u32)
+        let ms = blend.mask_stride
+        let mk_data = blend.mask
+        var i = 0usize
+        while i < hh {
+            let o = i * w
+            let d = i * dst_stride
+            var j = 0usize
             while j < w {
                 var mk = 0i32
                 if !sx && !sy {
@@ -447,8 +845,8 @@ fn predict_inter(wk: Work, g: Geom, m0: Motion, m1: Motion, compound: bool, blen
                 dst[d + j] = u16(clip3(0i32, maxv, (mk * p0[o + j] + (64i32 - mk) * p1[o + j] + add) >> sh))
                 j += 1usize
             }
+            i += 1usize
         }
-        i += 1usize
     }
     ret ok
 }
@@ -460,6 +858,33 @@ fn obmc_mask(len: i32, i: usize) -> i32 {
     if len == 8i32 { ret i32(tbl[6usize + i]) }
     if len == 16i32 { ret i32(tbl[14usize + i]) }
     ret i32(tbl[30usize + i])
+}
+
+fn blend_rows(p1: []i32, mt: []i32, pw: usize, ph: usize, pass: i32, maxv: i32, dst: []u16, at: usize, dst_stride: usize) {
+    var i = 0usize
+    @nocheck {
+    while i < ph {
+        let at0 = at + i * dst_stride
+        let o1 = i * pw
+        var j = 0usize
+        if pass == 1i32 {
+            while j < pw {
+                let mk = mt[j]
+                let o = clip3(0i32, maxv, p1[o1 + j])
+                dst[at0 + j] = u16((mk * i32(dst[at0 + j]) + (64i32 - mk) * o + 32i32) >> 6u32)
+                j += 1usize
+            }
+        } else {
+            let mk = mt[i]
+            while j < pw {
+                let o = clip3(0i32, maxv, p1[o1 + j])
+                dst[at0 + j] = u16((mk * i32(dst[at0 + j]) + (64i32 - mk) * o + 32i32) >> 6u32)
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    }
 }
 
 // pass 0: blend from above (mask by row), pass 1: from the left (mask by column)
@@ -475,31 +900,14 @@ fn predict_overlap(wk: Work, g: Geom, nb: Neighbor, pred_x: i32, pred_y: i32, pr
         mt[k] = obmc_mask(mask_len, k)
         k += 1usize
     }
+    if pred_x < g.x || pred_y < g.y { ret Invalid }
     let ox = usize(pred_x - g.x)
     let oy = usize(pred_y - g.y)
     let pw = usize(pred_w)
-    let p1 = wk.p1
-    var i = 0usize
-    while i < usize(pred_h) {
-        let at0 = (oy + i) * dst_stride + ox
-        var j = 0usize
-        if pass == 1i32 {
-            while j < pw {
-                let mk = mt[j]
-                let o = clip3(0i32, maxv, p1[i * pw + j])
-                dst[at0 + j] = u16((mk * i32(dst[at0 + j]) + (64i32 - mk) * o + 32i32) >> 6u32)
-                j += 1usize
-            }
-        } else {
-            let mk = mt[i]
-            while j < pw {
-                let o = clip3(0i32, maxv, p1[i * pw + j])
-                dst[at0 + j] = u16((mk * i32(dst[at0 + j]) + (64i32 - mk) * o + 32i32) >> 6u32)
-                j += 1usize
-            }
-        }
-        i += 1usize
-    }
+    let ph = usize(pred_h)
+    let at = oy * dst_stride + ox
+    if at + (ph - 1usize) * dst_stride + pw > dst.len { ret Invalid }
+    blend_rows(wk.p1, mt[..], pw, ph, pass, maxv, dst, at, dst_stride)
     ret ok
 }
 
