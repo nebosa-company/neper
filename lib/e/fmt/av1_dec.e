@@ -190,6 +190,7 @@ type Dec = struct {
     dbg_n: usize,
     ns_pred: i64,
     ns_resid: i64,
+    threads: usize,
     ns_mode: i64,
     ns_coef: i64,
     ns_txfm: i64,

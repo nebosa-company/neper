@@ -3,6 +3,7 @@
 
 use e.mem
 use e.time
+use e.thread
 use e.fmt.av1
 use e.fmt.av1_dec as D
 use e.fmt.av1_lf
@@ -51,7 +52,156 @@ fn gather(d: *D.Dec, s: *Scratch) {
     }
 }
 
-fn deblock(d: *D.Dec, s: *Scratch) -> err {
+type LfJob = struct {
+    p: *const av1_lf.LoopFilterParams,
+    f: *const av1_lf.LoopFilterFrame,
+    pr: *const av1_lf.Prepared,
+    from: usize,
+    to: usize,
+    cols: bool,
+    result: err,
+}
+
+fn lf_work(job: *LfJob) {
+    if job.cols {
+        job.result = av1_lf.filter_pass_cols(job.p, job.f, job.pr, job.from, job.to)
+    } else {
+        job.result = av1_lf.filter_pass_rows(job.p, job.f, job.pr, job.from, job.to)
+    }
+}
+
+// One plane and pass of the deblocking filter split into `workers` ranges of 4x4 rows or columns run on that many threads.
+fn lf_pass(a: *mem.Arena, p: *const av1_lf.LoopFilterParams, f: *const av1_lf.LoopFilterFrame, plane: u32, pass: u32, workers: usize) -> err {
+    let pr = av1_lf.loop_filter_plane_prepare(p, f, plane, pass)
+    var count = pr.rows4
+    if pass == 1u32 { count = pr.cols4 }
+    var n = workers
+    if n > count { n = count }
+    if n < 2usize {
+        if pass == 0u32 { ret av1_lf.filter_pass_rows(p, f, &pr, 0usize, count) }
+        ret av1_lf.filter_pass_cols(p, f, &pr, 0usize, count)
+    }
+    let mark = mem.mark(a)
+    let (jobs, jobs_error) = mem.alloc[LfJob](a, n)
+    if jobs_error != ok { ret jobs_error }
+    var i = 0usize
+    while i < n {
+        jobs[i] = LfJob { p: p, f: f, pr: &pr, from: i * count / n, to: (i + 1usize) * count / n, cols: pass == 1u32, result: ok }
+        i += 1usize
+    }
+    let (group, group_error) = thread.spawn_all[LfJob](a, lf_work, jobs, 1048576usize)
+    if group_error != ok {
+        mem.reset(a, mark)
+        ret group_error
+    }
+    let joined = thread.join_all(group)
+    var result = joined
+    i = 0usize
+    while i < n {
+        if jobs[i].result != ok { result = jobs[i].result }
+        i += 1usize
+    }
+    mem.reset(a, mark)
+    ret result
+}
+
+type CdefJob = struct {
+    p: av1_cdef.CdefParams,
+    idx: []const i8,
+    skips: []const u8,
+    src: av1_cdef.Planes,
+    dst: av1_cdef.Planes,
+    from: usize,
+    to: usize,
+}
+
+fn cdef_work(job: *CdefJob) {
+    av1_cdef.cdef_rows(job.p, job.idx, job.skips, job.src, job.dst, job.from, job.to)
+}
+
+fn cdef_threads(a: *mem.Arena, p: av1_cdef.CdefParams, idx: []const i8, skips: []const u8, src: av1_cdef.Planes, dst: av1_cdef.Planes, sb_rows: usize, workers: usize) -> err {
+    var n = workers
+    if n > sb_rows { n = sb_rows }
+    if n < 2usize {
+        av1_cdef.cdef_rows(p, idx, skips, src, dst, 0usize, sb_rows)
+        ret ok
+    }
+    let mark = mem.mark(a)
+    let (jobs, jobs_error) = mem.alloc[CdefJob](a, n)
+    if jobs_error != ok { ret jobs_error }
+    var i = 0usize
+    while i < n {
+        jobs[i] = CdefJob { p: p, idx: idx, skips: skips, src: src, dst: dst, from: i * sb_rows / n, to: (i + 1usize) * sb_rows / n }
+        i += 1usize
+    }
+    let (group, group_error) = thread.spawn_all[CdefJob](a, cdef_work, jobs, 1048576usize)
+    if group_error != ok {
+        mem.reset(a, mark)
+        ret group_error
+    }
+    let joined = thread.join_all(group)
+    mem.reset(a, mark)
+    ret joined
+}
+
+type LrJob = struct {
+    bit_depth: u32,
+    sub_x: u32,
+    sub_y: u32,
+    w: u32,
+    h: u32,
+    pre: []const u16,
+    cdef: []const u16,
+    out: []u16,
+    stride: usize,
+    unit: u32,
+    units: []const av1_lr.LrUnit,
+    from: u32,
+    to: u32,
+    scratch: []u8,
+    result: err,
+}
+
+fn lr_work(job: *LrJob) {
+    var arena = mem.arena_from(job.scratch)
+    job.result = av1_lr.restore_rows(&arena, job.bit_depth, job.sub_x, job.sub_y, job.w, job.h, job.pre, job.cdef, job.out, job.stride, job.unit, job.units, job.from, job.to)
+}
+
+fn lr_threads(a: *mem.Arena, bit_depth: u32, sx: u32, sy: u32, w: u32, h: u32, pre: []const u16, cdef: []const u16, out: []u16, stride: usize, unit: u32, units: []const av1_lr.LrUnit, workers: usize) -> err {
+    let stripes = av1_lr.count_stripes(h, sy)
+    var n = workers
+    if usize(stripes) < n { n = usize(stripes) }
+    if n < 2usize { ret av1_lr.restore_rows(a, bit_depth, sx, sy, w, h, pre, cdef, out, stride, unit, units, 0u32, stripes) }
+    let mark = mem.mark(a)
+    let (jobs, jobs_error) = mem.alloc[LrJob](a, n)
+    if jobs_error != ok { ret jobs_error }
+    var i = 0usize
+    while i < n {
+        let (scratch, scratch_error) = mem.alloc[u8](a, 524288usize)
+        if scratch_error != ok {
+            mem.reset(a, mark)
+            ret scratch_error
+        }
+        jobs[i] = LrJob { bit_depth: bit_depth, sub_x: sx, sub_y: sy, w: w, h: h, pre: pre, cdef: cdef, out: out, stride: stride, unit: unit, units: units, from: u32(usize(stripes) * i / n), to: u32(usize(stripes) * (i + 1usize) / n), scratch: scratch, result: ok }
+        i += 1usize
+    }
+    let (group, group_error) = thread.spawn_all[LrJob](a, lr_work, jobs, 1048576usize)
+    if group_error != ok {
+        mem.reset(a, mark)
+        ret group_error
+    }
+    let joined = thread.join_all(group)
+    var result = joined
+    i = 0usize
+    while i < n {
+        if jobs[i].result != ok { result = jobs[i].result }
+        i += 1usize
+    }
+    mem.reset(a, mark)
+    ret result
+}
+
+fn deblock(d: *D.Dec, s: *Scratch, a: *mem.Arena, workers: usize) -> err {
     let h = &d.st.h
     var p: av1_lf.LoopFilterParams = zero
     var i = 0usize
@@ -103,7 +253,15 @@ fn deblock(d: *D.Dec, s: *Scratch) -> err {
     f.stride0 = d.stride[0usize]
     f.stride1 = d.stride[1usize]
     f.stride2 = d.stride[2usize]
-    ret av1_lf.loop_filter(&p, &f)
+    var plane = 0u32
+    while plane < u32(d.st.seq.num_planes) {
+        if av1_lf.plane_enabled(&p, plane) {
+            try lf_pass(a, &p, &f, plane, 0u32, workers)
+            try lf_pass(a, &p, &f, plane, 1u32, workers)
+        }
+        plane += 1u32
+    }
+    ret ok
 }
 
 fn cdef_active(h: *const av1.Hdr) -> bool {
@@ -123,7 +281,7 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
     gather(d, s)
     if h.loop_filter_level[0usize] != 0i32 || h.loop_filter_level[1usize] != 0i32 {
         let (l0, lc0) = time.monotonic()
-        let e = deblock(d, s)
+        let e = deblock(d, s, a, d.threads)
         let (l1, lc1) = time.monotonic()
         d.ns_lf += l1.nanos - l0.nanos
         if e != ok { ret (0usize, e) }
@@ -159,7 +317,8 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
         dst.stride_y = d.stride[0usize]
         dst.stride_uv = d.stride[1usize]
         let (c0, cc0) = time.monotonic()
-        av1_cdef.cdef_frame(p, d.cdef_idx, s.skips, src, dst)
+        let cdef_error = cdef_threads(a, p, d.cdef_idx, s.skips, src, dst, usize((d.mi_rows + 15i32) >> 4u32), d.threads)
+        if cdef_error != ok { ret (0usize, cdef_error) }
         let (c1, cc1) = time.monotonic()
         d.ns_cdef += c1.nanos - c0.nanos
         result = 1usize
@@ -178,7 +337,7 @@ fn post_filter(d: *D.Dec, a: *mem.Arena, s: *Scratch, w1: [3][]u16, w2: [3][]u16
                     sx = u32(seq.subsampling_x)
                     sy = u32(seq.subsampling_y)
                 }
-                let e = av1_lr.restore_plane(a, u32(seq.bit_depth), sx, sy, u32(h.upscaled_width), u32(h.frame_height), d.frame[plane], cdef_src[plane], out[plane], d.stride[plane], u32(h.loop_restoration_size[plane]), d.lr_units[plane])
+                let e = lr_threads(a, u32(seq.bit_depth), sx, sy, u32(h.upscaled_width), u32(h.frame_height), d.frame[plane], cdef_src[plane], out[plane], d.stride[plane], u32(h.loop_restoration_size[plane]), d.lr_units[plane], d.threads)
                 if e != ok { ret (0usize, e) }
             } else {
                 var i = 0usize

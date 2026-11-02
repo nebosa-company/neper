@@ -634,16 +634,35 @@ fn filter_block(p: CdefParams, src: []const u16, dst: []u16, stride: usize, plan
 }
 
 fn cdef_frame(p: CdefParams, cdef_idx: []const i8, skips: []const u8, src: Planes, dst: Planes) {
+    cdef_rows(p, cdef_idx, skips, src, dst, 0usize, (usize(p.mi_rows) + 15usize) >> 4u32)
+}
+
+fn copy_rows(src: []const u16, dst: []u16, stride: usize, w: usize, y0: usize, y1: usize) {
+    if y1 <= y0 { ret }
+    copy_plane(src[y0 * stride..src.len], dst[y0 * stride..dst.len], stride, w, y1 - y0)
+}
+
+// Filters the superblock rows [sb_row_from, sb_row_to) (64 luma rows each, clamped to the picture) after
+// copying exactly those rows of src to dst. Superblock rows read src only and write only their own dst
+// rows, so any partition of 0..(mi_rows + 15) / 16 run in any order or concurrently gives the same dst as
+// cdef_frame. No shared state: the constrain tables live on the caller's stack.
+fn cdef_rows(p: CdefParams, cdef_idx: []const i8, skips: []const u8, src: Planes, dst: Planes, sb_row_from: usize, sb_row_to: usize) {
     let mi_rows = usize(p.mi_rows)
     let mi_cols = usize(p.mi_cols)
     let idx_stride = (mi_cols + 15usize) >> 4u32
-    copy_plane(src.y, dst.y, src.stride_y, mi_cols * 4usize, mi_rows * 4usize)
+    let r_from = sb_row_from * 16usize
+    var r_to = sb_row_to * 16usize
+    if r_to > mi_rows { r_to = mi_rows }
+    if r_from >= r_to { ret }
+    copy_rows(src.y, dst.y, src.stride_y, mi_cols * 4usize, r_from * 4usize, r_to * 4usize)
     let cw = (mi_cols * 4usize) >> p.sub_x
     let ch = (mi_rows * 4usize) >> p.sub_y
     let chroma = p.num_planes > 1u32
     if chroma {
-        copy_plane(src.u, dst.u, src.stride_uv, cw, ch)
-        copy_plane(src.v, dst.v, src.stride_uv, cw, ch)
+        let c0 = (r_from * 4usize) >> p.sub_y
+        let c1 = (r_to * 4usize) >> p.sub_y
+        copy_rows(src.u, dst.u, src.stride_uv, cw, c0, c1)
+        copy_rows(src.v, dst.v, src.stride_uv, cw, c0, c1)
     }
     let coeff_shift = p.bit_depth - 8u32
     let damping = i32(p.damping + coeff_shift)
@@ -657,8 +676,8 @@ fn cdef_frame(p: CdefParams, cdef_idx: []const i8, skips: []const u8, src: Plane
     let cph = i32(ch)
     let bw = i32(8u32 >> p.sub_x)
     let bh = i32(8u32 >> p.sub_y)
-    var r = 0usize
-    while r < mi_rows {
+    var r = r_from
+    while r < r_to {
         var c = 0usize
         while c < mi_cols {
             let idx = i32(cdef_idx[(r >> 4u32) * idx_stride + (c >> 4u32)])

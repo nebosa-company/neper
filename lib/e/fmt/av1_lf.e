@@ -18,6 +18,16 @@
 // [(row >> sub_y) * mi_cols + (col >> sub_x)] with sub_x/sub_y zero for plane 0. The sample planes
 // p0..p2 (stride in samples) must hold at least (mi_rows * 4) >> sub_y rows of (mi_cols * 4) >> sub_x
 // samples; frame_width / frame_height are the luma FrameWidth / FrameHeight.
+//
+// Threads. `loop_filter` is `loop_filter_plane_prepare` + `filter_pass_rows` / `filter_pass_cols` over
+// the whole plane, per enabled plane (`plane_enabled`). A caller may split a pass over workers: prepare once
+// per plane and pass, share the `Prepared` read-only, and give each worker a disjoint range of 4x4 rows
+// (pass 0) or columns (pass 1) of the plane. The ranges may run in any order or at once; pass 1 of a plane
+// starts only after every pass 0 range of that plane has finished. Planes are independent buffers.
+// Why disjoint ranges are safe (7.14.6): a vertical edge filters along sample rows and changes at most 6
+// samples (reads 7) on each side of the edge, all in its own row, so a pass 0 unit at plane row r4 touches
+// only sample rows 4*r4 .. 4*r4+3; the horizontal edge likewise only sample columns 4*c4 .. 4*c4+3.
+// Everything else read (MI arrays, tx sizes, Prepared) is not written.
 
 type LoopFilterParams = struct {
     levels: [4]i32,
@@ -455,7 +465,39 @@ fn fill_tabs(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, c:
     }
 }
 
-fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, plane: u32, pass: u32) -> bool {
+// Per plane and pass: everything the range workers share, read-only. It borrows the frame's sample
+// plane and tx-size array. rows4 / cols4 count the plane's 4x4 rows / columns that a pass covers.
+// `valid` is false when the frame, plane or pass is rejected; the range functions then answer Invalid.
+type Prepared = struct {
+    t: Tabs,
+    c: Ctx,
+    valid: bool,
+    row_end: usize,
+    col_end: usize,
+    rows4: usize,
+    cols4: usize
+}
+
+fn frame_ok(f: *const LoopFilterFrame) -> bool {
+    let mis = f.mi_rows * f.mi_cols
+    if f.mi_rows == 0usize || f.mi_cols == 0usize { ret false }
+    if f.bit_depth < 8u32 || f.bit_depth > 12u32 || f.num_planes < 1u32 || f.num_planes > 3u32 { ret false }
+    ret f.mi_sizes.len >= mis && f.skips.len >= mis && f.ref_frames.len >= mis && f.y_modes.len >= mis && f.segment_ids.len >= mis && f.delta_lfs.len >= mis * 4usize
+}
+
+fn plane_ok(f: *const LoopFilterFrame, plane: u32) -> bool {
+    ret plane < f.num_planes && check_dims(f, plane) && tx_sizes_of(f, plane).len >= f.mi_rows * f.mi_cols
+}
+
+// Whether `loop_filter` filters this plane: luma always, a chroma plane only with a non-zero level.
+fn plane_enabled(p: *const LoopFilterParams, plane: u32) -> bool {
+    ret plane == 0u32 || p.levels[usize(1u32 + plane)] != 0i32
+}
+
+// The strength tables and invariants of one plane and pass (0 = vertical edges, 1 = horizontal edges).
+fn loop_filter_plane_prepare(p: *const LoopFilterParams, f: *const LoopFilterFrame, plane: u32, pass: u32) -> Prepared {
+    var pr: Prepared = zero
+    if !frame_ok(f) || !plane_ok(f, plane) || pass > 1u32 { ret pr }
     var sub_x = 0u32
     var sub_y = 0u32
     var buf = f.p0
@@ -470,47 +512,78 @@ fn filter_pass(p: *const LoopFilterParams, f: *const LoopFilterFrame, t: *Tabs, 
             stride = f.stride2
         }
     }
-    let which = delta_index(p, plane, pass)
     var maxfs = 16i32
     if plane > 0u32 { maxfs = 8i32 }
-    let c = Ctx { plane: plane, pass: pass, sub_x: sub_x, sub_y: sub_y, mc: f.mi_cols, stride: stride, which: which, maxfs: maxfs, chroma: plane > 0u32, bd: f.bit_depth, one: 1i32 << (f.bit_depth - 8u32), buf: buf, txs: tx_sizes_of(f, plane) }
-    fill_tabs(p, f, t, &c)
-    let row_step = 1usize << sub_y
-    let col_step = 1usize << sub_x
-    var row_end = (f.frame_height + 3usize) >> 2u32
-    var col_end = (f.frame_width + 3usize) >> 2u32
-    if row_end > f.mi_rows { row_end = f.mi_rows }
-    if col_end > f.mi_cols { col_end = f.mi_cols }
-    var row = 0usize
-    var col_start = 0usize
-    if pass == 0u32 { col_start = col_step } else { row = row_step }
-    while row < row_end {
-        var col = col_start
-        while col < col_end {
-            if !edge(p, f, t, &c, row, col) { ret false }
+    pr.c = Ctx { plane: plane, pass: pass, sub_x: sub_x, sub_y: sub_y, mc: f.mi_cols, stride: stride, which: delta_index(p, plane, pass), maxfs: maxfs, chroma: plane > 0u32, bd: f.bit_depth, one: 1i32 << (f.bit_depth - 8u32), buf: buf, txs: tx_sizes_of(f, plane) }
+    fill_tabs(p, f, &pr.t, &pr.c)
+    pr.row_end = (f.frame_height + 3usize) >> 2u32
+    pr.col_end = (f.frame_width + 3usize) >> 2u32
+    if pr.row_end > f.mi_rows { pr.row_end = f.mi_rows }
+    if pr.col_end > f.mi_cols { pr.col_end = f.mi_cols }
+    pr.rows4 = (pr.row_end + (1usize << sub_y) - 1usize) >> sub_y
+    pr.cols4 = (pr.col_end + (1usize << sub_x) - 1usize) >> sub_x
+    pr.valid = true
+    ret pr
+}
+
+// Pass 0 over the plane's 4x4 rows [row4_from, row4_to) (clamped to pr.rows4). An edge of a 4x4 unit at
+// plane row r4 reads and writes only the four sample rows 4*r4 .. 4*r4+3 (7.14.6 changes at most 6 samples
+// each side along the row and reads 7), so workers on disjoint row ranges touch disjoint samples and
+// the rows' results do not depend on the order of the ranges. Within a range the edges go left to right as
+// in the whole-plane pass. Invalid: pr is not valid, is a pass 1 table, or a sample is out of reach.
+fn filter_pass_rows(p: *const LoopFilterParams, f: *const LoopFilterFrame, pr: *const Prepared, row4_from: usize, row4_to: usize) -> err {
+    if !pr.valid || pr.c.pass != 0u32 { ret Invalid }
+    var hi = row4_to
+    if hi > pr.rows4 { hi = pr.rows4 }
+    let col_step = 1usize << pr.c.sub_x
+    var r4 = row4_from
+    while r4 < hi {
+        let row = r4 << pr.c.sub_y
+        var col = col_step
+        while col < pr.col_end {
+            if !edge(p, f, &pr.t, &pr.c, row, col) { ret Invalid }
             col += col_step
+        }
+        r4 += 1usize
+    }
+    ret ok
+}
+
+// Pass 1 over the plane's 4x4 columns [col4_from, col4_to) (clamped to pr.cols4); the mirror image of
+// filter_pass_rows: an edge reads and writes only the four sample columns 4*c4 .. 4*c4+3. Pass 1 of a plane
+// may start only after pass 0 has finished on the whole plane. Within a range the edges go top to bottom.
+fn filter_pass_cols(p: *const LoopFilterParams, f: *const LoopFilterFrame, pr: *const Prepared, col4_from: usize, col4_to: usize) -> err {
+    if !pr.valid || pr.c.pass != 1u32 { ret Invalid }
+    var hi = col4_to
+    if hi > pr.cols4 { hi = pr.cols4 }
+    let row_step = 1usize << pr.c.sub_y
+    var row = row_step
+    while row < pr.row_end {
+        var c4 = col4_from
+        while c4 < hi {
+            if !edge(p, f, &pr.t, &pr.c, row, c4 << pr.c.sub_x) { ret Invalid }
+            c4 += 1usize
         }
         row += row_step
     }
-    ret true
+    ret ok
 }
 
 // Filters the whole frame in place (7.14.1). Invalid: the sample planes or MI arrays are too small.
 fn loop_filter(p: *const LoopFilterParams, f: *const LoopFilterFrame) -> err {
-    let mis = f.mi_rows * f.mi_cols
-    if f.mi_rows == 0usize || f.mi_cols == 0usize { ret Invalid }
-    if f.bit_depth < 8u32 || f.bit_depth > 12u32 || f.num_planes < 1u32 || f.num_planes > 3u32 { ret Invalid }
-    if f.mi_sizes.len < mis || f.skips.len < mis || f.ref_frames.len < mis || f.y_modes.len < mis || f.segment_ids.len < mis || f.delta_lfs.len < mis * 4usize { ret Invalid }
+    if !frame_ok(f) { ret Invalid }
     var plane = 0u32
     while plane < f.num_planes {
-        if !check_dims(f, plane) || tx_sizes_of(f, plane).len < mis { ret Invalid }
+        if !plane_ok(f, plane) { ret Invalid }
         plane += 1u32
     }
-    var t: Tabs = zero
     plane = 0u32
     while plane < f.num_planes {
-        if plane == 0u32 || p.levels[usize(1u32 + plane)] != 0i32 {
-            if !filter_pass(p, f, &t, plane, 0u32) || !filter_pass(p, f, &t, plane, 1u32) { ret Invalid }
+        if plane_enabled(p, plane) {
+            let p0 = loop_filter_plane_prepare(p, f, plane, 0u32)
+            try filter_pass_rows(p, f, &p0, 0usize, p0.rows4)
+            let p1 = loop_filter_plane_prepare(p, f, plane, 1u32)
+            try filter_pass_cols(p, f, &p1, 0usize, p1.cols4)
         }
         plane += 1u32
     }

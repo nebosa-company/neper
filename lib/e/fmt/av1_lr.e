@@ -364,7 +364,24 @@ fn wiener(sc: *const Scratch, u: *const LrUnit, w: usize, h: usize, bit_depth: u
     }
 }
 
+// Number of 64-row (luma) stripes of a plane: stripe n covers the plane rows
+// [max(0, (64n - 8) >> sub_y), min(plane_h, (64(n+1) - 8) >> sub_y)), the spec's StripeStartY/StripeEndY.
+fn count_stripes(frame_h: u32, sub_y: u32) -> u32 {
+    let ph = (frame_h + sub_y) >> sub_y
+    if ph == 0u32 { ret 0u32 }
+    ret (((ph << sub_y) + 8u32 + 63u32) >> 6u32)
+}
+
 fn restore_plane(a: *mem.Arena, bit_depth: u32, sub_x: u32, sub_y: u32, frame_w: u32, frame_h: u32, pre: []const u16, cdef: []const u16, out: []u16, stride: usize, unit_size: u32, units: []const LrUnit) -> err {
+    ret restore_rows(a, bit_depth, sub_x, sub_y, frame_w, frame_h, pre, cdef, out, stride, unit_size, units, 0u32, count_stripes(frame_h, sub_y))
+}
+
+// Restores the stripes [stripe_from, stripe_to) of a plane (clamped to count_stripes) and writes only
+// their rows of `out`, the plain copy of the cdef rows included. Stripes are independent: they read
+// `pre` and `cdef` only, so any partition of 0..count_stripes(frame_h, sub_y) into ranges, run in any
+// order or concurrently (one arena `a` per worker, it holds the ~100 KB scratch), gives the same `out` as
+// restore_plane. Ranges may be cut at any stripe boundary; unit boundaries need no alignment.
+fn restore_rows(a: *mem.Arena, bit_depth: u32, sub_x: u32, sub_y: u32, frame_w: u32, frame_h: u32, pre: []const u16, cdef: []const u16, out: []u16, stride: usize, unit_size: u32, units: []const LrUnit, stripe_from: u32, stripe_to: u32) -> err {
     let pw = i32((frame_w + sub_x) >> sub_x)
     let ph = i32((frame_h + sub_y) >> sub_y)
     if unit_size == 0u32 { ret Invalid }
@@ -374,7 +391,13 @@ fn restore_plane(a: *mem.Arena, bit_depth: u32, sub_x: u32, sub_y: u32, frame_w:
     if pw <= 0i32 || ph <= 0i32 { ret ok }
     let need = usize(ph - 1i32) * stride + usize(pw)
     if pre.len < need || cdef.len < need || out.len < need { ret Invalid }
-    copy_plane(cdef, out, stride, usize(pw), usize(ph))
+    var n_to = stripe_to
+    let n_all = count_stripes(frame_h, sub_y)
+    if n_to > n_all { n_to = n_all }
+    if stripe_from >= n_to { ret ok }
+    let row_lo = imax(0i32, (i32(stripe_from) * 64i32 - 8i32) >> sub_y)
+    let row_hi = imin(ph, (i32(n_to) * 64i32 - 8i32) >> sub_y)
+    copy_plane(cdef[usize(row_lo) * stride..cdef.len], out[usize(row_lo) * stride..out.len], stride, usize(pw), usize(row_hi - row_lo))
     var needs = false
     var q = 0usize
     while q < units.len {
@@ -413,8 +436,8 @@ fn restore_plane(a: *mem.Arena, bit_depth: u32, sub_x: u32, sub_y: u32, frame_w:
     let usz = i32(unit_size)
     let row_off = i32(8u32 >> sub_y)
     var src = Src { pre: pre, cdef: cdef, stride: stride, end_x: pw - 1i32, end_y: ph - 1i32, stripe_start: 0i32, stripe_end: 0i32 }
-    var n = 0i32
-    while true {
+    var n = i32(stripe_from)
+    while n < i32(n_to) {
         let start = (0i32 - 8i32 + n * 64i32) >> sub_y
         if start > ph - 1i32 { break }
         src.stripe_start = start
