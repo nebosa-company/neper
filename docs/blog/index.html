@@ -11,7 +11,10 @@
   <meta property="og:site_name" content="Neper">
   <meta property="og:title" content="Neper blog">
   <meta property="og:url" content="https://neper.dev/blog/">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="https://neper.dev/gtm/blog-og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
   <style>
@@ -182,7 +185,7 @@
       <h1>Notes from measuring Neper.</h1>
       <p class="lede">We hold the language to its claims with numbers from real sessions, including the columns where it loses.</p>
         <a class="blog-card" href="compiler-memory.html">
-          <img src="img/compiler-memory.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/compiler-memory.svg" width="1200" height="630" alt="A 1 TiB ceiling that costs 3 MiB. A program starts at 3 MiB of RAM; the compiler builds a million lines at 605 MB." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 30, 2026 · memory</span>
             <span class="blog-card-title">A 1 TiB ceiling that costs 3 MiB</span>
@@ -191,7 +194,7 @@
           </span>
         </a>
         <a class="blog-card" href="neper-webassembly.html">
-          <img src="img/neper-webassembly.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/neper-webassembly.svg" width="1200" height="630" alt="Neper writes WebAssembly itself. An 18,250-byte hello world, a 1.7 MB window, and 2,196 of 2,266 executables written by neper.wasm byte-identical to the native compiler. No LLVM, no second toolchain." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 27, 2026 · target</span>
             <span class="blog-card-title">Neper writes WebAssembly itself</span>
@@ -200,7 +203,7 @@
           </span>
         </a>
         <a class="blog-card" href="desktop-toolchains.html">
-          <img src="img/desktop-toolchains.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/desktop-toolchains.svg" width="1200" height="630" alt="Ten languages, one window. A real desktop app in under 3 MiB: 2.7 MiB on Windows x64, 2.8 MiB on Linux x64, 2.3 MiB on macOS arm64. One compiler, no runtime, no DLLs." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 23, 2026 · comparison</span>
             <span class="blog-card-title">Ten languages, one window: what you install</span>
@@ -209,7 +212,7 @@
           </span>
         </a>
         <a class="blog-card" href="why-neper-is-optimized-for-llms.html">
-          <img src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="Neper is built for the agent loop: search, generate, edit, check, repair." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 21, 2026 · design</span>
             <span class="blog-card-title">Why Neper is built for the agent loop</span>
@@ -218,7 +221,7 @@
           </span>
         </a>
         <a class="blog-card" href="cleartype-text.html">
-          <img src="img/cleartype-text.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/cleartype-text.svg" width="1200" height="630" alt="Text the way Windows draws it. Hinted ClearType, 77 captures checked, off pixels from 30,800 to 11,321." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 18, 2026 · engineering</span>
             <span class="blog-card-title">Text the way Windows draws it: ClearType in Neper</span>
@@ -227,7 +230,7 @@
           </span>
         </a>
         <a class="blog-card" href="charts-speed-and-png-size.html">
-          <img src="img/charts-speed-and-png-size.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/charts-speed-and-png-size.svg" width="1200" height="630" alt="SVG chart time in milliseconds per chart: Neper 3.9, base R 13.2, lattice 34.9, matplotlib 44.2, ggplot2 288.6." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 13, 2026 · engineering</span>
             <span class="blog-card-title">Faster charts, smaller SVG, and what we are doing about PNG size</span>
@@ -236,7 +239,7 @@
           </span>
         </a>
         <a class="blog-card" href="charts-field-guide.html">
-          <img src="img/charts-field-guide.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/charts-field-guide.svg" width="1200" height="630" alt="234 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 4, 2026 · library</span>
             <span class="blog-card-title">234 charts, and when to use each</span>
@@ -245,7 +248,7 @@
           </span>
         </a>
         <a class="blog-card" href="sc1m-eight-compilers.html">
-          <img src="img/sc1m-eight-compilers.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/sc1m-eight-compilers.svg" width="1200" height="630" alt="sc1m: 920,554 lines in 8 languages. Neper runs it in 47 ms from a 2.73 MiB binary; Dart compiles it fastest cold at 16,000 ms; Zig 0.16 never finishes." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 2, 2026 · measurement</span>
             <span class="blog-card-title">A million lines, eight compilers</span>
@@ -254,7 +257,7 @@
           </span>
         </a>
         <a class="blog-card" href="six-algorithms.html">
-          <img src="img/six-algorithms.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/six-algorithms.svg" width="1200" height="630" alt="Six algorithms we first skipped: backtracking regex, mixed-integer programming, model checking, AC-2001, crash dumps and integrated sign-on, each with its Neper module." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">September 29, 2026 · library</span>
             <span class="blog-card-title">Six algorithms we first skipped</span>
@@ -263,7 +266,7 @@
           </span>
         </a>
         <a class="blog-card" href="sqlserver-openssl.html">
-          <img src="img/sqlserver-openssl.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/sqlserver-openssl.svg" width="1200" height="630" alt="Bring your own OpenSSL. SQL Server scan on Windows, rows per second: Neper 707,389; Neper with OpenSSL 2,572,546; C 1,719,336; Go 987,118; Rust 1,942,502." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">September 29, 2026 · engineering</span>
             <span class="blog-card-title">Bring your own OpenSSL: SQL Server scans, three times faster</span>
@@ -272,7 +275,7 @@
           </span>
         </a>
         <a class="blog-card" href="e-db-drivers.html">
-          <img src="img/e-db-drivers.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/e-db-drivers.svg" width="1200" height="630" alt="One SQL contract, five drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 23.3 and 20.3, PostgreSQL 39.8 and 35.1, MySQL 102.6 and 90.2, ODBC 81.1 and 60.0, SQL Server 208.1 and 162.4." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">September 28, 2026 · engineering</span>
             <span class="blog-card-title">One SQL contract, five drivers</span>
@@ -281,7 +284,7 @@
           </span>
         </a>
         <a class="blog-card" href="neper-vs-dart-llm-cost.html">
-          <img src="img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="Neper vs Dart. Code written directly cost $0.155 per KB in Neper and $0.272 in Dart; all-in, $0.407 and $0.397." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">September 27, 2026 · measurement</span>
             <span class="blog-card-title">Neper vs Dart: what it costs an LLM to write each one</span>

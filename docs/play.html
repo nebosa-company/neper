@@ -13,7 +13,9 @@
   <meta property="og:title" content="Try Neper in your browser">
   <meta property="og:description" content="The Neper compiler, running as WebAssembly in the page: edit, compile, run. No install, nothing uploaded.">
   <meta property="og:url" content="https://neper.dev/play.html">
-  <meta property="og:image" content="https://neper.dev/gtm/get-started-poster.jpg">
+  <meta property="og:image" content="https://neper.dev/gtm/play-og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ux/components/bundle.css">
@@ -164,6 +166,8 @@
     textarea { background: transparent; color: transparent; caret-color: var(--on-surface); }
     textarea::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: transparent; }
     .note { margin-top: var(--space-6); }
+    .about { max-width: 720px; margin-top: var(--space-12); }
+    .about h3 { margin: var(--space-6) 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
     #hl .kw { color: var(--primary); }
     #hl .fn { color: var(--primary); font-weight: 600; }
     #hl .str { color: var(--tertiary); }
@@ -214,6 +218,32 @@
         <pre id="out" aria-label="Output" aria-live="polite"></pre>
       </div>
       <p class="note">This page hosts a small part of the standard library, enough for the samples: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.math</code>, <code>e.bytes</code>, <code>e.algo.sort</code>, <code>e.text.regex</code>, <code>e.fmt.json</code> and <code>e.crypto.hash</code>, with what they use. A <code>use</code> of any other module reports that it is missing. The full compiler and library are on <a href="https://github.com/nebosa-company/neper">GitHub</a>, and <a href="get-started.html">Get started</a> shows how to cross compile for any OS with no third-party toolchain.</p>
+      <section class="about">
+        <h2>What happens when you press Compile and run</h2>
+        <p>Your source goes to <code>neper.wasm</code>, Neper's own compiler built for WebAssembly. It checks the program, writes a <code>wasm32-wasi</code> module with its own emitter, and the page runs that module in a separate Worker. The compiler, the library files and your program all run in your browser, and nothing is uploaded.</p>
+
+        <h2>What the samples show</h2>
+        <ul>
+          <li><strong>hello.e</strong> is the smallest program: the root arena, the arguments and one <code>io.print</code>.</li>
+          <li><strong>strings.e</strong> builds, joins and formats strings in an arena, with the format string checked at compile time.</li>
+          <li><strong>squares.e</strong> is a loop, an accumulator and a formatted line.</li>
+          <li><strong>sort.e</strong> sorts in place with <code>e.algo.sort</code>, then again with a comparison function you pass.</li>
+          <li><strong>regex.e</strong> finds every match of a pattern and replaces them with <code>e.text.regex</code>, a Pike VM with no backtracking blow-up.</li>
+          <li><strong>json.e</strong> parses a document with <code>e.fmt.json</code> and walks the result.</li>
+          <li><strong>sha256.e</strong> hashes a string with <code>e.crypto.hash</code> and prints it as hex with <code>e.bytes</code>.</li>
+          <li><strong>math.e</strong> calls <code>floor</code>, <code>sin</code> and <code>pow</code> from <code>e.math</code>, which is Neper code and not libm.</li>
+        </ul>
+
+        <h2>Questions</h2>
+        <h3>Is my code sent anywhere?</h3>
+        <p>No. The page fetches the compiler and the library files it needs from neper.dev, and everything after that happens locally.</p>
+        <h3>Why is the first compile slower?</h3>
+        <p>The compiler asks for each library module the program uses, and the page fetches those files once. The browser caches them, so later compiles take a few hundred milliseconds.</p>
+        <h3>What does it compile to?</h3>
+        <p><code>wasm32-wasi</code>, which the page runs. The same compiler builds native Windows, Linux and macOS executables from one machine with no third-party toolchain; <a href="get-started.html">Get started</a> shows the commands.</p>
+        <h3>What are the limits?</h3>
+        <p>A program is stopped after 10 seconds, a compile after 30 seconds, and output is cut at 100 KB. The Stop button ends either at once. Only the library modules listed above are hosted here.</p>
+      </section>
     </main>
 
     <footer>
