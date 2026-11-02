@@ -156,7 +156,7 @@
     [hidden] { display: none !important; }
     .button[disabled] { opacity: .6; cursor: progress; }
     #status { color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
-    .panes { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-4); }
+    .panes { display: grid; grid-template-columns: 1fr; gap: var(--space-4); }
     .editor { position: relative; height: 380px; }
     textarea, #hl, #out { width: 100%; margin: 0; padding: var(--space-4); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); color: inherit; font: 400 14px/22px var(--font-mono); tab-size: 4; letter-spacing: 0; }
     textarea, #hl { position: absolute; inset: 0; height: 100%; white-space: pre; overflow: auto; resize: none; }
@@ -168,9 +168,10 @@
     #hl .fn { color: var(--primary); font-weight: 600; }
     #hl .str { color: var(--tertiary); }
     #hl .com { color: var(--on-surface-variant); }
-    #out { height: 380px; overflow: auto; white-space: pre-wrap; }
+    #out { min-height: 120px; max-height: 280px; overflow: auto; white-space: pre-wrap; }
+    #out:empty::before { content: "Output appears here."; color: var(--on-surface-variant); }
     #out.err { color: var(--tertiary); }
-    @media (max-width: 799px) { .panes { grid-template-columns: 1fr; } .editor, #out { height: 280px; } }
+    @media (max-width: 799px) { .editor { height: 280px; } }
   </style>
 </head>
 <body class="nu-page">
