@@ -949,6 +949,89 @@ fn packed_ext_instruction(ext: usize, lane: usize) -> (usize, bool, usize, bool)
     ret (0usize, false, 0usize, false)
 }
 
+// A vector object the allocator gave a vector register (xmm4 to xmm15 by index), and which xmm.
+fn vector_register_of(allocations: []regalloc.Allocation, value: usize) -> (usize, bool) {
+    if value < allocations.len && allocations[value].kind == .Vector { ret (4usize + allocations[value].index, true) }
+    ret (0usize, false)
+}
+
+// The vector at `value` -- the address of a slot, or a vector register -- into xmm `into` (`bytes` of it).
+fn vec_in(allocations: []regalloc.Allocation, value: usize, into: usize, bytes: usize, output: *emit_x64.Buffer) -> err {
+    let (held, is_held) = vector_register_of(allocations, value)
+    if is_held {
+        if bytes != 16usize || output.vex { ret Unsupported }
+        if held != into { ret emit_x64.vector_op(output, 0usize, into, held, 40usize) }
+        ret ok
+    }
+    let (address, address_error) = read_value(allocations, value, 10usize, output)
+    if address_error != ok { ret address_error }
+    ret emit_x64.vector_load(output, into, address, bytes, 11usize)
+}
+
+// Xmm `from` out to the vector at `value`.
+fn vec_out(allocations: []regalloc.Allocation, value: usize, from: usize, bytes: usize, output: *emit_x64.Buffer) -> err {
+    let (held, is_held) = vector_register_of(allocations, value)
+    if is_held {
+        if bytes != 16usize || output.vex { ret Unsupported }
+        if held != from { ret emit_x64.vector_op(output, 0usize, held, from, 40usize) }
+        ret ok
+    }
+    let (address, address_error) = read_value(allocations, value, 10usize, output)
+    if address_error != ok { ret address_error }
+    ret emit_x64.vector_store(output, address, from, bytes, 11usize)
+}
+
+// Which vector registers (bit i for xmm4 + i) the function's values are in.
+fn vector_registers_used(allocations: []regalloc.Allocation, value_count: usize) -> usize {
+    var mask = 0usize
+    var value = 0usize
+    while value < value_count && value < allocations.len {
+        if allocations[value].kind == .Vector { mask = mask | (1usize << allocations[value].index) }
+        value += 1usize
+    }
+    ret mask
+}
+
+fn popcount_small(mask: usize) -> usize {
+    var count = 0usize
+    var bit = 0usize
+    while bit < 12usize {
+        if ((mask >> bit) & 1usize) != 0usize { count += 1usize }
+        bit += 1usize
+    }
+    ret count
+}
+
+// Win64 keeps xmm6 to xmm15 across calls: the ones the function holds vectors in are saved in the prologue, two slots each, and
+// restored before the return. System V keeps none, so nothing is saved there.
+fn save_vector_registers(output: *emit_x64.Buffer, mask: usize, base: usize) -> err {
+    var bit = 0usize
+    var j = 0usize
+    while bit < 12usize {
+        if ((mask >> bit) & 1usize) != 0usize {
+            try emit_x64.stack_address(output, 10usize, base + 2usize * j + 1usize)
+            try emit_x64.vector_store(output, 10usize, 4usize + bit, 16usize, 11usize)
+            j += 1usize
+        }
+        bit += 1usize
+    }
+    ret ok
+}
+
+fn restore_vector_registers(output: *emit_x64.Buffer, mask: usize, base: usize) -> err {
+    var bit = 0usize
+    var j = 0usize
+    while bit < 12usize {
+        if ((mask >> bit) & 1usize) != 0usize {
+            try emit_x64.stack_address(output, 10usize, base + 2usize * j + 1usize)
+            try emit_x64.vector_load(output, 4usize + bit, 10usize, 16usize, 11usize)
+            j += 1usize
+        }
+        bit += 1usize
+    }
+    ret ok
+}
+
 // One extended packed operation (D5960): the sources come into xmm0 and xmm1 from their
 // slots, the one instruction (or the few of the absolute difference) runs, and the
 // result goes to the destination -- an address for the load and the store, a slot
@@ -963,12 +1046,22 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
     output.vex = ymm
     let destination_value = builder.operands[instruction.first_operand]
     if nir.EXT_LOAD == ext || nir.EXT_STORE == ext {
-        let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
-        if source_error != ok { ret source_error }
-        try emit_x64.vector_load(output, 0usize, source, bytes, 11usize)
-        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-        if destination_error != ok { ret destination_error }
-        try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+        // memory straight to the register that holds the vector, or the register straight to memory
+        let moved_value = builder.operands[instruction.first_operand + 1usize]
+        let (target_register, target_held) = vector_register_of(allocations, destination_value)
+        let (origin_register, origin_held) = vector_register_of(allocations, moved_value)
+        if bytes == 16usize && !ymm && target_held && !origin_held {
+            let (address, address_error) = read_value(allocations, moved_value, 10usize, output)
+            if address_error != ok { ret address_error }
+            ret emit_x64.vector_load(output, target_register, address, 16usize, 11usize)
+        }
+        if bytes == 16usize && !ymm && origin_held && !target_held {
+            let (address, address_error) = read_value(allocations, destination_value, 10usize, output)
+            if address_error != ok { ret address_error }
+            ret emit_x64.vector_store(output, address, origin_register, 16usize, 11usize)
+        }
+        try vec_in(allocations, builder.operands[instruction.first_operand + 1usize], 0usize, bytes, output)
+        try vec_out(allocations, destination_value, 0usize, bytes, output)
         ret vex_done(output)
     }
     if nir.EXT_CMP_EQ <= ext && nir.EXT_FCMP_NE >= ext {
@@ -977,12 +1070,8 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
         // `1`. Equal and greater-than are the instructions; the unsigned order is the
         // signed one on lanes with the sign bit flipped (the bytes use `pminub`), and
         // `!=` and `<=` are the complements.
-        let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
-        if left_error != ok { ret left_error }
-        try emit_x64.vector_load(output, 0usize, left, 16usize, 11usize)
-        let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
-        if right_error != ok { ret right_error }
-        try emit_x64.vector_load(output, 1usize, right, 16usize, 11usize)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 1usize], 0usize, 16usize, output)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 2usize], 1usize, 16usize, output)
         let size = packed_lane_size(lane)
         var invert = nir.EXT_CMP_NE == ext || nir.EXT_CMP_LE_S == ext
         if nir.EXT_FCMP_EQ <= ext {
@@ -1029,18 +1118,14 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
         if size >= 2usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 99usize) }
         try emit_x64.vector_op(output, 102usize, 2usize, 2usize, 239usize)
         try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 248usize)
-        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-        if destination_error != ok { ret destination_error }
-        try emit_x64.vector_store(output, destination, 2usize, 16usize / size, 11usize)
+        try vec_out(allocations, destination_value, 2usize, 16usize / size, output)
         ret vex_done(output)
     }
     if nir.EXT_SELECT == ext {
         // `select(m, yes, no)`: the mask's bytes of 0 or 1 widened to full lanes of
         // all ones or zero, then `(yes & m) | (no & !m)`.
         let size = packed_lane_size(lane)
-        let (mask_address, mask_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
-        if mask_error != ok { ret mask_error }
-        try emit_x64.vector_load(output, 2usize, mask_address, 16usize / size, 11usize)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 1usize], 2usize, 16usize / size, output)
         if size == 1usize {
             try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 239usize)
             try emit_x64.vector_op(output, 102usize, 3usize, 2usize, 248usize)
@@ -1056,18 +1141,12 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
             try emit_x64.vector_shift(output, 4usize, 2usize, width_bits, shift_opcode)
             if size == 8usize { try emit_x64.vector_shuffle(output, 2usize, 2usize, 80usize) }
         }
-        let (yes, yes_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
-        if yes_error != ok { ret yes_error }
-        try emit_x64.vector_load(output, 0usize, yes, 16usize, 11usize)
-        let (no, no_error) = read_value(allocations, builder.operands[instruction.first_operand + 3usize], 10usize, output)
-        if no_error != ok { ret no_error }
-        try emit_x64.vector_load(output, 1usize, no, 16usize, 11usize)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 2usize], 0usize, 16usize, output)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 3usize], 1usize, 16usize, output)
         try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 219usize)
         try emit_x64.vector_op(output, 102usize, 2usize, 1usize, 223usize)
         try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 235usize)
-        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-        if destination_error != ok { ret destination_error }
-        try emit_x64.vector_store(output, destination, 0usize, 16usize, 11usize)
+        try vec_out(allocations, destination_value, 0usize, 16usize, output)
         ret vex_done(output)
     }
     if nir.EXT_SPLAT == ext {
@@ -1081,14 +1160,33 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
         }
         if lane == 2usize || lane <= 1usize { try emit_x64.vector_shuffle(output, 0usize, 0usize, 0usize) }
         if lane == 3usize { try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 108usize) }
-        let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-        if destination_error != ok { ret destination_error }
-        try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+        try vec_out(allocations, destination_value, 0usize, bytes, output)
         ret vex_done(output)
     }
-    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
-    if left_error != ok { ret left_error }
-    try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
+    // A two-source operation whose result has a vector register is made in that register: the left source moved in (unless it is
+    // there), the right one a register or loaded into xmm1, and the one instruction.
+    if bytes == 16usize && !ymm && nir.EXT_MOVEMASK != ext && nir.EXT_ABSDIFF_U != ext && nir.EXT_ABSDIFF_S != ext {
+        let (target_register, target_held) = vector_register_of(allocations, destination_value)
+        if target_held {
+            let (direct_mandatory, direct_map38, direct_opcode, direct_known) = packed_ext_instruction(ext, lane)
+            let left_value = builder.operands[instruction.first_operand + 1usize]
+            let right_value = builder.operands[instruction.first_operand + 2usize]
+            let (left_register, left_held) = vector_register_of(allocations, left_value)
+            let (right_register, right_held) = vector_register_of(allocations, right_value)
+            if direct_known && !(right_held && right_register == target_register && !(left_held && left_register == target_register)) {
+                var source = 1usize
+                if right_held { source = right_register } else { try vec_in(allocations, right_value, 1usize, 16usize, output) }
+                try vec_in(allocations, left_value, target_register, 16usize, output)
+                if direct_map38 {
+                    try emit_x64.sse38(output, direct_mandatory, target_register, source, direct_opcode)
+                } else {
+                    try emit_x64.vector_op(output, direct_mandatory, target_register, source, direct_opcode)
+                }
+                ret ok
+            }
+        }
+    }
+    try vec_in(allocations, builder.operands[instruction.first_operand + 1usize], 0usize, bytes, output)
     if nir.EXT_MOVEMASK == ext {
         // `pmovmskb` answers the top bit of each byte in a general register; r11 is the
         // scratch no value is allocated to, and it is stored whole into the u64 slot.
@@ -1098,9 +1196,7 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
         try emit_x64.store_memory(output, destination, 11usize, 64usize)
         ret vex_done(output)
     }
-    let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
-    if right_error != ok { ret right_error }
-    try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
+    try vec_in(allocations, builder.operands[instruction.first_operand + 2usize], 1usize, bytes, output)
     var result = 0usize
     if nir.EXT_ABSDIFF_U == ext {
         // |a - b| = (a -sat b) | (b -sat a), the saturating subtract of the lane's width.
@@ -1128,9 +1224,7 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
             }
         }
     }
-    let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-    if destination_error != ok { ret destination_error }
-    try emit_x64.vector_store(output, destination, result, bytes, 11usize)
+    try vec_out(allocations, destination_value, result, bytes, output)
     ret vex_done(output)
 }
 
@@ -1163,13 +1257,27 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
     output.vex = ymm
     let destination_value = builder.operands[instruction.first_operand]
     let left_value = builder.operands[instruction.first_operand + 1usize]
-    let (left, left_error) = read_value(allocations, left_value, 10usize, output)
-    if left_error != ok { ret left_error }
+    // The plain two-source operations (not `~`, not the multiplies built from several instructions, not the floats, whose NaN
+    // lanes are canonicalised in xmm0) whose result has a vector register are made in that register.
+    if operation < 10usize && bytes == 16usize && !ymm && lane < 4usize && !(operation == 6usize && lane != 1usize) {
+        let (target_register, target_held) = vector_register_of(allocations, destination_value)
+        if target_held {
+            let right_value = builder.operands[instruction.first_operand + 2usize]
+            let (left_register, left_held) = vector_register_of(allocations, left_value)
+            let (right_register, right_held) = vector_register_of(allocations, right_value)
+            if !(right_held && right_register == target_register && !(left_held && left_register == target_register)) {
+                var source = 1usize
+                if right_held { source = right_register } else { try vec_in(allocations, right_value, 1usize, 16usize, output) }
+                try vec_in(allocations, left_value, target_register, 16usize, output)
+                ret emit_x64.vector_op(output, mandatory, target_register, source, opcode)
+            }
+        }
+    }
     // `~m` loads into xmm1 instead, because its compare reads the operand and its
     // subtraction has to answer in the register the store reads.
     var loaded = 0usize
     if operation == 11usize { loaded = 1usize }
-    try emit_x64.vector_load(output, loaded, left, bytes, 11usize)
+    try vec_in(allocations, left_value, loaded, bytes, output)
     if operation == 10usize {
         // `~v` is a `pxor` against all ones, which `pcmpeqd` on a register against
         // itself makes without reading the register or the image. Lowering repeats the
@@ -1187,9 +1295,7 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         try emit_x64.vector_op(output, 102usize, 1usize, 0usize, 116usize)
     }
     if operation < 10usize {
-        let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
-        if right_error != ok { ret right_error }
-        try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
+        try vec_in(allocations, builder.operands[instruction.first_operand + 2usize], 1usize, bytes, output)
     }
     // The three widths the baseline has no one multiply for and builds out of
     // `pmuludq` or `pmullw` instead; every other operation is the single instruction
@@ -1260,9 +1366,7 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     }
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
-    let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
-    if destination_error != ok { ret destination_error }
-    try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    try vec_out(allocations, destination_value, 0usize, bytes, output)
     ret vex_done(output)
 }
 
@@ -1291,9 +1395,7 @@ fn select_vector_shift(builder: *nir.Builder, current: nir.Function, instruction
     if (bytes != 16usize && !ymm) || lane == 0usize || lane > 3usize { ret Unsupported }
     if operation == 14usize && lane == 3usize { ret Unsupported }
     output.vex = ymm
-    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
-    if left_error != ok { ret left_error }
-    try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
+    try vec_in(allocations, builder.operands[instruction.first_operand + 1usize], 0usize, bytes, output)
     if nir.vector_shift_in_register(instruction.immediate) {
         let width = packed_lane_size(lane) * 8usize
         let (given, given_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
@@ -1318,9 +1420,7 @@ fn select_vector_shift(builder: *nir.Builder, current: nir.Function, instruction
         if operation == 14usize { extension = 4usize }
         try emit_x64.vector_shift(output, extension, 0usize, count, 112usize + lane)
     }
-    let (destination, destination_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
-    if destination_error != ok { ret destination_error }
-    try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    try vec_out(allocations, builder.operands[instruction.first_operand], 0usize, bytes, output)
     ret vex_done(output)
 }
 
@@ -2885,6 +2985,11 @@ fn select_zero(builder: *nir.Builder, instruction: nir.Instruction, allocations:
     }
     if instruction.operand_count != 1usize { ret Unsupported }
     let address = builder.operands[instruction.first_operand]
+    let (held, is_held) = vector_register_of(allocations, address)
+    if is_held {
+        if instruction.immediate != 16usize { ret Unsupported }
+        ret emit_x64.vector_op(output, 102usize, held, held, 239usize)
+    }
     let (address_register, address_error) = read_value(allocations, address, 10usize, output)
     if address_error != ok { ret InvalidMemoryAddress }
     ret emit_x64.zero_memory(output, address_register, instruction.immediate)
@@ -3864,12 +3969,16 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     // preserve area and the call area, which has to stay at the bottom (D235).
     let saved_base = preserve_base + preserve_count
     let saved_count = callee_saved_count(allocations, current.value_count)
-    let frame_slots = saved_base + saved_count + call_area_count
+    var vector_mask = 0usize
+    if abi == .Windows { vector_mask = vector_registers_used(allocations, current.value_count) & 4092usize }
+    let vector_base = saved_base + saved_count
+    let frame_slots = vector_base + 2usize * popcount_small(vector_mask) + call_area_count
     // Every function has a frame, even one with no slots: the backtrace walks the rbp
     // chain, and a frameless function that calls -- or traps -- would be no frame in
     // it, and its caller would be skipped (D212).
     try emit_x64.function_prologue(output, frame_slots)
     try save_callee_registers(output, saved_base, saved_count)
+    try save_vector_registers(output, vector_mask, vector_base)
     try prologue_parameters(builder, current, abi, stack_slots, parameters, context)
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
@@ -3944,10 +4053,13 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 let slot = local_base + stack_cursor + stack_object_slots(instruction) - 1usize
                 stack_cursor += stack_object_slots(instruction)
                 if instruction.result < context.stack_value_slots.len { context.stack_value_slots[instruction.result] = slot + 1usize }
-                let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
-                if destination_error != ok { ret destination_error }
-                try emit_x64.stack_address(output, destination, slot)
-                try store_result(allocations, instruction.result, destination, output)
+                let (vector_held, vector_is_held) = vector_register_of(allocations, instruction.result)
+                if !vector_is_held {
+                    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+                    if destination_error != ok { ret destination_error }
+                    try emit_x64.stack_address(output, destination, slot)
+                    try store_result(allocations, instruction.result, destination, output)
+                }
             } else {
             if instruction.opcode == .GlobalAddress {
                 // `lea` from the instruction pointer, with the displacement left for whoever
@@ -3981,10 +4093,23 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             } else {
             if instruction.opcode == .Copy {
                 if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
-                let copy_mask = preserve_mask(builder, current, instruction, 17usize, false, context)
-                try save_live_registers(output, copy_mask, preserve_base, preserve_count, context)
                 let destination_value = builder.operands[instruction.first_operand]
                 let source_value = builder.operands[instruction.first_operand + 1usize]
+                let (destination_held, destination_is_held) = vector_register_of(allocations, destination_value)
+                let (source_held, source_is_held) = vector_register_of(allocations, source_value)
+                if destination_is_held || source_is_held {
+                    // a vector with a vector register at one end or both: one sixteen-byte move
+                    if instruction.immediate != 16usize { ret Unsupported }
+                    if destination_is_held && source_is_held {
+                        if destination_held != source_held { try emit_x64.vector_op(output, 0usize, destination_held, source_held, 40usize) }
+                    } else if destination_is_held {
+                        try vec_in(allocations, source_value, destination_held, 16usize, output)
+                    } else {
+                        try vec_out(allocations, destination_value, source_held, 16usize, output)
+                    }
+                } else {
+                let copy_mask = preserve_mask(builder, current, instruction, 17usize, false, context)
+                try save_live_registers(output, copy_mask, preserve_base, preserve_count, context)
                 let (destination_source, destination_error) = read_value(allocations, destination_value, 10usize, output)
                 if destination_error != ok { ret destination_error }
                 if destination_source != 10usize { try emit_x64.mov_register(output, 10usize, destination_source) }
@@ -4009,6 +4134,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
                 }
                 try restore_live_registers(output, copy_mask, preserve_base, preserve_count, context)
+                }
             } else {
             if instruction.opcode == .Load {
                 if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
@@ -4481,6 +4607,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         }
                     }
                     try restore_callee_registers(output, saved_base, saved_count)
+                    try restore_vector_registers(output, vector_mask, vector_base)
                     try emit_x64.function_epilogue(output)
                 } else {
                     if instruction.opcode == .VectorBinary {

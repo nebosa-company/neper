@@ -12,6 +12,8 @@ type AllocationKind = enum u8 {
     Invalid,
     Register,
     Stack,
+    // A sixteen-byte vector object held in a vector register (xmm8 to xmm15 by `index` 0 to 7), never in memory.
+    Vector,
 }
 
 type LiveRange = struct {
@@ -27,6 +29,11 @@ type LiveRange = struct {
 // The registers a call clobbers come first in the pool: x64's five (`codegen_x64`'s
 // `caller_saved_count`), which this module cannot import.
 const CALLER_SAVED: usize = 5usize
+
+// The vector registers the allocator hands out, by index from xmm4: xmm4 to xmm15. xmm0 to xmm3 are the selection's scratch; xmm4 to
+// xmm7 are also the narrow float (f16, bf16) sequences', so a function that has one of those is given xmm8 to xmm15 only.
+const VECTOR_REGISTERS: usize = 12usize
+const VECTOR_FIRST_WIDE: usize = 4usize
 
 type Allocation = struct {
     kind: AllocationKind,
@@ -704,7 +711,7 @@ fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize,
     if capacity > 18446744073709551614usize / (register_count * 2usize) { ret (0usize, Capacity) }
     let (heaps, heaps_error) = mem.alloc[usize](a, register_count * capacity * 2usize + 1usize)
     if heaps_error != ok { ret (0usize, heaps_error) }
-    let (weights, weights_error) = mem.alloc[usize](a, capacity + 2usize * function.instruction_count + 5usize)
+    let (weights, weights_error) = mem.alloc[usize](a, 3usize * capacity + 2usize * function.instruction_count + 8usize)
     if weights_error != ok { ret (0usize, weights_error) }
     let (slots, allocate_error) = allocate_with(builder, function, register_count, ranges, allocations, heaps, capacity, weights)
     mem.reset(a, mark)
@@ -775,6 +782,114 @@ fn note_loop(builder: *nir.Builder, function: nir.Function, opens: []usize, clos
     ret ok
 }
 
+// Whether an instruction may take a vector object (a sixteen-byte stack slot) as operand `position` with the object in a vector register: the
+// packed operations (the selection reads and writes their vectors through `vec_in` and `vec_out`), a sixteen-byte copy and a
+// sixteen-byte zeroing. Any other use -- a lane read through a field address, a call argument -- keeps the object in memory.
+fn vector_use_ok(instruction: nir.Instruction, position: usize) -> bool {
+    if instruction.opcode == .VectorBinary { ret true }
+    if instruction.opcode == .Copy { ret instruction.immediate == 16usize && instruction.operand_count == 2usize }
+    if instruction.opcode == .Zero { ret instruction.immediate == 16usize && instruction.operand_count == 1usize && !instruction.has_result }
+    ret false
+}
+
+// Marks in `flags` the values that are vector objects to try for a vector register: a Stack of a Vec type and sixteen bytes that is not
+// live across a call (no vector register survives one) and is used only as above.
+fn mark_vector_objects(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange, flags: []usize, first_use: []usize) {
+    let end = function.first_instruction + function.instruction_count
+    var at = 0usize
+    while at < function.value_count {
+        flags[at] = 0usize
+        first_use[at] = 18446744073709551615usize
+        at += 1usize
+    }
+    at = function.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Stack && instruction.has_result && instruction.immediate == 2usize && instruction.ty.kind == .Named && check.same(instruction.ty.name, "Vec") {
+            if instruction.result < function.value_count && !ranges[instruction.result].crosses_call { flags[instruction.result] = 1usize }
+        }
+        at += 1usize
+    }
+    at = function.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        var position = 0usize
+        while position < instruction.operand_count {
+            let value = builder.operands[instruction.first_operand + position]
+            if value < function.value_count && flags[value] == 1usize {
+                if !vector_use_ok(instruction, position) { flags[value] = 0usize }
+                if at < first_use[value] { first_use[value] = at }
+            }
+            position += 1usize
+        }
+        at += 1usize
+    }
+}
+
+// Gives the marked vector objects their registers: in the order they begin, each takes a free one, and when there is none the one a
+// register is worth least to (weight over span, as for the general registers) stays in memory. A flag of 2 + i is vector register i.
+fn assign_vector_registers(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange, weights: []usize, flags: []usize, first_use: []usize) {
+    var narrow = false
+    let end = function.first_instruction + function.instruction_count
+    var at = function.first_instruction
+    while at < end {
+        let ty = builder.instructions[at].ty
+        if ty.kind == .Float && (check.same(ty.name, "f16") || check.same(ty.name, "bf16")) { narrow = true }
+        at += 1usize
+    }
+    var first_register = 0usize
+    if narrow { first_register = VECTOR_FIRST_WIDE }
+    var held: [12]usize = zero
+    var held_last: [12]usize = zero
+    var value = 0usize
+    while value < function.value_count {
+        if flags[value] == 1usize {
+            // an object is in its register from the first instruction that names it (its Stack makes nothing), and one that ends where
+            // another begins hands the register over: every packed operation reads its sources before it writes
+            var first = ranges[value].first
+            if first_use[value] != 18446744073709551615usize && first_use[value] > first { first = first_use[value] }
+            let last = ranges[value].last
+            var found = VECTOR_REGISTERS
+            var register = first_register
+            while register < VECTOR_REGISTERS && found == VECTOR_REGISTERS {
+                if held[register] == 0usize || held_last[register] <= first { found = register }
+                register += 1usize
+            }
+            if found != VECTOR_REGISTERS {
+                held[found] = value + 1usize
+                held_last[found] = last
+                flags[value] = 2usize + found
+            } else {
+                var victim = value
+                var victim_register = VECTOR_REGISTERS
+                var victim_cost = density(ranges, weights, value)
+                register = first_register
+                while register < VECTOR_REGISTERS {
+                    let candidate = held[register] - 1usize
+                    if held_last[register] > first {
+                        let cost = density(ranges, weights, candidate)
+                        if cost < victim_cost {
+                            victim = candidate
+                            victim_register = register
+                            victim_cost = cost
+                        }
+                    }
+                    register += 1usize
+                }
+                if victim_register != VECTOR_REGISTERS {
+                    flags[victim] = 0usize
+                    held[victim_register] = value + 1usize
+                    held_last[victim_register] = last
+                    flags[value] = 2usize + victim_register
+                } else {
+                    flags[value] = 0usize
+                }
+            }
+        }
+        value += 1usize
+    }
+}
+
 // What a register is worth to a value: its weight over the instructions it spans. The lowest is what goes to the stack.
 fn density(ranges: []LiveRange, weights: []usize, value: usize) -> usize {
     let span = ranges[value].last - ranges[value].first + 1usize
@@ -790,6 +905,12 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
     let weights_error = value_weights(builder, function, scratch)
     if weights_error != ok { ret (0usize, weights_error) }
     let weights = scratch[0usize..function.value_count]
+    let flags_start = function.value_count + 2usize * function.instruction_count + 4usize
+    if scratch.len < flags_start + 2usize * function.value_count { ret (0usize, Capacity) }
+    let vector_flags = scratch[flags_start..flags_start + function.value_count]
+    let vector_first = scratch[flags_start + function.value_count..flags_start + 2usize * function.value_count]
+    mark_vector_objects(builder, function, ranges, vector_flags, vector_first)
+    assign_vector_registers(builder, function, ranges, weights, vector_flags, vector_first)
     var counts: [16]usize = zero
     var value_at = 0usize
     var stack_slots = 0usize
@@ -798,6 +919,11 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
         allocations[value_at] = empty_allocation
         let first = ranges[value_at].first
         let last = ranges[value_at].last
+        if vector_flags[value_at] >= 2usize {
+            allocations[value_at] = Allocation { kind: .Vector, index: vector_flags[value_at] - 2usize }
+            value_at += 1usize
+            continue
+        }
         var register = 0usize
         var found_register = false
         // A value live across a call tries the registers a call keeps first (D1607): in

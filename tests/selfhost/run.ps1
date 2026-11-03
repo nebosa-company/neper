@@ -304,6 +304,11 @@ $manyParamsExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $manyParamsExecutableWritten -ne 'executable written') { throw 'many-parameter program did not emit a PE executable' }
 & $manyParamsExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'parameters past the sixteenth, or an argument-register cycle, arrived wrong' }
+$vectorRegistersExecutablePath = Join-Path $testBuild 'vector-registers-selfhost.exe'
+$vectorRegistersExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\vector_registers\src\main.e') $repo 'x64' 'windows' $vectorRegistersExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $vectorRegistersExecutableWritten -ne 'executable written') { throw 'vector register program did not emit a PE executable' }
+& $vectorRegistersExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'vectors held in registers, or spilled past the vector registers, computed wrong' }
 $genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
 $genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }

@@ -358,6 +358,11 @@ many_params_executable_written=$($test_build/neper-self emit-executable "$repo/t
 [ "$many_params_executable_written" = 'executable written' ]
 chmod +x "$many_params_executable_path"
 "$many_params_executable_path"
+vector_registers_executable_path="$test_build/vector-registers-selfhost"
+vector_registers_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/vector_registers/src/main.e" "$repo" x64 linux "$vector_registers_executable_path" --release --cpu x64-v2)
+[ "$vector_registers_executable_written" = 'executable written' ]
+chmod +x "$vector_registers_executable_path"
+"$vector_registers_executable_path"
 generic_executable_path="$test_build/generic-selfhost"
 generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
 [ "$generic_executable_written" = 'executable written' ]
