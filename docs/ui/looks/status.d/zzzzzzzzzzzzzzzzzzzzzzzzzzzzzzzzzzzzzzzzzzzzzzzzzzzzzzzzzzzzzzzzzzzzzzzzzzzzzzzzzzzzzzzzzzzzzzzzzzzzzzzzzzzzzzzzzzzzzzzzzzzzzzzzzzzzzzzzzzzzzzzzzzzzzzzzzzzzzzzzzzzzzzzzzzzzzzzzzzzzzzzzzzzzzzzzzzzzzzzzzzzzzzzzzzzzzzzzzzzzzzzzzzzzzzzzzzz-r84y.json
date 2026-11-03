@@ -1,0 +1,182 @@
+{
+ "menu_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/menu_bar.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule for rows with no Flutter widget and no citable number. Drawn and viewed light and dark at 1x and 1.5x, every cell and the open-menu sheet. Measured (own comparer): bar 24 high at 1x (rows 32 to 55) and 36 at 1.5x, HIG 'The menu bar's height is 24 pt' (solid, cited); the three cells now draw the same 400 wide bar (the hover and pressed cells used to show a bar clipped to 372 by the cell shift); text 19.4:1 (light, black on f6f6f6) and 14.3:1 (dark, white on 2a2a2c). The Apple logo is now a traced silhouette (two shoulders, waist, bite, leaf) in looks_y84.e, not discs. From memory, consistent with the macOS menu bar and the other drawn Cupertino sheets: face f6f6f6 / 2a2a2c flat (the real bar is translucent), 13 pt titles with the app name in semibold, pressed title chip, shortcuts written as words (the rig has no command-symbol face). Not matched: no measured Apple reference.",
+    "gaps": [
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "Shortcuts are written as Cmd+ words, not command symbols (Segoe UI has no command glyph in the rig)",
+     "The title chip colour and radius are an approximation of the menu-bar highlight (no published number)",
+     "The Apple logo is a traced silhouette of the public outline, not the SF Symbols glyph",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/menu_bar.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule for rows with no Flutter widget and no citable number. Drawn and viewed light and dark at 1x and 1.5x, every cell and the open-menu sheet. Measured (own comparer): bar 24 high at 1x (rows 32 to 55) and 36 at 1.5x, HIG 'The menu bar's height is 24 pt' (solid, cited); the three cells now draw the same 400 wide bar (the hover and pressed cells used to show a bar clipped to 372 by the cell shift); text 19.4:1 (light, black on f6f6f6) and 14.3:1 (dark, white on 2a2a2c). The Apple logo is now a traced silhouette (two shoulders, waist, bite, leaf) in looks_y84.e, not discs. From memory, consistent with the macOS menu bar and the other drawn Cupertino sheets: face f6f6f6 / 2a2a2c flat (the real bar is translucent), 13 pt titles with the app name in semibold, pressed title chip, shortcuts written as words (the rig has no command-symbol face). Not matched: no measured Apple reference.",
+    "gaps": [
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "Shortcuts are written as Cmd+ words, not command symbols (Segoe UI has no command glyph in the rig)",
+     "The title chip colour and radius are an approximation of the menu-bar highlight (no published number)",
+     "The Apple logo is a traced silhouette of the public outline, not the SF Symbols glyph",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/hint.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (macOS help tag: no Flutter widget, no citable number). Real defect fixed: the Cupertino tag capped its text at two lines (overlay.e max_lines 2) and dropped the third line of the wrapped sample; the cap is lifted for Cupertino only, the Wrapped cell now shows the whole sentence and its cell is 110 high so the tag no longer touches the next caption. Viewed light and dark, 1x and 1.5x, all four cells. Measured: single-line tag 20 high (rows 104 to 123 at 1x), 11 pt text, radius 4, 6 x 3 padding, 6 below the anchor, hairline plus a 1 px low shadow; text 17.6:1 light (101010 on f6f6f6) and 10.1:1 dark (f2f2f2 on 3a3a3c). All metrics are from memory of AppKit help tags and are consistent with the other drawn macOS sheets (corner 4, small control text 11 pt); never matched. Note: hint.e (all ten looks) also writes cupertino/hint.png from its own older sample text; run cup_tooltip last.",
+    "gaps": [
+     "iOS has no tooltip (this is the macOS help tag)",
+     "Rich tooltip not restyled",
+     "The tag face and hairline are flat approximations of the translucent AppKit tag",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/hint.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (macOS help tag: no Flutter widget, no citable number). Real defect fixed: the Cupertino tag capped its text at two lines (overlay.e max_lines 2) and dropped the third line of the wrapped sample; the cap is lifted for Cupertino only, the Wrapped cell now shows the whole sentence and its cell is 110 high so the tag no longer touches the next caption. Viewed light and dark, 1x and 1.5x, all four cells. Measured: single-line tag 20 high (rows 104 to 123 at 1x), 11 pt text, radius 4, 6 x 3 padding, 6 below the anchor, hairline plus a 1 px low shadow; text 17.6:1 light (101010 on f6f6f6) and 10.1:1 dark (f2f2f2 on 3a3a3c). All metrics are from memory of AppKit help tags and are consistent with the other drawn macOS sheets (corner 4, small control text 11 pt); never matched. Note: hint.e (all ten looks) also writes cupertino/hint.png from its own older sample text; run cup_tooltip last.",
+    "gaps": [
+     "iOS has no tooltip (this is the macOS help tag)",
+     "Rich tooltip not restyled",
+     "The tag face and hairline are flat approximations of the translucent AppKit tag",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/activity_indicator.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (the tick spinner is Flutter's CupertinoActivityIndicator, source read in round 81 u; the determinate ring has no Apple number). Real defect fixed: 'error 35 %' and 'paused 35 %' drew the same blue ring as 35 %; Cupertino rings now take the tone (error FF3B30 / FF453A, paused the grey on-surface-variant). Viewed light and dark, 1x and 1.5x, all nine cells. Measured: spinner ink boxes 20 x 20, 36 x 36 and 64 x 64 at 1x (UIActivityIndicatorView medium 20 and large 36 or 37 are from memory), tick ramp as Flutter's _kAlphaValues (solid); ring arc 3.6:1 light and 4.66:1 dark against the ground, error 3.18:1 and 4.99:1; the lead tick 3.11:1 and 5.57:1; the unfilled track (1.25:1, 1.57:1) is the system fill and carries no state. Not matched: no measured reference frame.",
+    "gaps": [
+     "The determinate ring has no Apple control behind it (UIKit has no ring); its width 12 % of the size and the system-fill track are from memory",
+     "The light spinner's lead tick is 3.11:1 against the ground, Flutter's own ramp"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/activity_indicator.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (the tick spinner is Flutter's CupertinoActivityIndicator, source read in round 81 u; the determinate ring has no Apple number). Real defect fixed: 'error 35 %' and 'paused 35 %' drew the same blue ring as 35 %; Cupertino rings now take the tone (error FF3B30 / FF453A, paused the grey on-surface-variant). Viewed light and dark, 1x and 1.5x, all nine cells. Measured: spinner ink boxes 20 x 20, 36 x 36 and 64 x 64 at 1x (UIActivityIndicatorView medium 20 and large 36 or 37 are from memory), tick ramp as Flutter's _kAlphaValues (solid); ring arc 3.6:1 light and 4.66:1 dark against the ground, error 3.18:1 and 4.99:1; the lead tick 3.11:1 and 5.57:1; the unfilled track (1.25:1, 1.57:1) is the system fill and carries no state. Not matched: no measured reference frame.",
+    "gaps": [
+     "The determinate ring has no Apple control behind it (UIKit has no ring); its width 12 % of the size and the system-fill track are from memory",
+     "The light spinner's lead tick is 3.11:1 against the ground, Flutter's own ramp"
+    ]
+   }
+  }
+ },
+ "progress_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/progress_bar.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIProgressView / NSProgressIndicator: no Flutter widget and no citable number for the bar). Viewed light and dark, 1x and 1.5x, all twelve cells. Measured: track 4 high and 6 for the thick bar (colour runs along a column), fill 007aff / 0a84ff (3.6:1 light, 4.66:1 dark against the ground), error FF3B30 / FF453A (3.18:1, 4.99:1), paused orange FF9500 / FF9F0A (1.97:1 on the light ground, 8.28:1 dark: Apple's own systemOrange; the light value is below 3:1 and is the one exception), the unfilled track is the system fill (1.25:1, 1.57:1) and carries no state; the spinner and ring cells are the activity_indicator ones above. Track height and corner are from memory of UIProgressView and consistent with the ring and spinner of the same sheet; never matched.",
+    "gaps": [
+     "The light paused bar (FF9500) is 1.97:1 against the ground: Apple's systemOrange, kept",
+     "The unfilled track is the system fill, 1.25:1 light and 1.57:1 dark, by design",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/progress_bar.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIProgressView / NSProgressIndicator: no Flutter widget and no citable number for the bar). Viewed light and dark, 1x and 1.5x, all twelve cells. Measured: track 4 high and 6 for the thick bar (colour runs along a column), fill 007aff / 0a84ff (3.6:1 light, 4.66:1 dark against the ground), error FF3B30 / FF453A (3.18:1, 4.99:1), paused orange FF9500 / FF9F0A (1.97:1 on the light ground, 8.28:1 dark: Apple's own systemOrange; the light value is below 3:1 and is the one exception), the unfilled track is the system fill (1.25:1, 1.57:1) and carries no state; the spinner and ring cells are the activity_indicator ones above. Track height and corner are from memory of UIProgressView and consistent with the ring and spinner of the same sheet; never matched.",
+    "gaps": [
+     "The light paused bar (FF9500) is 1.97:1 against the ground: Apple's systemOrange, kept",
+     "The unfilled track is the system fill, 1.25:1 light and 1.57:1 dark, by design",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/splitter.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): review kept. Added: a Thin divider row (HIG Split views: 'The thin divider measures one point', cited), 1 px line, panes 201 x 121 so the divider sits under the harness pointer; the sheet now has sixteen cells, the thick and the thin divider each upright and lying. Still not drawn: hover and held states are identical to rest in every divider cell (the harness pointer does not reach the sash; the dimple and accent line exist in code) and only the last cell shows the keyboard ring (the harness focuses the last focusable). Those cells are not drawn correctly, so the row cannot be raised. | AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The harness hover and press do not reach the divider: the Hover and Dragged cells look like Rest (thick and thin)",
+     "Only the last focusable shows the keyboard ring in a sheet: the Focus cells of the other three dividers look like Rest",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/splitter.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): review kept. Added: a Thin divider row (HIG Split views: 'The thin divider measures one point', cited), 1 px line, panes 201 x 121 so the divider sits under the harness pointer; the sheet now has sixteen cells, the thick and the thin divider each upright and lying. Still not drawn: hover and held states are identical to rest in every divider cell (the harness pointer does not reach the sash; the dimple and accent line exist in code) and only the last cell shows the keyboard ring (the harness focuses the last focusable). Those cells are not drawn correctly, so the row cannot be raised. | AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The harness hover and press do not reach the divider: the Hover and Dragged cells look like Rest (thick and thin)",
+     "Only the last focusable shows the keyboard ring in a sheet: the Focus cells of the other three dividers look like Rest",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/swipe_actions.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): review kept. The Cupertino sheet now draws the collection's real tiles (collection.swipe_actions_of, y84_swipe_actions.e writing only the two Cupertino looks): the row slides over full-height 80 wide tiles flush to the trailing edge, Archive in the accent and Delete destructive (red), the row text clear of them (it used to touch the Archive pill); measured tiles 80 x 64, 007aff / ff3b30 (dark 0a84ff / ff453a). Not raised: the 12 px tile labels are white on those fills, 4.02:1 and 3.55:1 light, 3.65:1 and 3.41:1 dark, under 4.5:1; the pointer-hover affordance and the mid-swipe drag are not drawn; the glyphs (arrow-down for Archive, cross for Delete) stand in for the Mail glyphs. | AUDIT 42 (2): new defect from the narrower label. In the revealed cell \"Message from Ada\" used to wrap to two lines against the Archive tile; it now fits on one line and its last glyph touches the tile with no gap (viewed, 1x, light and dark). Heights unchanged. Review stays the ceiling; raise only with a gap or a wrap. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "White 12 px labels on the system accent and red tiles are 3.4 to 4.0:1, under the 4.5:1 the maintainer's rule asks for text",
+     "The hover buttons and the mid-swipe drag are not drawn",
+     "Archive and Delete use an arrow and a cross; iOS draws SF Symbols",
+     "Audit 42: \"Message from Ada\" runs flush against the Archive tile in the revealed cell (semibold narrowed it from a two-line wrap to one line)",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/swipe_actions.png",
+    "notes": "ROUND 84 (lane y, docs/ui/looks/cupertino-complete-y.md): review kept. The Cupertino sheet now draws the collection's real tiles (collection.swipe_actions_of, y84_swipe_actions.e writing only the two Cupertino looks): the row slides over full-height 80 wide tiles flush to the trailing edge, Archive in the accent and Delete destructive (red), the row text clear of them (it used to touch the Archive pill); measured tiles 80 x 64, 007aff / ff3b30 (dark 0a84ff / ff453a). Not raised: the 12 px tile labels are white on those fills, 4.02:1 and 3.55:1 light, 3.65:1 and 3.41:1 dark, under 4.5:1; the pointer-hover affordance and the mid-swipe drag are not drawn; the glyphs (arrow-down for Archive, cross for Delete) stand in for the Mail glyphs. | AUDIT 42 (2): new defect from the narrower label. In the revealed cell \"Message from Ada\" used to wrap to two lines against the Archive tile; it now fits on one line and its last glyph touches the tile with no gap (viewed, 1x, light and dark). Heights unchanged. Review stays the ceiling; raise only with a gap or a wrap. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "White 12 px labels on the system accent and red tiles are 3.4 to 4.0:1, under the 4.5:1 the maintainer's rule asks for text",
+     "The hover buttons and the mid-swipe drag are not drawn",
+     "Archive and Delete use an arrow and a cross; iOS draws SF Symbols",
+     "Audit 42: \"Message from Ada\" runs flush against the Archive tile in the revealed cell (semibold narrowed it from a two-line wrap to one line)",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ }
+}

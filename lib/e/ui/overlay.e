@@ -91,7 +91,10 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
-    if cupertino { caption.size = 11.0 }
+    if cupertino {
+        caption.size = 11.0
+        caption.max_lines = 0u32
+    }
     // Neper: a plain hint wraps to its width without dropping lines (M3 sets no line cap).
     if t.tokens.profile == .Neper { caption.max_lines = 0u32 }
     if linux {

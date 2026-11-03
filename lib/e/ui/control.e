@@ -36,6 +36,7 @@ use e.ui.looks_b
 use e.ui.looks_z63
 use e.ui.looks_o78
 use e.ui.looks_t81
+use e.ui.looks_y84
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -11261,6 +11262,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let cupertino = t.tokens.profile == .CupertinoLike
     // macOS: the thick divider is 9 across with a 1 px separator line in it.
     if cupertino { hit = 9.0 }
+    if cupertino && looks_y84.thin() { hit = 1.0 }
     // libadwaita's GtkPaned: a 1 px #dddddd handle between the panes (worker l3).
     let linux = t.tokens.profile == .Linux
     if linux { hit = 1.0 }
@@ -20654,13 +20656,8 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret ok
     }
     if m.kind == 20u32 {
-        // The Apple mark, simplified: two shoulders, a waist, a leaf and a bite (`other`: the ground colour).
-        try cup_disc(m, b, x + w * 0.34, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.66, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.78, w * 0.3, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.40, w * 0.18, m.color)
-        try cup_disc(m, b, x + w * 0.62, y + h * 0.12, w * 0.12, m.color)
-        ret cup_disc(m, b, x + w * 0.98, y + h * 0.5, w * 0.17, m.other)
+        // The Apple mark (looks_y84.apple): a traced silhouette with its bite and leaf.
+        ret looks_y84.apple(m.arena, b, x, y + h * 0.03, w, h * 0.94, m.color)
     }
     if m.kind == 19u32 {
         // A bare cross.
@@ -21266,6 +21263,7 @@ fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, v
         var ground = style.hexa(0x787880u32, 0.2)
         if dark { ground = style.hexa(0x787880u32, 0.36) }
         var arc = style.color(t.tokens, .Primary)
+        if options.tone != .Active { arc = progress_ink(t, options.tone) }
         if options.content.alpha > 0.0 { arc = options.content }
         let (made, made_error) = cup_arc_node(a, arc, ground, size * 0.12, clamp_share(value), size)
         if made_error != ok { ret (zero, made_error) }
