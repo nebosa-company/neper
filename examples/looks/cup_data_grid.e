@@ -171,7 +171,15 @@ fn framed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32
     ret (widget.padded(0u64, 8.0, 8.0, 8.0, 8.0, face, held[0usize..1usize]), ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // This sheet only: the chosen row's fill is the darker blue 0A60FF so its white text holds 4.5:1 (systemBlue is 4.02:1).
+    let (copy, copy_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copy_error != ok { ret (0usize, copy_error) }
+    copy[0usize] = *base.tokens
+    if base.tokens.palette != .Dark { style.puta(&copy[0usize], .Primary, 0x0A60FFu32, 1.0) }
+    var local = *base
+    local.tokens = &copy[0usize]
+    let t = &local
     let app = mem.cast[*App](ctx)
     // a grid keeps the look it was given: the pass of another look builds its grids afresh
     if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }
