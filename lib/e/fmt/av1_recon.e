@@ -6,6 +6,7 @@ use e.fmt.av1_pool
 use e.atomic
 use e.os
 use e.mem
+use e.simd
 use e.fmt.av1
 use e.fmt.av1_sym
 use e.fmt.av1_tables
@@ -71,13 +72,18 @@ fn cdef_slot(d: *D.Dec, r: i32, c: i32) -> usize {
     ret usize((r >> 4u32) * d.cdef_stride + (c >> 4u32))
 }
 
+type U8x16 = Vec[u8, 16]
+type I32x4 = Vec[i32, 4]
+
 const BD_STRIDE: usize = 35usize
 
 fn bd_at(y: i32, x: i32) -> usize {
     ret usize(y + 1i32) * BD_STRIDE + usize(x + 1i32)
 }
 
+// 1 for the row above the superblock as far as the tile reaches and for the column to its left as far down, 0 elsewhere
 fn clear_block_decoded_flags(d: *D.Dec, r: i32, c: i32, sb4: i32) {
+    let z = simd.splat[U8x16](0u8)
     var plane = 0usize
     while plane < usize(d.st.seq.num_planes) {
         var sx = 0i32
@@ -88,22 +94,27 @@ fn clear_block_decoded_flags(d: *D.Dec, r: i32, c: i32, sb4: i32) {
         }
         let sb_w4 = (d.col_end - c) >> u32(sx)
         let sb_h4 = (d.row_end - r) >> u32(sy)
-        var y = 0i32 - 1i32
-        while y <= (sb4 >> u32(sy)) {
-            var x = 0i32 - 1i32
-            while x <= (sb4 >> u32(sx)) {
-                var v = 0u8
-                if y < 0i32 && x < sb_w4 {
-                    v = 1u8
-                } else if x < 0i32 && y < sb_h4 {
-                    v = 1u8
-                }
-                d.block_decoded[plane][bd_at(y, x)] = v
-                x += 1i32
-            }
+        let bd = d.block_decoded[plane]
+        var o = 0usize
+        while o + 16usize <= BD_STRIDE * BD_STRIDE {
+            simd.store[U8x16](bd, o, z)
+            o += 16usize
+        }
+        while o < BD_STRIDE * BD_STRIDE {
+            bd[o] = 0u8
+            o += 1usize
+        }
+        var x = 0i32 - 1i32
+        while x <= (sb4 >> u32(sx)) && x < sb_w4 {
+            bd[bd_at(0i32 - 1i32, x)] = 1u8
+            x += 1i32
+        }
+        var y = 0i32
+        while y <= (sb4 >> u32(sy)) && y < sb_h4 {
+            bd[bd_at(y, 0i32 - 1i32)] = 1u8
             y += 1i32
         }
-        d.block_decoded[plane][bd_at(sb4 >> u32(sy), 0i32 - 1i32)] = 0u8
+        bd[bd_at(sb4 >> u32(sy), 0i32 - 1i32)] = 0u8
         plane += 1usize
     }
 }
@@ -308,20 +319,31 @@ fn reconstruct(d: *D.Dec, plane: usize, start_x: usize, start_y: usize, tx: usiz
 
 // the last non-zero row and column of the coefficient block, plus one, so the transform can skip the empty part
 fn nonzero_limits(q: []const i32, tw: usize, th: usize) -> (usize, usize) {
-    var rows = 0usize
-    var cols = 0usize
-    var y = 0usize
-    while y < th {
+    let z = simd.splat[I32x4](0i32)
+    var rows = th
+    var found = false
+    while rows > 0usize && !found {
+        var acc = z
         var x = 0usize
         while x < tw {
-            if q[y * tw + x] != 0i32 {
-                if y + 1usize > rows { rows = y + 1usize }
-                if x + 1usize > cols { cols = x + 1usize }
-            }
-            x += 1usize
+            acc = acc | simd.load[I32x4](q, (rows - 1usize) * tw + x)
+            x += 4usize
+        }
+        if simd.any[I32x4](simd.cmp_ne[I32x4](acc, z)) { found = true } else { rows -= 1usize }
+    }
+    if rows == 0usize { ret (0usize, 0usize) }
+    var cols_or: [32]i32 = zero
+    var y = 0usize
+    while y < rows {
+        var x = 0usize
+        while x < tw {
+            simd.store[I32x4](cols_or[0usize..32usize], x, simd.load[I32x4](cols_or[0usize..32usize], x) | simd.load[I32x4](q, y * tw + x))
+            x += 4usize
         }
         y += 1usize
     }
+    var cols = tw
+    while cols > 0usize && cols_or[cols - 1usize] == 0i32 { cols -= 1usize }
     ret (rows, cols)
 }
 
