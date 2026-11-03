@@ -5399,7 +5399,10 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     parts[0usize] = head
     var popup_node = widget.box(0u64, style.defaults(), zero)
     if open {
-        let (month, month_error) = calendar(a, base + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
+        // Android: the M3 docked picker is 360 wide, its day cells 48 dp apart (md.comp.date-picker.docked.container.width).
+        var docked_marks: CalendarMarks = zero
+        if t.tokens.profile == .MaterialLike { docked_marks.slot = 48.0 }
+        let (month, month_error) = calendar_with(a, base + 2u64, t, label, shown, value, has_value, ranged, from, to, shown, false, show, pick, docked_marks)
         if month_error != ok { ret (zero, month_error) }
         let (inside, inside_error) = mem.alloc[widget.Node](a, 4usize)
         if inside_error != ok { ret (zero, TooLarge) }
@@ -5438,6 +5441,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         var raised_style = control.surface_style(t, raised)
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
+        if t.tokens.profile == .MaterialLike { raised_style.width = style.Length { Px: 360.0 } }
         var gap_below: f32 = 4.0
         if t.tokens.profile == .CupertinoLike {
             // The iOS graphical picker's popover: the cell colour, 14 round, a hairline and a soft shadow.

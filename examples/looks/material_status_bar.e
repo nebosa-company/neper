@@ -44,6 +44,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             drive = .Hover
             // the first panel's centre under the pointer (the cell's centre)
             x = 170.0
+            looks.aim(2usize, 0.0, -10.0)
             width = 470.0
         }
         if i == 3usize {

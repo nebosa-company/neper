@@ -38,6 +38,7 @@ use e.ui.looks_o78
 use e.ui.looks_t81
 use e.ui.looks_x84
 use e.ui.looks_y84
+use e.ui.looks_z84_edge
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -3422,7 +3423,10 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     caption.wrap = .None
     let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
     if label_error != ok { ret (zero, label_error) }
-    let active = state.hovered || state.pressed
+    var active = state.hovered || state.pressed
+    // Android: keyboard focus draws the 10 % layer and the underline, as the pointer states do.
+    let android_focus = t.tokens.profile == .MaterialLike && state.focus_visible
+    if android_focus { active = true }
     // (D1335) Over a link, the hand.
     if state.hovered && mem.address_of(t.runtime) != 0usize { widget.request_cursor(t.runtime, 2u8) }
     var count = 1usize
@@ -3438,7 +3442,10 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, style.defaults(), lines[0usize..count])
+    var body_style = style.defaults()
+    // Android: the label sits in the middle of its 48 dp target, so the layer is centred on it.
+    if t.tokens.profile == .MaterialLike { body_style.min_height = style.Length { Px: t.tokens.metrics.hit_target } }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, body_style, lines[0usize..count])
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     // A link is at least the hit target, so a short one is still reachable.
@@ -3451,6 +3458,7 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     // `key + 1048594`); reduced motion changes at once.
     var opacity: f32 = 0.0
     if state.hovered { opacity = t.tokens.states.hover }
+    if android_focus { opacity = t.tokens.states.focus }
     if state.pressed { opacity = t.tokens.states.pressed }
     let washed = eased_on(t, key, key + 1048594u64, opacity, false, t.tokens.durations.short2)
     target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), washed) }
@@ -8196,6 +8204,8 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         ink = style.color(t.tokens, .Primary)
         eye = .VisibilityOff
     }
+    // Android: a disabled field's trailing icon is on-surface at the 38 % content level.
+    if t.tokens.profile == .MaterialLike && !options.enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     let (mark, mark_error) = icon_square(a, ink, eye, glyph)
     if mark_error != ok { ret (zero, mark_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 4usize)
@@ -8347,6 +8357,8 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var fill = style.color(t.tokens, .SurfaceContainerHigh)
     if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
     if state.pressed && android { fill = style.layer(style.color(t.tokens, .SurfaceContainerHigh), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) }
+    // Android: the M3 search bar's focused state layer (md.comp.search-bar, on-surface 10 %).
+    if android && state.focus_visible && !state.hovered && !state.pressed { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.focus) }
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
@@ -8354,6 +8366,8 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         // The pill carries no outline at rest; keyboard focus and an invalid query draw the field outline (accent, error).
         if options.invalid { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } } else if state.focused { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
     }
+    // Android: M3 has no search error state; an invalid query takes the text field's error outline (error, 1 dp; the focused width when focused).
+    if android && options.invalid { bar.border = style.Border { width: if_else(state.focused, t.tokens.sizes.outline_focused, t.tokens.sizes.divider), color: style.color(t.tokens, .Error) } }
     var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
     if android { pad_y = style.Length { Px: 0.0 } }
@@ -8463,6 +8477,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var edge = style.color(t.tokens, .Outline)
     var edge_width = t.tokens.sizes.divider
     if state.hovered { edge = ink }
+    if looks_z84_edge.on() { edge = with_alpha(ink, 0.12 / t.tokens.states.disabled_content) }
     var point = muted
     var label_color = muted
     if open || (state.focused && t.tokens.profile == .MaterialLike) {
@@ -11811,7 +11826,15 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
     if marks_error != ok { ret (zero, TooLarge) }
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
     var none: []const widget.Node = zero
-    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    var chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    // Android: the M3 split button's trailing icon is a chevron that turns up while its menu is open.
+    if t.tokens.profile == .MaterialLike {
+        var turned = GlyphKind.ChevronDown
+        if open { turned = .ChevronUp }
+        let (arrow, arrow_error) = stroked_glyph(a, look.foreground, turned, 20.0, 20.0 * 1.75 / 24.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        chevron = arrow
+    }
     let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
     if tail_error != ok { ret (zero, tail_error) }
     parts[1usize] = tail
@@ -13467,7 +13490,7 @@ fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     if field_error != ok { ret (zero, field_error) }
     var none: []const widget.Node = zero
     var menu_w: f32 = 0.0
-    if t.tokens.profile == .Neper { menu_w = options.width }
+    if t.tokens.profile == .Neper || t.tokens.profile == .MaterialLike { menu_w = options.width }
     let (made, made_error) = suggesting_wide(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss, menu_w)
     ret (made, made_error)
 }
@@ -15521,6 +15544,16 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     caption.wrap = .None
     caption.ellipsis = "..."
     caption.max_lines = 1u32
+    var sample_size = size
+    if sample_size > 20i64 { sample_size = 20i64 }
+    // Android: the sample follows the chosen style and size (the family needs a face the rig does not have).
+    if t.tokens.profile == .MaterialLike {
+        if style_index == 1usize { caption.italic = true }
+        if style_index == 2usize { caption.weight = 500u32 }
+        // the sheet's cell is 300 high, so the sample grows with the size up to 20 sp and ellipsizes past the box
+        caption.size = f32(sample_size)
+        caption.wrap = .Word
+    }
     let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
     if preview_error != ok { ret (zero, preview_error) }
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15531,6 +15564,11 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     frame_options.padding = t.tokens.spacing.sm
     var frame_style = surface_style(t, frame_options)
     frame_style.width = style.Length { Px: width }
+    if t.tokens.profile == .MaterialLike {
+        frame_style.overflow = .Clip
+        let need = f32(sample_size) * 1.4 + 2.0 * t.tokens.spacing.sm
+        if need > 2.0 * t.tokens.text[0usize].line_height { frame_style.min_height = style.Length { Px: need } }
+    }
     frame_style.min_height = style.Length { Px: 2.0 * t.tokens.text[0usize].line_height }
     parts[3usize] = widget.box(0u64, frame_style, previewed[0usize..1usize])
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -17980,7 +18018,9 @@ fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // plain select: no icons.
 fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .MaterialLike {
+        looks_z84_edge.set(!enabled)
         let (pictured, pictured_error) = select_led(a, key, t, label, options, selected, open, toggle, picks, icons)
+        looks_z84_edge.set(false)
         if pictured_error != ok { ret (zero, pictured_error) }
         if enabled { ret (pictured, ok) }
         // Disabled: the whole field at the M3 `on-surface` 38 % content level.

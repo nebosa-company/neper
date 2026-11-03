@@ -45,7 +45,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let captions = [3]str{ "Plain", "Plain, long", "Rich, subhead and action" }
-    let texts = [3]str{ "Add to favorites", "Cards that share a name are\ncounted once, whatever their edition", "Prices are refreshed every night from TCGplayer and can lag a day." }
+    let texts = [3]str{ "Add to favorites", "Cards that share a name are counted once", "Prices are refreshed every night from TCGplayer and can lag a day." }
     var i = 0usize
     while i < 3usize {
         var subhead = ""
@@ -59,6 +59,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "tooltip", cells: 3usize, columns: 3usize, cell_w: 320.0, cell_h: 310.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "tooltip", cells: 3usize, columns: 3usize, cell_w: 320.0, cell_h: 400.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

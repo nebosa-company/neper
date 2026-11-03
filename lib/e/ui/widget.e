@@ -2451,19 +2451,23 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         // ponytail: no touch fast-scroll handle.
         let viewport = e.viewport_extent
         var length = viewport * viewport / content
-        if length < 32.0 { length = min_f(32.0, viewport) }
+        // Android (the Material look): Flutter's scrollbar keeps 48 as the shortest thumb and 4 wide in every state; a drag is on-surface at 60 % against the 50 % at rest.
+        var shortest: f32 = 32.0
+        if skia_corners { shortest = 48.0 }
+        if length < shortest { length = min_f(shortest, viewport) }
         var at = offset / content * viewport
         if at > viewport - length { at = viewport - length }
         if at < 0.0 { at = 0.0 }
         var wide: f32 = 4.0
         let p = s.arena_state.last
         if s.has_pointer && geometry.contains(inner, p) {
-            if (vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0) { wide = 8.0 }
+            if ((vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0)) && !skia_corners { wide = 8.0 }
         }
         var thumb = geometry.Rect { x: inner.x + inner.width - 2.0 - wide, y: inner.y + at, width: wide, height: length }
         if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
         var thumb_ink = sc.thumb
         var thumb_shown = true
+        if skia_corners && s.thumb_drag { thumb_ink.alpha = min_f(1.0, thumb_ink.alpha * 1.2) }
         if sc.fades {
             let idle = s.animation_time.nanos - e.scrolled_at
             if e.scrolled_at == 0i64 || idle >= 1750000000i64 {

@@ -1,0 +1,626 @@
+{
+ "label": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/label.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the M3 type scale is measured on label.png: cap height of every role is Roboto's 0.711 em at the token size (Headline medium 28: 20 px against 19.9, Headline small 24: 17 against 17.1, Title medium and Body large 16: 12 against 11.4, 14 sp roles 11 against 10.0, 12 sp roles 9 against 8.5; one to two pixels of anti-aliasing and hinting, the same in the dark twin). Colours are baseline tokens (on-surface, on-surface-variant, primary, error); text contrast 4.5:1 or better in all 15 non-disabled cells light and dark, the disabled cell is on-surface at the 38 % M3 content level (exempt). Viewed: light 1x and dark 1.5x, no clip or overrun (light 1.5x and dark 1x are the same code at another scale, not viewed). Raised to ready under the maintainer's decision for rows with no M3 component or Flutter widget (a text label is drawn from the type scale).",
+    "gaps": [
+     "The link form is primary text without an underline (M3 and Flutter define no link component), so colour is its only cue",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple",
+     "Roboto stands in for the device font; cap heights measured, glyph shapes not compared with a device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/label.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the M3 type scale is measured on label.png: cap height of every role is Roboto's 0.711 em at the token size (Headline medium 28: 20 px against 19.9, Headline small 24: 17 against 17.1, Title medium and Body large 16: 12 against 11.4, 14 sp roles 11 against 10.0, 12 sp roles 9 against 8.5; one to two pixels of anti-aliasing and hinting, the same in the dark twin). Colours are baseline tokens (on-surface, on-surface-variant, primary, error); text contrast 4.5:1 or better in all 15 non-disabled cells light and dark, the disabled cell is on-surface at the 38 % M3 content level (exempt). Viewed: light 1x and dark 1.5x, no clip or overrun (light 1.5x and dark 1x are the same code at another scale, not viewed). Raised to ready under the maintainer's decision for rows with no M3 component or Flutter widget (a text label is drawn from the type scale). (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The link form is primary text without an underline (M3 and Flutter define no link component), so colour is its only cue",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple",
+     "Roboto stands in for the device font; cap heights measured, glyph shapes not compared with a device capture"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/spin_edit.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): built from measured M3 parts, no M3 number field exists. Field 96 x 56 on the 56 dp outlined text-field token, outline 1 px (3 px focused, the md.comp.outlined-text-field.focus.outline.width token measured on text_field in round 79), error b3261e, disabled 12 % outline / 38 % content; the minus and plus are the 40 dp tonal icon buttons already matched (hover 8 %, pressed 10 % state layers on the circle, at-minimum and at-maximum 38 %). All 12 cells viewed at 1x and 1.5x, light and dark: nothing clipped; cells whose pointer must land on a button are offset on purpose (hovered plus and pressed plus sit left of the others). Contrast: text and outline 4.5:1 or better, disabled cells exempt. Raised to ready: every state of the sheet is drawn and measured, no Flutter widget exists.",
+    "gaps": [
+     "M3 defines no number field: the row is the outlined field flanked by two icon buttons",
+     "The field is 96 dp wide; typed text is parsed by the caller",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/spin_edit.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): built from measured M3 parts, no M3 number field exists. Field 96 x 56 on the 56 dp outlined text-field token, outline 1 px (3 px focused, the md.comp.outlined-text-field.focus.outline.width token measured on text_field in round 79), error b3261e, disabled 12 % outline / 38 % content; the minus and plus are the 40 dp tonal icon buttons already matched (hover 8 %, pressed 10 % state layers on the circle, at-minimum and at-maximum 38 %). All 12 cells viewed at 1x and 1.5x, light and dark: nothing clipped; cells whose pointer must land on a button are offset on purpose (hovered plus and pressed plus sit left of the others). Contrast: text and outline 4.5:1 or better, disabled cells exempt. Raised to ready: every state of the sheet is drawn and measured, no Flutter widget exists. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no number field: the row is the outlined field flanked by two icon buttons",
+     "The field is 96 dp wide; typed text is parsed by the caller",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/data_grid.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the hover cell drew no hover because the four grids of the sheet shared row keys 1 to 6 (the runtime resolves an interaction to the first element of a key, so the pointer on the third grid lit the first); each grid now has its own row keys. Measured on data_grid.png, light and dark: header 56 high, rows 52 (pitch 52, 52, 52, 52, 52), dividers 1 px outline-variant (cac4d0 / 49454f) exact, hovered row on-surface 8 % over the surface (ece5ed / 252229 exact), selected row secondary-container (e8def8 / 4a4458 exact), text 16.2:1 and 14.3:1 on the surface, 13.2:1 and 7.2:1 on the selected row. Built from the measured M3 list, divider and state-layer tokens: M3 has no data table component and Flutter's DataTable has no reference here. Every cell viewed at 1x and 1.5x, light and dark. Raised to ready.",
+    "gaps": [
+     "M3 defines no data table; the 52 dp row and 56 dp header are the Material data table sizes, not an md.comp token",
+     "No sticky header, row grouping or inline editing is drawn in this sheet",
+     "The select-mode sheet (data_grid_select.png, enlarged so its last row is not cut) draws its Focused cell as the hover layer, not a focus ring"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/data_grid.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the hover cell drew no hover because the four grids of the sheet shared row keys 1 to 6 (the runtime resolves an interaction to the first element of a key, so the pointer on the third grid lit the first); each grid now has its own row keys. Measured on data_grid.png, light and dark: header 56 high, rows 52 (pitch 52, 52, 52, 52, 52), dividers 1 px outline-variant (cac4d0 / 49454f) exact, hovered row on-surface 8 % over the surface (ece5ed / 252229 exact), selected row secondary-container (e8def8 / 4a4458 exact), text 16.2:1 and 14.3:1 on the surface, 13.2:1 and 7.2:1 on the selected row. Built from the measured M3 list, divider and state-layer tokens: M3 has no data table component and Flutter's DataTable has no reference here. Every cell viewed at 1x and 1.5x, light and dark. Raised to ready. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no data table; the 52 dp row and 56 dp header are the Material data table sizes, not an md.comp token",
+     "No sticky header, row grouping or inline editing is drawn in this sheet",
+     "The select-mode sheet (data_grid_select.png, enlarged so its last row is not cut) draws its Focused cell as the hover layer, not a focus ring"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/tree_list.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): same cause as data_grid, the three trees shared node keys so the hovered and focused cells lit nothing; row keys now carry the cell in their high bits. Measured on tree_list.png, light and dark: rows 48 (pitch 48 x 5), dividers outline-variant, selected row secondary-container e8def8 / 4a4458, hovered row on-surface 8 % (ece5ed / 252229), focused row on-surface 10 % (e8e1e9 / 29272d), header surface-container f3edf7 / 211f26: all exact. 48 dp is the md.comp.menu list-item height and the touch target; chevrons and 24 dp indentation per level. M3 has no tree and Flutter has none in the material library. Viewed: light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale). Raised to ready.",
+    "gaps": [
+     "M3 defines no tree: this is the list idiom with chevrons, 48 dp rows",
+     "Keyboard focus is shown as the 10 % layer (M3 list), there is no separate ring",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/tree_list.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): same cause as data_grid, the three trees shared node keys so the hovered and focused cells lit nothing; row keys now carry the cell in their high bits. Measured on tree_list.png, light and dark: rows 48 (pitch 48 x 5), dividers outline-variant, selected row secondary-container e8def8 / 4a4458, hovered row on-surface 8 % (ece5ed / 252229), focused row on-surface 10 % (e8e1e9 / 29272d), header surface-container f3edf7 / 211f26: all exact. 48 dp is the md.comp.menu list-item height and the touch target; chevrons and 24 dp indentation per level. M3 has no tree and Flutter has none in the material library. Viewed: light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale). Raised to ready. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no tree: this is the list idiom with chevrons, 48 dp rows",
+     "Keyboard focus is shown as the 10 % layer (M3 list), there is no separate ring",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/vertical_grid.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the uneven group pitch was the sheet, not the control. Property rows have a 56 dp minimum (touch) and a fixed-height cell makes the flex shrink them in proportion (26 in General, 34 in Computed, 56 when General was shut); the cell is now 780 high and every row is 56 apart in every cell, light and dark (measured by eye on the 1x pictures, rows at 56 dp pitch). Hover is the General heading (a property row has no pointer target of its own), shown at the 8 % layer; shared keys across the three grids fixed earlier. Viewed light and dark at 1x. M3 has no property grid: built from the 56 dp list item and the state layers.",
+    "gaps": [
+     "M3 defines no property grid",
+     "A property row has no hover layer of its own; its value editor is the control"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/vertical_grid.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the uneven group pitch was the sheet, not the control. Property rows have a 56 dp minimum (touch) and a fixed-height cell makes the flex shrink them in proportion (26 in General, 34 in Computed, 56 when General was shut); the cell is now 780 high and every row is 56 apart in every cell, light and dark (measured by eye on the 1x pictures, rows at 56 dp pitch). Hover is the General heading (a property row has no pointer target of its own), shown at the 8 % layer; shared keys across the three grids fixed earlier. Viewed light and dark at 1x. M3 has no property grid: built from the 56 dp list item and the state layers.",
+    "gaps": [
+     "M3 defines no property grid",
+     "A property row has no hover layer of its own; its value editor is the control"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/date_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the docked calendar is now 360 wide with day cells 48 dp apart, the M3 docked container (Material only: overlay.dated asks for slot 48 and width 360; measured 32 to 391 in the 424 px cell). The same change widens date_range_picker_open (its docked calendar), recorded below. Modal sheet 360 wide, header 120, selected circle 38 against the Flutter picker (round 79), day hover 8 % and pressed 10 % on-surface, the selected day focused at 10 % on-primary, docked picker with its field: all viewed light, dark for the docked and hover sheets. date_input.png re-rendered byte for byte.",
+    "gaps": [
+     "Day focus shows only the 10 % state layer, no ring",
+     "The docked calendar does not mark today",
+     "The calendar is a static sheet cell, not an open overlay"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/date_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the docked calendar is now 360 wide with day cells 48 dp apart, the M3 docked container (Material only: overlay.dated asks for slot 48 and width 360; measured 32 to 391 in the 424 px cell). The same change widens date_range_picker_open (its docked calendar), recorded below. Modal sheet 360 wide, header 120, selected circle 38 against the Flutter picker (round 79), day hover 8 % and pressed 10 % on-surface, the selected day focused at 10 % on-primary, docked picker with its field: all viewed light, dark for the docked and hover sheets. date_input.png re-rendered byte for byte.",
+    "gaps": [
+     "Day focus shows only the 10 % state layer, no ring",
+     "The docked calendar does not mark today",
+     "The calendar is a static sheet cell, not an open overlay"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/image_combo_box.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the disabled field's outline is now on-surface 12 % over the surface (e3dde4 measured, expected e3dde4) with content at 38 %, the M3 outlined text field disabled split; control.image_select asks for it through lib/e/ui/looks_z84_edge.e while it builds the Android disabled head (Material only; the Windows, Linux, Cupertino and Neper image combo boxes re-render byte for byte). All six cells viewed light and dark at 1x. Field 56 high, 1 px outline (3 px focused primary), hover on-surface outline, chevron and 24 dp leading icon.",
+    "gaps": [
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/image_combo_box.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the disabled field's outline is now on-surface 12 % over the surface (e3dde4 measured, expected e3dde4) with content at 38 %, the M3 outlined text field disabled split; control.image_select asks for it through lib/e/ui/looks_z84_edge.e while it builds the Android disabled head (Material only; the Windows, Linux, Cupertino and Neper image combo boxes re-render byte for byte). All six cells viewed light and dark at 1x. Field 56 high, 1 px outline (3 px focused primary), hover on-surface outline, chevron and 24 dp leading icon.",
+    "gaps": [
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/status_bar.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): two defects fixed. (1) The Narrow cell hard-clipped its message; the squeezed message now lays out as one Word-wrapped line so its ellipsis shows ('All: ...'), Material only (navigation.e), the other looks' status bars re-render byte for byte. (2) The pressable-panel hover that the earlier note called working was not: the driven pointer sat 4 px under the 24 px bar; the cell now aims 10 px higher and the panel shows on-surface-variant 8 % (f3edf7 to e5e0ea at the pointer). Strip fill surface-container, text body-small, error tone b3261e at 5:1. All five cells viewed light 1x and dark 1.5x. M3 has no status bar, so the row is a strip built from the surface-container and state-layer tokens.",
+    "gaps": [
+     "M3 has no status bar: a strip of panels, not a bottom app bar",
+     "Error tone only colours the text"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/status_bar.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): two defects fixed. (1) The Narrow cell hard-clipped its message; the squeezed message now lays out as one Word-wrapped line so its ellipsis shows ('All: ...'), Material only (navigation.e), the other looks' status bars re-render byte for byte. (2) The pressable-panel hover that the earlier note called working was not: the driven pointer sat 4 px under the 24 px bar; the cell now aims 10 px higher and the panel shows on-surface-variant 8 % (f3edf7 to e5e0ea at the pointer). Strip fill surface-container, text body-small, error tone b3261e at 5:1. All five cells viewed light 1x and dark 1.5x. M3 has no status bar, so the row is a strip built from the surface-container and state-layer tokens.",
+    "gaps": [
+     "M3 has no status bar: a strip of panels, not a bottom app bar",
+     "Error tone only colours the text"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tooltip.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered. Batch 3: the Material Web reference ref/material/light/tooltip-rich@1x.png has a soft shadow gradient at the plate edge so its edge column cannot be matched pixel for pixel; no evidence was found that the partial column is the reference's resampling, so hint stays review.",
+    "gaps": [
+     "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
+     "Rich tooltip left edge column half a pixel off (round 33)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered. Batch 3: the Material Web reference ref/material/light/tooltip-rich@1x.png has a soft shadow gradient at the plate edge so its edge column cannot be matched pixel for pixel; no evidence was found that the partial column is the reference's resampling, so hint stays review.",
+    "gaps": [
+     "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
+     "Rich tooltip left edge column half a pixel off (round 33)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/scroll_bar.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the shared thumb now follows Flutter's Android scrollbar for the Material look only (widget.e, gated by the Material corner flag): 4 wide in every state (hover no longer widens to 8), shortest thumb 48 (was 32), a drag at on-surface 60 % against 50 % at rest (alpha x 1.2). Rest 4 wide 2 from the edge as before. M3 has no scrollbar token; the numbers are Flutter's scrollbar.dart (round 81). Every other look re-renders byte for byte (all 251 sheet apps re-rendered; only Material pictures moved: scroll_bar, scroll_area, memo, terminal_view thumbs). Viewed light and dark at 1x.",
+    "gaps": [
+     "One thumb colour in every state but the drag; Flutter's idle highlight not modelled",
+     "No fast-scroll handle"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/scroll_bar.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the shared thumb now follows Flutter's Android scrollbar for the Material look only (widget.e, gated by the Material corner flag): 4 wide in every state (hover no longer widens to 8), shortest thumb 48 (was 32), a drag at on-surface 60 % against 50 % at rest (alpha x 1.2). Rest 4 wide 2 from the edge as before. M3 has no scrollbar token; the numbers are Flutter's scrollbar.dart (round 81). Every other look re-renders byte for byte (all 251 sheet apps re-rendered; only Material pictures moved: scroll_bar, scroll_area, memo, terminal_view thumbs). Viewed light and dark at 1x.",
+    "gaps": [
+     "One thumb colour in every state but the drag; Flutter's idle highlight not modelled",
+     "No fast-scroll handle"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/splitter.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): measured on the 1x pictures. Sash: 1 px outline-variant divider (cac4d0 / 49454f exact) with a 4 x 48 dp rounded handle (core 3 px plus anti-alias by 46 to 48 rows), the size of the M3 adaptive pane drag handle; rest on-surface-variant 49454f, hover and focus outline 79747e (4.5:1), dragged primary 6750a4 with a 2 px divider; all at least 3:1 on the surface. Four states in both orientations viewed light and dark at 1x. M3 publishes no splitter component, so the handle size and colours are the adaptive-layout handle, not an md.comp token I could cite by name.",
+    "gaps": [
+     "M3 has no splitter component; handle tokens are the adaptive pane drag handle from memory of the guidelines",
+     "Focus is the hover colour, no ring"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/splitter.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): measured on the 1x pictures. Sash: 1 px outline-variant divider (cac4d0 / 49454f exact) with a 4 x 48 dp rounded handle (core 3 px plus anti-alias by 46 to 48 rows), the size of the M3 adaptive pane drag handle; rest on-surface-variant 49454f, hover and focus outline 79747e (4.5:1), dragged primary 6750a4 with a 2 px divider; all at least 3:1 on the surface. Four states in both orientations viewed light and dark at 1x. M3 publishes no splitter component, so the handle size and colours are the adaptive-layout handle, not an md.comp token I could cite by name.",
+    "gaps": [
+     "M3 has no splitter component; handle tokens are the adaptive pane drag handle from memory of the guidelines",
+     "Focus is the hover colour, no ring"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/search_field_all.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): two states were not drawn and are now. The invalid cell was identical to the filled one; it takes the text field's error outline (error b3261e, 1 dp, the focused width when focused; M3 defines no search error, so the M3 text-field error is borrowed and says so). The focus cell had the rest fill; the M3 search bar's focus layer (on-surface 10 %) is now drawn (ece6f0 to d7d2db at keyboard focus; hover 8 % dbd6df unchanged). Bar measured 56 high, pill, 200 wide (md.comp.search-bar container 56, full shape, surface-container-high ece6f0). Placeholder and text 4.5:1 or better, disabled at the 38 % level (exempt). Six cells viewed light 1x and dark 1x. Other looks re-render byte for byte.",
+    "gaps": [
+     "M3 has no search-field error state: the text field's error outline is borrowed",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/search_field_all.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): two states were not drawn and are now. The invalid cell was identical to the filled one; it takes the text field's error outline (error b3261e, 1 dp, the focused width when focused; M3 defines no search error, so the M3 text-field error is borrowed and says so). The focus cell had the rest fill; the M3 search bar's focus layer (on-surface 10 %) is now drawn (ece6f0 to d7d2db at keyboard focus; hover 8 % dbd6df unchanged). Bar measured 56 high, pill, 200 wide (md.comp.search-bar container 56, full shape, surface-container-high ece6f0). Placeholder and text 4.5:1 or better, disabled at the 38 % level (exempt). Six cells viewed light 1x and dark 1x. Other looks re-render byte for byte. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 has no search-field error state: the text field's error outline is borrowed",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "pull_to_refresh": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/pull_to_refresh.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the refreshing cell is drawn at a defined progress (70 %, looks_z84_edge.set_ring, the sheet asks for it for the Android look only) instead of a few pixels of sweep, and the Android indicator is the M3 40 dp circular indicator (48 dp container; the arc measured 39 px across, it was 32). Hover now lights the Refresh button (8 % layer) and focus the 10 % layer. Four cells viewed light 1x and dark 1x. Other looks re-render byte for byte.",
+    "gaps": [
+     "No pull gesture mid-drag is drawn",
+     "The indicator sits at the top of the feed, not over its first row"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/pull_to_refresh.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the refreshing cell is drawn at a defined progress (70 %, looks_z84_edge.set_ring, the sheet asks for it for the Android look only) instead of a few pixels of sweep, and the Android indicator is the M3 40 dp circular indicator (48 dp container; the arc measured 39 px across, it was 32). Hover now lights the Refresh button (8 % layer) and focus the 10 % layer. Four cells viewed light 1x and dark 1x. Other looks re-render byte for byte. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "No pull gesture mid-drag is drawn",
+     "The indicator sits at the top of the feed, not over its first row"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/large_title_full.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the shared sheet's 124 px cell clamped the 152 dp bar, so large_title.png hid the real height. A Material sheet with a 176 px cell (large_title_full.png, material_large_title.e) measures the scrolled bar 152 high (rows 250 to 402) with its 64 dp action row (Edit centred 31 px under the top), headline-medium title near the foot, and a disabled Done at 38 % beside Edit. All six cells viewed light and dark at 1x. This row's picture is now large_title_full.png; the shared large_title.png is unchanged.",
+    "gaps": [
+     "The shared large_title.png still shows the bar clamped to 124 (the other looks' sheet size)",
+     "No collapse animation is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/large_title_full.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the shared sheet's 124 px cell clamped the 152 dp bar, so large_title.png hid the real height. A Material sheet with a 176 px cell (large_title_full.png, material_large_title.e) measures the scrolled bar 152 high (rows 250 to 402) with its 64 dp action row (Edit centred 31 px under the top), headline-medium title near the foot, and a disabled Done at 38 % beside Edit. All six cells viewed light and dark at 1x. This row's picture is now large_title_full.png; the shared large_title.png is unchanged. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The shared large_title.png still shows the bar clamped to 124 (the other looks' sheet size)",
+     "No collapse animation is drawn"
+    ]
+   }
+  }
+ },
+ "split_button": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/split_button.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the open cell was the rest picture. The trailing icon is now an M3 chevron that turns up while the menu is open (Material only, control.split_button), and split_button_open.png draws the menu under it: three 48 dp rows (pitch 48 measured: 119, 167, 215), surface-container panel at elevation 2. Six cells viewed light 1x (rest, hover primary, hover menu half, pressed, focus, open) and the open sheet light and dark; fills primary 6750a4 with on-primary text (7.6:1), state layers 8 % hover and 10 % pressed and focus. Other looks re-render byte for byte.",
+    "gaps": [
+     "The menu is a second picture (split_button_open.png), not part of the six-cell sheet",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/split_button.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the open cell was the rest picture. The trailing icon is now an M3 chevron that turns up while the menu is open (Material only, control.split_button), and split_button_open.png draws the menu under it: three 48 dp rows (pitch 48 measured: 119, 167, 215), surface-container panel at elevation 2. Six cells viewed light 1x (rest, hover primary, hover menu half, pressed, focus, open) and the open sheet light and dark; fills primary 6750a4 with on-primary text (7.6:1), state layers 8 % hover and 10 % pressed and focus. Other looks re-render byte for byte. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The menu is a second picture (split_button_open.png), not part of the six-cell sheet",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "speed_dial": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/speed_dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): speed_dial_open.png added (material_split_open.exe x): the open FAB list, three 56 dp primary-container items right-aligned 4 dp apart above the primary 56 dp trigger (Share pill measured 56 high), not overlapping the trigger and not clipped; light and dark viewed at 1x. The four button cells (rest, hover, pressed, focus) were viewed light only and read as the M3 tonal extended FAB with 8 % and 10 % layers.",
+    "gaps": [
+     "The list is a second picture, not part of the four-cell sheet",
+     "Items are labels without leading icons"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/speed_dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): speed_dial_open.png added (material_split_open.exe x): the open FAB list, three 56 dp primary-container items right-aligned 4 dp apart above the primary 56 dp trigger (Share pill measured 56 high), not overlapping the trigger and not clipped; light and dark viewed at 1x. The four button cells (rest, hover, pressed, focus) were viewed light only and read as the M3 tonal extended FAB with 8 % and 10 % layers. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The list is a second picture, not part of the four-cell sheet",
+     "Items are labels without leading icons"
+    ]
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/font_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the sample now follows style (Bold as Roboto Medium, the rig has no Roboto Bold) and size up to 20 sp (ellipsis and clip past the box; the sheet's cell is 300 high) and the hover lands on the Roboto row. Stays review: the family does not change the sample (the rig loads Roboto, Segoe UI and Tahoma only), Italic has no italic face, and sizes above 20 are capped.",
+    "gaps": [
+     "Sample ignores the family",
+     "No italic face",
+     "Sample size capped at 20 sp in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the sample now follows style (Bold as Roboto Medium, the rig has no Roboto Bold) and size up to 20 sp (ellipsis and clip past the box; the sheet's cell is 300 high) and the hover lands on the Roboto row. Stays review: the family does not change the sample (the rig loads Roboto, Segoe UI and Tahoma only), Italic has no italic face, and sizes above 20 are capped.",
+    "gaps": [
+     "Sample ignores the family",
+     "No italic face",
+     "Sample size capped at 20 sp in the sheet"
+    ]
+   }
+  }
+ },
+ "password_field": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/password_field.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): seven cells (empty, masked, hover, focus, revealed, disabled, invalid) on the M3 outlined text field: 1 px outline 79747e, hover on-surface, 3 px primary focus, error b3261e, the 24 dp eye as an icon button with the 8 and 10 % layers, revealed eye in primary. One defect fixed: the disabled field's eye stayed at full strength while the rest was at 38 %; it is now on-surface 38 % (control.password_field_with, Material only; other looks byte for byte). Placeholder and masked text 4.5:1 or better, disabled cells exempt. Viewed light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale).",
+    "gaps": [
+     "No letter spacing and no ripple",
+     "M3 has no password field: the outlined text field with a trailing visibility toggle"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/password_field.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): seven cells (empty, masked, hover, focus, revealed, disabled, invalid) on the M3 outlined text field: 1 px outline 79747e, hover on-surface, 3 px primary focus, error b3261e, the 24 dp eye as an icon button with the 8 and 10 % layers, revealed eye in primary. One defect fixed: the disabled field's eye stayed at full strength while the rest was at 38 %; it is now on-surface 38 % (control.password_field_with, Material only; other looks byte for byte). Placeholder and masked text 4.5:1 or better, disabled cells exempt. Viewed light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale). (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "No letter spacing and no ripple",
+     "M3 has no password field: the outlined text field with a trailing visibility toggle"
+    ]
+   }
+  }
+ },
+ "link": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/link.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): unchanged since batch 5 (label centred, focus underlines). The pressed and focus layers are eased and the sheet's frames do not advance time, so they do not show; changing the library to skip the fade for the Android look would change its behaviour, so it was not done.",
+    "gaps": [
+     "Pressed and focus layers eased, not visible in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/link.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): unchanged since batch 5 (label centred, focus underlines). The pressed and focus layers are eased and the sheet's frames do not advance time, so they do not show; changing the library to skip the fade for the Android look would change its behaviour, so it was not done.",
+    "gaps": [
+     "Pressed and focus layers eased, not visible in the sheet"
+    ]
+   }
+  }
+ },
+ "rating": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/rating.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell showed no focus; it now walks four Tab stops (Drive.Tabs) and draws the 10 % on-surface layer on the current star (the library's D1171 focus). Six cells (3 of 5, hover star 4, pressed star 4, focus, none, all five) viewed light 1x and dark 1.5x; filled stars primary, outlines on-surface-variant at 3:1 or better. M3 has no rating component, built from the 24 dp icon in a 40 dp target and the state layers.",
+    "gaps": [
+     "M3 defines no rating"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/rating.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell showed no focus; it now walks four Tab stops (Drive.Tabs) and draws the 10 % on-surface layer on the current star (the library's D1171 focus). Six cells (3 of 5, hover star 4, pressed star 4, focus, none, all five) viewed light 1x and dark 1.5x; filled stars primary, outlines on-surface-variant at 3:1 or better. M3 has no rating component, built from the 24 dp icon in a 40 dp target and the state layers. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no rating"
+    ]
+   }
+  }
+ },
+ "dial": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell is still identical to rest: Tab stops 2 and 4 through Drive.Tabs drew nothing, so the dial draws no keyboard focus in the Android look; not fixed.",
+    "gaps": [
+     "No keyboard focus indicator on the dial"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell is still identical to rest: Tab stops 2 and 4 through Drive.Tabs drew nothing, so the dial draws no keyboard focus in the Android look; not fixed.",
+    "gaps": [
+     "No keyboard focus indicator on the dial"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/autocomplete.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the open suggestion list was narrower than its field and inset 16; for the Android look it is now the field's width (control.autocomplete), rows 48 dp apart (143, 191, 239 measured), surface-container panel, the active row secondary-container. Closed sheet (empty, typed, hover, focus, disabled) viewed light 1x only, the open sheet light and dark at 1x. Other looks re-render byte for byte (combo_box, choices_filter, token_edit re-rendered too).",
+    "gaps": [
+     "The list is a second picture (autocomplete_open.png)",
+     "The closed sheet's dark twin was not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/autocomplete.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the open suggestion list was narrower than its field and inset 16; for the Android look it is now the field's width (control.autocomplete), rows 48 dp apart (143, 191, 239 measured), surface-container panel, the active row secondary-container. Closed sheet (empty, typed, hover, focus, disabled) viewed light 1x only, the open sheet light and dark at 1x. Other looks re-render byte for byte (combo_box, choices_filter, token_edit re-rendered too). (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The list is a second picture (autocomplete_open.png)",
+     "The closed sheet's dark twin was not viewed"
+    ]
+   }
+  }
+ },
+ "key_value_editor": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell drew no focus. It now walks 22 Tab stops to the first name field and shows the 3 px primary focus outline with the primary label; the hover cell comes before it and aims at the Add variable button (a keyboard walk mutes the pointer layers of later frames), which shows the on-surface 8 % layer. Four cells viewed light 1x and dark 1.5x. Outlined fields 56 high, 1 px outline, floating label notched; the 24 dp remove icon buttons and the Add text button. The ghost label of audit 42 does not occur on this master.",
+    "gaps": [
+     "No error state (a duplicate name) is drawn",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the focus cell drew no focus. It now walks 22 Tab stops to the first name field and shows the 3 px primary focus outline with the primary label; the hover cell comes before it and aims at the Add variable button (a keyboard walk mutes the pointer layers of later frames), which shows the on-surface 8 % layer. Four cells viewed light 1x and dark 1.5x. Outlined fields 56 high, 1 px outline, floating label notched; the 24 dp remove icon buttons and the Add text button. The ghost label of audit 42 does not occur on this master. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "No error state (a duplicate name) is drawn",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "terminal_view": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/terminal_view.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the hover cell draws no row layer. Giving each cell its own row keys (terminal_view, tried with a key salt) changed nothing: the rows are not pointer targets of the list, so no 8 % layer can show without a library change to the list; reverted.",
+    "gaps": [
+     "Rows are not pointer targets"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/terminal_view.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 6): the hover cell draws no row layer. Giving each cell its own row keys (terminal_view, tried with a key salt) changed nothing: the rows are not pointer targets of the list, so no 8 % layer can show without a library change to the list; reverted.",
+    "gaps": [
+     "Rows are not pointer targets"
+    ]
+   }
+  }
+ },
+ "key_caps": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/key_caps.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight static cells (single, chords of two and three, function key, named keys, compact single and chord, arrow keys) viewed light and dark at 1x: caps are 1 px outline-variant outlined rounded boxes with label text, no clipping, chords spaced evenly, compact caps smaller. Label text 4.5:1 or better on the surface. Not measured against a token: M3 has no keyboard-key component, so the row is built from the outline-variant and label-medium tokens; 1.5x not viewed.",
+    "gaps": [
+     "M3 defines no key cap",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/key_caps.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight static cells (single, chords of two and three, function key, named keys, compact single and chord, arrow keys) viewed light and dark at 1x: caps are 1 px outline-variant outlined rounded boxes with label text, no clipping, chords spaced evenly, compact caps smaller. Label text 4.5:1 or better on the surface. Not measured against a token: M3 has no keyboard-key component, so the row is built from the outline-variant and label-medium tokens; 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no key cap",
+     "1.5x not viewed"
+    ]
+   }
+  }
+ },
+ "skeleton": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/skeleton.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight cells (text line, short line, circle, rectangle, pill, on highest container, list row, mid shimmer) viewed light and dark at 1x; fill surface-container-highest e6e0e9 measured exact, shapes legible and unclipped. The fill is a decorative placeholder at about 1.2:1 against the surface by design (it names no control and carries no text); the on-highest-container cell shows the inner surface. M3 has no skeleton component; 1.5x not viewed.",
+    "gaps": [
+     "Decorative low contrast by design",
+     "M3 defines no skeleton",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/skeleton.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight cells (text line, short line, circle, rectangle, pill, on highest container, list row, mid shimmer) viewed light and dark at 1x; fill surface-container-highest e6e0e9 measured exact, shapes legible and unclipped. The fill is a decorative placeholder at about 1.2:1 against the surface by design (it names no control and carries no text); the on-highest-container cell shows the inner surface. M3 has no skeleton component; 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "Decorative low contrast by design",
+     "M3 defines no skeleton",
+     "1.5x not viewed"
+    ]
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/empty_state.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): seven cells (glyph and action, two actions, compact, text only, picture art, action hovered, action pressed) viewed light and dark at 1x. Headline-small title, body-medium description on-surface-variant, filled primary action 40 high (measured 40 x 108), secondary-container icon disc, outlined compact action; hover and pressed layers on the action. Text 4.5:1 or better. M3 has no empty-state component; the layout is the guidance's, 1.5x not viewed.",
+    "gaps": [
+     "M3 defines no empty state",
+     "Hover and pressed of the action differ from rest by a few levels"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/empty_state.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): seven cells (glyph and action, two actions, compact, text only, picture art, action hovered, action pressed) viewed light and dark at 1x. Headline-small title, body-medium description on-surface-variant, filled primary action 40 high (measured 40 x 108), secondary-container icon disc, outlined compact action; hover and pressed layers on the action. Text 4.5:1 or better. M3 has no empty-state component; the layout is the guidance's, 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no empty state",
+     "Hover and pressed of the action differ from rest by a few levels"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/toast.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): one stacked cell (a titled card with leading icon, action and dismiss, two plain toasts and the '1 more notification' chip) viewed light and dark at 1x. Plain toasts are 48 high on inverse-surface (the M3 single-line snackbar container, measured rows 106 to 153), text 11.7:1 on the plate; in dark the plain toasts are the light inverse surface, the rich card stays a dark container. No hover on the action or dismiss is drawn in this sheet, 1.5x not viewed.",
+    "gaps": [
+     "Action and dismiss hover not drawn",
+     "The rich card and the plain toasts use different surfaces",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/toast.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): one stacked cell (a titled card with leading icon, action and dismiss, two plain toasts and the '1 more notification' chip) viewed light and dark at 1x. Plain toasts are 48 high on inverse-surface (the M3 single-line snackbar container, measured rows 106 to 153), text 11.7:1 on the plate; in dark the plain toasts are the light inverse surface, the rich card stays a dark container. No hover on the action or dismiss is drawn in this sheet, 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "Action and dismiss hover not drawn",
+     "The rich card and the plain toasts use different surfaces",
+     "1.5x not viewed"
+    ]
+   }
+  }
+ }
+}
