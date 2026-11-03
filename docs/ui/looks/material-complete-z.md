@@ -93,3 +93,10 @@ Raised to `ready`: split_button (chevron turns up when open, open menu sheet wit
 Fixed, Material only, other looks byte for byte (split_button, speed_dial, font_picker re-rendered; git status shows only Material pictures): `control.split_button` chevron; new apps `material_split_open.e` (`split_button_open.png`, `x` for `speed_dial_open.png`) and `material_large_title.e`; `font_picker.e` hover aims at the Roboto row (Material profile only).
 
 Left at review: font_picker (the sample line ignores family, style and size), pull_to_refresh (the indeterminate arc is a few pixels at the frame the sheet takes; `Settle` did not advance it), terminal_view and surf_table (hover cells draw no row layer; not changed).
+
+## Batch 5
+
+Raised to `ready`: password_field (7 cells; the disabled eye is now at 38 %, Material only).
+Improved, still review: link (label centred in its 48 dp target, focus underlines; pressed and focus layers still do not show), rating and dial (focus cell identical to rest), autocomplete (no open suggestion list drawn).
+
+Idiom rows raised in total in this lane: search_field, split_button, speed_dial, large_title, password_field (5 of 66). About 50 idiom rows were not examined; the ones seen are listed above.

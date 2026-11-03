@@ -382,5 +382,109 @@
     ]
    }
   }
+ },
+ "password_field": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/password_field.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): seven cells (empty, masked, hover, focus, revealed, disabled, invalid) on the M3 outlined text field: 1 px outline 79747e, hover on-surface, 3 px primary focus, error b3261e, the 24 dp eye as an icon button with the 8 and 10 % layers, revealed eye in primary. One defect fixed: the disabled field's eye stayed at full strength while the rest was at 38 %; it is now on-surface 38 % (control.password_field_with, Material only; other looks byte for byte). Placeholder and masked text 4.5:1 or better, disabled cells exempt. Viewed light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale).",
+    "gaps": [
+     "No letter spacing and no ripple",
+     "M3 has no password field: the outlined text field with a trailing visibility toggle"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/password_field.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): seven cells (empty, masked, hover, focus, revealed, disabled, invalid) on the M3 outlined text field: 1 px outline 79747e, hover on-surface, 3 px primary focus, error b3261e, the 24 dp eye as an icon button with the 8 and 10 % layers, revealed eye in primary. One defect fixed: the disabled field's eye stayed at full strength while the rest was at 38 %; it is now on-surface 38 % (control.password_field_with, Material only; other looks byte for byte). Placeholder and masked text 4.5:1 or better, disabled cells exempt. Viewed light 1x and dark 1.5x (light 1.5x and dark 1x not viewed, same code at another scale). (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "No letter spacing and no ripple",
+     "M3 has no password field: the outlined text field with a trailing visibility toggle"
+    ]
+   }
+  }
+ },
+ "link": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/link.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): two defects fixed for the Android look: the hover wash sat on the top half of its 48 dp target with the label at the top (the label is now centred in the target) and keyboard focus was not drawn (it now underlines like the pointer states). Stays review: the 10 % focus and pressed layers do not show in the sheet (the wash is eased and only the hover pass lets it fade in), so pressed and focus differ from rest by the underline alone; M3 has no link component.",
+    "gaps": [
+     "Pressed and focus layers not visible in the sheet",
+     "M3 defines no link"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/link.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): two defects fixed for the Android look: the hover wash sat on the top half of its 48 dp target with the label at the top (the label is now centred in the target) and keyboard focus was not drawn (it now underlines like the pointer states). Stays review: the 10 % focus and pressed layers do not show in the sheet (the wash is eased and only the hover pass lets it fade in), so pressed and focus differ from rest by the underline alone; M3 has no link component.",
+    "gaps": [
+     "Pressed and focus layers not visible in the sheet",
+     "M3 defines no link"
+    ]
+   }
+  }
+ },
+ "rating": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/rating.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: the focus cell is identical to rest (no focus indication) and M3 has no rating component.",
+    "gaps": [
+     "the focus cell is identical to rest (no focus indication) and M3 has no rating component"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/rating.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: the focus cell is identical to rest (no focus indication) and M3 has no rating component.",
+    "gaps": [
+     "the focus cell is identical to rest (no focus indication) and M3 has no rating component"
+    ]
+   }
+  }
+ },
+ "dial": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: the focus cell is identical to rest (no focus indication).",
+    "gaps": [
+     "the focus cell is identical to rest (no focus indication)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: the focus cell is identical to rest (no focus indication).",
+    "gaps": [
+     "the focus cell is identical to rest (no focus indication)"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/autocomplete.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: no cell draws the open suggestion list.",
+    "gaps": [
+     "no cell draws the open suggestion list"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/autocomplete.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 5): viewed light 1x. Stays review: no cell draws the open suggestion list.",
+    "gaps": [
+     "no cell draws the open suggestion list"
+    ]
+   }
+  }
  }
 }

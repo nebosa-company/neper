@@ -3421,7 +3421,10 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     caption.wrap = .None
     let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
     if label_error != ok { ret (zero, label_error) }
-    let active = state.hovered || state.pressed
+    var active = state.hovered || state.pressed
+    // Android: keyboard focus draws the 10 % layer and the underline, as the pointer states do.
+    let android_focus = t.tokens.profile == .MaterialLike && state.focus_visible
+    if android_focus { active = true }
     // (D1335) Over a link, the hand.
     if state.hovered && mem.address_of(t.runtime) != 0usize { widget.request_cursor(t.runtime, 2u8) }
     var count = 1usize
@@ -3437,7 +3440,10 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, style.defaults(), lines[0usize..count])
+    var body_style = style.defaults()
+    // Android: the label sits in the middle of its 48 dp target, so the layer is centred on it.
+    if t.tokens.profile == .MaterialLike { body_style.min_height = style.Length { Px: t.tokens.metrics.hit_target } }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, body_style, lines[0usize..count])
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     // A link is at least the hit target, so a short one is still reachable.
@@ -3450,6 +3456,7 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     // `key + 1048594`); reduced motion changes at once.
     var opacity: f32 = 0.0
     if state.hovered { opacity = t.tokens.states.hover }
+    if android_focus { opacity = t.tokens.states.focus }
     if state.pressed { opacity = t.tokens.states.pressed }
     let washed = eased_on(t, key, key + 1048594u64, opacity, false, t.tokens.durations.short2)
     target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), washed) }
@@ -8150,6 +8157,8 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         ink = style.color(t.tokens, .Primary)
         eye = .VisibilityOff
     }
+    // Android: a disabled field's trailing icon is on-surface at the 38 % content level.
+    if t.tokens.profile == .MaterialLike && !options.enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     let (mark, mark_error) = icon_square(a, ink, eye, glyph)
     if mark_error != ok { ret (zero, mark_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 4usize)
