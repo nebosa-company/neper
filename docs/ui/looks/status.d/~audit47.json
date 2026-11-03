@@ -1,0 +1,44 @@
+{
+ "table": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "AUDIT 47 (1): the sorted descending cell draws the sort arrow on top of the 'Qty' caption (the Qty column is 56 wide), at 1x and 1.5x, light and dark: a defect, not a limit; the recorded gap says so but the row was raised. Fix: widen the Qty column or place the arrow after the caption. Back to review. Round 88 (y): NSTableView look: header with sort arrow, banded rows, grey selection and hover, overlay scroll thumb; the Type column is 104 wide on Cupertino so 'Creature' is no longer cut; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino/table.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "AUDIT 47 (1): the sorted descending cell draws the sort arrow on top of the 'Qty' caption (the Qty column is 56 wide), at 1x and 1.5x, light and dark: a defect, not a limit; the recorded gap says so but the row was raised. Fix: widen the Qty column or place the arrow after the caption. Back to review. Round 88 (y): NSTableView look: header with sort arrow, banded rows, grey selection and hover, overlay scroll thumb; the Type column is 104 wide on Cupertino so 'Creature' is no longer cut; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino-dark/table.png"
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/dialog.png",
+    "notes": "AUDIT 47 (2): Dark Missing Set Cards edition names are coloured inks left at 2.3 to 2.9:1 on #222 (AA5555 2.9, 5555AA 2.3), under 4.5:1; the new bodies were legible at 1x and 1.5x. Stays review. ROUND 88 (lane x): the eight remaining bodies are composed (Deck Properties, About, Filter Card Pool, Advanced Filter, Conditional Formatting, Deck Legality, Customization, Statistics) from the 1:1 captures (ref/windows-1to1/states) by scripts/gen_x88.py: the chrome of v3's DevExpress controls is one baked tile that the dark look maps, the artwork (skull, pie, icons) raw tiles, every text a live label at its captured ink position, the buttons live. Client areas against the 1:1 captures: 0 to 24 chrome px each (the live buttons' ring pixels), everything else glyph raster. Deviations kept honest: the Deck Legality memo is Verdana 11 in the capture and Tahoma 13 here (widths agree within 1 percent, heights do not); the About skull is posterised to six luminance levels in pixel pairs (the scene takes about 50000 rectangles); Deck Properties shows the sheet's Desktop file name, not the capture's Probe Deck path; the About version line is 91 px against 99. Dark: baked chrome mapped, dark inks lifted (grey to #E8E8E8, coloured to luma 0.72), artwork raw; viewed at 1x and 1.5x. scripts/looks_strict.py over the five sheets: 32 of 119 cells pass (24 before); the others fail on the resampled reference's soft edges and glyphs. Stays review: the row also lists states with no capture (caption pressed, resize, disabled, message box bitmaps, task dialog), and the older bodies (Search, Sort, Missing Set Cards, Options) differ from the 1:1 states captures by text raster and one row of label offset, not re-fitted this round. | ROUND 87 (lane x): Options (11 category buttons with baked icons, sunken panel, gradient header, 4 check boxes), Sort (dialog grid, shared via e.ui.dlggrid) and Missing Set Cards (edition list, Show Cards group, 3 radios) composed from the 1:1 control rectangles (ref/windows-1to1/dialogs/*.controls.json), with Search for Card 4 of the 14 bodies. looks_strict vs ref/windows (resampled): 24 of 119 cells pass (17 before), chrome px off 1.16 M to 1.02 M. Still NOT composed: Deck Properties (vertical grid, picture, colour icons), About (tab strip, picture), Filter Card Pool, Advanced Filter, Conditional Formatting, Deck Legality text, Customization list, Statistics chart. The row stays review. ROUND 85 (lane x, Windows Dark derivation of a ready light twin; maintainer rule: no dark capture exists). Batch 2: dark twin of a review row, stays review. Contrast probed on the six dialog sheets: titles, buttons, labels hold (inactive caption dimmed on purpose); the bodies are not composed as in Light. | ROUND 81 (lane t, re-audit, status unchanged): backed by native dark captures: the caption, its three buttons and the #6A6A6A line. Not backed: the Dark colours of the dialog body and button rows as the look draws them (the message box and task dialog stay light natively) and v3's 33 px close button in dark. | ROUND 33 (still review, measured whole): the whole native dialog is now a sheet (dialog_native: caption, the #6A6A6A line under it, the #202020 client inside the black 8 px resize border, Plain dialog window. and the OK button, 296 x 129). The close button is the 46 wide one (dark) and exact; the old 33 against 46 belonged to the light v3 dialog. Rule (scripts/looks_dark_whole.py): the whole native 1x capture, every pixel, placed at the whole-pixel offset with the fewest off in our sheet; a pixel is off when any channel differs by more than 2 levels; text pixels (within 2 px of ink, looks_dark_native.text_zone) are counted in the totals here. dialog-active: structure 519 (the OK button), text 704; dialog-inactive 533 and 688. By zone, dialog-active: black border, face, frame line and the rest 0 px off, caption title 206 px, close X 1 px, body label 498 px, OK button 519 px. Cause, measured: the capture's client text is not GDI hinted (the P of Plain has a 71 percent row above a 41 percent row where a hinted glyph is one full row) and the OK button's top and bottom edges are two partial rows (b5, 77 and aa, 61), so the dialog window was composited at a fractional vertical scale; the controls of the other native captures are not. Not reproducible by hinted text and whole-pixel chrome. | ROUND 31 (still review): the caption of dialog-active and dialog-inactive (31 rows) with glyphs counted 155 to 153: the title sat one pixel low (cap top on row 12, the capture's row 11) and now follows the capture (a caption without an icon pads its title area two pixels at the foot); the lone 46 wide close button is exact (0 px). The 153 left are the title text: DWM sets it as greyscale stems 1.5 px wide, our hinted glyphs have 1 px stems (the D's stem), so none of them is placement. The dialog body (Plain dialog window., OK) and the 1 px window-frame line under the caption have no sheet cell, so the whole dialog is not compared. The 33 px close button is v3's light dialog only. | Round 15: the caption against the native dark captures (window-active, window-inactive, dialog-active, dialog-inactive, 31 rows): the three buttons of the window caption are 0 px off (the glyphs sit 2 px left of and 1 px below v3's live windows: a Glyph kind of 16 or more in winchrome), the dialog's lone close button is now the native 46 wide one with its own asymmetric X (1 px off in dialog-active, 0 in dialog-inactive); the rest of each caption is the title text (ClearType) and the program icon (artwork). The message box and the task dialog stay light natively (no dark reference), the caption's 1 px #6A6A6A line under row 30 is a window frame feature.",
+    "gaps": [
+     "Dialog text and the OK button rows are fractionally blended in the capture (about 1.5 px stems); ours is hinted and whole pixel: 704 px (active)",
+     "The message box and the task dialog stay light natively: no dark reference",
+     "Deck Legality memo face: Verdana 11 in the capture, Tahoma 13 here",
+     "About skull posterised (six levels, pixel pairs): scene command budget",
+     "Dark Missing Set Cards: coloured edition names 2.3 to 2.9:1 on the dark list"
+    ]
+   }
+  }
+ }
+}
