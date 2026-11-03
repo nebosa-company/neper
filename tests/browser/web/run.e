@@ -128,8 +128,15 @@ fn fetch_file(ctx: *void, u: str, referrer: str, nav: bool) -> (str, u16, bool) 
         }
         k += 1usize
     }
+    var query: str = ""
+    if cut < path.len { query = path[cut + 1usize..] }
     path = path[0usize..cut]
     if str.eq(path, "/resources/testharnessreport.js") { ret (reporter(), 200u16, true) }
+    if str.ends_with(path, "/encoding.py") {
+        // dom/nodes/encoding.py: a page whose meta charset is the `label` query value.
+        let (lp, has_label) = str.find(query, "label=")
+        if has_label { ret (cat3(fc.a, "<!doctype html><meta charset=\"", query[lp + 6usize..], "\">"), 200u16, true) }
+    }
     let (txt, fe) = fs.read_file(fc.a, cat3(fc.a, fc.root, path, ""), 16777216usize)
     if fe != ok { ret ("", 404u16, true) }
     let body: str = txt

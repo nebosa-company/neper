@@ -470,6 +470,15 @@ fn parse_options() -> html.Options {
     ret html.Options { max_bytes: 67108864usize, max_nodes: 1000000usize, max_attributes: 256usize, max_depth: 512u16, preserve_comments: true }
 }
 
+// encodingName(label): the Encoding Standard name of a label, or undefined.
+fn n_encoding_name(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (label, le) = sarg(it, args, 0usize)
+    if le != ok { ret (js.undefv(), le) }
+    let (name, found) = charset.label_to_name(label)
+    if !found { ret (js.undefv(), ok) }
+    ret (js.str_value(name), ok)
+}
+
 fn n_inner_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let h = host_of(it)
     let id = nid(arg(args, 0usize))
@@ -1218,7 +1227,8 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "textGet", 1u32, n_text_get)
     js.add_method(it, n, "textSet", 2u32, n_text_set)
     js.add_method(it, n, "innerGet", 1u32, n_inner_get)
-    js.add_method(it, n, "innerSet", 2u32, n_inner_set)
+    js.add_method(it, n, "innerSet", 3u32, n_inner_set)
+    js.add_method(it, n, "encodingName", 1u32, n_encoding_name)
     js.add_method(it, n, "outerGet", 1u32, n_outer_get)
     js.add_method(it, n, "qs", 2u32, n_qs)
     js.add_method(it, n, "qsa", 2u32, n_qsa)
