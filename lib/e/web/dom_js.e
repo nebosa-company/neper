@@ -7285,6 +7285,8 @@ fn part25(b: *str.Builder) -> err {
     try str.push(b, "  if (c === null) throw domError('SecurityError', 'Invalid URL');\n")
     try str.push(b, "  const cur = curURL();\n")
     try str.push(b, "  if (c[10] !== cur[10]) throw domError('SecurityError', 'A history state object with URL cannot be created in a document with a different origin');\n")
+    try str.push(b, "  if (c[1] !== cur[1] || c[2] !== cur[2] || c[3] !== cur[3] || c[4] !== cur[4]) throw domError('SecurityError', 'The URL differs from the document URL in more than its path, query and fragment');\n")
+    try str.push(b, "  if (cur[7].charAt(0) !== '/' && c[0].split('#')[0] !== cur[0].split('#')[0]) throw domError('SecurityError', 'The document URL is opaque: only the fragment may change');\n")
     try str.push(b, "  slotOf(mainDocument).url = c[0];\n")
     try str.push(b, "}\n")
     try str.push(b, "function Navigator() { throw new TypeError('Illegal constructor'); }\n")
