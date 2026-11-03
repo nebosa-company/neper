@@ -16,8 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Enable safaridriver
         run: sudo safaridriver --enable
-      - run: python3 -m pip install selenium
+      - run: python3 -m venv /tmp/v && /tmp/v/bin/pip install selenium
       - name: Serve docs
         run: python3 -m http.server 8000 --directory docs & sleep 2
       - name: Samples in Safari
-        run: python3 tests/play/safari.py "${{ inputs.url || 'http://localhost:8000' }}"
+        run: /tmp/v/bin/python tests/play/safari.py "${{ inputs.url || 'http://localhost:8000' }}"
