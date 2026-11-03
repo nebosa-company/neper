@@ -111,7 +111,9 @@ The first working target is the simulator with an ad-hoc signature, because that
 
 ## 7. Verification and Phasing
 
-The Windows host cannot run iOS code. Every phase below needs a Mac (the macOS stream already has one).
+The Windows host cannot run iOS code. Phases 1-5 run on a GitHub-hosted `macos-14` runner, in the shape of `ios-sim.yml` and `macos-corpus.yml`: an Ubuntu job builds `neper-self` and emits the Mach-O, uploads it as an artifact, and the Mac job downloads it, ad-hoc signs, runs `codesign --verify`, boots a simulator, and runs or installs it. `rcodesign` runs in the same job for the CodeDirectory diff. Each check is a `workflow_dispatch` run, so batch several checks per run. Phase 6 needs a physical iPhone, which a hosted runner lacks (a self-hosted Mac or a manual run). Phases 6 and 7 take the certificate, key and provisioning profile from encrypted GitHub secrets, never from the repository.
+
+First workflow: `ios-sim-native.yml`, covering C225's first acceptance (a platform-7 `main` returning a code, ad-hoc signed, exit code read back from `xcrun simctl spawn`).
 
 1. **Phase 1.** `LC_BUILD_VERSION` platform 7 Mach-O `main` returning a code, ad-hoc signed, run in the Simulator with `xcrun simctl spawn`.
 2. **Phase 2.** Ad-hoc `CodeDirectory` writer. Check with `codesign -dvvv --verify`.
