@@ -1,0 +1,66 @@
+{
+ "avatar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the presence badge now hangs off the lower right corner (iOS 12 pt dot, 4 pt ring) and no longer covers the N, B or K of the monogram; presence tones 1F7A35 / C93400 / D70015 light and 30D158 / FF9F0A / FF453A dark (4.7:1 or better on the ground, 4.2:1 on the disc). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/avatar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the presence badge now hangs off the lower right corner (iOS 12 pt dot, 4 pt ring) and no longer covers the N, B or K of the monogram; presence tones 1F7A35 / C93400 / D70015 light and 30D158 / FF9F0A / FF453A dark (4.7:1 or better on the ground, 4.2:1 on the disc). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/avatar.png"
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button with the menu list. The lit row takes the 0A60FF / 0B57D0 accent (white text 5.5:1 / 6.4:1) and its template picture is drawn white (the red stand-in was 1.3:1 on the accent); hover equals rest as on the macOS pop-up (the ready combo_box row does the same). Viewed 1x and 1.5x light and dark. Colour pictures stand in for an image list and are content, not controls.",
+    "gaps": [],
+    "screenshot": "cupertino/image_combo_box.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button with the menu list. The lit row takes the 0A60FF / 0B57D0 accent (white text 5.5:1 / 6.4:1) and its template picture is drawn white (the red stand-in was 1.3:1 on the accent); hover equals rest as on the macOS pop-up (the ready combo_box row does the same). Viewed 1x and 1.5x light and dark. Colour pictures stand in for an image list and are content, not controls.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/image_combo_box.png"
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the field with the macOS graphical-date-picker popover. Chosen day white on 0A60FF (5.5:1) light, near-black on 409CFF dark; Today and Clear links 5.5:1 and 6:1; the day-hover cell now hovers day 1 (it hovered the chosen 8 and showed nothing). Viewed 1x and 1.5x light and dark. Not drawn: the iOS compact capsule and the macOS stepper field, and Today is marked by the footer button only (the docked picker does not ring it).",
+    "gaps": [],
+    "screenshot": "cupertino/date_edit.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the field with the macOS graphical-date-picker popover. Chosen day white on 0A60FF (5.5:1) light, near-black on 409CFF dark; Today and Clear links 5.5:1 and 6:1; the day-hover cell now hovers day 1 (it hovered the chosen 8 and showed nothing). Viewed 1x and 1.5x light and dark. Not drawn: the iOS compact capsule and the macOS stepper field, and Today is marked by the footer button only (the docked picker does not ring it).",
+    "gaps": [],
+    "screenshot": "cupertino-dark/date_edit.png"
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS box, iOS inset section, plain, disabled, empty, invalid all legible; the long caption no longer runs into the next cell; the invalid frame and message take D70015 / FF453A (4.8:1 and 5.0:1). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/group_box.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS box, iOS inset section, plain, disabled, empty, invalid all legible; the long caption no longer runs into the next cell; the invalid frame and message take D70015 / FF453A (4.8:1 and 5.0:1). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/group_box.png"
+   }
+  }
+ }
+}
