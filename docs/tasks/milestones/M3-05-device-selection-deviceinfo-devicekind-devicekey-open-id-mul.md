@@ -55,7 +55,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 ## Code anchors
 
 - `DeviceInfo`: `lib/e/gpu.e`×30‡
-- `DeviceKind`: `lib/e/gpu.e`×2‡
+- `DeviceKind`: `lib/e/gpu.e`×2‡, `scripts/flutter_refs/harness.dart`×2
 - `DeviceKey`: `lib/e/gpu.e`×4‡, `lib/e/gpu/vulkan.e`×2†
 - `open_id`: `lib/e/gpu.e`×1‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)

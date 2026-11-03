@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Project tools |
 | score | 0.00 of 1 |
-| queue position | 122 of 184 (only position 1 is eligible for the next session; see README) |
+| queue position | 122 of 192 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done

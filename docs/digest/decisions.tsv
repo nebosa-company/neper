@@ -3026,6 +3026,8 @@ D5928	2910	A Vulkan swapchain (`VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR
 D5929	3298	A GPU tile rasteriser for `e.gfx.scene` (`e.gfx.gpuraster`)
 D5950	1954	What the RTX 3080 and the kernel language exposed
 D5951	907	Defaults, by measurement
+D5952	1184	The playground compiler is built with `--arena 192m`, and a wasm reservation never exceeds the root
 D5953	972	Multicol columns start where whole lines and unbreakable boxes do
 D5954	935	The browser app: page scripts, taps and fonts
-D5955	674	The browser on wasm32-wasi
+D5955	675	The browser on wasm32-wasi
+D5956	922	NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
