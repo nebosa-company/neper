@@ -71,3 +71,17 @@ Duplicate-key scan (all 251 apps, a temporary detector in `looks.render_sheet`, 
 ## Not done
 
 The 66 platform-idiom rows were not raised in this batch. Viewed and found defective: search_field (the invalid cell is drawn like the filled one), large_title (the disabled-action cell shows no action), split_button (the menu-open cell shows no open menu), speed_dial (no open dial), pull_to_refresh (no hover), font_picker (hover off the list). key_value_editor and time_picker were viewed earlier and not changed. None of them is raised.
+
+## Batch 3
+
+Moved pictures confirmed (viewed, committed in batch 2): `date_range_picker_open` is the docked calendar variant, not the picture of the matched date_range_picker row (`date_range_picker.png`, unchanged); the Flutter reference for the row is the range dialog, and the only earlier measurement of the `_open` sheet was the band colour (e8def8 / 4a4458), still exact (e8def8 at the band pixel). `memo`, `scroll_area` and `terminal_view` changed only in their scroll thumbs (4 wide, 48 shortest). The terminal_view sheet is not a ready candidate (hover and focus cells draw no row layer).
+
+Fixed, Material only, other looks byte for byte (search_field_all, nav_large_title, h_pull_to_refresh re-rendered):
+- `search_field` invalid and focus cells (control.e, Android): error outline and the 10 % focus layer. Raised to `ready` (extra row).
+- `nav_large_title.e`: the Android sheet shows a disabled Done beside Edit. `large_title` stays review (bar height not measured against the M3 large app bar).
+- `h_pull_to_refresh.e`: the Android hover cell aims at the Refresh button. `pull_to_refresh` stays review (the refreshing arc is a few pixels).
+- `hint` stays review: the reference's edge is a shadow gradient, so the partial edge column cannot be matched or excused.
+
+Duplicate-key sheets that still lose a hover in the Material look and were not fixed: font_picker (hover cell lands at the foot of its list), terminal_view and surf_table (no row layer in the cells).
+
+Still not examined: the other 55 idiom rows, including split_button and speed_dial (no open state drawn).

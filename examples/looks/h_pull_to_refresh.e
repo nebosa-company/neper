@@ -23,7 +23,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let (node, node_error) = collection.pull_to_refresh(a, u64((i + 1usize) * 100usize), t, column, i == 1usize, &submit, 240.0, 130.0)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
-        if i == 2usize { drive = .Hover }
+        if i == 2usize {
+            drive = .Hover
+            if t.tokens.profile == .MaterialLike { looks.aim(2usize, -84.0, -61.0) }
+        }
         if i == 3usize { drive = .Focus }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize

@@ -190,7 +190,7 @@
    "material": {
     "status": "review",
     "screenshot": "material/tooltip.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered. Batch 3: the Material Web reference ref/material/light/tooltip-rich@1x.png has a soft shadow gradient at the plate edge so its edge column cannot be matched pixel for pixel; no evidence was found that the partial column is the reference's resampling, so hint stays review.",
     "gaps": [
      "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
      "Rich tooltip left edge column half a pixel off (round 33)"
@@ -199,7 +199,7 @@
    "material_dark": {
     "status": "review",
     "screenshot": "material-dark/tooltip.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered. Batch 3: the Material Web reference ref/material/light/tooltip-rich@1x.png has a soft shadow gradient at the plate edge so its edge column cannot be matched pixel for pixel; no evidence was found that the partial column is the reference's resampling, so hint stays review.",
     "gaps": [
      "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
      "Rich tooltip left edge column half a pixel off (round 33)"
@@ -247,6 +247,72 @@
     "gaps": [
      "M3 has no splitter component; handle tokens are the adaptive pane drag handle from memory of the guidelines",
      "Focus is the hover colour, no ring"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/search_field_all.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): two states were not drawn and are now. The invalid cell was identical to the filled one; it takes the text field's error outline (error b3261e, 1 dp, the focused width when focused; M3 defines no search error, so the M3 text-field error is borrowed and says so). The focus cell had the rest fill; the M3 search bar's focus layer (on-surface 10 %) is now drawn (ece6f0 to d7d2db at keyboard focus; hover 8 % dbd6df unchanged). Bar measured 56 high, pill, 200 wide (md.comp.search-bar container 56, full shape, surface-container-high ece6f0). Placeholder and text 4.5:1 or better, disabled at the 38 % level (exempt). Six cells viewed light 1x and dark 1x. Other looks re-render byte for byte.",
+    "gaps": [
+     "M3 has no search-field error state: the text field's error outline is borrowed",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/search_field_all.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): two states were not drawn and are now. The invalid cell was identical to the filled one; it takes the text field's error outline (error b3261e, 1 dp, the focused width when focused; M3 defines no search error, so the M3 text-field error is borrowed and says so). The focus cell had the rest fill; the M3 search bar's focus layer (on-surface 10 %) is now drawn (ece6f0 to d7d2db at keyboard focus; hover 8 % dbd6df unchanged). Bar measured 56 high, pill, 200 wide (md.comp.search-bar container 56, full shape, surface-container-high ece6f0). Placeholder and text 4.5:1 or better, disabled at the 38 % level (exempt). Six cells viewed light 1x and dark 1x. Other looks re-render byte for byte. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 has no search-field error state: the text field's error outline is borrowed",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "pull_to_refresh": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/pull_to_refresh.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the hover cell lit nothing because the driven pointer sat on the list, not on the Refresh button; the cell aims at the button for the Android look (h_pull_to_refresh.e, guarded by the Material profile, other looks unchanged) and the 8 % layer shows, equal to the focus layer's 10 % to the eye. Stays review: the refreshing cell draws only a few pixels of arc, not a legible 48 dp circular indicator, and no cell shows a pull in progress.",
+    "gaps": [
+     "The refreshing indicator is a small arc, not a legible circular progress",
+     "No pull gesture mid-drag"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/pull_to_refresh.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the hover cell lit nothing because the driven pointer sat on the list, not on the Refresh button; the cell aims at the button for the Android look (h_pull_to_refresh.e, guarded by the Material profile, other looks unchanged) and the 8 % layer shows, equal to the focus layer's 10 % to the eye. Stays review: the refreshing cell draws only a few pixels of arc, not a legible 48 dp circular indicator, and no cell shows a pull in progress.",
+    "gaps": [
+     "The refreshing indicator is a small arc, not a legible circular progress",
+     "No pull gesture mid-drag"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/large_title.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the disabled-action cell showed no action at all because the app bar drops a lone disabled trailing action. The Android sheet now shows Edit with a disabled Done (38 %), captioned so. Stays review: the large bar's height was not measured against the M3 large top app bar (152 dp) and the scrolled and inline forms were not compared with a token.",
+    "gaps": [
+     "Large app bar height not measured against md.comp.top-app-bar.large",
+     "A lone disabled action is dropped by app_bar_of"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/large_title.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the disabled-action cell showed no action at all because the app bar drops a lone disabled trailing action. The Android sheet now shows Edit with a disabled Done (38 %), captioned so. Stays review: the large bar's height was not measured against the M3 large top app bar (152 dp) and the scrolled and inline forms were not compared with a token.",
+    "gaps": [
+     "Large app bar height not measured against md.comp.top-app-bar.large",
+     "A lone disabled action is dropped by app_bar_of"
     ]
    }
   }

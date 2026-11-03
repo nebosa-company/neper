@@ -35,9 +35,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 3usize { options.scrolled = true }
         if i == 4usize { leading = lead[0usize..1usize] }
         if i == 5usize { trailing = trail[1usize..2usize] }
+        // The top app bar drops a lone disabled action; the Android sheet shows a disabled Done beside a live Edit instead.
+        if i == 5usize && t.tokens.profile == .MaterialLike { trailing = trail[0usize..2usize] }
         let (bar, bar_error) = navigation.app_bar_of(a, u64((i + 1usize) * 1000usize), t, "Library", leading, trailing, options, 330.0)
         if bar_error != ok { ret (0usize, bar_error) }
-        cells[i] = looks.Cell { caption: names[i], node: bar, drive: .None }
+        var caption = names[i]
+        if i == 5usize && t.tokens.profile == .MaterialLike { caption = "large, Done disabled beside Edit" }
+        cells[i] = looks.Cell { caption: caption, node: bar, drive: .None }
         i += 1usize
     }
     ret (6usize, ok)

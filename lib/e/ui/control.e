@@ -8301,6 +8301,8 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var fill = style.color(t.tokens, .SurfaceContainerHigh)
     if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
     if state.pressed && android { fill = style.layer(style.color(t.tokens, .SurfaceContainerHigh), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) }
+    // Android: the M3 search bar's focused state layer (md.comp.search-bar, on-surface 10 %).
+    if android && state.focus_visible && !state.hovered && !state.pressed { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.focus) }
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
@@ -8308,6 +8310,8 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         // The pill carries no outline at rest; keyboard focus and an invalid query draw the field outline (accent, error).
         if options.invalid { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } } else if state.focused { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
     }
+    // Android: M3 has no search error state; an invalid query takes the text field's error outline (error, 1 dp; the focused width when focused).
+    if android && options.invalid { bar.border = style.Border { width: if_else(state.focused, t.tokens.sizes.outline_focused, t.tokens.sizes.divider), color: style.color(t.tokens, .Error) } }
     var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
     if android { pad_y = style.Length { Px: 0.0 } }
