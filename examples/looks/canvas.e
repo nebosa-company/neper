@@ -55,6 +55,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         plots[0usize] = Plot { bar: style.color(t.tokens, .Primary), other: style.color(t.tokens, .Secondary), grid: style.color(t.tokens, .OutlineVariant), inset: 0.0 }
         // Android (round 86): the bars stand on a baseline 12 dp (the frame's corner radius) above the foot, so the rounded corners do not cut them.
         if t.tokens.profile == .MaterialLike && i != 2usize { plots[0usize].inset = 12.0 }
+        // Cupertino (round 87): the same for the 10 pt frame.
+        if t.tokens.profile == .CupertinoLike && i != 2usize && i != 1usize { plots[0usize].inset = 10.0 }
         let custom = widget.Custom { ctx: mem.cast[*void](&plots[0usize]), measure: plot_measure, paint: plot_paint, state: widget.bytes_of[Plot](&plots[0usize]) }
         var options = control.canvas_options()
         options.width = widths[i]

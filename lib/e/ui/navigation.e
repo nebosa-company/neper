@@ -20,6 +20,7 @@ use e.ui.looks_e_draw
 use e.ui.looks_q79
 use e.ui.looks_u81
 use e.ui.looks_y86
+use e.ui.looks_y87
 use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -6983,6 +6984,8 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     options.radius = t.tokens.radii.xl
     options.padding = 0.0
     var panel = control.surface_style(t, options)
+    // Cupertino: the shadow has no blur here, so a 3 pt offset reads as a hard band; one point at low strength reads as the panel's edge.
+    if t.tokens.profile == .CupertinoLike { panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 1.0 }, color: paint.rgba(0.0, 0.0, 0.0, looks_y87.edge_shadow(t.tokens.palette == .Dark)) } }
     panel.width = style.Length { Px: width }
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
     if boxed_error != ok { ret (zero, TooLarge) }
@@ -8596,6 +8599,43 @@ fn ribbon_jump(ctx: *void) -> err {
     ret widget.focus_key(j.runtime, j.to)
 }
 
+// The quick-access bar. Cupertino draws Save, Undo and Redo as glyphs (macOS toolbar items are icons; the name stays the accessible label); every other look keeps its text buttons.
+fn ribbon_quick(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action) -> (widget.Node, err) {
+    if t.tokens.profile != .CupertinoLike {
+        let (plain, plain_error) = spaced_row(a, key, t, items, .Plain, 2.0, false)
+        ret (plain, plain_error)
+    }
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, items.len)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < items.len {
+        let item = &items[i]
+        let code = looks_y87.quick_code(item.label)
+        if code == 255u8 {
+            let (made, made_error) = action_button(a, key + u64(i), t, item, .Plain)
+            if made_error != ok { ret (zero, made_error) }
+            buttons[i] = made
+        } else {
+            var kind: control.GlyphKind = .SaveTray
+            if code == 6u8 { kind = .Undo }
+            if code == 7u8 { kind = .Redo }
+            let ink = style.color(t.tokens, .Primary)
+            let (picture, picture_error) = control.stroked_glyph(a, ribbon_ink_of(ink, item.enabled, t), kind, 18.0, 1.5)
+            if picture_error != ok { ret (zero, picture_error) }
+            let (made, made_error) = ribbon_press(a, t, key + u64(i), item.label, picture, false, 32.0, item.enabled, false, false, false, false, &item.action, true)
+            if made_error != ok { ret (zero, made_error) }
+            buttons[i] = made
+        }
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 2.0 }, style.defaults(), buttons[0usize..items.len]), ok)
+}
+
+fn ribbon_ink_of(ink: paint.Color, enabled: bool, t: *const control.Theme) -> paint.Color {
+    if !enabled { ret control.with_alpha(ink, t.tokens.states.disabled_content) }
+    ret ink
+}
+
 // The ribbon. The quick-access bar is 32 tall, the strip 32, the panel 100; the tabs, group names and commands are
 // the caller's data. `tabs` lists every tab, shown or not; `options.picks` has one action per tab.
 fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const RibbonTab, options: RibbonOptions) -> (widget.Node, err) {
@@ -8622,7 +8662,7 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
     bar_style.height = style.Length { Px: 32.0 }
     bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
     if options.quick.len > 0usize {
-        let (quick, quick_error) = spaced_row(a, key + 1u64, t, options.quick, .Plain, 2.0, false)
+        let (quick, quick_error) = ribbon_quick(a, key + 1u64, t, options.quick)
         if quick_error != ok { ret (zero, quick_error) }
         let (quick_wrap, quick_wrap_error) = mem.alloc[widget.Node](a, 1usize)
         if quick_wrap_error != ok { ret (zero, TooLarge) }

@@ -1,0 +1,194 @@
+{
+ "ribbon": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the toolbar draws real command glyphs as SF-Symbols-style outline vector paths: scissors (Cut), two pages (Copy), clipboard (Paste), B, I, U letters, undo and redo arrows, a down-arrow into a tray (Save); the quick bar is icon-only like a macOS toolbar (the name stays the accessible label). Quick bar glyph ink 6.78:1 light (0040DD on F2F2F7) and 6.01:1 dark (409CFF on 1C1C1E); inactive tab text 5.6 and 7.6:1; Redo is disabled. Viewed at 1x and 1.5x light and dark. Glyph drawing is from memory, no Apple capture.",
+    "gaps": [],
+    "screenshot": "cupertino/ribbon.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the toolbar draws real command glyphs as SF-Symbols-style outline vector paths: scissors (Cut), two pages (Copy), clipboard (Paste), B, I, U letters, undo and redo arrows, a down-arrow into a tray (Save); the quick bar is icon-only like a macOS toolbar (the name stays the accessible label). Quick bar glyph ink 6.78:1 light (0040DD on F2F2F7) and 6.01:1 dark (409CFF on 1C1C1E); inactive tab text 5.6 and 7.6:1; Redo is disabled. Viewed at 1x and 1.5x light and dark. Glyph drawing is from memory, no Apple capture.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/ribbon.png"
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the filled action takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1), the Import link its own text blue 0040DD / 409CFF; hovered and pressed cells differ. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/empty_state.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the filled action takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1), the Import link its own text blue 0040DD / 409CFF; hovered and pressed cells differ. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/empty_state.png"
+   }
+  }
+ },
+ "avatar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the grey monogram of Contacts (E5E5EA / 3A3A3C disc, 3C3C43 / F2F2F7 initials, about 8:1 and 11:1) replaces the tertiary container peach discs; presence dots keep their rings; the keyboard ring is the strong blue. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/avatar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the grey monogram of Contacts (E5E5EA / 3A3A3C disc, 3C3C43 / F2F2F7 initials, about 8:1 and 11:1) replaces the tertiary container peach discs; presence dots keep their rings; the keyboard ring is the strong blue. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/avatar.png"
+   }
+  }
+ },
+ "icon": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the warning role takes C93400 / FF9F0A (4.7:1 and 8:1) instead of systemOrange (2.1:1 on the light ground). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/icon.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the warning role takes C93400 / FF9F0A (4.7:1 and 8:1) instead of systemOrange (2.1:1 on the light ground). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/icon.png"
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): links take 0040DD / 409CFF (6.8:1 and 6.0:1 over the page) in both sheets. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/markdown_view.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): links take 0040DD / 409CFF (6.8:1 and 6.0:1 over the page) in both sheets. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/markdown_view.png"
+   }
+  }
+ },
+ "code_editor": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): token colours at contrast: keyword 0040DD / 409CFF, type C93400 / FF9F0A, number 6C6C70 / AEAEB2, string 1F7A35 / 30D158 (all 4.5:1 or better on white and 1C1C1E). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/code_editor.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): token colours at contrast: keyword 0040DD / 409CFF, type C93400 / FF9F0A, number 6C6C70 / AEAEB2, string 1F7A35 / 30D158 (all 4.5:1 or better on white and 1C1C1E). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/code_editor.png"
+   }
+  }
+ },
+ "canvas": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the bars stand on a baseline 10 pt above the foot so the frame corner no longer clips them (the small cell as well). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/canvas.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the bars stand on a baseline 10 pt above the foot so the frame corner no longer clips them (the small cell as well). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/canvas.png"
+   }
+  }
+ },
+ "speed_dial": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): text 0040DD on its tinted tile 5.3:1 light and 66B2FF on dark 5.0:1; the ring is the strong blue. A tinted Menu button idiom, no UIKit speed dial exists.",
+    "gaps": [],
+    "screenshot": "cupertino/speed_dial.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): text 0040DD on its tinted tile 5.3:1 light and 66B2FF on dark 5.0:1; the ring is the strong blue. A tinted Menu button idiom, no UIKit speed dial exists.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/speed_dial.png"
+   }
+  }
+ },
+ "gauge": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): arcs take 0040DD / 409CFF, warning C93400 / FF9F0A and error D70015 / FF453A (3:1 or better on the ground); the SwiftUI circular Gauge shape, from memory. Viewed 1x light and dark and 1.5x light.",
+    "gaps": [],
+    "screenshot": "cupertino/gauge.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): arcs take 0040DD / 409CFF, warning C93400 / FF9F0A and error D70015 / FF453A (3:1 or better on the ground); the SwiftUI circular Gauge shape, from memory. Viewed 1x light and dark and 1.5x light.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/gauge.png"
+   }
+  }
+ },
+ "level": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): warning and error tones as the gauge; the NSLevelIndicator continuous, discrete (segments) and capacity forms. Viewed 1x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/level.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): warning and error tones as the gauge; the NSLevelIndicator continuous, discrete (segments) and capacity forms. Viewed 1x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/level.png"
+   }
+  }
+ },
+ "window_switcher": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the panel casts a one point edge instead of the hard 3 pt band; active row white on 0A60FF 5.1:1 (6.4:1 dark). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/window_switcher.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the panel casts a one point edge instead of the hard 3 pt band; active row white on 0A60FF 5.1:1 (6.4:1 dark). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/window_switcher.png"
+   }
+  }
+ },
+ "accordion": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): grouped inset disclosure rows (DisclosureGroup), chevrons, hovered, pressed, disabled and keyboard focus cells all differ and read in both palettes. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/accordion.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): grouped inset disclosure rows (DisclosureGroup), chevrons, hovered, pressed, disabled and keyboard focus cells all differ and read in both palettes. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/accordion.png"
+   }
+  }
+ }
+}

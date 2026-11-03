@@ -15,6 +15,7 @@ use e.ui.looks
 use e.ui.looks_x63
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_y87
 
 fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
@@ -220,7 +221,18 @@ fn at(e: *ce.Editor, ln: usize, col: usize) -> usize {
     ret ce.line_start(e, ln) + col
 }
 
-fn build(ctx: *void, a: *mem.Arena, theme: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [4]looks_y87.RoleTone{ looks_y87.blue_tone(), looks_y87.orange_tone(.Tertiary), looks_y87.grey_tone(.Secondary), looks_y87.green_tone(.Success) }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..4usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, theme: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     // Android: the rig has no Roboto Mono, so the sheet adds Cascadia Mono (the Cupertino sheets keep their face).
     var t = theme
     if theme.tokens.profile == .MaterialLike {
