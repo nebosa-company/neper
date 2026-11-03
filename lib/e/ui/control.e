@@ -22,6 +22,7 @@ use e.ui.accessibility
 use e.ui.adwicon_l2 as adwicon
 use e.ui.linuxshadow_l2 as linuxshadow
 use e.ui.matglyph
+use e.ui.matglyph_z87
 use e.ui.animation
 use e.ui.gridlook as gl
 use e.ui.input
@@ -3524,7 +3525,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma, Share, Archive, Delete }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
 
 // (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
@@ -24622,7 +24623,7 @@ fn chip_icon_stroke(t: *const Theme) -> f32 {
 fn set_material_icons(on: bool) { looks_material_icons = on }
 
 fn material_has_icon(kind: GlyphKind) -> bool {
-    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
+    ret kind == .Share || kind == .Archive || kind == .Delete || kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
 }
 
 fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
@@ -24670,6 +24671,12 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
         try matglyph.mat_refresh(&builder, x, y, w, h)
     } else if g.kind == .Picture {
         try matglyph.mat_image(&builder, x, y, w, h)
+    } else if g.kind == .Share {
+        try matglyph_z87.mat_share(&builder, x, y, w, h)
+    } else if g.kind == .Archive {
+        try matglyph_z87.mat_archive(&builder, x, y, w, h)
+    } else if g.kind == .Delete {
+        try matglyph_z87.mat_delete(&builder, x, y, w, h)
     } else {
         made = false
     }

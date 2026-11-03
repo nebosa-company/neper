@@ -176,6 +176,16 @@ fn bar_action(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
         let (pictured, pictured_error) = control.icon_button(a, key, t, item.icon, item.label, &item.action, options)
         ret (pictured, pictured_error)
     }
+    // Android: M3's bottom app bar holds 48 dp icon buttons, not words. The actions carry a label only, so the named ones take their Material icon.
+    if t.tokens.profile == .MaterialLike {
+        var kind: control.GlyphKind = .Search
+        var known = true
+        if string.eq(item.label, "Share") { kind = .Share } else if string.eq(item.label, "Archive") { kind = .Archive } else if string.eq(item.label, "Delete") { kind = .Delete } else if !string.eq(item.label, "Search") { known = false }
+        if known {
+            let (glyph, glyph_error) = control.material_icon_button(a, key, t, kind, item.label, &item.action, .Plain, item.enabled, false)
+            ret (glyph, glyph_error)
+        }
+    }
     if !item.enabled {
         let (dim, dim_error) = control.button(a, key, t, item.label, &item.action, options)
         ret (dim, dim_error)
