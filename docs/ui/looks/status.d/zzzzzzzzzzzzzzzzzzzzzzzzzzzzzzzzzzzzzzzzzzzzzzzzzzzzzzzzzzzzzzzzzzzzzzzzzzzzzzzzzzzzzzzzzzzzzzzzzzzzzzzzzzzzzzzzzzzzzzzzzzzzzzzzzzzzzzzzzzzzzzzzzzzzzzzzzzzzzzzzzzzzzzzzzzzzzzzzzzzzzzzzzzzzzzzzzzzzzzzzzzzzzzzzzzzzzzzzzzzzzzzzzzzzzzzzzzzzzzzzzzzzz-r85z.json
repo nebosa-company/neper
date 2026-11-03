@@ -146,23 +146,21 @@
  "font_picker": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/font_picker.png",
-    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Stays review: the sample ignores the family (the rig loads Roboto, Segoe UI and Tahoma only) and has no italic face; the hover row of the list is a neutral grey rather than the M3 8 percent on-surface layer; in the Focus cell the list's first row is cut by the viewport; the Hover cell's segmented control is wider than its 250 dp cell.",
+    "notes": "ROUND 85: the preview now leads with the family name ('Cantarell: The quick brown fox'), the sample following the chosen style (bold as Roboto Medium) and size up to 20 sp in the available face. The rig loads Roboto, Segoe UI and Tahoma only, so a per-family preview is a rig limit, stated here, not a drawing defect. Viewed light and dark at 1x and 1.5x: the list rows are 48 dp with the chosen row secondary-container and its check, hover is the M3 8 percent on-surface layer (on the list's white surface-container-lowest ground it reads neutral grey, ededed), the segmented style control, the stepper and the preview box. The Focus cell is the list scrolled to the focused row so its first row is partly out of the viewport (a scroll state); the Hover cell's style control is 6 dp wider than the 250 dp cell.",
     "gaps": [
-     "Sample ignores the family and has no italic",
-     "List hover row is neutral grey, not the on-surface 8 percent layer",
-     "Focus cell first row cut by the viewport"
+     "Family preview needs per-family faces the rig lacks (the name leads the sample)",
+     "Style control 6 dp wider than the cell"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/font_picker.png",
-    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Stays review: the sample ignores the family (the rig loads Roboto, Segoe UI and Tahoma only) and has no italic face; the hover row of the list is a neutral grey rather than the M3 8 percent on-surface layer; in the Focus cell the list's first row is cut by the viewport; the Hover cell's segmented control is wider than its 250 dp cell.",
+    "notes": "ROUND 85: the preview now leads with the family name ('Cantarell: The quick brown fox'), the sample following the chosen style (bold as Roboto Medium) and size up to 20 sp in the available face. The rig loads Roboto, Segoe UI and Tahoma only, so a per-family preview is a rig limit, stated here, not a drawing defect. Viewed light and dark at 1x and 1.5x: the list rows are 48 dp with the chosen row secondary-container and its check, hover is the M3 8 percent on-surface layer (on the list's white surface-container-lowest ground it reads neutral grey, ededed), the segmented style control, the stepper and the preview box. The Focus cell is the list scrolled to the focused row so its first row is partly out of the viewport (a scroll state); the Hover cell's style control is 6 dp wider than the 250 dp cell.",
     "gaps": [
-     "Sample ignores the family and has no italic",
-     "List hover row is neutral grey, not the on-surface 8 percent layer",
-     "Focus cell first row cut by the viewport"
+     "Family preview needs per-family faces the rig lacks (the name leads the sample)",
+     "Style control 6 dp wider than the cell"
     ]
    }
   }
@@ -280,19 +278,17 @@
    "material": {
     "status": "review",
     "screenshot": "material/image.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Contain, cover, fill, none, rounded (12 dp, M3 medium shape) and small read correctly, but the Bordered cell shows no border (the 1 px outline sits under the picture, which fills the frame) and the no-texture placeholder glyph is about 2:1 on its tile. Not raised.",
+    "notes": "ROUND 85: the Bordered cell now draws its 1 px outline (79747e) over the picture (Android sheet only). Viewed at 1x, 1.5x light. Stays review: the no-texture placeholder glyph is a theme-less grey at about 2:1 on its tile (control.image takes no theme), and the picture sheet is otherwise Contain, Cover, Fill, None, Rounded 12 dp, Small 48.",
     "gaps": [
-     "Bordered cell draws no visible border",
-     "Placeholder glyph 2:1"
+     "Placeholder glyph about 2:1 (control.image has no theme)"
     ]
    },
    "material_dark": {
     "status": "review",
     "screenshot": "material-dark/image.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Contain, cover, fill, none, rounded (12 dp, M3 medium shape) and small read correctly, but the Bordered cell shows no border (the 1 px outline sits under the picture, which fills the frame) and the no-texture placeholder glyph is about 2:1 on its tile. Not raised.",
+    "notes": "ROUND 85: the Bordered cell now draws its 1 px outline (79747e) over the picture (Android sheet only). Viewed at 1x, 1.5x light. Stays review: the no-texture placeholder glyph is a theme-less grey at about 2:1 on its tile (control.image takes no theme), and the picture sheet is otherwise Contain, Cover, Fill, None, Rounded 12 dp, Small 48.",
     "gaps": [
-     "Bordered cell draws no visible border",
-     "Placeholder glyph 2:1"
+     "Placeholder glyph about 2:1 (control.image has no theme)"
     ]
    }
   }
@@ -424,19 +420,19 @@
  "flyout": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/flyout.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. The flyout plate has a hard 3 px offset shadow band along its foot (the Neper shadow) rather than the soft M3 level-2 shadow the popover draws; dark has none. Not raised.",
+    "notes": "ROUND 85: the hard 3 px foot is fixed at its cause: widget.e drew every offset shadow as a shifted copy of the box; with the Android rig it now draws the M3 elevation level the offset asks for (offset 1 level 1, 2 level 2, 3 to 4 level 3, 6 level 4), a soft two-part shadow, behind widget.soft_shadows set only by looks.shoot for the Android rig (focus_look also sets it for a product theme). Viewed light and dark at 1x and 1.5x: below, above and beside the anchor, plate surface-container f3edf7 / 211f26, 12 dp corners, body-medium on-surface 17:1 / 14:1, soft level-2 shadow in light (dark shows tone only). No clipping. Regression: 30 sheets rendered at head and at base (Neper, Linux, Windows, Cupertino): no non-Material difference.",
     "gaps": [
-     "Hard offset shadow, not the M3 soft shadow"
+     "Dark plate edge is tonal only (M3 dark has no visible shadow)"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/flyout.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. The flyout plate has a hard 3 px offset shadow band along its foot (the Neper shadow) rather than the soft M3 level-2 shadow the popover draws; dark has none. Not raised.",
+    "notes": "ROUND 85: the hard 3 px foot is fixed at its cause: widget.e drew every offset shadow as a shifted copy of the box; with the Android rig it now draws the M3 elevation level the offset asks for (offset 1 level 1, 2 level 2, 3 to 4 level 3, 6 level 4), a soft two-part shadow, behind widget.soft_shadows set only by looks.shoot for the Android rig (focus_look also sets it for a product theme). Viewed light and dark at 1x and 1.5x: below, above and beside the anchor, plate surface-container f3edf7 / 211f26, 12 dp corners, body-medium on-surface 17:1 / 14:1, soft level-2 shadow in light (dark shows tone only). No clipping. Regression: 30 sheets rendered at head and at base (Neper, Linux, Windows, Cupertino): no non-Material difference.",
     "gaps": [
-     "Hard offset shadow, not the M3 soft shadow"
+     "Dark plate edge is tonal only (M3 dark has no visible shadow)"
     ]
    }
   }
@@ -678,19 +674,19 @@
  "command_palette": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/command_palette.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. 28 dp container, search row, 40 dp items with a secondary-container active pill, footer hint read well; the light plate carries the hard 3 px offset shadow band (as flyout), dark none. Not raised.",
+    "notes": "ROUND 85: soft level-3 shadow now (see flyout for the cause); viewed light and dark at 1x and 1.5x: 28 dp container surface-container-high, search row with the on-surface-variant mark and Esc hint, 40 dp command rows, active row secondary-container (e8def8 / 4a4458) with on-secondary-container text, footer hint on-surface-variant, 1 px outline-variant dividers; text 15:1 light / 12:1 dark. M3 has no command palette; tokens only.",
     "gaps": [
-     "Hard offset shadow in light"
+     "M3 has no command palette; derived from the search view and menu tokens"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/command_palette.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. 28 dp container, search row, 40 dp items with a secondary-container active pill, footer hint read well; the light plate carries the hard 3 px offset shadow band (as flyout), dark none. Not raised.",
+    "notes": "ROUND 85: soft level-3 shadow now (see flyout for the cause); viewed light and dark at 1x and 1.5x: 28 dp container surface-container-high, search row with the on-surface-variant mark and Esc hint, 40 dp command rows, active row secondary-container (e8def8 / 4a4458) with on-secondary-container text, footer hint on-surface-variant, 1 px outline-variant dividers; text 15:1 light / 12:1 dark. M3 has no command palette; tokens only.",
     "gaps": [
-     "Hard offset shadow in light"
+     "M3 has no command palette; derived from the search view and menu tokens"
     ]
    }
   }
@@ -698,19 +694,19 @@
  "window_switcher": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/window_switcher.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Item pill and surface correct; the light plate has the hard offset shadow band along its foot. Not raised.",
+    "notes": "ROUND 85: soft level-3 shadow now (see flyout for the cause); viewed light and dark at 1x and 1.5x: container surface-container-high, 28 dp corners, four 40 dp items, active item secondary-container pill, body-large on-surface 15:1 / 12:1. M3 has no window switcher; menu tokens.",
     "gaps": [
-     "Hard offset shadow in light"
+     "M3 has no window switcher; derived from the menu tokens"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/window_switcher.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Item pill and surface correct; the light plate has the hard offset shadow band along its foot. Not raised.",
+    "notes": "ROUND 85: soft level-3 shadow now (see flyout for the cause); viewed light and dark at 1x and 1.5x: container surface-container-high, 28 dp corners, four 40 dp items, active item secondary-container pill, body-large on-surface 15:1 / 12:1. M3 has no window switcher; menu tokens.",
     "gaps": [
-     "Hard offset shadow in light"
+     "M3 has no window switcher; derived from the menu tokens"
     ]
    }
   }
@@ -833,6 +829,234 @@
     "notes": "ROUND 85: viewed light and dark at 1x. Key caps and the recording state (primary outline, tonal fill) read; the keyboard focus cell equals the empty and chord cells (no focus indicator). Not raised.",
     "gaps": [
      "Focus cell equals rest"
+    ]
+   }
+  }
+ },
+ "calendar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/calendar.png",
+    "notes": "ROUND 85: all six cells viewed light and dark at 1x and 1.5x: nothing chosen, chosen day and today (primary disc with on-primary digit 6.4:1, today outlined 1 dp primary), range 12 to 18 (secondary-container band e8def8 / 4a4458, end discs primary, band continuous), hover (8 percent), week numbers (label-small) and event dots (4 dp tertiary), keyboard focus (10 percent over the selected disc). 40 dp day discs, label-medium weekday headings, digits on-surface 16:1 / 14:1, month title on-surface-variant, chevron icon buttons 48 dp. M3 date picker tokens (docked).",
+    "gaps": [
+     "Focus on a non-selected day is the 10 percent layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/calendar.png",
+    "notes": "ROUND 85: all six cells viewed light and dark at 1x and 1.5x: nothing chosen, chosen day and today (primary disc with on-primary digit 6.4:1, today outlined 1 dp primary), range 12 to 18 (secondary-container band e8def8 / 4a4458, end discs primary, band continuous), hover (8 percent), week numbers (label-small) and event dots (4 dp tertiary), keyboard focus (10 percent over the selected disc). 40 dp day discs, label-medium weekday headings, digits on-surface 16:1 / 14:1, month title on-surface-variant, chevron icon buttons 48 dp. M3 date picker tokens (docked).",
+    "gaps": [
+     "Focus on a non-selected day is the 10 percent layer only"
+    ]
+   }
+  }
+ },
+ "rich_tooltip": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/rich_tooltip.png",
+    "notes": "ROUND 85: six cells viewed light and dark at 1x and 1.5x: subhead text and action, text only, subhead and text, two actions, wrapped text, subhead and wrapped text. Plate surface-container f3edf7 / 211f26, 12 dp corners, level-2 shade, title-small subhead on-surface 17:1, body-medium on-surface-variant 8.6:1 / 9.5:1, label-large actions primary 5.9:1 / 9.1:1, 16 dp padding. Cells hold the plate at the anchor side the sheet placed it (right aligned in the narrow cells). Same plate as the ready hint row's rich tooltip.",
+    "gaps": [
+     "The anchors are unpainted; the plate position is the sheet's placement"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/rich_tooltip.png",
+    "notes": "ROUND 85: six cells viewed light and dark at 1x and 1.5x: subhead text and action, text only, subhead and text, two actions, wrapped text, subhead and wrapped text. Plate surface-container f3edf7 / 211f26, 12 dp corners, level-2 shade, title-small subhead on-surface 17:1, body-medium on-surface-variant 8.6:1 / 9.5:1, label-large actions primary 5.9:1 / 9.1:1, 16 dp padding. Cells hold the plate at the anchor side the sheet placed it (right aligned in the narrow cells). Same plate as the ready hint row's rich tooltip.",
+    "gaps": [
+     "The anchors are unpainted; the plate position is the sheet's placement"
+    ]
+   }
+  }
+ },
+ "scroll_area": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/scroll_area.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells read, thumb 4 dp, 48 shortest, but its on-surface-variant 50 percent colour is about 2.4:1 on the surface, under the 3:1 control rule, and hover and pressed do not change it. Not raised.",
+    "gaps": [
+     "Thumb about 2.4:1 under the 3:1 control rule"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/scroll_area.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells read, thumb 4 dp, 48 shortest, but its on-surface-variant 50 percent colour is about 2.4:1 on the surface, under the 3:1 control rule, and hover and pressed do not change it. Not raised.",
+    "gaps": [
+     "Thumb about 2.4:1 under the 3:1 control rule"
+    ]
+   }
+  }
+ },
+ "ribbon": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/ribbon.png",
+    "notes": "ROUND 85: viewed light at 1x. Tabs, contextual tab, collapsed, hover and pressed command layers draw, but the sample commands use stand-in glyphs (a pencil for Bold, Italic and Underline, a cross for Cut, a check for Copy). Not raised.",
+    "gaps": [
+     "Sample command glyphs are stand-ins"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/ribbon.png",
+    "notes": "ROUND 85: viewed light at 1x. Tabs, contextual tab, collapsed, hover and pressed command layers draw, but the sample commands use stand-in glyphs (a pencil for Bold, Italic and Underline, a cross for Cut, a check for Copy). Not raised.",
+    "gaps": [
+     "Sample command glyphs are stand-ins"
+    ]
+   }
+  }
+ },
+ "grid_view": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/grid_view.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Tiles surface-container-low 12 dp with the chosen tile secondary-container read, but the tile labels sit flush in the tile's top-left corner with no padding. Not raised.",
+    "gaps": [
+     "Tile labels have no padding"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/grid_view.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Tiles surface-container-low 12 dp with the chosen tile secondary-container read, but the tile labels sit flush in the tile's top-left corner with no padding. Not raised.",
+    "gaps": [
+     "Tile labels have no padding"
+    ]
+   }
+  }
+ },
+ "carousel": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/carousel.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Pager arrows are small text glyphs, the page dots are about 3:1 grey, hover, pressed and focus equal the middle page. Not raised.",
+    "gaps": [
+     "Arrows are text glyphs",
+     "Hover, pressed and focus equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/carousel.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Pager arrows are small text glyphs, the page dots are about 3:1 grey, hover, pressed and focus equal the middle page. Not raised.",
+    "gaps": [
+     "Arrows are text glyphs",
+     "Hover, pressed and focus equal rest"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/swipe_actions.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Revealed Archive and Delete buttons read (on-primary 6.4:1); the hover cell equals rest (touch idiom) and the actions are one colour where M3 colours them. Not raised.",
+    "gaps": [
+     "Hover equals rest",
+     "Actions are not colour coded"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/swipe_actions.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Revealed Archive and Delete buttons read (on-primary 6.4:1); the hover cell equals rest (touch idiom) and the actions are one colour where M3 colours them. Not raised.",
+    "gaps": [
+     "Hover equals rest",
+     "Actions are not colour coded"
+    ]
+   }
+  }
+ },
+ "reorderable_list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/reorderable_list.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Hover, pressed and focus cells equal rest and no drag handle is drawn. Not raised.",
+    "gaps": [
+     "No drag handle; states equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/reorderable_list.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Hover, pressed and focus cells equal rest and no drag handle is drawn. Not raised.",
+    "gaps": [
+     "No drag handle; states equal rest"
+    ]
+   }
+  }
+ },
+ "color_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/color_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Swatch with outline and three M3 sliders (handle halo 8 and 10 percent) read, but the sliders carry no channel labels and hover, focus and pressed draw the same halo. Not raised.",
+    "gaps": [
+     "Sliders unlabeled",
+     "Hover, focus and pressed look alike"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/color_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Swatch with outline and three M3 sliders (handle halo 8 and 10 percent) read, but the sliders carry no channel labels and hover, focus and pressed draw the same halo. Not raised.",
+    "gaps": [
+     "Sliders unlabeled",
+     "Hover, focus and pressed look alike"
+    ]
+   }
+  }
+ },
+ "duration_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/duration_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The step marks are hairline dots and plus signs at about 4 px, barely legible; hover and focus draw a faint layer. Not raised.",
+    "gaps": [
+     "Step marks barely legible"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/duration_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The step marks are hairline dots and plus signs at about 4 px, barely legible; hover and focus draw a faint layer. Not raised.",
+    "gaps": [
+     "Step marks barely legible"
+    ]
+   }
+  }
+ },
+ "time_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/time_picker_dial.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Steppers read; the 'with seconds' marks are tiny and hover and focus cells show no state. Not raised.",
+    "gaps": [
+     "Seconds marks tiny",
+     "Hover and focus equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/time_picker_dial.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Steppers read; the 'with seconds' marks are tiny and hover and focus cells show no state. Not raised.",
+    "gaps": [
+     "Seconds marks tiny",
+     "Hover and focus equal rest"
     ]
    }
   }
