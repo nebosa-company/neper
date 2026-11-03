@@ -63,7 +63,9 @@ rows rest on measured numbers against cited public specs and contrast probes, no
   `D:/repos/neper_master` has been used by other sessions too (it was on `av1-decoder` for part of this
   work): do not check out or commit there. Land work by merging in a throwaway worktree
   (`merge84`..`merge88` were that), then `git branch -f master <branch>` after `git merge-base --is-ancestor master <branch>`
-  (works only because `master` is not checked out anywhere). Nothing was pushed.
+  (works only because `master` is not checked out anywhere). The work was pushed to `origin/master` on 2026-11-03
+  after merging `origin/master` into it (a clean merge: the 20 incoming commits only touched planning docs, the
+  playground and CI); the lane and audit worktrees and branches were deleted afterwards (all were merged into master).
 - Compile one app: `build/windows/neper-self.exe emit-executable examples/looks/X.e <root> x64 windows <out>.exe --arena 4g`
   (use `--arena 8g` when it reports arena errors). Render one app at a time, in the foreground; never run
   `scripts/render_looks_all.sh` in one call. Python: `export PATH=/d/tools/python312:$PATH`.
@@ -125,8 +127,8 @@ Per-look evidence notes: `flutter-compare*.md`, `windows-complete-x.md`, `cupert
 - **Limits of the evidence:** the contrast figures are nominal ink pairs at the pixel; not every Cupertino row was
   viewed at 1.5x; Material 1.5x pictures were not opened in audit 47; the Linux and Neper looks were not the subject of
   any audit after round 77, so a fresh independent look at them is worthwhile before calling the programme done.
-- Housekeeping: nothing is pushed anywhere; `docs/ui/looks-progress.html` is large and conflicts on every merge
-  (take either side, regenerate); the overlay-name length problem above; temporary worktrees under
-  `D:/Temp/lanes/` and the branches `looks62-*` to `looks88-*`, `audit*`, `merge84`..`merge88` can be removed.
+- Housekeeping: `docs/ui/looks-progress.html` is large and conflicts on every merge (take either side,
+  regenerate); the overlay-name length problem above. The scratch folders still under `D:/Temp/lanes/` (render
+  outputs, about 4 GB) are not git worktrees and can simply be deleted.
   A Claude Design artifact with the derived macOS, Android and Windows 11 sheets exists
   (https://claude.ai/artifact/RDcCzMvf45BazMab7ophNe, private, metrics only).
