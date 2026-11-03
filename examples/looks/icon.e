@@ -10,6 +10,7 @@ use e.ui.looks
 use e.ui.looks_c
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_y87
 
 fn glyph_row(a: *mem.Arena, t: *const control.Theme, base: u64, kinds: []const control.GlyphKind) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, kinds.len)
@@ -29,7 +30,18 @@ fn glyph_row(a: *mem.Arena, t: *const control.Theme, base: u64, kinds: []const c
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 10.0 }, style.defaults(), parts[0usize..kinds.len]), ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [1]looks_y87.RoleTone{ looks_y87.orange_tone(.Tertiary) }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..1usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let captions = [9]str{ "Set, 1 to 12", "Set, 13 to 24", "Set, 25 to 35", "Sizes 16 20 24 36", "Colour roles", "Disabled", "Filled", "Filled, primary", "Picture icon 24" }
     let first = [12]control.GlyphKind{ .Check, .Dash, .Cross, .ChevronDown, .ChevronUp, .ChevronLeft, .ChevronRight, .Calendar, .Clock, .Search, .Person, .Picture }
     let second = [12]control.GlyphKind{ .Alert, .DragHandle, .DockLeft, .Maximize, .MoreHoriz, .ArrowBack, .ArrowForward, .Info, .CheckCircle, .Warning, .MoreVert, .Menu }

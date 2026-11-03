@@ -5,6 +5,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.mem
 use e.str as strs
+use e.ui.style
 
 error TooLarge
 
@@ -136,3 +137,30 @@ fn quick_code(label: str) -> u8 {
     if strs.eq(label, "Redo") { ret 7u8 }
     ret 255u8
 }
+
+
+type RoleTone = struct { role: style.ColorRole, light: u32, dark: u32 }
+
+// A copy of `base` with each role set to its light or dark value (Cupertino only; any other look gets `base` back unchanged). `ring`
+// also moves the keyboard ring to the first role's blue, at 80 %.
+fn retoned(a: *mem.Arena, base: *const style.ThemeTokens, tones: []const RoleTone) -> (*const style.ThemeTokens, err) {
+    if base.profile != .CupertinoLike { ret (base, ok) }
+    let (copy, copy_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copy_error != ok { ret (base, TooLarge) }
+    copy[0usize] = *base
+    var i = 0usize
+    while i < tones.len {
+        var value = tones[i].light
+        if base.palette == .Dark { value = tones[i].dark }
+        style.puta(&copy[0usize], tones[i].role, value, 1.0)
+        i += 1usize
+    }
+    ret (&copy[0usize], ok)
+}
+
+// The text and control tones that hold 4.5:1 on the grouped ground in both palettes: the accent blue, the orange, the green, and the
+// quiet grey.
+fn blue_tone() -> RoleTone { ret RoleTone { role: .Primary, light: 0x0040DDu32, dark: 0x409CFFu32 } }
+fn orange_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, light: 0xC93400u32, dark: 0xFF9F0Au32 } }
+fn green_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, light: 0x1F7A35u32, dark: 0x30D158u32 } }
+fn grey_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, light: 0x6C6C70u32, dark: 0xAEAEB2u32 } }

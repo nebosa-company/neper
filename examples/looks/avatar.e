@@ -8,10 +8,23 @@ use e.ui.control
 use e.ui.looks
 use e.ui.looks_c
 use e.ui.widget
+use e.ui.looks_y87
+use e.ui.style
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [7]looks_y87.RoleTone{ looks_y87.RoleTone { role: .FocusRing, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .PrimaryContainer, light: 0xE5E5EAu32, dark: 0x3A3A3Cu32 }, looks_y87.RoleTone { role: .SecondaryContainer, light: 0xE5E5EAu32, dark: 0x3A3A3Cu32 }, looks_y87.RoleTone { role: .TertiaryContainer, light: 0xE5E5EAu32, dark: 0x3A3A3Cu32 }, looks_y87.RoleTone { role: .OnPrimaryContainer, light: 0x3C3C43u32, dark: 0xF2F2F7u32 }, looks_y87.RoleTone { role: .OnSecondaryContainer, light: 0x3C3C43u32, dark: 0xF2F2F7u32 }, looks_y87.RoleTone { role: .OnTertiaryContainer, light: 0x3C3C43u32, dark: 0xF2F2F7u32 } }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..7usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (hold, hold_error) = mem.alloc[widget.Submit](a, 1usize)
     if hold_error != ok { ret (0usize, hold_error) }
     hold[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }

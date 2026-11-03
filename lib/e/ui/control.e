@@ -15373,7 +15373,12 @@ fn empty_with_art(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, m
         if options.other_label.len != 0usize && !compact {
             var plain = button_options()
             plain.variant = .Plain
-            let (alt, alt_error) = button(a, key + 2u64, t, options.other_label, options.other, plain)
+            // Cupertino: the link takes the text blue (the fill's blue is a different one in dark).
+            let (link_tokens, link_tokens_error) = looks_y85.tinted_ring(a, t.tokens, 0x0040DDu32, 0x409CFFu32)
+            if link_tokens_error != ok { ret (zero, link_tokens_error) }
+            var link_theme = *t
+            link_theme.tokens = link_tokens
+            let (alt, alt_error) = button(a, key + 2u64, &link_theme, options.other_label, options.other, plain)
             if alt_error != ok { ret (zero, alt_error) }
             buttons[n] = alt
             n += 1usize

@@ -6,11 +6,18 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_c
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the filled action takes the blue that white text holds 4.5:1 on (the link takes its own in the control).
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0A60FFu32, 0x0B57D0u32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let go = widget.Submit { ctx: zero, invoke: noop_submit }
     let (hold, hold_error) = mem.alloc[widget.Submit](a, 1usize)
     if hold_error != ok { ret (0usize, hold_error) }
