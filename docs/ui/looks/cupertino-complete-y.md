@@ -49,3 +49,9 @@ Root cause for the Rest-looking Hover, Pressed and Focus cells of scroll_bar and
 Raised to `ready` (both looks): splitter (sixteen cells, all states now drawn; divider line 3.4:1 light, 5:1 dark), scroll_bar (hover and pressed 6 wide against 4), swipe_actions (tile labels 5.3 to 5.8:1 with a darker accent and red in the swipe tile only), popup_menu (iOS context menu cell added: 250 wide, radius 14, 44 high rows, trailing symbols; the macOS destructive row 4.98:1).
 
 Not raised: page_control (strip focus ring is a 13 px rectangle through the label), toolbar_button (accent text 3.6:1; the nav bar text code is shared with matched rows, so no row-only darker blue was possible), data_grid (chosen row white on 007AFF, 4.02:1; the group total overlap is fixed).
+
+## Batch 4: generic extra rows, first look (divider, link, key_caps, rating, skeleton)
+
+Viewed light and dark at 1x. None raised. These rows have no UIKit or AppKit control behind them (skeleton and rating are Material or web patterns, key caps and the underlined link are web idioms), so "the shape is the real macOS or iOS control" cannot be defended by restyling alone; the divider is a hairline at about 1.2:1 (a separator, not a control) and the Vertical cell is nearly invisible; the link's accent text is 3.6:1 on the light ground. The other generic extra rows (about 65: toast, list, banner, card, empty_state, sheet, popover, ribbon, wizard and the rest) were not viewed in this lane and keep `review`.
+
+Final regression: the 45 `run_cupertino` apps, the nine row apps, cup_menu, y84_swipe_actions and activity_indicator were re-rendered after the last code change; `git status` shows no file outside the Cupertino folders and the sources.
