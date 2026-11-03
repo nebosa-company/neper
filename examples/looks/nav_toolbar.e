@@ -6,11 +6,23 @@ use e.gfx.scene
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.looks_e
 use e.ui.navigation
 use e.ui.widget
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Increased-contrast blue for the toolbar text buttons (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [2]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0040DDu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .FocusRing, light: 0x0A60FFu32, dark: 0x409CFFu32 } }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..2usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (subs, subs_error) = looks_e.submits(a, 1usize)
     if subs_error != ok { ret (0usize, subs_error) }
     let (acts, acts_error) = mem.alloc[navigation.Action](a, 5usize)

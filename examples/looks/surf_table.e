@@ -8,6 +8,7 @@ use e.str as strs
 use e.ui.collection
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.widget
 
 type Host = struct { t: *const control.Theme, base: u64, first: u64 }
@@ -107,6 +108,11 @@ fn columns_of(a: *mem.Arena, t: *const control.Theme) -> ([]collection.Column, e
     columns[0usize] = collection.Column { title: "Name", width: 150.0 }
     columns[1usize] = collection.Column { title: "Qty", width: 60.0 }
     columns[2usize] = collection.Column { title: "Type", width: 90.0 }
+    // Cupertino: the 15 pt body face cut "Creature" in 90 (no ellipsis); the Type column takes 104
+    if t.tokens.profile == .CupertinoLike {
+        columns[1usize].width = 56.0
+        columns[2usize].width = 104.0
+    }
     // Android: M3's 16 dp cell padding leaves the sort arrow no room in 60 dp, so it ran over the Qty label.
     if t.tokens.profile == .MaterialLike {
         columns[0usize].width = 134.0
@@ -121,7 +127,18 @@ fn header_of(t: *const control.Theme) -> f32 {
     ret 33.0
 }
 
-fn build_table(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino: the keyboard ring at 80 % of the strong blue (3:1 or better); any other look is passed through unchanged.
+fn build_table(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [1]looks_y87.RoleTone{ looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..1usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_table_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_table_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (columns, columns_error) = columns_of(a, t)
     if columns_error != ok { ret (0usize, columns_error) }
     let names = [5]str{ "rest", "row selected", "sorted descending", "row hover", "keyboard focus" }
@@ -159,7 +176,18 @@ fn build_table(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (5usize, ok)
 }
 
-fn build_tree(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino: the keyboard ring at 80 % of the strong blue (3:1 or better); any other look is passed through unchanged.
+fn build_tree(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [1]looks_y87.RoleTone{ looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..1usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_tree_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_tree_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (columns, columns_error) = columns_of(a, t)
     if columns_error != ok { ret (0usize, columns_error) }
     // Android: the indent and the disclosure take 56 dp of the name column, so the file names need it wider (they clipped).

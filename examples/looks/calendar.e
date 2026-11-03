@@ -7,6 +7,7 @@ use e.mem
 use e.time
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.looks_b_run
 use e.ui.overlay
 use e.ui.widget
@@ -15,7 +16,18 @@ fn noop_date(ctx: *void, value: time.Date) -> err { ret ok }
 
 fn day(d: u8) -> time.Date { ret time.Date { year: 2026i32, month: 10u8, day: d } }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Chosen days, range band and links hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [5]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }, looks_y87.RoleTone { role: .FocusRing, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .PrimaryContainer, light: 0xDCE8FFu32, dark: 0x1E3A66u32 }, looks_y87.RoleTone { role: .OnPrimaryContainer, light: 0x0040DDu32, dark: 0x9CC8FFu32 } }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..5usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     // The keyboard focus cell is the last: Tab and Shift+Tab walk every cell of the window, and the focus wraps round to the last
     // calendar's chosen day, so the ring lands in the cell that shows it.
     let names = [6]str{ "Nothing chosen", "Chosen day, today", "Range 12 to 18", "Hover on a day", "Week numbers, events", "Keyboard focus" }
