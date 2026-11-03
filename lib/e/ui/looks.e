@@ -465,6 +465,8 @@ fn drop_shot(rig: *Rig) {
 
 // One frame of `root` and its pixels.
 fn shoot(rig: *Rig, root: widget.Node, step: i64) -> (image.Image, err) {
+    // Android: offset shadows draw as the M3 levels; the flag follows the rig's look so no other look inherits it.
+    widget.set_soft_shadows(rig.tokens.profile == .MaterialLike)
     let pumped = testing.pump(&rig.harness, root, instant(step))
     if pumped != ok { ret (zero, pumped) }
     shot_from = rig.a.off

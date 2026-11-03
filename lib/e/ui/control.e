@@ -2455,6 +2455,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 fn focus_look(t: *const Theme) {
     if t.tokens.profile != .Neper { widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux) }
     widget.set_skia_corners(t.tokens.profile == .MaterialLike)
+    widget.set_soft_shadows(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
