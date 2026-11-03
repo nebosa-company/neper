@@ -40,6 +40,7 @@ use e.ui.looks_x84
 use e.ui.looks_x85
 use e.ui.looks_y84
 use e.ui.looks_y85
+use e.ui.looks_y87
 use e.ui.looks_z84_edge
 use e.ui.looks_z86
 use e.ui.winbutton
@@ -3524,7 +3525,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma, Scissors, Pages, Clipboard, LetterB, LetterI, LetterU, Undo, Redo, SaveTray }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
 
 // (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
@@ -3712,6 +3713,19 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if drawn { ret ok }
     }
     if g.filled && glyph_has_body(g.kind) { ret filled_glyph_paint(g, b, area) }
+    if g.kind >= .Scissors {
+        var code = 0u8
+        if g.kind == .Pages { code = 1u8 }
+        if g.kind == .Clipboard { code = 2u8 }
+        if g.kind == .LetterB { code = 3u8 }
+        if g.kind == .LetterI { code = 4u8 }
+        if g.kind == .LetterU { code = 5u8 }
+        if g.kind == .Undo { code = 6u8 }
+        if g.kind == .Redo { code = 7u8 }
+        if g.kind == .SaveTray { code = 8u8 }
+        let drawn = looks_y87.command_glyph(g.arena, b, code, area.x, area.y, area.width, area.height, g.color, g.stroke)
+        ret drawn
+    }
     // (D1302) The gear's two rings and eight teeth need the larger builder.
     var verbs = 16usize
     var points = 24usize
