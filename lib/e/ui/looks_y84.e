@@ -4,6 +4,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.mem
+use e.ui.style
 
 error TooLarge
 
@@ -41,4 +42,17 @@ fn apple(a: *mem.Arena, b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, color
     try geometry.cubic_to(&builder, geometry.Point { x: x + w * 0.5902, y: y + h * 0.2343 }, geometry.Point { x: x + w * 0.6568, y: y + h * 0.2014 }, geometry.Point { x: x + w * 0.6977, y: y + h * 0.1593 })
     try geometry.close_path(&builder)
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: color } } })
+}
+
+// A sheet-local accent for the Cupertino look only: a copy of `base` whose Primary is `light` or `dark`; any other look gets `base` back
+// unchanged, so a shared sheet that calls this leaves every other look's picture as it was.
+fn tinted(a: *mem.Arena, base: *const style.ThemeTokens, light: u32, dark: u32) -> (*const style.ThemeTokens, err) {
+    if base.profile != .CupertinoLike { ret (base, ok) }
+    let (copy, copy_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copy_error != ok { ret (base, TooLarge) }
+    copy[0usize] = *base
+    var value = light
+    if base.palette == .Dark { value = dark }
+    style.puta(&copy[0usize], .Primary, value, 1.0)
+    ret (&copy[0usize], ok)
 }

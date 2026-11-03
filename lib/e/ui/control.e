@@ -7159,6 +7159,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         var hint_text = options.placeholder
         if resting { hint_text = label }
         var hint_color = with_alpha(muted, value_color.alpha)
+        if t.tokens.profile == .CupertinoLike { hint_color = muted }
         // Android: the resting label has the label's colour (on-surface under the pointer, error when invalid, on-surface at 38 % when disabled).
         if resting && t.tokens.profile == .MaterialLike { hint_color = label_color }
         let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, hint_color)

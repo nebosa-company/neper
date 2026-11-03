@@ -64,3 +64,13 @@ Final regression: the 45 `run_cupertino` apps, the nine row apps, cup_menu, y84_
 - rating and skeleton raised under the coordinator's standard for generic rows (own tokens, system fills, no Material shape), viewed at 1x and 1.5x, light and dark.
 - divider not raised: the hairlines are about 1.1:1 and the Vertical cell is nearly invisible. link not raised: the accent text is 3.6:1 and it underlines on hover. key_caps was seen at 1x only.
 - Not viewed in this lane and left at `review`: the remaining generic extra rows (icon_button, toggle_button, split_button, speed_dial, range_slider, dial, password_field, autocomplete, banner, toast, card, sheet, popover, ribbon, wizard and about forty more).
+
+## Batch 6: re-run, link, divider, icon_button, password_field
+
+- Regression: the 45 `run_cupertino` apps, the nine row apps, cup_menu, y84_swipe_actions, activity_indicator, link, password_field, icon_button and divider were re-rendered after the last code change; nothing outside the Cupertino folders moved (segmented_control PNGs included).
+- `looks_y84.tinted` gives a shared sheet a Cupertino-only accent: a copy of the tokens with another Primary; any other look gets its own tokens back. Used by link.e.
+- Cupertino placeholders (text fields) use the secondary label colour; the old dimmed copy was 1.7:1 light.
+- Raised: link (0040DD / 409CFF text), divider (hairline separators are decorative, WCAG 1.4.11), icon_button, password_field.
+- page_control: a second attempt (padding the strip segments) moved the labels and left the ring unchanged, so it was reverted; the ring is not tied to the segment rectangle and the cause was not found. Stays `review`.
+- Viewed and not raised (Material-looking or not an Apple idiom): toast (stacked heavy shadow bands), card (elevated, filled, outlined, dragged tilt), banner (accent 'Details' links 3.6:1), toggle_button and split_button (white on 0A84FF in dark is 3.65:1), sheet (spreadsheet) and ribbon (Office ribbon).
+- Not viewed: about 45 further generic extra rows.
