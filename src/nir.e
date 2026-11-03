@@ -141,6 +141,91 @@ fn vector_binary_lane(immediate: usize) -> usize { ret immediate / 256usize % 16
 
 fn vector_binary_lanes(immediate: usize) -> usize { ret immediate % 256usize }
 
+// The extended packed operations (D5960): `VectorBinary` with the bits above the shift
+// flag naming an operation of `e.simd` that is one or a few instructions on x64 and has
+// no operator -- a load or store through a slice, a splat, a saturating add, a pack, a
+// byte shuffle. The operation field is empty then, and `lane` and `lanes` still say
+// the shape of ONE chunk (a register's worth of the operand). The operands are always
+// three: a destination address, the first source address and the second (a scalar for
+// the splat, the destination for the store). Lowering only emits one where
+// `vector_ext_supported` says the instruction level has it.
+const EXT_LOAD: usize = 1usize
+const EXT_STORE: usize = 2usize
+const EXT_SPLAT: usize = 3usize
+const EXT_MIN_U: usize = 4usize
+const EXT_MIN_S: usize = 5usize
+const EXT_MAX_U: usize = 6usize
+const EXT_MAX_S: usize = 7usize
+const EXT_ADDS_U: usize = 8usize
+const EXT_ADDS_S: usize = 9usize
+const EXT_SUBS_U: usize = 10usize
+const EXT_SUBS_S: usize = 11usize
+const EXT_AVG: usize = 12usize
+const EXT_MULHI_S: usize = 13usize
+const EXT_MULHRS: usize = 14usize
+const EXT_MADD: usize = 15usize
+const EXT_SAD: usize = 16usize
+const EXT_UNPACK_LO: usize = 17usize
+const EXT_UNPACK_HI: usize = 18usize
+const EXT_PACK_US: usize = 19usize
+const EXT_PACK_SS: usize = 20usize
+const EXT_PACK_US32: usize = 21usize
+const EXT_SHUFFLE: usize = 22usize
+const EXT_MOVEMASK: usize = 23usize
+const EXT_ABSDIFF_U: usize = 24usize
+const EXT_ABSDIFF_S: usize = 25usize
+const EXT_CMP_EQ: usize = 26usize
+const EXT_CMP_NE: usize = 27usize
+const EXT_CMP_GT_S: usize = 28usize
+const EXT_CMP_LE_S: usize = 29usize
+const EXT_CMP_GT_U: usize = 30usize
+const EXT_CMP_LE_U: usize = 31usize
+const EXT_FCMP_EQ: usize = 32usize
+const EXT_FCMP_LT: usize = 33usize
+const EXT_FCMP_LE: usize = 34usize
+const EXT_FCMP_NE: usize = 35usize
+const EXT_SELECT: usize = 36usize
+const EXT_CVT_RND: usize = 37usize
+
+fn vector_ext_immediate(ext: usize, lane: usize, lanes: usize) -> usize {
+    ret ext * 8388608usize + lane * 256usize + lanes
+}
+
+fn vector_ext(immediate: usize) -> usize { ret immediate / 8388608usize }
+
+// Whether the instruction level has the extended operation on that lane shape (lane
+// code 0 to 3: one, two, four, eight bytes). Level 1 is SSE2, level 2 adds SSSE3 and
+// SSE4.1 (the byte shuffle, `pmulhrsw`, the remaining min and max forms, the
+// unsigned-saturating 32-bit pack).
+fn vector_ext_supported(ext: usize, lane: usize, cpu_level: usize) -> bool {
+    if EXT_LOAD == ext || EXT_STORE == ext || EXT_SPLAT == ext { ret true }
+    if EXT_MIN_U == ext || EXT_MAX_U == ext {
+        if lane == 0usize { ret true }
+        ret lane <= 2usize && cpu_level >= 2usize
+    }
+    if EXT_MIN_S == ext || EXT_MAX_S == ext {
+        if lane == 1usize { ret true }
+        ret cpu_level >= 2usize && lane != 1usize && lane <= 2usize
+    }
+    if EXT_ADDS_U <= ext && EXT_SUBS_S >= ext { ret lane <= 1usize }
+    if EXT_AVG == ext { ret lane <= 1usize }
+    if EXT_MULHI_S == ext || EXT_MADD == ext { ret lane == 1usize }
+    if EXT_MULHRS == ext { ret lane == 1usize && cpu_level >= 2usize }
+    if EXT_SAD == ext || EXT_MOVEMASK == ext { ret lane == 0usize }
+    if EXT_UNPACK_LO == ext || EXT_UNPACK_HI == ext { ret lane <= 3usize }
+    if EXT_PACK_US == ext { ret lane == 1usize }
+    if EXT_PACK_SS == ext { ret lane == 1usize || lane == 2usize }
+    if EXT_PACK_US32 == ext { ret lane == 2usize && cpu_level >= 2usize }
+    if EXT_SHUFFLE == ext { ret lane == 0usize && cpu_level >= 2usize }
+    if EXT_ABSDIFF_U == ext { ret lane <= 1usize }
+    if EXT_ABSDIFF_S == ext { ret lane == 1usize }
+    if EXT_CMP_EQ <= ext && EXT_CMP_LE_U >= ext { ret lane <= 2usize }
+    if EXT_FCMP_EQ <= ext && EXT_FCMP_NE >= ext { ret lane == 4usize || lane == 5usize }
+    if EXT_SELECT == ext { ret true }
+    if EXT_CVT_RND == ext { ret lane == 4usize }
+    ret false
+}
+
 // `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one
 // immediate an instruction has. Never renumber these either: they are in the format.
 type AtomicRmwKind = enum u8 {
@@ -167,6 +252,74 @@ fn atomic_rmw_kind_rank(kind: AtomicRmwKind) -> usize {
     if kind == .Min { ret 6usize }
     if kind == .Max { ret 7usize }
     ret 5usize
+}
+
+// The opcode's name, for a diagnostic.
+fn opcode_name(op: Opcode) -> str {
+    if op == .Invalid { ret "Invalid" }
+    if op == .Parameter { ret "Parameter" }
+    if op == .ConstInteger { ret "ConstInteger" }
+    if op == .ConstBool { ret "ConstBool" }
+    if op == .ConstError { ret "ConstError" }
+    if op == .ConstString { ret "ConstString" }
+    if op == .Stack { ret "Stack" }
+    if op == .Load { ret "Load" }
+    if op == .Store { ret "Store" }
+    if op == .Copy { ret "Copy" }
+    if op == .Zero { ret "Zero" }
+    if op == .FieldAddress { ret "FieldAddress" }
+    if op == .IndexAddress { ret "IndexAddress" }
+    if op == .Slice { ret "Slice" }
+    if op == .Cast { ret "Cast" }
+    if op == .Add { ret "Add" }
+    if op == .Subtract { ret "Subtract" }
+    if op == .Multiply { ret "Multiply" }
+    if op == .Divide { ret "Divide" }
+    if op == .Remainder { ret "Remainder" }
+    if op == .AddWrap { ret "AddWrap" }
+    if op == .SubtractWrap { ret "SubtractWrap" }
+    if op == .MultiplyWrap { ret "MultiplyWrap" }
+    if op == .ShiftLeft { ret "ShiftLeft" }
+    if op == .ShiftRight { ret "ShiftRight" }
+    if op == .BitAnd { ret "BitAnd" }
+    if op == .BitXor { ret "BitXor" }
+    if op == .BitOr { ret "BitOr" }
+    if op == .Negate { ret "Negate" }
+    if op == .BitNot { ret "BitNot" }
+    if op == .Equal { ret "Equal" }
+    if op == .NotEqual { ret "NotEqual" }
+    if op == .Less { ret "Less" }
+    if op == .LessEqual { ret "LessEqual" }
+    if op == .Greater { ret "Greater" }
+    if op == .GreaterEqual { ret "GreaterEqual" }
+    if op == .Call { ret "Call" }
+    if op == .Extract { ret "Extract" }
+    if op == .Phi { ret "Phi" }
+    if op == .Trap { ret "Trap" }
+    if op == .Branch { ret "Branch" }
+    if op == .BranchIf { ret "BranchIf" }
+    if op == .Switch { ret "Switch" }
+    if op == .Return { ret "Return" }
+    if op == .Unreachable { ret "Unreachable" }
+    if op == .FunctionAddress { ret "FunctionAddress" }
+    if op == .IndirectCall { ret "IndirectCall" }
+    if op == .ConstFloat { ret "ConstFloat" }
+    if op == .Bitcast { ret "Bitcast" }
+    if op == .AtomicLoad { ret "AtomicLoad" }
+    if op == .AtomicStore { ret "AtomicStore" }
+    if op == .AtomicRmw { ret "AtomicRmw" }
+    if op == .AtomicCas { ret "AtomicCas" }
+    if op == .AtomicFence { ret "AtomicFence" }
+    if op == .GlobalAddress { ret "GlobalAddress" }
+    if op == .Sqrt { ret "Sqrt" }
+    if op == .VectorBinary { ret "VectorBinary" }
+    if op == .Data { ret "Data" }
+    if op == .TrapStub { ret "TrapStub" }
+    if op == .Barrier { ret "Barrier" }
+    if op == .MemoryBarrier { ret "MemoryBarrier" }
+    if op == .Subgroup { ret "Subgroup" }
+    if op == .FrameAddress { ret "FrameAddress" }
+    ret "?"
 }
 
 type Site = struct {
@@ -409,6 +562,10 @@ type Builder = struct {
     // Device-only helpers keep their locals in Stack slots so copying one into
     // a kernel can turn those slots into invocation-frame addresses.
     frame_locals: bool,
+    // The target has no vector register class (AArch64 holds a vector object in memory for now): regalloc keeps them there.
+    no_vector_registers: bool,
+    // AArch64: nine sixteen-byte registers, v23 to v31, hold vector objects (they survive no call, and no object that crosses one has one).
+    vector_registers_a64: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
     spirv: bool,

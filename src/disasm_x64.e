@@ -689,6 +689,38 @@ fn vex_instruction(c: *Cursor, prefix: usize) -> bool {
 
 // Two-byte opcodes: the 0F map, after the legacy prefixes or a VEX prefix.
 fn two_byte(c: *Cursor, second: usize, repeat: usize, operand16: bool, rex: bool, rex_w: bool, rex_r: bool, rex_x: bool, rex_b: bool, width: usize) -> bool {
+    // The 0F 38 map the extended packed operations use (D5960): the third byte names it.
+    if second == 56usize && operand16 {
+        let (third, third_present) = fetch(c)
+        if !third_present { ret false }
+        var mnemonic = ""
+        if third == 0usize { mnemonic = "pshufb " }
+        if third == 11usize { mnemonic = "pmulhrsw " }
+        if third == 43usize { mnemonic = "packusdw " }
+        if third == 56usize { mnemonic = "pminsb " }
+        if third == 57usize { mnemonic = "pminsd " }
+        if third == 58usize { mnemonic = "pminuw " }
+        if third == 59usize { mnemonic = "pminud " }
+        if third == 60usize { mnemonic = "pmaxsb " }
+        if third == 61usize { mnemonic = "pmaxsd " }
+        if third == 62usize { mnemonic = "pmaxuw " }
+        if third == 63usize { mnemonic = "pmaxud " }
+        if mnemonic.len == 0usize { ret false }
+        if !okay(puts(c, mnemonic)) { ret false }
+        ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
+    }
+    if second == 215usize && operand16 {
+        if !okay(puts(c, "pmovmskb ")) { ret false }
+        ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 2usize)
+    }
+    if second == 112usize && repeat == 242usize {
+        if !okay(puts(c, "pshuflw ")) { ret false }
+        if !two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize) { ret false }
+        if !okay(puts(c, ", ")) { ret false }
+        let (selector, selector_present) = fetch(c)
+        if !selector_present { ret false }
+        ret okay(put_number(c, selector))
+    }
     if second == 5usize { ret okay(puts(c, "syscall")) }
     if second == 11usize { ret okay(puts(c, "ud2")) }
     if second == 174usize {
@@ -896,6 +928,9 @@ fn packed_integer_mnemonic(second: usize) -> str {
     if second == 235usize { ret "por " }
     if second == 239usize { ret "pxor " }
     if second == 118usize { ret "pcmpeqd " }
+    if second == 100usize { ret "pcmpgtb " }
+    if second == 101usize { ret "pcmpgtw " }
+    if second == 102usize { ret "pcmpgtd " }
     if second == 116usize { ret "pcmpeqb " }
     if second == 117usize { ret "pcmpeqw " }
     // The multiplies the baseline builds out of, and the lanes moved between widths.
@@ -904,6 +939,30 @@ fn packed_integer_mnemonic(second: usize) -> str {
     if second == 98usize { ret "punpckldq " }
     if second == 104usize { ret "punpckhbw " }
     if second == 103usize { ret "packuswb " }
+    if second == 218usize { ret "pminub " }
+    if second == 222usize { ret "pmaxub " }
+    if second == 234usize { ret "pminsw " }
+    if second == 238usize { ret "pmaxsw " }
+    if second == 220usize { ret "paddusb " }
+    if second == 221usize { ret "paddusw " }
+    if second == 236usize { ret "paddsb " }
+    if second == 237usize { ret "paddsw " }
+    if second == 216usize { ret "psubusb " }
+    if second == 217usize { ret "psubusw " }
+    if second == 232usize { ret "psubsb " }
+    if second == 233usize { ret "psubsw " }
+    if second == 224usize { ret "pavgb " }
+    if second == 227usize { ret "pavgw " }
+    if second == 229usize { ret "pmulhw " }
+    if second == 245usize { ret "pmaddwd " }
+    if second == 246usize { ret "psadbw " }
+    if second == 97usize { ret "punpcklwd " }
+    if second == 108usize { ret "punpcklqdq " }
+    if second == 105usize { ret "punpckhwd " }
+    if second == 106usize { ret "punpckhdq " }
+    if second == 109usize { ret "punpckhqdq " }
+    if second == 99usize { ret "packsswb " }
+    if second == 107usize { ret "packssdw " }
     // Shifts by the low quadword of a register.
     if second == 241usize { ret "psllw " }
     if second == 242usize { ret "pslld " }

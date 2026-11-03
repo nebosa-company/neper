@@ -476,6 +476,449 @@ fn append_decimal(storage: []u8, write_at: *usize, value: usize) -> err {
     ret ok
 }
 
+// ---- `e.simd`'s extended packed operations (D5960)
+//
+// A call into `e.simd` whose operation is a few x64 packed instructions becomes
+// `VectorBinary` with an extended operation (`nir.vector_ext_immediate`), when the
+// target is x64, the instruction level has the instruction and the vector is a whole
+// number of registers. Anything else returns `false` and the call is the library's
+// own lane loop, which has the same answer. The operands stay in memory slots, as
+// the operator forms do (D751).
+
+fn simd_lane_code(size: usize) -> usize {
+    if size == 1usize { ret 0usize }
+    if size == 2usize { ret 1usize }
+    if size == 4usize { ret 2usize }
+    if size == 8usize { ret 3usize }
+    ret 16usize
+}
+
+// One vector type's facts: lane count, lane size, whether the lane is a signed
+// integer, and whether it is an integer at all (a float or a bool is not).
+fn simd_lane_facts(c: *check.Checker, vector_type: check.Type) -> (usize, usize, bool, bool, bool) {
+    let (lanes, is_vector) = check.vector_lanes(c, vector_type)
+    let (lane, has_lane) = check.vector_lane_type(c, vector_type)
+    if !is_vector || !has_lane { ret (0usize, 0usize, false, false, false) }
+    let (lane_info, lane_info_error) = layout.type_info(c, lane)
+    if lane_info_error != ok { ret (0usize, 0usize, false, false, false) }
+    let signed = lane.name.len != 0usize && lane.name[0usize] == 105u8
+    ret (lanes.array_length, lane_info.size, signed, lane.kind == .Integer, lane.kind == .Float)
+}
+
+// The registers one operation walks: the chunk is sixteen bytes (thirty-two under
+// `--cpu x64-v3`), and a vector is a whole number of them.
+fn simd_chunks(bytes: usize, builder: *nir.Builder) -> (usize, usize) {
+    var chunk_bytes = packed_chunk_bytes(builder)
+    if bytes % chunk_bytes != 0usize { chunk_bytes = 16usize }
+    if bytes < 16usize || bytes > 64usize || bytes % chunk_bytes != 0usize { ret (0usize, 0usize) }
+    ret (chunk_bytes, bytes / chunk_bytes)
+}
+
+fn simd_chunk_address(base: usize, offset: usize, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    if offset == 0usize { ret (base, ok) }
+    let (instruction, address, emit_error) = nir.emit(builder, .FieldAddress, ty, true, offset, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    let operand_error = nir.add_operand(builder, instruction, base)
+    ret (address, operand_error)
+}
+
+// One extended `VectorBinary` per chunk. `lane_size` is the operation's lane (the
+// source's); `scalar_b` says the second operand is a value and not an address.
+fn emit_simd_ext(ext: usize, lane_code: usize, chunk_bytes: usize, chunks: usize, ty: check.Type, dest: usize, a: usize, b: usize, scalar_b: bool, dest_step: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let lane_size = simd_code_size(lane_code)
+    let packed = nir.vector_ext_immediate(ext, lane_code, chunk_bytes / lane_size)
+    var chunk = 0usize
+    while chunk < chunks {
+        let (dest_at, dest_error) = simd_chunk_address(dest, chunk * dest_step, ty, builder, token)
+        if dest_error != ok { ret dest_error }
+        var a_at = a
+        if !scalar_b {
+            let (a_chunk, a_error) = simd_chunk_address(a, chunk * chunk_bytes, ty, builder, token)
+            if a_error != ok { ret a_error }
+            a_at = a_chunk
+        }
+        var b_at = b
+        if !scalar_b {
+            let (b_chunk, b_error) = simd_chunk_address(b, chunk * chunk_bytes, ty, builder, token)
+            if b_error != ok { ret b_error }
+            b_at = b_chunk
+        }
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, ty, false, packed, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, dest_at)
+        try nir.add_operand(builder, instruction, a_at)
+        try nir.add_operand(builder, instruction, b_at)
+        chunk += 1usize
+    }
+    ret ok
+}
+
+// The address of element `index` of a slice, bounds-checked: the slice's data and
+// length loaded, then `IndexAddress` as `s[i]` is.
+fn simd_slice_parts(slice: usize, element_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, usize, err) {
+    let module_index = element_type.module_index
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
+    if data_address_error != ok { ret (0usize, 0usize, data_address_error) }
+    let operand_error1 = nir.add_operand(builder, data_address_instruction, slice)
+    if operand_error1 != ok { ret (0usize, 0usize, operand_error1) }
+    let (data_load, data, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+    if data_load_error != ok { ret (0usize, 0usize, data_load_error) }
+    let operand_error2 = nir.add_operand(builder, data_load, data_address)
+    if operand_error2 != ok { ret (0usize, 0usize, operand_error2) }
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, token)
+    if length_address_error != ok { ret (0usize, 0usize, length_address_error) }
+    let operand_error3 = nir.add_operand(builder, length_address_instruction, slice)
+    if operand_error3 != ok { ret (0usize, 0usize, operand_error3) }
+    let (length_load, length, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if length_load_error != ok { ret (0usize, 0usize, length_load_error) }
+    let operand_error4 = nir.add_operand(builder, length_load, length_address)
+    if operand_error4 != ok { ret (0usize, 0usize, operand_error4) }
+    ret (data, length, ok)
+}
+
+fn simd_index_address(data: usize, length: usize, index: usize, element_size: usize, element_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_size, token)
+    if address_error != ok { ret (0usize, address_error) }
+    let operand_error5 = nir.add_operand(builder, address_instruction, data)
+    if operand_error5 != ok { ret (0usize, operand_error5) }
+    let operand_error6 = nir.add_operand(builder, address_instruction, index)
+    if operand_error6 != ok { ret (0usize, operand_error6) }
+    let operand_error7 = nir.add_operand(builder, address_instruction, length)
+    if operand_error7 != ok { ret (0usize, operand_error7) }
+    ret (address, ok)
+}
+
+fn finish_simd_result(call: check.CallInfo, value: usize, address: bool, results: *CallResults) {
+    results.call = call
+    results.count = 1usize
+    results.values[0usize] = value
+    results.addresses[0usize] = address
+}
+
+// `e.simd.load` and `store`: both ends of the run are checked the way the lane loop's
+// first and last `s[off + i]` are, and one move per chunk does the rest.
+fn lower_simd_move(c: *check.Checker, call: check.CallInfo, storing: bool, arguments: []usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    let bytes = count * size
+    let (chunk_bytes, chunks) = simd_chunks(bytes, builder)
+    if chunks == 0usize { ret ok }
+    let module_index = vector_type.module_index
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let slice_type = c.parameters[call.function.first_parameter].ty
+    let (element_type, element_error) = check.index_element_type(c, slice_type, module_index)
+    if element_error != ok { ret element_error }
+    let offset = arguments[1usize]
+    let (data, length, parts_error) = simd_slice_parts(arguments[0usize], element_type, builder, token)
+    if parts_error != ok { ret parts_error }
+    let (first, first_error) = simd_index_address(data, length, offset, size, element_type, builder, token)
+    if first_error != ok { ret first_error }
+    let (last_count_instruction, last_count, last_count_error) = nir.emit(builder, .ConstInteger, usize_type, true, count - 1usize, token)
+    if last_count_error != ok { ret last_count_error }
+    let (sum_instruction, last_index, sum_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if sum_error != ok { ret sum_error }
+    try nir.add_operand(builder, sum_instruction, offset)
+    try nir.add_operand(builder, sum_instruction, last_count)
+    let (last, last_error) = simd_index_address(data, length, last_index, size, element_type, builder, token)
+    if last_error != ok { ret last_error }
+    if storing {
+        try emit_simd_ext(nir.EXT_STORE, simd_lane_code(size), chunk_bytes, chunks, vector_type, first, arguments[2usize], arguments[2usize], false, chunk_bytes, builder, token)
+        *handled = true
+        ret ok
+    }
+    let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    try emit_simd_ext(nir.EXT_LOAD, simd_lane_code(size), chunk_bytes, chunks, vector_type, slot, first, first, false, chunk_bytes, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+        ret ok
+}
+
+fn lower_simd_splat(c: *check.Checker, call: check.CallInfo, arguments: []usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    let bytes = count * size
+    if bytes < 16usize || bytes > 64usize || bytes % 16usize != 0usize { ret ok }
+    let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    try emit_simd_ext(nir.EXT_SPLAT, simd_lane_code(size), 16usize, bytes / 16usize, vector_type, slot, arguments[0usize], arguments[0usize], true, 16usize, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+        ret ok
+}
+
+// The extended operation a two-operand `e.simd` function is, for the lane's
+// signedness and size; zero for none.
+fn simd_ext_of(name: str, signed: bool, lane_size: usize) -> usize {
+    if check.same(name, "min") {
+        if signed { ret nir.EXT_MIN_S }
+        ret nir.EXT_MIN_U
+    }
+    if check.same(name, "max") {
+        if signed { ret nir.EXT_MAX_S }
+        ret nir.EXT_MAX_U
+    }
+    if check.same(name, "adds") {
+        if signed { ret nir.EXT_ADDS_S }
+        ret nir.EXT_ADDS_U
+    }
+    if check.same(name, "subs") {
+        if signed { ret nir.EXT_SUBS_S }
+        ret nir.EXT_SUBS_U
+    }
+    if check.same(name, "abs_diff") {
+        if signed { ret nir.EXT_ABSDIFF_S }
+        ret nir.EXT_ABSDIFF_U
+    }
+    if check.same(name, "avg_u8") && !signed && lane_size == 1usize { ret nir.EXT_AVG }
+    if check.same(name, "avg_u16") && !signed && lane_size == 2usize { ret nir.EXT_AVG }
+    if check.same(name, "mulhi_i16") && signed && lane_size == 2usize { ret nir.EXT_MULHI_S }
+    if check.same(name, "mulhrs_i16") && signed && lane_size == 2usize { ret nir.EXT_MULHRS }
+    if check.same(name, "madd_i16") && signed && lane_size == 2usize { ret nir.EXT_MADD }
+    if check.same(name, "sad_u8") && !signed && lane_size == 1usize { ret nir.EXT_SAD }
+    if check.same(name, "unpack_lo") { ret nir.EXT_UNPACK_LO }
+    if check.same(name, "unpack_hi") { ret nir.EXT_UNPACK_HI }
+    if check.same(name, "shuffle_bytes") && lane_size == 1usize { ret nir.EXT_SHUFFLE }
+    ret 0usize
+}
+
+// `round_i32`: four-byte float lanes to four-byte integer lanes, round to nearest even (`cvtps2dq`); the one instruction reads its
+// source twice, as every extended operation has two.
+fn lower_simd_round(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, vector_type: check.Type, result_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    if argument_count != 1usize { ret ok }
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !float || size != 4usize { ret ok }
+    let (out_count, out_size, out_signed, out_integer, out_float) = simd_lane_facts(c, result_type)
+    if !out_integer || !out_signed || out_size != 4usize || out_count != count { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    if !nir.vector_ext_supported(nir.EXT_CVT_RND, 4usize, builder.cpu_level) { ret ok }
+    let (slot, slot_error) = vector_slot(c, result_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    try emit_simd_ext(nir.EXT_CVT_RND, 4usize, 16usize, bytes / 16usize, vector_type, slot, arguments[0usize], arguments[0usize], false, 16usize, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
+// `movemask`: one bit per byte lane, the top bit of each. A chunk answers its bits in
+// a scratch slot, and the chunks are joined at their widths.
+fn lower_simd_movemask(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    if argument_count != 1usize { ret ok }
+    let (lane_count, lane_size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer || lane_size != 1usize { ret ok }
+    let (chunk_bytes, chunks) = simd_chunks(lane_count, builder)
+    if chunks == 0usize { ret ok }
+    let u64_type = check.make_type(.Integer, "u64", vector_type.module_index)
+    var combined = 0usize
+    var chunk = 0usize
+    while chunk < chunks {
+        let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, u64_type, true, 1usize, token)
+        if slot_error != ok { ret slot_error }
+        let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, u64_type, true, 0usize, token)
+        if zero_error != ok { ret zero_error }
+        let (clear_instruction, clear_ignored, clear_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+        if clear_error != ok { ret clear_error }
+        try nir.add_operand(builder, clear_instruction, slot)
+        try nir.add_operand(builder, clear_instruction, zero_value)
+        let (source, source_error) = simd_chunk_address(arguments[0usize], chunk * chunk_bytes, vector_type, builder, token)
+        if source_error != ok { ret source_error }
+        let packed = nir.vector_ext_immediate(nir.EXT_MOVEMASK, 0usize, chunk_bytes)
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, vector_type, false, packed, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, slot)
+        try nir.add_operand(builder, instruction, source)
+        try nir.add_operand(builder, instruction, source)
+        let (load_instruction, bits, load_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, slot)
+        if chunk == 0usize {
+            combined = bits
+        } else {
+            let (shift_instruction, shift, shift_error) = nir.emit(builder, .ConstInteger, u64_type, true, chunk * chunk_bytes, token)
+            if shift_error != ok { ret shift_error }
+            let (shifted_instruction, shifted, shifted_error) = nir.emit(builder, .ShiftLeft, u64_type, true, 0usize, token)
+            if shifted_error != ok { ret shifted_error }
+            try nir.add_operand(builder, shifted_instruction, bits)
+            try nir.add_operand(builder, shifted_instruction, shift)
+            let (or_instruction, joined, or_error) = nir.emit(builder, .BitOr, u64_type, true, 0usize, token)
+            if or_error != ok { ret or_error }
+            try nir.add_operand(builder, or_instruction, combined)
+            try nir.add_operand(builder, or_instruction, shifted)
+            combined = joined
+        }
+        chunk += 1usize
+    }
+    finish_simd_result(call, combined, false, results)
+    *handled = true
+        ret ok
+}
+
+fn simd_code_size(code: usize) -> usize {
+    if code == 0usize { ret 1usize }
+    if code == 1usize { ret 2usize }
+    if code == 2usize || code == 4usize { ret 4usize }
+    ret 8usize
+}
+
+// `cmp_*`: the lanes compared in sixteen-byte registers and each result lane narrowed to
+// the mask's byte of 0 or 1, so a chunk stores `16 / size` mask bytes. The six orders
+// are the instruction forms equal, not equal and greater (or its complement, less or
+// equal) with the operands swapped for the other two; a float lane has the four
+// predicates `cmpps` has, whose unordered answer is the IEEE one (false except `!=`).
+fn lower_simd_compare(c: *check.Checker, call: check.CallInfo, arguments: []usize, vector_type: check.Type, mask_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    if integer && size > 4usize { ret ok }
+    if float && size != 4usize && size != 8usize { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    let name = call.function.name
+    var swap = false
+    var ext = 0usize
+    if float {
+        if check.same(name, "cmp_eq") { ext = nir.EXT_FCMP_EQ }
+        if check.same(name, "cmp_ne") { ext = nir.EXT_FCMP_NE }
+        if check.same(name, "cmp_lt") { ext = nir.EXT_FCMP_LT }
+        if check.same(name, "cmp_le") { ext = nir.EXT_FCMP_LE }
+        if check.same(name, "cmp_gt") {
+            ext = nir.EXT_FCMP_LT
+            swap = true
+        }
+        if check.same(name, "cmp_ge") {
+            ext = nir.EXT_FCMP_LE
+            swap = true
+        }
+    } else {
+        if check.same(name, "cmp_eq") { ext = nir.EXT_CMP_EQ }
+        if check.same(name, "cmp_ne") { ext = nir.EXT_CMP_NE }
+        if check.same(name, "cmp_gt") || check.same(name, "cmp_lt") {
+            ext = nir.EXT_CMP_GT_U
+            if signed { ext = nir.EXT_CMP_GT_S }
+        }
+        if check.same(name, "cmp_le") || check.same(name, "cmp_ge") {
+            ext = nir.EXT_CMP_LE_U
+            if signed { ext = nir.EXT_CMP_LE_S }
+        }
+        if check.same(name, "cmp_lt") || check.same(name, "cmp_ge") { swap = true }
+    }
+    if ext == 0usize { ret ok }
+    var lane_code = simd_lane_code(size)
+    if float && size == 4usize { lane_code = 4usize }
+    if float && size == 8usize { lane_code = 5usize }
+    let (slot, slot_error) = vector_slot(c, mask_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    var left = arguments[0usize]
+    var right = arguments[1usize]
+    if swap {
+        left = arguments[1usize]
+        right = arguments[0usize]
+    }
+    try emit_simd_ext(ext, lane_code, 16usize, bytes / 16usize, vector_type, slot, left, right, false, 16usize / size, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
+// `select(m, yes, no)`: the mask's bytes widened to full lanes and a bitwise blend.
+fn lower_simd_select(c: *check.Checker, call: check.CallInfo, arguments: []usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !integer && !float { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    let (slot, slot_error) = vector_slot(c, vector_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    let packed = nir.vector_ext_immediate(nir.EXT_SELECT, simd_lane_code(size), 16usize / size)
+    var chunk = 0usize
+    while chunk < bytes / 16usize {
+        let (dest_at, dest_error) = simd_chunk_address(slot, chunk * 16usize, vector_type, builder, token)
+        if dest_error != ok { ret dest_error }
+        let (mask_at, mask_error) = simd_chunk_address(arguments[0usize], chunk * (16usize / size), vector_type, builder, token)
+        if mask_error != ok { ret mask_error }
+        let (yes_at, yes_error) = simd_chunk_address(arguments[1usize], chunk * 16usize, vector_type, builder, token)
+        if yes_error != ok { ret yes_error }
+        let (no_at, no_error) = simd_chunk_address(arguments[2usize], chunk * 16usize, vector_type, builder, token)
+        if no_error != ok { ret no_error }
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, vector_type, false, packed, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, dest_at)
+        try nir.add_operand(builder, instruction, mask_at)
+        try nir.add_operand(builder, instruction, yes_at)
+        try nir.add_operand(builder, instruction, no_at)
+        chunk += 1usize
+    }
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
+// The packed form of a call into `e.simd`, if it has one at this instruction level.
+// Returns whether it did; on `false` nothing was emitted.
+fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    *handled = false
+    let on_a64 = check.same(g.arch, "aarch64")
+    if builder.spirv || builder.frame_mode || builder.frame_locals || !(check.same(g.arch, "x64") || on_a64) { ret ok }
+    if call.function.module_index >= g.count || !check.same(g.modules[call.function.module_index].name, "e.simd") { ret ok }
+    if call.function.parameter_count == 0usize || call.function.first_parameter + call.function.parameter_count > c.parameter_count { ret ok }
+    if call.function.return_count > 1usize || call.function.first_return + call.function.return_count > c.return_type_count { ret ok }
+    if argument_count != call.function.parameter_count { ret ok }
+    let name = call.function.name
+    let first = c.parameters[call.function.first_parameter].ty
+    if check.same(name, "load") || check.same(name, "load_aligned") {
+        if call.function.return_count != 1usize || argument_count != 2usize { ret ok }
+        ret lower_simd_move(c, call, false, arguments, c.return_types[call.function.first_return], builder, token, results, handled)
+    }
+    if check.same(name, "store") || check.same(name, "store_aligned") {
+        if argument_count != 3usize { ret ok }
+        ret lower_simd_move(c, call, true, arguments, c.parameters[call.function.first_parameter + 2usize].ty, builder, token, results, handled)
+    }
+    if check.same(name, "splat") {
+        if call.function.return_count != 1usize || argument_count != 1usize { ret ok }
+        ret lower_simd_splat(c, call, arguments, c.return_types[call.function.first_return], builder, token, results, handled)
+    }
+    if call.function.return_count != 1usize { ret ok }
+    if check.same(name, "select") {
+        if argument_count != 3usize { ret ok }
+        ret lower_simd_select(c, call, arguments, c.parameters[call.function.first_parameter + 1usize].ty, builder, token, results, handled)
+    }
+    if check.same(name, "round_i32") { ret lower_simd_round(c, call, arguments, argument_count, first, c.return_types[call.function.first_return], builder, token, results, handled) }
+    if check.same(name, "movemask") { ret lower_simd_movemask(c, call, arguments, argument_count, first, builder, token, results, handled) }
+    if argument_count != 2usize { ret ok }
+    let result_type = c.return_types[call.function.first_return]
+    if check.same(name, "cmp_eq") || check.same(name, "cmp_ne") || check.same(name, "cmp_lt") || check.same(name, "cmp_le") || check.same(name, "cmp_gt") || check.same(name, "cmp_ge") {
+        ret lower_simd_compare(c, call, arguments, first, result_type, builder, token, results, handled)
+    }
+    let (lane_count, lane_size, signed, integer, float) = simd_lane_facts(c, first)
+    if !integer { ret ok }
+    var ext = 0usize
+    if check.same(name, "pack_sat") {
+        // `pack_sat[V, W](a: W, b: W) -> V`: the source lane picks the instruction.
+        let (out_count, out_size, out_signed, out_integer, out_float) = simd_lane_facts(c, result_type)
+        if !out_integer || !signed || out_size * 2usize != lane_size { ret ok }
+        if lane_size == 2usize && !out_signed { ext = nir.EXT_PACK_US }
+        if lane_size == 2usize && out_signed { ext = nir.EXT_PACK_SS }
+        if lane_size == 4usize && out_signed { ext = nir.EXT_PACK_SS }
+        if lane_size == 4usize && !out_signed { ext = nir.EXT_PACK_US32 }
+    } else {
+        ext = simd_ext_of(name, signed, lane_size)
+    }
+    if ext == 0usize { ret ok }
+    let lane_code = simd_lane_code(lane_size)
+    var level = builder.cpu_level
+    if on_a64 { level = 2usize }
+    if lane_code == 16usize || !nir.vector_ext_supported(ext, lane_code, level) { ret ok }
+    let (chunk_bytes, chunks) = simd_chunks(lane_count * lane_size, builder)
+    if chunks == 0usize { ret ok }
+    let (slot, slot_error) = vector_slot(c, result_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    try emit_simd_ext(ext, simd_lane_code(lane_size), chunk_bytes, chunks, result_type, slot, arguments[0usize], arguments[1usize], false, chunk_bytes, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+        ret ok
+}
+
 fn emit_align_check(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token) -> err {
     if builder.nocheck || call.function.module_index >= g.count || argument_count < 2usize { ret ok }
     if !check.same(g.modules[call.function.module_index].name, "e.simd") { ret ok }
@@ -4355,6 +4798,9 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     }
     let align_error = emit_align_check(c, g, call, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)])
     if align_error != ok { ret align_error }
+    var simd_packed = false
+    try lower_simd_call(c, g, call, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results, &simd_packed)
+    if simd_packed { ret ok }
     ret emit_call_results(c, g, call, callee, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results)
 }
 

@@ -353,6 +353,38 @@ scalar_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$scalar_executable_written" = 'executable written' ]
 chmod +x "$scalar_executable_path"
 "$scalar_executable_path"
+many_params_executable_path="$test_build/many-params-selfhost"
+many_params_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/many_params/src/main.e" "$repo" x64 linux "$many_params_executable_path" --release)
+[ "$many_params_executable_written" = 'executable written' ]
+chmod +x "$many_params_executable_path"
+"$many_params_executable_path"
+vector_registers_executable_path="$test_build/vector-registers-selfhost"
+vector_registers_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/vector_registers/src/main.e" "$repo" x64 linux "$vector_registers_executable_path" --release --cpu x64-v2)
+[ "$vector_registers_executable_written" = 'executable written' ]
+chmod +x "$vector_registers_executable_path"
+"$vector_registers_executable_path"
+vector_float_chain_executable_path="$test_build/vector-float-chain-selfhost"
+vector_float_chain_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/vector_float_chain/src/main.e" "$repo" x64 linux "$vector_float_chain_executable_path" --release --cpu x64-v2)
+[ "$vector_float_chain_executable_written" = 'executable written' ]
+chmod +x "$vector_float_chain_executable_path"
+"$vector_float_chain_executable_path"
+param_register_share_executable_path="$test_build/param-register-share-selfhost"
+param_register_share_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/param_register_share/src/main.e" "$repo" x64 linux "$param_register_share_executable_path" --release)
+[ "$param_register_share_executable_written" = 'executable written' ]
+chmod +x "$param_register_share_executable_path"
+"$param_register_share_executable_path"
+simd_ops_executable_path="$test_build/simd-ops-selfhost"
+simd_ops_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_ops_reference/src/main.e" "$repo" x64 linux "$simd_ops_executable_path" --release --cpu x64-v2)
+[ "$simd_ops_executable_written" = 'executable written' ]
+chmod +x "$simd_ops_executable_path"
+"$simd_ops_executable_path"
+# The same program for AArch64, where e.simd lowers to Advanced SIMD, run under qemu-user when it is there.
+simd_ops_a64_path="$test_build/simd-ops-a64-selfhost"
+simd_ops_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_ops_reference/src/main.e" "$repo" aarch64 linux "$simd_ops_a64_path" --release)
+[ "$simd_ops_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1; then
+    qemu-aarch64 "$simd_ops_a64_path"
+fi
 generic_executable_path="$test_build/generic-selfhost"
 generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
 [ "$generic_executable_written" = 'executable written' ]
@@ -815,6 +847,17 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# `e.simd`'s codec operations (D5960) against reference loops at every instruction level,
+# in debug and release: packed instructions where the level has them, the lane loops where
+# it has not.
+for simd_codec_level in x64-v1 x64-v2 x64-v3; do
+    for simd_codec_mode in "" --release; do
+        simd_codec_path="$test_build/simd-codec-$simd_codec_level$simd_codec_mode"
+        [ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_codec/src/main.e" "$repo" x64 linux "$simd_codec_path" --cpu $simd_codec_level $simd_codec_mode)" = 'executable written' ]
+        chmod +x "$simd_codec_path"
+        "$simd_codec_path"
+    done
+done
 # `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
 # call reach its explicit contract trap, while an equal-lane conversion remains valid.
 for simd_convert_build in debug release; do
@@ -8758,6 +8801,9 @@ cmp "$test_build/conformance-tools-dis-follow.jsonl" "$conformance_root/tools/di
 # `dis` decodes the VEX forms of `--cpu x64-v3` (D1705).
 $test_build/neper-self dis-file "$conformance_root/tools/dis_vex.e" "$repo" x64 linux --json --release --cpu x64-v3 > "$test_build/conformance-tools-dis-vex.jsonl"
 cmp "$test_build/conformance-tools-dis-vex.jsonl" "$conformance_root/tools/dis_vex.x64-linux.expected.jsonl"
+# `dis` shows the packed instructions of `e.simd`'s codec operations (D5960).
+$test_build/neper-self dis-file "$conformance_root/tools/dis_simd.e" "$repo" x64 linux --json --release --cpu x64-v2 > "$test_build/conformance-tools-dis-simd.jsonl"
+cmp "$test_build/conformance-tools-dis-simd.jsonl" "$conformance_root/tools/dis_simd.x64-linux.expected.jsonl"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
 ' "dis --json differs from the conformance corpus" >&2; exit 1; }
 # `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);

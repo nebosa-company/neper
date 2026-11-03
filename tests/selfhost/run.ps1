@@ -299,6 +299,33 @@ $scalarExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $scalarExecutableWritten -ne 'executable written') { throw 'scalar PE executable emission failed' }
 & $scalarExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'integer cast semantics failed in the self-hosted PE executable' }
+$manyParamsExecutablePath = Join-Path $testBuild 'many-params-selfhost.exe'
+$manyParamsExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\many_params\src\main.e') $repo 'x64' 'windows' $manyParamsExecutablePath --release
+if ($LASTEXITCODE -ne 0 -or $manyParamsExecutableWritten -ne 'executable written') { throw 'many-parameter program did not emit a PE executable' }
+& $manyParamsExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'parameters past the sixteenth, or an argument-register cycle, arrived wrong' }
+$vectorRegistersExecutablePath = Join-Path $testBuild 'vector-registers-selfhost.exe'
+$vectorRegistersExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\vector_registers\src\main.e') $repo 'x64' 'windows' $vectorRegistersExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $vectorRegistersExecutableWritten -ne 'executable written') { throw 'vector register program did not emit a PE executable' }
+& $vectorRegistersExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'vectors held in registers, or spilled past the vector registers, computed wrong' }
+$vectorFloatChainExecutablePath = Join-Path $testBuild 'vector-float-chain-selfhost.exe'
+$vectorFloatChainExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\vector_float_chain\src\main.e') $repo 'x64' 'windows' $vectorFloatChainExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $vectorFloatChainExecutableWritten -ne 'executable written') { throw 'vector float chain program did not emit a PE executable' }
+& $vectorFloatChainExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'round_i32 or a chain of float vector arithmetic answered wrong, or left a NaN that is not canonical' }
+$paramRegisterShareExecutablePath = Join-Path $testBuild 'param-register-share-selfhost.exe'
+$paramRegisterShareExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\param_register_share\src\main.e') $repo 'x64' 'windows' $paramRegisterShareExecutablePath --release
+if ($LASTEXITCODE -ne 0 -or $paramRegisterShareExecutableWritten -ne 'executable written') { throw 'param register share program did not emit a PE executable' }
+& $paramRegisterShareExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'a dead parameter made after the prologue overwrote a register a later parameter was moved into' }
+$simdOpsExecutablePath = Join-Path $testBuild 'simd-ops-selfhost.exe'
+$simdOpsExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_ops_reference\src\main.e') $repo 'x64' 'windows' $simdOpsExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $simdOpsExecutableWritten -ne 'executable written') { throw 'simd ops program did not emit a PE executable' }
+& $simdOpsExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'a packed e.simd operation answered other than its definition' }
+$simdOpsA64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_ops_reference\src\main.e') $repo 'aarch64' 'linux' (Join-Path $testBuild 'simd-ops-a64-selfhost') --release
+if ($LASTEXITCODE -ne 0 -or $simdOpsA64Written -ne 'executable written') { throw 'simd ops program did not emit an AArch64 executable' }
 $genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
 $genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }
@@ -849,6 +876,19 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# `e.simd`'s codec operations (D5960) against reference loops at every instruction level,
+# in debug and release.
+foreach ($simdCodecLevel in @('x64-v1', 'x64-v2', 'x64-v3')) {
+    foreach ($simdCodecMode in @('--debug', '--release')) {
+        $simdCodecPath = Join-Path $testBuild "simd-codec-$simdCodecLevel$simdCodecMode.exe"
+        $simdCodecArgs = @('--cpu', $simdCodecLevel)
+        if ($simdCodecMode -eq '--release') { $simdCodecArgs += '--release' }
+        $simdCodecWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_codec\src\main.e') $repo 'x64' 'windows' $simdCodecPath @simdCodecArgs
+        if ($LASTEXITCODE -ne 0 -or $simdCodecWritten -ne 'executable written') { throw "simd_codec emission failed ($simdCodecLevel $simdCodecMode)" }
+        & $simdCodecPath
+        if ($LASTEXITCODE -ne 0) { throw "an e.simd codec check failed ($simdCodecLevel $simdCodecMode): exit $LASTEXITCODE" }
+    }
+}
 # `convert` is lane-wise rather than a resize. Both directions of an unequal-lane
 # call reach its explicit contract trap, while an equal-lane conversion remains valid.
 foreach ($simdConvertBuild in @(@('debug', @()), @('release', @('--release')))) {
@@ -9670,6 +9710,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disFollowActual).Hash -ne (Get
 $disVexActual = Join-Path $testBuild 'conformance-tools-dis-vex.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_vex.e')`" `"$repo`" x64 windows --json --release --cpu x64-v3 > `"$disVexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disVexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_vex.x64-windows.expected.jsonl')).Hash) { throw "dis VEX forms differ from the conformance corpus" }
+# `dis` shows the packed instructions of `e.simd`'s codec operations (D5960).
+$disSimdActual = Join-Path $testBuild 'conformance-tools-dis-simd.jsonl'
+cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_simd.e')`" `"$repo`" x64 windows --json --release --cpu x64-v2 > `"$disSimdActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disSimdActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_simd.x64-windows.expected.jsonl')).Hash) { throw "dis of the e.simd codec operations differs from the conformance corpus" }
 # `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $disInlinedActual = Join-Path $testBuild 'conformance-tools-dis-inlined.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_inlined.e')`" `"$repo`" x64 windows --json --release > `"$disInlinedActual`""

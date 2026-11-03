@@ -3032,3 +3032,4 @@ D5954	935	The browser app: page scripts, taps and fonts
 D5955	675	The browser on wasm32-wasi
 D5956	923	NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
 D5957	928	Optimization roadmap: eleven queue items from a survey of the fastest compilers
+D5960	5002	Real SIMD on x64: `e.simd` calls lower to packed instructions, SSE2 baseline, SSE4.1 at `x64-v2`, AVX2 at `x64-v3`

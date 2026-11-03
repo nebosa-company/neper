@@ -7,7 +7,9 @@
 // by a caller -- each is read off `V` by `e.meta`, which is what the surface's
 // dependent names mean.
 //
-// ponytail: every operation lowers to N scalar instructions. A vector register class
+// On x64 the operations that are a few packed instructions lower to them (D5960): a call
+// below becomes `VectorBinary` with an extended operation in `lower_simd_call`, on 16, 32
+// and 64 byte vectors, and anything else is the loop here. A vector register class
 // and SSE/AVX selection are the upgrade path; the source here does not change for it,
 // only how many instructions come out (section 4: "every vector width compiles on
 // every target").
@@ -22,6 +24,7 @@
 
 use e.meta
 use e.math
+use e.mem
 
 fn splat[V: type](x: meta.element_type[V]()) -> V {
     var v: V = zero
@@ -299,6 +302,23 @@ fn reduce_max[V: type](v: V) -> meta.element_type[V]() {
     ret acc.lanes[0]
 }
 
+// Lane-wise float to signed integer, rounded to nearest with ties to even (`cvtps2dq` on x64); a lane that is NaN or outside the
+// integer range is the integer's least value. Unlike `convert` it never saturates, and is one instruction where the target has it.
+fn round_i32[V: type, W: type](v: V) -> W {
+    var w: W = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        let x = f64(v.lanes[i])
+        if x >= -2147483648.0f64 && x < 2147483648.0f64 {
+            w.lanes[i] = meta.element_type[W]()(math.round[f64](x))
+        } else {
+            w.lanes[i] = meta.element_type[W]()(0i64 - 2147483647i64 - 1i64)
+        }
+        i += 1usize
+    }
+    ret w
+}
+
 // Lane-wise `T(x)` to `W`'s lane type, with section 4's Casts table: whatever the
 // scalar conversion does on a lane, this does on every lane. The vectors must have
 // the same lane count; otherwise no lane-wise correspondence exists.
@@ -355,4 +375,256 @@ fn pext(x: u64, bit_mask: u64) -> u64 {
         bit += 1u32
     }
     ret result
+}
+
+// ---- Codec operations (D5960)
+//
+// The operations a video codec's inner loops are made of. Each is a loop over the lanes
+// here, and on x64 a call into this module is one packed instruction instead when the
+// vector is sixteen, thirty-two or sixty-four bytes and the instruction level has it
+// (`--cpu x64-v2` for `shuffle_bytes`, `mulhrs_i16` and the min and max of the lanes SSE2
+// has no form for); the answer is the same bits either way. The operations that move
+// lanes between positions (`unpack_lo`, `unpack_hi`, `pack_sat`, `shuffle_bytes`) work
+// on each sixteen-byte block of the vector on its own, which is what both SSE and AVX2
+// do and so what a wider vector can be built from. Lane types the description does not
+// name are not defined and trap.
+
+fn lane_bits[T: type]() -> u32 {
+    ret u32(mem.size_of[T]()) * 8u32
+}
+
+fn lane_low[T: type]() -> i64 {
+    if meta.signed[T]() { ret 0i64 - (1i64 << (lane_bits[T]() - 1u32)) }
+    ret 0i64
+}
+
+fn lane_high[T: type]() -> i64 {
+    if meta.signed[T]() { ret (1i64 << (lane_bits[T]() - 1u32)) - 1i64 }
+    ret (1i64 << lane_bits[T]()) - 1i64
+}
+
+fn trunc_lane[T: type](x: i32) -> T {
+    ret T.trunc(x)
+}
+
+fn saturate[T: type](x: i64) -> T {
+    if x < lane_low[T]() { ret T(lane_low[T]()) }
+    if x > lane_high[T]() { ret T(lane_high[T]()) }
+    ret T(x)
+}
+
+// Lane-wise minimum and maximum; an integer lane has one order, a float lane the IEEE
+// `minimum`/`maximum` of `reduce_min`.
+fn min[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = lane_min[meta.element_type[V]()](a.lanes[i], b.lanes[i])
+        i += 1usize
+    }
+    ret v
+}
+
+fn max[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = lane_max[meta.element_type[V]()](a.lanes[i], b.lanes[i])
+        i += 1usize
+    }
+    ret v
+}
+
+// Saturating add and subtract on 8-, 16- and 32-bit integer lanes: the sum is clamped to
+// the lane's range instead of wrapping.
+fn adds[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = saturate[meta.element_type[V]()](i64(a.lanes[i]) + i64(b.lanes[i]))
+        i += 1usize
+    }
+    ret v
+}
+
+fn subs[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = saturate[meta.element_type[V]()](i64(a.lanes[i]) - i64(b.lanes[i]))
+        i += 1usize
+    }
+    ret v
+}
+
+// The rounding average `(a + b + 1) >> 1` of unsigned 8-bit (`avg_u8`) or 16-bit
+// (`avg_u16`) lanes, without the intermediate sum overflowing.
+fn avg_u8[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = meta.element_type[V]()((i64(a.lanes[i]) + i64(b.lanes[i]) + 1i64) >> 1u32)
+        i += 1usize
+    }
+    ret v
+}
+
+fn avg_u16[V: type](a: V, b: V) -> V {
+    ret avg_u8[V](a, b)
+}
+
+// `|a - b|` of an unsigned lane; on a signed lane the difference wraps like `-%`.
+fn abs_diff[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        if a.lanes[i] > b.lanes[i] {
+            v.lanes[i] = a.lanes[i] -% b.lanes[i]
+        } else {
+            v.lanes[i] = b.lanes[i] -% a.lanes[i]
+        }
+        i += 1usize
+    }
+    ret v
+}
+
+// `i16` lanes: the high half of the 32-bit product (`mulhi_i16`, `pmulhw`), and the
+// rounded Q15 product `((a * b >> 14) + 1) >> 1` (`mulhrs_i16`, `pmulhrsw`), which
+// wraps in the one case, -32768 * -32768, where the result does not fit.
+fn mulhi_i16[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        v.lanes[i] = trunc_lane[meta.element_type[V]()]((i32(a.lanes[i]) * i32(b.lanes[i])) >> 16u32)
+        i += 1usize
+    }
+    ret v
+}
+
+fn mulhrs_i16[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        let product = (i32(a.lanes[i]) * i32(b.lanes[i])) >> 14u32
+        v.lanes[i] = trunc_lane[meta.element_type[V]()]((product + 1i32) >> 1u32)
+        i += 1usize
+    }
+    ret v
+}
+
+// `i16` lanes in, `i32` lanes out, half as many: lane `j` is `a[2j] * b[2j] + a[2j+1] *
+// b[2j+1]` (`pmaddwd`), wrapping when both products are 2^30.
+fn madd_i16[V: type](a: V, b: V) -> Vec[i32, meta.array_len[V]() / 2usize] {
+    var v: Vec[i32, meta.array_len[V]() / 2usize] = zero
+    var j = 0usize
+    while j < meta.array_len[V]() / 2usize {
+        let low = i32(a.lanes[2usize * j]) * i32(b.lanes[2usize * j])
+        let high = i32(a.lanes[2usize * j + 1usize]) * i32(b.lanes[2usize * j + 1usize])
+        v.lanes[j] = low +% high
+        j += 1usize
+    }
+    ret v
+}
+
+// `u8` lanes in, `u64` lanes out, an eighth as many: lane `j` is the sum of
+// `|a[i] - b[i]|` over its eight bytes (`psadbw`).
+fn sad_u8[V: type](a: V, b: V) -> Vec[u64, meta.array_len[V]() / 8usize] {
+    var v: Vec[u64, meta.array_len[V]() / 8usize] = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        var difference = u64(a.lanes[i])
+        if a.lanes[i] > b.lanes[i] {
+            difference = u64(a.lanes[i]) - u64(b.lanes[i])
+        } else {
+            difference = u64(b.lanes[i]) - u64(a.lanes[i])
+        }
+        v.lanes[i / 8usize] = v.lanes[i / 8usize] + difference
+        i += 1usize
+    }
+    ret v
+}
+
+// Interleave the low halves (`unpack_lo`) or the high halves (`unpack_hi`) of each
+// sixteen-byte block of `a` and `b`: `a0 b0 a1 b1 ...`. With `b` zero this widens an
+// unsigned lane to twice its width, viewed as the next wider vector.
+fn unpack_lo[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    let block = 16usize / mem.size_of[meta.element_type[V]()]()
+    var at = 0usize
+    while at < meta.array_len[V]() {
+        var j = 0usize
+        while j < block / 2usize {
+            v.lanes[at + 2usize * j] = a.lanes[at + j]
+            v.lanes[at + 2usize * j + 1usize] = b.lanes[at + j]
+            j += 1usize
+        }
+        at += block
+    }
+    ret v
+}
+
+fn unpack_hi[V: type](a: V, b: V) -> V {
+    var v: V = zero
+    let block = 16usize / mem.size_of[meta.element_type[V]()]()
+    var at = 0usize
+    while at < meta.array_len[V]() {
+        var j = 0usize
+        while j < block / 2usize {
+            v.lanes[at + 2usize * j] = a.lanes[at + block / 2usize + j]
+            v.lanes[at + 2usize * j + 1usize] = b.lanes[at + block / 2usize + j]
+            j += 1usize
+        }
+        at += block
+    }
+    ret v
+}
+
+// Narrow each lane of `a` and then of `b` to half the width, clamping to the range of
+// the result lane (`packuswb`, `packsswb`, `packssdw`, `packusdw`): in each sixteen-byte
+// block, the first half of the result is `a`'s block and the second `b`'s. `W` is the
+// wider vector type and `V` the narrower; the source lanes are signed.
+fn pack_sat[V: type, W: type](a: W, b: W) -> V {
+    var v: V = zero
+    let block = 16usize / mem.size_of[meta.element_type[W]()]()
+    var at = 0usize
+    while at < meta.array_len[W]() {
+        var j = 0usize
+        while j < block {
+            v.lanes[at + j] = saturate[meta.element_type[V]()](i64(a.lanes[at + j]))
+            v.lanes[at + block + j] = saturate[meta.element_type[V]()](i64(b.lanes[at + j]))
+            j += 1usize
+        }
+        at += block
+    }
+    ret v
+}
+
+// Within each sixteen-byte block, byte `i` of the result is byte `index[i] & 15` of `a`'s
+// block, or zero where `index[i]` has its top bit set (`pshufb`).
+fn shuffle_bytes[V: type](a: V, index: V) -> V {
+    var v: V = zero
+    var at = 0usize
+    while at < meta.array_len[V]() {
+        var j = 0usize
+        while j < 16usize {
+            let selector = index.lanes[at + j]
+            if (selector & 128u8) == 0u8 {
+                v.lanes[at + j] = a.lanes[at + usize(selector & 15u8)]
+            }
+            j += 1usize
+        }
+        at += 16usize
+    }
+    ret v
+}
+
+// Bit `i` of the result is the top bit of byte lane `i` (`pmovmskb`).
+fn movemask[V: type](v: V) -> u64 {
+    var packed = 0u64
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        if (v.lanes[i] & 128u8) != 0u8 { packed = packed | (1u64 << u32(i)) }
+        i += 1usize
+    }
+    ret packed
 }
