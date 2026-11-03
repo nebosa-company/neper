@@ -26,6 +26,20 @@ fn framed(a: *mem.Arena, key: u64, t: *const control.Theme, picture: scene.Textu
         frame.overflow = .Clip
     }
     if bordered { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .Outline) } }
+    if bordered && t.tokens.profile == .MaterialLike {
+        // Android: the outline is drawn over the picture (it sat under it and never showed).
+        frame.border = style.Border { width: 0.0, color: style.color(t.tokens, .Outline) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, layers_error) }
+        var edge = style.defaults()
+        edge.width = style.Length { Px: w }
+        edge.height = style.Length { Px: h }
+        edge.border = style.Border { width: 1.0, color: style.color(t.tokens, .Outline) }
+        var no_children: []const widget.Node = zero
+        layers[0usize] = photo
+        layers[1usize] = widget.positioned(0u64, 0.0, 0.0, edge, no_children)
+        ret (widget.stack(key, frame, layers[0usize..2usize]), ok)
+    }
     ret (widget.box(key, frame, kids[0usize..1usize]), ok)
 }
 

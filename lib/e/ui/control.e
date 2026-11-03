@@ -15575,7 +15575,17 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
         caption.size = f32(sample_size)
         caption.wrap = .Word
     }
-    let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
+    // Android: the rig loads no face per family, so the family's name leads the sample, which is drawn in the available face.
+    var shown_sample = sample
+    if t.tokens.profile == .MaterialLike {
+        let (sample_text, sample_text_error) = mem.alloc[u8](a, families[family].len + 2usize + sample.len)
+        if sample_text_error != ok { ret (zero, TooLarge) }
+        var at = copy_text(sample_text, families[family])
+        at += copy_text(sample_text[at..sample_text.len], ": ")
+        at += copy_text(sample_text[at..sample_text.len], sample)
+        shown_sample = sample_text[0usize..at]
+    }
+    let (preview, preview_error) = text_node(a, key + 81u64, shown_sample, t, caption)
     if preview_error != ok { ret (zero, preview_error) }
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
     if previewed_error != ok { ret (zero, TooLarge) }
