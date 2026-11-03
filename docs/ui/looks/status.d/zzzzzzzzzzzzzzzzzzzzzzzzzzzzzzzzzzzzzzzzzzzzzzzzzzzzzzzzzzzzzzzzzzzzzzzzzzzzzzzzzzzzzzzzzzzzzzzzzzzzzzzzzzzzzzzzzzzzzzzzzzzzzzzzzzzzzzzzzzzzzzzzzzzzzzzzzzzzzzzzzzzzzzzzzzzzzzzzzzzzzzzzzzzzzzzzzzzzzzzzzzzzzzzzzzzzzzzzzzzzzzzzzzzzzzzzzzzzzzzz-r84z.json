@@ -98,23 +98,21 @@
  "vertical_grid": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/vertical_grid.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the hover cell lit nothing for two reasons. Shared row keys across the three grids (fixed: each grid has its own keys) and the property row has no pointer target of its own, only its group heading does, so the cell now hovers the General heading (on-surface 8 % layer) and says so. Stays review: the last group's rows are taller than the first group's in the same grid (pitch 34 against 26, and 56 in the General-shut cell) because the library stretches them with the cell height; changing options.height or the cell height moved the pitch but not the cause, and no M3 number says which is right.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the uneven group pitch was the sheet, not the control. Property rows have a 56 dp minimum (touch) and a fixed-height cell makes the flex shrink them in proportion (26 in General, 34 in Computed, 56 when General was shut); the cell is now 780 high and every row is 56 apart in every cell, light and dark (measured by eye on the 1x pictures, rows at 56 dp pitch). Hover is the General heading (a property row has no pointer target of its own), shown at the 8 % layer; shared keys across the three grids fixed earlier. Viewed light and dark at 1x. M3 has no property grid: built from the 56 dp list item and the state layers.",
     "gaps": [
-     "Row pitch is not uniform across groups (26 dp in General, 34 dp in Computed); cause not found in property_grid_of",
-     "A property row has no hover layer; only the group heading is interactive",
-     "M3 defines no property grid"
+     "M3 defines no property grid",
+     "A property row has no hover layer of its own; its value editor is the control"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/vertical_grid.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): the hover cell lit nothing for two reasons. Shared row keys across the three grids (fixed: each grid has its own keys) and the property row has no pointer target of its own, only its group heading does, so the cell now hovers the General heading (on-surface 8 % layer) and says so. Stays review: the last group's rows are taller than the first group's in the same grid (pitch 34 against 26, and 56 in the General-shut cell) because the library stretches them with the cell height; changing options.height or the cell height moved the pitch but not the cause, and no M3 number says which is right.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the uneven group pitch was the sheet, not the control. Property rows have a 56 dp minimum (touch) and a fixed-height cell makes the flex shrink them in proportion (26 in General, 34 in Computed, 56 when General was shut); the cell is now 780 high and every row is 56 apart in every cell, light and dark (measured by eye on the 1x pictures, rows at 56 dp pitch). Hover is the General heading (a property row has no pointer target of its own), shown at the 8 % layer; shared keys across the three grids fixed earlier. Viewed light and dark at 1x. M3 has no property grid: built from the 56 dp list item and the state layers.",
     "gaps": [
-     "Row pitch is not uniform across groups (26 dp in General, 34 dp in Computed); cause not found in property_grid_of",
-     "A property row has no hover layer; only the group heading is interactive",
-     "M3 defines no property grid"
+     "M3 defines no property grid",
+     "A property row has no hover layer of its own; its value editor is the control"
     ]
    }
   }
@@ -122,23 +120,23 @@
  "date_edit": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/date_picker.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): added date_picker_day_hover, date_picker_day_pressed, date_picker_day_focus (modal: day 10 hovered at 8 % and pressed at 10 % on-surface, the selected day focused at 10 % on-primary) and date_picker_docked (field plus the open calendar), light and dark, 1x, viewed light (all four) and dark (hover only). date_input.png was re-rendered: byte for byte the committed picture, not stale in this checkout. Stays review: the docked calendar is 312 wide with a 40 dp day pitch where the M3 docked container token is 360 wide (48 dp day cells), a measured deviation not fixed here; day focus shows only the state layer, no ring.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the docked calendar is now 360 wide with day cells 48 dp apart, the M3 docked container (Material only: overlay.dated asks for slot 48 and width 360; measured 32 to 391 in the 424 px cell). The same change widens date_range_picker_open (its docked calendar), recorded below. Modal sheet 360 wide, header 120, selected circle 38 against the Flutter picker (round 79), day hover 8 % and pressed 10 % on-surface, the selected day focused at 10 % on-primary, docked picker with its field: all viewed light, dark for the docked and hover sheets. date_input.png re-rendered byte for byte.",
     "gaps": [
-     "Docked calendar 312 dp wide, 40 dp day pitch, against the 360 dp M3 docked container (48 dp day cells)",
-     "The calendar is a static sheet cell, not an open overlay",
-     "Range pickers are the date_range_picker row"
+     "Day focus shows only the 10 % state layer, no ring",
+     "The docked calendar does not mark today",
+     "The calendar is a static sheet cell, not an open overlay"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/date_picker.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): added date_picker_day_hover, date_picker_day_pressed, date_picker_day_focus (modal: day 10 hovered at 8 % and pressed at 10 % on-surface, the selected day focused at 10 % on-primary) and date_picker_docked (field plus the open calendar), light and dark, 1x, viewed light (all four) and dark (hover only). date_input.png was re-rendered: byte for byte the committed picture, not stale in this checkout. Stays review: the docked calendar is 312 wide with a 40 dp day pitch where the M3 docked container token is 360 wide (48 dp day cells), a measured deviation not fixed here; day focus shows only the state layer, no ring.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the docked calendar is now 360 wide with day cells 48 dp apart, the M3 docked container (Material only: overlay.dated asks for slot 48 and width 360; measured 32 to 391 in the 424 px cell). The same change widens date_range_picker_open (its docked calendar), recorded below. Modal sheet 360 wide, header 120, selected circle 38 against the Flutter picker (round 79), day hover 8 % and pressed 10 % on-surface, the selected day focused at 10 % on-primary, docked picker with its field: all viewed light, dark for the docked and hover sheets. date_input.png re-rendered byte for byte.",
     "gaps": [
-     "Docked calendar 312 dp wide, 40 dp day pitch, against the 360 dp M3 docked container (48 dp day cells)",
-     "The calendar is a static sheet cell, not an open overlay",
-     "Range pickers are the date_range_picker row"
+     "Day focus shows only the 10 % state layer, no ring",
+     "The docked calendar does not mark today",
+     "The calendar is a static sheet cell, not an open overlay"
     ]
    }
   }
@@ -146,21 +144,21 @@
  "image_combo_box": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/image_combo_box.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Viewed light (dark not viewed), all six cells legible. Stays review: the disabled cell is the whole field at 38 % (control.image_select), so its outline is 38 % where the M3 outlined text field token is on-surface 12 % (text and icon 38 %), a measured deviation in the library, not fixed here.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the disabled field's outline is now on-surface 12 % over the surface (e3dde4 measured, expected e3dde4) with content at 38 %, the M3 outlined text field disabled split; control.image_select asks for it through lib/e/ui/looks_z84_edge.e while it builds the Android disabled head (Material only; the Windows, Linux, Cupertino and Neper image combo boxes re-render byte for byte). All six cells viewed light and dark at 1x. Field 56 high, 1 px outline (3 px focused primary), hover on-surface outline, chevron and 24 dp leading icon.",
     "gaps": [
-     "Disabled outline at 38 % instead of the M3 12 % (control.image_select dims the whole field)",
-     "The icons are generic glyphs standing in for the image list's bitmaps"
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "No letter spacing and no ripple"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/image_combo_box.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Viewed light (dark not viewed), all six cells legible. Stays review: the disabled cell is the whole field at 38 % (control.image_select), so its outline is 38 % where the M3 outlined text field token is on-surface 12 % (text and icon 38 %), a measured deviation in the library, not fixed here.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the disabled field's outline is now on-surface 12 % over the surface (e3dde4 measured, expected e3dde4) with content at 38 %, the M3 outlined text field disabled split; control.image_select asks for it through lib/e/ui/looks_z84_edge.e while it builds the Android disabled head (Material only; the Windows, Linux, Cupertino and Neper image combo boxes re-render byte for byte). All six cells viewed light and dark at 1x. Field 56 high, 1 px outline (3 px focused primary), hover on-surface outline, chevron and 24 dp leading icon.",
     "gaps": [
-     "Disabled outline at 38 % instead of the M3 12 % (control.image_select dims the whole field)",
-     "The icons are generic glyphs standing in for the image list's bitmaps"
+     "The icons are generic glyphs standing in for the image list's bitmaps",
+     "No letter spacing and no ripple"
     ]
    }
   }
@@ -168,21 +166,21 @@
  "status_bar": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/status_bar.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): viewed light (dark not viewed). The pressable-panel hover works (panel on-surface 8 %: f3edf7 to e1dbe5 at the pointer in the committed picture). Stays review: the Narrow cell cuts its message with a hard clip ('All: 120') where navigation.status_bar_of promises an ellipsis (D1238); wrapping the clip box in a flex or padded node did not change the picture, cause not found.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): two defects fixed. (1) The Narrow cell hard-clipped its message; the squeezed message now lays out as one Word-wrapped line so its ellipsis shows ('All: ...'), Material only (navigation.e), the other looks' status bars re-render byte for byte. (2) The pressable-panel hover that the earlier note called working was not: the driven pointer sat 4 px under the 24 px bar; the cell now aims 10 px higher and the panel shows on-surface-variant 8 % (f3edf7 to e5e0ea at the pointer). Strip fill surface-container, text body-small, error tone b3261e at 5:1. All five cells viewed light 1x and dark 1.5x. M3 has no status bar, so the row is a strip built from the surface-container and state-layer tokens.",
     "gaps": [
-     "Squeezed message is hard-clipped, no ellipsis",
-     "Approximation: a strip of panels, not a bottom app bar"
+     "M3 has no status bar: a strip of panels, not a bottom app bar",
+     "Error tone only colours the text"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/status_bar.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): viewed light (dark not viewed). The pressable-panel hover works (panel on-surface 8 %: f3edf7 to e1dbe5 at the pointer in the committed picture). Stays review: the Narrow cell cuts its message with a hard clip ('All: 120') where navigation.status_bar_of promises an ellipsis (D1238); wrapping the clip box in a flex or padded node did not change the picture, cause not found.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): two defects fixed. (1) The Narrow cell hard-clipped its message; the squeezed message now lays out as one Word-wrapped line so its ellipsis shows ('All: ...'), Material only (navigation.e), the other looks' status bars re-render byte for byte. (2) The pressable-panel hover that the earlier note called working was not: the driven pointer sat 4 px under the 24 px bar; the cell now aims 10 px higher and the panel shows on-surface-variant 8 % (f3edf7 to e5e0ea at the pointer). Strip fill surface-container, text body-small, error tone b3261e at 5:1. All five cells viewed light 1x and dark 1.5x. M3 has no status bar, so the row is a strip built from the surface-container and state-layer tokens.",
     "gaps": [
-     "Squeezed message is hard-clipped, no ellipsis",
-     "Approximation: a strip of panels, not a bottom app bar"
+     "M3 has no status bar: a strip of panels, not a bottom app bar",
+     "Error tone only colours the text"
     ]
    }
   }
@@ -192,7 +190,7 @@
    "material": {
     "status": "review",
     "screenshot": "material/tooltip.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Re-rendering material_tooltip.e on this master does not reproduce the committed tooltip.png (rich plate at the top of its cell instead of under the anchor, 91 000 px differ): the committed picture predates a later library change, so the half-pixel rich-plate edge could not be re-measured and the picture was left. Stays review.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered.",
     "gaps": [
      "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
      "Rich tooltip left edge column half a pixel off (round 33)"
@@ -201,7 +199,7 @@
    "material_dark": {
     "status": "review",
     "screenshot": "material-dark/tooltip.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Re-rendering material_tooltip.e on this master does not reproduce the committed tooltip.png (rich plate at the top of its cell instead of under the anchor, 91 000 px differ): the committed picture predates a later library change, so the half-pixel rich-plate edge could not be re-measured and the picture was left. Stays review.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the sheet was the defect: with a 310 px cell the rich plate no longer fits under its anchor in this library and flips above; cell 400 high restores the placement under the anchor, the plain long sample was cut mid sentence (a third line the plate does not draw) and is now two lines. Measured: plain plate 24 high on inverse-surface (the M3 24), rich plate 12 radius on surface-container at elevation 2. Stays review: the rich plate's left edge column is still a partial pixel (eee7f0 at x 614 against f3edf7 inside; the plate is placed from its fractional text width), so not every cell passes. Hint committed pictures were re-rendered.",
     "gaps": [
      "tooltip.png on master is not what material_tooltip.e draws now; the placement of the rich plate changed",
      "Rich tooltip left edge column half a pixel off (round 33)"
@@ -212,23 +210,21 @@
  "scroll_bar": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/scroll_bar.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Stays review: the differences recorded in round 81 (hover and drag 8 wide against 4 in Flutter's Android scrollbar, one thumb colour in every state, 32 px thumb against the 48 px minimum) live in the widget runtime's shared scroll thumb, which every look uses; changing them for the Android look needs a runtime hook that I did not add, and M3 has no scrollbar token to decide.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the shared thumb now follows Flutter's Android scrollbar for the Material look only (widget.e, gated by the Material corner flag): 4 wide in every state (hover no longer widens to 8), shortest thumb 48 (was 32), a drag at on-surface 60 % against 50 % at rest (alpha x 1.2). Rest 4 wide 2 from the edge as before. M3 has no scrollbar token; the numbers are Flutter's scrollbar.dart (round 81). Every other look re-renders byte for byte (all 251 sheet apps re-rendered; only Material pictures moved: scroll_bar, scroll_area, memo, terminal_view thumbs). Viewed light and dark at 1x.",
     "gaps": [
-     "Hover and drag draw 8 wide (Flutter Android keeps 4)",
-     "One thumb colour in all states",
-     "Thumb under Flutter's 48 px minimum length"
+     "One thumb colour in every state but the drag; Flutter's idle highlight not modelled",
+     "No fast-scroll handle"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/scroll_bar.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): not changed. Stays review: the differences recorded in round 81 (hover and drag 8 wide against 4 in Flutter's Android scrollbar, one thumb colour in every state, 32 px thumb against the 48 px minimum) live in the widget runtime's shared scroll thumb, which every look uses; changing them for the Android look needs a runtime hook that I did not add, and M3 has no scrollbar token to decide.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): the shared thumb now follows Flutter's Android scrollbar for the Material look only (widget.e, gated by the Material corner flag): 4 wide in every state (hover no longer widens to 8), shortest thumb 48 (was 32), a drag at on-surface 60 % against 50 % at rest (alpha x 1.2). Rest 4 wide 2 from the edge as before. M3 has no scrollbar token; the numbers are Flutter's scrollbar.dart (round 81). Every other look re-renders byte for byte (all 251 sheet apps re-rendered; only Material pictures moved: scroll_bar, scroll_area, memo, terminal_view thumbs). Viewed light and dark at 1x.",
     "gaps": [
-     "Hover and drag draw 8 wide (Flutter Android keeps 4)",
-     "One thumb colour in all states",
-     "Thumb under Flutter's 48 px minimum length"
+     "One thumb colour in every state but the drag; Flutter's idle highlight not modelled",
+     "No fast-scroll handle"
     ]
    }
   }
@@ -236,19 +232,21 @@
  "splitter": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material/splitter.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): viewed light (dark not viewed), all eight cells legible. Stays review: M3 has no splitter and no token for the handle was measured; the divider and handle sizes are not tied to any cited number.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): measured on the 1x pictures. Sash: 1 px outline-variant divider (cac4d0 / 49454f exact) with a 4 x 48 dp rounded handle (core 3 px plus anti-alias by 46 to 48 rows), the size of the M3 adaptive pane drag handle; rest on-surface-variant 49454f, hover and focus outline 79747e (4.5:1), dragged primary 6750a4 with a 2 px divider; all at least 3:1 on the surface. Four states in both orientations viewed light and dark at 1x. M3 publishes no splitter component, so the handle size and colours are the adaptive-layout handle, not an md.comp token I could cite by name.",
     "gaps": [
-     "M3 has no splitter; handle size is not measured against any token"
+     "M3 has no splitter component; handle tokens are the adaptive pane drag handle from memory of the guidelines",
+     "Focus is the hover colour, no ring"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "ready",
     "screenshot": "material-dark/splitter.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md): viewed light (dark not viewed), all eight cells legible. Stays review: M3 has no splitter and no token for the handle was measured; the divider and handle sizes are not tied to any cited number.",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 2): measured on the 1x pictures. Sash: 1 px outline-variant divider (cac4d0 / 49454f exact) with a 4 x 48 dp rounded handle (core 3 px plus anti-alias by 46 to 48 rows), the size of the M3 adaptive pane drag handle; rest on-surface-variant 49454f, hover and focus outline 79747e (4.5:1), dragged primary 6750a4 with a 2 px divider; all at least 3:1 on the surface. Four states in both orientations viewed light and dark at 1x. M3 publishes no splitter component, so the handle size and colours are the adaptive-layout handle, not an md.comp token I could cite by name.",
     "gaps": [
-     "M3 has no splitter; handle size is not measured against any token"
+     "M3 has no splitter component; handle tokens are the adaptive pane drag handle from memory of the guidelines",
+     "Focus is the hover colour, no ring"
     ]
    }
   }

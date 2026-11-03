@@ -36,6 +36,7 @@ use e.ui.looks_b
 use e.ui.looks_z63
 use e.ui.looks_o78
 use e.ui.looks_t81
+use e.ui.looks_z84_edge
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -8416,6 +8417,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var edge = style.color(t.tokens, .Outline)
     var edge_width = t.tokens.sizes.divider
     if state.hovered { edge = ink }
+    if looks_z84_edge.on() { edge = with_alpha(ink, 0.12 / t.tokens.states.disabled_content) }
     var point = muted
     var label_color = muted
     if open || (state.focused && t.tokens.profile == .MaterialLike) {
@@ -17902,7 +17904,9 @@ fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // plain select: no icons.
 fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .MaterialLike {
+        looks_z84_edge.set(!enabled)
         let (pictured, pictured_error) = select_led(a, key, t, label, options, selected, open, toggle, picks, icons)
+        looks_z84_edge.set(false)
         if pictured_error != ok { ret (zero, pictured_error) }
         if enabled { ret (pictured, ok) }
         // Disabled: the whole field at the M3 `on-surface` 38 % content level.

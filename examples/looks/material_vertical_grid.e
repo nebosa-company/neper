@@ -66,7 +66,7 @@ fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, collapsed: []co
     let source = collection.PropertySource { ctx: mem.cast[*void](t), count: count_of, property: property_at, editor: editor_of }
     var options = collection.property_grid_options()
     if selected != 0u64 { options.selected = base + selected }
-    options.height = 400.0
+    options.height = 0.0
     let (made, made_error) = collection.property_grid_of(a, key, t, "Deck properties", source, collapsed, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 150.0, 360.0, options)
     ret (made, made_error)
 }
@@ -85,12 +85,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if three_error != ok { ret (0usize, three_error) }
     cells[0usize] = looks.Cell { caption: "Enabled, Name selected", node: one, drive: .None }
     cells[1usize] = looks.Cell { caption: "General shut", node: two, drive: .None }
-    looks.aim(2usize, 0.0, -176.0)
+    looks.aim(2usize, 0.0, -356.0)
     cells[2usize] = looks.Cell { caption: "Group heading hovered", node: three, drive: .Hover }
     ret (3usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "vertical_grid", cells: 3usize, columns: 3usize, cell_w: 370.0, cell_h: 410.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "vertical_grid", cells: 3usize, columns: 3usize, cell_w: 370.0, cell_h: 780.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

@@ -794,6 +794,7 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         if squeezed {
             small.max_lines = 1u32
             small.ellipsis = "…"
+            if t.tokens.profile == .MaterialLike { small.wrap = .Word }
         }
         var words = ink
         if t.tokens.profile == .MaterialLike && item.tone == .Error { words = style.color(t.tokens, .Error) }
