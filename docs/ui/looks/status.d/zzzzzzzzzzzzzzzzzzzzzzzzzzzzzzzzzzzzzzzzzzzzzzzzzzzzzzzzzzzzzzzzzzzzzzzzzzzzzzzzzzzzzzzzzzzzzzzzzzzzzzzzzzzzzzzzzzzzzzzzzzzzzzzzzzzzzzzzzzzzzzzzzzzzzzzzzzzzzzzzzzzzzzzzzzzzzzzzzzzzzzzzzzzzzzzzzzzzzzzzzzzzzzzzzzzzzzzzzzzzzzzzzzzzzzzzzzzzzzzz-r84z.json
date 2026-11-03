@@ -298,21 +298,87 @@
  "large_title": {
   "looks": {
    "material": {
-    "status": "review",
-    "screenshot": "material/large_title.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the disabled-action cell showed no action at all because the app bar drops a lone disabled trailing action. The Android sheet now shows Edit with a disabled Done (38 %), captioned so. Stays review: the large bar's height was not measured against the M3 large top app bar (152 dp) and the scrolled and inline forms were not compared with a token.",
+    "status": "ready",
+    "screenshot": "material/large_title_full.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the shared sheet's 124 px cell clamped the 152 dp bar, so large_title.png hid the real height. A Material sheet with a 176 px cell (large_title_full.png, material_large_title.e) measures the scrolled bar 152 high (rows 250 to 402) with its 64 dp action row (Edit centred 31 px under the top), headline-medium title near the foot, and a disabled Done at 38 % beside Edit. All six cells viewed light and dark at 1x. This row's picture is now large_title_full.png; the shared large_title.png is unchanged.",
     "gaps": [
-     "Large app bar height not measured against md.comp.top-app-bar.large",
-     "A lone disabled action is dropped by app_bar_of"
+     "The shared large_title.png still shows the bar clamped to 124 (the other looks' sheet size)",
+     "No collapse animation is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/large_title_full.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the shared sheet's 124 px cell clamped the 152 dp bar, so large_title.png hid the real height. A Material sheet with a 176 px cell (large_title_full.png, material_large_title.e) measures the scrolled bar 152 high (rows 250 to 402) with its 64 dp action row (Edit centred 31 px under the top), headline-medium title near the foot, and a disabled Done at 38 % beside Edit. All six cells viewed light and dark at 1x. This row's picture is now large_title_full.png; the shared large_title.png is unchanged. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The shared large_title.png still shows the bar clamped to 124 (the other looks' sheet size)",
+     "No collapse animation is drawn"
+    ]
+   }
+  }
+ },
+ "split_button": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/split_button.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the open cell was the rest picture. The trailing icon is now an M3 chevron that turns up while the menu is open (Material only, control.split_button), and split_button_open.png draws the menu under it: three 48 dp rows (pitch 48 measured: 119, 167, 215), surface-container panel at elevation 2. Six cells viewed light 1x (rest, hover primary, hover menu half, pressed, focus, open) and the open sheet light and dark; fills primary 6750a4 with on-primary text (7.6:1), state layers 8 % hover and 10 % pressed and focus. Other looks re-render byte for byte.",
+    "gaps": [
+     "The menu is a second picture (split_button_open.png), not part of the six-cell sheet",
+     "No letter spacing and no ripple"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/split_button.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the open cell was the rest picture. The trailing icon is now an M3 chevron that turns up while the menu is open (Material only, control.split_button), and split_button_open.png draws the menu under it: three 48 dp rows (pitch 48 measured: 119, 167, 215), surface-container panel at elevation 2. Six cells viewed light 1x (rest, hover primary, hover menu half, pressed, focus, open) and the open sheet light and dark; fills primary 6750a4 with on-primary text (7.6:1), state layers 8 % hover and 10 % pressed and focus. Other looks re-render byte for byte. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The menu is a second picture (split_button_open.png), not part of the six-cell sheet",
+     "No letter spacing and no ripple"
+    ]
+   }
+  }
+ },
+ "speed_dial": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/speed_dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): speed_dial_open.png added (material_split_open.exe x): the open FAB list, three 56 dp primary-container items right-aligned 4 dp apart above the primary 56 dp trigger (Share pill measured 56 high), not overlapping the trigger and not clipped; light and dark viewed at 1x. The four button cells (rest, hover, pressed, focus) were viewed light only and read as the M3 tonal extended FAB with 8 % and 10 % layers.",
+    "gaps": [
+     "The list is a second picture, not part of the four-cell sheet",
+     "Items are labels without leading icons"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/speed_dial.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): speed_dial_open.png added (material_split_open.exe x): the open FAB list, three 56 dp primary-container items right-aligned 4 dp apart above the primary 56 dp trigger (Share pill measured 56 high), not overlapping the trigger and not clipped; light and dark viewed at 1x. The four button cells (rest, hover, pressed, focus) were viewed light only and read as the M3 tonal extended FAB with 8 % and 10 % layers. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "The list is a second picture, not part of the four-cell sheet",
+     "Items are labels without leading icons"
+    ]
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/font_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the Hover cell aimed at a clipped row; it now hovers the Roboto row (8 % layer shown). Stays review: the sample line under each picker does not follow the settings (the Bold, Segoe UI and 48 size cells all show the same 14 sp regular text), and its box is a square 1 px outline.",
+    "gaps": [
+     "Sample text ignores family, style and size",
+     "Sample box is a square outline, not an M3 field"
     ]
    },
    "material_dark": {
     "status": "review",
-    "screenshot": "material-dark/large_title.png",
-    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 3): the disabled-action cell showed no action at all because the app bar drops a lone disabled trailing action. The Android sheet now shows Edit with a disabled Done (38 %), captioned so. Stays review: the large bar's height was not measured against the M3 large top app bar (152 dp) and the scrolled and inline forms were not compared with a token.",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 4): the Hover cell aimed at a clipped row; it now hovers the Roboto row (8 % layer shown). Stays review: the sample line under each picker does not follow the settings (the Bold, Segoe UI and 48 size cells all show the same 14 sp regular text), and its box is a square 1 px outline.",
     "gaps": [
-     "Large app bar height not measured against md.comp.top-app-bar.large",
-     "A lone disabled action is dropped by app_bar_of"
+     "Sample text ignores family, style and size",
+     "Sample box is a square outline, not an M3 field"
     ]
    }
   }

@@ -11769,7 +11769,15 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
     if marks_error != ok { ret (zero, TooLarge) }
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
     var none: []const widget.Node = zero
-    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    var chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    // Android: the M3 split button's trailing icon is a chevron that turns up while its menu is open.
+    if t.tokens.profile == .MaterialLike {
+        var turned = GlyphKind.ChevronDown
+        if open { turned = .ChevronUp }
+        let (arrow, arrow_error) = stroked_glyph(a, look.foreground, turned, 20.0, 20.0 * 1.75 / 24.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        chevron = arrow
+    }
     let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
     if tail_error != ok { ret (zero, tail_error) }
     parts[1usize] = tail

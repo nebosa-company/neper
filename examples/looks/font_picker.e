@@ -28,6 +28,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 4usize { size = 48i64 }
         let (node, node_error) = control.font_picker(a, u64((i + 1usize) * 100usize), t, "Font", families[0usize..6usize], family, styles[0usize..3usize], style_index, size, "The quick brown fox", widget.Change[usize] { ctx: zero, invoke: noop_index }, widget.Change[usize] { ctx: zero, invoke: noop_index }, widget.Change[i64] { ctx: zero, invoke: noop_size }, 4u32, 220.0)
         if node_error != ok { ret (0usize, node_error) }
+        if i == 2usize && t.tokens.profile == .MaterialLike { looks.aim(2usize, 0.0, -85.0) }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drives[i] }
         i += 1usize
     }

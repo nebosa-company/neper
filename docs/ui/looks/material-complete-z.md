@@ -85,3 +85,11 @@ Fixed, Material only, other looks byte for byte (search_field_all, nav_large_tit
 Duplicate-key sheets that still lose a hover in the Material look and were not fixed: font_picker (hover cell lands at the foot of its list), terminal_view and surf_table (no row layer in the cells).
 
 Still not examined: the other 55 idiom rows, including split_button and speed_dial (no open state drawn).
+
+## Batch 4
+
+Raised to `ready`: split_button (chevron turns up when open, open menu sheet with 48 dp rows), speed_dial (open FAB list, 56 dp items), large_title (152 dp bar measured on `large_title_full.png`, the shared sheet's 124 px cell had clamped it; the row's picture is now the full sheet).
+
+Fixed, Material only, other looks byte for byte (split_button, speed_dial, font_picker re-rendered; git status shows only Material pictures): `control.split_button` chevron; new apps `material_split_open.e` (`split_button_open.png`, `x` for `speed_dial_open.png`) and `material_large_title.e`; `font_picker.e` hover aims at the Roboto row (Material profile only).
+
+Left at review: font_picker (the sample line ignores family, style and size), pull_to_refresh (the indeterminate arc is a few pixels at the frame the sheet takes; `Settle` did not advance it), terminal_view and surf_table (hover cells draw no row layer; not changed).
