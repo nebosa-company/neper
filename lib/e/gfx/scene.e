@@ -2767,7 +2767,18 @@ fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *con
                     var from = (y * s.width + x0 + first) * 4usize
                     var to = y * s.width + x0 + first
                     i = first
+                    let scale = simd.splat[F32x4](255.0)
                     @nocheck {
+                    while i + 4usize <= last {
+                        let q0 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from) * scale)
+                        let q1 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 4usize) * scale)
+                        let q2 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 8usize) * scale)
+                        let q3 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 12usize) * scale)
+                        *mem.cast[*U8x16](&s.vid[to]) = simd.pack_sat[U8x16, I16x8](simd.pack_sat[I16x8, I32x4](q0, q1), simd.pack_sat[I16x8, I32x4](q2, q3))
+                        from += 16usize
+                        to += 4usize
+                        i += 4usize
+                    }
                     while i < last {
                         s.vid[to] = vid_byte(canvas[from]) | (vid_byte(canvas[from + 1usize]) << 8u32) | (vid_byte(canvas[from + 2usize]) << 16u32) | (vid_byte(canvas[from + 3usize]) << 24u32)
                         from += 4usize
@@ -4290,7 +4301,8 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
 
 // The byte of a channel value in 0..1 with no float to integer conversion, which saturates and checks: v * 255 is exact in f64, adding
 // 2^52 rounds it to an integer, ties to even, and the integer is the sum's low bits. That is `channel_byte` except where the f32 steps
-// of `v * 255.0 + 0.5` round across a half (128 values of v in 0..1, one level apart, never 0.5 itself).
+// of `v * 255.0 + 0.5` round across a half (about 130 values of v in 0..1, one level apart); the vector form of the same, `round_i32` of
+// the f32 product, differs from `channel_byte` at about as many other values.
 fn vid_byte(v: f32) -> u32 {
     ret u32(mem.bitcast[u64](f64(v) * 255.0f64 + 4503599627370496.0f64) & 255u64)
 }
