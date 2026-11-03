@@ -588,5 +588,253 @@
     ]
    }
   }
+ },
+ "pagination": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/pagination.png",
+    "notes": "ROUND 85: all six cells viewed light and dark at 1x and 1.5x. 40 dp circular page targets, selected page secondary-container e8def8 / 4a4458 with on-secondary-container digits, hover 8 percent and pressed and focus 10 percent over the selected page, previous and next chevrons disabled at the ends at 38 percent (exempt), digits on-surface-variant on surface 7.6:1 light / 9:1 dark. M3 has no pagination; tokens only. No clipping.",
+    "gaps": [
+     "M3 has no pagination; derived",
+     "Hover, pressed and focus are shown on the selected page only"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/pagination.png",
+    "notes": "ROUND 85: all six cells viewed light and dark at 1x and 1.5x. 40 dp circular page targets, selected page secondary-container e8def8 / 4a4458 with on-secondary-container digits, hover 8 percent and pressed and focus 10 percent over the selected page, previous and next chevrons disabled at the ends at 38 percent (exempt), digits on-surface-variant on surface 7.6:1 light / 9:1 dark. M3 has no pagination; tokens only. No clipping.",
+    "gaps": [
+     "M3 has no pagination; derived",
+     "Hover, pressed and focus are shown on the selected page only"
+    ]
+   }
+  }
+ },
+ "toggle_button": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/toggle_button.png",
+    "notes": "ROUND 85: three variants x five states viewed light and dark at 1x and 1.5x. Off buttons are fully round, on buttons the squarer shape; outlined (outline 79747e, label primary 6.4:1), tonal (secondary-container, on-secondary-container 13:1) and filled (primary, on-primary 6.4:1) with hover 8 percent, pressed and focus 10 percent layers, elevation on hover for tonal and filled, a primary outline for the outlined focus, disabled at 12 / 38 percent (exempt). M3 toggle button (button group) tokens.",
+    "gaps": [
+     "Focus on tonal and filled is the 10 percent layer only"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/toggle_button.png",
+    "notes": "ROUND 85: three variants x five states viewed light and dark at 1x and 1.5x. Off buttons are fully round, on buttons the squarer shape; outlined (outline 79747e, label primary 6.4:1), tonal (secondary-container, on-secondary-container 13:1) and filled (primary, on-primary 6.4:1) with hover 8 percent, pressed and focus 10 percent layers, elevation on hover for tonal and filled, a primary outline for the outlined focus, disabled at 12 / 38 percent (exempt). M3 toggle button (button group) tokens.",
+    "gaps": [
+     "Focus on tonal and filled is the 10 percent layer only"
+    ]
+   }
+  }
+ },
+ "gauge": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/gauge.png",
+    "notes": "ROUND 85: all eight cells viewed light and dark at 1x and 1.5x. 270 degree arc, primary arc over a secondary-container track (the track is 1.3:1, decorative: the value is in the arc and the digits), digits on-surface 16:1, caption on-surface-variant 7:1; warning (amber 6d4c00 6:1; dark ffb95c) and critical (error b3261e 5.7:1; dark f2b8b5) states always carry a bell glyph and a word, so colour is not the only signal; no data shows an em dash, stale a neutral arc, loading a skeleton bar. M3 has no gauge; built from the progress indicator tokens.",
+    "gaps": [
+     "M3 has no gauge; derived from the circular progress tokens",
+     "Track 1.3:1 (decorative)"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/gauge.png",
+    "notes": "ROUND 85: all eight cells viewed light and dark at 1x and 1.5x. 270 degree arc, primary arc over a secondary-container track (the track is 1.3:1, decorative: the value is in the arc and the digits), digits on-surface 16:1, caption on-surface-variant 7:1; warning (amber 6d4c00 6:1; dark ffb95c) and critical (error b3261e 5.7:1; dark f2b8b5) states always carry a bell glyph and a word, so colour is not the only signal; no data shows an em dash, stale a neutral arc, loading a skeleton bar. M3 has no gauge; built from the progress indicator tokens.",
+    "gaps": [
+     "M3 has no gauge; derived from the circular progress tokens",
+     "Track 1.3:1 (decorative)"
+    ]
+   }
+  }
+ },
+ "level": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/level.png",
+    "notes": "ROUND 85: all nine cells viewed light and dark at 1x and 1.5x: 40, empty, full, warning (amber), danger 95 (error with bell and word), small, limit mark, three segments, bars. Fill primary 6.4:1 on the surface (dark d0bcff 11:1), track secondary-container (1.3:1, decorative), label on-surface 16:1, value on-surface-variant 7.6:1; the limit mark is on-surface. M3 has no level meter; built from the linear progress tokens (4 dp round bar).",
+    "gaps": [
+     "M3 has no level meter; derived from the linear progress tokens",
+     "Track 1.3:1 (decorative)"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/level.png",
+    "notes": "ROUND 85: all nine cells viewed light and dark at 1x and 1.5x: 40, empty, full, warning (amber), danger 95 (error with bell and word), small, limit mark, three segments, bars. Fill primary 6.4:1 on the surface (dark d0bcff 11:1), track secondary-container (1.3:1, decorative), label on-surface 16:1, value on-surface-variant 7.6:1; the limit mark is on-surface. M3 has no level meter; built from the linear progress tokens (4 dp round bar).",
+    "gaps": [
+     "M3 has no level meter; derived from the linear progress tokens",
+     "Track 1.3:1 (decorative)"
+    ]
+   }
+  }
+ },
+ "command_palette": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/command_palette.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. 28 dp container, search row, 40 dp items with a secondary-container active pill, footer hint read well; the light plate carries the hard 3 px offset shadow band (as flyout), dark none. Not raised.",
+    "gaps": [
+     "Hard offset shadow in light"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/command_palette.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. 28 dp container, search row, 40 dp items with a secondary-container active pill, footer hint read well; the light plate carries the hard 3 px offset shadow band (as flyout), dark none. Not raised.",
+    "gaps": [
+     "Hard offset shadow in light"
+    ]
+   }
+  }
+ },
+ "window_switcher": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/window_switcher.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Item pill and surface correct; the light plate has the hard offset shadow band along its foot. Not raised.",
+    "gaps": [
+     "Hard offset shadow in light"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/window_switcher.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Item pill and surface correct; the light plate has the hard offset shadow band along its foot. Not raised.",
+    "gaps": [
+     "Hard offset shadow in light"
+    ]
+   }
+  }
+ },
+ "title_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/title_bar_all.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Caption buttons are about 8 px glyphs in 46 px cells (the close X is barely legible), Windows-style caption controls under an M3 palette; the disabled glyphs are near invisible. Not raised.",
+    "gaps": [
+     "Caption glyphs about 8 px",
+     "Windows caption controls"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/title_bar_all.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Caption buttons are about 8 px glyphs in 46 px cells (the close X is barely legible), Windows-style caption controls under an M3 palette; the disabled glyphs are near invisible. Not raised.",
+    "gaps": [
+     "Caption glyphs about 8 px",
+     "Windows caption controls"
+    ]
+   }
+  }
+ },
+ "document_tabs": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/document_tabs.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Tabs, pinned, unsaved dot, hover and pressed draw; the keyboard focus cell is identical to rest (no ring or layer). Not raised.",
+    "gaps": [
+     "Focus cell equals rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/document_tabs.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Tabs, pinned, unsaved dot, hover and pressed draw; the keyboard focus cell is identical to rest (no ring or layer). Not raised.",
+    "gaps": [
+     "Focus cell equals rest"
+    ]
+   }
+  }
+ },
+ "dock_panel": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/dock_panel.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The panel body text starts flush with the panel's left edge and touches the header, 12 dp left of the title; busy and focused draw a top rule only. Not raised.",
+    "gaps": [
+     "Body text unpadded and flush with the header"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/dock_panel.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The panel body text starts flush with the panel's left edge and touches the header, 12 dp left of the title; busy and focused draw a top rule only. Not raised.",
+    "gaps": [
+     "Body text unpadded and flush with the header"
+    ]
+   }
+  }
+ },
+ "workspace": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/workspace.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The document text sits directly under the tab strip with no padding and the empty-state help block is off centre. Not raised.",
+    "gaps": [
+     "No body padding under the tabs"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/workspace.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The document text sits directly under the tab strip with no padding and the empty-state help block is off centre. Not raised.",
+    "gaps": [
+     "No body padding under the tabs"
+    ]
+   }
+  }
+ },
+ "list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/list_rows.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Rows are 21 dp with no horizontal padding against the M3 one-line list item of 56 dp with 16 dp padding; selected rows use secondary-container correctly. Not raised.",
+    "gaps": [
+     "Rows 21 dp, M3 list item is 56 dp"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list_rows.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Rows are 21 dp with no horizontal padding against the M3 one-line list item of 56 dp with 16 dp padding; selected rows use secondary-container correctly. Not raised.",
+    "gaps": [
+     "Rows 21 dp, M3 list item is 56 dp"
+    ]
+   }
+  }
+ },
+ "shortcut_recorder": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/shortcut_recorder.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Key caps and the recording state (primary outline, tonal fill) read; the keyboard focus cell equals the empty and chord cells (no focus indicator). Not raised.",
+    "gaps": [
+     "Focus cell equals rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/shortcut_recorder.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Key caps and the recording state (primary outline, tonal fill) read; the keyboard focus cell equals the empty and chord cells (no focus indicator). Not raised.",
+    "gaps": [
+     "Focus cell equals rest"
+    ]
+   }
+  }
  }
 }
