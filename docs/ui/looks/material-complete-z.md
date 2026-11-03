@@ -144,3 +144,24 @@ Raised to ready: flyout, command_palette, window_switcher, calendar, rich_toolti
 Fixed but still review: image (Bordered cell draws its outline; the placeholder glyph is a theme-less 2:1 grey).
 
 Left at review, reason: scroll_area (thumb about 2.4:1 under 3:1), ribbon (stand-in glyphs), grid_view (tile labels unpadded), carousel, swipe_actions, reorderable_list, color_picker, duration_picker, time_picker stays matched (its earlier ref measurement stands; tiny seconds marks and equal-to-rest states are noted in its overlay), notification_list, icon, schedule, flow_editor, sheet, canvas, bottom_app_bar, navigation_stack, navigation_split, sidebar (the shared sheet's cell height shrinks the rows; changing it would move every look), breadcrumbs (8 px baseline offset in the library, not traced), title_bar, document_tabs, dock_panel, workspace, list, shortcut_recorder, tree_table. Not examined: android_text_modes.
+
+
+## Round 86 (lane z3)
+
+Android idiom rows ready or matched: 59 of 90 before (ready 32, matched 27), 64 after (ready 37, matched 27). Method: every picture re-rendered one at a time with the committed `neper-self.exe`, viewed light and dark at 1x and at 1.5x (the ten audit 44 rows at 1.5x in downscaled montages), contrast ratios computed from the M3 baseline token pairs (primary 6750a4 on fef7ff 6.1:1, on-surface-variant 8.9:1, on-primary 6.4:1, outline 79747e 4.3:1, dark 10.9, 10.9, 7.7, 5.9:1), not from every glyph.
+
+Audit 44's ten rows, viewed. Held ready: code_editor, popover, skeleton, empty_state, toolbar, pagination, key_value_editor, markdown_view (with a recorded gap), key_caps (fixed). Downgraded to review: terminal_view (the focus cell equals rest: the scrollback list draws no focus indicator in any look).
+
+Fixed, Android only (non-Material pictures byte for byte as committed):
+- code_editor: the disabled cell drew a caret and current-line tint; none now (`examples/looks/code_editor.e`).
+- key_caps: the compact cap's label was flush at the top; centred (control.compact_key_caps).
+- rich-text links (markdown_view_links): keyboard focus lays the 10 % layer and the 2 dp underline (control.rich_piece); the pressed sheet waits for its eased layer. Recorded: a two-word link lights the word under the pointer only (both words share one key).
+- scroll thumb (widget.e): 70 % of on-surface-variant at rest (3.98:1 light, 5.9:1 dark; was 2.4:1), 90 % over its strip. Pressed equals hover in the scroll_area sheet.
+- font_picker: `looks_z86` (family faces, oblique shear), `VisualTransform.skew` (new field, 0 everywhere else), the list shows whole rows. Family rows and the sample use Roboto, Segoe UI or Tahoma where the rig has the face; other families show their name alone; Italic is Skia's fake italic (shear 1/4). New sheet `font_picker_faces.png` (`examples/looks/font_picker_faces.e`). Raised to ready.
+- grid_view tile labels padded 12 dp; breadcrumbs centred in their 48 dp targets (the trail is on one baseline); sidebar four-item frame 248 high, sheet drawn in a 320 cell; canvas bars stand 12 dp above the frame foot.
+
+Raised to ready: font_picker, scroll_area, grid_view, breadcrumbs, sidebar, canvas.
+
+Left at review, with the defect: terminal_view (no focus indicator), ribbon (stand-in glyphs), carousel (text-glyph arrows, hover, pressed and focus equal rest), swipe_actions (one action colour, hover equals rest), reorderable_list (no drag handle, states equal rest), color_picker (unlabeled sliders, alike layers), duration_picker (step marks barely legible), icon (not Material Symbols), image (theme-less placeholder glyph 2:1), schedule (clipped labels, chips overflow), flow_editor (states equal rest), sheet (disabled equals rest, cut cell text), bottom_app_bar (text actions where M3 has icons, no hover cell), tree_table, notification_list, title_bar, document_tabs, dock_panel, workspace, list, shortcut_recorder, navigation_stack, navigation_split, android_text_modes (a text-rendering mode, not a drawn row). None was examined this round beyond the audit 43 and 44 notes; time ran out before the library work they need.
+
+Regression: 28 sheets re-rendered one at a time (button, checkbox, combo_box, label, memo, data_grid, tree_list, status_bar, splitter, scroll_bar, spin_edit, progress_bar, card, toast, calendar, hint, link, image, terminal_view, markdown_view, code_editor, font_picker, key_caps, nav_breadcrumbs, nav_sidebar, h_grid_view, f_scroll_area, canvas), `git status` after each: every Neper, Neper Dark, Linux, Linux Dark, Windows, Windows Dark, Cupertino and Cupertino Dark picture is byte for byte as committed.
