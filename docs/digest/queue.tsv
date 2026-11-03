@@ -94,14 +94,92 @@ G010	library	0	286	export + clipboard (+ print hand-off)	Proposed by docs/grid.m
 G011	library	0	298	MTG Studio reference app: card-pool/deck/collection views over a 150k fixture	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G012	library	0.85	3700	pixel-perfect parity with the v3 grid: reference recordings, state catalogue, metric tokens, visual and behavioural diff ledger	Requirement added by the owner 2026-10-13 (docs/grid.md section 1.1): the grid UI and behaviour must be a pixel-perfect equivalent of MTG Studio v3 (many visual inconsistencies in v5/cardgrid).
 L165	library	0.4	1714	UI looks: one widget set in a Windows (MTG Studio v3) look, then macOS/iOS and Android	any control at matched or ready, dark and high-contrast sheets beyond the button, Cupertino and Material.
-L166	library	0.2	2218	Browser M1: e.ui.browser shows a static page (no JS)	everything except 0.1, most of 0.3, 0.6a, 1.1 to 1.3, 1.7 and 1.13a to 1.13d. PART (2026-10-16): 0.6a html5lib runner done (tests/browser/html5lib/run.sh) 1.1 to 1.3 done (D5124) 1.7 done (D5125, e.fm
-L167	library	0	515	Browser M2: modern CSS layout	all of it.
-L168	library	0	603	Browser M3: the real web without JavaScript	all of it.
-L169	library	0	640	Browser M4: JavaScript engine and DOM bindings	all of it.
-L170	library	0	541	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it.
-L171	library	0	623	Browser M6: beyond Vaper (gap items)	all of it.
+L166	library	0.5	2371	Browser M1: e.ui.browser shows a static page (no JS)	everything except 0.1, most of 0.3, 0.6a, 1.1 to 1.3, 1.7 and 1.13a to 1.13d. PART (2026-10-16): 0.6a html5lib runner done (tests/browser/html5lib/run.sh) 1.1 to 1.3 done (D5124) 1.7 done (D5125, e.fm
+L167	library	0.35	669	Browser M2: modern CSS layout	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P2+P3): 4 done, 21 partial, 16 todo of 41; score is the mean with partial counted as half.
+L168	library	0.25	753	Browser M3: the real web without JavaScript	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P4): 1 done, 8 partial, 10 todo of 19; score is the mean with partial counted as half.
+L169	library	0.3	794	Browser M4: JavaScript engine and DOM bindings	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P5+P6): 0 done, 26 partial, 15 todo of 41; score is the mean with partial counted as half.
+L170	library	0.15	694	Browser M5: Dart parity reached, NeperOS Browser replaced	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P7+P9): 1 done, 4 partial, 19 todo of 24; score is the mean with partial counted as half.
+L171	library	0	771	Browser M6: beyond Vaper (gap items)	all of it. Status 2026-11-03 (branch browser-conformance, tracker rows of P8): 0 done, 0 partial, 7 todo of 7; score is the mean with partial counted as half.
 C213	library	0	1648	e.ui in a browser: a real phone's virtual keyboard and IME	Android Chrome checked by hand (D5890, D5891: suggestion replacement, touch hold, drag selection, toolbar);
 L176	library	0	237	OpenGL 5: CGL context on macOS (GL 4.1 core, presentation only)	Design docs/opengl-plan.md, D5879, D5880.
 T048	tooling	0	122	OpenGL verify 4 (verify-only): full suites for the shared compiler change	Verify-only turn, no edits.
 C219	compiler	0.9	1380	OpenGL 16: the Android target, executable form	Done 2026-10-27 (D5896, D5900): emit-executable ...
 T050	tooling	0	458	Regression test for the heap-backed device-lost path (D5949)	D5949 keeps a device lost after a failed Metal or OpenGL command, but no fixture makes dispatch_wait fail, so nothing fails if the sticky flag or the state_of check is removed.
+C224	compiler	0	488	x86-32 emitter: x86-windows and x86-linux targets	Opened 2026-11-03 from docs/roadmap.md:179 by the single-list audit;
+C225	compiler	0	536	aarch64-windows target: ARM64 PE emitter, linker and runtime	Opened 2026-11-03 from docs/roadmap.md:178 by the single-list audit;
+C226	compiler	0	508	PTX emitter and CUDA compute backend for e.gpu (.Cuda devices open and launch)	Opened 2026-11-03 from docs/roadmap.md:180 by the single-list audit;
+C227	compiler	0	466	PDB writer in the own PE linker (MSF, DBI, module, symbol and line streams)	Opened 2026-11-03 from docs/roadmap.md:183 by the single-list audit;
+C228	compiler	0	567	neper-format debug side table in .em (types, locals, scopes, variable locations)	Opened 2026-11-03 from docs/roadmap.md:185 by the single-list audit;
+T051	tooling	0	538	Native debug engine: process control, breakpoints, single-step, stack walking, location rendering	Opened 2026-11-03 from docs/roadmap.md:188 by the single-list audit;
+T052	tooling	0	450	`neper dap`: framed-JSON debug adapter plus VS Code and Zed extensions	Opened 2026-11-03 from docs/roadmap.md:190 by the single-list audit;
+C229	compiler	0	544	Optimiser depth: inlining heuristics, load/store forwarding and instruction scheduling	Opened 2026-11-03 from docs/roadmap.md:194 by the single-list audit;
+C230	compiler	0	463	Vector register class: pass Vec/Mask in xmm/ymm per spec section 5	Opened 2026-11-03 from docs/roadmap.md:196 by the single-list audit;
+T053	tooling	0	516	neper pacman CLI group and e.* namespace-reservation enforcement	Opened 2026-11-03 from docs/roadmap.md:363 by the single-list audit;
+T054	tooling	0	461	One shared usage text for --help, -h, help and E-CLI-9999; info.commands lists every dispatched command	Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit;
+T055	tooling	0	474	`neper eval EXPR`: fold a const initialiser and print it (comptime interpreter, no codegen)	Opened 2026-11-03 from docs/roadmap.md:440 by the single-list audit;
+T056	tooling	0	502	Rename the prose name for the standard library to `e.lib` across the docs	Opened 2026-11-03 from docs/roadmap.md:444 by the single-list audit;
+C231	compiler	0	540	Windows resources part 1: link a precompiled .res into a .rsrc section; os.resource(kind,name)	Opened 2026-11-03 from docs/roadmap.md:450 by the single-list audit;
+T057	tooling	0	524	Windows resources part 2: `neper rc FILE.rc -o FILE.res` compiler	Opened 2026-11-03 from docs/roadmap.md:456 by the single-list audit;
+T058	tooling	0	428	`build --subsystem gui`: PE subsystem 2 behind a flag, recorded in the build manifest	Opened 2026-11-03 from docs/roadmap.md:469 by the single-list audit;
+T059	tooling	0	385	`neper run --watch`: rebuild and rerun on a source change using e.fs.watch	Opened 2026-11-03 from docs/roadmap.md:472 by the single-list audit;
+T060	tooling	0	446	TextMate grammar neper.tmLanguage.json generated from grammar.ebnf	Opened 2026-11-03 from docs/roadmap.md:475 by the single-list audit;
+L183	library	0	563	Chart PDF: embedded TrueType text, FlateDecode streams, multi-page reports; SVG font subsetting	Opened 2026-11-03 from docs/charts.md:1716 by the single-list audit;
+L184	library	0	517	Chart widget: legends, multi-layer views, keyboard zoom/orbit, single-axis zoom, cross-chart filter state	Opened 2026-11-03 from docs/charts.md:1740 by the single-list audit;
+L185	library	0	638	Chart layout: automatic legend placement/wrapping, layout-aware margins, label and strip collision avoidance	Opened 2026-11-03 from docs/charts.md:929 by the single-list audit;
+L186	library	0	525	Chart label leader lines and optimising placement; curved labels for sunburst/pie	Opened 2026-11-03 from docs/charts.md:1771 by the single-list audit;
+L187	library	0	501	Chart downsampling and scene batching for very large series	Opened 2026-11-03 from docs/charts.md:1667 by the single-list audit;
+L188	library	0	494	Chart color accessibility: Machado anomalous-trichromacy tables and automatic marker shapes	Opened 2026-11-03 from docs/charts.md:1784 by the single-list audit;
+L189	library	0	576	Geographic charts: quantile and Jenks classes, TopoJSON reader, polygon clipping, antimeridian splitting	Opened 2026-11-03 from docs/charts.md:1751 by the single-list audit;
+L190	library	0	557	Gantt dependency links, CPM working calendars, leads/lags, resource levelling and duration uncertainty	Opened 2026-11-03 from docs/charts.md:1270 by the single-list audit;
+L191	library	0	643	Diagram auto-layout: flowchart, state machine, ER, org chart and dependency-graph routing	Opened 2026-11-03 from docs/charts.md:1319 by the single-list audit;
+L192	library	0	476	UML and decision diagram depth: sequence fragments, activation inference, BPMN gateways, influence diagrams	Opened 2026-11-03 from docs/charts.md:1332 by the single-list audit;
+L193	library	0	567	Chart statistics follow-ons: adaptive histogram bins, weighted counts, STL/multiplicative decomposition, robust fit	Opened 2026-11-03 from docs/charts.md:828 by the single-list audit;
+L194	library	0	510	Chart layout follow-ons: squarified treemap, streamgraph wiggle, Sankey/alluvial crossovers, word-cloud packing	Opened 2026-11-03 from docs/charts.md:998 by the single-list audit;
+L195	library	0	464	Report compositions: page breaks, print layout and tabular export for cross-tab and matrix reports	Opened 2026-11-03 from docs/charts.md:388 by the single-list audit;
+L196	library	0	520	Motion framework: curves catalogue and tweens (P6-01, P6-02)	Opened 2026-11-03 from docs/animation-plan.md:1 by the single-list audit;
+L197	library	0	570	Motion framework: controller v2 and physics simulations (P6-03, P6-04)	Opened 2026-11-03 from docs/animation-spec.md:235 by the single-list audit;
+L198	library	0	524	Motion framework: implicit animations and explicit transitions (P6-05, P6-06)	Opened 2026-11-03 from docs/animation-plan.md:30 by the single-list audit;
+L199	library	0	553	Motion framework: choreography, animated list changes, shared-element and route transitions (P6-07, P6-08)	Opened 2026-11-03 from docs/animation-controls.md:389 by the single-list audit;
+L200	library	0	557	Motion framework: fake-clock testing, reduced-motion policy, migration of hand-rolled motion (P6-09)	Opened 2026-11-03 from docs/animation-spec.md:722 by the single-list audit;
+L201	library	0	563	Screen-reader bridge: value/name/live-region events, RangeValue and Selection/Table patterns, AT-SPI extents	Opened 2026-11-03 from docs/ux/accessibility-bridge.md:251 by the single-list audit;
+L202	library	0	601	Build the unbuilt TcxGrid parity grids on e.ui.datagrid (prices, editions, messages, shortcuts, statistics, import)	Opened 2026-11-03 from docs/grid-parity/tcxgrid-plan.md:7 by the single-list audit;
+T061	tooling	0	530	Promote e.ui/e.gfx from experimental: multi-window keyboard-accessible app workload on three desktops	Opened 2026-11-03 from docs/ui-framework.md:283 by the single-list audit;
+C232	compiler	0	669	GP-09: lower simd.shuffle/interleave to punpck/pshufb so the Base16 codec stops using scalar lane loops	Opened 2026-11-03 from docs/gp-performance.md:29 by the single-list audit;
+C233	compiler	0	674	Direct argument-to-register call lowering in codegen_x64 (finish db-perf item 1 acceptance)	Opened 2026-11-03 from docs/db-perf-plan.md:60 by the single-list audit;
+T062	tooling	0	710	Native `neper mcp` stdio server exposing symbol, diagnostics, references and AST-subtree tools	Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit;
+T063	tooling	0	486	Add --no-trivia to `neper tokens` and `neper parse` (parser-core trivia suppression)	Opened 2026-11-03 from docs/llm-mcp-server.md:68 by the single-list audit;
+T064	tooling	0	733	H33: per-component token-pressure report over whole verified agent trajectories	Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1289 by the single-list audit;
+T065	tooling	0	720	H43: performance-regression obligations with pre-registered statistics bound into receipts	Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1549 by the single-list audit;
+T066	tooling	0	677	H45: export H34 receipts and H35 contracts into a signed release-provenance envelope	Opened 2026-11-03 from docs/post-m2-llm-hardening.md:1586 by the single-list audit;
+L203	library	0	585	GP-02/GP-03/GP-06 workloads: cross-platform CLI, parallel build executor, streaming parser with designs and oracles	Opened 2026-11-03 from docs/general-purpose-verification.md:147 by the single-list audit;
+L204	library	0	513	GP-07/GP-13 workloads: persistent bounded cache and binary format reader/writer	Opened 2026-11-03 from docs/general-purpose-verification.md:152 by the single-list audit;
+L205	library	0	519	GP-04 workload: long-running HTTP service with bounded steady-state memory and graceful shutdown	Opened 2026-11-03 from docs/general-purpose-verification.md:149 by the single-list audit;
+L206	library	0	534	GP-05/GP-08 workloads: e.db client over a C library and a plugin-style C ABI	Opened 2026-11-03 from docs/general-purpose-verification.md:150 by the single-list audit;
+L207	library	0	507	GP-11/GP-14 workloads: interactive terminal application and image/audio transform pipeline	Opened 2026-11-03 from docs/general-purpose-verification.md:156 by the single-list audit;
+L208	library	0	500	GP-12 workload: multi-package application with reproducible vendoring and clean-room rebuild	Opened 2026-11-03 from docs/general-purpose-verification.md:157 by the single-list audit;
+C234	compiler	0	690	Containers that hold obligated or borrowed values: failure-safe insert and dynamic retention checking	Opened 2026-11-03 from docs/m25-h01-ownership.md:389 by the single-list audit;
+L209	library	0	571	Add e.algo.approx: vertex cover, knapsack FPTAS, LPT and greedy makespan, half-approx max-cut	Opened 2026-11-03 from docs/algos-2.md:86 by the single-list audit;
+L210	library	0	517	Add e.algo.online: ski rental (with predictions), Belady/marking paging, move-to-front, online facility location	Opened 2026-11-03 from docs/algos-2.md:127 by the single-list audit;
+L211	library	0	596	Add iterative linear solvers (CG, GMRES with restart) to e.algo.linalg over a matrix-free operator	Opened 2026-11-03 from docs/algos-2.md:171 by the single-list audit;
+L212	library	0	505	Add classical MDS and Johnson-Lindenstrauss random projection to e.ml.reduce	Opened 2026-11-03 from docs/algos-2.md:244 by the single-list audit;
+L213	library	0	535	Add e.algo.discrepancy: Beck-Fiala, Spencer-style balancing, derandomized max-cut by conditional expectations	Opened 2026-11-03 from docs/algos-2.md:290 by the single-list audit;
+L214	library	0	569	Add WireGuard packet framing over e.crypto.noise (MAC1/MAC2, TAI64N, cookie reply, transport messages)	Opened 2026-11-03 from scripts/algos/decisions-pending.md:743 by the single-list audit;
+L215	library	0	489	Harden e.dist.consensus: Raft pre-vote and config revert, Multi-Paxos accepted values, VR out-of-order	Opened 2026-11-03 from scripts/algos/decisions-pending.md:457 by the single-list audit;
+L216	library	0	524	Add a secure wipe primitive and apply a zeroization policy across e.crypto key-holding APIs	Opened 2026-11-03 from docs/algorithm-format-conformance.md:31 by the single-list audit;
+L217	library	0	635	Hostile-input, limit and differential sweep for compression/archive/media decoders (A0 matrix)	Opened 2026-11-03 from docs/algorithm-format-coverage.md:64 by the single-list audit;
+L218	library	0	571	Nesting, entity-expansion and limit tests for text parsers (json, xml, yaml, html, csv, ini, mail, mime, uri, protobuf)	Opened 2026-11-03 from docs/algorithm-format-coverage.md:53 by the single-list audit;
+L219	library	0	585	Crypto and statistics conformance evidence: vectors, nonce rules, NaN/inf contracts (A0 matrix)	Opened 2026-11-03 from docs/algorithm-format-conformance.md:26 by the single-list audit;
+T067	tooling	0	557	Regenerate the repo rewrite-coverage inventory against the delivered widget and module set	Opened 2026-11-03 from docs/rewrite-coverage-verification.md:10 by the single-list audit;
+T068	tooling	0	739	pacman P0: strict project.yaml parser, canonical project.lock writer, SemVer ranges and PubGrub resolver	Opened 2026-11-03 from docs/pacman.md:410 by the single-list audit;
+T069	tooling	0	554	pacman P1: immutable content-addressed cache, path dependencies, frozen/offline sync and virtual module map	Opened 2026-11-03 from docs/pacman.md:412 by the single-list audit;
+T070	tooling	0	549	pacman P2: signed registry client, Git adapter, mirrors, publish/yank, cache verify and GC	Opened 2026-11-03 from docs/pacman.md:415 by the single-list audit;
+T071	tooling	0	526	pacman P3: controlled generation tasks with hash, scratch execution, capability policy and source maps	Opened 2026-11-03 from docs/pacman.md:418 by the single-list audit;
+T072	tooling	0	506	Embed dependency-package assets and external runtime assets in pacman builds	Opened 2026-11-03 from docs/pacman.md:156 by the single-list audit;
+L220	library	0	672	Constant-time P-256 ECDSA, BIP-340, FFDHE, ML-DSA and RSA-PSS signing to replace the fail-closed stubs	Opened 2026-11-03 from docs/security-audit-2026-09-24.md:H3 by the single-list audit;
+C235	compiler	0	557	Contain module source selection to the project root: resolve symlinks and re-stat at open	Opened 2026-11-03 from docs/security-findings.md:407 by the single-list audit;
+L221	library	0	534	e.fmt.macho: read-only Mach-O headers, load commands, segments and symbol tables	Opened 2026-11-03 from docs/ethical-hacking.md:42 by the single-list audit;
+L222	library	0	608	TLS 1.3 server and client with P-256/RSA credentials, client-certificate auth and PSK session resumption	Opened 2026-11-03 from docs/tls-p256-openrouter.md:40 by the single-list audit;
+T073	tooling	0	564	Android validation matrix: 4 KiB/16 KiB pages, API-level symbol resolution, APK upgrade and wrong-key rejection	Opened 2026-11-03 from docs/android-cross-compilation.md:64 by the single-list audit;
+L223	library	0	499	Apply safe-area insets in the Android counter app and edge-to-edge windows	Opened 2026-11-03 from docs/HANDOVER-OPENGL.md:40 by the single-list audit;
+T074	tooling	0	541	Get both full self-host suites green from a clean worktree, including the unreached NeperOS fixture rows	Opened 2026-11-03 from HANDOVER.md:40 by the single-list audit;
+T075	tooling	0	479	neper-tooling: make a comptime parameter a symbol and reference target in index and uses output	Opened 2026-11-03 from docs/tooling.md:293 by the single-list audit;

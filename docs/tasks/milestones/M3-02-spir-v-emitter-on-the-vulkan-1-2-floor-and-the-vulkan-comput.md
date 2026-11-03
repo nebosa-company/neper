@@ -58,7 +58,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 - `PhysicalStorageBuffer64`: `src/spirv.e`×4‡
 - `NoContraction`: `src/spirv.e`×2‡
 - `libvulkan`: `lib/e/gpu/vulkan.e`×2†, `lib/e/os.macos.e`×1‡
-- `.Vulkan`: `lib/e/gpu.e`×17‡, `scripts/run-gl-fixtures.py`×3, `benchmarks/gp/neper/gp10.e`×2, `benchmarks/gp/README.md`×1, `lib/e/gpu/vulkan.e`×1†
+- `.Vulkan`: `lib/e/gpu.e`×21‡, `scripts/run-gl-fixtures.py`×3, `benchmarks/gp/neper/gp10.e`×2, `benchmarks/gfx_gpu_raster.e`×1, `benchmarks/gp/README.md`×1, `benchmarks/window_present.e`×1, `lib/e/gfx/gpuraster.e`×1†, `lib/e/gpu/vulkan.e`×1†
 - `.Cuda`: `lib/e/gpu.e`×5‡, `lib/e/gpu/cuda.e`×1
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 

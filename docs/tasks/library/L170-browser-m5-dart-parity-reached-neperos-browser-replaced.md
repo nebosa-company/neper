@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Library |
-| score | 0.00 of 1 |
-| queue position | 100 of 106 (only position 1 is eligible for the next session; see README) |
+| score | 0.15 of 1 |
+| queue position | 100 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Plan docs/browser-progress.html. Needs L168 and L169. Acceptance: (1) every tracker row with track mig is done; (2) html5lib at 100 percent (1.3, 9.1); (3) 7.15 neperos/src/browser.e replaced by e.ui.browser and C159 closed; (4) 4.8 and 4.9 cache gaps, 4.10 encrypted cache, 7.8 to 7.12 shell items; (5) 9.7 performance and memory budgets met against the 0.7 baselines; (6) 9.8 fixtures registered in run.ps1 and run.sh, module-apis.md and modules.json current; (7) the Dart repository archived with the oracle artifacts
+> Plan docs/browser-progress.html. Needs L168 and L169. Acceptance: (1) every tracker row with track mig is done; (2) html5lib at 100 percent (1.3, 9.1); (3) 7.15 neperos/src/browser.e replaced by e.ui.browser and C159 closed; (4) 4.8 and 4.9 cache gaps, 4.10 encrypted cache, 7.8 to 7.12 shell items; (5) 9.7 performance and memory budgets met against the 0.7 baselines; (6) 9.8 fixtures registered in run.ps1 and run.sh, module-apis.md and modules.json current; (7) the Dart repository archived with the oracle artifacts. Status 2026-11-03 (branch browser-conformance, tracker rows of P7+P9): 1 done, 4 partial, 19 todo of 24; score is the mean with partial counted as half.
 
 ## Remaining work
 

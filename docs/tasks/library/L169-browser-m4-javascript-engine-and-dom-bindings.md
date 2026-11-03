@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Library |
-| score | 0.00 of 1 |
-| queue position | 99 of 106 (only position 1 is eligible for the next session; see README) |
+| score | 0.30 of 1 |
+| queue position | 99 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Plan docs/browser-progress.html, decision D5115. Needs L166; engine work (5.1 to 5.16) can start in parallel with L167. Acceptance: (1) P5 5.1 to 5.16: parser, compiler, VM, heap and GC, object model, builtins, ECMAScript RegExp, Promise and microtasks, modules, test262 runner with feature-gated pass targets, benchmarks against QuickJS; (2) P6 6.1 to 6.8 and 6.14 bindings: DOM, CSSOM, events, timers, fetch, storage, forms; (3) 6.17 iframes; (4) jQuery 3.5.1 initialises, AJAX re-renders, timers and events work, getBoundingClientRect feeds layout; (5) 9.4 test262 targets, 9.6 real-site sweep including JS-app pages
+> Plan docs/browser-progress.html, decision D5115. Needs L166; engine work (5.1 to 5.16) can start in parallel with L167. Acceptance: (1) P5 5.1 to 5.16: parser, compiler, VM, heap and GC, object model, builtins, ECMAScript RegExp, Promise and microtasks, modules, test262 runner with feature-gated pass targets, benchmarks against QuickJS; (2) P6 6.1 to 6.8 and 6.14 bindings: DOM, CSSOM, events, timers, fetch, storage, forms; (3) 6.17 iframes; (4) jQuery 3.5.1 initialises, AJAX re-renders, timers and events work, getBoundingClientRect feeds layout; (5) 9.4 test262 targets, 9.6 real-site sweep including JS-app pages. Status 2026-11-03 (branch browser-conformance, tracker rows of P5+P6): 0 done, 26 partial, 15 todo of 41; score is the mean with partial counted as half.
 
 ## Remaining work
 
