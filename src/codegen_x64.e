@@ -3884,6 +3884,39 @@ fn immediate_operand(builder: *nir.Builder, current: nir.Function, instruction: 
     ret constant <= 2147483647usize
 }
 
+// The vector slots whose every use is a float + - * / (`FunctionContext.chain_skip`): found from the function's instructions and the
+// instruction that defines each value (`definers`, one more than its index).
+fn chain_analysis(builder: *nir.Builder, current: nir.Function, context: *FunctionContext, definers: []usize) -> err {
+    let chain_end = current.first_instruction + current.instruction_count
+    let (chain, chain_error) = mem.alloc[bool](context.arena, current.value_count + 1usize)
+    if chain_error != ok { ret chain_error }
+    var chain_at = 0usize
+    while chain_at < chain.len {
+        chain[chain_at] = true
+        chain_at += 1usize
+    }
+    var chain_use = current.first_instruction
+    while chain_use < chain_end {
+        let user = builder.instructions[chain_use]
+        let arithmetic = user.opcode == .VectorBinary && !user.has_result && user.operand_count == 3usize && nir.vector_ext(user.immediate) == 0usize && nir.vector_binary_lane(user.immediate) >= 4usize && nir.vector_binary_operation(user.immediate) <= 3usize
+        var chain_position = 0usize
+        while chain_position < user.operand_count {
+            let used = builder.operands[user.first_operand + chain_position]
+            if used < chain.len && !arithmetic { chain[used] = false }
+            chain_position += 1usize
+        }
+        chain_use += 1usize
+    }
+    // only a slot itself: an address computed from one (the second chunk of a wider vector) is not all its uses
+    var chain_define = 0usize
+    while chain_define < chain.len {
+        if chain[chain_define] && (definers[chain_define] == 0usize || builder.instructions[definers[chain_define] - 1usize].opcode != .Stack) { chain[chain_define] = false }
+        chain_define += 1usize
+    }
+    context.chain_skip = chain
+    ret ok
+}
+
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     if !context.has_arena || function_index >= builder.function_count {
         context.live_masks = context.live_masks[0usize..0usize]
@@ -3962,32 +3995,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         dead_at += 1usize
     }
     context.dead_consts = dead
-    let (chain, chain_error) = mem.alloc[bool](context.arena, current.value_count + 1usize)
-    if chain_error != ok { ret chain_error }
-    var chain_at = 0usize
-    while chain_at < chain.len {
-        chain[chain_at] = true
-        chain_at += 1usize
-    }
-    var chain_use = current.first_instruction
-    while chain_use < fill_end {
-        let user = builder.instructions[chain_use]
-        let arithmetic = user.opcode == .VectorBinary && !user.has_result && user.operand_count == 3usize && nir.vector_ext(user.immediate) == 0usize && nir.vector_binary_lane(user.immediate) >= 4usize && nir.vector_binary_operation(user.immediate) <= 3usize
-        var chain_position = 0usize
-        while chain_position < user.operand_count {
-            let used = builder.operands[user.first_operand + chain_position]
-            if used < chain.len && !arithmetic { chain[used] = false }
-            chain_position += 1usize
-        }
-        chain_use += 1usize
-    }
-    // only a slot itself: an address computed from one (the second chunk of a wider vector) is not all its uses
-    var chain_define = 0usize
-    while chain_define < chain.len {
-        if chain[chain_define] && (definers[chain_define] == 0usize || builder.instructions[definers[chain_define] - 1usize].opcode != .Stack) { chain[chain_define] = false }
-        chain_define += 1usize
-    }
-    context.chain_skip = chain
+    try chain_analysis(builder, current, context, definers)
     context.instruction_offsets = context.instruction_offsets[0usize..0usize]
     context.stack_value_slots = context.stack_value_slots[0usize..0usize]
     let (debug_first, debug_count) = nir.debug_locals_of(builder, current.first_instruction)

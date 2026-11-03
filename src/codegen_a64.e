@@ -1144,18 +1144,17 @@ fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: 
     }
     if ext == nir.EXT_CVT_RND {
         try ext_in(allocations, left_value, 16usize, output)
+        // FCVTNS saturates: past the top it answers the largest integer, which no float rounds to exactly, and a NaN answers zero;
+        // both lanes are made the least integer, MVNI/MOVI giving the constants without a general register.
         try neon2(output, 0x4E21A800usize, 0usize, 17usize, 16usize)
-        try emit_a64.move_constant(output, 2usize, 0xCF000000usize)
-        try emit_a64.vector_duplicate(output, 2usize, 18usize, 2usize)
-        try emit_a64.move_constant(output, 3usize, 0x4F000000usize)
-        try emit_a64.vector_duplicate(output, 2usize, 19usize, 3usize)
-        try neon3(output, 0x6E20E400usize, 0usize, 20usize, 16usize, 18usize)
-        try neon3(output, 0x6EA0E400usize, 0usize, 21usize, 19usize, 16usize)
-        try neon3(output, 0x4E201C00usize, 0usize, 20usize, 20usize, 21usize)
-        try emit_a64.move_constant(output, 4usize, 0x80000000usize)
-        try emit_a64.vector_duplicate(output, 2usize, 22usize, 4usize)
-        try neon3(output, 0x6E601C00usize, 0usize, 20usize, 17usize, 22usize)
-        ret ext_out(allocations, destination_value, 20usize, 16usize, output)
+        try emit_a64.instruction_word(output, 0x6F046400usize | 18usize)
+        try neon3(output, 0x6E208C00usize, 2usize, 18usize, 17usize, 18usize)
+        try neon3(output, 0x4E20E400usize, 0usize, 19usize, 16usize, 16usize)
+        try emit_a64.vector_not(output, 19usize, 19usize)
+        try neon3(output, 0x4EA01C00usize, 0usize, 18usize, 18usize, 19usize)
+        try emit_a64.instruction_word(output, 0x4F046400usize | 20usize)
+        try neon3(output, 0x6E601C00usize, 0usize, 18usize, 20usize, 17usize)
+        ret ext_out(allocations, destination_value, 18usize, 16usize, output)
     }
     try ext_in(allocations, left_value, 16usize, output)
     if ext != nir.EXT_MOVEMASK { try ext_in(allocations, right_value, 17usize, output) }
@@ -1335,12 +1334,14 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         if operation <= 3usize {
             if lane < 4usize { ret codegen_x64.Unsupported }
             try emit_a64.vector_three(output, 9usize + operation, size, 16usize, 16usize, 17usize)
-            try emit_a64.vector_three(output, 13usize, size, 18usize, 16usize, 16usize)
-            var width = 32usize
-            if lane == 5usize { width = 64usize }
-            try emit_a64.move_constant(output, A64_S2, codegen_x64.canonical_nan(width))
-            try emit_a64.vector_duplicate(output, size, 19usize, A64_S2)
-            try emit_a64.vector_three(output, 8usize, 0usize, 16usize, 19usize, 18usize)
+            if !(destination_value < context.chain_skip.len && context.chain_skip[destination_value]) {
+                try emit_a64.vector_three(output, 13usize, size, 18usize, 16usize, 16usize)
+                var width = 32usize
+                if lane == 5usize { width = 64usize }
+                try emit_a64.move_constant(output, A64_S2, codegen_x64.canonical_nan(width))
+                try emit_a64.vector_duplicate(output, size, 19usize, A64_S2)
+                try emit_a64.vector_three(output, 8usize, 0usize, 16usize, 19usize, 18usize)
+            }
         }
         if operation == 4usize { try emit_a64.vector_three(output, 0usize, size, 16usize, 16usize, 17usize) }
         if operation == 5usize { try emit_a64.vector_three(output, 1usize, size, 16usize, 16usize, 17usize) }
@@ -1783,6 +1784,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     if !context.has_arena || function_index >= builder.function_count {
         context.live_masks = context.live_masks[0usize..0usize]
         context.entered = context.entered[0usize..0usize]
+        context.chain_skip = context.chain_skip[0usize..0usize]
         ret function_body(builder, function_index, stack_slots, context)
     }
     let current = builder.functions[function_index]
@@ -1817,8 +1819,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     builder.definers = definers
     builder.definers_first = current.first_instruction
     builder.definers_valid = true
+    try codegen_x64.chain_analysis(builder, current, context, definers)
     let body_error = function_body(builder, function_index, stack_slots, context)
     builder.definers_valid = false
+    context.chain_skip = context.chain_skip[0usize..0usize]
     context.live_masks = context.live_masks[0usize..0usize]
     mem.reset(context.arena, mark)
     ret body_error
