@@ -9,8 +9,15 @@ use e.ui.looks_e
 use e.ui.looks_y63
 use e.ui.navigation
 use e.ui.widget
+use e.ui.looks_y85
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the selected row fill holds white text at 4.5:1 (0045E6 light, 0B57D0 dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x0B57D0u32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (subs, subs_error) = looks_e.submits(a, 4usize)
     if subs_error != ok { ret (0usize, subs_error) }
     let labels = [4]str{ "Inbox", "Sent", "Drafts", "Trash" }

@@ -6,11 +6,18 @@ use e.ui.control
 use e.ui.looks
 use e.ui.looks_z84
 use e.ui.looks_a
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_rate(ctx: *void, value: u32) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: Apple's increased-contrast blue, so the star holds 3:1 on its hover and pressed layers; other looks are unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let names = [6]str{ "3 of 5", "hover star 4", "pressed star 4", "focus", "none", "all five" }
     let values = [6]u32{ 3u32, 3u32, 3u32, 3u32, 0u32, 5u32 }
     var i = 0usize
@@ -25,7 +32,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if i == 2usize { drive = .Press }
         if i == 3usize { drive = .Focus }
-        if i == 3usize && t.tokens.profile == .MaterialLike {
+        if i == 3usize && (t.tokens.profile == .MaterialLike || t.tokens.profile == .CupertinoLike) {
             looks_z84.stops(4usize)
             drive = .Tabs
         }

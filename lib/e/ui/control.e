@@ -39,6 +39,7 @@ use e.ui.looks_t81
 use e.ui.looks_x84
 use e.ui.looks_x85
 use e.ui.looks_y84
+use e.ui.looks_y85
 use e.ui.looks_z84_edge
 use e.ui.winbutton
 use e.ui.winhint
@@ -1470,8 +1471,14 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         ground = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container)
         raised = 0usize
     }
+    // Cupertino: a grouped inset card, a white (dark 2C2C2E) face with a 10 pt radius and no shadow, as a grouped table section is
+    let grouped = t.tokens.profile == .CupertinoLike
+    if grouped && options.enabled && options.variant != .Filled && options.variant != .Outlined && !options.dragged && !(interactive && (state.hovered || state.pressed)) {
+        ground = style.hex_raw(looks_y85.card_face(t.tokens.palette == .Dark))
+    }
     s.background = paint.Brush { Solid: ground }
     s.radius = t.tokens.radii.md
+    if grouped { s.radius = 10.0 }
     if options.width > 0.0 {
         s.width = style.Length { Px: options.width }
         if options.width < 120.0 { s.radius = t.tokens.radii.sm }
@@ -1483,7 +1490,12 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
     s.overflow = .Clip
     if options.variant == .Outlined { s.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.variant == .Outlined && grouped { s.border = style.Border { width: 1.0, color: style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, false)) } }
     if options.selected { s.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    if grouped {
+        raised = 0usize
+        if options.dragged && options.enabled { raised = 2usize }
+    }
     if raised > 0usize { s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) } }
     var column_style = style.defaults()
     if !options.enabled { column_style.opacity = t.tokens.states.disabled_content }
@@ -1914,6 +1926,11 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
     if options.strong { ink = style.color(t.tokens, .Outline) }
     let horizontal = options.axis == .Horizontal
     var thick = style.Length { Px: t.tokens.sizes.divider }
+    // Cupertino: the opaque separator colour the picture cites (the translucent token composes to 1.07:1), one whole pixel thick so the colour is drawn
+    if t.tokens.profile == .CupertinoLike {
+        ink = style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, options.strong))
+        thick = style.Length { Px: 1.0 }
+    }
     // The Linux look (worker l3): libadwaita's GtkSeparator is a #dddddd (#454545 Dark) fill of its whole allocation; `thick` sets it.
     if t.tokens.profile == .Linux {
         ink = linux_rule(t)
@@ -1938,6 +1955,14 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
         line.width = thick
         line.height = style.Length { Flex: 1.0 }
         outer.padding = style.EdgeLengths { left: none, top: lead, right: none, bottom: tail }
+    }
+    // Cupertino: a 2 px box holds the 1 px line at its top edge, so the centred rule lands on whole pixels
+    if t.tokens.profile == .CupertinoLike && options.label.len == 0usize {
+        if horizontal {
+            outer.padding.bottom = style.Length { Px: 1.0 }
+        } else {
+            outer.padding.right = style.Length { Px: 1.0 }
+        }
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -12336,6 +12361,8 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         if filled { ink = primary }
         if hovered < count && i <= hovered && !filled {
             ink = with_alpha(primary, 0.6)
+            // Cupertino: the full accent, a 60 % one is under 3:1 on the hover layer
+            if t.tokens.profile == .CupertinoLike { ink = primary }
             filled = true
         }
         stars[i] = Star { color: ink, filled: filled, arena: a }
@@ -14644,6 +14671,11 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     if !bottom {
         options.background = .SurfaceContainerHigh
         options.radius = t.tokens.radii.md
+        // Cupertino: a rounded banner with a soft shadow, not Material's stacked heavy one
+        if t.tokens.profile == .CupertinoLike {
+            options.radius = 22.0
+            options.elevation = 1u8
+        }
         wide = 340.0
         pad_y = style.Length { Px: 12.0 }
     }
@@ -14740,6 +14772,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
             column[4usize] = more_words
             var pill = style.defaults()
             pill.radius = t.tokens.radii.md
+            if t.tokens.profile == .CupertinoLike { pill.radius = 16.0 }
             pill.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
             let across = style.Length { Px: 12.0 }
             let down = style.Length { Px: 6.0 }
@@ -14814,6 +14847,10 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     options.background = .SurfaceContainerHigh
     options.radius = t.tokens.radii.md
     options.elevation = 3u8
+    if t.tokens.profile == .CupertinoLike {
+        options.radius = 22.0
+        options.elevation = 1u8
+    }
     var sheet = surface_style(t, options)
     sheet.overflow = .Visible
     sheet.width = style.Length { Px: 340.0 }
@@ -21236,6 +21273,17 @@ fn cup_segments(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lab
         let (item, item_error) = pressable(a, item_key, t, item_role, labels[k], look, live, chosen, &actions[k], content)
         if item_error != ok { ret (zero, item_error) }
         items[k] = item
+        // A tab strip (role 19): the runtime insets a tab's ring 3 px, which left a 12 px box through the label; here the ring stays outside the segment
+        if item_role == 19u8 {
+            switch items[k].kind {
+            case .Semantics as item_sem:
+                var ringed_sem = item_sem
+                ringed_sem.focus_inset = -1.0
+                items[k].kind = widget.Kind { Semantics: ringed_sem }
+            default:
+                items[k] = item
+            }
+        }
         k += 1usize
     }
     layers[used] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])))
