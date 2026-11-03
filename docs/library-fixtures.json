@@ -109,6 +109,7 @@
    "pending": [],
    "fixtures": [
     "async",
+    "async_init",
     "async_io"
    ]
   },
@@ -251,6 +252,7 @@
     "crypto_sign_plan",
     "crypto_sign_wide",
     "differential",
+    "net_ssh",
     "net_tls_roots"
    ]
   },
@@ -265,6 +267,7 @@
     "crypto_kx",
     "crypto_pq",
     "crypto_sign_plan",
+    "net_ssh",
     "net_tls"
    ]
   },
@@ -530,6 +533,7 @@
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
+    "log_debug",
     "net_grpccall",
     "net_grpcretry",
     "net_grpcstub",
@@ -2131,7 +2135,8 @@
     "ui_theme",
     "ui_title_bar",
     "ui_widget",
-    "ui_window"
+    "ui_window",
+    "ui_windows_looks"
    ]
   },
   {
@@ -2466,6 +2471,10 @@
     "gpu_gl",
     "gpu_gl_cache",
     "gpu_gl_exact",
+    "gpu_gl_f64",
+    "gpu_gl_limits",
+    "gpu_gl_narrow",
+    "gpu_gl_subgroup",
     "gpu_gl_threads",
     "gpu_inventory",
     "gpu_launch_facts",
@@ -2485,6 +2494,7 @@
     "macos_gpu_metal",
     "macos_metal_atomics",
     "macos_metal_subgroup",
+    "narrow_float",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -2586,7 +2596,8 @@
     "ui_widget",
     "ui_window",
     "ui_workspace",
-    "wasm_irreducible"
+    "wasm_irreducible",
+    "x_khronos_gl_present"
    ]
   },
   {
@@ -2696,6 +2707,8 @@
     "gpu_float_modes",
     "gpu_ftz_ops",
     "gpu_gl_exact",
+    "gpu_gl_f64",
+    "gpu_gl_narrow",
     "gpu_vulkan_float",
     "macos_metal_exact",
     "math_exact",
@@ -2705,6 +2718,7 @@
     "math_inverse",
     "math_mc",
     "math_mcmc",
+    "math_narrow",
     "math_ode",
     "math_opt_meta",
     "math_opt_milp",
@@ -2716,6 +2730,7 @@
     "ml_mixed",
     "ml_reduce",
     "ml_sample",
+    "narrow_float",
     "robot_map",
     "robot_motion",
     "robot_plan",
@@ -2887,7 +2902,9 @@
     "gp09_simd_hex",
     "gpu_barrier_chain",
     "gpu_fault_bounds",
+    "math_narrow",
     "simd_lanes",
+    "simd_masked_bounds",
     "trap_align",
     "trap_arithmetic",
     "wasm_mask",
@@ -2904,6 +2921,7 @@
    "fixtures": [
     "channel_semantics",
     "channel_threads",
+    "gpu_gl_threads",
     "net_sp",
     "net_zmtp",
     "os_exit_threads",
@@ -2918,6 +2936,7 @@
     "task_pool",
     "test_poll",
     "thread_perturb",
+    "thread_pool",
     "wasm_threads"
    ]
   },
@@ -3236,6 +3255,7 @@
     "test_support",
     "text_locale",
     "text_regex_backtrack",
+    "thread_pool",
     "time_calendar",
     "time_calendars",
     "time_calendars_african",
@@ -4225,6 +4245,7 @@
     "ui_title_bar",
     "ui_transient",
     "ui_widget",
+    "ui_windows_looks",
     "ui_workspace"
    ]
   },
@@ -4451,8 +4472,8 @@
    "module": "e.ui.window",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 31,
-   "delivered": 31,
+   "catalogue": 38,
+   "delivered": 38,
    "pending": [],
    "fixtures": [
     "ui_accessibility",
@@ -4469,7 +4490,8 @@
     "ui_testing",
     "ui_title_bar",
     "ui_widget",
-    "ui_window"
+    "ui_window",
+    "x_khronos_gl_present"
    ]
   },
   {

@@ -1,7 +1,7 @@
 name: macos-a64
 on:
   push:
-    branches: [macos-a64, macos-dir, macos-ci]
+    branches: [master, macos-a64, macos-dir]
   workflow_dispatch:
 jobs:
   run:

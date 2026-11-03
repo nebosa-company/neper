@@ -272,7 +272,12 @@ fn event_of(s: *State, id: window.Id, host: os.WindowEvent) -> (Event, bool) {
         s.has_pending = true
         ret (Event { Blur: id }, true)
     }
-    if host.kind == .Paint { ret (Event { Frame: id }, true) }
+    if host.kind == .Paint {
+        // An expose shows the window's last frame whole at once: a repaint of an unchanged scene presents nothing,
+        // and `request_frame` shows only the changed box.
+        let repainted = window.repaint(id)
+        ret (Event { Frame: id }, true)
+    }
     if host.kind == .Resize {
         let (state, window_error) = window.state_by_id(id)
         if window_error != ok { ret (none, false) }

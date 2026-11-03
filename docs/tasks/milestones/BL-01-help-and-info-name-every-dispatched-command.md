@@ -25,7 +25,7 @@
 
 ## Code anchors
 
-- `E-CLI-9999`: `src/main.e`×24‡, `src/tool.e`×10‡, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×2, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×2, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1, `tests/conformance/tools/info_version.expected.jsonl`×1, `tests/conformance/tools/plan_parameter_refused.expected.jsonl`×1, `tests/conformance/tools/plan_rename_protocol_refused.expected.jsonl`×1
+- `E-CLI-9999`: `src/main.e`×33‡, `src/tool.e`×10‡, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×2, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×2, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1, `tests/conformance/tools/info_version.expected.jsonl`×1, `tests/conformance/tools/plan_parameter_refused.expected.jsonl`×1, `tests/conformance/tools/plan_rename_protocol_refused.expected.jsonl`×1
 - nearest existing implementation: `src/main.e`‡, `tests/conformance/tools/info_version` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

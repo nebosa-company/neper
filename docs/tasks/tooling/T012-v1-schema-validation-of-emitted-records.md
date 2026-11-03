@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | tooling / Tooling |
-| score | 0.90 of 1 |
-| queue position | 38 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 23 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | low — rated for a small model; a whole checklist line per session is realistic |
 
 ## Definition of done
@@ -15,7 +15,7 @@ The contract is `docs/tooling.md`, section `## 9. Conformance and compatibility`
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `python scripts/validate_stream.py` validates every committed golden against docs/schemas/neper-v1.schema.json, and both suites run it (D250): the 23 `.jsonl` streams under tests/conformance -- one record per line, 895 of them -- and docs/modules.json as a whole document, so the three shapes anything currently emits are covered (`streamRecord`, `buildManifest`, `modulePlan`). The goldens are what the commands emit byte for byte, so validating them validates the emitters. A self-check rejects a header carrying an unregistered command before the corpus runs, so a validator that accepted everything could not pass; a machine without the `jsonschema` package prints a skip rather than failing the suite. The runner's source map (D264) is validated by both suites as a fourth shape; `packageManifest` is in the schema with nothing producing it yet
+> `python scripts/validate_stream.py` validates every committed golden against docs/schemas/neper-v1.schema.json, and both suites run it (D250): the 23 `.jsonl` streams under tests/conformance -- one record per line, 895 of them -- and docs/modules.json as a whole document, so the three shapes anything currently emits are covered (`streamRecord`, `buildManifest`, `modulePlan`). The goldens are what the commands emit byte for byte, so validating them validates the emitters. A self-check rejects a header carrying an unregistered command before the corpus runs, so a validator that accepted everything could not pass; a machine without the `jsonschema` package prints a skip rather than failing the suite. The runner's source map (D264) is validated by both suites as a fourth shape; `packageManifest` is in the schema with nothing producing it yet PART (D4305): tests/conformance/package/p0.package.json validated by validate_stream.py with a five-mutation negative self-check; 3,368 records, 0 invalid. Missing: the producer (M6 pacman P0).
 
 ## Remaining work
 
@@ -36,8 +36,12 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_stats_record.py`×1, `scripts/render_card.py`×1
+- `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `scripts/freeze_llm_protocol.py`×2, `scripts/lang-stats.py`×2†, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `lib/e/log/rotate.e`×1, `scripts/check_stats_record.py`×1
 - `jsonschema`: `scripts/validate_stream.py`×3, `scripts/algos/decisions-pending.md`×1†
+
+## Existing fixtures
+
+- `tests/conformance/package/p0.package.json`
 
 ## Verification
 

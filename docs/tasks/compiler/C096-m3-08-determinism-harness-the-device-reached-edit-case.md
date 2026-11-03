@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.00 of 1 |
-| queue position | 25 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.90 of 1 |
+| queue position | 18 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> 
+>  PART (D4201-D4202): gpu_device_edit edits a helper two modules from the kernel and requires main and lowhelp rebuilt, midhelp kept, hot image equal to clean, device equal to host, -j 1 and -j 3 --perturb images equal; also fixed emit-em-all --incremental rebuilding main/e.gpu/e.sync every time (D4202). Run by hand on x64 Windows and the Linux target; the run.sh block not executed.
 
 ## Remaining work
 

@@ -320,6 +320,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wide_second_error != ok { os.exit(48i32) }
     let (_, wide_child_count) = widget.find_by_key(mem.cast[*widget.State](wide_runtime.state), 65u64)
     if wide_child_count != 1usize { os.exit(49i32) }
+    // A text too large for the frame's arena reports the exhausted arena, not an invalid tree (a long tab label once stopped a window
+    // with the second and nothing said).
+    let (long_fonts, long_fonts_error) = mem.alloc[layout.FontChoice](a, 1usize)
+    if long_fonts_error != ok { os.exit(60i32) }
+    long_fonts[0usize] = layout.FontChoice { font: font, size: 16.0 }
+    let (long_text, long_text_error) = mem.alloc[u8](a, 400usize)
+    if long_text_error != ok { os.exit(61i32) }
+    var long_at = 0usize
+    while long_at < long_text.len {
+        long_text[long_at] = 97u8
+        long_at += 1usize
+    }
+    let long_value: str = long_text[0usize..400usize]
+    let (small_storage, small_error) = mem.alloc[u8](a, 32768usize)
+    if small_error != ok { os.exit(62i32) }
+    var small_frame = mem.arena_from(small_storage)
+    let long_node = widget.text(0u64, widget.Text { value: long_value, style: layout.Style { fonts: long_fonts, language: "", line_height: 16.0 }, color: paint.rgba(1.0, 1.0, 1.0, 1.0), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
+    let (long_scene, long_error) = widget.reconcile(&runtime, &small_frame, long_node, limits_64)
+    if long_error != mem.Exhausted { os.exit(63i32) }
     if widget.close(&wide_runtime) != ok { os.exit(50i32) }
     if widget.close(&runtime) != ok || widget.close(&runtime) != widget.InvalidTree { os.exit(51i32) }
     if scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(52i32) }

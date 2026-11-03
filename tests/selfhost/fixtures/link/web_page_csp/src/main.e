@@ -1,5 +1,6 @@
 // A page's Content Security Policy as the loader applies it: a `<meta http-equiv>` policy stops inline scripts without a matching
 // nonce, lets the nonce'd one run, and `eval` is refused unless `'unsafe-eval'` is listed; a page with no policy runs everything.
+use e.bytes
 use e.fs
 use e.fmt.dom as dom
 use e.fmt.html as html
@@ -45,6 +46,42 @@ fn title_of(a: *mem.Arena, fonts: *fontset.Set, client: *fetch.Client, body: str
     ret pg.title
 }
 
+// Initial style collection happens before a view exists. It must nevertheless
+// use Page.load's requested viewport for style/link/import/font media rules.
+fn initial_media_regression(a: *mem.Arena, fonts: *fontset.Set, client: *fetch.Client) -> bool {
+    let (font_bytes, font_error) = fs.read_file(a, "tests/browser/assets/ahem.ttf", 65536usize)
+    if font_error != ok { ret false }
+    let (encoded_len, length_error) = bytes.base64_encoded_len(font_bytes.len, true)
+    if length_error != ok { ret false }
+    let (encoded, encoded_error) = mem.alloc[u8](a, encoded_len)
+    if encoded_error != ok { ret false }
+    let (font_text, encode_error) = bytes.base64_encode(encoded, font_bytes, .Standard, true)
+    if encode_error != ok { ret false }
+    let (builder0, builder_error) = str.builder(a, font_text.len + 1024usize)
+    if builder_error != ok { ret false }
+    var builder = builder0
+    if str.push(&builder, "<style media=\"(max-width: 600px)\">.inline-narrow{color:red}</style><style media=\"(min-width: 601px)\">.inline-wide{color:blue}</style><style>@import url(\"data:text/css,.import-wide%7Bcolor%3Ablue%7D\") screen and (min-width: 601px);.base-rule{color:black}</style><link rel=\"stylesheet\" media=\"(min-width: 601px)\" href=\"data:text/css,.link-wide%7Bcolor%3Agreen%7D\"><style media=\"(min-width: 601px)\">@font-face{font-family:ViewportProbe;src:url(data:font/ttf;base64,") != ok { ret false }
+    if str.push(&builder, font_text) != ok { ret false }
+    if str.push(&builder, ")}</style>") != ok { ret false }
+    let body = str.done(&builder)
+    let (address, address_error) = str.concat(a, "data:text/html,", body)
+    if address_error != ok { ret false }
+
+    let before = fonts.faces.len
+    let (narrow, narrow_error) = page.load(a, client, fonts, address, 400.0f32, 200.0f32, 16777216usize)
+    if narrow_error != ok { ret false }
+    if narrow.sheets.len != 2usize || !str.contains(narrow.sheets[0usize], ".inline-narrow") || !str.contains(narrow.sheets[1usize], ".base-rule") || fonts.faces.len != before { ret false }
+    page.close(narrow)
+    if fonts.faces.len != before { ret false }
+
+    let (wide, wide_error) = page.load(a, client, fonts, address, 800.0f32, 200.0f32, 16777216usize)
+    if wide_error != ok { ret false }
+    let wide_ok = wide.sheets.len == 5usize && str.contains(wide.sheets[0usize], ".inline-wide") && str.contains(wide.sheets[1usize], ".import-wide") && str.contains(wide.sheets[2usize], ".base-rule") && str.contains(wide.sheets[3usize], ".link-wide") && str.contains(wide.sheets[4usize], "ViewportProbe") && fonts.faces.len == before + 1usize
+    page.close(wide)
+    if fonts.faces.len != before { ret false }
+    ret wide_ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (made, me) = fontset.new(a)
     if me != ok { os.exit(1i32) }
@@ -69,6 +106,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.eq(title_of(a, &fonts, &client, "<meta http-equiv=Content-Security-Policy content=\"script-src 'unsafe-inline'\"><title>t</title><script>try{eval('1');document.title='evaled'}catch(e){document.title=e.name}</script>"), "EvalError") { os.exit(13i32) }
     if !str.eq(title_of(a, &fonts, &client, "<meta http-equiv=Content-Security-Policy content=\"script-src 'unsafe-inline' 'unsafe-eval'\"><title>t</title><script>try{eval('1');document.title='evaled'}catch(e){document.title=e.name}</script>"), "evaled") { os.exit(14i32) }
     // 5. Only an explicit crossorigin=use-credentials script/module graph asks the page to include cookies.
+    if !initial_media_regression(a, &fonts, &client) { os.exit(16i32) }
     if !script_credentials(a) { os.exit(15i32) }
     // 6. A geometry lookup before insertion does not leave the inserted node outside the box cache.
     if !str.eq(title_of(a, &fonts, &client, "<script>document.body.getBoundingClientRect();let e=document.createElement('div');e.setAttribute('style','width:37px;height:19px');document.body.appendChild(e);let r=e.getBoundingClientRect();document.title=r.width+'x'+r.height</script>"), "37x19") { os.exit(16i32) }

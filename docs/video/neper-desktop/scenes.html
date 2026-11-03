@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neper desktop video</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0c0e14; }
+  body { position: relative; color: #e1e2e9; font: 400 30px/1.35 "Segoe UI", system-ui, sans-serif; }
+  .mono { font-family: "Cascadia Code", Consolas, monospace; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .brand { position: absolute; left: 80px; top: 52px; display: flex; align-items: center; gap: 16px; font-weight: 600; font-size: 30px; letter-spacing: 1px; }
+  .brand img { width: 48px; height: 48px; }
+  .title { position: absolute; left: 80px; top: 130px; font: 600 64px/1.1 "Segoe UI", sans-serif; color: #fff; }
+  .title small { display: block; margin-top: 12px; font: 400 28px/1.3 "Segoe UI", sans-serif; color: #8d909e; }
+  #caption { position: absolute; left: 160px; right: 160px; bottom: 86px; text-align: center; font-size: 34px; line-height: 1.35; color: #fff; padding: 18px 32px; border-radius: 20px; background: #0c0e14cc; }
+  #foot { position: absolute; left: 80px; right: 80px; bottom: 26px; font-size: 20px; color: #8d909e; text-align: center; }
+  .card { position: absolute; top: 330px; height: 470px; width: 410px; border: 2px solid #39475f; border-radius: 24px; padding: 28px 30px; background: #12141b; }
+  .card h3 { margin: 0 0 20px; font: 600 34px/1.2 "Segoe UI", sans-serif; color: #b3c5ff; }
+  .card .row { font-size: 27px; line-height: 1.3; margin-bottom: 14px; color: #c3c6d5; opacity: 0; }
+  .card.neper { border-color: #b3c5ff; background: #0f1b33; }
+  .card.neper .big { position: absolute; left: 0; right: 0; top: 170px; text-align: center; font: 600 60px "Cascadia Code", Consolas, monospace; color: #fff; opacity: 0; }
+  .card.neper .sub { position: absolute; left: 0; right: 0; top: 270px; text-align: center; font-size: 32px; color: #ffb692; opacity: 0; }
+  .panel { position: absolute; border: 2px solid #39475f; border-radius: 22px; background: #12141b; padding: 26px 32px; }
+  .code { font: 400 27px/1.5 "Cascadia Code", Consolas, monospace; white-space: pre; color: #e1e2e9; }
+  .code .c { color: #8d909e; } .code .k { color: #b3c5ff; } .code .s { color: #ffb692; }
+  .strike { position: absolute; left: 1000px; font: 600 44px "Segoe UI", sans-serif; color: #c3c6d5; opacity: 0; }
+  .strike s { text-decoration-thickness: 4px; text-decoration-color: #ffb692; }
+  .term { position: absolute; left: 80px; top: 120px; width: 1760px; height: 400px; font: 400 23px/1.45 "Cascadia Code", Consolas, monospace; white-space: pre; padding: 22px 30px; }
+  .term .p { color: #b3c5ff; } .term .ok { color: #7bd88f; } .term .d { color: #8d909e; }
+  .tile { position: absolute; top: 550px; width: 330px; height: 240px; border: 2px solid #39475f; border-radius: 22px; padding: 24px; background: #12141b; opacity: 0; }
+  .tile b { display: block; font: 600 34px "Segoe UI", sans-serif; color: #fff; }
+  .tile span { display: block; font-size: 24px; color: #c3c6d5; margin-top: 6px; }
+  .tile em { display: block; font: 600 42px "Cascadia Code", Consolas, monospace; color: #b3c5ff; margin-top: 10px; font-style: normal; }
+  .src { position: absolute; top: 330px; height: 150px; border-radius: 10px; background: #1e2a44; border: 2px solid #39475f; overflow: hidden; font-size: 22px; padding: 10px; color: #c3c6d5; white-space: nowrap; }
+  .src.hot { background: #2a4a85; border-color: #b3c5ff; color: #fff; }
+  .bar { position: absolute; height: 54px; border-radius: 8px; background: #b3c5ff; }
+  .lbl { position: absolute; font-size: 28px; color: #c3c6d5; white-space: nowrap; }
+  .hbar { position: absolute; left: 520px; height: 56px; border-radius: 8px; background: #39475f; }
+  .hbar.n { background: #b3c5ff; }
+  .name { position: absolute; left: 80px; width: 420px; text-align: right; font-size: 30px; color: #e1e2e9; }
+  .val { position: absolute; font: 600 28px "Cascadia Code", Consolas, monospace; color: #c3c6d5; white-space: nowrap; }
+  .formula { font: 400 84px "Cambria Math", "STIX Two Math", Cambria, serif; color: #b3c5ff; }
+</style>
+</head>
+<body>
+<div class="brand"><img src="../../gtm/logo/neper-icon.svg" alt=""><span>NEPER</span></div>
+
+<div id="hook" class="scene">
+  <div class="title">What you install before the first window<small>Windows prerequisites, from each project's own install guide</small></div>
+  <div class="card" style="left:80px"><h3>Flutter</h3><div class="row">Git for Windows</div><div class="row">Visual Studio + C++ workload</div><div class="row">Flutter SDK · 1.8 GB</div></div>
+  <div class="card" style="left:510px"><h3>Tauri</h3><div class="row">Rust</div><div class="row">MSVC C++ Build Tools</div><div class="row">WebView2</div><div class="row">Node.js, for a JS front end</div></div>
+  <div class="card" style="left:940px"><h3>C++ with Qt</h3><div class="row">Qt account + installer</div><div class="row">MSVC or MinGW-w64</div></div>
+  <div class="card neper" style="left:1370px"><h3>Neper</h3><div class="big">neper.exe</div><div class="sub">one file</div></div>
+</div>
+
+<div id="start" class="scene">
+  <div class="title">A project is a file<small>hello.e, 281 bytes</small></div>
+  <div class="panel" style="left:80px; top:290px; width:820px; height:440px"><div id="code" class="code"></div></div>
+  <div class="strike" style="top:310px"><s>SDK</s></div>
+  <div class="strike" style="top:400px"><s>IDE</s></div>
+  <div class="strike" style="top:490px"><s>second toolchain</s></div>
+  <div class="strike" style="top:580px"><s>runtime</s></div>
+  <div class="strike" id="one" style="top:690px; color:#b3c5ff">neper.exe · about 10 MB</div>
+  <div id="boot" style="position:absolute;left:1000px;top:770px;font-size:24px;width:820px;color:#8d909e;opacity:0">first build: a throwaway C99 bootstrap, once; then the compiler builds itself</div>
+</div>
+
+<div id="cross" class="scene">
+  <div class="title" style="top:52px;left:360px;font-size:44px"></div>
+  <div class="panel term" id="term"></div>
+</div>
+
+<div id="dce" class="scene">
+  <div class="title">Only what main reaches<small id="dcesub"></small></div>
+  <div id="dcebody"></div>
+</div>
+
+<div id="small" class="scene">
+  <div class="title">Self-contained, and small<small>Smallest reported app, in MB. Different app shapes: see the blog post.</small></div>
+  <div id="smallbody"></div>
+</div>
+
+<div id="close" class="scene">
+  <div style="position:absolute;left:0;right:0;top:250px;text-align:center"><img src="../../gtm/logo/neper-icon.svg" style="width:160px;height:160px" alt=""></div>
+  <div id="c1" style="position:absolute;left:0;right:0;top:450px;text-align:center;font:600 84px 'Segoe UI',sans-serif;color:#fff">One compiler. Every target.</div>
+  <div id="c2" style="position:absolute;left:0;right:0;top:560px;text-align:center;font:600 84px 'Segoe UI',sans-serif;color:#ffb692">Nothing to install.</div>
+  <div id="c3" class="formula" style="position:absolute;left:0;right:0;top:720px;text-align:center;font-size:72px">e = lim<sub style="font-size:30px">n→∞</sub> (1 + n<sup style="font-size:34px">−1</sup>)<sup style="font-size:44px">n</sup></div>
+  <div id="c4" class="mono" style="position:absolute;left:0;right:0;top:870px;text-align:center;font-size:34px;color:#8d909e">neper.dev</div>
+</div>
+
+<div id="caption"></div>
+<div id="foot"></div>
+
+<script>
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (p) => 1 - Math.pow(1 - clamp(p), 3);
+const prog = (t, a, d = 0.5) => clamp((t - a) / d);
+const $ = (id) => document.getElementById(id);
+function fadeIn(el, t, a, d = 0.5, rise = 18) { const p = ease(prog(t, a, d)); el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * rise}px)`; }
+function typed(text, t, a, cps) { return text.slice(0, Math.max(0, Math.floor((t - a) * cps))); }
+
+const HELLO = [
+  ['k', 'use'], 'e.mem', null,
+];
+const helloHtml = (n) => {
+  const lines = [
+    '<span class="k">use</span> e.mem',
+    '<span class="k">use</span> e.io',
+    '',
+    '<span class="c">// (two comment lines: the signature of main)</span>',
+    '<span class="k">fn</span> main(a: *mem.Arena, args: []str) -&gt; err {',
+    '    <span class="k">try</span> io.print(<span class="s">"hello, neper\\n"</span>)',
+    '    <span class="k">ret</span> ok',
+    '}',
+  ];
+  return lines.slice(0, n).join('\n');
+};
+
+const CMDS = [
+  ['x64', 'windows', 'hello.exe', 'PE32+ · x86-64', '12,600 B', '747 ms'],
+  ['x64', 'linux', 'hello-linux-x64', 'ELF · x86-64', '9,704 B', '570 ms'],
+  ['aarch64', 'linux', 'hello-linux-arm64', 'ELF · aarch64', '11,688 B', '528 ms'],
+  ['x64', 'macos', 'hello-macos-x64', 'Mach-O · x86_64', '66,258 B', '531 ms'],
+  ['aarch64', 'macos', 'hello-macos-arm64', 'Mach-O · arm64', '66,258 B', '551 ms'],
+];
+const OSNAME = { windows: 'Windows', linux: 'Linux', macos: 'macOS' };
+
+const SRC = [['math.e', 62.0], ['str.e', 146.5], ['time.e', 16.8], ['fmt/json.e', 92.1], ['crypto/hash.e', 43.2], ['mem.e', 10.6], ['io.e', 27.0]];
+const PXK = 1560 / 398.3;
+
+const REPORTED = [
+  ['Electron (runtime zip alone)', 151, 'documented'],
+  ['Compose Multiplatform', 50, 'reported'],
+  ['Qt', 46, 'reported, 42 to 50'],
+  ['Flutter', 25, 'reported'],
+  ['Go + Wails', 10, 'reported, 8 to 11'],
+  ['Tauri', 4, 'reported, 3 to 5'],
+  ['Neper window (Windows)', 2.7, 'measured'],
+];
+
+// Static scaffolding that depends on data.
+(function build() {
+  // cross: tiles
+  const cross = $('cross');
+  CMDS.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = 'tile'; d.id = 'tile' + i; d.style.left = (80 + i * 354) + 'px';
+    d.innerHTML = `<b>${OSNAME[c[1]]}</b><span>${c[0]}</span><span>${c[3]}</span><em>${c[4]}</em>`;
+    cross.appendChild(d);
+  });
+  // dce: source tiles
+  const body = $('dcebody');
+  let x = 80;
+  SRC.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'src'; d.id = 'src' + i; d.style.left = x + 'px'; d.style.width = (s[1] * PXK - 6) + 'px';
+    d.innerHTML = `${s[0]}<br><span style="color:#8d909e">${s[1].toFixed(1)} KiB</span>`;
+    body.appendChild(d); x += s[1] * PXK;
+  });
+  const l1 = document.createElement('div'); l1.className = 'lbl'; l1.style.left = '80px'; l1.style.top = '270px'; l1.textContent = 'imported source: 398 KiB'; l1.id = 'l1'; body.appendChild(l1);
+  const l2 = document.createElement('div'); l2.className = 'lbl'; l2.style.left = '80px'; l2.style.top = '515px'; l2.textContent = 'the executable'; body.appendChild(l2);
+  const bar = document.createElement('div'); bar.className = 'bar'; bar.id = 'outbar'; bar.style.left = '80px'; bar.style.top = '570px'; body.appendChild(bar);
+  const bl = document.createElement('div'); bl.className = 'val'; bl.id = 'outval'; bl.style.top = '574px'; body.appendChild(bl);
+  const code = document.createElement('div'); code.className = 'panel code'; code.id = 'dcecode'; code.style.cssText = 'left:80px;top:660px;width:1760px;height:140px;opacity:0;font-size:26px';
+  body.appendChild(code);
+  // small: bars
+  const sb = $('smallbody'); const max = 160; const W = 1000;
+  REPORTED.forEach((r, i) => {
+    const y = 285 + i * 72;
+    const n = document.createElement('div'); n.className = 'name'; n.style.top = y + 'px'; n.textContent = r[0]; n.id = 'sn' + i;
+    const b = document.createElement('div'); b.className = 'hbar' + (i === REPORTED.length - 1 ? ' n' : ''); b.style.top = y + 'px'; b.id = 'sb' + i; b.dataset.w = Math.max(10, r[1] / max * W);
+    const v = document.createElement('div'); v.className = 'val'; v.style.top = (y + 10) + 'px'; v.id = 'sv' + i; v.dataset.x = 520 + Math.max(10, r[1] / max * W) + 14; v.textContent = r[1] + (i === REPORTED.length - 1 ? ' MiB' : ' MB') + ' · ' + r[2];
+    sb.append(n, b, v);
+  });
+  const ex = document.createElement('div'); ex.className = 'lbl'; ex.id = 'smallnote'; ex.style.cssText = 'left:520px;top:790px;opacity:0;color:#ffb692'; ex.textContent = 'Same window, measured: Windows 2.69 · Linux 2.82 · macOS arm64 2.33 MiB'; sb.appendChild(ex);
+})();
+
+const CAP = {};
+let SCENES = [];
+
+function render(t, scenes) {
+  SCENES = scenes;
+  const cap = $('caption'), foot = $('foot');
+  let active = null;
+  scenes.forEach((sc) => {
+    const el = $(sc.id);
+    const lt = t - sc.start;
+    const fin = prog(lt, 0, 0.5), fout = 1 - prog(lt, sc.dur - 0.5, 0.5);
+    el.style.opacity = (lt >= 0 && lt < sc.dur) ? Math.min(fin, fout) : 0;
+    if (lt >= 0 && lt < sc.dur) { active = sc; sc.lt = lt; }
+  });
+  if (!active) return;
+  const lt = active.lt * (active.speed || 1), id = active.id;
+  cap.textContent = active.caption;
+  cap.style.opacity = id === 'close' ? 0 : ease(prog(lt, 0.5, 0.5));
+  foot.textContent = active.foot || '';
+
+  if (id === 'hook') {
+    const cards = document.querySelectorAll('#hook .card');
+    const starts = [5.8, 8.8, 10.8, 13.6];
+    cards.forEach((c, i) => {
+      fadeIn(c, lt, starts[i] - 0.5, 0.6, 24);
+      c.querySelectorAll('.row').forEach((r, j) => fadeIn(r, lt, starts[i] + j * 0.6, 0.4, 10));
+    });
+    const n = document.querySelector('#hook .card.neper');
+    fadeIn(n.querySelector(".big"), lt, 14.2, 0.6); fadeIn(n.querySelector(".sub"), lt, 15.6, 0.6);
+  }
+  if (id === 'start') {
+    
+    const lines = Math.min(8, Math.floor(prog(lt, 1.5, 6) * 8) + (lt > 1.5 ? 1 : 0));
+    $('code').innerHTML = helloHtml(lines);
+    ['SDK', 'IDE', 'second toolchain', 'runtime'].forEach((_, i) => fadeIn(document.querySelectorAll('#start .strike')[i], lt, 13.5 + i * 1.5, 0.5, 14));
+    fadeIn($("one"), lt, 8.5, 0.6, 14);
+    $('boot').style.opacity = ease(prog(lt, 11.5, 0.6)) * 0.95;
+  }
+  if (id === 'cross') {
+    const T0 = 1.0, STEP = 2.3;
+    let out = '';
+    CMDS.forEach((c, i) => {
+      const a = T0 + i * STEP;
+      const cmd = `neper emit-executable hello.e . ${c[0]} ${c[1]} ${c[2]} --release`;
+      const typedCmd = typed(cmd, lt, a, 60);
+      if (lt >= a) {
+        out += `<span class="p">$</span> ${typedCmd}\n`;
+        if (typedCmd.length === cmd.length && lt > a + cmd.length / 60 + 0.15) out = out.replace(/\n$/, '') + `\n<span class="ok">  ✓</span> <span class="d">${c[3]} · ${c[4]} · ${c[5]}</span>\n`;
+      }
+      fadeIn($('tile' + i), lt, a + cmd.length / 60 + 0.2, 0.5, 18);
+    });
+    $('term').innerHTML = out;
+    foot.textContent = 'Run: Windows exe natively, Linux ELF under WSL. The macOS binaries were built here but not run: no Mac.';
+    foot.style.opacity = ease(prog(lt, 12.5, 0.6));
+  }
+  if (id === 'dce') {
+    const split = 11.6;
+    const stageB = lt >= split;
+    $('dcesub').textContent = stageB ? 'Now it calls hash.sha256("neper")' : 'Seven modules imported, none called';
+    SRC.forEach((s, i) => {
+      const el = $('src' + i); fadeIn(el, lt, 1.0 + i * 0.18, 0.4, 14);
+      const hot = stageB && i === 4; el.className = 'src' + (hot ? ' hot' : '');
+      el.style.opacity = (stageB && i !== 4) ? 0.28 * ease(prog(lt, 1.0, 0.4)) + 0.0 : el.style.opacity;
+    });
+    fadeIn($('l1'), lt, 0.6, 0.4);
+    const kib = stageB ? 13.3 + (31.2 - 13.3) * ease(prog(lt, split + 1.0, 1.2)) : 13.3;
+    const bar = $('outbar'); bar.style.opacity = ease(prog(lt, 3.2, 0.5)); bar.style.width = (kib * PXK) + 'px';
+    const v = $('outval'); v.style.opacity = bar.style.opacity; v.style.left = (80 + kib * PXK + 18) + 'px'; v.textContent = kib.toFixed(1) + ' KiB · 13,616 B → ' + (stageB && lt > split + 2.4 ? '31,919 B' : stageB ? '…' : 'kept: just main');
+    const code = $('dcecode');
+    code.style.opacity = ease(prog(lt, split + 0.2, 0.5));
+    code.innerHTML = '<span class="p" style="color:#b3c5ff">$</span> hash.sha256("neper")\n' + (lt > split + 2.6 ? '0da9583d62d0ac5a379b967606ca83fc9c066eab7b3366e696763ec2754eb0d6\n<span style="color:#7bd88f">identical to sha256sum</span>' : '');
+    foot.textContent = 'Release build, Windows x64. 7 modules = 407,829 bytes of source; sizes are file bytes.';
+    foot.style.opacity = 1;
+  }
+  if (id === 'small') {
+    REPORTED.forEach((r, i) => {
+      const a = 1.2 + i * 0.9;
+      const n = $('sn' + i), b = $('sb' + i), v = $('sv' + i);
+      const p = ease(prog(lt, a, 0.8));
+      n.style.opacity = p; b.style.opacity = p; b.style.width = (b.dataset.w * p) + 'px';
+      v.style.opacity = p; v.style.left = (520 + b.dataset.w * p + 14) + 'px';
+    });
+    fadeIn($('smallnote'), lt, 8.6, 0.6);
+    foot.textContent = 'Reported sizes are from vendor docs and third-party reports for different app shapes; only the Neper figure is ours.';
+    foot.style.opacity = 1;
+  }
+  if (id === 'close') {
+    fadeIn($('c1'), lt, 0.6); fadeIn($('c2'), lt, 1.6); fadeIn($('c3'), lt, 2.8, 0.8); fadeIn($('c4'), lt, 3.8);
+  }
+}
+</script>
+</body>
+</html>

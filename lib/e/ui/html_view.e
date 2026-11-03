@@ -213,62 +213,31 @@ fn custom(v: *View) -> widget.Custom {
     ret widget.Custom { ctx: mem.cast[*void](v), measure: measure_view, paint: paint_view, state: widget.bytes_of[u64](&v.revision) }
 }
 
-// `v` in decimal, for the fragment dump.
-fn int_text(a: *mem.Arena, v: i64) -> str {
-    var digits: [24]u8 = zero
-    var n = 0usize
-    var m = v
-    var neg = false
-    if m < 0i64 {
-        neg = true
-        m = 0i64 - m
-    }
-    if m == 0i64 {
-        digits[n] = 48u8
-        n += 1usize
-    }
-    while m > 0i64 {
-        digits[n] = u8(48i64 + m % 10i64)
-        n += 1usize
-        m = m / 10i64
-    }
-    if neg {
-        digits[n] = 45u8
-        n += 1usize
-    }
-    let (buf, be) = mem.alloc[u8](a, n + 1usize)
-    if be != ok { ret "" }
-    var i = 0usize
-    while i < n {
-        buf[i] = digits[n - 1usize - i]
-        i += 1usize
-    }
-    ret buf[0usize..n]
-}
-
 // The text of every laid-out fragment with its position (x,y), for the conformance runner's `--text`.
 fn fragment_text(v: *View) -> str {
-    var out: str = ""
+    var need = 16usize
     var i = 0usize
+    while i < v.lay.frags.len {
+        need += v.lay.frags.items[i].text.len + 48usize
+        i += 1usize
+    }
+    let (b0, be) = str.builder(v.arena, need)
+    if be != ok { ret "" }
+    var b = b0
+    i = 0usize
     while i < v.lay.frags.len {
         let t = v.lay.frags.items[i].text
         if t.len > 0usize {
-            let fx = int_text(v.arena, i64(v.lay.frags.items[i].x))
-            let fy = int_text(v.arena, i64(v.lay.frags.items[i].y))
-            let (p1, p1e) = str.concat(v.arena, out, fx)
-            let (p2, p2e) = str.concat(v.arena, p1, ",")
-            let (p3, p3e) = str.concat(v.arena, p2, fy)
-            let (p4, p4e) = str.concat(v.arena, p3, ":")
-            if p1e != ok || p2e != ok || p3e != ok || p4e != ok { ret out }
-            let (joined, je) = str.concat(v.arena, p4, t)
-            if je != ok { ret out }
-            let (line, le) = str.concat(v.arena, joined, " | ")
-            if le != ok { ret out }
-            out = line
+            let e1 = str.push_i64(&b, i64(v.lay.frags.items[i].x))
+            let e2 = str.push(&b, ",")
+            let e3 = str.push_i64(&b, i64(v.lay.frags.items[i].y))
+            let e4 = str.push(&b, ":")
+            let e5 = str.push(&b, t)
+            let e6 = str.push(&b, " | ")
         }
         i += 1usize
     }
-    ret out
+    ret str.done(&b)
 }
 
 // Notches of the mouse wheel scroll this many pixels.

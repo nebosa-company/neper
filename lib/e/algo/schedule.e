@@ -172,7 +172,13 @@ fn cooldown(tasks: []const usize, kinds: usize, gap: usize, counts: []usize) -> 
         k += 1usize
     }
     if most == 0usize { ret (0usize, ok) }
-    let bound = (most - 1usize) * (gap + 1usize) + at_most
+    // The bound is (most - 1) * (gap + 1) + at_most; a gap or count that overflows it is refused.
+    let largest = 18446744073709551615usize
+    if gap == largest { ret (0usize, Invalid) }
+    if most > 1usize && gap + 1usize > largest / (most - 1usize) { ret (0usize, Invalid) }
+    let spaced = (most - 1usize) * (gap + 1usize)
+    if spaced > largest - at_most { ret (0usize, Invalid) }
+    let bound = spaced + at_most
     if bound > tasks.len { ret (bound, ok) }
     ret (tasks.len, ok)
 }

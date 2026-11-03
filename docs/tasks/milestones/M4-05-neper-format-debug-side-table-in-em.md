@@ -19,15 +19,15 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Spec sections
 
-- `docs/spec.md:4192` 13. Toolchain
-  - `docs/spec.md:4307` Diagnostics
-  - `docs/spec.md:4326` Program entry
-  - `docs/spec.md:4366` Testing
-  - `docs/spec.md:4530` Linking
-  - `docs/spec.md:4598` Target CPU levels
-  - `docs/spec.md:4655` Debug information
-  - `docs/spec.md:4749` Editor integration
-  - `docs/spec.md:4775` Standard library
+- `docs/spec.md:4229` 13. Toolchain
+  - `docs/spec.md:4354` Diagnostics
+  - `docs/spec.md:4373` Program entry
+  - `docs/spec.md:4413` Testing
+  - `docs/spec.md:4577` Linking
+  - `docs/spec.md:4645` Target CPU levels
+  - `docs/spec.md:4702` Debug information
+  - `docs/spec.md:4796` Editor integration
+  - `docs/spec.md:4822` Standard library
 
 ## Code anchors
 

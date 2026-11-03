@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Algorithms |
-| score | 0.00 of 1 |
-| queue position | 109 of 142 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 48 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Planning only (D1881). One small-completions item for individually tiny gaps: s2 block codec beside snappy, a bincode-style compact binary codec, magic-number sniff DB over mime sniffing, shell word-splitting, tilde expansion, hostname/users/locale/tz lookups, SIGINT/SIGTERM hooks, byte-unit parse/format and an exact rational type. Each lands with table fixtures; split out any that grows.
+> Planning only (D1881). One small-completions item for individually tiny gaps: s2 block codec beside snappy, a bincode-style compact binary codec, magic-number sniff DB over mime sniffing, shell word-splitting, tilde expansion, hostname/users/locale/tz lookups, SIGINT/SIGTERM hooks, byte-unit parse/format and an exact rational type. Each lands with table fixtures; split out any that grows. PART (D2801): e.fmt.bincode, e.text.shlex, e.path.tilde, e.text.bytesize, e.fmt.magic and e.os.ident built, each against an independent model or library. NOT DONE: the S2 codec (no reference), MAC addresses and wider host lookups (hostname, user, locale and zone only); signals and exact rationals already exist in e.os and e.algo.bignum. PART (D3301-D3302): e.fmt.s2 block and framed stream codec vs Go klauspost/compress/s2 (fmt_s2 29 checks), e.os.ident.mac_address on Windows (matches ipconfig) and Linux (one-off WSL run only). Missing: user database (getpwuid), full locale-variable cascade.
 
 ## Remaining work
 

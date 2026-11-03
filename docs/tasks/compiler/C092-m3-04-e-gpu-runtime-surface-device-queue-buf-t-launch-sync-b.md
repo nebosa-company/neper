@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.80 of 1 |
-| queue position | 21 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 14 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -15,14 +15,13 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). `gpu.barrier()` is the third device intrinsic recognised, legal only in a kernel's own body, lowered as the cut of the CPU build (D780). The fault buffer (D785): a failed tag, alignment, null, enum or bounds check in a kernel's CPU build writes the queue's one `FaultRecord` and ends the invocation, `sync`/`download` answer `Fault` once, `last_fault` answers the record. Presentation (D791): `Image`, `open_target`, `acquire`, `present`, `presented`, `resize` and `close_target`, offscreen on the CPU device
+> `e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). `gpu.barrier()` is the third device intrinsic recognised, legal only in a kernel's own body, lowered as the cut of the CPU build (D780). The fault buffer (D785): a failed tag, alignment, null, enum or bounds check in a kernel's CPU build writes the queue's one `FaultRecord` and ends the invocation, `sync`/`download` answer `Fault` once, `last_fault` answers the record. Presentation (D791): `Image`, `open_target`, `acquire`, `present`, `presented`, `resize` and `close_target`, offscreen on the CPU device. `[]Atomic[T]` launch parameters and both `gpu.memory_barrier` scopes already run in `link/gpu_vulkan_sync` on CPU and Vulkan (D1615). `queue_with` now uses a lazily allocated reusable Vulkan staging block, chunks writes by `block_bytes`, and frees it on close; CPU remains a direct copy (D1787). `link/gpu_staging` passes on CPU and two Windows Vulkan devices, and `gpu_vulkan_sync`, `gpu_cpu`, and `gpu_gaps` still pass there; the Linux CPU/no-device staging fixture passes. The device block now has a reentrant mutex covering queue, buffer and close operations; a short registry lock protects publication and token lookup, and CPU launches serialize their shared scheduler globals (D1788). `link/gpu_device_lock` passed ten Windows runs on CPU and both Vulkan devices, and passed Linux's CPU/no-device path. Existing GPU staging, sync, CPU, gaps and presentation fixtures pass on Windows; staging passes Linux's CPU/no-device path. The prior Windows suite reached its final function/type-renamed compiler image, which crashed with an access violation when compiling the original sources. Linux's bootstrap compiler rebuild restarted WSL even at pre-staging `afdc224b`. The current synchronous implementation reuses one staging block even when the configured bound allows more.
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] `[]Atomic[T]` parameters, `gpu.memory_barrier`, staging pools that do anything
-- [ ] a lock on the device block
+- [ ] full-suite verification
 
 ## Decisions to read first
 
@@ -37,19 +36,21 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2‡, `lib/e/gpu.e`×2†, `scripts/algos/batch45.json`×2, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1
-- `queue_with`: `lib/e/gpu.e`×2†
-- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2†, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1‡
-- `download`: `lib/e/gpu.e`×5†, `lib/e/gpu/tensor.e`×3, `lib/e/fmt/brotli.e`×1‡
-- `wait_for`: `lib/e/dist/deadlock.e`×5, `lib/e/task.e`×4, `lib/e/os.windows.e`×3‡, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/db/storage.e`×1†, `lib/e/gpu.e`×1†, `scripts/algos/batch28.json`×1
-- `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1†, `src/lower.e`×1‡
-- `FaultRecord`: `lib/e/gpu.e`×4†
-- `Fault`: `lib/e/test/support.e`×18, `lib/e/gpu.e`×12†, `lib/e/os.windows.e`×7‡, `lib/e/os.linux.e`×5‡, `src/main.e`×3‡, `lib/e/resilience.e`×1, `src/lower.e`×1‡
-- `last_fault`: `lib/e/gpu.e`×3†
-- `Image`: `lib/e/gfx/scene.e`×20‡, `lib/e/gfx/image.e`×19, `lib/e/ui/control.e`×16‡, `lib/e/ui/widget.e`×11‡, `lib/e/gpu.e`×9†, `scripts/build-docs-pdf.py`×7, `lib/e/fmt/png.e`×6, `lib/e/fmt/webp.e`×5†
-- `open_target`: `lib/e/ui/window.e`×2, `lib/e/gpu.e`×1†, `lib/e/ui/testing.e`×1
-- `presented`: `lib/e/fmt/brotli.e`×4‡, `lib/e/gpu.e`×4†, `lib/e/ui/testing.e`×2, `lib/e/ui/window.e`×2, `lib/e/gfx/scene.e`×1‡, `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `lib/e/ui/app.e`×1†
-- `resize`: `lib/e/ui/collection.e`×22‡, `lib/e/ui/navigation.e`×7‡, `lib/e/ui/control.e`×2‡, `lib/e/ui/window.e`×2, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/scene.e`×1‡, `lib/e/gpu.e`×1†, `lib/e/os.linux.e`×1‡
+- `e.gpu`: `src/check.e`×39‡, `src/resolve.e`×27†, `src/lower.e`×12‡, `lib/x/khronos/compute.e`×10, `lib/e/gpu.e`×6‡, `lib/e/os.neperos.e`×3, `lib/e/os.wasi.e`×3‡, `lib/e/gfx/scene.e`×2‡
+- `queue_with`: `lib/e/gpu.e`×2‡
+- `wait_for`: `lib/e/dist/deadlock.e`×5, `lib/e/js/realm.e`×4†, `lib/e/task.e`×4, `src/runtime_none_a64.e`×4†, `src/runtime_none_a64.s`×4, `lib/e/os.windows.e`×3‡, `lib/e/sync.e`×3, `scripts/neperos-input.py`×3
+- `gpu.barrier`: `src/check.e`×7‡, `tests/conformance/spirv/sync.e`×3, `lib/e/gpu.e`×1‡, `src/lower.e`×1‡
+- `FaultRecord`: `lib/e/gpu.e`×6‡
+- `Fault`: `scripts/soap_reference.py`×27, `lib/e/fmt/soap.e`×24, `lib/e/test/support.e`×18, `lib/e/gpu.e`×16‡, `lib/e/os.windows.e`×7‡, `lib/e/os.linux.e`×5‡, `lib/e/os.macos.e`×4‡, `src/main.e`×4‡
+- `last_fault`: `lib/e/gpu.e`×3‡
+- `Image`: `scripts/khronos/glcorearb.h`×102‡, `lib/x/khronos/gl.e`×45‡, `lib/e/os/shell.macos.e`×28‡, `scripts/image_vectors.py`×25, `lib/e/ui/control.e`×24‡, `lib/e/gfx/image.e`×21, `lib/e/gfx/scene.e`×21‡, `lib/e/web/page.e`×21†
+- `open_target`: `lib/e/ui/window.e`×2, `scripts/gen_svg_text_test.py`×2, `benchmarks/charts/chart_bench.e`×1, `lib/e/gfx/svg_filter.e`×1, `lib/e/gpu.e`×1‡, `lib/e/ui/testing.e`×1, `scripts/gen_math_render_test.py`×1†, `scripts/gen_svg_render_test.py`×1
+
+## Existing fixtures
+
+- `tests/selfhost/fixtures/link/gpu_vulkan_sync`
+- `tests/selfhost/fixtures/link/gpu_staging`
+- `tests/selfhost/fixtures/link/gpu_device_lock`
 
 ## Verification
 

@@ -16,6 +16,7 @@ use e.os
 use e.gfx.geometry
 use e.gfx.scene
 use e.ui.style
+use e.str
 
 type Id = struct { slot: u32, generation: u32 }
 type Window = struct { state: *void, id: Id }
@@ -59,6 +60,9 @@ type State = struct {
     has_presenter: bool,
     changed: Changed,
     has_changed: bool,
+    shown_valid: bool,
+    shown_w: u32,
+    shown_h: u32,
 }
 
 // The pixels of the next frame that differ from the last one shown: `[x0, x1) x [y0, y1)`, empty when none do (D5905).
@@ -97,6 +101,28 @@ fn state_of(window: *const Window) -> (*State, err) {
     ret (s, ok)
 }
 
+// A native handle is a number; `gpu.Surface` carries it as a pointer (there is no integer-to-pointer cast, so a union is the pun).
+type AddressPun = union { bits: usize, pointer: *void }
+
+// NEPER_PRESENT=swapchain|gdi (D5928): how a window shows its frames. Unset is `SWAPCHAIN_DEFAULT`.
+// Default GDI, measured (gw/pb.exe, a frame written then shown, 20 presents each, us): Intel Iris Xe 1180x780 full frame GDI 3515 /
+// swapchain 2226, 1600x1000 6922 / 3130, but a 133x136 changed box GDI 197 / swapchain 473 (638 at 1600); RTX 3080 (Optimus, display on the
+// Intel GPU) full frame GDI 3285 / swapchain 4686, 1600x1000 5629 / 7866, box 213 / 2661. SLUST changes small boxes almost every frame,
+// and the first present on the RTX cost 200 ms more. The swapchain is therefore opt-in (NEPER_PRESENT=swapchain).
+const SWAPCHAIN_DEFAULT: bool = false
+
+fn swapchain_wanted(a: *mem.Arena) -> bool {
+    var wanted = SWAPCHAIN_DEFAULT
+    let checkpoint = mem.mark(a)
+    let (text, text_error) = os.env(a, "NEPER_PRESENT")
+    if text_error == ok {
+        if str.eq(text, "swapchain") { wanted = true }
+        if str.eq(text, "gdi") { wanted = false }
+    }
+    mem.reset(a, checkpoint)
+    ret wanted
+}
+
 fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 { ret (none, Invalid) }
@@ -115,7 +141,24 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    let (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, options.width, options.height, .Bgra8)
+    // A swapchain target when the device can present to the window and NEPER_PRESENT / the default asks for it (D5928), else
+    // the offscreen pair shown by `os.window_present`. The swapchain target keeps the same frame images, so everything above
+    // this module renders as before.
+    var frames: *gpu.Target = zero
+    var frames_error = gpu.Unsupported
+    if swapchain_wanted(a) {
+        let (hwnd, hinstance, native_error) = os.window_native(handle)
+        if native_error == ok {
+            var window_pun: AddressPun = zero
+            var module_pun: AddressPun = zero
+            window_pun.bits = hwnd
+            module_pun.bits = hinstance
+            (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: .Win32, handle: window_pun.pointer, context: module_pun.pointer }, options.width, options.height, .Bgra8)
+        }
+    }
+    if frames_error != ok {
+        (frames, frames_error) = gpu.open_target(queue, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, options.width, options.height, .Bgra8)
+    }
     if frames_error != ok {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
@@ -138,7 +181,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false, changed: zero, has_changed: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, accessibility: zero, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false, presenter: zero, has_presenter: false, changed: zero, has_changed: false, shown_valid: false, shown_w: 0u32, shown_h: 0u32 }
     let opened_state = &states[0usize]
     generations[slot] += 1u32
     slots[slot] = opened_state
@@ -247,6 +290,34 @@ fn failed_resize_keeps_cached_extent(a: *mem.Arena) -> err {
     ret ok
 }
 
+// An empty changed box on a window that already shows the previous frame reads back and blits nothing; a window that
+// does not (first frame, after a resize or a failed blit), a different extent, or a presenter takes the whole frame.
+@test
+fn empty_changed_box_presents_nothing(a: *mem.Arena) -> err {
+    var state: State = zero
+    state.has_changed = true
+    state.shown_valid = true
+    state.shown_w = 64u32
+    state.shown_h = 32u32
+    var shown: gpu.Image = zero
+    shown.width = 64u32
+    shown.height = 32u32
+    let (skipped, skipped_error) = present_changed(&state, shown)
+    if skipped_error != ok || !skipped { ret Invalid }
+    state.shown_valid = false
+    let (first, first_error) = present_changed(&state, shown)
+    if first_error != ok || first { ret Invalid }
+    state.shown_valid = true
+    shown.width = 65u32
+    let (resized, resized_error) = present_changed(&state, shown)
+    if resized_error != ok || resized { ret Invalid }
+    shown.width = 64u32
+    state.has_presenter = true
+    let (presented, presented_error) = present_changed(&state, shown)
+    if presented_error != ok || presented { ret Invalid }
+    ret ok
+}
+
 fn draw_target(window: *const Window) -> (scene.Target, err) {
     let (s, state_error) = state_of(window)
     if state_error != ok { ret (zero, state_error) }
@@ -291,9 +362,23 @@ fn visible(window: *Window, value: bool) -> err {
 // Shows the last frame rendered into the target and queues a `Frame` event for
 // the window: on the CPU device the presented offscreen image is read back and
 // blitted through the host's software path.
+//
+// Only what changed is read back and blitted (D5905). The renderer reports the box that differs from the frame
+// last shown (`report_changed`); an empty box reads and blits nothing, any other box just that rectangle. Measured
+// on the SLUST match screen at 1600x1000 (6.4 MB a frame), the whole-frame readback plus GDI blit cost 2.2 ms
+// every frame even when nothing changed, ~100 % of an idle frame once the frame buffers were host-cached. The
+// whole frame is still shown for the first frame, after a resize, after a failed blit, on an expose (`repaint`),
+// with a presenter installed, or where the host cannot blit a rectangle (`os.window_present_rect` Unsupported).
 fn request_frame(window: *Window) -> err {
     let (s, state_error) = state_of(window)
     if state_error != ok { ret state_error }
+    // A swapchain presented the frame inside `gpu.present`: nothing to read back or blit (D5928).
+    if gpu.native(s.frames) {
+        s.frame_requested = true
+        s.damaged = false
+        s.has_changed = false
+        ret ok
+    }
     let (shown, shown_error) = gpu.presented(s.frames)
     if shown_error == ok {
         let count = usize(shown.width) * usize(shown.height)
@@ -304,23 +389,79 @@ fn request_frame(window: *Window) -> err {
             if scratch_error != ok { ret Invalid }
             s.scratch = scratch
         }
-        if gpu.read_image(s.queue, shown, s.scratch[0usize..count]) != ok { ret Invalid }
-        var presented = false
-        if s.has_presenter {
-            var changed = Changed { x0: 0u32, y0: 0u32, x1: shown.width, y1: shown.height }
-            if s.has_changed { changed = s.changed }
-            presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height, changed) == ok
-            if !presented {
-                s.has_presenter = false
-                let released = s.presenter.release(s.presenter.context)
-            }
-        }
-        if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
+        let (handled, partial_error) = present_changed(s, shown)
+        if partial_error != ok { ret partial_error }
+        if !handled { try present_whole(s, shown, count) }
     }
     s.frame_requested = true
     s.damaged = false
     s.has_changed = false
     ret ok
+}
+
+// The changed box alone, when the window already shows the frame before this one: `true` when it was handled
+// (including an empty box, which shows nothing) and `false` when the whole frame has to be shown.
+fn present_changed(s: *State, shown: gpu.Image) -> (bool, err) {
+    if !s.has_changed || !s.shown_valid || s.has_presenter { ret (false, ok) }
+    if shown.width != s.shown_w || shown.height != s.shown_h { ret (false, ok) }
+    var x0 = s.changed.x0
+    var y0 = s.changed.y0
+    var x1 = s.changed.x1
+    var y1 = s.changed.y1
+    if x1 > shown.width { x1 = shown.width }
+    if y1 > shown.height { y1 = shown.height }
+    if x1 <= x0 || y1 <= y0 { ret (true, ok) }
+    if x0 == 0u32 && y0 == 0u32 && x1 == shown.width && y1 == shown.height { ret (false, ok) }
+    let width = x1 - x0
+    let height = y1 - y0
+    let pixels = s.scratch[0usize..usize(width) * usize(height)]
+    if gpu.read_image_rect(s.queue, shown, x0, y0, width, height, pixels) != ok {
+        s.shown_valid = false
+        ret (false, Invalid)
+    }
+    let blit = os.window_present_rect(s.handle, pixels, x0, y0, width, height)
+    if blit == os.Unsupported { ret (false, ok) }
+    if blit != ok {
+        s.shown_valid = false
+        ret (false, Invalid)
+    }
+    ret (true, ok)
+}
+
+fn present_whole(s: *State, shown: gpu.Image, count: usize) -> err {
+    s.shown_valid = false
+    if gpu.read_image(s.queue, shown, s.scratch[0usize..count]) != ok { ret Invalid }
+    var presented = false
+    if s.has_presenter {
+        var changed = Changed { x0: 0u32, y0: 0u32, x1: shown.width, y1: shown.height }
+        if s.has_changed { changed = s.changed }
+        presented = s.presenter.present(s.presenter.context, s.handle, s.scratch[0usize..count], shown.width, shown.height, changed) == ok
+        if !presented {
+            s.has_presenter = false
+            let released = s.presenter.release(s.presenter.context)
+        }
+    }
+    if !presented && os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
+    s.shown_valid = true
+    s.shown_w = shown.width
+    s.shown_h = shown.height
+    ret ok
+}
+
+// The host asked for the window's pixels again (an expose, `Paint`): shows the last presented frame whole, at once,
+// whether or not another frame is coming, since a repaint of an unchanged scene presents nothing.
+fn repaint(id: Id) -> err {
+    let (s, state_error) = state_by_id(id)
+    if state_error != ok { ret state_error }
+    s.shown_valid = false
+    // A swapchain window keeps its last presented image on the compositor (D5928); an expose needs nothing.
+    if gpu.native(s.frames) { ret ok }
+    s.has_changed = false
+    let (shown, shown_error) = gpu.presented(s.frames)
+    if shown_error != ok { ret ok }
+    let count = usize(shown.width) * usize(shown.height)
+    if s.scratch.len < count { ret ok }
+    ret present_whole(s, shown, count)
 }
 
 // (D5905) The renderer's word on which pixels of the next frame differ from the last one: a presenter given it uploads only

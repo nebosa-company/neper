@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / UI |
-| score | 0.00 of 1 |
-| queue position | 67 of 142 (only position 1 is eligible for the next session; see README) |
+| score | 0.90 of 1 |
+| queue position | 41 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Planning only (D1812). Reference: JustCode src/replytext.js and its unit cases. e.fmt.markdown already provides caller-storage block/inline parsing; e.ui.control has text/rich-text primitives. Reuse these for a generic native viewer with headings, paragraphs, lists, quotes, rules, fenced/inline code, emphasis and selectable text. Render source as data; no script execution, implicit network loads or hidden harness dependencies. P7 hover/docs and T034 may consume this viewer without duplicating parsers.
+> Planning only (D1812). Reference: JustCode src/replytext.js and its unit cases. e.fmt.markdown already provides caller-storage block/inline parsing; e.ui.control has text/rich-text primitives. Reuse these for a generic native viewer with headings, paragraphs, lists, quotes, rules, fenced/inline code, emphasis and selectable text. Render source as data; no script execution, implicit network loads or hidden harness dependencies. P7 hover/docs and T034 may consume this viewer without duplicating parsers. PART (D2880): e.ui.markdown_view builds scene items, accessible nodes, links, selection text and control.RichSpans from a Markdown source (raw HTML and reference links literal, images alt text, link policy and scheme allowlist), 40 checks vs markdown-it-py. NOT DONE: a window-level check, shaped-text measurement (fixed one-advance grid), tables. PART (D3304): GFM pipe tables in e.ui.markdown_view (Table/Row/Cell nodes, alignment, selected_text, rich_spans); ui_markdown_view 12 documents match markdown-it-py. Missing: window-level check, shaped-text measurement, content-sized columns. PART (D3603): host text measurement callback and content-sized table columns; ui_markdown_view_fit 12 documents vs a markdown-it-py model. Missing: a real shaper behind the callback, window-level pointer/clipboard check. PART (D4607): ui_markdown_view_window drives the real widget runtime: safe link action once under HostActivated, DisplayOnly/javascript:/data: not pressable, selection to clipboard round trip. Missing: a real shaper, pointer-capturing draw region.
 
 ## Remaining work
 

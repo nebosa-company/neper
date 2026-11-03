@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.85 of 1 |
-| queue position | 50 of 142 (only position 1 is eligible for the next session; see README) |
+| queue position | 29 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -29,7 +29,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `.ArgumentCount`: `src/lower.e`×57‡, `src/check.e`×1‡
 - `.InvalidOperator`: `src/lower.e`×2‡, `src/check.e`×1‡
-- `.Unsupported`: `src/codegen_a64.e`×73†, `src/lower.e`×56‡, `lib/e/crypto/x509.e`×18†, `lib/x/postgresql/libpq.e`×12†, `lib/e/ui/app.e`×10†, `scripts/xsd_schema_reference.py`×10, `lib/e/gpu/tensor.e`×9, `lib/x/oracle/mysql.e`×8
+- `.Unsupported`: `src/codegen_a64.e`×79†, `src/lower.e`×56‡, `lib/e/crypto/x509.e`×18†, `lib/x/postgresql/libpq.e`×12†, `lib/e/ui/app.e`×10†, `scripts/xsd_schema_reference.py`×10, `lib/e/gpu/tensor.e`×9, `lib/x/oracle/mysql.e`×8
 - `.InvalidType`: `src/lower.e`×54‡, `src/tool.e`×2‡, `src/check.e`×1‡, `src/layout.e`×1, `src/main.e`×1‡
 - `.MissingContext`: `src/lower.e`×2‡, `src/check.e`×1‡
 

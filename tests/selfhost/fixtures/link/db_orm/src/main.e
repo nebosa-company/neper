@@ -290,9 +290,31 @@ fn checks_relations(a: *mem.Arena) -> i32 {
     if spans[2].start != 3usize || spans[2].len != 2usize { ret 93i32 }
     if !str.eq(out[0].title, "c1") || !str.eq(out[1].title, "c2") || !str.eq(out[2].title, "c3") { ret 94i32 }
     if !str.eq(out[3].title, "a1") || !str.eq(out[4].title, "a2") || out[4].views != 4000000000u32 { ret 95i32 }
+    // A short output is atomic: rows are first decoded into private scratch, so a
+    // TooSmall result does not partially mutate caller output or spans.
     var small: [4]Post = zero
+    small[0usize] = Post { id: 900i64, user_id: 900i64, title: "sentinel", views: 9u32 }
+    let old_span_start = spans[0usize].start
+    let old_span_len = spans[0usize].len
     let (_, small_error) = orm.has_many[User, Post](&s, "posts", "user_id", order[0..], small[0..], spans[0..])
     if small_error != orm.TooSmall { ret 96i32 }
+    if small[0usize].id != 900i64 || spans[0usize].start != old_span_start || spans[0usize].len != old_span_len { ret 98i32 }
+
+    // Duplicate parents would duplicate output runs but not the returned database-row
+    // count. Reject them before issuing SQL and leave both caller arrays untouched.
+    var duplicates: [2]User = zero
+    duplicates[0usize] = users[0usize]
+    duplicates[1usize] = users[0usize]
+    var duplicate_out: [1]Post = zero
+    duplicate_out[0usize] = Post { id: 901i64, user_id: 901i64, title: "duplicate", views: 10u32 }
+    var duplicate_spans: [2]orm.Span = zero
+    duplicate_spans[0usize] = orm.Span { start: 17usize, len: 19usize }
+    duplicate_spans[1usize] = orm.Span { start: 23usize, len: 29usize }
+    let duplicate_queries = s.queries
+    let (duplicate_total, duplicate_error) = orm.has_many[User, Post](&s, "posts", "user_id", duplicates[0..], duplicate_out[0..], duplicate_spans[0..])
+    if duplicate_error != orm.Invalid || duplicate_total != 0usize { ret 99i32 }
+    if s.queries != duplicate_queries { ret 100i32 }
+    if duplicate_out[0usize].id != 901i64 || duplicate_spans[0usize].start != 17usize || duplicate_spans[0usize].len != 19usize || duplicate_spans[1usize].start != 23usize || duplicate_spans[1usize].len != 29usize { ret 101i32 }
     if db.close(&c) != ok { ret 97i32 }
     ret 0i32
 }

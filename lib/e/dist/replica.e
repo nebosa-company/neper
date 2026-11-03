@@ -21,7 +21,7 @@ error TooSmall
 // Reads and writes overlap on at least one replica when r + w > n.
 fn quorum(n: usize, r: usize, w: usize) -> (bool, err) {
     if n == 0usize || r == 0usize || w == 0usize || r > n || w > n { ret (false, Invalid) }
-    ret (r + w > n, ok)
+    ret (r > n - w, ok)
 }
 
 fn replica(stamp: []u64) -> Replica { ret Replica { clock: stamp, value: 0i64, up: true } }

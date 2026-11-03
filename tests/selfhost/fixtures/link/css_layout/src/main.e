@@ -737,6 +737,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 135. A percentage max-height cap on a scroll ancestor constrains a vertical child through an auto wrapper.
     let (p135, ok135) = build(a, "<div style=\"height:200px;font-size:10px\"><div style=\"overflow:hidden;max-height:25%\"><div><div id=o style=\"writing-mode:vertical-rl\">aaaa aaaa</div></div></div></div>", "")
     if !ok135 || !near(rect_of(p135, "o").h, 50.0f64) { os.exit(176) }
+    // 136. `contain: inline-size` contains one axis only: the block size still follows the content, unlike `contain: size`.
+    let (p136, ok136) = build(a, "<div id=a style=\"contain:inline-size\"><div style=\"height:40px\"></div></div>", "")
+    if !ok136 || !near(rect_of(p136, "a").h, 40.0f64) { os.exit(177) }
     css_issue_regressions(a)
     ret ok
 }

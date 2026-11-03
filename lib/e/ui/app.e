@@ -14,11 +14,14 @@
 // application arena at `init`.
 
 use e.gpu
+use e.io
+use e.str
 use e.mem
 use e.os
 use e.os.shell
 use e.time
 use e.gfx.geometry
+use e.gfx.gpuraster
 use e.gfx.scene
 use e.ui.accessibility
 use e.ui.input
@@ -63,6 +66,9 @@ type State = struct {
     idle_pending: bool,
     // (D1602) The host's assistive technology has had a tree published to it.
     assisted: bool,
+    // NEPER_FRAME_STATS=1: print one line per frame that changed pixels (or the first), see `report_frame`.
+    stats: bool,
+    stats_first: bool,
 }
 
 // The per-context trampoline: the erased context and the build function's bits
@@ -76,7 +82,7 @@ fn call_builder[Ctx: type](ctx: *void, bits: usize, build_context: *widget.Build
 
 fn init[Ctx: type](a: *mem.Arena, options: Options, builder: Builder[Ctx]) -> (App, err) {
     if options.frame_arena_bytes < 65536usize || options.event_capacity == 0usize { ret (zero, Failed) }
-    let (device, open_error) = gpu.open(a, options.backend, 0u32)
+    let (device, open_error) = gpu.open_preferred(a, options.backend)
     if open_error != ok { ret (zero, Failed) }
     let (win, window_error) = window.open(a, device, options.window)
     if window_error != ok {
@@ -88,10 +94,27 @@ fn init[Ctx: type](a: *mem.Arena, options: Options, builder: Builder[Ctx]) -> (A
     if queue_error != ok { ret (zero, Failed) }
     let (renderer, renderer_error) = scene.renderer(a, device, queue, 4u32, 256u32)
     if renderer_error != ok { ret (zero, Failed) }
+    // NEPER_RASTER=gpu or check (D5929): the tile rasteriser draws the frames on a Vulkan device; a device whose self-test fails, or
+    // any other backend, keeps the CPU rasteriser. check draws every frame both ways and prints the difference.
+    if options.backend == .Vulkan {
+        let (raster_mode, raster_error) = os.env(a, "NEPER_RASTER")
+        if raster_error == ok && (str.eq(raster_mode, "gpu") || str.eq(raster_mode, "check")) {
+            var raster_target = renderer
+            let (raster_context, raster_install_error) = gpuraster.install(&raster_target, a, queue, 256usize, str.eq(raster_mode, "check"))
+            if s_stats_requested(a) {
+                var verdict = "raster: install failed, the CPU draws\n"
+                if raster_install_error == ok { verdict = "raster: gpu installed\n" }
+                if raster_install_error == gpuraster.Refused { verdict = "raster: refused by its self-test, the CPU draws\n" }
+                let said = io.print(verdict)
+            }
+        }
+    }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok { ret (zero, Failed) }
     var s: State = zero
     s.arena = a
+    let (stats_text, stats_error) = os.env(a, "NEPER_FRAME_STATS")
+    s.stats = stats_error == ok && stats_text.len > 0usize
     s.device = device
     s.win = opened
     s.renderer = renderer
@@ -168,9 +191,42 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
     ret (true, ok)
 }
 
+// NEPER_FRAME_STATS=1 (D5926): "frame N render=<ms> present=<ms> box=x0,y0,x1,y1" on stdout for the first frame and every frame
+// that changed pixels, the render (rasterise + upload into the target) and the present (readback + blit, or swapchain) apart.
+// Written to measure the GDI present against the swapchain and the GPU rasteriser on the same scene; costs a clock read per frame.
+fn report_frame(s: *State, scratch: *mem.Arena, x0: usize, y0: usize, x1: usize, y1: usize, render_ns: i64, present_ns: i64) {
+    if x1 <= x0 && y1 <= y0 && s.stats_first { ret }
+    s.stats_first = true
+    let (b, b_error) = str.builder(scratch, 160usize)
+    if b_error != ok { ret }
+    var out = b
+    let e1 = str.push(&out, "frame ")
+    let e2 = str.push_u64(&out, s.frames)
+    let e3 = str.push(&out, " render_us=")
+    let e4 = str.push_u64(&out, u64(render_ns / 1000i64))
+    let e5 = str.push(&out, " present_us=")
+    let e6 = str.push_u64(&out, u64(present_ns / 1000i64))
+    let e7 = str.push(&out, " box=")
+    let e8 = str.push_u64(&out, u64(x0))
+    let e9 = str.push(&out, ",")
+    let e10 = str.push_u64(&out, u64(y0))
+    let e11 = str.push(&out, ",")
+    let e12 = str.push_u64(&out, u64(x1))
+    let e13 = str.push(&out, ",")
+    let e14 = str.push_u64(&out, u64(y1))
+    let e15 = str.push(&out, "\n")
+    let printed = io.print(str.done(&out))
+}
+
 fn present_frame(s: *State) -> err {
     let (metrics, metrics_error) = window.metrics(&s.win)
     if metrics_error != ok { ret Failed }
+    // A minimised window has a 0 x 0 client: the build under zero constraints fails (widget.InvalidTree) and ended the program (SLUST,
+    // observed on minimise). Nothing is drawn until the restore's resize event makes a frame due again.
+    if metrics.framebuffer_width == 0u32 || metrics.framebuffer_height == 0u32 {
+        s.frame_due = false
+        ret ok
+    }
     let (now, clock_error) = time.monotonic()
     if clock_error != ok { ret Failed }
     widget.begin_frame(&s.runtime, now)
@@ -202,12 +258,18 @@ fn present_frame(s: *State) -> err {
     }
     let (canvas, canvas_error) = window.draw_target(&s.win)
     if canvas_error != ok { ret Failed }
+    let (render_start, render_start_error) = time.monotonic()
     let render_error = scene.render_scaled(&s.renderer, compiled, canvas, metrics.logical_size, metrics.scale)
+    let (render_end, render_end_error) = time.monotonic()
     if render_error != ok { ret render_error }
     // (D5905) A presenter uploads only what the renderer changed.
     let (x0, y0, x1, y1) = scene.changed_box(&s.renderer)
     if window.report_changed(&s.win, window.Changed { x0: u32(x0), y0: u32(y0), x1: u32(x1), y1: u32(y1) }) != ok { ret Failed }
     if window.request_frame(&s.win) != ok { ret Failed }
+    if s.stats {
+        let (present_end, present_end_error) = time.monotonic()
+        report_frame(s, &frame, x0, y0, x1, y1, render_end.nanos - render_start.nanos, present_end.nanos - render_end.nanos)
+    }
     s.frames += 1u64
     s.frame_due = widget.animation_frame_requested(&s.runtime)
     s.echo = true
@@ -1208,4 +1270,9 @@ fn window_of(app: *App) -> (*window.Window, err) {
     let (s, state_error) = state_of(app)
     if state_error != ok { ret (zero, state_error) }
     ret (&s.win, ok)
+}
+
+fn s_stats_requested(a: *mem.Arena) -> bool {
+    let (text, text_error) = os.env(a, "NEPER_FRAME_STATS")
+    ret text_error == ok && text.len > 0usize
 }

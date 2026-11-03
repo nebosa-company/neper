@@ -93,8 +93,8 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/net/balance.e`
 - `lib/e/net/cidr.e`
 - `lib/e/net/coap.e`
-- `lib/e/net/dns.e`
-- `lib/e/net/ftp.e`
+- `lib/e/net/cookie.e`
+- `lib/e/net/dhcp.e`
 
 ## Verification
 

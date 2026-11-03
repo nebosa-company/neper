@@ -550,10 +550,28 @@ fn belongs_to[C: type, P: type](s: *Session, parent_table: str, child: *const C,
 // Preload the children of every parent in one query. `out` receives the children
 // grouped by the parent's order in `parents` (parent `i`'s are `out[spans[i].start..]`
 // for `spans[i].len`); `spans` has one entry per parent and `out` must hold them all
-// (`TooSmall` otherwise). Answers the total children read. A parent with no children has a zero span.
+// (`TooSmall` otherwise). Parent keys must be distinct (`Invalid` otherwise), so every
+// span is within the returned total. Answers the total children read. A parent with no
+// children has a zero span.
 fn has_many[P: type, C: type](s: *Session, child_table: str, fk: str, parents: []const P, out: []C, spans: []Span) -> (usize, err) {
     if spans.len < parents.len { ret (0usize, TooSmall) }
     if parents.len == 0usize { ret (0usize, ok) }
+    // The output contains each database child once. Reject duplicate parent keys before
+    // issuing a query or touching output/spans rather than duplicating a child while
+    // reporting the smaller database-row count.
+    var parent_at = 0usize
+    while parent_at < parents.len {
+        let (parent_key, parent_error) = key_of[P](&parents[parent_at])
+        if parent_error != ok { ret (0usize, parent_error) }
+        var prior = 0usize
+        while prior < parent_at {
+            let (prior_key, prior_error) = key_of[P](&parents[prior])
+            if prior_error != ok { ret (0usize, prior_error) }
+            if prior_key == parent_key { ret (0usize, Invalid) }
+            prior += 1usize
+        }
+        parent_at += 1usize
+    }
     let (builder0, builder_error) = str.builder(s.a, 128usize)
     if builder_error != ok { ret (0usize, builder_error) }
     var b = builder0

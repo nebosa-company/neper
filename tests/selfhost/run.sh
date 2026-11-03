@@ -11089,6 +11089,7 @@ if command -v node >/dev/null 2>&1; then
     (cd "$repo" && node --no-warnings tests/wasm/host.mjs "$wasm_build/host_files.wasm" "$wasm_build/release-debug.wasm" "$wasm_build/release.wasm" "$wasm_build/wasm_threads.threads.wasm" "$wasm_build/thread_ops.threads.wasm") || { printf '%s\n' 'the lib/wasm/neper-host.js API check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_proc_cleanup.mjs) || { printf '%s\n' 'the WASM process-host cleanup check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_proc_preopen.mjs) || { printf '%s\n' 'the WASM process-host preopen boundary check failed' >&2; exit 1; }
+    (cd "$repo" && node --no-warnings tests/wasm/host_socket_queue_bounds.mjs) || { printf '%s\n' 'the WASM socket queue-bound check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_preopen_symlink.mjs) || { printf '%s\n' 'the WASM preopen symlink boundary check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_sys_disk_precision.mjs) || { printf '%s\n' 'the WASM sys_disk precision check failed' >&2; exit 1; }
     (cd "$repo" && node --no-warnings tests/wasm/host_import_ranges.mjs) || { printf '%s\n' 'the WASM host-import guest-range check failed' >&2; exit 1; }

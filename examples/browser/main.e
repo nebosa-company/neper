@@ -1,7 +1,7 @@
 // The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page, over
 // `e.web.shell` (tabs, session history, omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
 // opens URL (default about:blank). The profile (bookmarks and visit log) is `neper-browser.profile` in the working directory,
-// read at start and written on exit. Build with `--arena 4g`: each tab reserves 128 MB and the TLS chain check allocates from
+// read at start and written on exit. Build with `--arena 4g`: each tab reserves 256 MB and the TLS chain check allocates from
 // the same arena, so the default one fails every https page as "not private" or "could not be loaded".
 use e.fs
 use e.gfx.paint
@@ -27,13 +27,16 @@ use e.web.page as page
 use e.web.shell as shell
 
 const MAX_SLOTS: usize = 16usize
-const OMNI_BYTES: usize = 1024usize
+// The address field holds at most this many bytes. Laying a longer text out in the frame took more memory than the frame's arena
+// has (the cost grows with the square of the length), which stopped the window; longer addresses are shown clipped and a typed
+// or pasted address longer than this is cut. ponytail: a 400-byte ceiling, raise it together with `frame_arena_bytes`.
+const OMNI_BYTES: usize = 400usize
 
 type FaceSpec = struct { file: str, family: str, weight: u32, italic: bool }
 type Slot = struct { model: *Model, index: usize }
 type Model = struct {
     a: *mem.Arena, frame: mem.Arena, frame_mark: usize, sh: *shell.Shell, shapes: []shape.Font, tokens: style.ThemeTokens,
-    omni: []u8, omni_len: usize, shown_url: str, slots: [16]Slot, labels: [16]str, picks: [16]widget.Submit,
+    omni: []u8, omni_len: usize, shown_url: str, omni_real: str, omni_clipped: bool, slots: [16]Slot, labels: [16]str, picks: [16]widget.Submit,
     start_ms: f64, profile_path: str, attached: [16]u32
 }
 
@@ -55,12 +58,23 @@ fn sync_omni(m: *Model) {
     let u = shell.current_entry(t).url
     if !str.eq(u, m.shown_url) {
         m.shown_url = u
-        if str.starts_with(u, "about:blank") { set_omni(m, "") } else { set_omni(m, u) }
+        m.omni_clipped = false
+        if str.starts_with(u, "about:blank") {
+            set_omni(m, "")
+        } else if u.len > OMNI_BYTES {
+            // Shown clipped; the field stands for the whole address until it is edited.
+            m.omni_real = u
+            m.omni_clipped = true
+            set_omni(m, clip_label(&m.frame, u, OMNI_BYTES - 3usize))
+        } else {
+            set_omni(m, u)
+        }
     }
 }
 
 fn on_omni_change(ctx: *void, text: str) -> err {
     let m = mem.cast[*Model](ctx)
+    m.omni_clipped = false
     set_omni(m, text)
     ret ok
 }
@@ -68,7 +82,9 @@ fn on_omni_change(ctx: *void, text: str) -> err {
 fn on_omni_submit(ctx: *void) -> err {
     let m = mem.cast[*Model](ctx)
     let t = shell.active_tab(m.sh)
-    let e = shell.navigate(m.sh, t, url_text(m))
+    var go_to = url_text(m)
+    if m.omni_clipped { go_to = m.omni_real }
+    let e = shell.navigate(m.sh, t, go_to)
     m.shown_url = ""
     ret ok
 }
@@ -130,9 +146,9 @@ fn now_ms() -> f64 {
 }
 
 // One frame of page work: timers and scripts, a navigation the page asked for, and a link the view reports as followed.
-fn pump_page(m: *Model) -> bool {
+fn pump_page(m: *Model) {
     let t = shell.active_tab(m.sh)
-    if !t.loaded { ret false }
+    if !t.loaded { ret }
     let more = page.tick(t.pg, now_ms() - m.start_ms)
     let moved = shell.follow_pending(m.sh, t)
     // A tap reaches the page's click handlers first; one that cancels the click also cancels the link.
@@ -148,14 +164,54 @@ fn pump_page(m: *Model) -> bool {
             m.shown_url = ""
         }
     }
-    // A timer still pending keeps frames coming; an idle window would never run it.
-    ret page.next_wakeup(t.pg) >= 0.0f64
+}
+
+// Whether the active page has a timer that is due: an idle window builds no frame, so the loop asks for one then (and only then,
+// so a timer minutes away costs nothing).
+fn timer_due(m: *Model) -> bool {
+    let t = shell.active_tab(m.sh)
+    if !t.loaded { ret false }
+    let due = page.next_wakeup(t.pg)
+    ret due >= 0.0f64 && due <= now_ms() - m.start_ms
+}
+
+// A tab's label cut to `most` bytes (on a character boundary) with "..." after it. A page without a title is labelled by its
+// address, which can be thousands of bytes (a data: URL); laying such a text out in the tab strip took more than the frame's
+// arena and stopped the window.
+fn clip_label(a: *mem.Arena, label: str, most: usize) -> str {
+    if label.len <= most { ret label }
+    var cut = most
+    while cut > 0usize && (label[cut] & 192u8) == 128u8 { cut -= 1usize }
+    let (clipped, ce) = str.concat(a, label[0usize..cut], "...")
+    if ce != ok { ret label[0usize..cut] }
+    ret clipped
+}
+
+fn error_text(e: err) -> str {
+    if e == mem.Exhausted { ret "ran out of memory in the frame (a text or layout was too large)" }
+    if e == widget.InvalidTree { ret "the widget tree was invalid" }
+    if e == widget.TooLarge { ret "the widget tree was too large" }
+    if e == widget.TooDeep { ret "the widget tree was too deep" }
+    if e == widget.DuplicateKey { ret "two widgets had the same key" }
+    if e == app.Failed { ret "the window system failed" }
+    if e == app.Closed { ret "the window was already closed" }
+    ret "an unnamed error"
+}
+
+// Says on standard error why the window stopped.
+fn report_stop(e: err) {
+    var out = os.stderr()
+    var w = io.file_writer(&out)
+    let wrote = io.write_all(&w, "browser: the window stopped: ")
+    let wrote2 = io.write_all(&w, error_text(e))
+    let wrote3 = io.write_all(&w, ".")
+    let wrote4 = io.write_all(&w, " Exit status 14.")
 }
 
 fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     mem.reset(&m.frame, m.frame_mark)
     let f = &m.frame
-    if pump_page(m) { widget.request_animation_frame(ctx.runtime) }
+    pump_page(m)
     sync_omni(m)
     let sh = m.sh
     let t = shell.active_tab(sh)
@@ -171,7 +227,7 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     while i < n {
         m.slots[i] = Slot { model: m, index: i }
         m.picks[i] = widget.Submit { ctx: mem.cast[*void](&m.slots[i]), invoke: on_pick }
-        m.labels[i] = shell.tab_title(sh.tabs.items[i])
+        m.labels[i] = clip_label(f, shell.tab_title(sh.tabs.items[i]), 48usize)
         i += 1usize
     }
     let (strip, strip_error) = control.tabs(f, 10u64, &theme, m.labels[0usize..n], sh.active, m.picks[0usize..n])
@@ -319,6 +375,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     model.omni = omni
     model.omni_len = 0usize
     model.shown_url = ""
+    model.omni_real = ""
+    model.omni_clipped = false
     model.start_ms = now_ms()
     model.profile_path = profile_path
     var ai = 0usize
@@ -341,12 +399,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if init_error != ok { os.exit(13i32) }
     var running = application
     var go = true
+    var stopped_by: err = ok
     while go {
         let (more, step_error) = app.step(&running, time.millis(16i64))
-        if step_error != ok || !more { go = false }
+        // Closing the window ends the loop with `more` false; an error is something else and is said, not hidden.
+        if step_error != ok {
+            stopped_by = step_error
+            go = false
+        } else if !more {
+            go = false
+        }
+        if go && timer_due(model) {
+            let asked = app.request_frame(&running)
+        }
     }
     let saved = shell.save_profile(sh, profile_path)
     let closed = app.close(&running)
+    if stopped_by != ok {
+        report_stop(stopped_by)
+        os.exit(14i32)
+    }
     ret ok
 }
 

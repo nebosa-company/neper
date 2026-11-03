@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.00 of 1 |
-| queue position | 53 of 142 (only position 1 is eligible for the next session; see README) |
+| score | 0.80 of 1 |
+| queue position | 32 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> e.crypto.aead's AES-GCM is portable Neper, a bitsliced AES (BearSSL's aes_ct64) and a GHASH from masked integer products (ghash_ctmul64), D1645. Measured 2026-09-28 on the Core i5-12500H, sealing one TLS record: 11.6 us for 100 bytes and 702 us for 16 KB (23 MB/s), against OpenSSL's 0.73 us and 3.19 us (5.1 GB/s, through Python's cryptography 48, whose call overhead is included): 16 times slower on small records and 220 times on large ones. It bounds every TLS user: x.microsoft.tds scans SQL Server at 28-35% of the fastest language (D1643), where OpenSSL, Go and rustls run AES-NI and PCLMULQDQ. Closing the gap needs the back end to emit AESENC/AESENCLAST and PCLMULQDQ (x64) behind a CPU check with the portable path as the fallback, as SHA-256 and CRC-32C already are in the link (D336), then a GCM that keeps its expanded key and H powers across records (e.net.tls expands the key for every record today) and runs four to eight blocks in flight. Until then, the portable path's own lever is codegen: the same bitsliced rounds run at about 130 cycles a byte, several times BearSSL's in C.
+> e.crypto.aead's AES-GCM is portable Neper, a bitsliced AES (BearSSL's aes_ct64) and a GHASH from masked integer products (ghash_ctmul64), D1645. Measured 2026-09-28 on the Core i5-12500H, sealing one TLS record: 11.6 us for 100 bytes and 702 us for 16 KB (23 MB/s), against OpenSSL's 0.73 us and 3.19 us (5.1 GB/s, through Python's cryptography 48, whose call overhead is included): 16 times slower on small records and 220 times on large ones. It bounds every TLS user: x.microsoft.tds scans SQL Server at 28-35% of the fastest language (D1643), where OpenSSL, Go and rustls run AES-NI and PCLMULQDQ. Closing the gap needs the back end to emit AESENC/AESENCLAST and PCLMULQDQ (x64) behind a CPU check with the portable path as the fallback, as SHA-256 and CRC-32C already are in the link (D336), then a GCM that keeps its expanded key and H powers across records (e.net.tls expands the key for every record today) and runs four to eight blocks in flight. Until then, the portable path's own lever is codegen: the same bitsliced rounds run at about 130 cycles a byte, several times BearSSL's in C. PART (D4300): four e.os intrinsics (cpu_features, aes_expand_key, aes_ctr, ghash_blocks; AES-NI and PCLMULQDQ on x86-64, aarch64 stubs answer none), e.crypto.aead takes the hardware path with the D1645 portable fallback; crypto_aead_hw passes vs portable GCM, OpenSSL and a bit-level GF(2^128) product on Windows and Linux x64; 16 KB seal ~1.8 GB/s vs OpenSSL ~5 GB/s on a quiet machine. Missing: 8-way interleave and fused CTR+GHASH, ARMv8 AES/PMULL, VAES.
 
 ## Remaining work
 

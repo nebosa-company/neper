@@ -4,7 +4,7 @@
 |---|---|
 | phase | P6 — Motion framework (next release; docs/animation-plan.md) |
 | module | `e.ui.navigation` |
-| module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.mem`, `e.ui.accessibility`, `e.ui.control`, `e.ui.input`, `e.ui.layout`, `e.ui.overlay`, `e.ui.style`, `e.ui.widget`, `e.ui.window` |
+| module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.mem`, `e.ui.accessibility`, `e.ui.control`, `e.ui.input`, `e.ui.layout`, `e.ui.overlay`, `e.ui.style`, `e.ui.widget`, `e.ui.winchrome`, `e.ui.window` |
 | blocked by | `P5`, `next-release` |
 | delivered | 0 of 5 |
 

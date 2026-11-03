@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | tooling / Tooling |
-| score | 0.88 of 1 |
-| queue position | 30 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.93 of 1 |
+| queue position | 21 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -15,14 +15,13 @@ The contract is `docs/tooling.md`, section `## 7. Test, build and command result
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then the program is launched with its stdout and stderr to files beside the executable and read back whole into one `run` record with the process exit code, captured bytes base64 when they are not UTF-8 (section 2); tests/conformance/tools/run.e exits 3 and writes a non-UTF-8 stderr byte. A trap's record is read back out of stderr as the structured `trap` payload (D253): its kind, a byte-precise zero-width span at the site when the file is the operand, the record's values text as one entry, and one backtrace frame per `  at` line with its qualified function, the operand source where the frame lies in it, and its line; tests/conformance/tools/run_trap.e pins a bounds trap two frames deep, spelled relative to the test build dir so the golden carries no host path. `-- ARGS...` after the flags reaches the program as its arguments on both hosts, spaces kept (D267, tests/conformance/tools/run_args.e echoes three and exits with their count); a relative OUTPUT with directories launches on Windows too, spelled the host's way. A Linux build writes its executable mode 0755 and `run` and `test` launch it directly, no `sh -c` and `chmod` in front (D291: `os.set_mode` joined the bootstrap's fixed surface, the per-host `e.os` source having it); the Linux suite requires the corpus build's executable to be one. a trap and a frame in another module name that module's source under its own root with the line and column the child printed (D503; `run_trap_module`), where both were null
+> `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then the program is launched with its stdout and stderr to files beside the executable and read back whole into one `run` record with the process exit code, captured bytes base64 when they are not UTF-8 (section 2); tests/conformance/tools/run.e exits 3 and writes a non-UTF-8 stderr byte. A trap's record is read back out of stderr as the structured `trap` payload (D253): its kind, a byte-precise zero-width span at the site when the file is the operand, the record's values text as one entry, and one backtrace frame per `  at` line with its qualified function, the operand source where the frame lies in it, and its line; tests/conformance/tools/run_trap.e pins a bounds trap two frames deep, spelled relative to the test build dir so the golden carries no host path. `-- ARGS...` after the flags reaches the program as its arguments on both hosts, spaces kept (D267, tests/conformance/tools/run_args.e echoes three and exits with their count); a relative OUTPUT with directories launches on Windows too, spelled the host's way. A Linux build writes its executable mode 0755 and `run` and `test` launch it directly, no `sh -c` and `chmod` in front (D291: `os.set_mode` joined the bootstrap's fixed surface, the per-host `e.os` source having it); the Linux suite requires the corpus build's executable to be one. a trap and a frame in another module name that module's source under its own root with the line and column the child printed (D503; `run_trap_module`), where both were null. A project root is `run`'s operand (D1682): `neper run DIR`, or no operand, runs the project's `src/main.e`, pinned with `build` in both suites; a repeated `run` is incremental (D1681)
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
 - [ ] streaming
-- [ ] a project root
 
 ## Decisions to read first
 
@@ -38,9 +37,9 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `chmod`: `benchmarks/scale/profile_own.sh`×2, `benchmarks/differential/bootstrap.py`×1, `benchmarks/differential/differential.py`×1, `benchmarks/metamorphic/metamorphic.py`×1, `benchmarks/scale/profile.sh`×1, `benchmarks/scale/profile_check.sh`×1, `benchmarks/scale/profile_edit.sh`×1, `benchmarks/scale/profile_warm.sh`×1
-- `os.set_mode`: `src/main.e`×2‡, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×2, `lib/e/fs.e`×1
-- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×164, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×145, `src/resolve.e`×36†, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/os.windows.e`×7‡
+- `os.set_mode`: `src/main.e`×2‡, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×2, `lib/e/fs.e`×1†, `lib/e/os/shell.macos.e`×1‡
+- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×268, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×215, `src/resolve.e`×85†, `src/check.e`×13‡, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `lib/e/fs.e`×8†, `lib/e/os.windows.e`×7‡
+- `src/main.e`: `benchmarks/baseline/results/baseline-linux.json`×8, `benchmarks/baseline/results/h25-linux-d936.json`×8, `scripts/wasm-compiler.sh`×6, `benchmarks/scale/profile.sh`×5, `benchmarks/baseline/rename.py`×4, `benchmarks/baseline/context.py`×3, `benchmarks/baseline/session.py`×3, `benchmarks/scale/profile_edit.sh`×3
 
 ## Existing fixtures
 

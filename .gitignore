@@ -20,3 +20,4 @@ tests/m0/*.exe
 /docs/neper.pdf
 .neper/
 .metrics
+/tmp/

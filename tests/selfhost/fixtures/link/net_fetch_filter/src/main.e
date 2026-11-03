@@ -55,7 +55,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     cfg4.block_hosts = rules4.domains
     cfg4.typed_hosts = rules4.typed
     cfg4.typed_types = rules4.types
-    if rules4.domains.len != 3usize || rules4.typed.len != 2usize { os.exit(15i32) }
+    if rules4.domains.len != 3usize || rules4.typed.len != 3usize { os.exit(15i32) }
     let (c4, ce4) = fetch.client(a, cfg4, 8usize)
     if ce4 != ok { os.exit(16i32) }
     var t4 = c4
@@ -98,6 +98,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e19 != fetch.BlockedByFilter || t6.blocked != 1usize { os.exit(28i32) }
     let (r20, e20) = fetch.fetch(&t6, request("http://pathy.test/app.js", "http://site.test/"))
     if e20 == fetch.BlockedByFilter || t6.blocked != 1usize { os.exit(29i32) }
+    // Several rules for one host: a request is blocked when any of them covers it.
+    var cfg7 = fetch.default_config(zero)
+    let rules7 = policy.parse_filter_list(a, "||multi.test^$image\n||multi.test/track.js^$script\n||both.test/a^\n||both.test^$image\n")
+    cfg7.block_hosts = rules7.domains
+    cfg7.typed_hosts = rules7.typed
+    cfg7.typed_types = rules7.types
+    if rules7.typed.len != 4usize { os.exit(40i32) }
+    let (c7, ce7) = fetch.client(a, cfg7, 8usize)
+    if ce7 != ok { os.exit(41i32) }
+    var t7 = c7
+    let (r21, e21) = fetch.fetch(&t7, request_as("http://multi.test/track.js", "http://site.test/", "script"))
+    if e21 != fetch.BlockedByFilter || t7.blocked != 1usize { os.exit(42i32) }
+    let (r22, e22) = fetch.fetch(&t7, request_as("http://multi.test/a.png", "http://site.test/", "image"))
+    if e22 != fetch.BlockedByFilter || t7.blocked != 2usize { os.exit(43i32) }
+    let (r23, e23) = fetch.fetch(&t7, request_as("http://multi.test/other.js", "http://site.test/", "script"))
+    if e23 == fetch.BlockedByFilter || t7.blocked != 2usize { os.exit(44i32) }
+    let (r24, e24) = fetch.fetch(&t7, request_as("http://both.test/a.js", "http://site.test/", "script"))
+    if e24 != fetch.BlockedByFilter || t7.blocked != 3usize { os.exit(45i32) }
+    let (r25, e25) = fetch.fetch(&t7, request_as("http://both.test/b.js", "http://site.test/", "script"))
+    if e25 == fetch.BlockedByFilter || t7.blocked != 3usize { os.exit(46i32) }
+    let (r26, e26) = fetch.fetch(&t7, request_as("http://both.test/b.png", "http://site.test/", "image"))
+    if e26 != fetch.BlockedByFilter || t7.blocked != 4usize { os.exit(47i32) }
+    // A subresource with a destination but no referrer is still filtered; a document request (neither) is not.
+    let (r27, e27) = fetch.fetch(&t7, request_as("http://multi.test/a.png", "", "image"))
+    if e27 != fetch.BlockedByFilter || t7.blocked != 5usize { os.exit(48i32) }
+    let (r28, e28) = fetch.fetch(&t7, request_as("http://multi.test/a.png", "", ""))
+    if e28 == fetch.BlockedByFilter || t7.blocked != 5usize { os.exit(49i32) }
     // With no list there is no blocking.
     let (c1, ce1) = fetch.client(a, fetch.default_config(zero), 8usize)
     if ce1 != ok { os.exit(9i32) }

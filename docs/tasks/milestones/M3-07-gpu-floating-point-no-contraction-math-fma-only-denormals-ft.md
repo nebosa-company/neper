@@ -28,11 +28,11 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Spec sections
 
-- `docs/spec.md:3557` 11. Build modes and safety
-  - `docs/spec.md:3612` Trap protocol
-  - `docs/spec.md:3670` Resources: static rules
-  - `docs/spec.md:3929` Debug fills
-  - `docs/spec.md:3942` Floating point
+- `docs/spec.md:3594` 11. Build modes and safety
+  - `docs/spec.md:3649` Trap protocol
+  - `docs/spec.md:3707` Resources: static rules
+  - `docs/spec.md:3966` Debug fills
+  - `docs/spec.md:3979` Floating point
 
 ## Decisions to read first
 
@@ -44,7 +44,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `math.fma`: `lib/e/simd.e`×1
+- `math.fma`: `src/glsl.e`×6†, `src/spirv.e`×5‡, `tests/conformance/spirv/float64.e`×2, `tests/conformance/spirv/narrow.e`×2, `lib/e/simd.e`×1, `scripts/gen_gpu_gl_narrow.py`×1, `scripts/narrow_float_vectors.py`×1, `src/check.e`×1‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

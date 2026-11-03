@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.85 of 1 |
-| queue position | 51 of 142 (only position 1 is eligible for the next session; see README) |
+| queue position | 30 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -34,7 +34,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `name_value`: `lib/x/cloud/manifest.e`×6, `lib/x/cloud/rest.e`×6, `scripts/rest_fixture_template.e`×3, `scripts/manifest_fixture_template.e`×1, `scripts/manifest_vectors.mjs`×1, `scripts/rest_vectors.mjs`×1, `src/main.e`×1‡
+- `name_value`: `lib/x/khronos/compute.e`×7, `lib/x/cloud/manifest.e`×6, `lib/x/cloud/rest.e`×6, `scripts/rest_fixture_template.e`×3, `lib/e/crypto/pkcs12.e`×2, `lib/x/mongodb/wire.e`×2, `scripts/manifest_fixture_template.e`×1, `scripts/manifest_vectors.mjs`×1
 - `name_value2`: `src/main.e`×1‡
 
 ## Verification

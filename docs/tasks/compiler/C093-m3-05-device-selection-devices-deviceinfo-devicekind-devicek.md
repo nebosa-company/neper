@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | compiler / Back end |
-| score | 0.40 of 1 |
-| queue position | 22 of 45 (only position 1 is eligible for the next session; see README) |
+| score | 0.95 of 1 |
+| queue position | 15 of 106 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `devices` answers the bounded snapshot with the CPU device (`supported`, no stable key, capabilities copied into the caller's arena), `open` takes `.Cpu` index 0 and refuses other indices with `NoDevice` and other backends with `Unsupported`, `open_id` refuses a CPU key with `NoDevice` since the CPU has none, `info` copies the opening-time descriptor (D778)
+> `devices` answers the bounded snapshot with the CPU device (`supported`, no stable key, capabilities copied into the caller's arena), `open` takes `.Cpu` index 0 and refuses other indices with `NoDevice` and other backends with `Unsupported`, `open_id` refuses a CPU key with `NoDevice` since the CPU has none, `info` copies the opening-time descriptor (D778). PART (D4200): Vulkan device keys from deviceUUID with key_valid, open_id matching backend and all 16 bytes (NoDevice, AmbiguousDevice, Unsupported), devices a complete snapshot, real index in info; gpu_devices passes on this host's two Vulkan devices; AmbiguousDevice only through the pure resolve_key. Missing: CUDA enumeration, a --gpu-inventory file, three-attempt re-enumeration. PART (D4700, D4703): neper run --gpu-inventory FILE, three-attempt count/list re-enumeration, CUDA enumeration via dlopen (CUDA uuid equals the Vulkan deviceUUID on the RTX 3080); gpu_inventory, gpu_devices pass. Missing: a CUDA backend (M4), AmbiguousDevice from real hardware, MIG.
 
 ## Remaining work
 
@@ -33,12 +33,11 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `devices`: `lib/e/gpu.e`×7†, `lib/e/fmt/brotli.e`×2‡, `lib/e/os/shell.linux.e`×1, `scripts/check_gpu_contracts.py`×1
-- `.Cpu`: `lib/e/gpu.e`×6†
-- `NoDevice`: `lib/e/gpu.e`×3†
-- `Unsupported`: `src/codegen_x64.e`×106‡, `src/check.e`×73‡, `src/lower.e`×55‡, `lib/e/os/shell.linux.e`×50, `lib/e/os.linux.e`×27‡, `lib/e/os.windows.e`×18‡, `lib/e/crypto/x509.e`×17†, `lib/e/fmt/parquet.e`×15†
-- `open_id`: `lib/e/gpu.e`×1†
-- `AmbiguousDevice`: `lib/e/gpu.e`×1†
+- `.Cpu`: `lib/e/gpu.e`×14‡, `lib/e/proc/sys/host.linux.e`×2, `lib/e/proc/sys/host.neperos.e`×2, `lib/e/proc/sys/host.wasi.e`×2, `lib/e/proc/sys/host.windows.e`×2, `scripts/gen_gpu_gl_narrow.py`×2, `benchmarks/charts/chart_bench.e`×1, `benchmarks/gp/README.md`×1
+- `NoDevice`: `lib/e/gpu.e`×20‡, `lib/e/gpu/cuda.e`×4, `lib/e/gpu/metal.macos.e`×4, `lib/e/gpu/vulkan.e`×2†, `benchmarks/gp/neper/gp10.e`×1, `lib/e/gpu/metal.e`×1
+- `Unsupported`: `lib/x/khronos/gl.e`×671‡, `src/codegen_x64.e`×112‡, `lib/e/os.neperos.e`×80, `src/codegen_a64.e`×79†, `src/check.e`×74‡, `src/lower.e`×57‡, `lib/e/os/shell.neperos.e`×51, `lib/x/khronos/egl.e`×51
+- `open_id`: `lib/e/gpu.e`×1‡
+- `AmbiguousDevice`: `lib/e/gpu.e`×3‡
 
 ## Verification
 
