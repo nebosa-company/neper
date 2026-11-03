@@ -27,9 +27,12 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
     clear[0usize] = go
     let captions = [5]str{ "Three notices", "One notice", "Empty", "Clear hovered", "Clear pressed" }
     let counts = [5]usize{ 3usize, 1usize, 0usize, 3usize, 3usize }
+    // Cupertino (round 87): the three-notice list stands tall enough for its third row.
+    var listh: f32 = 260.0
+    if t.tokens.profile == .CupertinoLike { listh = 300.0 }
     var i = 0usize
     while i < 5usize {
-        let (node, node_error) = control.notification_list(a, u64((i + 1usize) * 64usize), t, "Notifications", notices[0usize..counts[i]], &clear[0usize], 340.0, 260.0)
+        let (node, node_error) = control.notification_list(a, u64((i + 1usize) * 64usize), t, "Notifications", notices[0usize..counts[i]], &clear[0usize], 340.0, listh)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 3usize { drive = .Hover }
