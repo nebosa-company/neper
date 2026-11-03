@@ -684,6 +684,25 @@ fn simd_ext_of(name: str, signed: bool, lane_size: usize) -> usize {
     ret 0usize
 }
 
+// `round_i32`: four-byte float lanes to four-byte integer lanes, round to nearest even (`cvtps2dq`); the one instruction reads its
+// source twice, as every extended operation has two.
+fn lower_simd_round(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, vector_type: check.Type, result_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
+    if argument_count != 1usize { ret ok }
+    let (count, size, signed, integer, float) = simd_lane_facts(c, vector_type)
+    if !float || size != 4usize { ret ok }
+    let (out_count, out_size, out_signed, out_integer, out_float) = simd_lane_facts(c, result_type)
+    if !out_integer || !out_signed || out_size != 4usize || out_count != count { ret ok }
+    let bytes = count * size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret ok }
+    if !nir.vector_ext_supported(nir.EXT_CVT_RND, 4usize, builder.cpu_level) { ret ok }
+    let (slot, slot_error) = vector_slot(c, result_type, builder, token)
+    if slot_error != ok { ret slot_error }
+    try emit_simd_ext(nir.EXT_CVT_RND, 4usize, 16usize, bytes / 16usize, vector_type, slot, arguments[0usize], arguments[0usize], false, 16usize, builder, token)
+    finish_simd_result(call, slot, true, results)
+    *handled = true
+    ret ok
+}
+
 // `movemask`: one bit per byte lane, the top bit of each. A chunk answers its bits in
 // a scratch slot, and the chunks are joined at their widths.
 fn lower_simd_movemask(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, vector_type: check.Type, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
@@ -863,6 +882,7 @@ fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arg
         if argument_count != 3usize { ret ok }
         ret lower_simd_select(c, call, arguments, c.parameters[call.function.first_parameter + 1usize].ty, builder, token, results, handled)
     }
+    if check.same(name, "round_i32") { ret lower_simd_round(c, call, arguments, argument_count, first, c.return_types[call.function.first_return], builder, token, results, handled) }
     if check.same(name, "movemask") { ret lower_simd_movemask(c, call, arguments, argument_count, first, builder, token, results, handled) }
     if argument_count != 2usize { ret ok }
     let result_type = c.return_types[call.function.first_return]

@@ -302,6 +302,23 @@ fn reduce_max[V: type](v: V) -> meta.element_type[V]() {
     ret acc.lanes[0]
 }
 
+// Lane-wise float to signed integer, rounded to nearest with ties to even (`cvtps2dq` on x64); a lane that is NaN or outside the
+// integer range is the integer's least value. Unlike `convert` it never saturates, and is one instruction where the target has it.
+fn round_i32[V: type, W: type](v: V) -> W {
+    var w: W = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        let x = f64(v.lanes[i])
+        if x >= -2147483648.0f64 && x < 2147483648.0f64 {
+            w.lanes[i] = meta.element_type[W]()(math.round[f64](x))
+        } else {
+            w.lanes[i] = meta.element_type[W]()(0i64 - 2147483647i64 - 1i64)
+        }
+        i += 1usize
+    }
+    ret w
+}
+
 // Lane-wise `T(x)` to `W`'s lane type, with section 4's Casts table: whatever the
 // scalar conversion does on a lane, this does on every lane. The vectors must have
 // the same lane count; otherwise no lane-wise correspondence exists.

@@ -363,6 +363,16 @@ vector_registers_executable_written=$($test_build/neper-self emit-executable "$r
 [ "$vector_registers_executable_written" = 'executable written' ]
 chmod +x "$vector_registers_executable_path"
 "$vector_registers_executable_path"
+vector_float_chain_executable_path="$test_build/vector-float-chain-selfhost"
+vector_float_chain_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/vector_float_chain/src/main.e" "$repo" x64 linux "$vector_float_chain_executable_path" --release --cpu x64-v2)
+[ "$vector_float_chain_executable_written" = 'executable written' ]
+chmod +x "$vector_float_chain_executable_path"
+"$vector_float_chain_executable_path"
+param_register_share_executable_path="$test_build/param-register-share-selfhost"
+param_register_share_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/param_register_share/src/main.e" "$repo" x64 linux "$param_register_share_executable_path" --release)
+[ "$param_register_share_executable_written" = 'executable written' ]
+chmod +x "$param_register_share_executable_path"
+"$param_register_share_executable_path"
 generic_executable_path="$test_build/generic-selfhost"
 generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
 [ "$generic_executable_written" = 'executable written' ]

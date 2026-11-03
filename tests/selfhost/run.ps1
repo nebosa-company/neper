@@ -309,6 +309,16 @@ $vectorRegistersExecutableWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $vectorRegistersExecutableWritten -ne 'executable written') { throw 'vector register program did not emit a PE executable' }
 & $vectorRegistersExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'vectors held in registers, or spilled past the vector registers, computed wrong' }
+$vectorFloatChainExecutablePath = Join-Path $testBuild 'vector-float-chain-selfhost.exe'
+$vectorFloatChainExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\vector_float_chain\src\main.e') $repo 'x64' 'windows' $vectorFloatChainExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $vectorFloatChainExecutableWritten -ne 'executable written') { throw 'vector float chain program did not emit a PE executable' }
+& $vectorFloatChainExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'round_i32 or a chain of float vector arithmetic answered wrong, or left a NaN that is not canonical' }
+$paramRegisterShareExecutablePath = Join-Path $testBuild 'param-register-share-selfhost.exe'
+$paramRegisterShareExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\param_register_share\src\main.e') $repo 'x64' 'windows' $paramRegisterShareExecutablePath --release
+if ($LASTEXITCODE -ne 0 -or $paramRegisterShareExecutableWritten -ne 'executable written') { throw 'param register share program did not emit a PE executable' }
+& $paramRegisterShareExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'a dead parameter made after the prologue overwrote a register a later parameter was moved into' }
 $genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
 $genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }

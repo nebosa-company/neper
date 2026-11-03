@@ -185,6 +185,7 @@ const EXT_FCMP_LT: usize = 33usize
 const EXT_FCMP_LE: usize = 34usize
 const EXT_FCMP_NE: usize = 35usize
 const EXT_SELECT: usize = 36usize
+const EXT_CVT_RND: usize = 37usize
 
 fn vector_ext_immediate(ext: usize, lane: usize, lanes: usize) -> usize {
     ret ext * 8388608usize + lane * 256usize + lanes
@@ -221,6 +222,7 @@ fn vector_ext_supported(ext: usize, lane: usize, cpu_level: usize) -> bool {
     if EXT_CMP_EQ <= ext && EXT_CMP_LE_U >= ext { ret lane <= 2usize }
     if EXT_FCMP_EQ <= ext && EXT_FCMP_NE >= ext { ret lane == 4usize || lane == 5usize }
     if EXT_SELECT == ext { ret true }
+    if EXT_CVT_RND == ext { ret lane == 4usize }
     ret false
 }
 

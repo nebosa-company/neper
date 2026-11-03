@@ -114,6 +114,10 @@ type FunctionContext = struct {
     field_offset: usize,
     // Per value: an integer constant every use of which is an immediate operand, so it is not made.
     dead_consts: []bool,
+    // The vector slots whose every use is a float `+ - * /` (as a source or the destination): a NaN that arithmetic leaves in one is
+    // not made canonical there, because the next such operation turns any NaN into a NaN again and the last of the chain makes it
+    // canonical, and nothing else ever reads the slot (section 11 is about the value an operation answers, which is that).
+    chain_skip: []bool,
     // Per parameter: moved from its argument register to its value's register or slot in the prologue, so its Parameter makes nothing.
     param_direct: [16]bool,
 }
@@ -930,6 +934,7 @@ fn packed_ext_instruction(ext: usize, lane: usize) -> (usize, bool, usize, bool)
     if nir.EXT_MULHI_S == ext && lane == 1usize { ret (102usize, false, 229usize, true) }
     if nir.EXT_MULHRS == ext && lane == 1usize { ret (102usize, true, 11usize, true) }
     if nir.EXT_MADD == ext && lane == 1usize { ret (102usize, false, 245usize, true) }
+    if nir.EXT_CVT_RND == ext && lane == 4usize { ret (102usize, false, 91usize, true) }
     if nir.EXT_SAD == ext && lane == 0usize { ret (102usize, false, 246usize, true) }
     if nir.EXT_UNPACK_LO == ext {
         if lane <= 2usize { ret (102usize, false, 96usize + lane, true) }
@@ -1365,7 +1370,7 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
     if !synthesized {
         try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     }
-    if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
+    if lane >= 4usize && !(destination_value < context.chain_skip.len && context.chain_skip[destination_value]) { try canonicalize_packed_nan(lane == 5usize, output) }
     try vec_out(allocations, destination_value, 0usize, bytes, output)
     ret vex_done(output)
 }
@@ -1995,13 +2000,76 @@ fn parameter_type(builder: *nir.Builder, current: nir.Function, index: usize) ->
 // `store_incoming_parameters` parked every argument in a slot and the Parameter instructions read it back. Only when the
 // Parameter instructions are the first of the function (no value can hold a register an argument is still in), and there are no
 // debug locals (which read the parked slot). The register moves are one parallel move, with r10 to break a cycle.
+// Whether a parameter that is not moved in the prologue has a Parameter instruction that writes a register a moved one is already in:
+// the unmoved ones (a float, an aggregate, one on the stack) make their value when their instruction comes, and a value that is dead
+// by then may have shared its register with a later parameter, which the prologue has put there already.
+fn prologue_conflict(builder: *nir.Builder, current: nir.Function, abi: Abi, parameters: usize, context: *FunctionContext) -> bool {
+    let allocations = context.allocations
+    var direct_registers = 0usize
+    var other_registers = 0usize
+    var integer_used = 0usize
+    var float_used = 0usize
+    var stack_used = 0usize
+    var in_register = false
+    var register = 0usize
+    var stack_index = 0usize
+    var at = 0usize
+    var stop = false
+    while at < parameters && !stop {
+        let incoming = parameter_type(builder, current, at)
+        let width = float_width(incoming)
+        var stacked = false
+        if stacked_argument(incoming) {
+            stacked = true
+            in_register = false
+            stack_index = stack_used
+            stack_used += 1usize
+        } else {
+            let classified = classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+            if classified != ok { ret true }
+        }
+        let first = current.first_instruction + at
+        if at >= 16usize || first >= builder.instruction_count {
+            stop = true
+            continue
+        }
+        let definer = builder.instructions[first]
+        if definer.opcode != .Parameter || definer.immediate != at || !definer.has_result {
+            stop = true
+            continue
+        }
+        let value = definer.result
+        if value >= allocations.len || value >= context.ranges.len { ret true }
+        var direct = false
+        if in_register && width == 0usize && !stacked {
+            if !context.ranges[value].used {
+                direct = true
+            } else if allocations[value].kind == .Register {
+                let (hardware, hardware_error) = hardware_register(allocations[value].index)
+                if hardware_error != ok { ret true }
+                direct_registers = direct_registers | (1usize << hardware)
+                direct = true
+            } else if allocations[value].kind == .Stack {
+                direct = true
+            }
+        }
+        if !direct && allocations[value].kind == .Register {
+            let (hardware, hardware_error) = hardware_register(allocations[value].index)
+            if hardware_error != ok { ret true }
+            other_registers = other_registers | (1usize << hardware)
+        }
+        at += 1usize
+    }
+    ret (direct_registers & other_registers) != 0usize
+}
+
 fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, stack_slots: usize, parameters: usize, context: *FunctionContext) -> err {
     let output = context.output
     let allocations = context.allocations
     var move_src: [16]usize = zero
     var move_dst: [16]usize = zero
     var moves = 0usize
-    var prefix_ok = context.instruction_offsets.len == 0usize
+    var prefix_ok = context.instruction_offsets.len == 0usize && !prologue_conflict(builder, current, abi, parameters, context)
     var clear_at = 0usize
     while clear_at < 16usize {
         context.param_direct[clear_at] = false
@@ -3821,6 +3889,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         context.live_masks = context.live_masks[0usize..0usize]
         context.entered = context.entered[0usize..0usize]
         context.dead_consts = context.dead_consts[0usize..0usize]
+        context.chain_skip = context.chain_skip[0usize..0usize]
         ret function_body(builder, function_index, stack_slots, context)
     }
     let current = builder.functions[function_index]
@@ -3893,6 +3962,32 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         dead_at += 1usize
     }
     context.dead_consts = dead
+    let (chain, chain_error) = mem.alloc[bool](context.arena, current.value_count + 1usize)
+    if chain_error != ok { ret chain_error }
+    var chain_at = 0usize
+    while chain_at < chain.len {
+        chain[chain_at] = true
+        chain_at += 1usize
+    }
+    var chain_use = current.first_instruction
+    while chain_use < fill_end {
+        let user = builder.instructions[chain_use]
+        let arithmetic = user.opcode == .VectorBinary && !user.has_result && user.operand_count == 3usize && nir.vector_ext(user.immediate) == 0usize && nir.vector_binary_lane(user.immediate) >= 4usize && nir.vector_binary_operation(user.immediate) <= 3usize
+        var chain_position = 0usize
+        while chain_position < user.operand_count {
+            let used = builder.operands[user.first_operand + chain_position]
+            if used < chain.len && !arithmetic { chain[used] = false }
+            chain_position += 1usize
+        }
+        chain_use += 1usize
+    }
+    // only a slot itself: an address computed from one (the second chunk of a wider vector) is not all its uses
+    var chain_define = 0usize
+    while chain_define < chain.len {
+        if chain[chain_define] && (definers[chain_define] == 0usize || builder.instructions[definers[chain_define] - 1usize].opcode != .Stack) { chain[chain_define] = false }
+        chain_define += 1usize
+    }
+    context.chain_skip = chain
     context.instruction_offsets = context.instruction_offsets[0usize..0usize]
     context.stack_value_slots = context.stack_value_slots[0usize..0usize]
     let (debug_first, debug_count) = nir.debug_locals_of(builder, current.first_instruction)
@@ -3915,6 +4010,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     context.debug_windows = context.debug_windows[0usize..0usize]
     context.debug_window_count = 0usize
     context.dead_consts = context.dead_consts[0usize..0usize]
+    context.chain_skip = context.chain_skip[0usize..0usize]
     builder.definers_valid = false
     context.live_masks = context.live_masks[0usize..0usize]
     mem.reset(context.arena, mark)
@@ -4850,7 +4946,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize, dead_consts: zero, param_direct: zero }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize, dead_consts: zero, chain_skip: zero, param_direct: zero }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
