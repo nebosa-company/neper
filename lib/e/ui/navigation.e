@@ -486,7 +486,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         let (easing, easing_error) = mem.alloc[widget.Node](a, 2usize)
         if easing_error != ok { ret (zero, TooLarge) }
         easing[0usize] = row[0usize]
-        easing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - 4.0 * (1.0 - entered) } }, style.defaults(), easing[0usize..1usize])
+        easing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - 4.0 * (1.0 - entered) } }, style.defaults(), easing[0usize..1usize])
         var faded = style.defaults()
         faded.opacity = entered
         row[0usize] = widget.box(0u64, faded, easing[1usize..2usize])
@@ -1161,7 +1161,7 @@ fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         let (slid, slid_error) = mem.alloc[widget.Node](a, 1usize)
         if slid_error != ok { ret (zero, TooLarge) }
         slid[0usize] = parts[1usize]
-        parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
+        parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
         // (D1499) Popping, the page left slides from its place out to the end,
         // over the revealed page (keyed `key + 5`).
         if left < 0.0 && left_from > titles.len && mem.address_of(leaving.ctx) != 0usize {
@@ -1175,7 +1175,7 @@ fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             both[2usize] = left_page
             both[3usize] = widget.box(key + 5u64, grow, both[2usize..3usize])
             both[0usize] = parts[1usize]
-            both[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: out_dx, y: 0.0 } }, grow, both[3usize..4usize])
+            both[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: out_dx, y: 0.0 } }, grow, both[3usize..4usize])
             parts[1usize] = widget.stack(0u64, grow, both[0usize..2usize])
         }
     }
@@ -1577,7 +1577,7 @@ fn destination_bar_hiding(a: *mem.Arena, key: widget.Key, t: *const control.Them
     var quiet: widget.Semantics = zero
     quiet.hidden = hidden
     held[1usize] = widget.semantics(0u64, quiet, style.defaults(), held[2usize..3usize])
-    held[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * gone } }, style.defaults(), held[1usize..2usize])
+    held[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: height * gone } }, style.defaults(), held[1usize..2usize])
     var clip = control.sized_style(width, height)
     clip.overflow = .Clip
     ret (widget.box(key, clip, held[0usize..1usize]), ok)
@@ -2809,7 +2809,7 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         var toward = width * (1.0 - pushed)
         if t.tokens.direction == .RightToLeft { toward = 0.0 - toward }
         pushing[0usize] = body[0usize]
-        body[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: toward, y: 0.0 } }, style.defaults(), pushing[0usize..1usize])
+        body[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: toward, y: 0.0 } }, style.defaults(), pushing[0usize..1usize])
     }
     var page = control.sized_style(width, height)
     page.overflow = .Clip
@@ -3011,7 +3011,7 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
         if sliding_error != ok { ret (zero, TooLarge) }
         sliding[0usize] = drawer[0usize]
-        drawer[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+        drawer[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
     }
     // The scrim is an overlay of its own under the drawer: a press on it misses
     // the modal drawer, which dismisses it.
@@ -6481,7 +6481,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[2usize] = content
-    body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: shift, y: 0.0 } }, style.defaults(), body[2usize..3usize])
+    body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: shift, y: 0.0 } }, style.defaults(), body[2usize..3usize])
     var arriving = style.defaults()
     arriving.opacity = 1.0 - coming
     body[0usize] = widget.box(0u64, arriving, body[1usize..2usize])

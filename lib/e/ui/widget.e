@@ -161,8 +161,8 @@ fn zoom_values_valid(value: ZoomState, min_scale: f32, max_scale: f32) -> bool {
 fn zoom_valid(z: Zoom) -> bool {
     ret zoom_values_valid(z.state, z.min_scale, z.max_scale)
 }
-// A paint-only transform about the node's centre. Layout and hit bounds stay put.
-type VisualTransform = struct { scale: f32, rotation: f32, offset: geometry.Point }
+// A paint-only transform about the node's centre. Layout and hit bounds stay put. `skew` leans the node: a point moves right by skew times its height above the centre (negative leans right, like an italic).
+type VisualTransform = struct { scale: f32, rotation: f32, skew: f32, offset: geometry.Point }
 // A drop (D844): what a drag begun with `begin_drag` carried, released over a region
 // that takes drops.
 type Dropped = struct { position: geometry.Point, payload: u64 }
@@ -2477,6 +2477,8 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
         var thumb_ink = sc.thumb
         var thumb_shown = true
+        // Android (round 86): the thumb is never fainter than 70 % of its colour, which keeps it 3:1 against the surface (50 % read 2.4:1).
+        if skia_corners && thumb_ink.alpha < 0.7 { thumb_ink.alpha = 0.7 }
         if skia_corners && s.thumb_drag { thumb_ink.alpha = min_f(1.0, thumb_ink.alpha * 1.2) }
         if sc.fades {
             let idle = s.animation_time.nanos - e.scrolled_at
@@ -3190,7 +3192,8 @@ fn place_transformed(s: *State, a: *mem.Arena, node: *const Node, element: usize
     let cx = inner.x + inner.width * 0.5
     let cy = inner.y + inner.height * 0.5
     let moved = geometry.transform_translate(cx + value.offset.x, cy + value.offset.y)
-    let changed = geometry.transform_multiply(geometry.transform_rotate(value.rotation), geometry.transform_scale(scale, scale))
+    var changed = geometry.transform_multiply(geometry.transform_rotate(value.rotation), geometry.transform_scale(scale, scale))
+    if value.skew != 0.0 { changed = geometry.transform_multiply(geometry.Transform { m00: 1.0, m01: value.skew, m02: 0.0, m10: 0.0, m11: 1.0, m12: 0.0 }, changed) }
     let about = geometry.transform_multiply(moved, geometry.transform_multiply(changed, geometry.transform_translate(0.0 - cx, 0.0 - cy)))
     var save: scene.Command = .Save
     var restore: scene.Command = .Restore

@@ -2064,7 +2064,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = arrow
-            body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
+            body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, skew: 0.0, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
             if has_cup_chevron { body[1usize] = cup_chevron }
             b = 2usize
             if look.on {
@@ -5020,7 +5020,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             turning[0usize] = twisty
             let (led, led_error) = mem.alloc[widget.Node](a, 2usize)
             if led_error != ok { ret (zero, TooLarge) }
-            led[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, control.sized_style(24.0, 24.0), turning[0usize..1usize])
+            led[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, skew: 0.0, offset: zero }, control.sized_style(24.0, 24.0), turning[0usize..1usize])
             led[1usize] = cells[0usize]
             cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), led[0usize..2usize])
         }
@@ -6055,7 +6055,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if open && !t.tokens.motion.reduced { open_goal = 1.0 }
             let twisty_key = key + 1u64 + 2u64 * u64(i)
             let rotation = 1.5707963 * control.eased_on(t, twisty_key, twisty_key + 1048596u64, open_goal, false, t.tokens.durations.short3)
-            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, offset: zero }, style.defaults(), drawn[1usize..2usize])
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, skew: 0.0, offset: zero }, style.defaults(), drawn[1usize..2usize])
             var box_style = control.sized_style(24.0, 24.0)
             let around = style.Length { Px: 4.5 }
             box_style.padding = style.EdgeLengths { left: around, top: around, right: around, bottom: around }
@@ -7279,7 +7279,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             if open { open_goal = 1.0 }
             let quarter = 1.5707963 * control.eased_on(t, heading_key, heading_key + 1048597u64, open_goal, false, t.tokens.durations.short3)
             drawn[1usize] = chevron
-            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, style.defaults(), drawn[1usize..2usize])
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, skew: 0.0, offset: zero }, style.defaults(), drawn[1usize..2usize])
             let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.padded(0u64, 4.5, 4.5, 4.5, 4.5, control.sized_style(24.0, 24.0), drawn[0usize..1usize])
@@ -10174,7 +10174,7 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         if reflow_left > 0.0 && old_columns > 0usize {
             shift = geometry.Point { x: (f32(r % old_columns) - f32(r % columns)) * (side + 8.0) * reflow_left, y: (f32(r / old_columns) - f32(r / columns)) * (tile_high + 8.0) * reflow_left }
         }
-        moved_cells[r] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[r..r + 1usize])
+        moved_cells[r] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: shift }, style.defaults(), cells[r..r + 1usize])
         r += 1usize
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -10343,7 +10343,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         if reflow_left > 0.0 && old_columns > 0usize {
             shift = geometry.Point { x: (f32(index % old_columns) - f32(index % columns)) * (side + 4.0) * reflow_left, y: (f32(index / old_columns) - f32(index / columns)) * extent * reflow_left }
         }
-        moved_cells[m] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[m..m + 1usize])
+        moved_cells[m] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: shift }, style.defaults(), cells[m..m + 1usize])
         m += 1usize
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
@@ -11618,8 +11618,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             let (lifted_row, lifted_error) = mem.alloc[widget.Node](a, 1usize)
             if lifted_error != ok { ret (zero, TooLarge) }
             lifted_row[0usize] = rows[i]
-            var lift = widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: zero }
-            if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
+            var lift = widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: zero }
+            if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
             rows[i] = widget.transformed(0u64, lift, style.defaults(), lifted_row[0usize..1usize])
         }
         nudges[2usize * i] = Nudging { item: keys[i], index: i, count: n, up: true, move: move, cell: cells[i], has_cell: has[i] }

@@ -297,6 +297,9 @@ fn build_links(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
         if i == 0usize { drive = .Hover }
         if i == 1usize { drive = .Focus }
         if i == 2usize { drive = .Press }
+        // Android (round 86): the pressed and focus layers are eased, so those frames wait for them.
+        if t.tokens.profile == .MaterialLike && i == 1usize { drive = .FocusSettle }
+        if t.tokens.profile == .MaterialLike && i == 2usize { drive = .PressSettle }
         if i == 3usize { policy = .DisplayOnly }
         let (node, node_error) = document(a, t, "See the [release notes](https://example.org/notes) for more.", 300.0, u64(i + 1usize) * 10000000u64, policy)
         if node_error != ok { ret (0usize, node_error) }

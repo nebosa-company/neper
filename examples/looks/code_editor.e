@@ -268,6 +268,8 @@ fn build(ctx: *void, a: *mem.Arena, theme: *const control.Theme, cells: []looks.
             s += 1usize
         }
         m.caret_n = count
+        // Android (round 86): a disabled editor shows no caret and no current-line tint.
+        if i == 5usize && t.tokens.profile == .MaterialLike { m.caret_n = 0usize }
         let (node, node_error) = editor_view(a, t, e, &m, 520.0, i == 5usize)
         if node_error != ok { ret (0usize, node_error) }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: .None }

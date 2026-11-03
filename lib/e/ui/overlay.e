@@ -255,7 +255,7 @@ fn slid_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share: 
     sliding[0usize] = surface
     var travel = distance * (1.0 - share)
     if t.tokens.motion.reduced { travel = 0.0 }
-    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - travel } }, style.defaults(), sliding[0usize..1usize])
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - travel } }, style.defaults(), sliding[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, sliding[1usize..2usize]), ok)
@@ -269,7 +269,7 @@ fn scaled_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share
     growing[0usize] = surface
     var scale = from + (1.0 - from) * share
     if t.tokens.motion.reduced { scale = 1.0 }
-    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: scale, rotation: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: scale, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
@@ -2342,7 +2342,7 @@ fn grown_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, opened
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
     if growing_error != ok { ret (zero, TooLarge) }
     growing[0usize] = surface
-    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = opened
     ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
@@ -3190,7 +3190,7 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     sliding[0usize] = placed
     var sheet_look = style.defaults()
     sheet_look.opacity = sheet_fade
-    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, sheet_look, sliding[0usize..1usize])
+    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: away }, sheet_look, sliding[0usize..1usize])
     // Its own slot: body[4] is the aligned node's child, and a node listed among
     // its own children would nest without end (TooDeep at any depth).
     body[5usize] = placed
@@ -4565,7 +4565,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
     if sliding_error != ok { ret (zero, TooLarge) }
     sliding[0usize] = parts[2usize]
-    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
     var clip = style.defaults()
     clip.overflow = .Clip
     parts[2usize] = widget.box(0u64, clip, sliding[1usize..2usize])
@@ -5138,7 +5138,7 @@ fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         modal_look.opacity = arrived
         arrived = 1.0
     }
-    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, modal_look, framed[2usize..3usize])
+    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, modal_look, framed[2usize..3usize])
     ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *close }, style.defaults(), framed[3usize..4usize]), ok)
 }
 
@@ -6661,7 +6661,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if hands_error != ok { ret (zero, TooLarge) }
     hands[0usize] = widget.box(0u64, hand, zero)
     // Turned about its own centre, set half way from the dot to the knob.
-    hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, style.defaults(), hands[0usize..1usize])
+    hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, skew: 0.0, offset: zero }, style.defaults(), hands[0usize..1usize])
     layers[n] = widget.positioned(0u64, mid - 1.0 + spoke * 0.5 * math.sin[f32](angle), mid - spoke * 0.5 - spoke * 0.5 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
     n += 1usize
     var dot = control.sized_style(8.0, 8.0)

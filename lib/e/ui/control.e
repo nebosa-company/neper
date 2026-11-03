@@ -41,6 +41,7 @@ use e.ui.looks_x85
 use e.ui.looks_y84
 use e.ui.looks_y85
 use e.ui.looks_z84_edge
+use e.ui.looks_z86
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -635,7 +636,10 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     // `+ 1048601`; a link broken over two lines changes at once); reduced motion
     // changes at once.
     var wash_goal: f32 = 0.0
+    // Android (round 86): keyboard focus lays the 10 % layer and the 2 dp underline, as the link control does.
+    let android_focus = t.tokens.profile == .MaterialLike && state.focus_visible
     if state.hovered { wash_goal = t.tokens.states.hover }
+    if android_focus { wash_goal = t.tokens.states.focus }
     if state.pressed { wash_goal = t.tokens.states.pressed }
     var wash = wash_goal
     if live_link { wash = eased_on(t, link_key, link_key + 1048601u64, wash_goal, false, t.tokens.durations.short2) }
@@ -644,7 +648,7 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     var count = 1usize
     if span.kind == .Link {
         var thick = t.tokens.sizes.divider
-        if state.hovered { thick = 2.0 }
+        if state.hovered || android_focus { thick = 2.0 }
         var rule = sized_style(piece.fit, thick)
         rule.background = paint.Brush { Solid: ink }
         parts[2usize] = widget.positioned(0u64, 0.0, math.round[f32](lb + 3.0), rule, zero)
@@ -1574,7 +1578,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         holder[2usize] = widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize])
         if options.dragged && options.enabled && !t.tokens.motion.reduced {
             holder[3usize] = holder[2usize]
-            ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+            ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, skew: 0.0, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
         }
         ret (holder[2usize], ok)
     }
@@ -1586,7 +1590,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     holder[2usize] = widget.semantics(key, sem, style.defaults(), holder[0usize..1usize])
     if options.dragged && options.enabled && !t.tokens.motion.reduced {
         holder[3usize] = holder[2usize]
-        ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+        ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, skew: 0.0, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
     }
     ret (holder[2usize], ok)
 }
@@ -2049,7 +2053,7 @@ fn badge_grown(a: *mem.Arena, t: *const Theme, key: widget.Key, made: widget.Nod
     held[0usize] = made
     // (D1497) The scale carries the badge's key and its kept state, so the pill
     // inside may change shape (a count cross-fading) without losing them.
-    ret (widget.transformed(key, widget.VisualTransform { scale: grown, rotation: 0.0, offset: zero }, style.defaults(), held[0usize..1usize]), ok)
+    ret (widget.transformed(key, widget.VisualTransform { scale: grown, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
 fn badge_bare(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: BadgeKind) -> (widget.Node, err) {
@@ -6156,7 +6160,7 @@ fn material_slider_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, label
         var square = sized_style(14.0, 14.0)
         square.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
         diamond_held[0usize] = widget.box(0u64, square, zero)
-        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
+        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
         let (turned_held, turned_error) = mem.alloc[widget.Node](a, 1usize)
         if turned_error != ok { ret (zero, TooLarge) }
         turned_held[0usize] = turned
@@ -8705,7 +8709,7 @@ fn select_icons(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (popup, popup_error) = mem.alloc[widget.Node](a, 3usize)
         if popup_error != ok { ret (zero, TooLarge) }
         popup[2usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
-        popup[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 0.8 + 0.2 * opened, rotation: 0.0, offset: zero }, style.defaults(), popup[2usize..3usize])
+        popup[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 0.8 + 0.2 * opened, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), popup[2usize..3usize])
         var fading = style.defaults()
         fading.opacity = opened
         popup[0usize] = widget.box(0u64, fading, popup[1usize..2usize])
@@ -8899,6 +8903,8 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var caption = text_options()
         caption.role = role
         caption.wrap = .None
+        // Android (round 86): a font list shows each family in its own face where the rig has one.
+        if looks_z86.faces_on() { caption.face = looks_z86.face_of(options[i]) }
         let (text_item, text_error) = colored_text(a, 0u64, options[i], t, caption, words)
         if text_error != ok { ret (zero, text_error) }
         let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
@@ -8978,6 +8984,8 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     var view_style = style.defaults()
     view_style.width = style.Length { Px: width }
     view_style.height = style.Length { Px: f32(rows) * row_height + 8.0 }
+    // Android (round 86): the font list shows whole rows (one fewer than asked, whose pitch is the 48 dp target), so none is cut at the foot.
+    if looks_z86.faces_on() { view_style.height = style.Length { Px: f32(rows - 1u32) * t.tokens.metrics.hit_target + 10.0 } }
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
     view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.frame_ink(t.tokens) }
     view_style.radius = t.tokens.radii.sm
@@ -9413,7 +9421,7 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = chevron
-            head[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+            head[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, skew: 0.0, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
         }
     }
     var caption = text_options()
@@ -9600,7 +9608,7 @@ fn section_header_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, title:
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = chevron
-            row[cells] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * turned, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+            row[cells] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * turned, skew: 0.0, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
         }
     }
     cells += 1usize
@@ -13224,7 +13232,10 @@ fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, er
 }
 
 fn compact_key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
-    let (made, made_error) = key_caps_of(a, t, chord_text, 20.0, 20.0, 4.0, 0.0, .LabelSmall)
+    // Android (round 86): the 16 dp label line sits in the 20 dp cap with 2 dp above and below, not flush at the top.
+    var vertical: f32 = 0.0
+    if t.tokens.profile == .MaterialLike { vertical = 2.0 }
+    let (made, made_error) = key_caps_of(a, t, chord_text, 20.0, 20.0, 4.0, vertical, .LabelSmall)
     ret (made, made_error)
 }
 
@@ -13921,7 +13932,7 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
             if sliding_error != ok { ret (zero, TooLarge) }
             sliding[0usize] = centred[0usize]
-            centred[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: drop } }, centre, sliding[0usize..1usize])
+            centred[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: drop } }, centre, sliding[0usize..1usize])
         }
         var none: []const widget.Shortcut = zero
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -14823,7 +14834,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     let (entering, entering_error) = mem.alloc[widget.Node](a, 2usize)
     if entering_error != ok { ret (zero, TooLarge) }
     entering[0usize] = kept[0usize]
-    entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
+    entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = entered
     kept[0usize] = widget.box(0u64, faded, entering[1usize..2usize])
@@ -15591,7 +15602,9 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     if style_error != ok { ret (zero, style_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
+    looks_z86.set_faces(t.tokens.profile == .MaterialLike)
     let (listed_families, listed_error) = list_box(a, key + 1u64, t, "Family", families, family, family_actions, rows, width)
+    looks_z86.set_faces(false)
     if listed_error != ok { ret (zero, listed_error) }
     parts[0usize] = listed_families
     let (segments, segments_error) = segmented_control(a, key + 64u64, t, "Style", styles, style_index, style_actions, true)
@@ -15609,15 +15622,23 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     if sample_size > 20i64 { sample_size = 20i64 }
     // Android: the sample follows the chosen style and size (the family needs a face the rig does not have).
     if t.tokens.profile == .MaterialLike {
-        if style_index == 1usize { caption.italic = true }
-        if style_index == 2usize { caption.weight = 500u32 }
+        // Round 86: the sample is drawn in the family's own face where the rig has one (Roboto, Segoe UI, Tahoma); Bold is the face's bold
+        // (Roboto Medium), Italic a synthetic oblique (below).
+        caption.face = looks_z86.face_of(families[family])
+        if style_index == 2usize {
+            caption.weight = 500u32
+            if caption.face != 0u32 { caption.weight = 700u32 }
+        }
         // the sheet's cell is 300 high, so the sample grows with the size up to 20 sp and ellipsizes past the box
         caption.size = f32(sample_size)
         caption.wrap = .Word
     }
     // Android: the rig loads no face per family, so the family's name leads the sample, which is drawn in the available face.
     var shown_sample = sample
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike && !looks_z86.has_face(families[family]) {
+        // no face for this family on the rig: its name alone, not a sample in a stand-in face
+        shown_sample = families[family]
+    } else if t.tokens.profile == .MaterialLike {
         let (sample_text, sample_text_error) = mem.alloc[u8](a, families[family].len + 2usize + sample.len)
         if sample_text_error != ok { ret (zero, TooLarge) }
         var at = copy_text(sample_text, families[family])
@@ -15630,6 +15651,15 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
     if previewed_error != ok { ret (zero, TooLarge) }
     previewed[0usize] = preview
+    if t.tokens.profile == .MaterialLike && style_index == 1usize {
+        // Flutter's fake italic: the run sheared by 1/4 (the families have no italic face on the rig)
+        var lean = style.defaults()
+        lean.width = style.Length { Px: width - 2.0 * t.tokens.spacing.sm - 2.0 }
+        let (leaning, leaning_error) = mem.alloc[widget.Node](a, 1usize)
+        if leaning_error != ok { ret (zero, TooLarge) }
+        leaning[0usize] = preview
+        previewed[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: looks_z86.oblique(), offset: zero }, lean, leaning[0usize..1usize])
+    }
     var frame_options = surface_options(t)
     frame_options.bordered = true
     frame_options.padding = t.tokens.spacing.sm
