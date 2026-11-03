@@ -50,7 +50,7 @@ fn blend_row(canvas: []f32, start: usize, rows: []const f32, h0: usize, h1: usiz
         while i < n {
             if colv[i] {
                 let o = i * 4usize
-                simd.store[F32x4](canvas, at, simd.load[F32x4](rows, h0 + o) * ivv + simd.load[F32x4](rows, h1 + o) * fvv)
+                *mem.cast[*F32x4](&canvas[at]) = *mem.cast[*const F32x4](&rows[h0 + o]) * ivv + *mem.cast[*const F32x4](&rows[h1 + o]) * fvv
             }
             at += 4usize
             i += 1usize
@@ -66,10 +66,10 @@ fn row_bytes(canvas: []const f32, start: usize, vid: []u32, first: usize, count:
     let scale = simd.splat[F32x4](255.0)
     @nocheck {
         while i + 4usize <= count {
-            let q0 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from) * scale)
-            let q1 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 4usize) * scale)
-            let q2 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 8usize) * scale)
-            let q3 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 12usize) * scale)
+            let q0 = simd.round_i32[F32x4, I32x4](*mem.cast[*const F32x4](&canvas[from]) * scale)
+            let q1 = simd.round_i32[F32x4, I32x4](*mem.cast[*const F32x4](&canvas[from + 4usize]) * scale)
+            let q2 = simd.round_i32[F32x4, I32x4](*mem.cast[*const F32x4](&canvas[from + 8usize]) * scale)
+            let q3 = simd.round_i32[F32x4, I32x4](*mem.cast[*const F32x4](&canvas[from + 12usize]) * scale)
             *mem.cast[*U8x16](&vid[to]) = simd.pack_sat[U8x16, I16x8](simd.pack_sat[I16x8, I32x4](q0, q1), simd.pack_sat[I16x8, I32x4](q2, q3))
             from += 16usize
             to += 4usize
