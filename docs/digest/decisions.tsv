@@ -3030,4 +3030,5 @@ D5952	1184	The playground compiler is built with `--arena 192m`, and a wasm rese
 D5953	972	Multicol columns start where whole lines and unbreakable boxes do
 D5954	935	The browser app: page scripts, taps and fonts
 D5955	675	The browser on wasm32-wasi
-D5956	922	NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
+D5956	923	NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
+D5957	928	Optimization roadmap: eleven queue items from a survey of the fastest compilers

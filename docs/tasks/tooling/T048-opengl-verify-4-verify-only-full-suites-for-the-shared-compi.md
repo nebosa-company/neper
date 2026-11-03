@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / OpenGL |
 | score | 0.00 of 1 |
-| queue position | 104 of 192 (only position 1 is eligible for the next session; see README) |
+| queue position | 104 of 212 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done

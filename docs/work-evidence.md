@@ -772,6 +772,86 @@ Backlog only; blueprint is docs/os/zephyr.md, and it depends on C227 for the Thu
 
 Backlog only; blueprint is docs/os/z-os.md. Largest item of the six: a new ISA back end (R1 parameter list, R13 DSA, LE prologue/epilogue), GOFF record output (ESD/TXT/RLD/END) with 8-character member name mangling, IBM-1047 string lowering, e.mem over GETMAIN/FREEMAIN, e.io over CICS queues, and a CICS command wrapper mapping EIB RESP/RESP2 to err. No mainframe or emulator (Hercules, z/PDT) is available here, so the first acceptance is a GOFF byte-level check against IBM's documented record layout and a decision on how code is ever run.
 
+### C242 — float/vector register class: allocate xmm registers, floats stop living in general registers as raw bits (x64 first, a64 after) (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: regalloc has a second register class; a scalar float and a Vec[T,N] stay in xmm across operations and calls under the System V and Win64 conventions; D786 copied-storage convention replaced; fixtures for float loops, Vec arguments and returns and callee/caller-saved xmm pass on both hosts; stage2==stage3 holds; cachegrind instruction count of benchmarks/cpu float workloads drops and is recorded.
+
+### C243 — Vec shuffle, interleave, pack and movemask selection so GP-09 stops using scalar lane loops (0%)
+
+Opened from docs/compiler-optimizations.md. Needs C242. Acceptance: punpck/pshufb/pack/movmsk (and a64 zip/tbl equivalents) selected for the Vec interleave and pair-assembly operations; GP-09 Base16 output unchanged and runtime p50 within 3x of C (was 1576 ms against 50 ms); a fixture compares every shuffle against the scalar lane loop.
+
+### C244 — scalar replacement of aggregates and copy elision (struct copy was 16% of all instructions, D930-D933) (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: a non-escaping struct or tuple local is split into scalar locals before promote_locals; a copy whose source is dead afterwards, and a returned aggregate built in place, emit no copy; fixtures prove aliasing and address-taken aggregates are left alone; cachegrind instruction count on the records and db-scan workloads drops and is recorded.
+
+### C245 — value numbering, instruction simplification and division by constants in NIR (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: dominator-based value numbering removes repeated pure computations and repeated loads with no intervening store; rule-driven simplification covers identities (x+0, x*2^k, x^x, compare folds); unsigned and signed division and modulo by a constant use a multiply sequence, checked against the division instruction over edge values; compile time on GP-01 grows less than 3%.
+
+### C246 — loop-invariant code motion and induction-variable strength reduction (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: loop detection and rotation on NIR; pure invariant computations hoist to a preheader; i*scale address arithmetic in counted loops becomes a pointer bump; fixtures prove no hoist across a store that may alias, a call, or a trap; sieve, sort and hash in benchmarks/cpu improve and are recorded.
+
+### C247 — bounds-check elimination from range facts, extending elide_null_checks (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: an index proven below len by a loop bound, a dominating compare or a slice split emits no check in the checked release build; a check that can fail is kept and a fixture traps on it; counted-loop checks hoist out of the loop; checked-release cost on benchmarks/cpu is measured before and after.
+
+### C248 — likely/unlikely edge hints on trap paths and basic block placement (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: trap, check-failure and error paths are marked cold; blocks are laid out with the likely successor falling through and cold blocks at the function end; branch folding removes empty blocks and jumps to jumps; stage2==stage3 holds and the instruction count on GP-01 is recorded.
+
+### C249 — register allocator: interval splitting, copy coalescing, loop-depth spill weights and rematerialisation (0%)
+
+Opened from docs/compiler-optimizations.md. Start after C242 since both change regalloc data. Acceptance: a value may live in a register for part of its range and in memory for the rest; two-address and call-argument moves coalesce; the spill choice weighs use count by loop depth; constants and frame addresses are rematerialised instead of spilled; the allocator self_test and the emit sweeps pass; spill count and instructions on GP-01 are recorded.
+
+### C250 — inliner cost model replacing the flat 40-instruction cap (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: the decision weighs callee size against bonuses for constant arguments, a single call site and a call inside a loop; validated with benchmarks/baseline/inline_cap.py on GP-01 and the CPU workloads for image size and runtime, with the result recorded; the compiler still builds itself to the same bytes.
+
+### C251 — tail calls, switch lowering (jump tables, bit tests) and branch folding (0%)
+
+Opened from docs/compiler-optimizations.md. Acceptance: a call in tail position with matching stack arguments becomes a jump under both conventions, and a deep recursion fixture runs in constant stack; dense integer switches compile to a bounded jump table and sparse ones to a binary search; fixtures cover the edge values of each.
+
+### C252 — decide whether regions and value semantics guarantee non-aliasing, and emit noalias facts in NIR (0%)
+
+Opened from docs/compiler-optimizations.md. First step is a decision row after reading docs/m25-h02-regions.md and docs/m25-h05-value-semantics.md. Acceptance: if the spec guarantees it, NIR carries a no-alias fact on region and by-value pointers, and C245 value numbering and C246 LICM use it with a fixture that fails if a possibly aliased store is ignored; if it does not, the decision row says so and the item closes.
+
+### C253 — a64 Linux CI job running the aarch64 differential check on an arm runner or under QEMU (0%)
+
+Opened from docs/compiler-optimizations.md: CI has macos-14 for native macOS a64 but no Linux a64 job, so a64 codegen changes (C242, C243, C249) are checked only in WSL. scripts/a64-differential.sh runs prebuilt x64/aarch64 pairs named in build/a64/out/names.txt, which scripts/a64-differential.ps1 builds on Windows, so the job needs a Linux step that builds the pairs itself. Acceptance: a workflow runs the differential on ubuntu-24.04-arm (native) or ubuntu-latest with qemu-user, libc6:arm64 and aarch64-linux-gnu-gcc, builds both architectures of every fixture in the list, and fails when any pair differs outside the five expected ones (when_target, os_fs, fs_basics, os_gaps, debug_dump); a deliberately broken a64 select_binary makes the job fail; the job is triggered by workflow_dispatch and by pushes touching src/codegen_a64.e, src/regalloc.e or src/nir.e.
+
+### C254 — capacity limits name themselves: every fixed pool, arena and token table reports its own exhaustion (0%)
+
+Opened from the weakness review: arena, bootstrap tokens and resolver tokens each filled up and the diagnostic blamed the change, and MAX_LOCALS 256 truncated silently. Acceptance: an inventory of every fixed capacity in src/ and the C bootstrap (constant, file, what fills it); each exhaustion raises one code E-CAP-nnnn naming the limit, its value and the current use; no capacity truncates silently; one generated fixture per capacity that fills it exactly and one past it, the first compiles, the second reports its code; the inventory is the fixture list, not a second document.
+
+### C255 — generic deferral probe matrix: instances over instances at every site that can hold a deferred value (0%)
+
+Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it. Acceptance: a generated fixture set crosses {return, assign, let, call argument, field, index, annotation, comptime branch} with {T, Inner[T], Outer[Inner[X], Y], Vec[T]} and checks the value at run time on both hosts; every combination passes or is a named refusal with a code; the checker has no site that reads a still-generic type as concrete.
+
+### C256 — miscompile net: narrow-width and constant edge values through every call, return and store path, run against two back ends (0%)
+
+Opened from the weakness review: unwidened narrow extern returns, negative narrow constants (lower_constant), uncleared mem.alloc under neper-self and a local shadowing a module-scope function each shipped silently and were found late. Acceptance: a generated fixture covers i8/i16/i32/u8/u16/u32 at min, max, -1 and 0 through extern return, extern argument, struct field, constant, comparison and shift, with the expected value computed in the generator; each case runs x64 and a64 and under the bootstrap and neper-self, and any pair disagreeing fails; the emit sweep runs it; reverting any of the four past fixes makes a case fail.
+
+### C257 — extern call path: register arguments and caller-saved-only spills instead of stack slots and spill-all (0%)
+
+Opened from the weakness review: extern calls cost about 15 ns over C (D1597) because arguments pass through stack slots and every live value is spilled. C249 owns the allocator; this item owns the call sequence. Acceptance: a call to a leaf extern with up to six integer arguments emits register moves only, and only values live across the call and held in caller-saved registers are spilled; the db-scan microbenchmark of D1597 is within 5 ns of the C baseline; struct-by-value (D1675) and variadic calls keep their fixtures; cachegrind instruction count for the benchmark drops and the number is the test threshold.
+
+### L228 — WASI e.os surface so the WASM target runs e.fs, e.io, e.time and e.proc-free programs (0%)
+
+Opened from the weakness review: the WASM design (D5213) and the browser engine are blocked on a missing WASI e.os; node 22/24 run WASI here. Acceptance: os.wasi.e adds the per-target variant for files, clocks, random, args, environment and exit through wasi_snapshot_preview1; unsupported operations (threads, processes, dynamic linking) return a named error, not a trap; fs_basics, time and the e.str, e.fmt and e.math fixtures run under node on WASM with output equal to the native run; the browser engine builds for WASM and loads a static page.
+
+### L229 — operating-system accessibility preferences: reduced motion, high contrast, text scale, screen reader presence (0%)
+
+Opened from the 2026-09-27 accessibility audit: the AT bridge (D1602-D1604) exists but OS preferences are unread. Acceptance: e.ui exposes one prefs() record read from Windows (SystemParametersInfo, UISettings), macOS (NSWorkspace accessibility display options) and Linux (portal settings over D-Bus) with a change notification; reduced motion disables the D1412-D1450 motion paths, high contrast selects a token set, text scale multiplies font tokens; a fixture sets each preference through a test hook and checks the frame differs; every preference unreadable on a host returns the default and a flag saying so.
+
+### T076 — suite runner that finishes: bounded workers by free memory, per-fixture timeout, resumable, stderr tolerant (0%)
+
+Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml). Acceptance: the runner picks -j from free commit before starting and lowers it on pressure; a fixture past its timeout is killed and reported, not left hanging; an interrupted run resumes from the last finished fixture; stderr output never fails a fixture whose exit code and stdout match; a deliberately hanging fixture and a deliberately stderr-writing fixture are the tests; scripts/check_suite_parity.py keeps both hosts' fixture lists equal.
+
+### T077 — land script for the shared tree: stage listed paths only, merge queue and decision rows by id, allocate D-numbers under a lock (0%)
+
+Opened from the weakness review: peers' uncommitted decision rows and queue edits live in the same files, a peer commit swept hunks and a D-number, and landing needs foreign-commit checks before push. Acceptance: one command takes explicit paths and a message, refuses git add -A, takes only this session's hunks from docs/decisions.md and docs/work-queue.json, allocates the next D-number from a lock file so two sessions never share one, refuses to push when git log origin/master..HEAD holds commits not made by this session, and regenerates progress.html and the digests; a two-session fixture on a scratch repo shows no lost row and no duplicate number.
+
 ## Implemented
 
 ### C001 — Lexer over the closed token registry

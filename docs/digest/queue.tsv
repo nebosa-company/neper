@@ -191,3 +191,23 @@ C238	compiler	0	589	FreeBSD target: ELF with the FreeBSD identity, carry-flag sy
 C239	compiler	0	597	FreeRTOS target: Thumb-2 back end, relocatable ELF output, C shim for the kernel API	Backlog only;
 C240	compiler	0	595	Zephyr target: Neper as an out-of-tree Zephyr module with a C shim	Backlog only;
 C241	compiler	0	543	z/OS and CICS target: z/Architecture back end, GOFF linker output, EBCDIC literals, CICS bridge	Backlog only;
+C242	compiler	0	454	float/vector register class: allocate xmm registers, floats stop living in general registers as raw bits (x64 first, a64 after)	Opened from docs/compiler-optimizations.md.
+C243	compiler	0	338	Vec shuffle, interleave, pack and movemask selection so GP-09 stops using scalar lane loops	Opened from docs/compiler-optimizations.md.
+C244	compiler	0	396	scalar replacement of aggregates and copy elision (struct copy was 16% of all instructions, D930-D933)	Opened from docs/compiler-optimizations.md.
+C245	compiler	0	427	value numbering, instruction simplification and division by constants in NIR	Opened from docs/compiler-optimizations.md.
+C246	compiler	0	348	loop-invariant code motion and induction-variable strength reduction	Opened from docs/compiler-optimizations.md.
+C247	compiler	0	350	bounds-check elimination from range facts, extending elide_null_checks	Opened from docs/compiler-optimizations.md.
+C248	compiler	0	332	likely/unlikely edge hints on trap paths and basic block placement	Opened from docs/compiler-optimizations.md.
+C249	compiler	0	452	register allocator: interval splitting, copy coalescing, loop-depth spill weights and rematerialisation	Opened from docs/compiler-optimizations.md.
+C250	compiler	0	358	inliner cost model replacing the flat 40-instruction cap	Opened from docs/compiler-optimizations.md.
+C251	compiler	0	332	tail calls, switch lowering (jump tables, bit tests) and branch folding	Opened from docs/compiler-optimizations.md.
+C252	compiler	0	421	decide whether regions and value semantics guarantee non-aliasing, and emit noalias facts in NIR	Opened from docs/compiler-optimizations.md.
+C253	tooling	0	869	a64 Linux CI job running the aarch64 differential check on an arm runner or under QEMU	Opened from docs/compiler-optimizations.md: CI has macos-14 for native macOS a64 but no Linux a64 job, so a64 codegen changes (C242, C243, C249) are checked only in WSL.
+C254	compiler	0	583	capacity limits name themselves: every fixed pool, arena and token table reports its own exhaustion	Opened from the weakness review: arena, bootstrap tokens and resolver tokens each filled up and the diagnostic blamed the change, and MAX_LOCALS 256 truncated silently.
+C255	compiler	0	527	generic deferral probe matrix: instances over instances at every site that can hold a deferred value	Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it.
+C256	compiler	0	634	miscompile net: narrow-width and constant edge values through every call, return and store path, run against two back ends	Opened from the weakness review: unwidened narrow extern returns, negative narrow constants (lower_constant), uncleared mem.alloc under neper-self and a local shadowing a module-scope function each sh
+C257	compiler	0	618	extern call path: register arguments and caller-saved-only spills instead of stack slots and spill-all	Opened from the weakness review: extern calls cost about 15 ns over C (D1597) because arguments pass through stack slots and every live value is spilled.
+L228	library	0	549	WASI e.os surface so the WASM target runs e.fs, e.io, e.time and e.proc-free programs	Opened from the weakness review: the WASM design (D5213) and the browser engine are blocked on a missing WASI e.os;
+L229	library	0	613	operating-system accessibility preferences: reduced motion, high contrast, text scale, screen reader presence	Opened from the 2026-09-27 accessibility audit: the AT bridge (D1602-D1604) exists but OS preferences are unread.
+T076	tooling	0	604	suite runner that finishes: bounded workers by free memory, per-fixture timeout, resumable, stderr tolerant	Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml).
+T077	tooling	0	658	land script for the shared tree: stage listed paths only, merge queue and decision rows by id, allocate D-numbers under a lock	Opened from the weakness review: peers' uncommitted decision rows and queue edits live in the same files, a peer commit swept hunks and a D-number, and landing needs foreign-commit checks before push.
