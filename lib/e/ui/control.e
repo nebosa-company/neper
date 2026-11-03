@@ -5208,8 +5208,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         if dark_list {
             // round 13: the native dark list view's chosen row: #1A364D in a #0078D4 line while the list has the focus, #1B1B1B in a
             // #131313 line without it (checklist-selected-focused, -selected-unfocused)
-            var fill_color = style.hex_raw(0x1B1B1Bu32)
-            var line_color = style.hex_raw(0x131313u32)
+            // round 84: the unfocused chosen row was #1B1B1B in #131313 (1.1 : 1, invisible): #3A3A3A in the dark control frame #828790 (4.5 : 1)
+            var fill_color = style.hex_raw(0x3A3A3Au32)
+            var line_color = looks_x84.frame_line()
             if state.focused {
                 fill_color = style.hex_raw(0x1A364Du32)
                 line_color = style.hex_raw(0x0078D4u32)

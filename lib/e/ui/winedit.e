@@ -686,8 +686,9 @@ fn nedit_ellipsis(b: *scene.Builder, x: f32, y: f32, w: f32, h: f32, state: u32,
     var ink = 0xFFFFFFu32
     if state == 2u32 { ink = 0x7A7A7Au32 }
     // coverage in percent of the three columns of one dot, upper and lower row
-    let top = [3]u32{ 15u32, 23u32, 8u32 }
-    let low = [3]u32{ 9u32, 14u32, 4u32 }
+    // round 84: the dots were 23 % of white at their strongest (about 2 : 1 on the #333333 face); the peak pixel is solid now
+    let top = [3]u32{ 60u32, 100u32, 35u32 }
+    let low = [3]u32{ 35u32, 55u32, 15u32 }
     var d = 0usize
     while d < 3usize {
         var c = 0usize
