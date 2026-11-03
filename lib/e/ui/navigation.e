@@ -487,7 +487,7 @@ fn app_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         let (easing, easing_error) = mem.alloc[widget.Node](a, 2usize)
         if easing_error != ok { ret (zero, TooLarge) }
         easing[0usize] = row[0usize]
-        easing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - 4.0 * (1.0 - entered) } }, style.defaults(), easing[0usize..1usize])
+        easing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - 4.0 * (1.0 - entered) } }, style.defaults(), easing[0usize..1usize])
         var faded = style.defaults()
         faded.opacity = entered
         row[0usize] = widget.box(0u64, faded, easing[1usize..2usize])
@@ -1162,7 +1162,7 @@ fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         let (slid, slid_error) = mem.alloc[widget.Node](a, 1usize)
         if slid_error != ok { ret (zero, TooLarge) }
         slid[0usize] = parts[1usize]
-        parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
+        parts[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, grow, slid[0usize..1usize])
         // (D1499) Popping, the page left slides from its place out to the end,
         // over the revealed page (keyed `key + 5`).
         if left < 0.0 && left_from > titles.len && mem.address_of(leaving.ctx) != 0usize {
@@ -1176,7 +1176,7 @@ fn navigation_stack_core(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             both[2usize] = left_page
             both[3usize] = widget.box(key + 5u64, grow, both[2usize..3usize])
             both[0usize] = parts[1usize]
-            both[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: out_dx, y: 0.0 } }, grow, both[3usize..4usize])
+            both[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: out_dx, y: 0.0 } }, grow, both[3usize..4usize])
             parts[1usize] = widget.stack(0u64, grow, both[0usize..2usize])
         }
     }
@@ -1578,7 +1578,7 @@ fn destination_bar_hiding(a: *mem.Arena, key: widget.Key, t: *const control.Them
     var quiet: widget.Semantics = zero
     quiet.hidden = hidden
     held[1usize] = widget.semantics(0u64, quiet, style.defaults(), held[2usize..3usize])
-    held[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * gone } }, style.defaults(), held[1usize..2usize])
+    held[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: height * gone } }, style.defaults(), held[1usize..2usize])
     var clip = control.sized_style(width, height)
     clip.overflow = .Clip
     ret (widget.box(key, clip, held[0usize..1usize]), ok)
@@ -2810,7 +2810,7 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         var toward = width * (1.0 - pushed)
         if t.tokens.direction == .RightToLeft { toward = 0.0 - toward }
         pushing[0usize] = body[0usize]
-        body[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: toward, y: 0.0 } }, style.defaults(), pushing[0usize..1usize])
+        body[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: toward, y: 0.0 } }, style.defaults(), pushing[0usize..1usize])
     }
     var page = control.sized_style(width, height)
     page.overflow = .Clip
@@ -3012,7 +3012,7 @@ fn navigation_drawer_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
         if sliding_error != ok { ret (zero, TooLarge) }
         sliding[0usize] = drawer[0usize]
-        drawer[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+        drawer[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: dx, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
     }
     // The scrim is an overlay of its own under the drawer: a press on it misses
     // the modal drawer, which dismisses it.
@@ -3269,6 +3269,15 @@ fn trail_crumb_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         bits[1usize] = said
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize])
     }
+    if t.tokens.profile == .MaterialLike {
+        // Android (round 86): the label is centred in the crumb's full target height, on the line of the chevrons and the current place.
+        let (held_label, held_label_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_label_error != ok { ret (zero, TooLarge) }
+        held_label[0usize] = content
+        var centred = style.defaults()
+        centred.height = style.Length { Px: height }
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, centred, held_label[0usize..1usize])
+    }
     let (made, made_error) = control.pressable_states(a, key, t, 9u8, label, look, true, false, 0u32, 0u32, 0u64, action, content)
     if made_error != ok { ret (zero, made_error) }
     var capped = made
@@ -3494,8 +3503,17 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 let (named, named_error) = joined(a, front, tail)
                 if named_error != ok { ret (zero, named_error) }
                 let (look, ink) = crumb_look(t, key + 40u64, h)
-                let (dots, dots_error) = control.icon_square(a, ink, .MoreHoriz, 18.0)
+                let (dots_glyph, dots_error) = control.icon_square(a, ink, .MoreHoriz, 18.0)
                 if dots_error != ok { ret (zero, dots_error) }
+                var dots = dots_glyph
+                if t.tokens.profile == .MaterialLike {
+                    let (held_dots, held_dots_error) = mem.alloc[widget.Node](a, 1usize)
+                    if held_dots_error != ok { ret (zero, TooLarge) }
+                    held_dots[0usize] = dots_glyph
+                    var centred_dots = style.defaults()
+                    centred_dots.height = style.Length { Px: h }
+                    dots = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, centred_dots, held_dots[0usize..1usize])
+                }
                 var states = 0u32
                 if options.open { states = accessibility.STATE_EXPANDED }
                 let (more, more_error) = control.pressable_states(a, key + 40u64, t, 3u8, named, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 41u64, &held[0usize], dots)
@@ -6487,7 +6505,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[2usize] = content
-    body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: shift, y: 0.0 } }, style.defaults(), body[2usize..3usize])
+    body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: shift, y: 0.0 } }, style.defaults(), body[2usize..3usize])
     var arriving = style.defaults()
     arriving.opacity = 1.0 - coming
     body[0usize] = widget.box(0u64, arriving, body[1usize..2usize])

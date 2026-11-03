@@ -14,7 +14,7 @@ use e.ui.looks
 use e.ui.style
 use e.ui.widget
 
-type Plot = struct { bar: paint.Color, other: paint.Color, grid: paint.Color }
+type Plot = struct { bar: paint.Color, other: paint.Color, grid: paint.Color, inset: f32 }
 
 fn plot_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -35,10 +35,10 @@ fn plot_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let slot = area.width / 6.0
     var i = 0usize
     while i < 6usize {
-        let h = (area.height - 2.0) * heights[i]
+        let h = (area.height - 2.0 - p.inset) * heights[i]
         var c = p.bar
         if i == 3usize { c = p.other }
-        try fill(b, area.x + slot * f32(i) + slot * 0.18, area.y + area.height - h, slot * 0.64, h, c)
+        try fill(b, area.x + slot * f32(i) + slot * 0.18, area.y + area.height - p.inset - h, slot * 0.64, h, c)
         i += 1usize
     }
     ret ok
@@ -52,7 +52,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     while i < 6usize {
         let (plots, plots_error) = mem.alloc[Plot](a, 1usize)
         if plots_error != ok { ret (0usize, plots_error) }
-        plots[0usize] = Plot { bar: style.color(t.tokens, .Primary), other: style.color(t.tokens, .Secondary), grid: style.color(t.tokens, .OutlineVariant) }
+        plots[0usize] = Plot { bar: style.color(t.tokens, .Primary), other: style.color(t.tokens, .Secondary), grid: style.color(t.tokens, .OutlineVariant), inset: 0.0 }
+        // Android (round 86): the bars stand on a baseline 12 dp (the frame's corner radius) above the foot, so the rounded corners do not cut them.
+        if t.tokens.profile == .MaterialLike && i != 2usize { plots[0usize].inset = 12.0 }
         let custom = widget.Custom { ctx: mem.cast[*void](&plots[0usize]), measure: plot_measure, paint: plot_paint, state: widget.bytes_of[Plot](&plots[0usize]) }
         var options = control.canvas_options()
         options.width = widths[i]

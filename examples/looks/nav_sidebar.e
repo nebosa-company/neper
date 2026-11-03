@@ -27,7 +27,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 3usize { selected = 1usize }
         let (rail, rail_error) = navigation.sidebar(a, u64((i + 1usize) * 100usize), t, labels[0usize..count], selected, subs[0usize..count], 200.0)
         if rail_error != ok { ret (0usize, rail_error) }
-        let (boxed, boxed_error) = looks_e.framed(a, u64((i + 1usize) * 100usize + 90usize), 200.0, 200.0, rail)
+        var frame_h: f32 = 200.0
+        if t.tokens.profile == .MaterialLike && count == 4usize { frame_h = 248.0 }
+        let (boxed, boxed_error) = looks_e.framed(a, u64((i + 1usize) * 100usize + 90usize), 200.0, frame_h, rail)
         var shown = boxed
         if i == 3usize {
             let (middle, middle_error) = looks_y63.framed_center(a, u64((i + 1usize) * 100usize + 90usize), 200.0, 200.0, rail)
@@ -43,5 +45,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "sidebar", cells: 5usize, columns: 3usize, cell_w: 230.0, cell_h: 240.0, ctx: zero, build: build }
-    ret looks_e.run_ten(a, &sheet)
+    try looks_e.run_ten(a, &sheet)
+    // Android (round 86): the 56 dp rows of the four-item cell need a taller cell than the other looks' 40 and 44 dp rows (a fixed cell squeezed them to 44), so the sheet is drawn again for Material alone.
+    let tall = looks.Sheet { name: "sidebar", cells: 5usize, columns: 3usize, cell_w: 230.0, cell_h: 320.0, ctx: zero, build: build }
+    ret looks.run_material(a, &tall)
 }
