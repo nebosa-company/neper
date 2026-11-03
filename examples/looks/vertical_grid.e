@@ -250,6 +250,29 @@ fn light_tags(a: *mem.Arena, out: *widget.Node) -> err {
     ret ok
 }
 
+// round 85: the dark twin of the tags: deep red and green boxes with white letters (the capture's dark letters on mapped pastel boxes were 2.7 : 1), 9.4 and 6.5 : 1
+fn dark_tags(a: *mem.Arena, t: *const control.Theme, out: *widget.Node) -> err {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if parts_error != ok { ret parts_error }
+    var red = looks.size_style(45.0, 19.0)
+    red.background = paint.Brush { Solid: style.hex_raw(0x7A2E2Eu32) }
+    var green = looks.size_style(30.0, 19.0)
+    green.background = paint.Brush { Solid: style.hex_raw(0x2E6B1Fu32) }
+    parts[0usize] = widget.positioned(0u64, 42.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, red, zero)))
+    parts[1usize] = widget.positioned(0u64, 87.0, 0.0, style.defaults(), mem_one_node(a, widget.box(0u64, green, zero)))
+    var xs = [5]f32{ 46.0, 60.0, 76.0, 91.0, 105.0 }
+    var letters = [5]str{ "S", "M", "E", "L", "V" }
+    var i = 0usize
+    while i < 5usize {
+        let (text, text_error) = control.colored_text(a, 0u64, letters[i], t, control.text_options(), style.hex_raw(0xFFFFFFu32))
+        if text_error != ok { ret text_error }
+        parts[2usize + i] = widget.positioned(0u64, xs[i], 1.0, style.defaults(), mem_one_node(a, text))
+        i += 1usize
+    }
+    *out = widget.stack(0u64, looks.size_style(160.0, 19.0), parts[0usize..7usize])
+    ret ok
+}
+
 fn light_discs(a: *mem.Arena, out: *widget.Node) -> err {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret parts_error }
@@ -385,7 +408,9 @@ fn computed_editor(a: *mem.Arena, t: *const control.Theme, index: usize, out: *w
         // v3's five tags S M E L V, the capture's pixels (artwork)
         var tags: widget.Node = zero
         var tags_error: err = ok
-        if light_on(t) {
+        if style.windows_dark_on() {
+            tags_error = dark_tags(a, t, &tags)
+        } else if t.tokens.profile == .Windows {
             tags_error = light_tags(a, &tags)
         } else {
             let (picture, picture_error) = gl.pixels(a, vg_legality(), vg_legality_w(), vg_legality_h())

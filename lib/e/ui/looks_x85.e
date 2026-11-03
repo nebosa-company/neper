@@ -36,3 +36,31 @@ fn one_of(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     held[0usize] = node
     ret held[0usize..1usize]
 }
+
+// A dark-palette ink read on the dark list face #2B2B2B: lifted toward white, keeping its hue, until it reaches 4.6 : 1 (the mapped v3 card colours were 2.5 to 4.1 : 1). The light palette is untouched.
+fn lift_dark(c: paint.Color) -> paint.Color {
+    if !style.windark_active() { ret c }
+    let face = style.hex_raw(0x2B2B2Bu32)
+    let white = style.hex_raw(0xFFFFFFu32)
+    var out = c
+    var share: f32 = 0.0
+    while style.contrast_ratio(out, face) < 5.0 && share < 1.0 {
+        share += 0.04
+        out = style.mix(c, white, share)
+    }
+    ret out
+}
+
+// The same lift on the dark selection fill (#264F78 focused, the lightest of the dark row fills), 4.6 : 1.
+fn lift_on_selection(c: paint.Color) -> paint.Color {
+    if !style.windark_active() { ret c }
+    let face = style.hex_raw(0x264F78u32)
+    let white = style.hex_raw(0xFFFFFFu32)
+    var out = c
+    var share: f32 = 0.0
+    while style.contrast_ratio(out, face) < 5.0 && share < 1.0 {
+        share += 0.04
+        out = style.mix(c, white, share)
+    }
+    ret out
+}

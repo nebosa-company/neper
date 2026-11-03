@@ -78,6 +78,7 @@ use e.gfx.scene
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
+use e.ui.looks_x85
 use e.ui.widget
 
 const FILTER_TEXT: usize = 40usize
@@ -7592,7 +7593,9 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
             options.wrap = .None
             if grid.look.on { options.size = grid.look.text_size }
             if bold { options.weight = 700u32 }
-            let (coloured, coloured_error) = control.colored_text(a, 0u64, text, cells_theme(grid), options, ink)
+            var shown_ink = ink
+            if style.windows_dark_on() && grid.has_selection && row == grid.selected_row { shown_ink = looks_x85.lift_on_selection(ink) }
+            let (coloured, coloured_error) = control.colored_text(a, 0u64, text, cells_theme(grid), options, shown_ink)
             if coloured_error != ok { ret coloured_error }
             *out = coloured
             ret ok
