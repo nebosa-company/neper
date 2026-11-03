@@ -833,11 +833,19 @@ fn compile_selectors(a: *mem.Arena, text: str) -> ([]const selector.RuleSelector
     if segments.len != chosen.len { ret (zero, SyntaxError) }
     var i = 0usize
     while i < chosen.len {
-        if chosen[i].has_pseudo || !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
+        if !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
         i += 1usize
+    }
+    // No @namespace rules exist for the selector APIs, so a named namespace prefix is undeclared.
+    var t = 1usize
+    while t + 1usize < tokens.len {
+        if is_pipe(tokens[t]) && tokens[t - 1usize].kind == .Ident && !(tokens[t + 1usize].kind == .Delim && str.eq(tokens[t + 1usize].value, "=")) { ret (zero, SyntaxError) }
+        t += 1usize
     }
     ret (chosen, ok)
 }
+
+fn is_pipe(t: syntax.Token) -> bool { ret t.kind == .Delim && str.eq(t.value, "|") }
 
 fn known_pseudo_class(name: str) -> bool {
     let names = ",active,any-link,autofill,blank,buffering,checked,current,default,defined,dir,disabled,empty,enabled,first-child,first-of-type,focus,focus-visible,focus-within,fullscreen,future,has,host,host-context,hover,in-range,indeterminate,invalid,is,lang,last-child,last-of-type,link,local-link,matches,modal,muted,not,nth-child,nth-last-child,nth-last-of-type,nth-of-type,only-child,only-of-type,open,optional,out-of-range,past,paused,picture-in-picture,placeholder-shown,playing,popover-open,read-only,read-write,required,root,scope,seeking,stalled,state,target,target-within,user-invalid,user-valid,valid,visited,volume-locked,where,-webkit-any,-moz-any,"
