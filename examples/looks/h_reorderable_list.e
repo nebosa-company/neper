@@ -24,13 +24,20 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             keys[k] = u64((i + 1usize) * 100usize + k + 1usize)
             k += 1usize
         }
-        let (node, node_error) = collection.reorderable_list(a, u64((i + 1usize) * 100usize), t, "Order", items[0usize..5usize], keys[0usize..5usize], 32.0, widget.Change[collection.Reorder] { ctx: zero, invoke: h.noop_move }, 220.0)
+        // Android: 56 dp list items (a 24 dp drag handle leads each)
+        var extent: f32 = 32.0
+        if t.tokens.profile == .MaterialLike { extent = 56.0 }
+        let (node, node_error) = collection.reorderable_list(a, u64((i + 1usize) * 100usize), t, "Order", items[0usize..5usize], keys[0usize..5usize], extent, widget.Change[collection.Reorder] { ctx: zero, invoke: h.noop_move }, 220.0)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
         // Android: the pointer goes down onto the third row (the cell centre is the seam between the second and third)
-        if i == 1usize || i == 2usize { looks_z87.aim(t, i, 0.0, 16.0) }
+        if i == 1usize || i == 2usize {
+            var down: f32 = 16.0
+            if t.tokens.profile == .MaterialLike { down = 0.0 }
+            looks_z87.aim(t, i, 0.0, down)
+        }
         if i == 3usize { drive = .Focus }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
@@ -40,5 +47,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "reorderable_list", cells: 4usize, columns: 2usize, cell_w: 250.0, cell_h: 200.0, ctx: zero, build: build }
-    ret h.run_ten(a, &sheet)
+    try looks.run_all(a, &sheet)
+    try looks.run_linux(a, &sheet)
+    try looks.run_cupertino(a, &sheet)
+    // Android: 56 dp rows, five of them, in a taller cell
+    let android = looks.Sheet { name: "reorderable_list", cells: 4usize, columns: 2usize, cell_w: 250.0, cell_h: 310.0, ctx: zero, build: build }
+    ret looks.run_material(a, &android)
 }

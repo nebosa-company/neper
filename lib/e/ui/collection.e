@@ -1455,6 +1455,22 @@ fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         var row_style = style.defaults()
         row_style.width = style.Length { Px: width }
         row_style.height = style.Length { Px: extent }
+        // Android (round 88): a 24 dp drag handle leads the row, and the row takes the list item's state layers (on-surface 8 % hover, 10 % focus and pressed).
+        if t.tokens.profile == .MaterialLike {
+            let state = control.control_state(t, keys[i], true, false)
+            row_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state)) }
+            let (handle, handle_error) = control.icon_square(a, style.color(t.tokens, .OnSurfaceVariant), .DragHandle, 24.0)
+            if handle_error != ok { ret (zero, handle_error) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = handle
+            pair[1usize] = items[i]
+            var inset = style.defaults()
+            inset.width = style.Length { Px: width }
+            inset.height = style.Length { Px: extent }
+            inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+            body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, inset, pair[0usize..2usize])
+        }
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         control.focus_look(t)

@@ -16264,6 +16264,12 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
         cells[0usize] = well
         var grow = style.defaults()
         grow.width = style.Length { Flex: 1.0 }
+        // Android (round 88): a wrapped message gave the well and the dismiss button their width back (they drew 30 and 24 wide); the text column takes the exact room instead.
+        if t.tokens.profile == .MaterialLike {
+            var room = inner - 24.0 - 40.0 - 32.0 - 24.0
+            if item.unread { room -= 20.0 }
+            grow.width = style.Length { Px: room }
+        }
         cells[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, grow, lines[0usize..line_count])
         var cell_count = 2usize
         if item.unread {
