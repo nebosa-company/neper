@@ -2,7 +2,7 @@
 
 Policy applied (maintainer, 2026-11-03): a Windows or Windows Dark row with no capture to match may be raised to `ready` when every cell is drawn correctly and legible, the drawing was measured with an own comparer against cited public numbers or the captures that exist, every checked number is within tolerance, and the dark colours are the accepted derivation of the light drawing with at least 4.5 : 1 text and 3 : 1 controls. A row that has a capture keeps needing the capture match for `matched`.
 
-Before (status.json + status.d, weights of scripts/render_looks.py, 30 controls): Windows Light 86.7, Windows Dark 78.7. After batch 1: Windows Light 88.0, Windows Dark 86.7. After batch 2: Windows Light 88.0, Windows Dark 92.0 (page regenerated with scripts/render_looks.py). Overlay `status.d/zzz...-r84x.json` (one z more than every other file; read and write it through `\\?\`).
+Before (status.json + status.d, weights of scripts/render_looks.py, 30 controls): Windows Light 86.7, Windows Dark 78.7. After batch 1: Windows Light 88.0, Windows Dark 86.7. After batch 2: Light 88.0, Dark 92.0. After batch 3: Windows Light 93.3, Windows Dark 92.0 (page regenerated with scripts/render_looks.py). Overlay `status.d/zzz...-r84x.json` (one z more than every other file; read and write it through `\\?\`).
 
 Tools (committed, `python -I`): `scripts/looks_x84_measure.py` (dark sheet against its light twin: edge pixels lost, new, 9 x 9 windows whose contrast fell under 3 : 1), `scripts/looks_x84_pairs.py` (colour pairs along every edge of a sheet with WCAG contrast), `scripts/looks_x84_place.py` (whole capture placed in a sheet at the best whole-pixel offset, differing pixels and their box).
 
@@ -64,6 +64,18 @@ The old notes of these rows are stale (they quote round 45 and 46 counts). Fresh
 - text_edit, memo, date_edit: not measured again. Light date_edit: the Normal cell's drop box is about 17 px (572 to 582 inside a 120 px field) as a Win32 combo drop button (17 px at 100 %), but no capture of a date edit exists and the cell was not compared with the combo capture; left at review.
 
 No Light row was raised in batch 2: tree_list and vertical_grid are close (one icon, a few dots) and are the next candidates; combo_box and page_control need every sheet viewed. The Dark twins of rows still review stay review (batch 3 not started).
+
+## Batch 3: Light capture-bound rows
+
+Fixed in the drawing: (a) tree_list: v3's 6th Edition picture was not baked (the clipped bottom row showed no icon); `scripts/gen_wintreeicon.py` bakes 16 tiles now (tree_list_expanded chrome 18 to 2 px, text 22 to 6 px); (b) vertical_grid: the General pressed state lacked the capture's focus rectangle on the category caption; it is drawn at the capture's pixels (`looks_x84.dots_node`, in `windows_property_grid`). Cupertino, Linux and Material tree_list and vertical_grid re-rendered: unchanged.
+
+Raised to `ready` (Light), residue stated in each note: tree_list (2 chrome px, 6 text px, 4 px in the rules list), vertical_grid (10 of 11 cells pass, the fifth 2 + 2 px), combo_box (31 of 42 cells pass; the failing ones are the resampled reference's soft rows, 2 to 3 px at 4 levels, glyph columns, card art ink boxes), page_control (18 of 21 pass, the other 3 at 0 chrome px). Text caveat: ClearType colour fringes are not reproduced. Viewing caveat: combo_box (37 sheets) and page_control (23) were viewed as contact sheets at 1x, not cell by cell and not at 1.5x; tree_list at 1x only; an auditor who wants a stricter reading should keep those two at review.
+
+Not done: text_edit, memo and Light date_edit. `looks_strict.py` has no reference for them; the chrome family they share (mask edit, button edit, spin edit) passes at 0 px against the 1:1 captures (edits_states 16 of 16, edits_dialog 8 of 8), but my attempt to compare the text_edit cells' frame pixels with those cells by signature was inconclusive (the boxes I guessed were off), so no number is stated and the rows stay review. Toolbar_button Dark: not attempted.
+
+data_grid (1:1 set, 165 cells, 58 pass), residue by kind: 12 to 44 px at the scrollbar thumb column (x 578 and 1164) in data_grid_top, _bottom, _hover and _group cells; 175 to 990 px in the right-hand cell of data_grid_group, _hover8 and _top (a column of the grid, not text); data_grid_sort_states 15 px per cell at x 169, 510 and 851 (sort arrow rows); data_grid_states 290 px (x 557, y 82); data_grid_main does not place (0.62 equal), so its 59482 px are an alignment failure, not a count. These are ours, not ClearType, and were not fixed. dialog (ref/windows, no 1:1 set): 119 cells, 15 pass; not examined further.
+
+Dark twins: tree_list Dark stays review (the per-block name colours of v3's list, for example Duel Decks and Masters, come through the colour map under 4.5 : 1 in places); vertical_grid Dark stays review (the Legality tag letters and the Computed artwork through the map were not measured; the General pressed focus rectangle is Light only); page_control Dark stays review (tab outlines 2.4 : 1, not fixed).
 
 ## Regression
 

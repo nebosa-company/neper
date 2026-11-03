@@ -166,5 +166,61 @@
     ]
    }
   }
+ },
+ "tree_list": {
+  "looks": {
+   "windows": {
+    "status": "ready",
+    "screenshot": "windows/tree_list_expanded.png",
+    "notes": "ROUND 84 (lane x, review to ready). Re-measured with scripts/looks_strict.py against ref/windows-1to1 (true 1:1 captures): tree_list, tree_list_check, tree_list_focus, tree_list_hover (6 cells) and tree_list_hover2 (4 cells) pass at 0 chrome px; tree_list_expanded had 18 chrome and 22 text px because the clipped bottom row lacked v3's 6th Edition picture, now baked (scripts/gen_wintreeicon.py, 16 tiles): 2 chrome px (column x 115 of the clipped picture, 255 levels) and 6 text px (ClearType glyph shifts of 1 px) remain; tree_list_rules 4 px (max 22 levels). Residue: ClearType glyph pixels and 6 icon-edge pixels. Colours and geometry otherwise at 0 px. 7 sheets viewed at 1x (contact sheet), tree_list_expanded at 1.5x not separately re-viewed. The old notes of rounds 45 and 46 are stale. | ROUND 45 (1:1 captures, counted = >2 levels, glyphs included): tree_list_expanded 14216 to 2082 (chrome 6824 to 106), tree_list 5315 to 434, tree_list_check 2679 to 36, tree_list_hover 15913 to 1270, tree_list_hover2 10598 to 836, tree_list_rules 4682 to 3876. Check boxes are RGBA bitmaps solved from white and grey rows, 9 px expander boxes, the #DCDCDC dotted lines, the inverting one pixel focus rectangle, the crisp header with its centred captions and the edition pictures are drawn or cut from the crisp capture. What is left is ClearType glyph pixels. Not matched: the rules list still has 1994 chrome pixels and the dark look is untouched.",
+    "gaps": [
+     "Glyph rasterisation: ClearType colour fringes against greyscale text (6 text px in tree_list_expanded)",
+     "2 chrome px at x 115 of the clipped 6th Edition picture",
+     "tree_list_rules 4 px (max 22 levels)",
+     "Dot parity is calibrated on the Filter list capture; another capture's window position could flip it"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "windows": {
+    "status": "ready",
+    "screenshot": "windows/vertical_grid.png",
+    "notes": "ROUND 84 (lane x, review to ready). The General pressed state lacked the focus rectangle on the category caption (the capture draws a 42 x 15 dotted rectangle, a dot at every pixel whose x + y is even, #2E2E2E on the #D1D1D1 band, from (369, 491)); it is drawn now (collection.windows_property_grid, looks_x84.dots_node) at the capture's pixels. Against ref/windows-1to1 with scripts/looks_strict.py: vertical_grid 1 of 1 cell, vertical_grid_states 4 of 5; the fifth has 2 chrome px (max 80 levels) and 2 text px (the double chevron's two greys, 118 and 183 in the capture against 151 and 159). Residue is ClearType and the chevron's antialiasing. Sheets viewed at 1x (contact view of the states sheet, light and dark). | ROUND 46 (worker d): the Computed rows' 160 px row pictures (colors 2880, strip 1760, legality 2720 baked pixels) are drawn: the strategy bar is a two channel ramp in 2 px steps, the Legality tags are drawn boxes (11 ramp rows and a flat foot); baked tiles remain for the artwork only: four colour discs 18 x 18, the strip marker 9 x 10, five tag letters (about 2.2k px, scripts/gen_vgtiles.py). Counted against the 1:1 capture: vertical_grid 1845 to 1781, states 9490 to 9170, hover 9225 to 8905 (these numbers are now honest: nothing exact by construction except the small tiles). No row promoted. Scale check 1.25, 1.5, 2.0: vertical_grid 92.9, 100, 100 within a pixel 100; data_grid_shortcuts_states 100, 99.9, 100.",
+    "gaps": [
+     "ClearType colour fringes against greyscale text",
+     "The shut General chevron's shading differs in 2 px (a baked tile)"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "windows": {
+    "status": "ready",
+    "screenshot": "windows/combo_box_focus.png",
+    "notes": "ROUND 84 (lane x, review to ready). scripts/looks_strict.py against ref/windows (the older resampled set, no 1:1 set has a combo): 42 cells, 31 pass. Failing cells: combo_box_list_color, _list_color2, _open_color, _open_color2 (778 and 416 px: the reference's rows are soft resampled lines, for example 83, 164, 228 where the drawing has the capture's crisp #0078D7, rows 33, 46, 59 and 72 of the crop), combo_box_list_show3 to 5 (2 to 3 px, 4 levels), _list_size3 and _list_size5 (8 to 16 chrome px that are glyph columns, text 3 to 10 px), combo_box_flat_card and _hover (0 px off, only the card art's ink boxes differ). Every other chrome pixel is at 0 px. Residue is the reference's resampling and glyph rasterisation. All 37 combo_box sheets viewed as contact sheets at 1x only (not per cell, not at 1.5x); disabled and read-only closed combos have no capture (the native Win32 combo is another frame family) and are drawn from the same chrome. | ROUND 31 (Windows light): the list_size and open_size crops (15 to 19 px rows) have references and are measured, no drawing change. Flat px off, chrome + glyphs (my comparer, see popup_menu): combo_box_list_size 0, _list_size2 0, _list_size3 16 + 3, _list_size5 8 + 10, combo_box_open_size, _open_size2 and their _head crops 0; every counted pixel is a glyph edge (x 40, y 20 to 25 and the selected row's letter). | Round 15: the light sheet is unchanged (verified by a full re-render). Fixed: the hot list-style combo's pure stroke columns were #0078D7 where the capture has #0078D4 (combo_hover 9 of 9 cells pass at 0 chrome px, was 8 of 9). Still failing (scripts/looks_cells2.py): the lit row text of the Font Size, Row Color and Show lists against ClearType (combo_box_list_size and open_size 17 to 19 chrome px, 8 to 15 of them outside the 2 px glyph halo; list_show and open_show 2 to 3), the card combo crops (flat_card, flat_card_hover) fail the ink boxes at 0 chrome px, and the in-place grid editor combo (vertical grid) keeps 3 px. | Round 17 (w2): re-measured with scripts/looks_strict.py: combo_box_list_size 15, list_size3 16, list_size5 8, open_size 15 chrome px, list_size2 and open_size2 0, both head crops 0. All of the remainder is glyph columns of the lit row text and of Small and Extra Large (x 40 and x 52, 106 and 139 levels), the 1 px hinting difference; no structure is off. Not changed this round (text engine, outside this group).",
+    "gaps": [
+     "Resampled reference rows (list_color and open_color sheets): 416 to 778 px that the crisp 1:1 drawing cannot match",
+     "Glyph columns of the lit row text (size3, size5: 8 to 16 px)",
+     "Disabled and read-only closed combos have no capture",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "windows": {
+    "status": "ready",
+    "screenshot": "windows/page_control_stats_1-vs-ref.png",
+    "notes": "ROUND 84 (lane x, review to ready). scripts/looks_strict.py against ref/windows: 21 cells, 18 pass, the 3 failing cells (bottom_hover2, custom, options) have 0 chrome px and 0 to 8 text px (ink boxes). Chrome at 0 px in every referenced sheet. 23 sheets viewed as one contact sheet at 1x (not per cell, not at 1.5x). | ROUND 33 (Windows light): The Statistics strip: the eleven tab bitmaps are cut at y 36 from a capture where their tab is not chosen, at the column the bitmap starts (they stood 2 px low, lost two rows and, for the last two tabs, a column), the chosen tab keeps its picture 2 px higher, a pixel right and its caption a pixel higher; the chosen tab's focus rectangle is now drawn (the sheet's focus drive aimed at the middle of the strip; the live rectangle is two rows of #5A5A5A over #A5A5A5 with the foot row on the other phase). All-pixel difference per Statistics strip 4,574 to 3,315 (stats_1 to 11: about 4,600 to about 3,500); chrome per looks_strict 0 in every strip. What is left: the captions (ClearType against PrintWindow text, 150 to 560 px per tab) and about 100 px of the chosen tab's picture, whose anti-aliased edge was baked over white and shows on the #F0F0F0 face. Metric (looks_strict, scripts/looks_strict.py): a reference flat pixel (run of 11 equal pixels, colour seen 30 or more times, not within 1 px of ink) is off when ours differs by more than 2 levels; 'chrome' = off pixels outside text boxes, 'text' = off pixels inside a text box (glyphs counted, never set apart); v3 coloured artwork is reported as artwork; stamps count for nothing. Audit-8 glyph rule: glyph pixels are counted and reported next to the chrome figure, and a control reaches matched only when both are zero or the glyph difference is shown to be the PrintWindow capture's softer text. ROUND 31 (Windows light): an unchosen tab's caption stood 2 px closer to its picture, tuned on greyscale ink boxes; with hinted ClearType text it starts 2 px left of the capture's. The gap is back to 6 (as the chosen tab's), the dark look keeps 4. Flat px off with glyphs counted over the 21 page_control crops (my comparer, see popup_menu): 750 before, 35 now (page_control_about 16, _custom 8, _stats and _stats_1 to _stats_11 1 each except _stats_9; 0 in cards, filter, options, held, bottom*). Not matched: v3's tab-top artwork differs and the glyph ink boxes at the 100 and 150 level do not agree beside icon bitmaps. | ROUND 22 (Windows light): the Statistics strips draw v3's eleven tab bitmaps as pixel tiles (scripts/gen_winpageicon.py, keyed by the tab caption; light look only). Flat px off with glyphs counted, my comparer, per crop: page_control_stats 79 to 66, stats_1 79 to 66, stats_2 71 to 58, stats_3 75 to 62, stats_10 67 to 62, stats_11 76 to 64, stats_4 to 9 71 to 58 or 62 (12 to 13 fewer each; about, bottom, bottom2, bottom_hover2, cards, custom, filter, held, options stay at 0); in all 871 to 726 over the 20 sheets. The rest is the hinted Tahoma word edges (the R stem a pixel left) and the focus rectangle's dots, which ours draws only under the picture. | ROUND 20 (Windows light): summed over the 28 page_control reference sheets the flat px off with glyphs counted fell from 887 to 156 (worst crop 79 to 14): the DevExpress text is drawn greyscale (control.set_dx_text). 9 sheets (about, bottom, bottom2, bottom_hover2, cards, custom, filter, held, options) are at 0. The rest is the placeholder tab icon's edge column (x 765 in page_control_stats, v3 artwork) and one or two glyph pixels. | AUDIT 9 (matched to review): independent recompute, glyphs counted: 757 flat px off in 21 crops, 13 crops above 5 px and 12 above 20 (page_control_stats 68, stats_1 68, stats_11 65), single pixels at the tab tops (ours orange 255,219,143 where the capture is white) beside the placeholder tab icons; glyph-excluded count is 1. | Round 15: the bottom strip is rebuilt from the v3 grabs: a chosen tab's two frame columns run one row lower than its face (the strip's first rule row crosses their top) through the third row, with the capture's greys (#010101 left and #060606 right for the first tab, #060606 and #0A0A0A for a later one) and the pale column after it (#F9F9F9, #F4F4F4), where it was one #060606 box a row high. looks_strict.py --lum over the 21 page_control_* references: 0 chrome px off in 21 of 21 crops. Excluded rectangles (v3 artwork and crop edges): the tab picture bitmaps (bottom: x 27 to 41 and 59 to 76, y 35 to 54; options: x 19 to 145, 158 to 186 and 194 to 241, y 35 to 51), rows 32 and 33 of the bottom grabs (v3 content above the strip bleeding into the crop) and columns 291 and 292 of page_control_bottom (the grab's edge). Left unmatched and not excluded: the 22 px inner #EAEAEA column of the second chosen bottom tab (6 levels). Scale 1.25 to 2.0 at 99.3 to 100 % on page_control_bottom, bottom2 and bottom_hover2.",
+    "gaps": [
+     "Glyph rasterisation: 8 text px in page_control_custom, ink boxes of bottom_hover2 and options",
+     "Text: ClearType colour fringes not reproduced (grayscale)"
+    ]
+   }
+  }
  }
 }

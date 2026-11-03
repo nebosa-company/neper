@@ -17,6 +17,7 @@ use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.linux_card
+use e.ui.looks_x84
 use e.ui.overlay
 use e.ui.style
 use e.ui.vgridlook as vg
@@ -11864,6 +11865,15 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             if !style.windark_active() { said_y = cursor + 3.0 }
             parts[n] = widget.positioned(0u64, band_x, said_y, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
             n += 1usize
+            // round 84: the focus rectangle on the chosen category's caption (Windows light, as the General pressed capture shows it)
+            if !style.windark_active() && options.selected != 0u64 && options.selected == group_key {
+                let (adv, fit, base, metrics_error) = control.run_metrics_faced(a, band_face, caption, head.group)
+                if metrics_error != ok { ret (zero, metrics_error) }
+                let (rect, rect_error) = looks_x84.dots_node(a, f32(i32(fit + 0.5)) + looks_x84.dots_pad_w(), 15.0)
+                if rect_error != ok { ret (zero, rect_error) }
+                parts[n] = widget.positioned(0u64, band_x + looks_x84.dots_dx(), said_y + looks_x84.dots_dy(), style.defaults(), control.mem_one_node(a, rect))
+                n += 1usize
+            }
             bands += 1usize
             cursor += 22.0
         }

@@ -108,3 +108,46 @@ fn thin_frame(b: *scene.Builder, x: f32, y: f32, right: f32, bottom: f32, color:
     try winpx.fill(b, fx, fy + t, t, ly - fy - t, color)
     ret winpx.fill(b, lx, fy + t, t, ly - fy - t, color)
 }
+
+// The focus rectangle of a Windows light category caption (states/vertical-grid-*-deck-properties-general-pressed): a 1 px dotted rectangle on the
+// perimeter of w x h, a dot at every pixel whose x + y is even, the colour inverse of the #D1D1D1 category band.
+type FocusDots = struct { w: f32, h: f32 }
+
+fn dots_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    let m = mem.cast[*FocusDots](ctx)
+    ret geometry.Size { width: m.w, height: m.h }
+}
+
+fn dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*FocusDots](ctx)
+    let x0 = i32(area.x + 0.001)
+    let y0 = i32(area.y + 0.001)
+    let w = i32(m.w)
+    let h = i32(m.h)
+    let ink = style.hex_raw(0x2E2E2Eu32)
+    var i: i32 = 0
+    while i < w {
+        if (x0 + i + y0) % 2 == 0 { try winpx.fill(b, f32(x0 + i), f32(y0), 1.0, 1.0, ink) }
+        if (x0 + i + y0 + h - 1) % 2 == 0 { try winpx.fill(b, f32(x0 + i), f32(y0 + h - 1), 1.0, 1.0, ink) }
+        i += 1
+    }
+    var j: i32 = 1
+    while j < h - 1 {
+        if (x0 + y0 + j) % 2 == 0 { try winpx.fill(b, f32(x0), f32(y0 + j), 1.0, 1.0, ink) }
+        if (x0 + w - 1 + y0 + j) % 2 == 0 { try winpx.fill(b, f32(x0 + w - 1), f32(y0 + j), 1.0, 1.0, ink) }
+        j += 1
+    }
+    ret ok
+}
+
+fn dots_node(a: *mem.Arena, w: f32, h: f32) -> (widget.Node, err) {
+    let (held, held_error) = mem.alloc[FocusDots](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = FocusDots { w: w, h: h }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&held[0usize]), measure: dots_measure, paint: dots_paint, state: widget.bytes_of[FocusDots](&held[0usize]) } }, style: style.defaults(), children: none }, ok)
+}
+
+fn dots_pad_w() -> f32 { ret 5.0 }
+fn dots_dx() -> f32 { ret 0.0 - 1.0 }
+fn dots_dy() -> f32 { ret 0.0 }
