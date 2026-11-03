@@ -112,6 +112,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         // Neper: the pointer goes to the drop button (106 px right of the cell centre: the 280 column stands centred in the 360 cell, the field 10 in, the icon 20 from its end), not the field's text.
         var aim_dx: f32 = 0.0
         if t.tokens.profile == .Neper && (i == 4usize || i == 5usize) { aim_dx = 106.0 }
+        // Windows: the 120 wide field stands 10 in from the cell's left edge, its drop button's centre 16 right of the cell's centre
+        if t.tokens.profile == .Windows && (i == 4usize || i == 5usize) { aim_dx = 16.0 }
         // Neper: the pointer on a day of the open calendar (Thursday the 15th), below the weekday row.
         var aim_dy: f32 = 0.0
         if t.tokens.profile == .Neper && i == 1usize { aim_dy = 98.0 }
