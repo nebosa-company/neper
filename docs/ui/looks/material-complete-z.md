@@ -165,3 +165,22 @@ Raised to ready: font_picker, scroll_area, grid_view, breadcrumbs, sidebar, canv
 Left at review, with the defect: terminal_view (no focus indicator), ribbon (stand-in glyphs), carousel (text-glyph arrows, hover, pressed and focus equal rest), swipe_actions (one action colour, hover equals rest), reorderable_list (no drag handle, states equal rest), color_picker (unlabeled sliders, alike layers), duration_picker (step marks barely legible), icon (not Material Symbols), image (theme-less placeholder glyph 2:1), schedule (clipped labels, chips overflow), flow_editor (states equal rest), sheet (disabled equals rest, cut cell text), bottom_app_bar (text actions where M3 has icons, no hover cell), tree_table, notification_list, title_bar, document_tabs, dock_panel, workspace, list, shortcut_recorder, navigation_stack, navigation_split, android_text_modes (a text-rendering mode, not a drawn row). None was examined this round beyond the audit 43 and 44 notes; time ran out before the library work they need.
 
 Regression: 28 sheets re-rendered one at a time (button, checkbox, combo_box, label, memo, data_grid, tree_list, status_bar, splitter, scroll_bar, spin_edit, progress_bar, card, toast, calendar, hint, link, image, terminal_view, markdown_view, code_editor, font_picker, key_caps, nav_breadcrumbs, nav_sidebar, h_grid_view, f_scroll_area, canvas), `git status` after each: every Neper, Neper Dark, Linux, Linux Dark, Windows, Windows Dark, Cupertino and Cupertino Dark picture is byte for byte as committed.
+
+
+## Round 87 (lane z4)
+
+Android idiom rows ready or matched: 63 of 89 before (ready 36, matched 27), 66 after (ready 40, matched 26). Method: every picture re-rendered one at a time with the committed `neper-self.exe`, viewed light and dark at 1x and 1.5x (montages), contrasts measured at the pixel.
+
+Task 1, the round 86 scroll thumb. It was in the library but not in the committed pictures. Re-rendered: table, notification_list, data_grid, memo, tree_list, scroll_bar (the only Material sheets that draw it among about 40 candidates rendered: code_editor, terminal_view, markdown_view, list_box, schedule, sheet, canvas and the rest are unchanged). `table` re-measured against `ref/flutter/material/*/datatable-rest@1x`: the rule is cac4d0 against cac4cf, but the header is f3edf7 against the reference's surface fdf7ff, rows are 28 dp against 48, and the reference has a checkbox column. Matched is withdrawn: `table` is review.
+
+Task 2, scroll_area. `looks_z87.aim` (a new file; it sets `looks.aim` for the Android look and clears it for every other, because the sheet apps run all looks in one process) points the Hover and Pressed cells at the thumb. Thumb 7f7a84 at rest, 5b5761 hovered, 49454f dragged (dark 938f99, b8b2be, cac4d0): three distinct states, 3.98 to 10.9:1. Raised to ready.
+
+Task 3, idiom rows.
+- Raised to ready: swipe_actions (hover and focus layers on More, Delete in the error colour), duration_picker (the 250 wide cell squeezed the 40 dp buttons to 22 px so the marks degenerated; the Android sheet is 520 wide), bottom_app_bar (Material icons, new `matglyph_z87` share, archive and delete outlines; hover and focus cells added for Android only).
+- Improved, still review: carousel (M3 chevron icon buttons; hover, pressed and focus layers still do not draw on them, aim and a Tab walk tried).
+- Tried, no change: reorderable_list (aiming at the third row draws nothing; the plain rows have no pointer layer or handle for the Android look).
+- Not touched, reason: ribbon (command glyphs are stand-ins; needs six more icon outlines), color_picker (pressed would need the slider value label), icon and image (library glyphs, a theme-less placeholder), schedule, flow_editor and sheet (states equal rest in the library's drawing), terminal_view (the list is not focusable in any look), markdown_view two-word link (recorded gap, row stays ready), android_text_modes (a rendering mode, not a drawn row), notification_list (round 85 defects stand).
+
+Findings. Windows Dark `data_grid_dialogs` and `native_dark4` re-render differently from their committed pictures on unmodified master code too (text bands, 704 and 2081 px): the committed pictures are stale, not changed here, and were restored. Cupertino `swipe_actions` is overwritten by `h_swipe_actions` although `y84_swipe_actions` owns it; restored after each render.
+
+Overlay `status.d/` 246 z then `-z87.json` (255 characters, the file system limit; sorts after `-z45.json` by the digit).
