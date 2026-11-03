@@ -9,6 +9,7 @@ use e.ui.looks
 use e.ui.looks_a
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_y85
 
 fn noop_typed(ctx: *void, value: str) -> err { ret ok }
 fn noop_submit(ctx: *void) -> err { ret ok }
@@ -43,7 +44,13 @@ fn one(a: *mem.Arena, t: *const control.Theme, key: widget.Key, value: str, open
     ret (node, node_error)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let names = [5]str{ "empty", "typed", "hover", "focus", "disabled" }
     let values = [5]str{ "", "Ber", "Ber", "Ber", "Ber" }
     var i = 0usize
@@ -66,7 +73,13 @@ fn one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     ret held[0usize..1usize]
 }
 
-fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build_open(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (node, node_error) = one(a, t, 100u64, "Ber", true, true)
     if node_error != ok { ret (0usize, node_error) }
     var room = looks.size_style(260.0, 230.0)

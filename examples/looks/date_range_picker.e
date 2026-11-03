@@ -12,6 +12,7 @@ use e.ui.overlay
 use e.ui.style
 use e.ui.widget
 use e.ui.layout as ui_layout
+use e.ui.looks_y85
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 fn noop_date(ctx: *void, value: time.Date) -> err { ret ok }
@@ -26,7 +27,13 @@ fn field(a: *mem.Arena, t: *const control.Theme, key: u64, has_range: bool, open
     ret (node, node_error)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let names = [5]str{ "Empty", "Range chosen", "Hover", "Focus", "Pressed" }
     let drives = [5]looks.Drive{ .None, .None, .Hover, .Focus, .Press }
     var i = 0usize
@@ -40,7 +47,13 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 // The control 12 px below the top of its cell, so the flyout under it stays inside the window.
-fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build_open(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (node, node_error) = field(a, t, 7u64 * 10000u64, true, true)
     if node_error != ok { ret (0usize, node_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)

@@ -7,11 +7,18 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn made(a: *mem.Arena, t: *const control.Theme, count: usize, title: str, severity: control.Severity, action: bool, caption: str, cells: []looks.Cell) -> (usize, err) {
+fn made(a: *mem.Arena, base: *const control.Theme, count: usize, title: str, severity: control.Severity, action: bool, caption: str, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the action text holds 4.5:1 on the banner (0040DD light, 70B0FF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x70B0FFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (notices, notices_error) = mem.alloc[control.Notice](a, count)
     if notices_error != ok { ret (0usize, notices_error) }
     let go = widget.Submit { ctx: zero, invoke: noop_submit }

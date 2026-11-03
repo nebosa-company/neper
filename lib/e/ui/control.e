@@ -1470,8 +1470,14 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         ground = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container)
         raised = 0usize
     }
+    // Cupertino: a grouped inset card, a white (dark 2C2C2E) face with a 10 pt radius and no shadow, as a grouped table section is
+    let grouped = t.tokens.profile == .CupertinoLike
+    if grouped && options.enabled && options.variant != .Filled && options.variant != .Outlined && !options.dragged && !(interactive && (state.hovered || state.pressed)) {
+        ground = style.hex_raw(looks_y85.card_face(t.tokens.palette == .Dark))
+    }
     s.background = paint.Brush { Solid: ground }
     s.radius = t.tokens.radii.md
+    if grouped { s.radius = 10.0 }
     if options.width > 0.0 {
         s.width = style.Length { Px: options.width }
         if options.width < 120.0 { s.radius = t.tokens.radii.sm }
@@ -1483,7 +1489,12 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
     s.overflow = .Clip
     if options.variant == .Outlined { s.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.variant == .Outlined && grouped { s.border = style.Border { width: 1.0, color: style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, false)) } }
     if options.selected { s.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    if grouped {
+        raised = 0usize
+        if options.dragged && options.enabled { raised = 2usize }
+    }
     if raised > 0usize { s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) } }
     var column_style = style.defaults()
     if !options.enabled { column_style.opacity = t.tokens.states.disabled_content }
@@ -14657,6 +14668,11 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     if !bottom {
         options.background = .SurfaceContainerHigh
         options.radius = t.tokens.radii.md
+        // Cupertino: a rounded banner with a soft shadow, not Material's stacked heavy one
+        if t.tokens.profile == .CupertinoLike {
+            options.radius = 22.0
+            options.elevation = 1u8
+        }
         wide = 340.0
         pad_y = style.Length { Px: 12.0 }
     }
@@ -14753,6 +14769,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
             column[4usize] = more_words
             var pill = style.defaults()
             pill.radius = t.tokens.radii.md
+            if t.tokens.profile == .CupertinoLike { pill.radius = 16.0 }
             pill.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
             let across = style.Length { Px: 12.0 }
             let down = style.Length { Px: 6.0 }
@@ -14827,6 +14844,10 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     options.background = .SurfaceContainerHigh
     options.radius = t.tokens.radii.md
     options.elevation = 3u8
+    if t.tokens.profile == .CupertinoLike {
+        options.radius = 22.0
+        options.elevation = 1u8
+    }
     var sheet = surface_style(t, options)
     sheet.overflow = .Visible
     sheet.width = style.Length { Px: 340.0 }

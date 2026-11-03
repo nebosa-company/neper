@@ -10,8 +10,15 @@ use e.ui.control
 use e.ui.looks
 use e.ui.looks_h as h
 use e.ui.widget
+use e.ui.looks_y85
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     var names = [4]str{ "rest", "empty", "focus", "hover" }
     // Android: keyboard focus mutes the pointer layers of the frames after it, so the hover cell comes before the focus cell.
     if t.tokens.profile == .MaterialLike { names = [4]str{ "rest", "empty", "hover", "focus" } }

@@ -15,7 +15,10 @@ fn tinted_ring(a: *mem.Arena, base: *const style.ThemeTokens, light: u32, dark: 
     var value = light
     if base.palette == .Dark { value = dark }
     style.puta(&copy[0usize], .Primary, value, 1.0)
-    style.puta(&copy[0usize], .FocusRing, value, 0.8)
+    // the dark ring stays the light blue even where the fill is a darker one, so it holds 3:1 on the ground
+    var ring = value
+    if base.palette == .Dark { ring = 0x409CFFu32 }
+    style.puta(&copy[0usize], .FocusRing, ring, 0.8)
     ret (&copy[0usize], ok)
 }
 
@@ -28,4 +31,10 @@ fn separator(dark: bool, strong: bool) -> u32 {
     }
     if dark { ret 0x38383Au32 }
     ret 0xC6C6C8u32
+}
+
+// The grouped inset card face: secondarySystemGroupedBackground on the grouped ground (white light, 2C2C2E dark).
+fn card_face(dark: bool) -> u32 {
+    if dark { ret 0x2C2C2Eu32 }
+    ret 0xFFFFFFu32
 }
