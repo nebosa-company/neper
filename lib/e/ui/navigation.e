@@ -19,6 +19,7 @@ use e.ui.input
 use e.ui.looks_e_draw
 use e.ui.looks_q79
 use e.ui.looks_u81
+use e.ui.looks_y86
 use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -4010,6 +4011,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if chosen {
             ink = style.color(t.tokens, .OnSurface)
             ground = style.layer(style.color(t.tokens, .Background), ink, control.state_opacity(t, state))
+            // macOS: the chosen tab is a raised pill, not a flat face on the strip.
+            if t.tokens.profile == .CupertinoLike { ground = style.layer(style.hex_raw(looks_y86.tab_face(t.tokens.palette == .Dark)), ink, control.state_opacity(t, state)) }
         }
         var caption = control.text_options()
         caption.role = .BodyMedium
@@ -4115,6 +4118,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         tab_style.max_width = style.Length { Px: most }
         let sm = t.tokens.radii.sm
         tab_style.corners = style.Corners { top_left: sm, top_right: sm, bottom_right: 0.0, bottom_left: 0.0 }
+        if t.tokens.profile == .CupertinoLike { tab_style.corners = style.Corners { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0 } }
         tab_style.overflow = .Clip
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
@@ -4152,6 +4156,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             sem.actions = accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU
             sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](&asks[i]), invoke: tab_menu_ask }
         }
+        // the strip clips its tabs, so the Cupertino ring is drawn inside the pill
+        if t.tokens.profile == .CupertinoLike { sem.focus_inset = 3.0 }
         if chosen { sem.states = accessibility.STATE_SELECTED }
         if d.dirty { sem.hint = "unsaved" }
         tabs[i] = widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize])
@@ -6777,6 +6783,10 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         if i == active && enabled && !compact {
             fill = style.color(t.tokens, .SecondaryContainer)
             ink = style.color(t.tokens, .OnSecondaryContainer)
+            if t.tokens.profile == .CupertinoLike {
+                fill = style.hex_raw(looks_y86.row_select(t.tokens.palette == .Dark))
+                ink = style.hex_raw(0xFFFFFFu32)
+            }
         }
         var look = style.resolve(t.tokens, .Plain, state)
         look.background = style.layer(fill, ink, control.state_opacity(t, state))
@@ -8486,9 +8496,12 @@ fn ribbon_group(a: *mem.Arena, t: *const control.Theme, key: widget.Key, index: 
     body_style.height = style.Length { Px: 68.0 }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 2.0 }, body_style, cells[0usize..made])
     parts[1usize] = row
+    var part_count = 2usize
+    // macOS toolbar: items carry their own labels, there is no group caption or dialog launcher under them
+    if t.tokens.profile == .CupertinoLike { part_count = 1usize }
     var column_style = style.defaults()
     column_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 4.0 }, column_style, parts[0usize..2usize])
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 4.0 }, column_style, parts[0usize..part_count])
     let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
     if wrapped_error != ok { ret (zero, TooLarge) }
     wrapped[0usize] = column
@@ -8587,6 +8600,7 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
     var row = 0usize
     var bar_style = style.defaults()
     bar_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    if t.tokens.profile == .CupertinoLike { bar_style.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     bar_style.height = style.Length { Px: 32.0 }
     bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
     if options.quick.len > 0usize {
@@ -8642,7 +8656,7 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
         let contextual = tabs[i].context.len > 0usize
         var ink = style.color(t.tokens, .OnSurfaceVariant)
         if chosen { ink = style.color(t.tokens, .OnSurface) }
-        if contextual { ink = style.color(t.tokens, .OnTertiaryContainer) }
+        if contextual && t.tokens.profile != .CupertinoLike { ink = style.color(t.tokens, .OnTertiaryContainer) }
         let state = control.control_state(t, tab_keys[i], true, chosen)
         var look = style.resolve(t.tokens, .Plain, state)
         look.background = control.with_alpha(ink, control.state_opacity(t, state))
@@ -8656,6 +8670,11 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
         look.padding_y = 0.0
         look.min_width = widths[i]
         look.min_height = 32.0
+        // macOS toolbar tab strip: the chosen tab is a raised pill, the others are plain labels
+        if t.tokens.profile == .CupertinoLike {
+            look.corners = style.Corners { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0 }
+            if chosen { look.background = style.hex_raw(looks_y86.tab_face(t.tokens.palette == .Dark)) }
+        }
         var caption = control.text_options()
         caption.role = .TitleSmall
         caption.wrap = .None
@@ -8702,13 +8721,17 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
             band_caption.role = .LabelSmall
             band_caption.wrap = .None
             band_caption.align = .Center
-            let (band_word, band_word_error) = control.colored_text(a, 0u64, tabs[i].context, t, band_caption, style.color(t.tokens, .OnTertiaryContainer))
+            var band_ink = style.color(t.tokens, .OnTertiaryContainer)
+            if t.tokens.profile == .CupertinoLike { band_ink = style.color(t.tokens, .OnSurfaceVariant) }
+            let (band_word, band_word_error) = control.colored_text(a, 0u64, tabs[i].context, t, band_caption, band_ink)
             if band_word_error != ok { ret (zero, band_word_error) }
             let (band_inner, band_inner_error) = mem.alloc[widget.Node](a, 1usize)
             if band_inner_error != ok { ret (zero, TooLarge) }
             band_inner[0usize] = band_word
             var band_style = control.sized_style(span, 20.0)
             band_style.background = paint.Brush { Solid: style.color(t.tokens, .TertiaryContainer) }
+            // macOS: a section label over the tab run, no coloured band
+            if t.tokens.profile == .CupertinoLike { band_style.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
             band_style.corners = style.Corners { top_left: 6.0, top_right: 6.0, bottom_right: 0.0, bottom_left: 0.0 }
             let piece = widget.flex(key + 300u64 + u64(i), ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, band_style, band_inner[0usize..1usize])
             band_nodes[band_at] = piece
@@ -8743,6 +8766,7 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
     strip_parts[placed + 1usize] = collapse_button
     var strip_style = style.defaults()
     strip_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    if t.tokens.profile == .CupertinoLike { strip_style.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     strip_style.height = style.Length { Px: 32.0 }
     strip_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let strip = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip_style, strip_parts[0usize..placed + 2usize])

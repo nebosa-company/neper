@@ -6,6 +6,7 @@ use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
@@ -39,7 +40,13 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     ret (widget.padded(0u64, 250.0, 0.0, 0.0, 170.0, style.defaults(), held[0usize..1usize]), ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text and the keyboard ring take the increased-contrast blue (0x0040DD, 0x409CFF); other looks get their own tokens back.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }

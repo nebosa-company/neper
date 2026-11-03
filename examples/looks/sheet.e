@@ -29,6 +29,8 @@ fn texts(row: usize, col: usize) -> str {
     ret sets[r]
 }
 
+var grouped: bool = false
+
 fn source_cell(ctx: *void, row: usize, col: usize) -> sh.SheetCell {
     var c: sh.SheetCell = zero
     c.text = texts(row, col)
@@ -36,6 +38,8 @@ fn source_cell(ctx: *void, row: usize, col: usize) -> sh.SheetCell {
         c.style.bold = true
         c.style.filled = true
         c.style.fill = paint.rgba(0.5, 0.5, 0.5, 0.18)
+        // Cupertino: the system fill (secondarySystemFill, 12 % of 787880), not a heavy grey band
+        if grouped { c.style.fill = paint.rgba(0.47, 0.47, 0.5, 0.12) }
     }
     if row > 0usize && (col == 1usize || col == 2usize || col == 3usize) { c.style.align = .Right }
     if row == 5usize && col == 4usize { c.read_only = true }
@@ -47,7 +51,11 @@ fn on_event(ctx: *void, e: sh.SheetEvent) -> err { ret ok }
 fn one(a: *mem.Arena, t: *const control.Theme, i: usize, state: sh.SheetState, disabled: bool) -> (widget.Node, err) {
     let (rows, rows_error) = sh.axis(a, 60usize, 24.0, zero)
     if rows_error != ok { ret (zero, rows_error) }
-    let col_over = [2]sh.Override{ sh.Override { index: 0usize, size: 128.0 }, sh.Override { index: 1usize, size: 44.0 } }
+    grouped = t.tokens.profile == .CupertinoLike
+    // Cupertino: the first column is wide enough for the longest card name, which was cut at the column edge
+    var first_width: f32 = 128.0
+    if grouped { first_width = 156.0 }
+    let col_over = [2]sh.Override{ sh.Override { index: 0usize, size: first_width }, sh.Override { index: 1usize, size: 44.0 } }
     let (cols, cols_error) = sh.axis(a, 8usize, 60.0, col_over[0..])
     if cols_error != ok { ret (zero, cols_error) }
     let merge_list = [1]sh.Merge{ sh.Merge { row: 6usize, col: 3usize, rows: 1usize, cols: 2usize } }

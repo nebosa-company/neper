@@ -7,6 +7,7 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_f
+use e.ui.looks_y85
 use e.ui.navigation
 use e.ui.overlay
 use e.ui.widget
@@ -23,7 +24,13 @@ fn command(label: str, glyph: control.GlyphKind, large: bool, press: widget.Subm
     ret c
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: quick-bar and tab text take the increased-contrast blue; other looks get their own tokens back.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let captions = [6]str{ "Home", "Insert", "Contextual tabs", "Collapsed", "Command hovered", "Command pressed" }
     let press = widget.Submit { ctx: zero, invoke: no_press }
     let (picks, picks_error) = mem.alloc[widget.Submit](a, 5usize)

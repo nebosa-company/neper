@@ -8,6 +8,7 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_g
+use e.ui.looks_y85
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
@@ -148,7 +149,13 @@ fn build_side(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
     ret (1usize, ok)
 }
 
-fn build_bottom(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build_bottom(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the Save fill is the blue white text holds 4.5:1 on (0A60FF, 0B57D0); other looks get their own tokens back.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0A60FFu32, 0x0B57D0u32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let (dismiss, dismiss_error) = dismiss_of(a)
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let (body, body_error) = with_button(a, t, "Choose where the copy is saved.", "Save")

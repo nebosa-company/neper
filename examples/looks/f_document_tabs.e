@@ -7,13 +7,20 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_f
+use e.ui.looks_y85
 use e.ui.navigation
 use e.ui.widget
 
 fn no_pick(ctx: *void, value: usize) -> err { ret ok }
 fn no_move(ctx: *void, value: navigation.DocumentMove) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the keyboard ring takes the increased-contrast blue; other looks get their own tokens back.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let captions = [8]str{ "First current", "Second current", "Unsaved changes", "Pinned tab", "Hover", "Pressed", "Keyboard focus", "One tab" }
     let (docs, docs_error) = mem.alloc[navigation.Document](a, 3usize)
     if docs_error != ok { ret (0usize, docs_error) }
@@ -33,6 +40,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 4usize || i == 5usize { drive = .Hover }
         if i == 5usize { drive = .Press }
         if i == 6usize { drive = .Focus }
+        // the click that starts the keyboard focus must land on the current tab, the one tab stop (Cupertino pictures only, the others keep theirs)
+        // (looks.aim lasts across the looks of one run, so the other looks set it back to nothing)
+        if i == 6usize && t.tokens.profile == .CupertinoLike { looks.aim(i, -150.0, 0.0) }
+        if i == 6usize && t.tokens.profile != .CupertinoLike { looks.aim(i, 0.0, 0.0) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
