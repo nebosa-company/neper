@@ -353,6 +353,11 @@ scalar_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$scalar_executable_written" = 'executable written' ]
 chmod +x "$scalar_executable_path"
 "$scalar_executable_path"
+many_params_executable_path="$test_build/many-params-selfhost"
+many_params_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/many_params/src/main.e" "$repo" x64 linux "$many_params_executable_path" --release)
+[ "$many_params_executable_written" = 'executable written' ]
+chmod +x "$many_params_executable_path"
+"$many_params_executable_path"
 generic_executable_path="$test_build/generic-selfhost"
 generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
 [ "$generic_executable_written" = 'executable written' ]

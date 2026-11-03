@@ -299,6 +299,11 @@ $scalarExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $scalarExecutableWritten -ne 'executable written') { throw 'scalar PE executable emission failed' }
 & $scalarExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'integer cast semantics failed in the self-hosted PE executable' }
+$manyParamsExecutablePath = Join-Path $testBuild 'many-params-selfhost.exe'
+$manyParamsExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\many_params\src\main.e') $repo 'x64' 'windows' $manyParamsExecutablePath --release
+if ($LASTEXITCODE -ne 0 -or $manyParamsExecutableWritten -ne 'executable written') { throw 'many-parameter program did not emit a PE executable' }
+& $manyParamsExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'parameters past the sixteenth, or an argument-register cycle, arrived wrong' }
 $genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
 $genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }
