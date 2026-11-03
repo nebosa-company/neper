@@ -17417,6 +17417,10 @@ fn windows_glyph_toggle_art(a: *mem.Arena, key: widget.Key, t: *const Theme, kin
     style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, enabled, checked)
     var look = windows_bar_look(state, style.hex(4210752u32))
+    // round 85: the rim of v3's hot button is #A0A0A0 in the 1:1 capture (toolbar_button_hot, 9824 px); on the dark bar the hot rim is its counterpart #828282 (3.6 : 1) and the pressed one #9D9D9D
+    if style.windows_dark_on() && enabled && !state.selected {
+        if state.pressed { look.border = style.hex_raw(0x9D9D9Du32) } else if state.hovered { look.border = style.hex_raw(0x828282u32) }
+    }
     // v3's disabled pictures are pale bitmaps (mean #D4D4D4 over the glyph area, measured);
     // a drawn glyph in #C8C8C8 stands in.
     var ink = look.foreground
