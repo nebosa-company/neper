@@ -22,6 +22,7 @@
 use e.gpu
 use e.math
 use e.mem
+use e.simd
 use e.gfx.cleartype
 use e.gfx.dwtext
 use e.gfx.geometry
@@ -72,6 +73,10 @@ type Floats = struct { data: []f32, len: usize }
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
 type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64 }
+type F32x4 = Vec[f32, 4]
+type I32x4 = Vec[i32, 4]
+type I16x8 = Vec[i16, 8]
+type U8x16 = Vec[u8, 16]
 type TargetState = struct { target: *gpu.Target }
 
 // A rasteriser that draws a frame instead of the CPU loop (D5929): `e.gfx.gpuraster` installs one on a Vulkan device. `render` is
@@ -2508,6 +2513,10 @@ fn draw_image(s: *RendererState, state: DrawState, draw: DrawImage) -> err {
     }
     let bounds = geometry.intersect(state.scissor, geometry.Rect { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 })
     let (x0, y0, x1, y1) = scissor_bounds(s, bounds)
+    if !state.has_mask && inverse.m01 == 0.0 && inverse.m10 == 0.0 && x1 > x0 && x1 - x0 <= 2048usize {
+        draw_image_axis(s, state, draw, t, inverse, x0, y0, x1, y1)
+        ret ok
+    }
     let canvas = s.canvases[state.layer].data
     var y = y0
     while y < y1 {
@@ -2530,6 +2539,152 @@ fn draw_image(s: *RendererState, state: DrawState, draw: DrawImage) -> err {
         y += 1usize
     }
     ret ok
+}
+
+// `draw_image` for a transform without rotation or skew: the columns' source texels and weights are found once, the texel rows are
+// blended across (and kept for the rows that share them), and each pixel takes its two rows; the arithmetic is that of the general
+// loop and `sample_texture`, so the pixels are the same.
+var axis_rows: []f32 = zero
+
+fn axis_fill(rows: []f32, slot: usize, pix: []const f32, row: usize, tw: usize, n: usize, col0: []const u32, col1: []const u32, colu: []const f32, colv: []const bool) {
+    let base = row * tw * 4usize
+    let out = slot * 8192usize
+    var i = 0usize
+    @nocheck {
+    while i < n {
+        if colv[i] {
+            let fu = colu[i]
+            let iu = 1.0 - fu
+            let p0 = base + usize(col0[i]) * 4usize
+            let p1 = base + usize(col1[i]) * 4usize
+            let o = out + i * 4usize
+            rows[o] = pix[p0] * iu + pix[p1] * fu
+            rows[o + 1usize] = pix[p0 + 1usize] * iu + pix[p1 + 1usize] * fu
+            rows[o + 2usize] = pix[p0 + 2usize] * iu + pix[p1 + 2usize] * fu
+            rows[o + 3usize] = pix[p0 + 3usize] * iu + pix[p1 + 3usize] * fu
+        }
+        i += 1usize
+    }
+    }
+}
+
+fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *const Texture, inverse: geometry.Transform, x0: usize, y0: usize, x1: usize, y1: usize) {
+    if axis_rows.len < 16384usize {
+        let (made, made_error) = mem.alloc[f32](s.arena, 16384usize)
+        if made_error != ok { ret }
+        axis_rows = made
+    }
+    let rows = axis_rows
+    let n = x1 - x0
+    var col0: [2048]u32 = zero
+    var col1: [2048]u32 = zero
+    var colu: [2048]f32 = zero
+    var colv: [2048]bool = zero
+    let tw = usize(t.width)
+    let th = usize(t.height)
+    let max_x = f32(t.width) - 1.0
+    let max_y = f32(t.height) - 1.0
+    var i = 0usize
+    while i < n {
+        let px = inverse.m00 * (f32(x0 + i) + 0.5) + inverse.m02
+        let u = (px - draw.destination.x) / draw.destination.width
+        if u >= 0.0 && u < 1.0 {
+            var fx = draw.source.x + u * draw.source.width - 0.5
+            if !(fx >= 0.0) { fx = 0.0 }
+            if fx > max_x { fx = max_x }
+            let a0 = usize(math.floor[f32](fx))
+            var a1 = a0 + 1usize
+            if a1 >= tw { a1 = a0 }
+            col0[i] = u32(a0)
+            col1[i] = u32(a1)
+            colu[i] = fx - f32(a0)
+            colv[i] = true
+        }
+        i += 1usize
+    }
+    let canvas = s.canvases[state.layer].data
+    let weight = draw.opacity
+    if weight <= 0.0 { ret }
+    let pix = t.pixels
+    // an opaque texture at full weight replaces the pixel (its blended alpha is 1 to rounding), so a row is one vector blend per pixel
+    var opaque = weight == 1.0
+    var q = 3usize
+    while opaque && q < tw * th * 4usize {
+        if pix[q] != 1.0 { opaque = false }
+        q += 4usize
+    }
+    let none = 18446744073709551615usize
+    var tag0 = none
+    var tag1 = none
+    var y = y0
+    while y < y1 {
+        let py = inverse.m11 * (f32(y) + 0.5) + inverse.m12
+        let v = (py - draw.destination.y) / draw.destination.height
+        if v >= 0.0 && v < 1.0 {
+            var fy = draw.source.y + v * draw.source.height - 0.5
+            if !(fy >= 0.0) { fy = 0.0 }
+            if fy > max_y { fy = max_y }
+            let b0 = usize(math.floor[f32](fy))
+            var b1 = b0 + 1usize
+            if b1 >= th { b1 = b0 }
+            let fv = fy - f32(b0)
+            var k0 = 0usize
+            if tag0 == b0 { k0 = 0usize } else if tag1 == b0 { k0 = 1usize } else {
+                if tag0 == b1 { k0 = 1usize }
+                axis_fill(rows, k0, pix, b0, tw, n, col0[0usize..n], col1[0usize..n], colu[0usize..n], colv[0usize..n])
+                if k0 == 0usize { tag0 = b0 } else { tag1 = b0 }
+            }
+            var k1 = k0
+            if b1 != b0 {
+                if tag0 == b1 { k1 = 0usize } else if tag1 == b1 { k1 = 1usize } else {
+                    k1 = 1usize - k0
+                    axis_fill(rows, k1, pix, b1, tw, n, col0[0usize..n], col1[0usize..n], colu[0usize..n], colv[0usize..n])
+                    if k1 == 0usize { tag0 = b1 } else { tag1 = b1 }
+                }
+            }
+            let h0 = k0 * 8192usize
+            let h1 = k1 * 8192usize
+            let iv = 1.0 - fv
+            var at = (y * s.width + x0) * 4usize
+            i = 0usize
+            if opaque {
+                let ivv = simd.splat[F32x4](iv)
+                let fvv = simd.splat[F32x4](fv)
+                @nocheck {
+                while i < n {
+                    if colv[i] {
+                        let o = i * 4usize
+                        simd.store[F32x4](canvas, at, simd.load[F32x4](rows, h0 + o) * ivv + simd.load[F32x4](rows, h1 + o) * fvv)
+                    }
+                    at += 4usize
+                    i += 1usize
+                }
+                }
+                y += 1usize
+                continue
+            }
+            @nocheck {
+            while i < n {
+                if colv[i] {
+                    let o = i * 4usize
+                    let red = rows[h0 + o] * iv + rows[h1 + o] * fv
+                    let green = rows[h0 + o + 1usize] * iv + rows[h1 + o + 1usize] * fv
+                    let blue = rows[h0 + o + 2usize] * iv + rows[h1 + o + 2usize] * fv
+                    let alpha = rows[h0 + o + 3usize] * iv + rows[h1 + o + 3usize] * fv
+                    let a = alpha * weight
+                    let keep = 1.0 - a
+                    canvas[at] = red * weight + canvas[at] * keep
+                    canvas[at + 1usize] = green * weight + canvas[at + 1usize] * keep
+                    canvas[at + 2usize] = blue * weight + canvas[at + 2usize] * keep
+                    canvas[at + 3usize] = a + canvas[at + 3usize] * keep
+                }
+                at += 4usize
+                i += 1usize
+            }
+            }
+        }
+        y += 1usize
+    }
 }
 
 // Bilinear, the texture's edge clamped; premultiplied in and out.
