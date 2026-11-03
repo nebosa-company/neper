@@ -10928,6 +10928,11 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
         // round 43: the 1:1 capture's frame is one #828790 pixel on every side, the parts inside it touch
         frame.border = style.Border { width: 1.0, color: gl.rgb(0x828790u32) }
         stacked = widget.padded(0u64, 1.0, 1.0, 1.0, 1.0, frame, one(a, stacked))
+        if grid.look.ring_head_end > 0.0 && grid.look.ring_thumb == 1u8 {
+            let (barred, barred_error) = crisp_bar_over(a, grid, stacked)
+            if barred_error != ok { ret (zero, barred_error) }
+            stacked = barred
+        }
     } else if grid.look.on && !grid.look.frame_none && grid.look.ring {
         let (ringed, ring_error) = ring_wrap(a, grid, stacked)
         if ring_error != ok { ret (zero, ring_error) }
@@ -10984,6 +10989,21 @@ fn ring_inner_band(a: *mem.Arena, parts: []widget.Node, n: usize, y0: f32, y1: f
     if y1 < y0 { ret n }
     parts[n] = footer_px(a, 1.0, y0, 1.0, y1 - y0 + 1.0, col)
     ret n + 1usize
+}
+
+// round 85: the 1:1 capture's vertical bar over the group box: a white column and the crisp thumb (two #858585 columns, #929292 and #939393 end rows, 16 rows)
+fn crisp_bar_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {
+    let w = grid.look.ring_w
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = inner
+    parts[1usize] = footer_px(a, w - 18.0, 1.0, 1.0, 35.0, 0xFFFFFFu32)
+    parts[2usize] = footer_px(a, w - 10.0, 18.0, 1.0, 1.0, 0x929292u32)
+    parts[3usize] = footer_px(a, w - 9.0, 18.0, 1.0, 1.0, 0x939393u32)
+    parts[4usize] = footer_px(a, w - 10.0, 19.0, 2.0, 14.0, 0x858585u32)
+    parts[5usize] = footer_px(a, w - 10.0, 33.0, 1.0, 1.0, 0x929292u32)
+    parts[6usize] = footer_px(a, w - 9.0, 33.0, 1.0, 1.0, 0x939393u32)
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..7usize]), ok)
 }
 
 fn ring_model_over(a: *mem.Arena, grid: *const Grid, inner: widget.Node) -> (widget.Node, err) {

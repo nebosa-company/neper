@@ -18,6 +18,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.linux_card
 use e.ui.looks_x84
+use e.ui.looks_x85
 use e.ui.overlay
 use e.ui.looks_z84_edge
 use e.ui.style
@@ -2907,6 +2908,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if disabled { content_look.opacity = t.tokens.states.disabled_content }
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
     var crisp_rows = false
+    var crisp_edged = false
     if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8) {
         // v3's horizontal grid lines: a 1 px line along the bottom of the row
         let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
@@ -2972,10 +2974,18 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 crisp_foot.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
                 with_line[1usize] = widget.positioned(0u64, pair_x, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, crisp_foot, zero)))
                 crisp_rows = true
+                // round 85: the 1:1 capture's idle current row ends in its edge colour one pixel above that foot pixel
+                if lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots && !style.windows_dark_on() {
+                    var crisp_edge = control.sized_style(4000.0, 1.0)
+                    crisp_edge.background = paint.Brush { Solid: look.selected_line }
+                    with_line[2usize] = widget.positioned(0u64, pair_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, crisp_edge, zero)))
+                    crisp_edged = true
+                }
             }
         }
         var stacked_count = 2usize
         if look.soft_lines && !crisp_rows { stacked_count = 3usize }
+        if crisp_edged { stacked_count = 3usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
         if look.dialog_lines && look.soft_lines && !look.vertical_off && !style.windows_dark_on() {
             // round 31: a dialog grid's column lines run through the two foot pixels of a row (live Sort dialog), not under them
@@ -5251,6 +5261,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             win_style.margin = thumb_style.margin
             win_style.margin.left = style.Length { Px: thumb_left - 0.5 }
             thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, win_style, one_node(a, win_thumb))
+        }
+        if lk.top_fit && lk.crisp && lk.soft_lines && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w < 3.0 && thumb_h >= 6.0 {
+            // round 85: the 1:1 capture's thumb: two crisp columns on whole pixels, 16 rows
+            let (crisp_node, crisp_error) = looks_x85.crisp_thumb(a, thumb_h - 1.0)
+            if crisp_error != ok { ret (zero, crisp_error) }
+            var crisp_style = control.sized_style(2.0, thumb_h - 1.0)
+            crisp_style.margin = thumb_style.margin
+            crisp_style.margin.left = style.Length { Px: 6.0 }
+            crisp_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, crisp_style, one_node(a, crisp_node))
         }
         // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
         if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {

@@ -334,6 +334,7 @@ fn setup(app: *App) -> err {
         dg.show_navigator(&app.grids[k], true)
         if app.windows { dg.show_footer(&app.grids[k], false) }
         dg.set_pane_hint(&app.grids[k], 573.0)
+        if app.windows { dg.set_pane_hint(&app.grids[k], 574.0) }
         app.grids[k].aligns[4usize] = 2u8
         app.grids[k].aligns[5usize] = 2u8
         app.grids[k].aligns[7usize] = 2u8
