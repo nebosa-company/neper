@@ -1,0 +1,42 @@
+{
+ "rating": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/rating.png",
+    "notes": "ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; drawn in the look's own tokens: SF-style star glyphs, system blue fill, system fill hover and pressed discs, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all six cells. Measured: filled stars 007AFF 3.6:1 light and 0A84FF dark, empty star outline 3.29:1 light and 5.94:1 dark against the ground (controls, 3:1); the captions are label colour. Star geometry is the generic five point star, not the SF Symbols glyph.",
+    "gaps": [
+     "The star is the sheet's five point star, not the SF Symbols glyph"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/rating.png",
+    "notes": "ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; drawn in the look's own tokens: SF-style star glyphs, system blue fill, system fill hover and pressed discs, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all six cells. Measured: filled stars 007AFF 3.6:1 light and 0A84FF dark, empty star outline 3.29:1 light and 5.94:1 dark against the ground (controls, 3:1); the captions are label colour. Star geometry is the generic five point star, not the SF Symbols glyph.",
+    "gaps": [
+     "The star is the sheet's five point star, not the SF Symbols glyph"
+    ]
+   }
+  }
+ },
+ "skeleton": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/skeleton.png",
+    "notes": "ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; UIKit placeholders are system fills): the bars, circle, pill and rectangle are drawn in the Cupertino quaternary fill (E5E5EA light, 48484A dark) on the grouped ground, no shimmer in a still, no Material elevation. Viewed light and dark, 1x and 1.5x, all eight cells. The shapes carry no text and no state; their low contrast against the ground (1.1:1) is the point of a placeholder.",
+    "gaps": [
+     "A still cannot show the shimmer; the fills are the system fills"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/skeleton.png",
+    "notes": "ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; UIKit placeholders are system fills): the bars, circle, pill and rectangle are drawn in the Cupertino quaternary fill (E5E5EA light, 48484A dark) on the grouped ground, no shimmer in a still, no Material elevation. Viewed light and dark, 1x and 1.5x, all eight cells. The shapes carry no text and no state; their low contrast against the ground (1.1:1) is the point of a placeholder.",
+    "gaps": [
+     "A still cannot show the shimmer; the fills are the system fills"
+    ]
+   }
+  }
+ }
+}

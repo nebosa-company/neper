@@ -55,3 +55,12 @@ Not raised: page_control (strip focus ring is a 13 px rectangle through the labe
 Viewed light and dark at 1x. None raised. These rows have no UIKit or AppKit control behind them (skeleton and rating are Material or web patterns, key caps and the underlined link are web idioms), so "the shape is the real macOS or iOS control" cannot be defended by restyling alone; the divider is a hairline at about 1.2:1 (a separator, not a control) and the Vertical cell is nearly invisible; the link's accent text is 3.6:1 on the light ground. The other generic extra rows (about 65: toast, list, banner, card, empty_state, sheet, popover, ribbon, wizard and the rest) were not viewed in this lane and keep `review`.
 
 Final regression: the 45 `run_cupertino` apps, the nine row apps, cup_menu, y84_swipe_actions and activity_indicator were re-rendered after the last code change; `git status` shows no file outside the Cupertino folders and the sources.
+
+## Batch 4b and 5: page_control, toolbar_button, data_grid, rating, skeleton
+
+- toolbar_button raised: the sheet draws with a local theme copy whose accent is Apple's increased-contrast blue (0040DD, 409CFF dark); every other sheet and the shared nav-bar code keep 007AFF.
+- data_grid raised: the sheet-local chosen-row fill 0A60FF (light) gives white text 5.08:1, dark 0B57D0 6.39:1.
+- page_control stays at review: the strip focus ring is a 13 px rectangle through the label; the segmented strip code is shared with the matched segmented_control row, and its pictures must not move, so no fix was made.
+- rating and skeleton raised under the coordinator's standard for generic rows (own tokens, system fills, no Material shape), viewed at 1x and 1.5x, light and dark.
+- divider not raised: the hairlines are about 1.1:1 and the Vertical cell is nearly invisible. link not raised: the accent text is 3.6:1 and it underlines on hover. key_caps was seen at 1x only.
+- Not viewed in this lane and left at `review`: the remaining generic extra rows (icon_button, toggle_button, split_button, speed_dial, range_slider, dial, password_field, autocomplete, banner, toast, card, sheet, popover, ribbon, wizard and about forty more).
