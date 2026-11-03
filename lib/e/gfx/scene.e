@@ -22,7 +22,7 @@
 use e.gpu
 use e.math
 use e.mem
-use e.simd
+use e.gfx.scene_vec
 use e.gfx.cleartype
 use e.gfx.dwtext
 use e.gfx.geometry
@@ -73,10 +73,6 @@ type Floats = struct { data: []f32, len: usize }
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
 type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64, cover: usize, vid: []u32, vid_ok: bool, vid_x0: usize, vid_y0: usize, vid_x1: usize, vid_y1: usize, vid_dirty_ok: bool, vid_dirty: geometry.Rect }
-type F32x4 = Vec[f32, 4]
-type I32x4 = Vec[i32, 4]
-type I16x8 = Vec[i16, 8]
-type U8x16 = Vec[u8, 16]
 type TargetState = struct { target: *gpu.Target }
 
 // A rasteriser that draws a frame instead of the CPU loop (D5929): `e.gfx.gpuraster` installs one on a Vulkan device. `render` is
@@ -337,31 +333,17 @@ fn convert_span(s: *RendererState, y: usize, xa: usize, xb: usize, bgra: bool) {
 fn copy_span(s: *RendererState, y: usize, xa: usize, xb: usize, bgra: bool) {
     var i = y * s.width + xa
     let end = y * s.width + xb
-    var swap: U8x16 = zero
-    var j = 0usize
-    while j < 4usize {
-        swap.lanes[j * 4usize] = u8(j * 4usize + 2usize)
-        swap.lanes[j * 4usize + 1usize] = u8(j * 4usize + 1usize)
-        swap.lanes[j * 4usize + 2usize] = u8(j * 4usize)
-        swap.lanes[j * 4usize + 3usize] = u8(j * 4usize + 3usize)
-        j += 1usize
-    }
+    i = scene_vec.copy_pixels(s.pixels, s.vid, i, end, bgra)
     @nocheck {
-    while i + 4usize <= end {
-        var four = *mem.cast[*U8x16](&s.vid[i])
-        if bgra { four = simd.shuffle_bytes[U8x16](four, swap) }
-        *mem.cast[*U8x16](&s.pixels[i]) = four
-        i += 4usize
-    }
-    while i < end {
-        let p = s.vid[i]
-        if bgra {
-            s.pixels[i] = (p & 4278255360u32) | ((p & 255u32) << 16u32) | ((p >> 16u32) & 255u32)
-        } else {
-            s.pixels[i] = p
+        while i < end {
+            let p = s.vid[i]
+            if bgra {
+                s.pixels[i] = (p & 4278255360u32) | ((p & 255u32) << 16u32) | ((p >> 16u32) & 255u32)
+            } else {
+                s.pixels[i] = p
+            }
+            i += 1usize
         }
-        i += 1usize
-    }
     }
 }
 
@@ -2751,41 +2733,9 @@ fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *con
             var at = (y * s.width + x0) * 4usize
             i = 0usize
             if opaque {
-                let ivv = simd.splat[F32x4](iv)
-                let fvv = simd.splat[F32x4](fv)
-                @nocheck {
-                while i < n {
-                    if colv[i] {
-                        let o = i * 4usize
-                        simd.store[F32x4](canvas, at, simd.load[F32x4](rows, h0 + o) * ivv + simd.load[F32x4](rows, h1 + o) * fvv)
-                    }
-                    at += 4usize
-                    i += 1usize
-                }
-                }
+                scene_vec.blend_row(canvas, at, rows, h0, h1, colv[0usize..n], n, iv, fv)
                 if keep_bytes {
-                    var from = (y * s.width + x0 + first) * 4usize
-                    var to = y * s.width + x0 + first
-                    i = first
-                    let scale = simd.splat[F32x4](255.0)
-                    @nocheck {
-                    while i + 4usize <= last {
-                        let q0 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from) * scale)
-                        let q1 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 4usize) * scale)
-                        let q2 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 8usize) * scale)
-                        let q3 = simd.round_i32[F32x4, I32x4](simd.load[F32x4](canvas, from + 12usize) * scale)
-                        *mem.cast[*U8x16](&s.vid[to]) = simd.pack_sat[U8x16, I16x8](simd.pack_sat[I16x8, I32x4](q0, q1), simd.pack_sat[I16x8, I32x4](q2, q3))
-                        from += 16usize
-                        to += 4usize
-                        i += 4usize
-                    }
-                    while i < last {
-                        s.vid[to] = vid_byte(canvas[from]) | (vid_byte(canvas[from + 1usize]) << 8u32) | (vid_byte(canvas[from + 2usize]) << 16u32) | (vid_byte(canvas[from + 3usize]) << 24u32)
-                        from += 4usize
-                        to += 1usize
-                        i += 1usize
-                    }
-                    }
+                    scene_vec.row_bytes(canvas, (y * s.width + x0 + first) * 4usize, s.vid, y * s.width + x0 + first, last - first)
                     if y < row_first { row_first = y }
                     row_last = y + 1usize
                 }
@@ -4297,14 +4247,6 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     // Keep the previous scene comparison until its pixels have actually presented.
     commit_render(s, slot, width, height, scale)
     ret ok
-}
-
-// The byte of a channel value in 0..1 with no float to integer conversion, which saturates and checks: v * 255 is exact in f64, adding
-// 2^52 rounds it to an integer, ties to even, and the integer is the sum's low bits. That is `channel_byte` except where the f32 steps
-// of `v * 255.0 + 0.5` round across a half (about 130 values of v in 0..1, one level apart); the vector form of the same, `round_i32` of
-// the f32 product, differs from `channel_byte` at about as many other values.
-fn vid_byte(v: f32) -> u32 {
-    ret u32(mem.bitcast[u64](f64(v) * 255.0f64 + 4503599627370496.0f64) & 255u64)
 }
 
 fn channel_byte(v: f32) -> u32 {
