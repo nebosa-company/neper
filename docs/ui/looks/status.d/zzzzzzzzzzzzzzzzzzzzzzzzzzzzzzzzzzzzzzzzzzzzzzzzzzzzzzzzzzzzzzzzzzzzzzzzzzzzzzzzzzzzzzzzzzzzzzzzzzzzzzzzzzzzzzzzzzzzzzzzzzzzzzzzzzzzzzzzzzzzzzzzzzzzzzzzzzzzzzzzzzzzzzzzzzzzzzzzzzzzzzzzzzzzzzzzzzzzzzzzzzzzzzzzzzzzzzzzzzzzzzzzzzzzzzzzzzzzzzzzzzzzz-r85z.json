@@ -1,0 +1,82 @@
+{
+ "date_range_picker": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/date_range_picker.png",
+    "notes": "AUDIT 43 (5) fixed in round 85 (overlay.calendar_with): in the wide-slot (docked, 360 wide) calendar the range band is now drawn per 51 px slot, not per 40 px disc, so it runs unbroken across the row (half a slot at each end, hidden behind the end discs) and stays 40 high with the 8 dp week gap, secondary-container e8def8 light / 4a4458 dark with on-secondary-container digits. Measured against ref/flutter/material daterangepicker-open@1x (band row groups 42 high, 8 gap, continuous across the row): band colours exact in both themes, continuous, 40 against Flutter's 42 high (M3 day container is 40 dp; Flutter's is its row height). Viewed light and dark at 1x and 1.5x (field sheet and open sheet).",
+    "gaps": [
+     "Docked calendar in a field popup against Flutter's full-screen scrolling dialog: recorded as the desktop form; band 40 against 42"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/date_range_picker.png",
+    "notes": "AUDIT 43 (5) fixed in round 85 (overlay.calendar_with): in the wide-slot (docked, 360 wide) calendar the range band is now drawn per 51 px slot, not per 40 px disc, so it runs unbroken across the row (half a slot at each end, hidden behind the end discs) and stays 40 high with the 8 dp week gap, secondary-container e8def8 light / 4a4458 dark with on-secondary-container digits. Measured against ref/flutter/material daterangepicker-open@1x (band row groups 42 high, 8 gap, continuous across the row): band colours exact in both themes, continuous, 40 against Flutter's 42 high (M3 day container is 40 dp; Flutter's is its row height). Viewed light and dark at 1x and 1.5x (field sheet and open sheet).",
+    "gaps": [
+     "Docked calendar in a field popup against Flutter's full-screen scrolling dialog: recorded as the desktop form; band 40 against 42"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/tooltip.png",
+    "notes": "ROUND 85: every cell of tooltip.png viewed light and dark at 1x and 1.5x (plain, plain long over two lines, rich with subhead and action); no clipping. M3 tokens: plain tooltip container inverse-surface 322f35 / e6e0e9 (dark), 4 dp corners, body-small label in inverse-on-surface, 24 dp high (measured 24 on the one-line plate), 12.5:1 light, 14.3:1 dark; rich tooltip container surface-container f3edf7 / 211f26, 12 dp corners, title-small subhead in on-surface, body-medium text in on-surface-variant (49454f on f3edf7 about 8.6:1; cac4d0 on 211f26 about 9.5:1), action label-large in primary (6750a4 on f3edf7 5.9:1; d0bcff on 211f26 9.1:1), level-2 elevation. The soft shadow: the rich plate's edge is a blurred elevation shadow, so its outer pixel column is a gradient, not a hard edge; it cannot be matched pixel for pixel to Flutter's own shadow and is stated, not excused: there is no edge pixel to compare, the plate body is flat tokens. The anchors are left unpainted by the sheet so the tooltip alone is compared.",
+    "gaps": [
+     "Soft shadow edge (blurred level-2 elevation) is a gradient and not matched pixel for pixel; no Flutter or device capture exists for the tooltip"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/tooltip.png",
+    "notes": "ROUND 85: every cell of tooltip.png viewed light and dark at 1x and 1.5x (plain, plain long over two lines, rich with subhead and action); no clipping. M3 tokens: plain tooltip container inverse-surface 322f35 / e6e0e9 (dark), 4 dp corners, body-small label in inverse-on-surface, 24 dp high (measured 24 on the one-line plate), 12.5:1 light, 14.3:1 dark; rich tooltip container surface-container f3edf7 / 211f26, 12 dp corners, title-small subhead in on-surface, body-medium text in on-surface-variant (49454f on f3edf7 about 8.6:1; cac4d0 on 211f26 about 9.5:1), action label-large in primary (6750a4 on f3edf7 5.9:1; d0bcff on 211f26 9.1:1), level-2 elevation. The soft shadow: the rich plate's edge is a blurred elevation shadow, so its outer pixel column is a gradient, not a hard edge; it cannot be matched pixel for pixel to Flutter's own shadow and is stated, not excused: there is no edge pixel to compare, the plate body is flat tokens. The anchors are left unpainted by the sheet so the tooltip alone is compared.",
+    "gaps": [
+     "Soft shadow edge (blurred level-2 elevation) is a gradient and not matched pixel for pixel; no Flutter or device capture exists for the tooltip"
+    ]
+   }
+  }
+ },
+ "link": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/link.png",
+    "notes": "ROUND 85: pressed and keyboard-focus cells now show their state layer (sheet drive PressSettle and FocusSettle wait for the eased wash: the frames step 100 ms and the wash eases over duration-short-2). Measured at the pixel: hover 8 % primary over surface f2eaf8 (dark 23202a), pressed 10 % efe6f6 (27232f), focus 10 % efe6f6 (27232f), exact for 6750a4 over fef7ff and d0bcff over 141218; underline 1 px primary. Contrast: primary 6750a4 on surface 6.9:1, on the pressed layer 6.0:1; dark d0bcff on 141218 10.3:1, on the layer 9:1. M3 has no link: it is the text button's label-large primary with the standard layers (hover 8, focus 10, pressed 10) in a 48 dp target, 4 dp wash corners (radius-xs) rather than the button's full round, a design choice. Viewed light and dark at 1.5x (rest, hover, pressed, focus) and at 1x.",
+    "gaps": [
+     "Derived from the M3 text button; the 4 dp wash corner is not an M3 value (text buttons are fully round)"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/link.png",
+    "notes": "ROUND 85: pressed and keyboard-focus cells now show their state layer (sheet drive PressSettle and FocusSettle wait for the eased wash: the frames step 100 ms and the wash eases over duration-short-2). Measured at the pixel: hover 8 % primary over surface f2eaf8 (dark 23202a), pressed 10 % efe6f6 (27232f), focus 10 % efe6f6 (27232f), exact for 6750a4 over fef7ff and d0bcff over 141218; underline 1 px primary. Contrast: primary 6750a4 on surface 6.9:1, on the pressed layer 6.0:1; dark d0bcff on 141218 10.3:1, on the layer 9:1. M3 has no link: it is the text button's label-large primary with the standard layers (hover 8, focus 10, pressed 10) in a 48 dp target, 4 dp wash corners (radius-xs) rather than the button's full round, a design choice. Viewed light and dark at 1.5x (rest, hover, pressed, focus) and at 1x.",
+    "gaps": [
+     "Derived from the M3 text button; the 4 dp wash corner is not an M3 value (text buttons are fully round)"
+    ]
+   }
+  }
+ },
+ "dial": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/dial.png",
+    "notes": "ROUND 85: the Android knob now draws its states: a 40 dp state layer round the handle in primary (hover 8 %, pressed 10 %, keyboard focus 10 %: md.sys.state) and for keyboard focus a 3 dp ring 2 dp outside the handle (the M3 focus indicator thickness and offset), in FocusRing = primary 6750a4 / d0bcff. Contrast measured by computation: handle, active arc and ring primary on surface 6.9:1 light, 10.3:1 dark; readout on-surface 16:1 and 14:1. The inactive track is secondary-container as the M3 slider token md.comp.slider.inactive.track (e8def8 on fef7ff 1.3:1, 4a4458 on 141218 1.9:1): below 3:1 as in the M3 slider itself, the value is in the readout and the active arc, so it is not information-bearing. Windows, Linux and Cupertino knobs untouched (pictures byte for byte). All seven cells viewed light and dark at 1x and 1.5x, no clipping (the halo overhangs the 96 px face and the 120 px cell holds it). M3 has no dial: the geometry (270 degree arc, 40 % radius, 6 % stroke, 14 % handle) is the project's own, built from the slider tokens.",
+    "gaps": [
+     "M3 has no dial; geometry is the project's own on slider tokens; inactive track 1.3:1 / 1.9:1 as in the M3 slider"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/dial.png",
+    "notes": "ROUND 85: the Android knob now draws its states: a 40 dp state layer round the handle in primary (hover 8 %, pressed 10 %, keyboard focus 10 %: md.sys.state) and for keyboard focus a 3 dp ring 2 dp outside the handle (the M3 focus indicator thickness and offset), in FocusRing = primary 6750a4 / d0bcff. Contrast measured by computation: handle, active arc and ring primary on surface 6.9:1 light, 10.3:1 dark; readout on-surface 16:1 and 14:1. The inactive track is secondary-container as the M3 slider token md.comp.slider.inactive.track (e8def8 on fef7ff 1.3:1, 4a4458 on 141218 1.9:1): below 3:1 as in the M3 slider itself, the value is in the readout and the active arc, so it is not information-bearing. Windows, Linux and Cupertino knobs untouched (pictures byte for byte). All seven cells viewed light and dark at 1x and 1.5x, no clipping (the halo overhangs the 96 px face and the 120 px cell holds it). M3 has no dial: the geometry (270 degree arc, 40 % radius, 6 % stroke, 14 % handle) is the project's own, built from the slider tokens.",
+    "gaps": [
+     "M3 has no dial; geometry is the project's own on slider tokens; inactive track 1.3:1 / 1.9:1 as in the M3 slider"
+    ]
+   }
+  }
+ }
+}

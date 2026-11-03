@@ -4138,6 +4138,10 @@ fn week_unavailable(marks: *const CalendarMarks, d: time.Date, week_start: usize
     ret true
 }
 
+fn date_of_slot(shown: time.Date, slot: usize, first_weekday: i64) -> time.Date {
+    ret time.Date { year: shown.year, month: shown.month, day: u8(slot - usize(first_weekday) + 1usize) }
+}
+
 // The ISO 8601 week of the day `count` days from 1970-01-01: the week holding the
 // year's first Thursday is week 1.
 fn iso_week_of(count: i64) -> i64 {
@@ -4438,7 +4442,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 sized.style.width = style.Length { Px: cell }
                 sized.style.height = style.Length { Px: cell }
                 made = sized
-                if inside {
+                if inside && !(slot_w > cell) {
                     // The band: the whole cell between the ends, the inner half at an end.
                     var band_x: f32 = 0.0
                     var band_width = cell
@@ -4514,6 +4518,25 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 if slotted_error != ok { ret (zero, TooLarge) }
                 slotted[0usize] = made
                 made = widget.aligned(0u64, .Center, .Center, control.sized_style(slot_w, cell), slotted[0usize..1usize])
+                if ranged && !same_date(from, to) && within_range(date_of_slot(shown, slot, first_weekday), from, to) {
+                    // A wide slot (docked calendar): the band runs unbroken across the slot, half a slot at an end.
+                    var slot_x: f32 = 0.0
+                    var slot_band = slot_w
+                    if same_date(date_of_slot(shown, slot, first_weekday), from) {
+                        slot_x = slot_w * 0.5
+                        slot_band = slot_w * 0.5
+                    }
+                    if same_date(date_of_slot(shown, slot, first_weekday), to) { slot_band = slot_w * 0.5 }
+                    var slot_style = control.sized_style(slot_band, cell)
+                    slot_style.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                    if t.tokens.profile == .MaterialLike { slot_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
+                    let (slot_layers, slot_layers_error) = mem.alloc[widget.Node](a, 2usize)
+                    if slot_layers_error != ok { ret (zero, TooLarge) }
+                    var slot_none: []const widget.Node = zero
+                    slot_layers[0usize] = widget.positioned(0u64, slot_x, 0.0, slot_style, slot_none)
+                    slot_layers[1usize] = made
+                    made = widget.stack(0u64, control.sized_style(slot_w, cell), slot_layers[0usize..2usize])
+                }
             }
             cells[lead + column] = made
             column += 1usize

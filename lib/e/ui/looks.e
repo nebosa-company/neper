@@ -40,7 +40,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected), Settle (the pointer over it as Hover, then
 // four more frames of 100 ms so that a fade-in, an open menu's, has finished).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle, Tabs }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle, Tabs, PressSettle, FocusSettle }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -501,11 +501,11 @@ fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
         try testing.tap(&rig.harness, x - 60.0, y)
         ret testing.hover(&rig.harness, x, y)
     }
-    if drive == .Press {
+    if drive == .Press || drive == .PressSettle {
         try testing.hover(&rig.harness, x, y)
         ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
     }
-    if drive == .Focus {
+    if drive == .Focus || drive == .FocusSettle {
         // A click focuses it by pointer; Tab and Shift+Tab bring the keyboard focus back
         // to it (a ring only shows for keyboard focus), then the pointer leaves.
         try testing.tap(&rig.harness, x, y)
@@ -616,7 +616,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
                 if shot_two_error != ok { ret (zero, shot_two_error) }
                 shot = shot_two
             }
-            if drive == .Settle {
+            if drive == .Settle || drive == .PressSettle || drive == .FocusSettle {
                 var more = 0usize
                 while more < 4usize {
                     drop_shot(rig)
