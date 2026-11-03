@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Library |
-| score | 0.00 of 1 |
-| queue position | 98 of 106 (only position 1 is eligible for the next session; see README) |
+| score | 0.25 of 1 |
+| queue position | 98 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Plan docs/browser-progress.html. Needs L167. Acceptance: (1) Wikipedia with its 12k-node table, MDN with web fonts, craigslist and abv.bg match the Dart goldens within the per-site tolerance; (2) P3 3.13, 3.15, 3.16 SVG, web fonts; (3) P4 4.3 HTTP/2 transport, 4.4 and 4.5 TLS 1.3 interop and TLS 1.2, 4.8 HTTP cache, 4.11 to 4.14 cookies, CORS, SSRF, CSP, 4.17 filter lists; (4) core N.1 and N.2 scene limits and glyph cache as measured by these pages; (5) 7.2 to 7.6 control API, input, thread split, form widgets, accessibility; (6) a shell with tabs, history and bookmarks (7.7)
+> Plan docs/browser-progress.html. Needs L167. Acceptance: (1) Wikipedia with its 12k-node table, MDN with web fonts, craigslist and abv.bg match the Dart goldens within the per-site tolerance; (2) P3 3.13, 3.15, 3.16 SVG, web fonts; (3) P4 4.3 HTTP/2 transport, 4.4 and 4.5 TLS 1.3 interop and TLS 1.2, 4.8 HTTP cache, 4.11 to 4.14 cookies, CORS, SSRF, CSP, 4.17 filter lists; (4) core N.1 and N.2 scene limits and glyph cache as measured by these pages; (5) 7.2 to 7.6 control API, input, thread split, form widgets, accessibility; (6) a shell with tabs, history and bookmarks (7.7). Status 2026-11-03 (branch browser-conformance, tracker rows of P4): 1 done, 8 partial, 10 todo of 19; score is the mean with partial counted as half.
 
 ## Remaining work
 

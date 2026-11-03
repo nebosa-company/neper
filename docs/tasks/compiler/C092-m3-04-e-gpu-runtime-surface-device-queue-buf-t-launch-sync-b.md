@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Back end |
 | score | 0.95 of 1 |
-| queue position | 14 of 106 (only position 1 is eligible for the next session; see README) |
+| queue position | 14 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -38,13 +38,13 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `e.gpu`: `src/check.e`×39‡, `src/resolve.e`×27†, `src/lower.e`×12‡, `lib/x/khronos/compute.e`×10, `lib/e/gpu.e`×6‡, `lib/e/os.neperos.e`×3, `lib/e/os.wasi.e`×3‡, `lib/e/gfx/scene.e`×2‡
 - `queue_with`: `lib/e/gpu.e`×2‡
-- `wait_for`: `lib/e/dist/deadlock.e`×5, `lib/e/js/realm.e`×4†, `lib/e/task.e`×4, `src/runtime_none_a64.e`×4†, `src/runtime_none_a64.s`×4, `lib/e/os.windows.e`×3‡, `lib/e/sync.e`×3, `scripts/neperos-input.py`×3
+- `wait_for`: `lib/e/dist/deadlock.e`×5, `lib/e/gpu/vulkan.e`×5†, `lib/e/js/realm.e`×4†, `lib/e/task.e`×4, `src/runtime_none_a64.e`×4†, `src/runtime_none_a64.s`×4, `lib/e/os.windows.e`×3‡, `lib/e/sync.e`×3
 - `gpu.barrier`: `src/check.e`×7‡, `tests/conformance/spirv/sync.e`×3, `lib/e/gpu.e`×1‡, `src/lower.e`×1‡
 - `FaultRecord`: `lib/e/gpu.e`×6‡
 - `Fault`: `scripts/soap_reference.py`×27, `lib/e/fmt/soap.e`×24, `lib/e/test/support.e`×18, `lib/e/gpu.e`×16‡, `lib/e/os.windows.e`×7‡, `lib/e/os.linux.e`×5‡, `lib/e/os.macos.e`×4‡, `src/main.e`×4‡
 - `last_fault`: `lib/e/gpu.e`×3‡
 - `Image`: `scripts/khronos/glcorearb.h`×102‡, `lib/x/khronos/gl.e`×45‡, `lib/e/os/shell.macos.e`×28‡, `scripts/image_vectors.py`×25, `lib/e/ui/control.e`×24‡, `lib/e/gfx/image.e`×21, `lib/e/gfx/scene.e`×21‡, `lib/e/web/page.e`×21†
-- `open_target`: `lib/e/ui/window.e`×2, `scripts/gen_svg_text_test.py`×2, `benchmarks/charts/chart_bench.e`×1, `lib/e/gfx/svg_filter.e`×1, `lib/e/gpu.e`×1‡, `lib/e/ui/testing.e`×1, `scripts/gen_math_render_test.py`×1†, `scripts/gen_svg_render_test.py`×1
+- `open_target`: `lib/e/ui/window.e`×3, `benchmarks/gfx_gpu_raster.e`×2, `scripts/gen_svg_text_test.py`×2, `benchmarks/charts/chart_bench.e`×1, `benchmarks/window_present.e`×1, `lib/e/gfx/svg_filter.e`×1, `lib/e/gpu.e`×1‡, `lib/e/ui/testing.e`×1
 
 ## Existing fixtures
 

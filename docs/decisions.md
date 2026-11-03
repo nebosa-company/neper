@@ -43713,3 +43713,9 @@ mostly glyph outlines), the unsupported text modes.
 readback and GDI, as fast as the CPU path. `NEPER_RASTER=gpu` tries the GPU rasteriser: on the Intel iGPU it is about twice as fast for first frames and large changes and about equal for the rest, but 30 percent slower for the smallest
 animation frames at 1180x780 and compiles its kernel for 30 to 50 s the first time on a machine; on the RTX it refuses itself. Recommended default: Intel (the screen's GPU) the CPU renderer until the kernel compiles faster, or
 `SLUST_BACKEND=vulkan NEPER_RASTER=gpu` where the first-run wait is acceptable; RTX the CPU renderer (the discrete GPU adds nothing for this UI until the kernel runs there).
+
+## D5952 — The playground compiler is built with `--arena 192m`, and a wasm reservation never exceeds the root
+
+Safari on iPadOS 17 stopped the playground with `E-TYPE-9999 ... the compiler's arena is exhausted`. The compiler used about 105 MB, but its memory size was 1.03 GB after the passes that only name a missing module and 1.9 GB after the last: the engine grows a module's memory to the highest byte touched, and the 1 GiB root arena puts every reservation above it, each 805 MB (`platform.reservation`, D5640). Desktop engines and a newer iPad grant that; the older one refuses a grow somewhere between the two sizes.
+
+`platform.wasi.e` now gives a reservation the smaller of a quarter of what the root leaves and the root's own size, so the default 1 GiB build is unchanged byte for byte, and `--arena 192m` makes 192 MB reservations. `docs/play/neper.wasm` is built that way: the peak memory size is 500 MB, and the eight samples compile to the same bytes as before. 128m also works (372 MB), 64m does not (`hello.e` exhausts it). A program that needs more than 192 MB per pool now reports the arena diagnostic in the playground; the regular `neper.wasm` is unaffected.

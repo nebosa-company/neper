@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#0c0e14;color:#e1e2e9;font:400 40px/1.35 "Segoe UI","Segoe UI Variable Text",sans-serif}
+#stage{position:absolute;inset:0;padding:90px 120px}
+.step{color:#b3c5ff;font:600 30px/1 "Segoe UI",sans-serif;letter-spacing:2px}
+h1{margin:18px 0 44px;font:400 84px/1.1 "Segoe UI Variable Display","Segoe UI",sans-serif}
+.term{background:#0c0e14;border:2px solid #434653;border-radius:20px;padding:40px 48px;font:400 38px/1.6 "Cascadia Code",Consolas,monospace;min-height:300px;white-space:pre-wrap}
+.p{color:#b3c5ff}.o{color:#8d909e}.hl{color:#ffb692}
+.cards{display:flex;gap:32px;margin-bottom:40px}
+.card{flex:1;background:#1a1b20;border:2px solid #434653;border-radius:20px;padding:30px 36px}
+.card b{display:block;font:600 52px/1.2 "Segoe UI",sans-serif;color:#b3c5ff}
+.card span{font:400 30px/1.4 "Cascadia Code",Consolas,monospace;color:#c3c6d5}
+.no{display:flex;flex-wrap:wrap;gap:16px 36px;font:400 40px/1.2 "Segoe UI",sans-serif;color:#8d909e}
+.no s{text-decoration-thickness:4px;text-decoration-color:#ffb692}
+.big{font:400 110px/1.1 "Segoe UI Variable Display","Segoe UI",sans-serif;color:#b3c5ff;margin-top:24px}
+#end{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center}
+#end img{width:200px;height:200px}
+</style></head><body><div id="stage"></div><script>
+const S=document.getElementById('stage');
+const clamp=(x)=>Math.max(0,Math.min(1,x));
+const typed=(s,p)=>s.slice(0,Math.floor(s.length*clamp(p)));
+const esc=(s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const PROMPT=`Read docs/llm-neper-card.md first. Then write a Neper
+command-line program, wordfreq.e, that reads a text file
+and prints its ten most frequent words. Add @test
+functions, run them, and fix every diagnostic by its code
+and span. Then build it for x64 windows, x64 linux and
+aarch64 macos with emit-executable.`;
+function render(t,scenes){
+  let i=scenes.findIndex((s)=>t<s.start+s.dur); if(i<0)i=scenes.length-1;
+  const sc=scenes[i], p=clamp((t-sc.start-0.3)/(sc.dur-0.9)), id=sc.id;
+  if(id==='clone'){
+    const l1='git clone https://github.com/nebosa-company/neper', l2='scripts/build-selfhost.ps1';
+    const a=clamp(p/0.45), b=clamp((p-0.5)/0.3);
+    S.innerHTML=`<div class="step">STEP 1 OF 3</div><h1>Clone it. Build it once.</h1><div class="term"><span class="p">$</span> ${esc(typed(l1,a))}\n${p>0.5?'<span class="p">$</span> '+esc(typed(l2,b)):''}\n${p>0.85?'<span class="o">compiler built. MIT licensed, 100% Neper.</span>':''}</div>`;
+  } else if(id==='prompt'){
+    S.innerHTML=`<div class="step">STEP 2 OF 3</div><h1>Submit one prompt.</h1><div class="term"><span class="p">&gt;</span> ${esc(typed(PROMPT,clamp(p/0.92)))}</div>`;
+  } else if(id==='cross'){
+    const n=(k)=>clamp((p-k)/0.12);
+    const c=[['Windows','x64 windows → .exe'],['Linux','x64 linux → ELF'],['macOS','aarch64 macos → Mach-O']].map((x,k)=>`<div class="card" style="opacity:${n(0.05+k*0.12)}"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');
+    const no=['LLVM','MSVC / MinGW','Xcode / macOS SDK','system linker','Docker'].map((x,k)=>`<s style="opacity:${n(0.4+k*0.08)}">${x}</s>`).join('');
+    S.innerHTML=`<div class="step">STEP 3 OF 3</div><h1>One machine. Any OS.</h1><div class="cards">${c}</div><div class="no">${no}</div><div class="big" style="opacity:${n(0.8)}">0 third-party toolchains</div>`;
+  } else {
+    S.innerHTML=`<div id="end"><img src="../../gtm/logo/neper-icon.svg"><div class="big">neper.dev/get-started</div><div class="o" style="font-size:44px;margin-top:20px">github.com/nebosa-company/neper</div></div>`;
+  }
+}
+</script></body></html>

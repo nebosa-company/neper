@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | category | library / Library |
-| score | 0.00 of 1 |
-| queue position | 97 of 106 (only position 1 is eligible for the next session; see README) |
+| score | 0.35 of 1 |
+| queue position | 97 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Plan docs/browser-progress.html. Needs L166. Acceptance: (1) P2 2.4 to 2.15: floats, positioned and sticky, tables, flex, grid, multicolumn, intrinsic sizing, overflow, transforms, replaced elements, form controls, hit testing and geometry; (2) P3 3.4, 3.5, 3.8, 3.9 gradients, shadows, clip-path, mask, filters; (3) 9.2 WPT CSS reftests reproduce at least Dart's 116 of 122 and the six known failures are triaged; (4) the Dart layout pixel-probe expectations carried over as fixtures and green
+> Plan docs/browser-progress.html. Needs L166. Acceptance: (1) P2 2.4 to 2.15: floats, positioned and sticky, tables, flex, grid, multicolumn, intrinsic sizing, overflow, transforms, replaced elements, form controls, hit testing and geometry; (2) P3 3.4, 3.5, 3.8, 3.9 gradients, shadows, clip-path, mask, filters; (3) 9.2 WPT CSS reftests reproduce at least Dart's 116 of 122 and the six known failures are triaged; (4) the Dart layout pixel-probe expectations carried over as fixtures and green. Status 2026-11-03 (branch browser-conformance, tracker rows of P2+P3): 4 done, 21 partial, 16 todo of 41; score is the mean with partial counted as half.
 
 ## Remaining work
 

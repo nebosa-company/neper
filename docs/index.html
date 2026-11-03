@@ -126,6 +126,7 @@
     h1 span { color: var(--blue); }
     .lede { max-width: 630px; margin: 0 0 var(--space-8); color: var(--muted); font: 400 16px/24px var(--font-sans); letter-spacing: .15px; }
     .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+    #start .actions { margin-top: var(--space-6); }
     .button { text-decoration: none; }
     .button.secondary { --c: var(--secondary-container); --on: var(--on-secondary-container); }
 
@@ -236,14 +237,19 @@
     .blog-card { display: grid; grid-template-columns: 1.1fr 1fr; overflow: hidden; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); box-shadow: var(--elevation-1); color: inherit; text-decoration: none; }
     .blog-card:hover, .blog-card:focus-visible { border-color: var(--primary); }
     .blog-card + .blog-card { margin-top: var(--space-6); }
-    .blog-card img { display: block; width: 100%; height: 100%; object-fit: cover; border-right: 1px solid var(--outline-variant); }
+    .blog-card img { display: block; width: 100%; height: auto; align-self: center; aspect-ratio: 1200 / 630; border-right: 1px solid var(--outline-variant); }
     .blog-card-body { display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); padding: var(--space-8); }
     .blog-card-meta { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
     .blog-card-title { font: 400 24px/32px var(--font-display); }
     .blog-card-excerpt { color: var(--muted); }
     .blog-card-more { color: var(--primary); font: 600 13px/20px var(--font-sans); }
 
+    .yt { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; padding: 0; cursor: pointer; color: #fff; font: inherit; background: #0c0e14; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .yt span { display: grid; place-items: center; gap: 12px; text-align: center; padding: 0 16px; text-shadow: 0 1px 6px #000; }
+    .yt span::before { content: "\25B6"; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 28px; padding-left: 4px; }
+    .yt:hover span::before, .yt:focus-visible span::before { background: #c00; }
     .demo-video { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); object-fit: contain; }
+    main section:not(#start):not(#demo) { content-visibility: auto; contain-intrinsic-size: auto 800px; }
 
     .final { display: flex; align-items: end; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-16); padding: var(--space-10); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .final h2 { max-width: 700px; margin-bottom: 0; }
@@ -277,11 +283,13 @@
     <nav aria-label="Primary navigation">
       <a class="brand" href="#top" aria-label="Neper home"><img src="gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
       <div class="nav-links">
+        <a href="get-started.html">get started</a>
+        <a href="play.html">try it</a>
         <a href="#demo">demo</a>
         <a href="#speed">speed</a>
         <a href="#gpu">cpu + gpu</a>
         <a href="#llm">llm stack</a>
-        <a href="#blog">blog</a>
+        <a href="blog/">blog</a>
         <a href="https://discord.gg/AdRneEsbCu">discord ↗</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
       </div>
@@ -328,17 +336,33 @@ Hello, Neper</code></pre>
       </div>
 
       <section id="start">
-        <div class="eyebrow">&gt; your first program_</div>
-        <h2>Run one in a minute.</h2>
-        <p class="section-intro">Three small steps. Each one is yours to take, and none needs an account.</p>
+        <div class="eyebrow">&gt; get started_</div>
+        <h2>Get started in three steps.</h2>
+        <p class="section-intro">No account to create, and <strong>no third-party toolchain to cross compile for any OS</strong>: no LLVM, MSVC or MinGW, no Xcode or macOS SDK, no system linker, no Docker. One machine writes the Windows, Linux and macOS executables itself.</p>
         <div class="terminal">
-          <div class="terminal-bar">first run</div>
+          <div class="terminal-bar">1 · get it</div>
           <pre><code><span class="prompt">$</span> git clone https://github.com/nebosa-company/neper
-<span class="prompt">$</span> <span class="str"># save the hello.e example above as hello.e</span>
-<span class="prompt">$</span> neper run hello.e
+<span class="prompt">$</span> scripts/build-selfhost.ps1   <span class="str"># Linux, macOS: scripts/build-selfhost.sh</span>
+<span class="prompt">$</span> neper run hello.e          <span class="str"># the hello.e example above</span>
 Hello, Neper</code></pre>
         </div>
+        <div class="terminal" style="margin-top: var(--space-4)">
+          <div class="terminal-bar">2 · submit this prompt to your coding agent</div>
+          <pre><code>Read docs/llm-neper-card.md first. Then write a Neper command-line
+program, wordfreq.e, that reads a text file and prints its ten most
+frequent words. Add @test functions, run them, and fix every
+diagnostic by its code and span. Then build it for x64 windows,
+x64 linux and aarch64 macos with emit-executable.</code></pre>
+        </div>
+        <div class="terminal" style="margin-top: var(--space-4)">
+          <div class="terminal-bar">3 · cross compile, nothing else installed</div>
+          <pre><code><span class="prompt">$</span> neper emit-executable wordfreq.e . x64 windows   wordfreq.exe   --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . x64 linux     wordfreq-linux --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . aarch64 macos wordfreq-mac   --release</code></pre>
+        </div>
         <div class="actions">
+          <a class="button nu-btn lg" href="get-started.html">Full guide + 30-second video →</a>
+          <a class="button secondary nu-btn tonal lg" href="play.html">Try it in your browser</a>
           <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper#readme">Setup notes in the README</a>
           <a class="button secondary nu-btn tonal lg" href="https://github.com/nebosa-company/neper/discussions/new?category=show-and-tell">Tell us what you'll build</a>
         </div>
@@ -349,9 +373,9 @@ Hello, Neper</code></pre>
         <h2>From prompt to native binary.</h2>
         <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
         <h3 class="demo-caption" id="trailer">Neper in 30 seconds</h3>
-        <iframe class="demo-video" src="https://www.youtube-nocookie.com/embed/iZI3FmttYn4?rel=0" title="Neper in 30 seconds" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <button type="button" class="yt demo-video" data-yt="iZI3FmttYn4" data-title="Neper in 30 seconds"><span>Play: Neper in 30 seconds</span></button>
         <h3 class="demo-caption">From prompt to native binary, in full</h3>
-        <iframe class="demo-video" src="https://www.youtube-nocookie.com/embed/S5dMLUpOtRg" title="Neper capabilities demonstration" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <button type="button" class="yt demo-video" data-yt="S5dMLUpOtRg" data-title="Neper capabilities demonstration"><span>Play: from prompt to native binary, in full</span></button>
       </section>
 
       <section id="speed">
@@ -510,7 +534,7 @@ Hello, Neper</code></pre>
         <h2>Notes from measuring Neper.</h2>
         <p class="section-intro">We hold the language to the claim on this page with numbers from real sessions, including the columns where it loses.</p>
         <a class="blog-card" href="blog/compiler-memory.html">
-          <img src="blog/img/compiler-memory.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="blog/img/compiler-memory.svg" width="1200" height="630" alt="A 1 TiB ceiling that costs 3 MiB. A program starts at 3 MiB of RAM; the compiler builds a million lines at 605 MB." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 30, 2026 · memory</span>
             <span class="blog-card-title">A 1 TiB ceiling that costs 3 MiB</span>
@@ -519,7 +543,7 @@ Hello, Neper</code></pre>
           </span>
         </a>
         <a class="blog-card" href="blog/neper-webassembly.html">
-          <img src="blog/img/neper-webassembly.svg" width="1200" height="630" alt="" loading="lazy">
+          <img src="blog/img/neper-webassembly.svg" width="1200" height="630" alt="Neper writes WebAssembly itself. An 18,250-byte hello world, a 1.7 MB window, and 2,196 of 2,266 executables written by neper.wasm byte-identical to the native compiler. No LLVM, no second toolchain." loading="lazy">
           <span class="blog-card-body">
             <span class="blog-card-meta">October 27, 2026 · target</span>
             <span class="blog-card-title">Neper writes WebAssembly itself</span>
@@ -527,96 +551,9 @@ Hello, Neper</code></pre>
             <span class="blog-card-more">Read the post →</span>
           </span>
         </a>
-        <a class="blog-card" href="blog/desktop-toolchains.html">
-          <img src="blog/img/desktop-toolchains.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 23, 2026 · comparison</span>
-            <span class="blog-card-title">Ten languages, one window: what you install</span>
-            <span class="blog-card-excerpt">One compiler builds Windows and Linux desktop programs from one machine, the user installs nothing to run them, and the window is 2.7 MiB. Set against the install guides of ten popular desktop languages, with the limits listed.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/why-neper-is-optimized-for-llms.html">
-          <img src="blog/img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 21, 2026 · design</span>
-            <span class="blog-card-title">Why Neper is built for the agent loop</span>
-            <span class="blog-card-excerpt">Search, generate, edit, check, repair: what each step costs a model, and the language rules, JSONL commands and diagnostics that make each one cheaper, including the claims we have not yet proved.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/cleartype-text.html">
-          <img src="blog/img/cleartype-text.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 18, 2026 · engineering</span>
-            <span class="blog-card-title">Text the way Windows draws it: ClearType in Neper</span>
-            <span class="blog-card-excerpt">Neper's Windows look now draws hinted ClearType text, with its own TrueType bytecode interpreter and a GDI-style rasteriser. Against 77 native Windows captures the off pixels fell from 30,800 to 11,321. It is not pixel-exact yet, and the post says by how much.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/charts-speed-and-png-size.html">
-          <img src="blog/img/charts-speed-and-png-size.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 13, 2026 · engineering</span>
-            <span class="blog-card-title">Faster charts, smaller SVG, and what we are doing about PNG size</span>
-            <span class="blog-card-excerpt">The same chart drawn by Neper, base R, lattice, ggplot2 and matplotlib: 3.4 to 73 times faster as SVG, 2 to 24 times faster as PNG, SVG 28 to 32 percent smaller. Neper's PNG is three times larger than R's, and the post says why, what we measured, and the lossy step that cuts it by 47 percent.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/charts-field-guide.html">
-          <img src="blog/img/charts-field-guide.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 4, 2026 · library</span>
-            <span class="blog-card-title">234 charts, and when to use each</span>
-            <span class="blog-card-excerpt">A field guide to every chart Neper draws, from bars and box plots to Laney control charts, Kaplan-Meier curves, Sankeys and Nyquist plots: the question each one answers, when to reach for another, and how fast it is against matplotlib.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/sc1m-eight-compilers.html">
-          <img src="blog/img/sc1m-eight-compilers.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">October 2, 2026 · measurement</span>
-            <span class="blog-card-title">A million lines, eight compilers</span>
-            <span class="blog-card-excerpt">Neper's sc1m scale program ported to seven languages with checked answers. Neper's binary runs it in 47 ms from 2.73 MiB, Dart compiles it fastest cold — and Zig 0.16 never finishes.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/six-algorithms.html">
-          <img src="blog/img/six-algorithms.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 29, 2026 · library</span>
-            <span class="blog-card-title">Six algorithms we first skipped</span>
-            <span class="blog-card-excerpt">A backtracking regex engine with a step budget, mixed-integer programming by branch and cut, model checking that returns the shortest counterexample, AC-2001, crash dumps from both operating systems, and sign-on as the user who is already signed in: what each is for, and a program for each.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/sqlserver-openssl.html">
-          <img src="blog/img/sqlserver-openssl.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 29, 2026 · engineering</span>
-            <span class="blog-card-title">Bring your own OpenSSL: SQL Server scans, three times faster</span>
-            <span class="blog-card-excerpt">Neper's SQL Server driver can hand its TLS record cipher to the host's OpenSSL, looked up at run time and never shipped, while the handshake and certificate checks stay Neper's. Scans get 3.2–3.6 times faster, and on Windows Neper's scan becomes the fastest of Neper, C, Go and Rust.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/e-db-drivers.html">
-          <img src="blog/img/e-db-drivers.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 28, 2026 · engineering</span>
-            <span class="blog-card-title">One SQL contract, five drivers</span>
-            <span class="blog-card-excerpt">How e.db works, how to write a driver, and what differs between SQLite, PostgreSQL, MySQL, ODBC and SQL Server, whose TDS protocol Neper speaks itself inside TLS 1.3 — then the same workload in Neper, C, Go and Rust on Windows and Linux. C wins, Rust is second, Neper third ahead of Go, and scans are still where Neper loses.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
-        <a class="blog-card" href="blog/neper-vs-dart-llm-cost.html">
-          <img src="blog/img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="" loading="lazy">
-          <span class="blog-card-body">
-            <span class="blog-card-meta">September 27, 2026 · measurement</span>
-            <span class="blog-card-title">Neper vs Dart: what it costs an LLM to write each one</span>
-            <span class="blog-card-excerpt">Seven days of Claude transcripts, measured byte by byte. The same cost per KB, 43% cheaper direct edits and more first-try builds for Neper — and 2.2× the context, which is what we fix next.</span>
-            <span class="blog-card-more">Read the post →</span>
-          </span>
-        </a>
+        <div class="actions" style="margin-top: var(--space-6)">
+          <a class="button nu-btn lg" href="blog/">All 12 posts →</a>
+        </div>
       </section>
 
       <section class="final">
@@ -691,380 +628,7 @@ Hello, Neper</code></pre>
       <iframe class="control-detail-frame" title="Control preview"></iframe>
     </div>
   </dialog>
-  <script>
-    const controlGroups = new Map([
-      ["Content and display", "Avatar Badge Canvas Card Cover Divider EmptyState Gauge Icon Image Level Placeholder ProgressBar ProgressRing RichText SelectableText Skeleton Text".split(" ")],
-      ["Layout and structure", "ActionRow Form FormField GroupBox HeaderRow ResizablePane Row SplitView".split(" ")],
-      ["Actions", "Button Fab IconButton Link SpeedDial SplitButton SwipeActions ToggleButton Toolbar".split(" ")],
-      ["Input and selection", "Autocomplete ButtonEdit Chip Choice ColorPicker ComboBox Dial FieldLabel FieldMessage FontPicker FormattedField MultiSelectList Picker Rating SearchBar SegmentedControl Select ShortcutRecorder Slider SpinBox Stepper Switch TextField TokenField ValidationSummary".split(" ")],
-      ["Navigation", "AppBar Breadcrumbs DestinationBar DocumentTabs MenuBar NavigationDrawer NavigationSplit NavigationStack PageIndicator PageView Pagination Tabs WindowSwitcher Wizard".split(" ")],
-      ["Collections and data", "DataGrid GridView KeyValueEditor List ListBox NotificationList Outline PropertyGrid ReorderableList ScrollBar Table TableRow Tree TreeTable VirtualGrid VirtualList".split(" ")],
-      ["Overlays and feedback", "Accordion ActionSheet Banner CommandPalette ContextMenu Dialog Disclosure Flyout Menu Popover Popup Sheet Snackbar Tooltip".split(" ")],
-      ["Date and time", "Calendar DatePicker DurationPicker TimePicker".split(" ")],
-      ["Workspace", "Browser DockLayout DockPanel MultiDocumentWorkspace StatusBar".split(" ")],
-      ["Media and refresh", "Carousel PullToRefresh".split(" ")]
-    ])
-
-    function renderCatalog(dialog, groups) {
-      const output = dialog.querySelector(".catalog-dialog-groups")
-      const fragment = document.createDocumentFragment()
-      let count = 0
-      for (const [category, items] of groups) {
-        const collapsible = dialog.id === "algorithm-catalog"
-        const group = document.createElement(collapsible ? "details" : "section")
-        group.className = "catalog-dialog-group"
-        const heading = document.createElement(collapsible ? "summary" : "h3")
-        heading.textContent = dialog.id === "algorithm-catalog" ? `${category} (${items.length})` : category
-        const grid = document.createElement("div")
-        grid.className = "catalog-entry-grid"
-        for (const item of items) {
-          const card = document.createElement(item.href ? "a" : "div")
-          card.className = "catalog-entry"
-          if (item.href) {
-            card.href = item.href
-            if (item.preview) card.addEventListener("click", event => {
-              if (event.ctrlKey || event.metaKey || event.shiftKey || event.button) return
-              event.preventDefault()
-              const detail = document.getElementById("control-detail")
-              detail.querySelector("h2").textContent = item.name
-              detail.querySelector("iframe").src = `ux/control-preview.html?name=${encodeURIComponent(item.name)}&detail`
-              detail.querySelector("#control-detail-spec").href = `https://github.com/nebosa-company/neper/blob/master/docs/ux/components/${item.name}/README.md`
-              detail.showModal()
-            })
-          }
-          if (item.image) {
-            const image = document.createElement("img")
-            image.className = "catalog-entry-image"
-            image.src = item.image
-            image.width = 360
-            image.height = 240
-            image.loading = "lazy"
-            image.alt = `${item.name} chart rendered by Neper`
-            card.append(image)
-          }
-          if (item.preview) {
-            const preview = document.createElement("span")
-            preview.className = "catalog-entry-preview"
-            const frame = document.createElement("iframe")
-            frame.src = `ux/control-preview.html?name=${encodeURIComponent(item.preview)}`
-            frame.loading = "lazy"
-            frame.tabIndex = -1
-            frame.setAttribute("aria-hidden", "true")
-            preview.append(frame)
-            card.append(preview)
-          }
-          const name = document.createElement("span")
-          name.textContent = item.name
-          card.append(name)
-          if (item.description) {
-            const description = document.createElement("p")
-            description.textContent = item.description
-            card.append(description)
-          }
-          if (item.detail) {
-            const detail = document.createElement("code")
-            detail.textContent = item.detail
-            card.append(detail)
-          }
-          grid.append(card)
-          count++
-        }
-        group.append(heading, grid)
-        fragment.append(group)
-      }
-      if (!count) throw new Error("catalog is empty")
-      if (dialog.id !== "control-catalog") dialog.querySelector("h2").textContent = `${count.toLocaleString("en-US")} ${{"module-catalog": "modules", "algorithm-catalog": "algorithms", "chart-catalog": "chart types"}[dialog.id]}`
-      output.replaceChildren(fragment)
-      dialog.querySelector(".catalog-dialog-status").hidden = true
-      dialog.dataset.loaded = "true"
-    }
-
-    const moduleDescriptionOverrides = new Map([
-      ["e.algo.bdd", "Reduced ordered binary decision diagrams with Boolean operations, evaluation, and model counting."],
-      ["e.algo.bignum", "Arbitrary-precision integer arithmetic."],
-      ["e.algo.bitset", "Creates, queries, and combines compact sets of bits."],
-      ["e.algo.complex", "Complex-number arithmetic for 32-bit and 64-bit floating-point values."],
-      ["e.algo.decimal", "Fixed-scale decimal arithmetic with explicit precision."],
-      ["e.algo.deflate", "DEFLATE compression and decompression."],
-      ["e.algo.disjoint_set", "Maintains disjoint sets for connectivity and grouping queries."],
-      ["e.algo.hash", "Non-cryptographic hashing algorithms and checksums."],
-      ["e.algo.linalg.matrix", "Dense and sparse matrix operations for linear algebra."],
-      ["e.algo.linalg.tensor", "Multidimensional tensor views and operations for linear algebra."],
-      ["e.algo.rand", "Generates repeatable random values and bounded random choices."],
-      ["e.algo.rand.dist", "Samples common probability distributions from random-number generators."],
-      ["e.algo.rand.quasi", "Generates low-discrepancy and quasi-random sequences."],
-      ["e.algo.sketch", "Probabilistic data sketches for cardinality, frequency, similarity, and heavy-hitter estimation."],
-      ["e.algo.smt", "Satisfiability-modulo-theories solving for equality logic and bit-vector constraints."],
-      ["e.algo.sort", "Sorting, selection, partitioning, and ordering algorithms."],
-      ["e.algo.stat", "Statistical summaries, distributions, sampling, and analysis."],
-      ["e.algo.stat.test", "Statistical hypothesis tests and significance analysis."],
-      ["e.algo.uuid", "Generates, parses, and formats universally unique identifiers."],
-      ["e.audio.mixer", "Multichannel audio mixing, routing, gain, and buses."],
-      ["e.audio.spatial", "Spatial audio positioning, attenuation, and listener transforms."],
-      ["e.crypto.hash", "Cryptographic hash functions and secure digest operations."],
-      ["e.concurrent.deque", "Work-stealing double-ended queues for concurrent task scheduling."],
-      ["e.data.deque", "Double-ended queues with efficient insertion and removal at either end."],
-      ["e.data.list", "Dynamic lists for ordered collections of values."],
-      ["e.data.map", "Key-value maps for fast lookup and updates."],
-      ["e.data.ring", "Fixed-capacity ring buffers for bounded streaming data."],
-      ["e.data.window", "Maintains sliding windows over streaming data."],
-      ["e.fmt.csv", "CSV parsing and generation with explicit dialect handling."],
-      ["e.fmt.json.schema", "JSON Schema validation for types, values, arrays, objects, composition, and references."],
-      ["e.fmt.html.template", "Generates HTML safely from templates and dynamic values."],
-      ["e.fmt.mp3", "MP3 audio stream parsing and decoding."],
-      ["e.fmt.msgpack", "MessagePack encoding and decoding."],
-      ["e.fmt.wav", "WAV audio file encoding and decoding."],
-      ["e.fmt.zlib", "Zlib encoding and decoding with RFC 1950 framing and Adler-32 integrity checks."],
-      ["e.game.ai", "Artificial-intelligence behaviors and decision systems for games."],
-      ["e.game.camera", "Game-camera transforms, tracking, bounds, and viewport control."],
-      ["e.game.collide2d", "Two-dimensional collision detection and contact tests."],
-      ["e.game.dialog", "Branching dialogue trees, conditions, and conversation state."],
-      ["e.game.ecs", "Entity-component systems for organizing game objects and behavior."],
-      ["e.game.grid", "Grid coordinates, neighborhoods, traversal, and spatial queries."],
-      ["e.game.input", "Game-input actions, bindings, and device state."],
-      ["e.game.loop", "Deterministic game-loop timing and frame scheduling."],
-      ["e.game.netsync", "Network synchronization and state reconciliation for games."],
-      ["e.game.particle", "Particle-system simulation, emission, and lifecycle updates."],
-      ["e.game.sprite", "Two-dimensional sprite animation, batching, and rendering data."],
-      ["e.game.tilemap", "Tile-map layers, coordinates, traversal, and queries."],
-      ["e.game.vision", "Visibility, field-of-view, and line-of-sight calculations."],
-      ["e.gpu.tensor", "GPU-accelerated tensor operations over deterministic linear-algebra views."],
-      ["e.math", "Scalar mathematics, floating-point operations, and numerical helpers."],
-      ["e.math.fixed", "Fixed-point arithmetic for deterministic numeric computations."],
-      ["e.math.opt.convex", "Convex optimization models and solvers."],
-      ["e.math.opt.meta", "Metaheuristic optimization for difficult search spaces."],
-      ["e.ml.cluster.density", "Density-based clustering for machine learning."],
-      ["e.net.snapshot", "Captures and reconciles networked application state."],
-      ["e.net.http.auth", "HTTP authentication and authorization."],
-      ["e.text.normalize", "Unicode text normalization and canonical equivalence."],
-      ["e.text.unicode", "Unicode properties, categories, and character operations."],
-      ["e.text.utf8", "UTF-8 validation, decoding, encoding, and traversal."],
-      ["e.thread", "Native thread creation, coordination, and lifecycle management."],
-      ["e.thread.pool", "Bounded thread pools, task submission, parallel ranges, work stealing, and orderly shutdown."],
-      ["e.time", "Monotonic clocks, wall time, durations, and timers."],
-      ["e.ui.collection", "Lists, tables, trees, grids, and virtualized user-interface collections."],
-      ["e.ui.navigation", "Navigation stacks, tabs, breadcrumbs, drawers, and routing controls."],
-      ["e.ui.overlay", "Dialogs, popovers, menus, tooltips, and other user-interface overlays."],
-      ["e.ui.window", "Creates and manages native application windows."]
-    ])
-
-    const moduleTerms = new Map([
-      ["aead", "authenticated encryption"], ["ai", "artificial intelligence"], ["align", "sequence alignment"],
-      ["analysis", "analysis and feature extraction"], ["anti_entropy", "anti-entropy synchronization"],
-      ["anim", "animation"], ["ann", "approximate nearest-neighbor search"], ["arrow", "Apache Arrow"],
-      ["asn1", "ASN.1"], ["avro", "Apache Avro"], ["bdd", "binary decision diagrams"],
-      ["app", "application lifecycle"], ["asset", "asset management"], ["auth", "authentication"],
-      ["balance", "load balancing"], ["bayes", "Bayesian models"],
-      ["bidi", "bidirectional text"], ["bignum", "arbitrary-precision numbers"], ["bitset", "bit sets"],
-      ["bk_tree", "BK trees"], ["brotli", "Brotli"], ["bson", "BSON"], ["btree", "B-trees"],
-      ["bzip2", "Bzip2"], ["cache", "caching"], ["calendar", "calendar calculations"],
-      ["cbor", "CBOR"], ["cipher", "symmetric ciphers"], ["classic", "classical ciphers"],
-      ["cli", "command-line interfaces"], ["clock", "logical clocks"], ["cluster", "clustering"],
-      ["coding", "coding-theory"], ["collate", "collation"],
-      ["coap", "CoAP"], ["collab", "collaborative editing"], ["collide2d", "two-dimensional collision detection"],
-      ["collective", "collective communication"], ["color", "coloring"], ["combin", "combinatorics"],
-      ["combopt", "combinatorial optimization"], ["commit", "distributed transactions"],
-      ["community", "community detection"], ["consensus", "distributed consensus"],
-      ["consistent_hash", "consistent hashing"], ["control", "controls"], ["crdt", "conflict-free replicated data types"],
-      ["convex", "convex optimization"], ["cron", "scheduled jobs"], ["csp", "constraint satisfaction"],
-      ["css", "CSS"], ["csv", "CSV"], ["curve", "curves and splines"], ["deadlock", "deadlock detection"],
-      ["dht", "distributed hash tables"], ["diff", "differencing"],
-      ["dns", "DNS"], ["dp", "dynamic programming"], ["ecc", "error correction"],
-      ["ecs", "entity-component systems"], ["egraph", "equality-graph reasoning"], ["election", "leader election"],
-      ["encoding", "encoding conversion"], ["failure_detector", "failure detection"], ["fenwick", "Fenwick trees"],
-      ["fft", "fast Fourier transforms"], ["flac", "FLAC"], ["flatbuffers", "FlatBuffers"],
-      ["float", "floating-point arithmetic"], ["fmt", "format"], ["fs", "filesystem"], ["fuzz", "fuzz testing"],
-      ["fx", "effects"], ["geom", "two-dimensional geometry"], ["geom3", "three-dimensional geometry"],
-      ["geo", "geospatial"], ["gf", "finite fields"], ["gfx", "graphics"], ["gossip", "gossip protocols"],
-      ["gpu", "GPU"], ["gzip", "gzip"],
-      ["hamt", "hash-array mapped tries"],
-      ["hmm", "hidden Markov models"], ["html", "HTML"], ["http", "HTTP"], ["http3", "HTTP/3"],
-      ["idna", "internationalized domain names"], ["ini", "INI"], ["io", "input and output"],
-      ["hyphen", "hyphenation"], ["image", "image processing"], ["index", "indexing and search"],
-      ["input", "input handling"], ["iso", "isomorphism"], ["iter", "iteration"], ["jpeg", "JPEG"], ["json", "JSON"],
-      ["jwt", "JSON Web Tokens"],
-      ["kdf", "key derivation"], ["knn", "k-nearest neighbors"], ["kx", "key exchange"], ["linear", "linear models and regression"],
-      ["linalg", "linear algebra"], ["ll", "LL grammars"], ["lr", "LR grammars"], ["mac", "message authentication"],
-      ["mc", "Monte Carlo methods"], ["mcmc", "Markov chain Monte Carlo methods"], ["mem", "memory"],
-      ["linearize", "linearizability checking"], ["linked", "linked lists"], ["locale", "locale-aware operations"],
-      ["lock", "distributed locking"], ["loss", "loss functions"], ["mail", "email"], ["map", "mapping and localization"],
-      ["markdown", "Markdown"], ["match", "matching"], ["merkle", "Merkle trees and proofs"],
-      ["metric", "measurement and similarity"], ["mime", "MIME"],
-      ["mmap", "memory mapping"], ["mp3", "MP3"], ["mqtt", "MQTT"], ["lz4", "LZ4"],
-      ["lzma", "LZMA"], ["lzw", "LZW"],
-      ["motion", "motion generation and control"], ["msgpack", "MessagePack"], ["mutex", "distributed mutual exclusion"],
-      ["nav", "navigation and pathfinding"], ["netsync", "network synchronization"], ["nn", "neural networks"],
-      ["noise", "secure handshakes and sessions"],
-      ["ntheory", "number theory"], ["ode", "ordinary differential equations"], ["opt", "optimization"],
-      ["optim", "optimization"], ["opus", "Opus"], ["parquet", "Apache Parquet"], ["pem", "PEM"],
-      ["paint", "vector painting"], ["particle", "particle systems"], ["physics", "physics simulation"],
-      ["plan", "planning"], ["png", "PNG"], ["pool", "connection pooling"], ["pretty", "pretty-printing"], ["proc", "processes"],
-      ["procgen", "procedural generation"], ["prop", "property-based testing"], ["protobuf", "Protocol Buffers"],
-      ["query", "query processing"], ["quoted_printable", "quoted-printable data"], ["quic", "QUIC"],
-      ["rand", "random numbers"], ["random", "secure random-number generation"], ["rank", "relevance ranking"],
-      ["raster", "rasterization"], ["ratelimit", "rate limiting"], ["reclaim", "memory reclamation"],
-      ["reduce", "dimensionality reduction"], ["regex", "regular expressions"], ["rl", "reinforcement learning"],
-      ["reliable", "reliable messaging"], ["replica", "replication"], ["root", "root finding"],
-      ["sample", "sampling"], ["sat", "Boolean satisfiability"], ["scene", "scene graphs"],
-      ["schedule", "scheduling"], ["secret", "secret management"], ["segment", "segmentation"],
-      ["semver", "semantic versions"], ["shade", "material shading"], ["shell", "shell integration"],
-      ["sign", "digital signatures"], ["sim", "simulation-based testing"],
-      ["simd", "vector processing"], ["smt", "satisfiability modulo theories"], ["snappy", "Snappy"],
-      ["span", "spanning structures"],
-      ["snapshot", "state snapshots"], ["spatial", "spatial indexing"], ["special", "special functions"],
-      ["stat", "statistics"], ["state", "state management"], ["stem", "stemming"], ["stun", "STUN"],
-      ["style", "styling and themes"], ["suffix", "suffix indexing"],
-      ["support", "fixtures and helpers"], ["svm", "support vector machines"], ["synth", "sound synthesis"],
-      ["sync", "clock synchronization"], ["tar", "TAR archives"], ["testing", "testing and diagnostics"],
-      ["tilemap", "tile maps"], ["timeseries", "time-series analysis"], ["tls", "TLS"],
-      ["template", "templating"], ["texture", "texture processing"], ["tokenize", "tokenization"], ["toml", "TOML"],
-      ["tz", "time zones"], ["ui", "user interfaces"], ["uri", "URIs"], ["utf8", "UTF-8"],
-      ["trace", "ray tracing"], ["undo", "undo and redo"], ["uuid", "unique-identifier"], ["vision", "computer vision"],
-      ["watch", "file watching"], ["wav", "WAV"], ["webp", "WebP"], ["widget", "widget composition"],
-      ["wrap", "line wrapping"], ["ws", "WebSockets"],
-      ["x509", "X.509 certificates"], ["xml", "XML"], ["yaml", "YAML"], ["zip", "ZIP archives"],
-      ["zlib", "zlib"], ["zstd", "Zstandard"]
-    ])
-
-    const moduleRootDescriptions = new Map([
-      ["asset", "Embeds and retrieves immutable application assets."],
-      ["async", "Coordinates non-blocking operations and readiness events."],
-      ["atomic", "Provides atomic values, memory ordering, and lock-free primitives."],
-      ["audio", "Represents audio buffers, streams, and core signal operations."],
-      ["bytes", "Reads, writes, compares, and transforms byte sequences."],
-      ["cancel", "Propagates cancellation requests and deadlines across operations."],
-      ["channel", "Transfers typed values safely between concurrent workers."],
-      ["cli", "Parses command-line arguments, options, and subcommands."],
-      ["control", "Provides feedback controllers and control-system algorithms."],
-      ["db", "Defines database connections, transactions, statements, and row streams."],
-      ["debug", "Captures backtraces and resolves program symbols."],
-      ["dsp", "Provides digital signal processing filters and transforms."],
-      ["fs", "Reads, writes, watches, and manages files and directories."],
-      ["gpu", "Runs compute and graphics workloads on CPU, Vulkan, and CUDA devices."],
-      ["grep", "Searches text using patterns across strings and files."],
-      ["io", "Provides typed input and output streams, readers, and writers."],
-      ["log", "Emits structured application logs with levels and fields."],
-      ["math", "Provides scalar mathematics, floating-point operations, and numerical helpers."],
-      ["mem", "Controls memory layout, arenas, allocation, and byte views."],
-      ["meta", "Inspects and transforms compile-time type information."],
-      ["metrics", "Collects counters, gauges, histograms, and application measurements."],
-      ["net", "Provides sockets, addresses, connections, and network protocols."],
-      ["os", "Exposes operating-system services through one portable interface."],
-      ["parse", "Builds tokenizers, parsers, syntax trees, and evaluators."],
-      ["path", "Builds, normalizes, and compares platform-aware file paths."],
-      ["proc", "Starts, supervises, and communicates with child processes."],
-      ["ratelimit", "Controls request rates, quotas, and admission."],
-      ["resilience", "Adds retries, backoff, circuit breaking, and load shedding."],
-      ["simd", "Performs parallel numeric operations using CPU vector instructions."],
-      ["str", "Builds, searches, parses, formats, and transforms byte strings."],
-      ["sync", "Coordinates concurrent work with locks, semaphores, conditions, and barriers."],
-      ["task", "Runs bounded tasks with cancellation, scheduling, and completion tracking."],
-      ["test", "Provides assertions and shared primitives for automated testing."],
-      ["thread", "Creates and coordinates native threads."],
-      ["time", "Provides clocks, timestamps, durations, and timers."],
-      ["trace", "Records structured execution traces and spans."],
-      ["tz", "Converts times across IANA time zones and daylight-saving rules."],
-      ["valid", "Validates values and reports structured validation errors."]
-    ])
-
-    const moduleDomainDescriptions = new Map([
-      ["algo", "algorithms and utilities"], ["async", "for asynchronous programming"],
-      ["audio", "for audio processing"], ["concurrent", "for concurrent execution"],
-      ["crypto", "for cryptographic operations"], ["data", "for structured data"],
-      ["db", "for database access"], ["dist", "for distributed systems"],
-      ["fmt", "encoding, decoding, and validation"], ["fs", "for filesystem access"],
-      ["game", "for game development"], ["gfx", "for graphics and rendering"],
-      ["gpu", "for GPU computing"], ["math", "for numerical computing"],
-      ["ml", "for machine learning"], ["net", "networking support"],
-      ["os", "operating-system integration"], ["parse", "parsing tools"],
-      ["robot", "for robotics"], ["test", "for software testing"],
-      ["text", "for text processing"], ["thread", "for multithreaded execution"],
-      ["time", "for time and scheduling"], ["ui", "for native user interfaces"]
-    ])
-
-    function describeModule(name) {
-      if (moduleDescriptionOverrides.has(name)) return moduleDescriptionOverrides.get(name)
-      const [_, domain, ...parts] = name.split(".")
-      if (!parts.length) return moduleRootDescriptions.get(domain) || `${domain} standard-library capabilities.`
-      const topic = parts.map(part => moduleTerms.get(part) || part.replaceAll("_", " ")).join(" ")
-      const label = topic[0].toUpperCase() + topic.slice(1)
-      return `${label} ${moduleDomainDescriptions.get(domain) || "capabilities and utilities"}.`
-    }
-
-    async function loadModules(dialog) {
-      const modulesResponse = await fetch("modules.json")
-      if (!modulesResponse.ok) throw new Error("module catalog unavailable")
-      const plan = await modulesResponse.json()
-      const modules = [...new Set(plan.tiers.flatMap(tier => tier.modules))].sort()
-      const groups = new Map()
-      for (const name of modules) {
-        const namespace = name.split(".").slice(0, 2).join(".")
-        if (!groups.has(namespace)) groups.set(namespace, [])
-        groups.get(namespace).push({name, description: describeModule(name)})
-      }
-      renderCatalog(dialog, groups)
-    }
-
-    async function loadAlgorithms(dialog) {
-      const response = await fetch("algos.md")
-      if (!response.ok) throw new Error("algorithm catalog unavailable")
-      const groups = new Map()
-      let category = ""
-      for (const line of (await response.text()).split(/\r?\n/)) {
-        const heading = line.match(/^## \d+\.\s+(.+?)\s+\(\d+[–-]\d+\)$/)
-        if (heading) category = heading[1]
-        const entry = line.match(/^\d+\.\s+\*\*(.+?)\*\*.*?→ `((?:e|pacman)\.[^`]+)`/)
-        if (!entry || !category) continue
-        if (!groups.has(category)) groups.set(category, [])
-        groups.get(category).push({name: entry[1], detail: entry[2]})
-      }
-      renderCatalog(dialog, groups)
-    }
-
-    async function loadCharts(dialog) {
-      const guide = "blog/charts-field-guide.html"
-      const response = await fetch(guide)
-      if (!response.ok) throw new Error("chart guide unavailable")
-      const page = new DOMParser().parseFromString(await response.text(), "text/html")
-      const groups = new Map()
-      let category = ""
-      for (const node of page.querySelectorAll("h2, figure.chart-card")) {
-        if (node.tagName === "H2") { category = node.textContent.trim(); continue }
-        const image = node.querySelector("img")
-        if (!category || !image) continue
-        if (!groups.has(category)) groups.set(category, [])
-        groups.get(category).push({name: node.querySelector("h3").textContent.trim(), image: `blog/${image.getAttribute("src")}`, href: `${guide}#${node.id}`})
-      }
-      renderCatalog(dialog, groups)
-    }
-
-    function loadControls(dialog) {
-      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/control-preview.html?name=${name}`}))]))
-      renderCatalog(dialog, groups)
-    }
-
-    for (const trigger of document.querySelectorAll("[data-catalog]")) {
-      trigger.addEventListener("click", async () => {
-        const dialog = document.getElementById(trigger.dataset.catalog)
-        dialog.showModal()
-        if (dialog.dataset.loaded) return
-        try {
-          if (dialog.id === "module-catalog") await loadModules(dialog)
-          else if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
-          else if (dialog.id === "chart-catalog") await loadCharts(dialog)
-          else loadControls(dialog)
-        } catch {
-          const status = dialog.querySelector(".catalog-dialog-status")
-          status.textContent = "Could not load this catalog."
-          status.hidden = false
-        }
-      })
-    }
-
-    for (const dialog of document.querySelectorAll(".catalog-dialog")) {
-      dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close() })
-    }
-
-  </script>
+  <script src="yt.js" defer></script>
+  <script src="home.js" defer></script>
 </body>
 </html>

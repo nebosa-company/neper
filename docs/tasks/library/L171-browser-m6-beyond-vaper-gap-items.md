@@ -4,7 +4,7 @@
 |---|---|
 | category | library / Library |
 | score | 0.00 of 1 |
-| queue position | 101 of 106 (only position 1 is eligible for the next session; see README) |
+| queue position | 101 of 184 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -15,7 +15,7 @@ See `docs/roadmap.md` and the evidence below.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4)
+> Plan docs/browser-progress.html. Needs L170; individual gap rows may start earlier when nothing blocks them. Acceptance: every tracker row with track gap or core is done or explicitly deferred with a decision: Shadow DOM and custom elements (6.16), Workers and Service Workers (6.18, 6.19), contenteditable and Selection (6.11, 6.12), process isolation and OS sandbox (8.1 to 8.3, N.6), DevTools (7.13), WebAssembly (5.17), vertical writing modes (2.16, N.5), audio (3.19), backdrop-filter and blend modes (N.3), colour emoji and CFF (N.4), HSTS and clickjacking protections (4.15, 4.16), fuzzing (8.4). Status 2026-11-03 (branch browser-conformance, tracker rows of P8): 0 done, 0 partial, 7 todo of 7; score is the mean with partial counted as half.
 
 ## Remaining work
 
