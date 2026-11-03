@@ -9092,6 +9092,18 @@ fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, p
         var look = control.sized_style(12.0, 12.0)
         look.background = paint.Brush { Solid: disc }
         look.radius = 6.0
+        // Cupertino: over the group the lights show their glyphs (cross, dash, two arrows) in the dark tint of the disc, as macOS does.
+        if hovered && active && t.tokens.profile == .CupertinoLike {
+            var glyph_kind: control.GlyphKind = .Dash
+            if slot.kind == .Close { glyph_kind = .Cross }
+            if slot.kind == .Maximize { glyph_kind = .Maximize }
+            let (mark, mark_error) = control.stroked_glyph(a, paint.rgba(0.0, 0.0, 0.0, 0.62), glyph_kind, 6.0, 1.2)
+            if mark_error != ok { ret (zero, mark_error) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 1usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = mark
+            ret (widget.aligned(0u64, .Center, .Center, look, pair[0usize..1usize]), ok)
+        }
         ret (widget.box(0u64, look, zero), ok)
     }
     var side: f32 = 10.0

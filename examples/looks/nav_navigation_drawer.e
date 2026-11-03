@@ -5,11 +5,23 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.looks_e
 use e.ui.navigation
 use e.ui.widget
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// The chosen row takes the accent white text holds 4.5:1 on (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [2]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x0B57D0u32 }, looks_y87.RoleTone { role: .FocusRing, light: 0x0A60FFu32, dark: 0x409CFFu32 } }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..2usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (subs, subs_error) = looks_e.submits(a, 4usize)
     if subs_error != ok { ret (0usize, subs_error) }
     let labels = [3]str{ "Inbox", "Sent", "Drafts" }

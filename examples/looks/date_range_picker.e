@@ -13,6 +13,7 @@ use e.ui.style
 use e.ui.widget
 use e.ui.layout as ui_layout
 use e.ui.looks_y85
+use e.ui.looks_y87
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 fn noop_date(ctx: *void, value: time.Date) -> err { ret ok }
@@ -27,9 +28,20 @@ fn field(a: *mem.Arena, t: *const control.Theme, key: u64, has_range: bool, open
     ret (node, node_error)
 }
 
+// Chosen ends, the band and the links hold 4.5:1 (white on 0A60FF, near-black on 409CFF; band digits 0040DD on DCE8FF, 9CC8FF on 1E3A66).
+var tone_store: [5]looks_y87.RoleTone = zero
+fn range_tones() -> []looks_y87.RoleTone {
+    tone_store[0usize] = looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }
+    tone_store[1usize] = looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }
+    tone_store[2usize] = looks_y87.ring_tone()
+    tone_store[3usize] = looks_y87.RoleTone { role: .PrimaryContainer, light: 0xDCE8FFu32, dark: 0x1E3A66u32 }
+    tone_store[4usize] = looks_y87.RoleTone { role: .OnPrimaryContainer, light: 0x0040DDu32, dark: 0x9CC8FFu32 }
+    ret tone_store[0usize..5usize]
+}
+
 fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
-    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    let (tokens, tokens_error) = looks_y87.retoned(a, base.tokens, range_tones())
     if tokens_error != ok { ret (0usize, tokens_error) }
     var local = *base
     local.tokens = tokens
@@ -49,7 +61,7 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
 // The control 12 px below the top of its cell, so the flyout under it stays inside the window.
 fn build_open(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     // Cupertino only: accent text, selected tint and keyboard ring hold the contrast rule (0045E6 light, 409CFF dark); other looks unchanged.
-    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0045E6u32, 0x409CFFu32)
+    let (tokens, tokens_error) = looks_y87.retoned(a, base.tokens, range_tones())
     if tokens_error != ok { ret (0usize, tokens_error) }
     var local = *base
     local.tokens = tokens

@@ -7,6 +7,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.looks_g
 use e.ui.looks_y85
 use e.ui.overlay
@@ -83,7 +84,18 @@ fn build_alert(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
     ret (1usize, ok)
 }
 
-fn build_popover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino: the accent button and links hold 4.5:1 (white on 0A60FF, near-black on 409CFF); any other look is passed through unchanged.
+fn build_popover(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [3]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..3usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_popover_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_popover_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (dismiss, dismiss_error) = dismiss_of(a)
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let names = [3]str{ "below", "above", "with actions" }
@@ -117,7 +129,18 @@ fn build_popover(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []lo
     ret (3usize, ok)
 }
 
-fn build_flyout(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino: the accent button and links hold 4.5:1 (white on 0A60FF, near-black on 409CFF); any other look is passed through unchanged.
+fn build_flyout(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [3]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..3usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_flyout_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_flyout_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (dismiss, dismiss_error) = dismiss_of(a)
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let names = [3]str{ "below", "above", "right" }
@@ -138,7 +161,18 @@ fn build_flyout(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
     ret (3usize, ok)
 }
 
-fn build_side(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino: the accent button and links hold 4.5:1 (white on 0A60FF, near-black on 409CFF); any other look is passed through unchanged.
+fn build_side(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [3]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..3usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_side_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_side_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (dismiss, dismiss_error) = dismiss_of(a)
     if dismiss_error != ok { ret (0usize, dismiss_error) }
     let (body, body_error) = with_button(a, t, "Filters apply to the whole collection.", "Apply")
