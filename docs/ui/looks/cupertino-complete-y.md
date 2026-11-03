@@ -41,3 +41,11 @@ Raised to `ready` (both looks): combo_box, spin_edit, status_bar, tree_list, ver
 Not raised, with the measured reason: scroll_bar (Hover and Pressed draw the Rest thumb), page_control (the strip focus ring is a square rectangle), toolbar_button (accent text 3.6:1 on the light ground; the accent was not darkened because every matched row was compared at 007AFF), data_grid (group total touches the scroll thumb), splitter (Hover, Dragged and three of four Focus cells show Rest; the harness pointer does not reach the sash and focuses the last focusable), swipe_actions (white 12 px tile labels 3.4 to 4.0:1).
 
 Not started in this lane: the iOS context-menu cell for popup_menu, and the item-by-item pass over the generic extra rows; both need Cupertino-specific drawing code that was not written, so no extra row is raised.
+
+## Batch 3: harness aim, contrast and the iOS menu
+
+Root cause for the Rest-looking Hover, Pressed and Focus cells of scroll_bar and splitter: not duplicate keys (every cell already had its own key range) but the pointer: the harness drives a cell at its centre, the scroll thumb stands 31 px to the right of it and the sash at two thirds of its `position` argument, so nothing was hovered. `looks.aim` (offset from the cell centre) in `cup_scroll.e` and `cup_splitter.e` fixes both; only Cupertino PNGs of those two sheets changed (both apps write the Cupertino looks alone).
+
+Raised to `ready` (both looks): splitter (sixteen cells, all states now drawn; divider line 3.4:1 light, 5:1 dark), scroll_bar (hover and pressed 6 wide against 4), swipe_actions (tile labels 5.3 to 5.8:1 with a darker accent and red in the swipe tile only), popup_menu (iOS context menu cell added: 250 wide, radius 14, 44 high rows, trailing symbols; the macOS destructive row 4.98:1).
+
+Not raised: page_control (strip focus ring is a 13 px rectangle through the label), toolbar_button (accent text 3.6:1; the nav bar text code is shared with matched rows, so no row-only darker blue was possible), data_grid (chosen row white on 007AFF, 4.02:1; the group total overlap is fixed).

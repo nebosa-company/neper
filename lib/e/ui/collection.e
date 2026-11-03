@@ -11178,6 +11178,20 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
         fill = style.color(t.tokens, .Error)
         ink = style.color(t.tokens, .OnError)
     }
+    // Cupertino: the label is white 12 px, so the tiles take the darker accent and red that hold 4.5:1 (the system tints are 3.4 to 4.0:1).
+    if t.tokens.profile == .CupertinoLike {
+        let dark = t.tokens.palette == .Dark
+        if act.tone == .Accent {
+            fill = style.hex(0x0062CCu32)
+            if dark { fill = style.hex(0x0A68D6u32) }
+            ink = style.hex(0xFFFFFFu32)
+        }
+        if act.tone == .Destructive {
+            fill = style.hex(0xD70015u32)
+            if dark { fill = style.hex(0xC4281Cu32) }
+            ink = style.hex(0xFFFFFFu32)
+        }
+    }
     let state = control.control_state(t, key, true, false)
     let (mark, mark_error) = control.icon_square(a, ink, act.glyph, t.tokens.sizes.icon_md)
     if mark_error != ok { ret (zero, mark_error) }

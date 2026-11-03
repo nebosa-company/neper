@@ -36,7 +36,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         // HIG Split views: the thin divider measures one point; the sheet's first eight cells are the thick one.
         looks_y84.set_thin(i >= 8usize)
         if i >= 8usize {
-            position = 100.0
+            position = 99.0
             if i % 8usize >= 4usize { position = 60.0 }
         }
         let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
@@ -48,6 +48,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if step == 1usize { drive = .Hover }
         if step == 2usize { drive = .Press }
         if step == 3usize { drive = .Focus }
+        // The divider stands at two thirds of `position`; the harness pointer goes to its middle, not the cell's.
+        if i % 8usize >= 4usize { looks.aim(i, 0.0, -20.0) } else if i >= 8usize { looks.aim(i, -34.0, 0.0) } else { looks.aim(i, -32.0, 0.0) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }

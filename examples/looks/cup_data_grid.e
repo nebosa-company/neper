@@ -106,7 +106,7 @@ fn columns() -> [4]dg.ColumnSpec {
     specs[0usize] = dg.ColumnSpec { title: "Name", width: 180.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
     specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 100.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
     specs[2usize] = dg.ColumnSpec { title: "Qty", width: 60.0, column: C_QTY, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
-    specs[3usize] = dg.ColumnSpec { title: "Price", width: 84.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
+    specs[3usize] = dg.ColumnSpec { title: "Price", width: 100.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     ret specs
 }
 

@@ -71,6 +71,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
+        if i == 1usize || i == 2usize { looks.aim(i, 31.5, -39.0) }
         cells[i] = looks.Cell { caption: captions[i], node: held[0usize], drive: drive }
         i += 1usize
     }

@@ -11343,8 +11343,8 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if cupertino {
         // The separator line; a dimple shows under the pointer; held or keyboard-focused the line takes the accent.
         sashes_line = style.cupertino_separator(t.tokens)
-        if t.tokens.palette == .Dark { sashes_line = style.hex(0x48484Au32) }
-        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0xD1D1D6u32) }
+        if t.tokens.palette == .Dark { sashes_line = style.hex(0xAEAEB2u32) }
+        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0x6C6C70u32) }
         line_width = 1.0
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
         if state.hovered { grip_color = style.color(t.tokens, .TextMuted) }
@@ -21973,7 +21973,12 @@ fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, labe
     var face = cup_clear()
     var ink = style.cup_alpha(style.color(t.tokens, .Text), 0.85)
     var muted = style.color(t.tokens, .TextMuted)
-    if destructive { ink = style.color(t.tokens, .Error) }
+    if destructive {
+        ink = style.color(t.tokens, .Error)
+        // The label is 13 pt text: the accessible red holds 4.5:1 (systemRed is 3.3:1 on the menu face).
+        ink = style.hex(0xD70015u32)
+        if t.tokens.palette == .Dark { ink = style.hex(0xFF6961u32) }
+    }
     if !enabled {
         ink = style.cup_alpha(style.color(t.tokens, .Text), 0.25)
         muted = ink
