@@ -32,7 +32,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
     let captions = [4]str{ "Plain", "Wrapped", "With shortcut", "Short" }
-    let texts = [4]str{ "Save the deck", "Cards that share a name are counted once,\nwhatever their edition or condition", "Save", "Edition" }
+    let texts = [4]str{ "Save the deck", "Cards that share a name are counted once, whatever their edition or condition", "Save", "Edition" }
     var i = 0usize
     while i < 4usize {
         var shortcut = ""
@@ -46,6 +46,6 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "hint", cells: 4usize, columns: 2usize, cell_w: 260.0, cell_h: 90.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "hint", cells: 4usize, columns: 2usize, cell_w: 260.0, cell_h: 110.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }

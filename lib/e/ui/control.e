@@ -37,6 +37,7 @@ use e.ui.looks_z63
 use e.ui.looks_o78
 use e.ui.looks_t81
 use e.ui.looks_x84
+use e.ui.looks_y84
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -7200,6 +7201,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         var hint_text = options.placeholder
         if resting { hint_text = label }
         var hint_color = with_alpha(muted, value_color.alpha)
+        if t.tokens.profile == .CupertinoLike { hint_color = muted }
         // Android: the resting label has the label's colour (on-surface under the pointer, error when invalid, on-surface at 38 % when disabled).
         if resting && t.tokens.profile == .MaterialLike { hint_color = label_color }
         let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, hint_color)
@@ -11306,6 +11308,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let cupertino = t.tokens.profile == .CupertinoLike
     // macOS: the thick divider is 9 across with a 1 px separator line in it.
     if cupertino { hit = 9.0 }
+    if cupertino && looks_y84.thin() { hit = 1.0 }
     // libadwaita's GtkPaned: a 1 px #dddddd handle between the panes (worker l3).
     let linux = t.tokens.profile == .Linux
     if linux { hit = 1.0 }
@@ -11386,8 +11389,8 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if cupertino {
         // The separator line; a dimple shows under the pointer; held or keyboard-focused the line takes the accent.
         sashes_line = style.cupertino_separator(t.tokens)
-        if t.tokens.palette == .Dark { sashes_line = style.hex(0x48484Au32) }
-        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0xD1D1D6u32) }
+        if t.tokens.palette == .Dark { sashes_line = style.hex(0xAEAEB2u32) }
+        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0x6C6C70u32) }
         line_width = 1.0
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
         if state.hovered { grip_color = style.color(t.tokens, .TextMuted) }
@@ -17158,7 +17161,10 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
     let vertical = axis == .Vertical
     var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     // The Cupertino indicator: the label colour at 35 %, a thin pill that needs no track (iOS; macOS overlay scrollers).
-    if t.tokens.profile == .CupertinoLike { thumb = with_alpha(style.color(t.tokens, .Text), 0.35) }
+    if t.tokens.profile == .CupertinoLike {
+        thumb = with_alpha(style.color(t.tokens, .Text), 0.48)
+        if t.tokens.palette == .Dark { thumb = with_alpha(style.color(t.tokens, .Text), 0.44) }
+    }
     var view = sized_style(width, height)
     view.overflow = .Clip
     var along = height
@@ -20727,13 +20733,8 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         ret ok
     }
     if m.kind == 20u32 {
-        // The Apple mark, simplified: two shoulders, a waist, a leaf and a bite (`other`: the ground colour).
-        try cup_disc(m, b, x + w * 0.34, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.66, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.78, w * 0.3, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.40, w * 0.18, m.color)
-        try cup_disc(m, b, x + w * 0.62, y + h * 0.12, w * 0.12, m.color)
-        ret cup_disc(m, b, x + w * 0.98, y + h * 0.5, w * 0.17, m.other)
+        // The Apple mark (looks_y84.apple): a traced silhouette with its bite and leaf.
+        ret looks_y84.apple(m.arena, b, x, y + h * 0.03, w, h * 0.94, m.color)
     }
     if m.kind == 19u32 {
         // A bare cross.
@@ -21339,6 +21340,7 @@ fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, v
         var ground = style.hexa(0x787880u32, 0.2)
         if dark { ground = style.hexa(0x787880u32, 0.36) }
         var arc = style.color(t.tokens, .Primary)
+        if options.tone != .Active { arc = progress_ink(t, options.tone) }
         if options.content.alpha > 0.0 { arc = options.content }
         let (made, made_error) = cup_arc_node(a, arc, ground, size * 0.12, clamp_share(value), size)
         if made_error != ok { ret (zero, made_error) }
@@ -21369,8 +21371,8 @@ fn cup_field_edge(t: *const Theme) -> paint.Color {
 }
 
 fn cup_placeholder(t: *const Theme) -> paint.Color {
-    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.3) }
-    ret style.hexa(0x3C3C43u32, 0.3)
+    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.7) }
+    ret style.hexa(0x3C3C43u32, 0.72)
 }
 
 // The clear control of a field: a 17 grey disc with a white cross (iOS clearButtonMode), pressing it tells `owner`
@@ -21648,8 +21650,19 @@ fn cup_step_pill(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.box(0u64, track, zero)
     layers[1usize] = widget.positioned(0u64, 46.5, 8.0, style.defaults(), widget_one_of(a, widget.box(0u64, rule, zero)))
-    layers[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, sized_style(94.0, 32.0), halves[0usize..2usize])
-    ret (widget.stack(0u64, sized_style(94.0, 32.0), layers[0usize..3usize]), ok)
+    // The half holding the keyboard focus is painted last so its ring is not cut by the other half.
+    let (placed, placed_error) = mem.alloc[widget.Node](a, 2usize)
+    if placed_error != ok { ret (zero, TooLarge) }
+    placed[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, left))
+    placed[1usize] = widget.positioned(0u64, 47.0, 0.0, style.defaults(), widget_one_of(a, right))
+    layers[2usize] = placed[0usize]
+    let (rest, rest_error) = mem.alloc[widget.Node](a, 4usize)
+    if rest_error != ok { ret (zero, TooLarge) }
+    rest[0usize] = layers[0usize]
+    rest[1usize] = layers[1usize]
+    rest[2usize] = placed[0usize]
+    rest[3usize] = placed[1usize]
+    ret (widget.stack(0u64, sized_style(94.0, 32.0), rest[0usize..4usize]), ok)
 }
 
 // The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, with the value in the body face to its left.
@@ -21715,7 +21728,7 @@ fn cupertino_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []
     var each: f32 = 80.0
     if options.width > 0.0 { each = options.width / f32(labels.len) }
     var face = style.hex(0xF9F9F9u32)
-    var quiet = style.hex(0x8E8E93u32)
+    var quiet = style.hex(0x6C6C70u32)
     var hair = style.hexa(0x000000u32, 0.30)
     if dark {
         face = style.hex(0x1D1D1Du32)
@@ -22034,7 +22047,12 @@ fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, labe
     var face = cup_clear()
     var ink = style.cup_alpha(style.color(t.tokens, .Text), 0.85)
     var muted = style.color(t.tokens, .TextMuted)
-    if destructive { ink = style.color(t.tokens, .Error) }
+    if destructive {
+        ink = style.color(t.tokens, .Error)
+        // The label is 13 pt text: the accessible red holds 4.5:1 (systemRed is 3.3:1 on the menu face).
+        ink = style.hex(0xD70015u32)
+        if t.tokens.palette == .Dark { ink = style.hex(0xFF6961u32) }
+    }
     if !enabled {
         ink = style.cup_alpha(style.color(t.tokens, .Text), 0.25)
         muted = ink

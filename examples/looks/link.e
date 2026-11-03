@@ -5,11 +5,18 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_a
+use e.ui.looks_y84
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: the link text takes Apple's increased-contrast blue (4.5:1); other looks are returned unchanged.
+    let (tokens, tokens_error) = looks_y84.tinted(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }

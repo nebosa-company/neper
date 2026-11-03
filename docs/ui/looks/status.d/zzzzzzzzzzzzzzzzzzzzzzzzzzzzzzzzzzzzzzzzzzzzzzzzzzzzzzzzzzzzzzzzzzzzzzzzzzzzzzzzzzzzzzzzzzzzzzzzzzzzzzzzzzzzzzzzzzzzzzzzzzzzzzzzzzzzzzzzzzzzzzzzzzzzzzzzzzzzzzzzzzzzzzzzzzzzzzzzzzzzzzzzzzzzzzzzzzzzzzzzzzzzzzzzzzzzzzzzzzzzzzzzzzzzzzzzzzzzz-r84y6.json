@@ -1,0 +1,82 @@
+{
+ "link": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/link.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows. The link text takes Apple's increased-contrast blue (0040DD light, 409CFF dark) through looks_y84.tinted in link.e, which hands every other look its own tokens back (non-Cupertino PNGs re-rendered, byte for byte as committed): 6.78:1 light, 6.01:1 dark against the ground (was 3.6:1). System blue link, underline only on hover and press, state wash, focus ring. Viewed light and dark, 1x and 1.5x, all four cells.",
+    "gaps": [
+     "The link text is the increased-contrast blue, not systemBlue"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/link.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows. The link text takes Apple's increased-contrast blue (0040DD light, 409CFF dark) through looks_y84.tinted in link.e, which hands every other look its own tokens back (non-Cupertino PNGs re-rendered, byte for byte as committed): 6.78:1 light, 6.01:1 dark against the ground (was 3.6:1). System blue link, underline only on hover and press, state wash, focus ring. Viewed light and dark, 1x and 1.5x, all four cells.",
+    "gaps": [
+     "The link text is the increased-contrast blue, not systemBlue"
+    ]
+   }
+  }
+ },
+ "divider": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/divider.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard. Apple separators are hairlines by design (opaque separator C6C6C8 light, 38383A dark): they are decorative and carry no state, so WCAG 1.4.11 asks no 3:1 of them (about 1.1 to 1.5:1 here). All seven cells (full width, inset 56, middle inset 16, labelled, label leading, strong, vertical) are drawn and the labels ('Or') are secondary label colour at 5:1 and better. Viewed light and dark, 1x and 1.5x.",
+    "gaps": [
+     "The hairline is 1.1 to 1.5:1 by design; the Vertical cell is faint"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/divider.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard. Apple separators are hairlines by design (opaque separator C6C6C8 light, 38383A dark): they are decorative and carry no state, so WCAG 1.4.11 asks no 3:1 of them (about 1.1 to 1.5:1 here). All seven cells (full width, inset 56, middle inset 16, labelled, label leading, strong, vertical) are drawn and the labels ('Or') are secondary label colour at 5:1 and better. Viewed light and dark, 1x and 1.5x.",
+    "gaps": [
+     "The hairline is 1.1 to 1.5:1 by design; the Vertical cell is faint"
+    ]
+   }
+  }
+ },
+ "icon_button": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/icon_button.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard (own tokens: rounded-rectangle system fills, tinted and filled variants, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all fifteen cells. Glyphs: plain 5.59:1 light and 7.63:1 dark (secondary label, raised from 60 %), accent glyph 3.6:1 and 4.66:1 (controls, 3:1); disabled exempt. Settings glyph is the sheet's gear, not an SF Symbol.",
+    "gaps": [
+     "The glyph is the sheet's gear, not an SF Symbol"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/icon_button.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard (own tokens: rounded-rectangle system fills, tinted and filled variants, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all fifteen cells. Glyphs: plain 5.59:1 light and 7.63:1 dark (secondary label, raised from 60 %), accent glyph 3.6:1 and 4.66:1 (controls, 3:1); disabled exempt. Settings glyph is the sheet's gear, not an SF Symbol.",
+    "gaps": [
+     "The glyph is the sheet's gear, not an SF Symbol"
+    ]
+   }
+  }
+ },
+ "password_field": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/password_field.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard (UITextField / NSSecureTextField idiom: rounded field, trailing eye, clear button). Cupertino placeholders now use the secondary label colour instead of a dimmed copy: 4.72:1 light and 6.61:1 dark (was 1.7:1 and 2.4:1); entered text 21:1 and 13.9:1. Viewed light and dark, 1x and 1.5x, all seven cells. In the focus cell the clear button stands close to the eye.",
+    "gaps": [
+     "The clear button and the eye stand close in the focused field"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/password_field.png",
+    "notes": "ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard (UITextField / NSSecureTextField idiom: rounded field, trailing eye, clear button). Cupertino placeholders now use the secondary label colour instead of a dimmed copy: 4.72:1 light and 6.61:1 dark (was 1.7:1 and 2.4:1); entered text 21:1 and 13.9:1. Viewed light and dark, 1x and 1.5x, all seven cells. In the focus cell the clear button stands close to the eye.",
+    "gaps": [
+     "The clear button and the eye stand close in the focused field"
+    ]
+   }
+  }
+ }
+}

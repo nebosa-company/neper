@@ -2,8 +2,11 @@
 // row, the accent fill), and cupertino-dark. An open menu is a modal overlay, so the hover sheet holds that one cell
 // (run the app with an argument for it).
 
+use e.gfx.geometry
+use e.gfx.paint
 use e.mem
 use e.ui.control
+use e.ui.layout as ui_layout
 use e.ui.looks
 use e.ui.overlay
 use e.ui.style
@@ -78,6 +81,66 @@ fn actions_of(a: *mem.Arena) -> (*widget.Submit, err) {
     ret (&actions[0usize], actions_error)
 }
 
+// The iOS context menu (UIMenu / UIContextMenuInteraction), drawn flat: a 250 wide panel with 14 corners, 44 high rows (the HIG
+// 44 pt hit region) with the title at 17 pt and its symbol at the trailing end, hairlines between the rows and the destructive
+// row in red. The real panel is a blurred material; here it is the grouped cell face. Symbols are the sheet's glyphs, not SF Symbols.
+fn ios_row(a: *mem.Arena, t: *const control.Theme, label: str, glyph: control.GlyphKind, ink: paint.Color) -> (widget.Node, err) {
+    let (word, word_error) = control.colored_text(a, 0u64, label, t, control.text_options(), ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (mark, mark_error) = control.icon_square(a, ink, glyph, 20.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = word
+    parts[1usize] = mark
+    var row = style.defaults()
+    row.width = style.Length { Px: 250.0 }
+    row.height = style.Length { Px: 44.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, row, parts[0usize..2usize]), ok)
+}
+
+fn ios_menu(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
+    var ink = style.color(t.tokens, .Text)
+    var red = style.hex(0xD70015u32)
+    if t.tokens.palette == .Dark { red = style.hex(0xFF6961u32) }
+    let labels = [4]str{ "Copy", "Share", "Add to Deck", "Delete" }
+    let glyphs = [4]control.GlyphKind{ .Edit, .ArrowUp, .Add, .Cross }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 7usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    var n = 0usize
+    var i = 0usize
+    while i < 4usize {
+        var color = ink
+        if i == 3usize { color = red }
+        let (row, row_error) = ios_row(a, t, labels[i], glyphs[i], color)
+        if row_error != ok { ret (zero, row_error) }
+        if i > 0usize {
+            var rule = control.sized_style(250.0, 1.0)
+            rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            parts[n] = widget.box(0u64, rule, zero)
+            n += 1usize
+        }
+        parts[n] = row
+        n += 1usize
+        i += 1usize
+    }
+    var panel = control.sized_style(250.0, 44.0 * 4.0 + 3.0)
+    panel.radius = 14.0
+    panel.overflow = .Clip
+    panel.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.08) }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..n])
+    ret (widget.padded(0u64, 40.0, 20.0, 0.0, 0.0, control.sized_style(360.0, 240.0), widget_one(a, column)), ok)
+}
+
+fn widget_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret zero }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (action, action_error) = actions_of(a)
     if action_error != ok { ret (0usize, action_error) }
@@ -91,7 +154,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if node_b_error != ok { ret (0usize, node_b_error) }
     cells[0usize] = looks.Cell { caption: "Edit: shortcuts, disabled, destructive", node: node_a, drive: .None }
     cells[1usize] = looks.Cell { caption: "View: checked, radio, submenu", node: node_b, drive: .None }
-    ret (2usize, ok)
+    let (node_c, node_c_error) = ios_menu(a, t)
+    if node_c_error != ok { ret (0usize, node_c_error) }
+    cells[2usize] = looks.Cell { caption: "iOS context menu: symbols, destructive", node: node_c, drive: .None }
+    ret (3usize, ok)
 }
 
 // A hovered row (Paste, the fifth) under the pointer at the cell's centre.
@@ -111,6 +177,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let hover = looks.Sheet { name: "popup_menu-hover", cells: 1usize, columns: 1usize, cell_w: 300.0, cell_h: 240.0, ctx: zero, build: build_hover }
         ret looks.run_cupertino(a, &hover)
     }
-    let sheet = looks.Sheet { name: "popup_menu", cells: 2usize, columns: 2usize, cell_w: 360.0, cell_h: 240.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "popup_menu", cells: 3usize, columns: 3usize, cell_w: 360.0, cell_h: 240.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }

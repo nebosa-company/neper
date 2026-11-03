@@ -1,0 +1,60 @@
+{
+ "toolbar_button": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "ROUND 84 (lane y, batch 4, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIBarButtonItem / NSToolbarItem: no Flutter number). The sheet alone now draws with Apple's increased-contrast blue (0040DD light, 409CFF dark) through a local theme copy in cup_toolbar.e: bar text and glyphs 7.4:1 light and 6.6:1 dark against the ground (was 3.6:1 light), the shared nav-bar code and every other sheet keep 007AFF. Viewed light and dark, 1x and 1.5x, all eight cells (rest, hover, pressed, focus, on, three nav bars).",
+    "gaps": [
+     "The sheet uses the increased-contrast blue, not systemBlue",
+     "Large title is Segoe UI Bold standing for SF Pro Display Bold",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "ROUND 84 (lane y, batch 4, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIBarButtonItem / NSToolbarItem: no Flutter number). The sheet alone now draws with Apple's increased-contrast blue (0040DD light, 409CFF dark) through a local theme copy in cup_toolbar.e: bar text and glyphs 7.4:1 light and 6.6:1 dark against the ground (was 3.6:1 light), the shared nav-bar code and every other sheet keep 007AFF. Viewed light and dark, 1x and 1.5x, all eight cells (rest, hover, pressed, focus, on, three nav bars).",
+    "gaps": [
+     "The sheet uses the increased-contrast blue, not systemBlue",
+     "Large title is Segoe UI Bold standing for SF Pro Display Bold",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/data_grid.png",
+    "notes": "ROUND 84 (lane y, batch 4, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (no AppKit grid with these features; the table idiom of NSTableView / UITableView, from memory). The chosen row's fill is 0A60FF (light, sheet-local theme copy in cup_data_grid.e) under white text, 5.08:1 (was 4.02:1); dark chosen row 0B57D0 under white, 6.39:1; the group total no longer touches the scroll thumb (Price column 100 wide); secondary text 5:1 and better. Viewed light and dark, 1x and 1.5x, both cells.",
+    "gaps": [
+     "The light chosen row is 0A60FF, not systemBlue",
+     "Numbers are right-aligned, headers left-aligned",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/data_grid.png",
+    "notes": "ROUND 84 (lane y, batch 4, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (no AppKit grid with these features; the table idiom of NSTableView / UITableView, from memory). The chosen row's fill is 0A60FF (light, sheet-local theme copy in cup_data_grid.e) under white text, 5.08:1 (was 4.02:1); dark chosen row 0B57D0 under white, 6.39:1; the group total no longer touches the scroll thumb (Price column 100 wide); secondary text 5:1 and better. Viewed light and dark, 1x and 1.5x, both cells.",
+    "gaps": [
+     "The light chosen row is 0A60FF, not systemBlue",
+     "Numbers are right-aligned, headers left-aligned",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}
