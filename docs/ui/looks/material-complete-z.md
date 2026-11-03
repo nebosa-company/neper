@@ -114,3 +114,21 @@ Hooks added: `looks_z84_edge.set_ring` (collection.pull_to_refresh), the Materia
 
 Raised to `ready`: key_caps, skeleton, empty_state, toast (viewed light and dark at 1x, no library change; evidence in the overlay notes, 1.5x not viewed). Idiom rows raised in this lane: search_field, split_button, speed_dial, large_title, password_field, pull_to_refresh, rating, autocomplete, key_value_editor, key_caps, skeleton, empty_state, toast (13 of 66). About 40 idiom rows were not examined: notification_list, avatar, icon, image, markdown_view, code_editor, schedule, flow_editor, sheet, canvas, popover, flyout, side_sheet, action_sheet, tree_table, bottom_app_bar, toolbar, navigation_stack, navigation_split, sidebar, breadcrumbs, document_tabs, dock_panel, workspace, command_palette, window_switcher, ribbon, title_bar, scroll_area, list, grid_view, carousel, pagination, page_view, swipe_actions, reorderable_list, shortcut_recorder, color_picker, calendar, duration_picker, gauge, level, toggle_button, rich_tooltip, time_picker, android_text_modes.
 
+
+## Round 85 (lane z2)
+
+Android Light and Dark, Delphi-equivalent rows: 98.7 % before, 100 % after (hint raised to ready). Idiom rows ready or matched: 39 of 90 before, 54 after (ready 13 to 27, matched 26 to 27).
+
+Library and hook changes, all Material only (every Windows, Linux, Neper picture of each re-rendered app is byte for byte as committed; the Cupertino pictures of date_range_picker and tree_table differ from their commits exactly as they do on the base, stale and not restaged):
+- `overlay.calendar_with`: in a wide-slot (docked, 360 dp) calendar the range band is drawn per slot, so it runs unbroken across the row. date_range_picker is back to matched (band e8def8 / 4a4458 exact against `ref/flutter/material/*/daterangepicker-open`, continuous, 40 high against Flutter's 42).
+- `control.dial`: the Android knob draws the handle's state layer (hover 8, focus and pressed 10 percent, 40 dp) and a 3 dp ring 2 dp outside the handle for keyboard focus.
+- `looks.Drive`: `PressSettle` and `FocusSettle` (the pressed and focus frames wait for an eased layer); used by `link.e` for Android only.
+- `looks_z85.hover_rows` and `collection.row`: rows of a virtual list carry a hover-only region and the 8 percent layer, switched on by `terminal_view.e`.
+- `looks_x63.mono_theme`: Cascadia Mono as the Android fixed-pitch face (Roboto Mono is not installed); used by the terminal, code editor and markdown sheets, which were proportional.
+- `surf_table.e`: root cause of the dead hover and focus cells: the row keys `base + 1 + index` collided with the table's own parts keyed `key + 1, 2, 3 ...` and the pointer aim assumed a 33 px header (Android 56). Android rows now start at `base + 101` and aim below the 56 dp header; the Android columns are wider so the sort arrow no longer runs over Qty and the tree names are not clipped.
+
+Raised to ready: hint (soft shadow edge stated), link, dial, terminal_view, avatar, code_editor, markdown_view, popover, side_sheet, action_sheet, toolbar, pagination, toggle_button, gauge, level. Raised to matched: date_range_picker. The four rows raised from 1x only (key_caps, skeleton, empty_state, toast) were re-viewed light and dark at 1.5x and hold; the light toast stack shows the same hard foot shadow band as flyout (to check with that fix).
+
+Left at review, with the defect (overlay notes hold the detail): font_picker (family and italic cannot show, list hover grey, focus cell cut), tree_table (28 dp rows), notification_list, icon (not Material Symbols), image (bordered cell), schedule, flow_editor (states equal rest), flyout, command_palette, window_switcher (hard shadow band), sheet, canvas, bottom_app_bar, navigation_stack, navigation_split, sidebar, breadcrumbs, title_bar, document_tabs, dock_panel, workspace, list, shortcut_recorder (no focus indicator).
+
+Not examined (about 18 idiom rows): ribbon, scroll_area, grid_view, carousel, page_view, swipe_actions, reorderable_list, color_picker, calendar, duration_picker, time_picker, rich_tooltip, android_text_modes, and the others of the earlier list not named above.
