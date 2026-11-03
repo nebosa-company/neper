@@ -785,7 +785,9 @@ fn note_loop(builder: *nir.Builder, function: nir.Function, opens: []usize, clos
 // Whether an instruction may take a vector object (a sixteen-byte stack slot) as operand `position` with the object in a vector register: the
 // packed operations (the selection reads and writes their vectors through `vec_in` and `vec_out`), a sixteen-byte copy and a
 // sixteen-byte zeroing. Any other use -- a lane read through a field address, a call argument -- keeps the object in memory.
-fn vector_use_ok(instruction: nir.Instruction, position: usize) -> bool {
+fn vector_use_ok(instruction: nir.Instruction, position: usize, a64: bool) -> bool {
+    // AArch64 makes a sixty-four-bit lane product in general registers, a lane at a time, from the vectors' addresses
+    if instruction.opcode == .VectorBinary && a64 && nir.vector_ext(instruction.immediate) == 0usize && nir.vector_binary_operation(instruction.immediate) == 6usize && nir.vector_binary_lane(instruction.immediate) == 3usize { ret false }
     if instruction.opcode == .VectorBinary { ret true }
     if instruction.opcode == .Copy { ret instruction.immediate == 16usize && instruction.operand_count == 2usize }
     if instruction.opcode == .Zero { ret instruction.immediate == 16usize && instruction.operand_count == 1usize && !instruction.has_result }
@@ -817,7 +819,7 @@ fn mark_vector_objects(builder: *nir.Builder, function: nir.Function, ranges: []
         while position < instruction.operand_count {
             let value = builder.operands[instruction.first_operand + position]
             if value < function.value_count && flags[value] == 1usize {
-                if !vector_use_ok(instruction, position) { flags[value] = 0usize }
+                if !vector_use_ok(instruction, position, builder.vector_registers_a64) { flags[value] = 0usize }
                 if at < first_use[value] { first_use[value] = at }
             }
             position += 1usize
@@ -837,6 +839,8 @@ fn assign_vector_registers(builder: *nir.Builder, function: nir.Function, ranges
         if ty.kind == .Float && (check.same(ty.name, "f16") || check.same(ty.name, "bf16")) { narrow = true }
         at += 1usize
     }
+    var limit = VECTOR_REGISTERS
+    if builder.vector_registers_a64 { limit = 9usize }
     var first_register = 0usize
     if narrow { first_register = VECTOR_FIRST_WIDE }
     var held: [12]usize = zero
@@ -849,22 +853,22 @@ fn assign_vector_registers(builder: *nir.Builder, function: nir.Function, ranges
             var first = ranges[value].first
             if first_use[value] != 18446744073709551615usize && first_use[value] > first { first = first_use[value] }
             let last = ranges[value].last
-            var found = VECTOR_REGISTERS
+            var found = limit
             var register = first_register
-            while register < VECTOR_REGISTERS && found == VECTOR_REGISTERS {
+            while register < limit && found == limit {
                 if held[register] == 0usize || held_last[register] <= first { found = register }
                 register += 1usize
             }
-            if found != VECTOR_REGISTERS {
+            if found != limit {
                 held[found] = value + 1usize
                 held_last[found] = last
                 flags[value] = 2usize + found
             } else {
                 var victim = value
-                var victim_register = VECTOR_REGISTERS
+                var victim_register = limit
                 var victim_cost = density(ranges, weights, value)
                 register = first_register
-                while register < VECTOR_REGISTERS {
+                while register < limit {
                     let candidate = held[register] - 1usize
                     if held_last[register] > first {
                         let cost = density(ranges, weights, candidate)
@@ -876,7 +880,7 @@ fn assign_vector_registers(builder: *nir.Builder, function: nir.Function, ranges
                     }
                     register += 1usize
                 }
-                if victim_register != VECTOR_REGISTERS {
+                if victim_register != limit {
                     flags[victim] = 0usize
                     held[victim_register] = value + 1usize
                     held_last[victim_register] = last

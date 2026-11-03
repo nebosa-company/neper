@@ -1053,15 +1053,34 @@ fn simple_ext_word(ext: usize) -> usize {
     ret 0usize
 }
 
-// A vector operand's sixteen bytes into register `vt`.
+// The vector register a vector object lives in (v23 to v31), when the allocator gave it one.
+fn held_vector(allocations: []regalloc.Allocation, value: usize) -> (usize, bool) {
+    if value < allocations.len && allocations[value].kind == .Vector { ret (23usize + allocations[value].index, true) }
+    ret (0usize, false)
+}
+
+// A vector register copied to another (ORR with itself).
+fn vector_move(output: *emit_x64.Buffer, to: usize, from: usize) -> err {
+    if to == from { ret ok }
+    ret neon3(output, 0x4EA01C00usize, 0usize, to, from, from)
+}
+
+// A vector operand's sixteen bytes into register `vt`: from its vector register, or from the slot its address names.
 fn ext_in(allocations: []regalloc.Allocation, value: usize, vt: usize, output: *emit_x64.Buffer) -> err {
+    let (held, is_held) = held_vector(allocations, value)
+    if is_held { ret vector_move(output, vt, held) }
     let (address, address_error) = read_value(allocations, value, A64_S0, output)
     if address_error != ok { ret address_error }
     ret emit_a64.vector_load(output, vt, address, 16usize)
 }
 
-// Register `vt`'s low `bytes` bytes to the destination's address.
+// Register `vt`'s low `bytes` bytes to the destination: its vector register, or the slot its address names.
 fn ext_out(allocations: []regalloc.Allocation, value: usize, vt: usize, bytes: usize, output: *emit_x64.Buffer) -> err {
+    let (held, is_held) = held_vector(allocations, value)
+    if is_held {
+        if bytes != 16usize { ret codegen_x64.Unsupported }
+        ret vector_move(output, held, vt)
+    }
     let (address, address_error) = read_value(allocations, value, A64_S1, output)
     if address_error != ok { ret address_error }
     ret emit_a64.vector_store(output, vt, address, bytes)
@@ -1265,9 +1284,13 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         }
         ret ok
     }
-    let (left, left_error) = read_value(allocations, left_value, A64_S0, output)
-    if left_error != ok { ret left_error }
-    try emit_a64.vector_load(output, 16usize, left, bytes)
+    if bytes == 16usize {
+        try ext_in(allocations, left_value, 16usize, output)
+    } else {
+        let (left, left_error) = read_value(allocations, left_value, A64_S0, output)
+        if left_error != ok { ret left_error }
+        try emit_a64.vector_load(output, 16usize, left, bytes)
+    }
     if operation >= 12usize {
         if lane > 3usize { ret codegen_x64.Unsupported }
         if nir.vector_shift_in_register(instruction.immediate) {
@@ -1296,9 +1319,13 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         }
     } else {
         if operation < 10usize {
-            let (right, right_error) = read_value(allocations, right_value, A64_S1, output)
-            if right_error != ok { ret right_error }
-            try emit_a64.vector_load(output, 17usize, right, bytes)
+            if bytes == 16usize {
+                try ext_in(allocations, right_value, 17usize, output)
+            } else {
+                let (right, right_error) = read_value(allocations, right_value, A64_S1, output)
+                if right_error != ok { ret right_error }
+                try emit_a64.vector_load(output, 17usize, right, bytes)
+            }
         }
         if operation == 10usize { try emit_a64.vector_not(output, 16usize, 16usize) }
         if operation == 11usize {
@@ -1322,6 +1349,7 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         if operation == 8usize { try emit_a64.vector_three(output, 6usize, 0usize, 16usize, 16usize, 17usize) }
         if operation == 9usize { try emit_a64.vector_three(output, 7usize, 0usize, 16usize, 16usize, 17usize) }
     }
+    if bytes == 16usize { ret ext_out(allocations, destination_value, 16usize, 16usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, A64_S0, output)
     if destination_error != ok { ret destination_error }
     ret emit_a64.vector_store(output, 16usize, destination, bytes)
@@ -1897,10 +1925,13 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             if !instruction.has_result || instruction.operand_count != 0usize { ret codegen_x64.Unsupported }
             let slot = local_base + stack_cursor + codegen_x64.stack_object_slots(instruction) - 1usize
             stack_cursor += codegen_x64.stack_object_slots(instruction)
-            let (destination, destination_error) = result_register(allocations, instruction.result, A64_S0)
-            if destination_error != ok { ret destination_error }
-            try slot_address(output, destination, slot)
-            try store_result(allocations, instruction.result, destination, output)
+            let (vector_held, vector_is_held) = held_vector(allocations, instruction.result)
+            if !vector_is_held {
+                let (destination, destination_error) = result_register(allocations, instruction.result, A64_S0)
+                if destination_error != ok { ret destination_error }
+                try slot_address(output, destination, slot)
+                try store_result(allocations, instruction.result, destination, output)
+            }
         } else {
         if opcode == .GlobalAddress || opcode == .FunctionAddress {
             if !instruction.has_result || instruction.operand_count != 0usize { ret codegen_x64.Unsupported }
@@ -1942,9 +1973,23 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         } else {
         if opcode == .Copy {
             if instruction.has_result || instruction.operand_count != 2usize { ret codegen_x64.Unsupported }
+            let (copy_to, copy_to_held) = held_vector(allocations, builder.operands[instruction.first_operand])
+            let (copy_from, copy_from_held) = held_vector(allocations, builder.operands[instruction.first_operand + 1usize])
+            if copy_to_held || copy_from_held {
+                // a vector with a vector register at one end or both: one sixteen-byte move
+                if instruction.immediate != 16usize { ret codegen_x64.Unsupported }
+                if copy_to_held && copy_from_held {
+                    try vector_move(output, copy_to, copy_from)
+                } else if copy_to_held {
+                    try ext_in(allocations, builder.operands[instruction.first_operand + 1usize], copy_to, output)
+                } else {
+                    try ext_out(allocations, builder.operands[instruction.first_operand], copy_from, 16usize, output)
+                }
+            } else {
             try read_into(allocations, builder.operands[instruction.first_operand], 0usize, output)
             try read_into(allocations, builder.operands[instruction.first_operand + 1usize], 1usize, output)
             try copy_block(output, instruction.immediate)
+            }
         } else {
         if opcode == .Zero {
             if instruction.has_result {
@@ -1955,8 +2000,14 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 try store_result(allocations, instruction.result, destination, output)
             } else {
                 if instruction.operand_count != 1usize { ret codegen_x64.Unsupported }
+                let (zero_held, zero_is_held) = held_vector(allocations, builder.operands[instruction.first_operand])
+                if zero_is_held {
+                    if instruction.immediate != 16usize { ret codegen_x64.Unsupported }
+                    try neon3(output, 0x6E201C00usize, 0usize, zero_held, zero_held, zero_held)
+                } else {
                 try read_into(allocations, builder.operands[instruction.first_operand], 0usize, output)
                 try zero_block(output, instruction.immediate)
+                }
             }
         } else {
         if opcode == .FieldAddress {

@@ -10744,7 +10744,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
         if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
         var pool = codegen_x64.register_pool_count()
         if context.abi == .Aapcs64 { pool = codegen_a64.register_pool_count() }
-        builder.no_vector_registers = context.abi == .Aapcs64
+        builder.vector_registers_a64 = context.abi == .Aapcs64
         let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, pool, context.ranges, context.allocations, a)
         if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
         if allocation_error != ok { ret allocation_error }

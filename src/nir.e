@@ -564,6 +564,8 @@ type Builder = struct {
     frame_locals: bool,
     // The target has no vector register class (AArch64 holds a vector object in memory for now): regalloc keeps them there.
     no_vector_registers: bool,
+    // AArch64: nine sixteen-byte registers, v23 to v31, hold vector objects (they survive no call, and no object that crosses one has one).
+    vector_registers_a64: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
     spirv: bool,
