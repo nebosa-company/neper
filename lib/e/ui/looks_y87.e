@@ -165,3 +165,9 @@ fn orange_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, l
 fn green_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, light: 0x1F7A35u32, dark: 0x30D158u32 } }
 fn grey_tone(role: style.ColorRole) -> RoleTone { ret RoleTone { role: role, light: 0x6C6C70u32, dark: 0xAEAEB2u32 } }
 fn ring_tone() -> RoleTone { ret RoleTone { role: .FocusRing, light: 0x0A60FFu32, dark: 0x409CFFu32 } }
+
+// The strength of a Cupertino panel's one point edge shadow.
+fn edge_shadow(dark: bool) -> f32 {
+    if dark { ret 0.5 }
+    ret 0.16
+}

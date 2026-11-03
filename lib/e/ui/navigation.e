@@ -6984,6 +6984,8 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     options.radius = t.tokens.radii.xl
     options.padding = 0.0
     var panel = control.surface_style(t, options)
+    // Cupertino: the shadow has no blur here, so a 3 pt offset reads as a hard band; one point at low strength reads as the panel's edge.
+    if t.tokens.profile == .CupertinoLike { panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 1.0 }, color: paint.rgba(0.0, 0.0, 0.0, looks_y87.edge_shadow(t.tokens.palette == .Dark)) } }
     panel.width = style.Length { Px: width }
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
     if boxed_error != ok { ret (zero, TooLarge) }
