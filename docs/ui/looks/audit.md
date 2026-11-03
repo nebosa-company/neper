@@ -1,3 +1,23 @@
+# Looks audit 45, 2026-11-03 (round 86 merge: lanes x Windows, y Cupertino, z Material on master d5662c94f, tree merge86)
+
+Independent check of the merged tree `merge86` with the committed `neper-self.exe`. Own scratch comparers (python, numpy, PIL: contrast probes at the pixel, byte and bounding-box diffs of renders against committed bytes), light and dark composites viewed at 1x and 1.5x. Overlay `status.d/zzz...-z45.json` (246 z, the longest name a file system takes; it sorts after every other file).
+
+Result. 2 rows downgraded (4 look entries). Completion after regeneration, Light / Dark: Windows 97 / 97, Linux 100 / 100, Neper 100 / 100, macOS / iOS 96 / 96, Android 100 / 100.
+
+(1) Merge sanity. The merged tree compiles (arena 4g, none needed 8g). 54 sheet apps re-rendered one at a time, `git status` after each (every app the lanes changed, the Windows data_grid and dialog sheets, tree_list, scroll_bar, calendar, link, rating, card and 20 more). Every Neper, Linux, Windows Light and untouched Cupertino and Material picture is byte for byte as committed (well over 40 sheets of Neper and Linux alone, each app writes all ten looks at two scales), with these exceptions, restored and not committed: Material notification_list (4 files) and Material table (4 files, the matched row) are stale against the code: lane z's scroll thumb (70 % of on-surface-variant) is in the render, not in the committed bytes (thumb pixels only, 1956 and 2140 px); Windows Dark dock_panel is stale on master already (audit 44). The lane y reset of looks.aim holds: Material and Windows time_picker and document_tabs render byte for byte as committed.
+
+(2) Effective status. The overlays apply in sorted filename order; printed for every row any lane touched: Cupertino spin_edit, time_picker (the y overlay sorts after a44, raised again), duration_picker, command_palette, document_tabs, toast, bottom_sheet, ribbon, rich_tooltip ready; Material font_picker (the r86 overlay sorts after a44, ready), scroll_area, grid_view, breadcrumbs, sidebar, canvas ready, terminal_view review; Windows data_grid and dialog review, no Windows row changed status. No ordering fix needed.
+
+(3) Windows. data_grid Dark top5: the pressed-thumb cell now equals rest (thumb 8F8F8F in both cells, as the Light pair, as the capture); the Dark row is review already, nothing to downgrade. Windows Dark dialog Search for Card body is legible (labels, radios, group frame), the caption bar is the page colour; row review.
+
+(4) Cupertino viewed light and dark at 1x and 1.5x, measured at the pixel. spin_edit holds: plus glyph 5.4 and 3.8:1 hovered (light, dark), 4.8 and 3.0:1 pressed, ring 4.65 and 4.29:1, the hover and pressed cells now hit the plus half. time_picker, duration_picker hold (steppers whole, aim on a half). command_palette: active row white on 0A60FF 5.1:1, placeholder 5.2:1 (the light panel keeps a hard shadow band). document_tabs: hover and pressed faces differ from rest in both looks, close glyph 3.4:1 on the dark chosen tab. toast: info glyph 3.3 and 3.2:1, text 5.2 and 5.6:1, Undo 6.2 and 5.0:1. bottom_sheet Save 5.08 and 6.39:1. rich_tooltip: body 6.0 and 6.6:1, links 7.6 and 4.9:1, flat plate. window_switcher: accent active row 5.0:1 (light hard shadow band as noted). ribbon DOWNGRADED to review: the glyphs are stand-ins (Cut an X, Copy a check, Bold, Italic and Underline one pencil, Paste a plus); quick bar 6.8:1 light and 6.0:1 dark, not 7.6:1.
+
+(5) Material viewed light and dark at 1x and 1.5x. scroll_area DOWNGRADED to review: thumb 3.98 and 5.87:1, but the Hover and Pressed cells equal Rest pixel for pixel. grid_view, breadcrumbs, sidebar, canvas, font_picker (faces and synthetic italic in font_picker_faces), code_editor (disabled cell draws no caret), key_caps (compact caps centred), markdown_view links (focus layer): hold. terminal_view downgrade confirmed (focus cell equals rest).
+
+Honest limits. Contrasts are nominal ink pairs at the pixel; the Material table (matched) was not re-measured against its reference after the thumb change, its committed picture is stale and the row is kept.
+
+---
+
 # Looks audit 44, 2026-11-03 (round 85 merge: lanes x Windows, y Cupertino, z Material on master cf285b6be)
 
 Independent check of the merged tree `merge85` with the committed `neper-self.exe`. Own scratch comparers (python, numpy, PIL, not committed): WCAG contrast probes of ink and fill pairs at the pixel, per-picture diffs against master, profile and band probes against ref/flutter/material, light and dark composites viewed at 1x (1.5x for spin_edit, toggle_button, rating, page_control and toolbar_button).
