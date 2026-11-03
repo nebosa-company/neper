@@ -60,8 +60,14 @@ fn form(i: usize) -> Form {
         f.title = "Search for Card"
         f.width = 309.0
         f.height = 249.0
-        f.items = pad6([6]Item{ item(3u32, 20.0, 47.0, 289.0, 17.0, "Card:", false), item(0u32, 83.0, 215.0, 75.0, 23.0, "OK", true), item(0u32, 167.0, 215.0, 75.0, 23.0, "Cancel", false), none, none, none })
-        f.count = 3usize
+        f.items[0usize] = item(3u32, 20.0, 47.0, 289.0, 17.0, "Card:", false)
+        f.items[1usize] = item(8u32, 20.0, 71.0, 289.0, 23.0, "", true)
+        f.items[2usize] = item(6u32, 20.0, 102.0, 289.0, 99.0, "Search in", false)
+        f.items[3usize] = item(7u32, 27.0, 130.0, 120.0, 17.0, "Cards", true)
+        f.items[4usize] = item(7u32, 27.0, 172.0, 120.0, 17.0, "Collection", false)
+        f.items[5usize] = item(0u32, 83.0, 215.0, 75.0, 23.0, "OK", true)
+        f.items[6usize] = item(0u32, 167.0, 215.0, 75.0, 23.0, "Cancel", false)
+        f.count = 7usize
     }
     if i == 1usize {
         f.title = "Sort [Card Pool]"
@@ -249,7 +255,7 @@ fn window(a: *mem.Arena, t: *const control.Theme, i: usize, action: *const widge
     let base = u64(i + 1usize) * 100u64
     let (bar, bar_error) = navigation.title_bar(a, base, t, f.title, options, f.width)
     if bar_error != ok { ret (zero, bar_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, f.count * 2usize + 1usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, f.count * 2usize + 5usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = at(a, 0.0, 0.0, bar)
     var n = 1usize
@@ -281,6 +287,44 @@ fn window(a: *mem.Arena, t: *const control.Theme, i: usize, action: *const widge
                 n += 1usize
             }
             parts[n] = at(a, it.x - 8.0 + 1.0, it.y + 1.0, b)
+        } else if it.kind == 7u32 {
+            // round 86: a radio button of a dialog body (v3's TcxRadioButton)
+            let (radio_node, radio_error) = control.radio(a, key, t, it.text, it.flag, action, true)
+            if radio_error != ok { ret (zero, radio_error) }
+            parts[n] = at(a, it.x - 8.0, it.y, radio_node)
+        } else if it.kind == 8u32 {
+            // round 86: a closed combo box of a dialog body (v3's TcxComboBox)
+            let (buffer, buffer_error) = mem.alloc[u8](a, 64usize)
+            if buffer_error != ok { ret (zero, buffer_error) }
+            let shown = control.copy_text(buffer, it.text)
+            let (picks, picks_error) = mem.alloc[widget.Submit](a, 1usize)
+            if picks_error != ok { ret (zero, picks_error) }
+            picks[0usize] = *action
+            let (history, history_error) = mem.alloc[str](a, 1usize)
+            if history_error != ok { ret (zero, history_error) }
+            history[0usize] = " "
+            let empty: []const str = history[0usize..1usize]
+            var combo_options = control.field_options()
+            combo_options.width = it.w
+            combo_options.height = it.h
+            combo_options.flat = true
+            let (combo_node, combo_error) = control.combo_box(a, key, t, "Card", buffer, shown, zero, empty, 0usize, false, picks, zero, &picks[0usize], combo_options)
+            if combo_error != ok { ret (zero, combo_error) }
+            parts[n] = at(a, it.x - 8.0, it.y, combo_node)
+            if it.flag && t.tokens.palette != .Dark {
+                // the focused field's underline (the capture: #5599D5, #0067C0, #A0C3E0 under the white)
+                var line = style.defaults()
+                line.width = style.Length { Px: it.w }
+                line.height = style.Length { Px: 1.0 }
+                var line_none: []const widget.Node = zero
+                line.background = paint.Brush { Solid: style.hex(0x5599D5u32) }
+                parts[n + 1usize] = at(a, it.x - 8.0, it.y + 18.0, widget.box(0u64, line, line_none))
+                line.background = paint.Brush { Solid: style.hex(0x0067C0u32) }
+                parts[n + 2usize] = at(a, it.x - 8.0, it.y + 19.0, widget.box(0u64, line, line_none))
+                line.background = paint.Brush { Solid: style.hex(0xA0C3E0u32) }
+                parts[n + 3usize] = at(a, it.x - 8.0, it.y + 20.0, widget.box(0u64, line, line_none))
+                n += 3usize
+            }
         } else if it.kind == 6u32 {
             // looks12: a TcxGroupBox (Deck Legality's Select Format); its frame lines sit 0.4 px past the whole pixel as captured
             var held_none: []const widget.Node = zero
@@ -349,7 +393,10 @@ fn build_set(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, first:
         let f = form(first + i)
         let (win, win_error) = window(a, t, first + i, &actions[0usize])
         if win_error != ok { ret (0usize, win_error) }
-        cells[i] = looks.Cell { caption: f.title, node: whole(a, win, f.width, f.height, cell_w, cell_h), drive: .None }
+        var drive: looks.Drive = .None
+        // round 86: the Search for Card combo holds the focus in the capture (blue underline)
+        if first + i == 0usize && t.tokens.palette != .Dark { drive = .Focus }
+        cells[i] = looks.Cell { caption: f.title, node: whole(a, win, f.width, f.height, cell_w, cell_h), drive: drive }
         i += 1usize
     }
     ret (count, ok)

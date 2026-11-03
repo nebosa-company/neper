@@ -12,5 +12,22 @@
     ]
    }
   }
+ },
+ "dialog": {
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dialog_message.png",
+    "notes": "ROUND 86: Search for Card body composed (flat combo with the focus underline, Search in group, two radios; labels, radios and group caption at 0 chrome px, combo and group frame differ only by the resampled reference's soft edges). 13 of the 14 bodies are still not composed (Sort grid, Missing Set Cards list and radios, Deck Properties vertical grid, About tabs and picture, Filter Card Pool, Advanced Filter, Conditional Formatting), so the row stays review. | ROUND 85 (lane x, Windows Dark derivation of a ready light twin; maintainer rule: no dark capture exists). Batch 2: not composed, so not ready. Re-measured with looks_strict (ref/windows, resampled): 119 cells, 15 pass. Per cell class: 42 button cells (73 to 75 x 22 to 24, the resampled soft border; the button row matches the 1:1 captures at 0 px), 27 cells at 0 chrome px (ink boxes and glyph raster only), 14 bodies of grids, lists, combo, group boxes, vertical grid and About picture that the sheets do not compose (Search for Card: combo, Search in group and two radios; Sort: the dialog grid; Missing Set Cards: the colour list and the Show Cards radios; Deck Properties: the vertical grid; About; Filter Card Pool; Advanced Filter; Conditional Formatting), 3 scroll-bar columns of those bodies, 14 mixed (the Search for Card combo, 577 px of group frames, and the like: all parts of the uncomposed bodies), 4 under 40 px, 15 pass. Chrome (title bar, border, button row) is 0 px apart from the resampled button border. Composing the 14 bodies needs the dialog grid, colour list, combo and group builders inside examples/looks/dialog.e, and the resampled reference could not confirm them below its own blur; not done. | ROUND 33 (Windows light): references: v3 dialog grabs exist (ref/windows/dialogs: 16 dialogs with control rectangles) and Windows 11 captures of window, messagebox and taskdialog; no per-control strict comparison is possible against whole dialogs placed by size; not compared at this round (the native captures are not v3, and the strict comparer places a sheet by its structure, so a control inside a dialog scores nothing); stays review, capped there. ROUND 31 (Windows light): the reference sheets dialog, dialog_more, dialog_more2, dialog_more3 and dialog_wide hold v3's whole dialogs but our sheets draw only their frame, caption and buttons (the bodies: Search for Card, the Sort list, Missing Set Cards, Deck Properties' vertical grid and the About picture are not built), so the flat px off in the body cells run to the tens of thousands and mean nothing; the frame, title bar and button cells are 0. No change. | Round 17 (w3): unchanged at 78 of 107 crops. Re-measured with scripts/looks_strict.py: title_bar 15 of 16 and title_bar_hover 5 of 6, each failing crop one title glyph pixel 11 levels off (209,967 and 170,235), none under the audit 7 text rule. The dialog bodies are application content with no Neper control to compare. | Round 15: unchanged at 78 of 107 crops: the title bars and captions pass (title_bar 15 of 16 crops at 0 chrome px, title_bar_hover 5 of 6, the failing crop of each 1 px of 11 levels), the dialog bodies of dialog, dialog_more*, dialog_wide are application content (grids, web view, tool window) that no Neper control composes, so those crops cannot match.",
+    "gaps": [
+     "Dialog bodies are not composed (14 cells)",
+     "Dialog bodies are application content, not composed",
+     "Dialog close button: v3's 33 wide one kept",
+     "Caption pressed, resize, disabled: no capture",
+     "Task dialog (command links, footer, verification box) is captured natively but has no Neper control",
+     "Info, warning and error message box bitmaps were not captured"
+    ]
+   }
+  }
  }
 }
