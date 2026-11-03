@@ -184,3 +184,23 @@ Task 3, idiom rows.
 Findings. Windows Dark `data_grid_dialogs` and `native_dark4` re-render differently from their committed pictures on unmodified master code too (text bands, 704 and 2081 px): the committed pictures are stale, not changed here, and were restored. Cupertino `swipe_actions` is overwritten by `h_swipe_actions` although `y84_swipe_actions` owns it; restored after each render.
 
 Overlay `status.d/` 246 z then `-z87.json` (255 characters, the file system limit; sorts after `-z45.json` by the digit).
+
+
+## Round 88 (lane z5)
+
+Android idiom rows ready or matched: 66 of 89 before (ready 40, matched 26), 72 after (ready 45, matched 27). The Delphi-equivalent `table` row is back to matched. Method: each picture re-rendered one at a time with the committed `neper-self.exe`, viewed light and dark at 1x and 1.5x, contrasts from the M3 token pairs, geometry measured at the pixel.
+
+Task 1, duration_picker. The Hover cell aimed at the centre of the cell, the gap between two steppers, so it drew Rest. `looks_z87.aim` now points it at the Minutes plus button (hover layer d9d4dd over e6e0e9, dark 424047 over 36343b). Raised to ready.
+
+Task 2, table. `surf_table.e` builds the Android table as Flutter's DataTable: `looks_z88.head_flat` (new file, Material only) puts the header on the surface colour, rows are 48 dp, a checkbox column (centred in header and rows through the same switch in `collection.selection_check`) and numbers at the end. Measured against `ref/flutter/material/*/datatable-rest@1x`: header 56, row pitch 48, rule cac4d0 against cac4cf (dark 49454f against 49454e), ground equal to header, checkbox within 1 px. Recorded deviations: 16 dp margin against Flutter's 24, Type left aligned. The data grid and tree table are untouched (tree_table re-rendered, byte for byte). Back to matched.
+
+Task 3, idiom rows.
+- Raised to ready: notification_list (list 330 high so the third notice and Details are whole; a wrapped message no longer squeezes the well and dismiss button), carousel (hover and pressed aimed at the 40 dp Next button; the pointer was 6 px outside it; the focus cell lands on Previous with four Tab presses), reorderable_list (24 dp drag handle, 56 dp rows, list item layers 8 and 10 percent, aim on the third row), ribbon (real command glyphs and the table grid), color_picker (R, G, B, A letters and 0 to 255 readings; wider cell).
+- Tried, reverted: terminal_view focus indicator. A focusable region with a 3 dp secondary outline around the list draws when forced on, but the Focus drive never puts focus inside it (focus_within is false in every cell), so the cell stays equal to Rest; not committed.
+- Not touched, reason: icon (library glyphs are not Material Symbols), image (theme-less placeholder glyph), schedule, flow_editor, sheet (states equal rest in the library drawing), android_text_modes (a rendering mode), markdown_view two-word link (recorded gap, row stays ready).
+
+Findings. A slider's thumb position is computed from the width its node was built with, not the box it is laid out in: a slider put in a narrower flex drew its track short and its thumb clipped. Keep the slider's width and widen the container. Windows `data_grid_main` (both palettes, and its vs-ref image) and Cupertino `tree_table` re-render differently from their commits on unmodified code (stale on master); restored, not committed.
+
+Regression. 36 sheet apps (surf_table table and tree_table, button, checkbox, combo_box, label, memo, data_grid, tree_list, status_bar, scroll_bar, spin_edit, progress_bar, card, toast, calendar, hint, link, image, terminal_view, markdown_view, code_editor, font_picker, key_caps, nav_breadcrumbs, nav_sidebar, h_grid_view, f_scroll_area, canvas, text_edit, list_box, radio, dialog) plus the six changed apps were rendered one at a time; every Neper, Linux, Windows and Cupertino picture is byte for byte as committed except the stale ones named above.
+
+Overlay `status.d/` 250 z then `.json` (255 characters; the 246 z plus `-zzzz-r88z.json` asked for is 261, too long; this sorts after `-zzz.json` because of the character at 247).
