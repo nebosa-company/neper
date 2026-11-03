@@ -3268,6 +3268,15 @@ fn trail_crumb_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         bits[1usize] = said
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize])
     }
+    if t.tokens.profile == .MaterialLike {
+        // Android (round 86): the label is centred in the crumb's full target height, on the line of the chevrons and the current place.
+        let (held_label, held_label_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_label_error != ok { ret (zero, TooLarge) }
+        held_label[0usize] = content
+        var centred = style.defaults()
+        centred.height = style.Length { Px: height }
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, centred, held_label[0usize..1usize])
+    }
     let (made, made_error) = control.pressable_states(a, key, t, 9u8, label, look, true, false, 0u32, 0u32, 0u64, action, content)
     if made_error != ok { ret (zero, made_error) }
     var capped = made
@@ -3493,8 +3502,17 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 let (named, named_error) = joined(a, front, tail)
                 if named_error != ok { ret (zero, named_error) }
                 let (look, ink) = crumb_look(t, key + 40u64, h)
-                let (dots, dots_error) = control.icon_square(a, ink, .MoreHoriz, 18.0)
+                let (dots_glyph, dots_error) = control.icon_square(a, ink, .MoreHoriz, 18.0)
                 if dots_error != ok { ret (zero, dots_error) }
+                var dots = dots_glyph
+                if t.tokens.profile == .MaterialLike {
+                    let (held_dots, held_dots_error) = mem.alloc[widget.Node](a, 1usize)
+                    if held_dots_error != ok { ret (zero, TooLarge) }
+                    held_dots[0usize] = dots_glyph
+                    var centred_dots = style.defaults()
+                    centred_dots.height = style.Length { Px: h }
+                    dots = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, centred_dots, held_dots[0usize..1usize])
+                }
                 var states = 0u32
                 if options.open { states = accessibility.STATE_EXPANDED }
                 let (more, more_error) = control.pressable_states(a, key + 40u64, t, 3u8, named, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 41u64, &held[0usize], dots)

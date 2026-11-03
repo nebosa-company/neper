@@ -8,6 +8,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_h as h
+use e.ui.style
 use e.ui.widget
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -17,6 +18,20 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let labels = [6]str{ "Photos", "Music", "Maps", "Notes", "Mail", "Files" }
         var items: [6]widget.Node = zero
         try h.words(a, t, labels[0usize..6usize], items[0usize..6usize])
+        if t.tokens.profile == .MaterialLike {
+            // Android (round 86): the label sits 12 dp in from the tile's edges (M3 list and card content padding), not flush in the corner.
+            var w = 0usize
+            while w < 6usize {
+                let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+                if inner_error != ok { ret (0usize, inner_error) }
+                inner[0usize] = items[w]
+                var pad = style.defaults()
+                let twelve = style.Length { Px: 12.0 }
+                pad.padding = style.EdgeLengths { left: twelve, top: twelve, right: twelve, bottom: twelve }
+                items[w] = widget.box(0u64, pad, inner[0usize..1usize])
+                w += 1usize
+            }
+        }
         var keys: [6]widget.Key = zero
         var k = 0usize
         while k < 6usize {

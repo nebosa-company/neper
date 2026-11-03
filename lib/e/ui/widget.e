@@ -2469,9 +2469,13 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         if at > viewport - length { at = viewport - length }
         if at < 0.0 { at = 0.0 }
         var wide: f32 = 4.0
+        var near_thumb = false
         let p = s.arena_state.last
         if s.has_pointer && geometry.contains(inner, p) {
-            if ((vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0)) && !skia_corners { wide = 8.0 }
+            if ((vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0)) {
+                if !skia_corners { wide = 8.0 }
+                near_thumb = true
+            }
         }
         var thumb = geometry.Rect { x: inner.x + inner.width - 2.0 - wide, y: inner.y + at, width: wide, height: length }
         if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
@@ -2479,6 +2483,8 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         var thumb_shown = true
         // Android (round 86): the thumb is never fainter than 70 % of its colour, which keeps it 3:1 against the surface (50 % read 2.4:1).
         if skia_corners && thumb_ink.alpha < 0.7 { thumb_ink.alpha = 0.7 }
+        // and over its strip it darkens to 90 % (a drag, below, to full), so hover and drag read apart from rest
+        if skia_corners && near_thumb { thumb_ink.alpha = 0.9 }
         if skia_corners && s.thumb_drag { thumb_ink.alpha = min_f(1.0, thumb_ink.alpha * 1.2) }
         if sc.fades {
             let idle = s.animation_time.nanos - e.scrolled_at
