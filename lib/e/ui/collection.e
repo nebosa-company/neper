@@ -20,6 +20,7 @@ use e.ui.linux_card
 use e.ui.looks_x84
 use e.ui.looks_x85
 use e.ui.looks_x86
+use e.ui.looks_x87
 use e.ui.overlay
 use e.ui.looks_z84_edge
 use e.ui.looks_z85
@@ -2023,7 +2024,19 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             // a column marked with the favourite star shows it in place of a title
             var star_pix = gl.gx_star()
             if crisp_head { star_pix = gl.gx_star_c() }
-            let (star, star_error) = gl.pixels(a, star_pix, gl.gx_star_w(), gl.gx_star_h())
+            var star_node: widget.Node = zero
+            var star_error: err = ok
+            if style.windows_dark_on() && !look.dialog_lines {
+                // round 87: the Dark star is final colours (2.2 : 1 mapped, 4.3 : 1 here)
+                let (dark_star, dark_star_error) = gl.pixels_raw(a, looks_x87.star_dark(), gl.gx_star_w(), gl.gx_star_h())
+                star_node = dark_star
+                star_error = dark_star_error
+            } else {
+                let (plain_star, plain_star_error) = gl.pixels(a, star_pix, gl.gx_star_w(), gl.gx_star_h())
+                star_node = plain_star
+                star_error = plain_star_error
+            }
+            let star = star_node
             if star_error != ok { ret (zero, star_error) }
             // looks4-e: the live capture's faint star, 2 px below the top of the header row
             body[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, star))
@@ -2047,7 +2060,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 // round 86: the capture's glyph has five lines of dots and bars, the cell centres it
                 let (list_node, list_error) = looks_x86.list_glyph(a)
                 if list_error != ok { ret (zero, list_error) }
-                body[0usize] = list_node
+                // round 87: one pixel higher, as the capture (the centred cell put it a row lower)
+                body[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), one_node(a, list_node))
             }
         }
         var b = 1usize
@@ -2158,7 +2172,9 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 line_main = .Center
                 line_style.width = style.Length { Px: columns[i].width - 23.0 }
                 // round 46: the 1:1 capture's hot caption stands two pixels further right
-                if look.hot_crisp { line_style.width = style.Length { Px: columns[i].width - 19.0 } }
+                if look.hot_crisp || (crisp_head && state.hovered && !sorted && !state.pressed) { line_style.width = style.Length { Px: columns[i].width - 19.0 } }
+                // round 87: a hot sorted caption of the 1:1 capture stands from the left (the group box sheets), not centred
+                if crisp_head && sorted && state.hovered && !state.pressed { line_main = .Start }
             } else if crisp_centred {
                 line_main = .Start
             } else if numeric_column(look.center_head, i) {
@@ -2183,20 +2199,52 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 var tri_pix = gl.gx_chip_tri_rest()
                 if column_descending { tri_pix = gl.gx_sort_down() }
                 if state.pressed { tri_pix = gl.gx_chip_tri_pressed() } else if state.hovered { tri_pix = gl.gx_chip_tri_hover() }
-                let (tri_node, tri_error) = gl.pixels(a, tri_pix, 8.0, 9.0)
+                var tri_w: f32 = 8.0
+                var tri_h: f32 = 9.0
+                var tri_top: f32 = 4.0
+                if crisp_head && !column_descending {
+                    // round 87: the 1:1 capture's sort triangle, 7 x 8 in #A0A0A0 at rest (the older cut is 8 x 9 and faint), 8 x 8 on the hot and
+                    // pressed fills
+                    tri_pix = gl.gx_chip_tri_c()
+                    tri_w = 7.0
+                    tri_h = 8.0
+                    tri_top = 5.0
+                    if state.pressed {
+                        tri_pix = looks_x87.chip_tri_pressed()
+                        tri_w = 8.0
+                    } else if state.hovered {
+                        tri_pix = looks_x87.chip_tri_hot()
+                    }
+                }
+                let (tri_node, tri_error) = gl.pixels(a, tri_pix, tri_w, tri_h)
                 if tri_error != ok { ret (zero, tri_error) }
-                layers[layer_n] = widget.positioned(0u64, tri_at - pad, 4.0, style.defaults(), one_node(a, tri_node))
+                var tri_dx: f32 = 0.0
+                if crisp_head && !column_descending && filter_shown { tri_dx = 0.0 - 2.0 }
+                layers[layer_n] = widget.positioned(0u64, tri_at - pad + tri_dx, tri_top, style.defaults(), one_node(a, tri_node))
                 layer_n += 1usize
             }
             if filter_shown {
                 var filter_pix = gl.gx_chip_filter_hover()
                 if look.hot_crisp && !state.pressed { filter_pix = gl.gx_chip_filter_hover_c() }
                 if state.pressed { filter_pix = gl.gx_chip_filter_pressed() }
-                let (filter_node, filter_error) = gl.pixels(a, filter_pix, 12.0, 11.0)
-                if filter_error != ok { ret (zero, filter_error) }
+                var filter_w: f32 = 12.0
+                var filter_h: f32 = 11.0
                 var filter_top: f32 = 0.0
+                var filter_left: f32 = 0.0
                 if look.dialog_lines && state.pressed { filter_top = 0.0 - 1.0 }
-                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad, filter_top, style.defaults(), one_node(a, filter_node))
+                if crisp_head && !look.hot_crisp {
+                    // round 87: the 1:1 capture's filter button, 10 x 10, hot or pressed (the older cuts are soft)
+                    filter_pix = looks_x87.chip_filter_hot()
+                    if state.pressed { filter_pix = looks_x87.chip_filter_pressed() }
+                    filter_w = 10.0
+                    filter_h = 10.0
+                    filter_top = 1.0
+                    filter_left = 0.0 - 1.0
+                    if !sorted { filter_left = 1.0 }
+                }
+                let (filter_node, filter_error) = gl.pixels(a, filter_pix, filter_w, filter_h)
+                if filter_error != ok { ret (zero, filter_error) }
+                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad + filter_left, filter_top, style.defaults(), one_node(a, filter_node))
                 layer_n += 1usize
             }
             var layer_style = style.defaults()
@@ -2260,6 +2308,12 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if win_glyphs && (sorted || win_hot) {
                 var hot_top: f32 = 2.0
                 if look.hot_crisp { hot_top = 1.0 }
+                // round 87: a pressed sorted header's caption stands one pixel right and down (the 1:1 capture, group box sheets)
+                if sorted && state.hovered && !state.pressed && numeric_column(look.center_head, i) { crisp_left = style.Length { Px: pad + 3.0 } }
+                if state.pressed {
+                    crisp_left = style.Length { Px: pad + 2.0 }
+                    hot_top += 1.0
+                }
                 head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: hot_top }, right: sides, bottom: flat }
             } else {
                 // round 44: the capture's caption stands six rows below the header's top in the 22 and the 19 pixel headers alike
@@ -2958,7 +3012,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     var crisp_edged = false
     if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8) {
         // v3's horizontal grid lines: a 1 px line along the bottom of the row
-        let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, 4usize)
         if with_line_error != ok { ret (zero, TooLarge) }
         var rule_style = control.sized_style(4000.0, 1.0)
         rule_style.background = paint.Brush { Solid: look.line }
@@ -3026,13 +3080,17 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                     var crisp_edge = control.sized_style(4000.0, 1.0)
                     crisp_edge.background = paint.Brush { Solid: look.selected_line }
                     with_line[2usize] = widget.positioned(0u64, pair_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, crisp_edge, zero)))
+                    // round 87: and down its left side, from the end of the indicator column (the capture's frame is closed; the cell fill covered it)
+                    var crisp_side = control.sized_style(1.0, extent - 1.0)
+                    crisp_side.background = paint.Brush { Solid: look.selected_line }
+                    with_line[3usize] = widget.positioned(0u64, pair_x, 0.0, style.defaults(), one_node(a, widget.box(0u64, crisp_side, zero)))
                     crisp_edged = true
                 }
             }
         }
         var stacked_count = 2usize
         if look.soft_lines && !crisp_rows { stacked_count = 3usize }
-        if crisp_edged { stacked_count = 3usize }
+        if crisp_edged { stacked_count = 4usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
         if look.dialog_lines && look.soft_lines && !look.vertical_off && !style.windows_dark_on() {
             // round 31: a dialog grid's column lines run through the two foot pixels of a row (live Sort dialog), not under them
@@ -5344,6 +5402,25 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             crisp_style.margin.top = style.Length { Px: 17.0 + thumb_y }
             thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, crisp_style, one_node(a, crisp_node))
         }
+        if lk.top_fit && lk.crisp && lk.soft_lines && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w > 5.0 && thumb_h >= 9.0 {
+            // round 87: the 1:1 capture's pressed thumb is a pill of 6 whole columns, 16 rows (the rounded box blurred its sides)
+            let (pill_node, pill_error) = looks_x87.pill(a, thumb_h - 1.0)
+            if pill_error != ok { ret (zero, pill_error) }
+            var pill_style = control.sized_style(6.0, thumb_h - 1.0)
+            pill_style.margin = thumb_style.margin
+            pill_style.margin.left = style.Length { Px: thumb_left - 0.5 }
+            pill_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pill_style, one_node(a, pill_node))
+        }
+        if lk.crisp && lk.dialog_grid && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w > 5.0 && thumb_h >= 9.0 {
+            // round 87: the same pill in the 1:1 dialog grids (Sort, Shortcuts), one row lower than the rounded box stood
+            let (dialog_pill, dialog_pill_error) = looks_x87.pill(a, thumb_h)
+            if dialog_pill_error != ok { ret (zero, dialog_pill_error) }
+            var dialog_pill_style = control.sized_style(6.0, thumb_h)
+            dialog_pill_style.margin = thumb_style.margin
+            dialog_pill_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, dialog_pill_style, one_node(a, dialog_pill))
+        }
         if lk.crisp && lk.dialog_grid && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w < 3.0 && thumb_h >= 9.0 {
             // round 86: the 1:1 dialog grids' resting thumb is the same two crisp columns with the end rows
             let dialog_h = f32(i64(thumb_h + 0.5))
@@ -5368,7 +5445,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 thumb_holder[0usize] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
             }
         }
-        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed {
+        // round 87: the 1:1 dialog grids (Shortcuts) show no arrow under the pointer
+        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed && !(lk.crisp && lk.dialog_grid) {
             var hot_pix = gl.gx_arrow_hot_up()
             var hot_top: f32 = 4.0
             if arrow_hot == 2u8 {

@@ -333,7 +333,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert, PixelsA, TreeLines }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert, PixelsA, TreeLines, PixelsRaw }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape, pix: str, cols: usize, skip: usize }
 
@@ -398,7 +398,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var side = area.width
     if area.height < side { side = area.height }
     if m.shape == Shape.TreePlus || m.shape == Shape.TreeMinus || m.shape == Shape.TreeBox { ret tree_mark_paint(m, b, area) }
-    if m.shape == Shape.Pixels || m.shape == Shape.PixelsA { ret pixels_paint(m, b, area) }
+    if m.shape == Shape.Pixels || m.shape == Shape.PixelsA || m.shape == Shape.PixelsRaw { ret pixels_paint(m, b, area) }
     if m.shape == Shape.TreeLines { ret tree_lines_paint(m, b, area) }
     if m.shape == Shape.DotsSoft || m.shape == Shape.DotsSoftLeft { ret dots_soft_paint(m, b, area) }
     if m.shape == Shape.SelDots { ret sel_dots_paint(m, b, area) }
@@ -1071,6 +1071,8 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
         // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
         var shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
+        // round 87: a bitmap whose pixels are already the dark counterpart (the Dark star): no second mapping
+        if m.shape == Shape.PixelsRaw { shown = style.hex_raw(ri * 65536u32 + gi * 256u32 + bi) }
         // Neper dark: a dark glyph pixel of the bitmap (the row arrow, the star's outline) is drawn in light ink so that it reads on the dark tile
         if style.neperdark_active() && (ri + gi + bi) / 3u32 < 110u32 { shown = style.hex_raw((225u32 - ri / 2u32) * 65536u32 + (226u32 - gi / 2u32) * 256u32 + (233u32 - bi / 2u32)) }
         if m.shape == Shape.PixelsA {
@@ -1089,10 +1091,16 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // A `w` x `h` pixel glyph from `pix` (see the gx_ functions).
 fn pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
+    let (node, node_error) = pixels_with(a, pix, w, h, false)
+    ret (node, node_error)
+}
+
+fn pixels_with(a: *mem.Arena, pix: str, w: f32, h: f32, final_colours: bool) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
     var shape = Shape.Pixels
     if pix.len == usize(w) * usize(h) * 8usize { shape = Shape.PixelsA }
+    if final_colours { shape = Shape.PixelsRaw }
     marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: shape, pix: pix, cols: usize(w), skip: 0usize }
     var size = style.defaults()
     size.width = style.Length { Px: w }
@@ -1101,6 +1109,12 @@ fn pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
     size.min_height = style.Length { Px: h }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
+}
+
+// round 87: a bitmap in final colours, not mapped by the dark look
+fn pixels_raw(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
+    let (node, node_error) = pixels_with(a, pix, w, h, true)
+    ret (node, node_error)
 }
 
 // looks9-w1: the same glyph without its first `skip` columns (the node is `w - skip` wide)

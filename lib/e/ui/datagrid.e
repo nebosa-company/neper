@@ -81,6 +81,7 @@ use e.ui.style
 use e.ui.winsetpic
 use e.ui.looks_x85
 use e.ui.looks_x86
+use e.ui.looks_x87
 use e.ui.widget
 
 const FILTER_TEXT: usize = 40usize
@@ -8150,6 +8151,13 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
             if !grid.look.group_counts && win_look(grid) { long_top = 3.0 }
             // the capture with the fourth row current (data_grid_top) has it one row of pixels higher than the first-row captures
             if !grid.look.group_counts && win_look(grid) && row > 0usize { long_top = 2.0 }
+            if grid.look.crisp && !style.windows_dark_on() {
+                // round 87: the 1:1 capture's arrow, black and crisp (the older cut is soft), 10 x 10 on white
+                let (crisp_arrow, crisp_arrow_error) = gl.pixels(a, looks_x87.row_arrow(), 10.0, 10.0)
+                if crisp_arrow_error != ok { ret crisp_arrow_error }
+                *out = widget.padded(0u64, 1.0, 0.0, 0.0, 2.0, style.defaults(), one(a, crisp_arrow))
+                ret ok
+            }
             *out = widget.padded(0u64, 1.0, long_top, 0.0, 0.0, style.defaults(), one(a, long_pic))
             ret ok
         }
@@ -10345,6 +10353,31 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
                 crisp_parts[3usize] = widget.positioned(0u64, 52.0, 5.0, style.defaults(), one(a, crisp_tri))
                 padded_chip = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, style.defaults(), one(a, widget.stack(0u64, control.sized_style(66.0, 19.0), crisp_parts[0usize..4usize])))
             }
+            if grid.look.crisp && !style.windows_dark_on() && (chip_state.hovered || chip_state.pressed) {
+                // round 87: the 1:1 capture's pressed chip (the hot one derived): a flat 66 x 19 box, the word four pixels from the left,
+                // the hollow sort triangle and the filter button on the right
+                var hot_box = control.sized_style(66.0, 19.0)
+                hot_box.background = paint.Brush { Solid: chip_fill }
+                var hot_tri = looks_x87.chip_tri_hot()
+                var hot_filter = looks_x87.chip_filter_hot()
+                if chip_state.pressed {
+                    hot_tri = looks_x87.chip_tri_pressed()
+                    hot_filter = looks_x87.chip_filter_pressed()
+                }
+                var hot_tri_w: f32 = 7.0
+                if chip_state.pressed { hot_tri_w = 8.0 }
+                let (hot_tri_node, hot_tri_error) = gl.pixels(a, hot_tri, hot_tri_w, 8.0)
+                if hot_tri_error != ok { ret (zero, hot_tri_error) }
+                let (hot_filter_node, hot_filter_error) = gl.pixels(a, hot_filter, 10.0, 10.0)
+                if hot_filter_error != ok { ret (zero, hot_filter_error) }
+                let (hot_parts, hot_parts_error) = mem.alloc[widget.Node](a, 4usize)
+                if hot_parts_error != ok { ret (zero, control.TooLarge) }
+                hot_parts[0usize] = widget.box(0u64, hot_box, zero)
+                hot_parts[1usize] = widget.positioned(0u64, 4.0, 4.0, style.defaults(), one(a, bare_title))
+                hot_parts[2usize] = widget.positioned(0u64, 42.0, 5.0, style.defaults(), one(a, hot_tri_node))
+                hot_parts[3usize] = widget.positioned(0u64, 53.0, 3.0, style.defaults(), one(a, hot_filter_node))
+                padded_chip = widget.padded(0u64, 1.0, 1.0, 0.0, 0.0, style.defaults(), one(a, widget.stack(0u64, control.sized_style(66.0, 19.0), hot_parts[0usize..4usize])))
+            }
         }
         chips[i] = widget.region(grid.key + GROUP_BOX_KEY + 16u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&chip_taps[0usize]), invoke: on_chip_gesture }, gestures: 1u8 | 2u8 | 8u8, enabled: true, focusable: false }, style.defaults(), one(a, padded_chip))
         i += 1usize
@@ -10429,6 +10462,16 @@ fn group_box(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             }
         }
         drop_zone = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), zone_and_line[0usize..2usize])
+    }
+    if grid.look.crisp && !style.windows_dark_on() && grid.pane_hint > 0.0 && grid.look.group_flat {
+        // round 87: the 1:1 capture's box has a white pixel column where the client area ends, 17 px before the pane width
+        var white_style = control.sized_style(1.0, 35.0)
+        white_style.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
+        let (white_parts, white_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if white_parts_error != ok { ret (zero, control.TooLarge) }
+        white_parts[0usize] = drop_zone
+        white_parts[1usize] = widget.positioned(0u64, grid.pane_hint - 17.0, 0.0, style.defaults(), one(a, widget.box(0u64, white_style, zero)))
+        drop_zone = widget.stack(0u64, style.defaults(), white_parts[0usize..2usize])
     }
     // v3: while a header is over the box, a green arrow above it and one below it show the drop
     if mem.address_of(grid.theme) == 0usize || mem.address_of(grid.theme.runtime) == 0usize { ret (drop_zone, ok) }
