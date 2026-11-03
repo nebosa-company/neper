@@ -6,3 +6,16 @@ var dimmed: bool = false
 fn set(value: bool) { dimmed = value }
 
 fn on() -> bool { ret dimmed }
+
+
+// A sheet that cannot wait for an indeterminate indicator to sweep asks for it drawn at a fixed progress, in percent (-1: as the
+// library draws it).
+var ring_pct: i32 = -1i32
+
+fn set_ring(percent: i32) { ring_pct = percent }
+
+fn ring() -> f32 {
+    if ring_pct < 0i32 { ret -1.0 }
+    ret f32(ring_pct) / 100.0
+}
+

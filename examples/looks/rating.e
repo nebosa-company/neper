@@ -4,6 +4,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_z84
 use e.ui.looks_a
 use e.ui.widget
 
@@ -24,6 +25,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if i == 2usize { drive = .Press }
         if i == 3usize { drive = .Focus }
+        if i == 3usize && t.tokens.profile == .MaterialLike {
+            looks_z84.stops(4usize)
+            drive = .Tabs
+        }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
     }

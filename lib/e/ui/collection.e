@@ -18,6 +18,7 @@ use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.linux_card
 use e.ui.overlay
+use e.ui.looks_z84_edge
 use e.ui.style
 use e.ui.vgridlook as vg
 use e.ui.widget
@@ -1514,12 +1515,21 @@ fn pull_to_refresh(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cont
     view_style.overflow = .Clip
     parts[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&pulls[0usize]), invoke: pull_drag }, gestures: 2u8, enabled: true, focusable: false }, view_style, body[0usize..1usize])
     if refreshing {
-        let (ring, ring_error) = control.progress_ring(a, key + 2u64, t, "Refreshing", 0.0, true, t.tokens.metrics.control_height)
+        var ring_value: f32 = 0.0
+        var ring_sweeps = true
+        if looks_z84_edge.ring() >= 0.0 {
+            ring_value = looks_z84_edge.ring()
+            ring_sweeps = false
+        }
+        // Android: the M3 circular indicator is 40 dp across (a 48 dp container); the other looks keep the control height.
+        var ring_size = t.tokens.metrics.control_height
+        if t.tokens.profile == .MaterialLike { ring_size = 48.0 }
+        let (ring, ring_error) = control.progress_ring(a, key + 2u64, t, "Refreshing", ring_value, ring_sweeps, ring_size)
         if ring_error != ok { ret (zero, ring_error) }
         let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
         if lifted_error != ok { ret (zero, TooLarge) }
         lifted[0usize] = ring
-        parts[2usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: (width - t.tokens.metrics.control_height) * 0.5, y: 0.0 - height }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+        parts[2usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: (width - ring_size) * 0.5, y: 0.0 - height }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }

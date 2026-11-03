@@ -5,13 +5,16 @@
 
 use e.mem
 use e.ui.collection
+use e.ui.looks_z84
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_h as h
 use e.ui.widget
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let names = [4]str{ "rest", "empty", "focus", "hover" }
+    var names = [4]str{ "rest", "empty", "focus", "hover" }
+    // Android: keyboard focus mutes the pointer layers of the frames after it, so the hover cell comes before the focus cell.
+    if t.tokens.profile == .MaterialLike { names = [4]str{ "rest", "empty", "hover", "focus" } }
     var i = 0usize
     while i < 4usize {
         var pairs: [3]collection.Pair = zero
@@ -34,6 +37,16 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if i == 2usize { drive = .Focus }
         if i == 3usize { drive = .Hover }
+        if t.tokens.profile == .MaterialLike {
+            if i == 2usize {
+                drive = .Hover
+                looks.aim(2usize, -152.0, 73.0)
+            }
+            if i == 3usize {
+                looks_z84.stops(22usize)
+                drive = .Tabs
+            }
+        }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
     }

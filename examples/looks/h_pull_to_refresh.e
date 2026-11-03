@@ -8,6 +8,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_h as h
+use e.ui.looks_z84_edge
 use e.ui.widget
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -20,6 +21,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let (column, column_error) = h.column(a, items[0usize..3usize], 8.0)
         if column_error != ok { ret (0usize, column_error) }
         let submit = widget.Submit { ctx: zero, invoke: h.noop_submit }
+        // The Android sheet draws the refreshing arc at a fixed 70 % (the indeterminate sweep is a few pixels at the frame taken).
+        if t.tokens.profile == .MaterialLike && i == 1usize { looks_z84_edge.set_ring(70i32) } else { looks_z84_edge.set_ring(-1i32) }
         let (node, node_error) = collection.pull_to_refresh(a, u64((i + 1usize) * 100usize), t, column, i == 1usize, &submit, 240.0, 130.0)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None

@@ -100,3 +100,12 @@ Raised to `ready`: password_field (7 cells; the disabled eye is now at 38 %, Mat
 Improved, still review: link (label centred in its 48 dp target, focus underlines; pressed and focus layers still do not show), rating and dial (focus cell identical to rest), autocomplete (no open suggestion list drawn).
 
 Idiom rows raised in total in this lane: search_field, split_button, speed_dial, large_title, password_field (5 of 66). About 50 idiom rows were not examined; the ones seen are listed above.
+
+## Batch 6
+
+Raised to `ready`: pull_to_refresh (arc drawn at a fixed 70 % by the sheet, indicator 40 dp), rating (focus layer via Tab walk), autocomplete (open list as wide as its field), key_value_editor (focus ring; hover cell moved before it because a keyboard walk mutes the pointer layers of later frames).
+
+Fixed, stays review: font_picker (sample follows style and size up to 20 sp; family and italic need faces the rig does not load), link (pressed and focus layers are eased and the sheet's frames do not advance time).
+Not fixed: dial (no keyboard focus drawn for it in the Android look), terminal_view (rows are not pointer targets of the list; a per-cell key salt changed nothing and was reverted). surf_table (the matched `table` row) was not touched.
+
+Hooks added: `looks_z84_edge.set_ring` (collection.pull_to_refresh), the Material-only guarded edits in `control.e` (font_picker sample, autocomplete width) and `collection.e` (ring size 48). Other looks byte for byte for every app re-rendered (pull_to_refresh, font_picker, autocomplete, combo_box, choices_filter, token_edit, rating, key_value_editor).

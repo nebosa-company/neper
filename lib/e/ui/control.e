@@ -13442,7 +13442,7 @@ fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     if field_error != ok { ret (zero, field_error) }
     var none: []const widget.Node = zero
     var menu_w: f32 = 0.0
-    if t.tokens.profile == .Neper { menu_w = options.width }
+    if t.tokens.profile == .Neper || t.tokens.profile == .MaterialLike { menu_w = options.width }
     let (made, made_error) = suggesting_wide(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss, menu_w)
     ret (made, made_error)
 }
@@ -15496,6 +15496,16 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     caption.wrap = .None
     caption.ellipsis = "..."
     caption.max_lines = 1u32
+    var sample_size = size
+    if sample_size > 20i64 { sample_size = 20i64 }
+    // Android: the sample follows the chosen style and size (the family needs a face the rig does not have).
+    if t.tokens.profile == .MaterialLike {
+        if style_index == 1usize { caption.italic = true }
+        if style_index == 2usize { caption.weight = 500u32 }
+        // the sheet's cell is 300 high, so the sample grows with the size up to 20 sp and ellipsizes past the box
+        caption.size = f32(sample_size)
+        caption.wrap = .Word
+    }
     let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
     if preview_error != ok { ret (zero, preview_error) }
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15506,6 +15516,11 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     frame_options.padding = t.tokens.spacing.sm
     var frame_style = surface_style(t, frame_options)
     frame_style.width = style.Length { Px: width }
+    if t.tokens.profile == .MaterialLike {
+        frame_style.overflow = .Clip
+        let need = f32(sample_size) * 1.4 + 2.0 * t.tokens.spacing.sm
+        if need > 2.0 * t.tokens.text[0usize].line_height { frame_style.min_height = style.Length { Px: need } }
+    }
     frame_style.min_height = style.Length { Px: 2.0 * t.tokens.text[0usize].line_height }
     parts[3usize] = widget.box(0u64, frame_style, previewed[0usize..1usize])
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
