@@ -17,7 +17,8 @@ fn noop_scroll(ctx: *void, value: f32) -> err { ret ok }
 fn noop_select(ctx: *void, value: collection.ListSelect) -> err { ret ok }
 
 fn count_of(ctx: *void) -> usize { ret 6usize }
-fn key_of(ctx: *void, row: usize) -> widget.Key { ret u64(row) + 1u64 }
+var row_base: u64 = 0u64
+fn key_of(ctx: *void, row: usize) -> widget.Key { ret row_base + u64(row) + 1u64 }
 
 fn name_of(row: usize) -> str {
     if row == 0usize { ret "Lightning Bolt" }
@@ -72,6 +73,7 @@ fn cell_of(ctx: *void, a: *mem.Arena, row: usize, column: usize, out: *widget.No
 }
 
 fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, picked: usize, choosable: bool, descending: bool) -> (widget.Node, err) {
+    row_base = key * 16u64
     let (columns, columns_error) = mem.alloc[collection.Column](a, 4usize)
     if columns_error != ok { ret (zero, columns_error) }
     columns[0usize] = collection.Column { title: "Name", width: 180.0 }
@@ -82,11 +84,11 @@ fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, picked: usize, 
     if chosen_error != ok { ret (zero, chosen_error) }
     var how_many = 0usize
     if picked < 6usize {
-        chosen[0usize] = u64(picked) + 1u64
+        chosen[0usize] = row_base + u64(picked) + 1u64
         how_many = 1usize
     }
     if choosable && picked < 5usize {
-        chosen[1usize] = u64(picked) + 3u64
+        chosen[1usize] = row_base + u64(picked) + 3u64
         how_many = 2usize
     }
     let source = collection.TableSource { ctx: mem.cast[*void](t), count: count_of, key: key_of, cell: cell_of }
@@ -135,7 +137,7 @@ fn build_select(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []loo
 
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len > 1usize {
-        let chosen = looks.Sheet { name: "data_grid_select", cells: 3usize, columns: 3usize, cell_w: 460.0, cell_h: 380.0, ctx: zero, build: build_select }
+        let chosen = looks.Sheet { name: "data_grid_select", cells: 3usize, columns: 3usize, cell_w: 460.0, cell_h: 424.0, ctx: zero, build: build_select }
         ret looks.run_material(a, &chosen)
     }
     let sheet = looks.Sheet { name: "data_grid", cells: 4usize, columns: 2usize, cell_w: 460.0, cell_h: 380.0, ctx: zero, build: build }

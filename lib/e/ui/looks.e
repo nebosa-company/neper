@@ -28,6 +28,7 @@ use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.looks_c
+use e.ui.looks_z84
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -39,7 +40,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected), Settle (the pointer over it as Hover, then
 // four more frames of 100 ms so that a fade-in, an open menu's, has finished).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle, Tabs }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -492,6 +493,7 @@ fn render(rig: *Rig, root: widget.Node, path: str) -> err {
 
 // What a driven cell needs the runtime to have seen before its frame.
 fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
+    if drive == .Tabs { ret looks_z84.walk(&rig.harness) }
     if drive == .Hover || drive == .Settle { ret testing.hover(&rig.harness, x, y) }
     if drive == .FocusHover {
         // The keyboard focus in an edit (the click lands 60 px left of the point), then the pointer over the point.

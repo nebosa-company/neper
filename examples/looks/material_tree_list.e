@@ -15,7 +15,11 @@ fn noop_sort(ctx: *void, value: usize) -> err { ret ok }
 fn noop_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
 fn noop_resize(ctx: *void, value: collection.ColumnResize) -> err { ret ok }
 
-fn name_of(node: widget.Key) -> str {
+// Row keys carry the cell in their high bits: the runtime finds an interaction by key, and a sheet whose cells share keys hovers the first cell's row.
+var base: u64 = 0u64
+fn loc(node: widget.Key) -> u64 { ret node & 0xFFFFFFFFFFu64 }
+fn name_of(key: widget.Key) -> str {
+    let node = loc(key)
     if node == 1u64 { ret "Expansions" }
     if node == 2u64 { ret "Core Sets" }
     if node == 3u64 { ret "Masters" }
@@ -27,7 +31,8 @@ fn name_of(node: widget.Key) -> str {
     ret "Archenemy"
 }
 
-fn year_of(node: widget.Key) -> str {
+fn year_of(key: widget.Key) -> str {
+    let node = loc(key)
     if node == 1u64 { ret "1993" }
     if node == 2u64 { ret "2007" }
     if node == 3u64 { ret "2013" }
@@ -37,18 +42,20 @@ fn year_of(node: widget.Key) -> str {
     ret "2013"
 }
 
-fn count_of(ctx: *void, parent: widget.Key) -> usize {
+fn count_of(ctx: *void, key: widget.Key) -> usize {
+    let parent = loc(key)
     if parent == 0u64 { ret 6usize }
     if parent == 2u64 || parent == 3u64 { ret 1usize }
     ret 0usize
 }
 
 fn key_of(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
-    if parent == 0u64 { ret u64(index) + 1u64 }
-    ret parent * 100u64 + u64(index) + 1u64
+    if parent == 0u64 { ret base + u64(index) + 1u64 }
+    ret (parent & 0xFFFFFF0000000000u64) + loc(parent) * 100u64 + u64(index) + 1u64
 }
 
-fn has_children(ctx: *void, node: widget.Key) -> bool {
+fn has_children(ctx: *void, key: widget.Key) -> bool {
+    let node = loc(key)
     ret node == 2u64 || node == 3u64
 }
 
@@ -75,11 +82,12 @@ fn tree(a: *mem.Arena, t: *const control.Theme, key: widget.Key, picked: widget.
     columns[1usize] = collection.Column { title: "Released", width: 90.0 }
     let (open, open_error) = mem.alloc[widget.Key](a, 2usize)
     if open_error != ok { ret (zero, open_error) }
-    open[0usize] = 2u64
-    open[1usize] = 3u64
+    base = key << 40u64
+    open[0usize] = base + 2u64
+    open[1usize] = base + 3u64
     let (chosen, chosen_error) = mem.alloc[widget.Key](a, 1usize)
     if chosen_error != ok { ret (zero, chosen_error) }
-    chosen[0usize] = picked
+    chosen[0usize] = base + picked
     let source = collection.TreeSource { ctx: mem.cast[*void](t), count: count_of, key: key_of, has_children: has_children, build: build_row }
     let cells = collection.CellSource { ctx: mem.cast[*void](t), cell: build_cell }
     var options: collection.TreeOptions = zero
