@@ -19,6 +19,7 @@ use e.ui.input
 use e.ui.looks_e_draw
 use e.ui.looks_q79
 use e.ui.looks_u81
+use e.ui.looks_y86
 use e.ui.looks_y63
 use e.ui.layout as ui_layout
 use e.ui.overlay
@@ -4010,6 +4011,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if chosen {
             ink = style.color(t.tokens, .OnSurface)
             ground = style.layer(style.color(t.tokens, .Background), ink, control.state_opacity(t, state))
+            // macOS: the chosen tab is a raised pill, not a flat face on the strip.
+            if t.tokens.profile == .CupertinoLike { ground = style.layer(style.hex_raw(looks_y86.tab_face(t.tokens.palette == .Dark)), ink, control.state_opacity(t, state)) }
         }
         var caption = control.text_options()
         caption.role = .BodyMedium
@@ -4115,6 +4118,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         tab_style.max_width = style.Length { Px: most }
         let sm = t.tokens.radii.sm
         tab_style.corners = style.Corners { top_left: sm, top_right: sm, bottom_right: 0.0, bottom_left: 0.0 }
+        if t.tokens.profile == .CupertinoLike { tab_style.corners = style.Corners { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0 } }
         tab_style.overflow = .Clip
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
@@ -4152,6 +4156,8 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             sem.actions = accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU
             sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](&asks[i]), invoke: tab_menu_ask }
         }
+        // the strip clips its tabs, so the Cupertino ring is drawn inside the pill
+        if t.tokens.profile == .CupertinoLike { sem.focus_inset = 3.0 }
         if chosen { sem.states = accessibility.STATE_SELECTED }
         if d.dirty { sem.hint = "unsaved" }
         tabs[i] = widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize])
@@ -6777,6 +6783,10 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         if i == active && enabled && !compact {
             fill = style.color(t.tokens, .SecondaryContainer)
             ink = style.color(t.tokens, .OnSecondaryContainer)
+            if t.tokens.profile == .CupertinoLike {
+                fill = style.hex_raw(looks_y86.row_select(t.tokens.palette == .Dark))
+                ink = style.hex_raw(0xFFFFFFu32)
+            }
         }
         var look = style.resolve(t.tokens, .Plain, state)
         look.background = style.layer(fill, ink, control.state_opacity(t, state))
