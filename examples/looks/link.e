@@ -29,6 +29,9 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
         if i == 3usize { drive = .Focus }
+        // Android: the layer eases in over a few frames, so the pressed and focus cells wait for it.
+        if base.tokens.profile == .MaterialLike && i == 2usize { drive = .PressSettle }
+        if base.tokens.profile == .MaterialLike && i == 3usize { drive = .FocusSettle }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
     }

@@ -2481,6 +2481,7 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 fn focus_look(t: *const Theme) {
     if t.tokens.profile != .Neper { widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux) }
     widget.set_skia_corners(t.tokens.profile == .MaterialLike)
+    widget.set_soft_shadows(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
@@ -12823,7 +12824,7 @@ fn arrow_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // A dial's paint and pointer: the value's share of the turn, where it is, whom to
 // tell. The knob is a stroked circle with a line from the middle at the share's
 // angle, which runs three quarters of a turn from the lower left clockwise.
-type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena }
+type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena, halo: f32, ringed: bool, ring: paint.Color }
 
 // v2 (D953, docs/ux/components/Dial): a 270-degree track from the lower left,
 // radius 40% of the face and 6% wide in `secondary-container` with round caps, the
@@ -12849,6 +12850,17 @@ fn knob_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: active, brush: paint.Brush { Solid: k.fill }, stroke: stroke } })
     }
     let end = start + sweep
+    // Android (looks_z85): a state layer round the handle (hover 8 %, focus and pressed 10 %) and a 3 dp keyboard ring 2 dp outside it.
+    if k.halo > 0.0 {
+        let (halo, halo_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.2, 1.0)
+        if halo_error != ok { ret halo_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: halo, brush: paint.Brush { Solid: with_alpha(k.fill, k.halo) } } })
+    }
+    if k.ringed {
+        let (ring, ring_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.07 + 3.5, 1.0)
+        if ring_error != ok { ret ring_error }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring, brush: paint.Brush { Solid: k.ring }, stroke: paint.Stroke { width: 3.0, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+    }
     let (handle, handle_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.07, 1.0)
     if handle_error != ok { ret handle_error }
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: handle, brush: paint.Brush { Solid: k.fill } } })
@@ -12926,7 +12938,16 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     if share > 1.0 { share = 1.0 }
     let (knobs, knobs_error) = mem.alloc[Knob](a, 1usize)
     if knobs_error != ok { ret (zero, TooLarge) }
-    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .SecondaryContainer), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a }
+    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .SecondaryContainer), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a, halo: 0.0, ringed: false, ring: style.color(t.tokens, .FocusRing) }
+    if t.tokens.profile == .MaterialLike {
+        let hand_state = control_state(t, key, true, false)
+        if hand_state.hovered { knobs[0usize].halo = t.tokens.states.hover }
+        if hand_state.focus_visible {
+            knobs[0usize].halo = t.tokens.states.focus
+            knobs[0usize].ringed = true
+        }
+        if hand_state.pressed { knobs[0usize].halo = t.tokens.states.pressed }
+    }
     let (turns, turns_error) = mem.alloc[Turn](a, 2usize)
     if turns_error != ok { ret (zero, TooLarge) }
     turns[0usize] = Turn { knob: &knobs[0usize], up: false }
@@ -15594,7 +15615,17 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
         caption.size = f32(sample_size)
         caption.wrap = .Word
     }
-    let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
+    // Android: the rig loads no face per family, so the family's name leads the sample, which is drawn in the available face.
+    var shown_sample = sample
+    if t.tokens.profile == .MaterialLike {
+        let (sample_text, sample_text_error) = mem.alloc[u8](a, families[family].len + 2usize + sample.len)
+        if sample_text_error != ok { ret (zero, TooLarge) }
+        var at = copy_text(sample_text, families[family])
+        at += copy_text(sample_text[at..sample_text.len], ": ")
+        at += copy_text(sample_text[at..sample_text.len], sample)
+        shown_sample = sample_text[0usize..at]
+    }
+    let (preview, preview_error) = text_node(a, key + 81u64, shown_sample, t, caption)
     if preview_error != ok { ret (zero, preview_error) }
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
     if previewed_error != ok { ret (zero, TooLarge) }

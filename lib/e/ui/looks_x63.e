@@ -12,17 +12,34 @@ use e.ui.widget
 
 var mono_bytes: []u8 = zero
 var mono_read: bool = false
+var droid_bytes: []u8 = zero
+var droid_read: bool = false
 
 // The theme itself, or for the Cupertino look a copy whose fonts carry Consolas as id 21 (registered with the rig's renderer).
 fn mono_theme(a: *mem.Arena, t: *const control.Theme) -> (*const control.Theme, err) {
-    if t.tokens.profile != .CupertinoLike || mem.address_of(t.runtime) == 0usize { ret (t, ok) }
-    if !mono_read {
-        let (bytes, read_error) = fs.read_file(looks.stable(a), "C:/Windows/Fonts/consola.ttf", 16777216usize)
+    // Round 85 (z): the Android look gets Cascadia Mono (id 22; Roboto Mono is not installed here and stands in the same way).
+    let droid = t.tokens.profile == .MaterialLike
+    if (t.tokens.profile != .CupertinoLike && !droid) || mem.address_of(t.runtime) == 0usize { ret (t, ok) }
+    var path = "C:/Windows/Fonts/consola.ttf"
+    var face_id = 21u32
+    if droid {
+        path = "C:/Windows/Fonts/CascadiaMono.ttf"
+        face_id = 22u32
+    }
+    if droid && !droid_read {
+        let (bytes, read_error) = fs.read_file(looks.stable(a), path, 16777216usize)
+        if read_error != ok { ret (t, read_error) }
+        droid_bytes = bytes
+        droid_read = true
+    }
+    if !droid && !mono_read {
+        let (bytes, read_error) = fs.read_file(looks.stable(a), path, 16777216usize)
         if read_error != ok { ret (t, read_error) }
         mono_bytes = bytes
         mono_read = true
     }
-    let face = shape.Font { id: 21u32, data: mono_bytes, face_index: 0u32 }
+    var face = shape.Font { id: face_id, data: mono_bytes, face_index: 0u32 }
+    if droid { face = shape.Font { id: face_id, data: droid_bytes, face_index: 0u32 } }
     let (state, state_error) = widget.state_of(t.runtime)
     if state_error != ok { ret (t, state_error) }
     try scene.register_font(state.renderer, face)

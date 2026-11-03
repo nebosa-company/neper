@@ -1970,7 +1970,17 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         if corner.top_left > shade_radius { shade_radius = corner.top_left }
         try matshade.paint_level(b, bounds, shade_radius, node.style.shade)
     }
-    if node.style.shadow.color.alpha > 0.0 {
+    if node.style.shadow.color.alpha > 0.0 && soft_shadows && node.style.shade == 0u8 {
+        // Android (looks_z85): the offset copy becomes the drawn M3 level its offset asks for (1 to 5), a soft two-part shadow, not a hard foot.
+        var shadow_radius = node.style.radius
+        if corner.top_left > shadow_radius { shadow_radius = corner.top_left }
+        var level = 1u8
+        if node.style.shadow.offset.y > 1.5 { level = 2u8 }
+        if node.style.shadow.offset.y > 2.5 { level = 3u8 }
+        if node.style.shadow.offset.y > 4.5 { level = 4u8 }
+        if node.style.shadow.offset.y > 6.5 { level = 5u8 }
+        try matshade.paint_level(b, bounds, shadow_radius, level)
+    } else if node.style.shadow.color.alpha > 0.0 {
         let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
         try fill_corners(a, b, shifted, corner, paint.Brush { Solid: node.style.shadow.color })
     }
@@ -2637,6 +2647,13 @@ fn set_arc_corners(on: bool) {
 // the 4x anti-aliasing accuracy): 4 lines for a radius under about 11 px, 8 up to about 46, the true arc beyond. The radio
 // ring of the captures is that polygon (a 20 px circle is a 16-gon), 8 percent lighter than the circle. Set by `set_skia_corners`.
 var skia_corners: bool = false
+
+// Set by `control.focus_look` for the Android look: offset shadows are drawn as the M3 elevation levels.
+var soft_shadows: bool = false
+
+fn set_soft_shadows(on: bool) {
+    soft_shadows = on
+}
 
 fn set_skia_corners(on: bool) {
     skia_corners = on
