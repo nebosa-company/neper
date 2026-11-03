@@ -1,4 +1,4 @@
-# e.fmt.css.layout — 1 of 284 declarations missing
+# e.fmt.css.layout — 1 of 291 declarations missing
 
 | field | value |
 |---|---|
@@ -105,7 +105,7 @@ fn float_edge_right(l: *const Layout, base: usize, y0: f64, y1: f64, ceil_x: f64
 fn float_bottom(l: *const Layout, base: usize, side: u32, floor: f64) -> f64
 fn next_float_end(l: *const Layout, base: usize, y: f64) -> f64
 fn float_top_floor(l: *const Layout, base: usize, floor: f64) -> f64
-type PieceKind = enum u8 { Text, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
+type PieceKind = enum u8 { Text, Tab, Space, Hard, Atomic, Open, Close, Float, Abs, Marker }
 type Piece = struct { kind: PieceKind, box: u32, text: str, w: f64, trail: f64, soft: bool, ink: bool, start: usize, clen: usize }
 type Builder = struct { l: *Layout, pieces: list.List[Piece], last_space: bool, ws_pending: bool, cbw: f64, cbh: f64 }
 fn push_piece(bd: *Builder, p: Piece)
@@ -313,6 +313,13 @@ fn visible_tracks(tr: []GTrack, from: usize, to: usize) -> usize
 fn wrap_orphan_table_parts(l: *Layout, b: u32)
 fn fixed_block_size(l: *const Layout, b: u32) -> f64
 fn orthogonal_room(l: *const Layout, c: u32, pch: f64) -> f64
+fn clear_on_side(l: *const Layout, parent: u32, value: style.Clear, left_side: bool) -> bool
+fn float_on_left(l: *const Layout, parent: u32, value: style.Float) -> bool
+fn inline_start_is_left(l: *const Layout, parent: u32) -> bool
+fn tab_advance(l: *const Layout, s: *const style.Style, x: f64) -> f64
+fn table_column_index(ncols: usize, logical: usize, rtl: bool) -> usize
+fn table_left_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
+fn table_right_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
 ```
 
 ## Missing declarations

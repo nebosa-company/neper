@@ -102,12 +102,12 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 
 - `lib/e/fmt/arrow.e`
 - `lib/e/fmt/asn1.e`
-- `lib/e/fmt/avro.e`
-- `lib/e/fmt/bincode.e`
-- `lib/e/fmt/bmp.e`
-- `lib/e/fmt/brotli.e`‡
-- `lib/e/fmt/bson.e`
-- `lib/e/fmt/bzip2.e`
+- `lib/e/fmt/av1.e`†
+- `lib/e/fmt/av1_cdef.e`
+- `lib/e/fmt/av1_cdf.e`
+- `lib/e/fmt/av1_coef.e`
+- `lib/e/fmt/av1_dec.e`
+- `lib/e/fmt/av1_frame.e`
 
 ## Verification
 

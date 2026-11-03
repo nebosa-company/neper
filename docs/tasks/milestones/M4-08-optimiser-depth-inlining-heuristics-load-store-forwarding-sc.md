@@ -21,7 +21,7 @@ GP-09/GP-10 have been rerun for every new applicable backend.
 
 ## Code anchors
 
-- `Mask`: `lib/e/simd.e`×22, `src/check.e`×17‡, `scripts/khronos/glcorearb.h`×12‡, `lib/e/gfx/dwtext.e`×9, `lib/x/khronos/gl.e`×6‡, `scripts/khronos/gl32.h`×6‡, `src/main.e`×5‡, `lib/e/gfx/chart.e`×3‡
+- `Mask`: `lib/e/simd.e`×22, `src/check.e`×17‡, `lib/e/fmt/av1_mask.e`×12, `scripts/khronos/glcorearb.h`×12‡, `lib/e/gfx/dwtext.e`×9, `lib/x/khronos/gl.e`×6‡, `scripts/khronos/gl32.h`×6‡, `src/main.e`×5‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/regalloc.e`†, `src/em_link.e`† († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

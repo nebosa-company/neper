@@ -39,7 +39,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `language-version`: `src/main.e`×2‡, `scripts/render_card.py`×1
 - `cpu_levels`: `src/tool.e`×1‡, `tests/conformance/tools/info.x64-linux.expected.jsonl`×1, `tests/conformance/tools/info.x64-windows.expected.jsonl`×1
 - `x64-v1`: `src/main.e`×2‡, `src/tool.e`×2‡, `src/codegen_x64.e`×1‡, `src/nir.e`×1†, `tests/conformance/tools/info.x64-linux.expected.jsonl`×1, `tests/conformance/tools/info.x64-windows.expected.jsonl`×1, `tests/conformance/tools/manifest.x64-linux.expected.jsonl`×1, `tests/conformance/tools/manifest.x64-windows.expected.jsonl`×1
-- `x64-v3`: `benchmarks/gp/results/linux-wsl.json`×3, `src/main.e`×2‡, `src/tool.e`×2‡, `benchmarks/gp/run.py`×1, `scripts/build-docs-pdf.py`×1†, `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†, `src/lower.e`×1‡
+- `x64-v3`: `benchmarks/gp/results/linux-wsl.json`×3, `src/lower.e`×2‡, `src/main.e`×2‡, `src/tool.e`×2‡, `benchmarks/gp/run.py`×1, `scripts/build-docs-pdf.py`×1†, `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†
 
 ## Verification
 
