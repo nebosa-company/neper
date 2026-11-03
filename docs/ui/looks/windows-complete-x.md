@@ -102,3 +102,36 @@ Sheets re-rendered one at a time with the committed `neper-self.exe` (compiler a
 ## Limits
 
 The briefs of the round (round70-flutter-compare.md, round63-fixes.md, round72.md) were not on disk; the rules were taken from the coordinator's message. Contrast numbers are WCAG ratios of the nominal ink colours (the rendered peak of thin 11 px glyphs reads lower). Rows raised on derivation rest on the maintainer's policy, not on a dark capture.
+
+# Round 85, lane x
+
+Before (status.json + status.d): Windows Light 97.3, Windows Dark 92.0. After: Light 97.3, Dark 97.3 (page regenerated with scripts/render_looks.py; overlay `status.d/zz...-r85x.json`, 244 z). Code in `lib/e/ui/looks_x85.e`, small hooks in collection.e, datagrid.e, control.e, gridlook.e, the sheets data_grid_top.e, tree_list.e and vertical_grid.e.
+
+## Raised (Dark, derivations of ready light twins)
+
+| Row | To | What was fixed |
+|---|---|---|
+| page_control | ready | the dark strip's two rules were on a half pixel (the dark sheets centre cells on one): two blended rows at 2.2 to 2.8 : 1; now whole pixel rows #808080 and #9A9A9A, 3.6 and 5.8 : 1. Only the page_control sheets that draw the strip changed; Light, Neper and the bottom strip are byte identical |
+| tree_list | ready | edition and block name colours lifted toward white to 5 : 1 or more (`looks_x85.lift_dark`, applied in the sheet) |
+| vertical_grid | ready | Legality tags: deep boxes with white letters, 9.4 and 6.5 : 1 (were 2.7 : 1) |
+| toolbar_button | ready | v3's atlas through `looks_x85.dark_tile`: black outline to white, face to #2B2B2B, disabled tiles to #6F, colours kept |
+
+Viewed at 1x and 1.5x. Left in the notes: the strategy strip's marker tile (2 : 1, artwork), the toolbar hot, pressed and checked washes (guesses, outlined), the cell hairlines (2.3 : 1 like Light).
+
+## Light
+
+data_grid (strict compare against ref/windows-1to1, 33 sheets, 165 cells): 58 to 95 passing. The thumb is the capture's crisp two columns (#858585, #929292 and #939393 end rows) on whole pixels in the top sheets, the bar over the group box (white column and thumb) and the idle row's edge colour are drawn. The 1 px offset of the second grid was a sheet defect, not the rig: `data_grid_top.e` gave pane hint 573 where the live pane measures 574, so cells with no pointer driven (cells 1, 3, 5 ...) stood their bar one pixel left of the driven ones and a column of the Power cell leaked over the scroll bar. The 435 to 459 px in the right-hand cell was that leak, not a hover state: it is 20 px now. Affected sheets re-rendered (all with the committed compiler, one app at a time): data_grid_top (16 parts, states, pressed), data_grid_bottom (3), data_grid (main): 54 Windows Light and 26 Windows Dark files changed in the first commit; Cupertino, Linux, Material and Neper byte identical; samples viewed. Kept at review: the collection grid draws a flat disc where v3 shows the set symbol, the Shortcuts grid has no command icons, `data_grid_main` is another composition than the capture, the clipped last row lacks its final pixel row (20 px at 19 levels), and some captures carry a mouse cursor, a spin button or blur.
+
+dialog (ref/windows, resampled): 119 cells, 15 pass, unchanged. The 4 two-pixel "frame lines" are the scroll-bar columns of the dialog grids: the drawing matches the 1:1 captures at 0 px (sort and shortcuts sheets) and differs only from the resampled reference. The 14 uncomposed bodies (Filter Card Pool, Advanced Filter, Conditional Formatting, About picture) are not drawn; so not every cell is drawn and the row stays review, Dark with it.
+
+## Placeholder
+
+v3's null prompt is clGray #808080 (3.95 : 1 on white). Light draws #6B6B6B (5.3 : 1 on white, 4.8 : 1 on the dialog face); Dark keeps #808080 mapped (5.9 : 1). text_edit, memo, mask_edit, button_edit, password_field, autocomplete re-rendered; the matched edit captures contain no placeholder.
+
+## Regression
+
+Re-rendered with the committed `neper-self.exe`: data_grid_top, _bottom, data_grid, tree_list (5 forms), vertical_grid (4), page_control (23 forms), toolbar_button (3), text_edit, memo, mask_edit, button_edit, password_field, autocomplete, combo_box. No Linux, Neper, Material picture changed. Cupertino autocomplete changed (stale lane y output, audit 43) and was restored, not committed. page_control_cards, _held, _options differ from their committed bytes in every look (padding of the old arguments) and were restored.
+
+## Limits
+
+Contrast numbers are nominal ink pairs; ClearType fringes are not reproduced. The Dark rows rest on the maintainer's derivation policy.
