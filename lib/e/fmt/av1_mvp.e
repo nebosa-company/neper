@@ -31,6 +31,7 @@
 // num_found .. 1 are filled with the global motion vector without being counted.
 
 use e.mem
+use e.fmt.av1_pool
 
 const LAST_FRAME: i32 = 1i32
 const LAST2_FRAME: i32 = 2i32
@@ -786,14 +787,21 @@ fn project(v8_in: i32, delta: i32, dst_sign: i32, max8: i32, max_off8: i32) -> i
     ret v8
 }
 
-fn projection(f: *Frame, out: []i16, src: i32, dst_sign: i32) -> bool {
+// Whether the projection from reference `src` happens at all (the slot is a decoded inter frame of the same size).
+fn projection_valid(f: *Frame, src: i32) -> bool {
+    let slot = f.slots[usize(f.ref_frame_idx[usize(src - LAST_FRAME)])]
+    ret !(slot.mi_rows != f.mi_rows || slot.mi_cols != f.mi_cols || slot.frame_type == INTRA_ONLY_FRAME || slot.frame_type == KEY_FRAME)
+}
+
+// The rows y0 up to y1 of the sources of one projection. A source row only lands in its own band of 8 rows (project() keeps v8
+// inside base8 .. base8 + 8 for rows), so bands that start at a multiple of 8 are independent of each other.
+fn projection_rows(f: *Frame, out: []i16, src: i32, dst_sign: i32, y0: i32, y1: i32) {
     let src_idx = usize(f.ref_frame_idx[usize(src - LAST_FRAME)])
     let slot = f.slots[src_idx]
     let w8 = f.mi_cols >> 1u32
     let h8 = f.mi_rows >> 1u32
-    if slot.mi_rows != f.mi_rows || slot.mi_cols != f.mi_cols || slot.frame_type == INTRA_ONLY_FRAME || slot.frame_type == KEY_FRAME { ret false }
-    var y8 = 0i32
-    while y8 < h8 {
+    var y8 = y0
+    while y8 < y1 {
         var x8 = 0i32
         while x8 < w8 {
             let mi = usize((2i32 * y8 + 1i32) * slot.mi_cols + 2i32 * x8 + 1i32)
@@ -824,36 +832,90 @@ fn projection(f: *Frame, out: []i16, src: i32, dst_sign: i32) -> bool {
         }
         y8 += 1i32
     }
-    ret true
 }
 
 // Reads f.mi_rows / mi_cols, order_hint(_bits), order_hints, ref_frame_idx[7] (ref_frame_idx[i] is the slot of
 // LAST_FRAME + i) and f.slots[8]. RefSlot.mvs / ref_frames hold ONE vector and reference per MI position
 // (SavedMvs / SavedRefFrames): mvs at (r * mi_cols + c) * 2 + comp, ref_frames at r * mi_cols + c.
-fn motion_field_estimation(f: *Frame, out: []i16) {
-    let n = usize(f.mi_rows >> 1u32) * usize(f.mi_cols >> 1u32) * 16usize
-    var i = 0usize
-    while i < n {
-        out[i] = i16(INVALID_MV)
-        i += 1usize
-    }
+type MfJob = struct { f: *Frame, out: []i16, n: usize, srcs: [5]i32, signs: [5]i32 }
+
+// The projections to make, in the spec's order (a later one overwrites an earlier one), decided from the headers alone.
+fn mf_plan(f: *Frame, out: []i16) -> MfJob {
+    var j: MfJob = zero
+    j.f = f
+    j.out = out
     let last_idx = usize(f.ref_frame_idx[0usize])
     let cur_gold_order_hint = f.order_hints[usize(GOLDEN_FRAME)]
     let last_alt_order_hint = f.slots[last_idx].order_hints[usize(ALTREF_FRAME)]
-    if last_alt_order_hint != cur_gold_order_hint {
-        let ignored = projection(f, out, LAST_FRAME, -1i32)
+    if last_alt_order_hint != cur_gold_order_hint && projection_valid(f, LAST_FRAME) {
+        j.srcs[j.n] = LAST_FRAME
+        j.signs[j.n] = -1i32
+        j.n += 1usize
     }
     var ref_stamp = 1i32
-    if relative_dist(f, f.order_hints[usize(BWDREF_FRAME)], f.order_hint) > 0i32 {
-        if projection(f, out, BWDREF_FRAME, 1i32) { ref_stamp -= 1i32 }
+    if relative_dist(f, f.order_hints[usize(BWDREF_FRAME)], f.order_hint) > 0i32 && projection_valid(f, BWDREF_FRAME) {
+        j.srcs[j.n] = BWDREF_FRAME
+        j.signs[j.n] = 1i32
+        j.n += 1usize
+        ref_stamp -= 1i32
     }
-    if relative_dist(f, f.order_hints[usize(ALTREF2_FRAME)], f.order_hint) > 0i32 {
-        if projection(f, out, ALTREF2_FRAME, 1i32) { ref_stamp -= 1i32 }
+    if relative_dist(f, f.order_hints[usize(ALTREF2_FRAME)], f.order_hint) > 0i32 && projection_valid(f, ALTREF2_FRAME) {
+        j.srcs[j.n] = ALTREF2_FRAME
+        j.signs[j.n] = 1i32
+        j.n += 1usize
+        ref_stamp -= 1i32
     }
-    if relative_dist(f, f.order_hints[usize(ALTREF_FRAME)], f.order_hint) > 0i32 && ref_stamp >= 0i32 {
-        if projection(f, out, ALTREF_FRAME, 1i32) { ref_stamp -= 1i32 }
+    if relative_dist(f, f.order_hints[usize(ALTREF_FRAME)], f.order_hint) > 0i32 && ref_stamp >= 0i32 && projection_valid(f, ALTREF_FRAME) {
+        j.srcs[j.n] = ALTREF_FRAME
+        j.signs[j.n] = 1i32
+        j.n += 1usize
+        ref_stamp -= 1i32
     }
-    if ref_stamp >= 0i32 {
-        let ignored2 = projection(f, out, LAST2_FRAME, -1i32)
+    if ref_stamp >= 0i32 && projection_valid(f, LAST2_FRAME) {
+        j.srcs[j.n] = LAST2_FRAME
+        j.signs[j.n] = -1i32
+        j.n += 1usize
     }
+    ret j
+}
+
+// One band of 8 rows of 8x8 units: its part of the output is cleared, then every projection is made into it.
+fn mf_band(ctx: *void, band: usize) {
+    let j = mem.cast[*MfJob](ctx)
+    let h8 = j.f.mi_rows >> 1u32
+    let w8 = j.f.mi_cols >> 1u32
+    let y0 = i32(band) * 8i32
+    let y1 = imin(y0 + 8i32, h8)
+    var dst = 0usize
+    while dst < 8usize {
+        var i = ((dst * usize(h8) + usize(y0)) * usize(w8)) * 2usize
+        let end = ((dst * usize(h8) + usize(y1)) * usize(w8)) * 2usize
+        while i < end {
+            j.out[i] = i16(INVALID_MV)
+            i += 1usize
+        }
+        dst += 1usize
+    }
+    var k = 0usize
+    while k < j.n {
+        projection_rows(j.f, j.out, j.srcs[k], j.signs[k], y0, y1)
+        k += 1usize
+    }
+}
+
+fn motion_field_estimation(f: *Frame, out: []i16) {
+    var j = mf_plan(f, out)
+    let bands = usize((f.mi_rows >> 1u32) + 7i32) >> 3u32
+    var band = 0usize
+    while band < bands {
+        mf_band(mem.cast[*void](&j), band)
+        band += 1usize
+    }
+}
+
+// The same, the bands shared between the workers of `pool` and the caller. The pool must not be in use by anything else.
+fn motion_field_estimation_pool(f: *Frame, out: []i16, pool: *av1_pool.Pool) {
+    var j = mf_plan(f, out)
+    let bands = usize((f.mi_rows >> 1u32) + 7i32) >> 3u32
+    av1_pool.run(pool, bands, mf_band, mem.cast[*void](&j))
 }

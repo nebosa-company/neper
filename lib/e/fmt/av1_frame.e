@@ -78,6 +78,11 @@ type Decoder = struct {
     ns_tile: i64,
     ns_post: i64,
     ns_setup: i64,
+    mf_pool: *av1_pool.Pool,
+    prof_on: bool,
+    prof: [16]i64,
+    bk_end: i64,
+    bk_spawn: i64,
     shown: bool,
     frame_open: bool,
     tile_num: i32,
@@ -126,6 +131,8 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     var threads = 8usize
     let (tenv, tenv_error) = os.env(a, "AV1_THREADS")
     if tenv_error == ok && tenv.len > 0usize && tenv[0usize] >= 49u8 && tenv[0usize] <= 57u8 { threads = usize(tenv[0usize] - 48u8) }
+    let (penv, penv_error) = os.env(a, "AV1_PROFILE")
+    if penv_error == ok && penv.len > 0usize && penv[0usize] == 49u8 { dc.prof_on = true }
     let (tab, tab_error) = av1_tables.load(a)
     if tab_error != ok { ret (dc, tab_error) }
     dc.tab = tab
@@ -149,6 +156,11 @@ fn new_decoder(a: *mem.Arena) -> (Decoder, err) {
     let (wpool, wpool_error) = av1_pool.new_pool(a, threads - 1usize)
     if wpool_error != ok { ret (dc, wpool_error) }
     dc.d.wp = wpool
+    var mf_n = threads - 1usize
+    if mf_n > 4usize { mf_n = 4usize }
+    let (mfp, mfp_error) = av1_pool.new_pool(a, mf_n)
+    if mfp_error != ok { ret (dc, mfp_error) }
+    dc.mf_pool = mfp
     dc.d2.wp = wpool
     let init0 = init_dec(a, &dc.d, threads)
     if init0 != ok { ret (dc, init0) }
@@ -349,6 +361,21 @@ fn recount(dc: *Decoder) {
     }
 }
 
+// Stage timers (AV1_PROFILE=1): nanoseconds per frame stage in dc.prof, see PROF_NAMES in the tools that print them.
+// 0 headers, 1 setup_frame, 2 tile context copies, 3 save after parse, 4 replay (backend), 5 backend buffer bind and pipeline start,
+// 6 buffer acquire, 7 reference update after the post filters
+fn tick(dc: *Decoder) -> i64 {
+    if !dc.prof_on { ret 0i64 }
+    let (t, c) = time.monotonic()
+    ret t.nanos
+}
+
+fn lap(dc: *Decoder, k: usize, t0: i64) {
+    if !dc.prof_on { ret }
+    let (t, c) = time.monotonic()
+    dc.prof[k] += t.nanos - t0
+}
+
 fn acquire(dc: *Decoder) -> usize {
     var k = 0usize
     while k < POOL {
@@ -468,7 +495,9 @@ fn setup_frame(dc: *Decoder, x: usize) -> err {
     d.mi_rows = h.mi_rows
     d.mi_cols = h.mi_cols
     d.cdef_stride = (h.mi_cols + 15i32) >> 4u32
+    let tm = tick(dc)
     clear_mi(d)
+    lap(dc, 8usize, tm)
     var i = 0usize
     // loop restoration units
     var p = 0usize
@@ -520,7 +549,9 @@ fn setup_frame(dc: *Decoder, x: usize) -> err {
         }
         m.ref_frame_idx = h.ref_frame_idx[..]
         m.slots = d.mf_slots[..]
-        av1_mvp.motion_field_estimation(m, d.motion_field)
+        let tf = tick(dc)
+        av1_mvp.motion_field_estimation_pool(m, d.motion_field, dc.mf_pool)
+        lap(dc, 9usize, tf)
         m.motion_field = d.motion_field
     }
     // cdfs of the frame
@@ -612,6 +643,7 @@ fn tile_group(dc: *Decoder, x: usize, data: []const u8) -> err {
         d.col_start = h.mi_col_starts[usize(tile_col)]
         d.col_end = h.mi_col_starts[usize(tile_col + 1i32)]
         d.current_q_index = h.base_q_idx
+        let tc = tick(dc)
         var i = 0usize
         while i < CDF.CTX_COUNT {
             dc.tile_ctx[i] = dc.ctx[i]
@@ -623,6 +655,7 @@ fn tile_group(dc: *Decoder, x: usize, data: []const u8) -> err {
             i += 1usize
         }
         d.ctx = dc.tile_ctx
+        lap(dc, 2usize, tc)
         d.sd = av1_sym.init_symbol(data[at..at + size], h.disable_cdf_update)
         let (t0, c0) = time.monotonic()
         let tile_result = T.decode_tile(d)
@@ -662,6 +695,7 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
     let st = st_of(dc, x)
     let h = &st.h
     let d = dec_of(dc, x)
+    let tv = tick(dc)
     // the vectors are made straight into the first slot the frame refreshes and copied to the others
     var first = 8usize
     var i = 0usize
@@ -693,6 +727,7 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
         i += 1usize
     }
     dc.last = x
+    lap(dc, 3usize, tv)
     if !dc.async_on {
         let made = backend(dc, x)
         take_pending(dc)
@@ -700,7 +735,10 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
     }
     try finish_backend(dc)
     dc.bk_job[0usize] = BkJob { dc: dc, x: x, result: ok }
+    let tn = tick(dc)
+    dc.bk_spawn = tn
     let (th, spawn_error) = thread.spawn[BkJob](bk_main, &dc.bk_job[0usize], 8388608usize)
+    lap(dc, 11usize, tn)
     if spawn_error != ok { ret spawn_error }
     dc.bk_threads[0usize] = th
     dc.bk_running = true
@@ -709,13 +747,20 @@ fn frame_parsed(dc: *Decoder, x: usize) -> err {
 }
 
 fn bk_main(job: *BkJob) {
+    let tw = tick(job.dc)
+    if job.dc.prof_on { job.dc.prof[14usize] += tw - job.dc.bk_spawn }
     job.result = backend(job.dc, job.x)
+    lap(job.dc, 12usize, tw)
+    job.dc.bk_end = tick(job.dc)
 }
 
 // Waits for the backend thread, if one runs, and hands over the finished frame.
 fn finish_backend(dc: *Decoder) -> err {
     if !dc.bk_running { ret ok }
+    let tj = tick(dc)
     let joined = thread.join(dc.bk_threads[0usize])
+    lap(dc, 10usize, tj)
+    if dc.prof_on { dc.prof[13usize] += tj - dc.bk_end }
     dc.bk_running = false
     if joined != ok { ret joined }
     if dc.bk_job[0usize].result != ok { ret dc.bk_job[0usize].result }
@@ -730,15 +775,19 @@ fn backend(dc: *Decoder, x: usize) -> err {
     let d = dec_of(dc, x)
     if dc.async_on {
         dc.hold = 0i32 - 1i32
+        let tb = tick(dc)
         recount(dc)
         bind_buffers(dc, d)
         if d.deferred {
             try R.pipe_start(d)
             R.pipe_publish(d)
         }
+        lap(dc, 5usize, tb)
     }
     if d.deferred {
+        let tr = tick(dc)
         let replayed = R.replay(d, dc.a, d.threads)
+        lap(dc, 4usize, tr)
         if replayed != ok { ret replayed }
     }
     ret finish_frame(dc, x)
@@ -749,13 +798,16 @@ fn backend(dc: *Decoder, x: usize) -> err {
 fn finish_frame(dc: *Decoder, x: usize) -> err {
     let h = &st_of(dc, x).h
     let d = dec_of(dc, x)
+    let tq = tick(dc)
     let w1 = acquire(dc)
     let w2 = acquire(dc)
+    lap(dc, 6usize, tq)
     let (p0, pc0) = time.monotonic()
     let (which, post_error) = av1_post.post_filter(d, dc.a, &dc.scratch, planes_of(dc, w1), planes_of(dc, w2))
     let (p1, pc1) = time.monotonic()
     dc.ns_post += p1.nanos - p0.nanos
     if post_error != ok { ret post_error }
+    let tu = tick(dc)
     var final = dc.cur_buf
     if which == 1usize { final = w1 }
     if which == 2usize { final = w2 }
@@ -777,6 +829,7 @@ fn finish_frame(dc: *Decoder, x: usize) -> err {
     dc.pool_ref[final] += 1i32
     dc.hold = i32(final)
     dc.pend_shown = h.show_frame
+    lap(dc, 7usize, tu)
     ret ok
 }
 
@@ -855,7 +908,9 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
             st.temporal_id = o.temporal_id
             st.spatial_id = o.spatial_id
             var b = av1.bits_of(o.payload)
+            let th = tick(dc)
             try av1.uncompressed_header(&b, st)
+            lap(dc, 0usize, th)
             if st.h.show_existing_frame {
                 if st.h.frame_type == av1.KEY_FRAME { ret Unsupported }
                 // A hidden frame still being made emits nothing and leaves the slot shown alone, so the slot's picture can go out
@@ -881,7 +936,9 @@ fn decode_sample(dc: *Decoder, sample: []const u8) -> err {
                 if dc.async_on && dc.emit_on { dc.emit(dc.emit_ctx, dc.out_buf) }
                 continue
             }
+            let ts = tick(dc)
             try setup_frame(dc, x)
+            lap(dc, 1usize, ts)
             dc.frame_open = true
             if dc.async_on { dc.nx = 1usize - x }
             if o.kind == av1.OBU_FRAME {
@@ -904,6 +961,7 @@ fn flush(dc: *Decoder) -> err {
 // released.
 fn close(dc: *Decoder) -> err {
     let flushed = finish_backend(dc)
+    let mf_closed = av1_pool.close(dc.mf_pool)
     let closed = av1_pool.close(dc.d.wp)
     if flushed != ok { ret flushed }
     ret closed
