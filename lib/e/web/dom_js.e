@@ -2387,7 +2387,7 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "function parseFragment(context, markup) {\n")
     try str.push(b, "  const tmp = createFragmentNode(slotOf(context).doc);\n")
     try str.push(b, "  const holder = createElementInternal(slotOf(context).doc, slotOf(context).localName, slotOf(context).namespaceURI, null, null, false);\n")
-    try str.push(b, "  N.innerSet(idOf(holder), markup);\n")
+    try str.push(b, "  N.innerSet(idOf(holder), markup, !!slotOf(slotOf(context).doc).browsingContext);\n")
     try str.push(b, "  markScriptsStarted(idOf(holder));\n")
     try str.push(b, "  let id = nFirst(idOf(holder));\n")
     try str.push(b, "  const kids = [];\n")

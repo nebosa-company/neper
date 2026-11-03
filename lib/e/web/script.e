@@ -476,7 +476,7 @@ fn n_inner_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
     if !valid(h, id) { ret (js.undefv(), bad_node(it)) }
     let (s, se) = sarg(it, args, 1usize)
     if se != ok { ret (js.undefv(), se) }
-    let e = dom.set_inner_html(h.d, id, s, parse_options())
+    let e = dom.set_inner_html_with(h.d, id, s, parse_options(), js.to_boolean(arg(args, 2usize)))
     if e != ok { ret (js.undefv(), js.throw_range(it, "could not parse markup")) }
     ret (js.undefv(), ok)
 }
