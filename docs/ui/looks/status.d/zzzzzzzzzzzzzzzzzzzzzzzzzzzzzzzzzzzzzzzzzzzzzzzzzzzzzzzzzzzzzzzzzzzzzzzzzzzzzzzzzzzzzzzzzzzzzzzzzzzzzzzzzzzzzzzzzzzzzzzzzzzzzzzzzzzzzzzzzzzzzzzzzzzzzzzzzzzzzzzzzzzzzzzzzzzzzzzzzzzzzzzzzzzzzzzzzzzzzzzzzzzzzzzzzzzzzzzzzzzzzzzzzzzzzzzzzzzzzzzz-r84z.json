@@ -530,5 +530,97 @@
     ]
    }
   }
+ },
+ "key_caps": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/key_caps.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight static cells (single, chords of two and three, function key, named keys, compact single and chord, arrow keys) viewed light and dark at 1x: caps are 1 px outline-variant outlined rounded boxes with label text, no clipping, chords spaced evenly, compact caps smaller. Label text 4.5:1 or better on the surface. Not measured against a token: M3 has no keyboard-key component, so the row is built from the outline-variant and label-medium tokens; 1.5x not viewed.",
+    "gaps": [
+     "M3 defines no key cap",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/key_caps.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight static cells (single, chords of two and three, function key, named keys, compact single and chord, arrow keys) viewed light and dark at 1x: caps are 1 px outline-variant outlined rounded boxes with label text, no clipping, chords spaced evenly, compact caps smaller. Label text 4.5:1 or better on the surface. Not measured against a token: M3 has no keyboard-key component, so the row is built from the outline-variant and label-medium tokens; 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no key cap",
+     "1.5x not viewed"
+    ]
+   }
+  }
+ },
+ "skeleton": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/skeleton.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight cells (text line, short line, circle, rectangle, pill, on highest container, list row, mid shimmer) viewed light and dark at 1x; fill surface-container-highest e6e0e9 measured exact, shapes legible and unclipped. The fill is a decorative placeholder at about 1.2:1 against the surface by design (it names no control and carries no text); the on-highest-container cell shows the inner surface. M3 has no skeleton component; 1.5x not viewed.",
+    "gaps": [
+     "Decorative low contrast by design",
+     "M3 defines no skeleton",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/skeleton.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): eight cells (text line, short line, circle, rectangle, pill, on highest container, list row, mid shimmer) viewed light and dark at 1x; fill surface-container-highest e6e0e9 measured exact, shapes legible and unclipped. The fill is a decorative placeholder at about 1.2:1 against the surface by design (it names no control and carries no text); the on-highest-container cell shows the inner surface. M3 has no skeleton component; 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "Decorative low contrast by design",
+     "M3 defines no skeleton",
+     "1.5x not viewed"
+    ]
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/empty_state.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): seven cells (glyph and action, two actions, compact, text only, picture art, action hovered, action pressed) viewed light and dark at 1x. Headline-small title, body-medium description on-surface-variant, filled primary action 40 high (measured 40 x 108), secondary-container icon disc, outlined compact action; hover and pressed layers on the action. Text 4.5:1 or better. M3 has no empty-state component; the layout is the guidance's, 1.5x not viewed.",
+    "gaps": [
+     "M3 defines no empty state",
+     "Hover and pressed of the action differ from rest by a few levels"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/empty_state.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): seven cells (glyph and action, two actions, compact, text only, picture art, action hovered, action pressed) viewed light and dark at 1x. Headline-small title, body-medium description on-surface-variant, filled primary action 40 high (measured 40 x 108), secondary-container icon disc, outlined compact action; hover and pressed layers on the action. Text 4.5:1 or better. M3 has no empty-state component; the layout is the guidance's, 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "M3 defines no empty state",
+     "Hover and pressed of the action differ from rest by a few levels"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/toast.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): one stacked cell (a titled card with leading icon, action and dismiss, two plain toasts and the '1 more notification' chip) viewed light and dark at 1x. Plain toasts are 48 high on inverse-surface (the M3 single-line snackbar container, measured rows 106 to 153), text 11.7:1 on the plate; in dark the plain toasts are the light inverse surface, the rich card stays a dark container. No hover on the action or dismiss is drawn in this sheet, 1.5x not viewed.",
+    "gaps": [
+     "Action and dismiss hover not drawn",
+     "The rich card and the plain toasts use different surfaces",
+     "1.5x not viewed"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/toast.png",
+    "notes": "Round 84 (z, docs/ui/looks/material-complete-z.md, batch 7): one stacked cell (a titled card with leading icon, action and dismiss, two plain toasts and the '1 more notification' chip) viewed light and dark at 1x. Plain toasts are 48 high on inverse-surface (the M3 single-line snackbar container, measured rows 106 to 153), text 11.7:1 on the plate; in dark the plain toasts are the light inverse surface, the rich card stays a dark container. No hover on the action or dismiss is drawn in this sheet, 1.5x not viewed. (Dark twin: same geometry, Dark baseline tokens.)",
+    "gaps": [
+     "Action and dismiss hover not drawn",
+     "The rich card and the plain toasts use different surfaces",
+     "1.5x not viewed"
+    ]
+   }
+  }
  }
 }

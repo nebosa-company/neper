@@ -109,3 +109,8 @@ Fixed, stays review: font_picker (sample follows style and size up to 20 sp; fam
 Not fixed: dial (no keyboard focus drawn for it in the Android look), terminal_view (rows are not pointer targets of the list; a per-cell key salt changed nothing and was reverted). surf_table (the matched `table` row) was not touched.
 
 Hooks added: `looks_z84_edge.set_ring` (collection.pull_to_refresh), the Material-only guarded edits in `control.e` (font_picker sample, autocomplete width) and `collection.e` (ring size 48). Other looks byte for byte for every app re-rendered (pull_to_refresh, font_picker, autocomplete, combo_box, choices_filter, token_edit, rating, key_value_editor).
+
+## Batch 7
+
+Raised to `ready`: key_caps, skeleton, empty_state, toast (viewed light and dark at 1x, no library change; evidence in the overlay notes, 1.5x not viewed). Idiom rows raised in this lane: search_field, split_button, speed_dial, large_title, password_field, pull_to_refresh, rating, autocomplete, key_value_editor, key_caps, skeleton, empty_state, toast (13 of 66). About 40 idiom rows were not examined: notification_list, avatar, icon, image, markdown_view, code_editor, schedule, flow_editor, sheet, canvas, popover, flyout, side_sheet, action_sheet, tree_table, bottom_app_bar, toolbar, navigation_stack, navigation_split, sidebar, breadcrumbs, document_tabs, dock_panel, workspace, command_palette, window_switcher, ribbon, title_bar, scroll_area, list, grid_view, carousel, pagination, page_view, swipe_actions, reorderable_list, shortcut_recorder, color_picker, calendar, duration_picker, gauge, level, toggle_button, rich_tooltip, time_picker, android_text_modes.
+
