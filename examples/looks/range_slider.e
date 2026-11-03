@@ -7,10 +7,23 @@ use e.ui.control
 use e.ui.looks
 use e.ui.looks_a
 use e.ui.widget
+use e.ui.looks_y87
+use e.ui.style
 
 fn noop_change(ctx: *void, value: f32) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [1]looks_y87.RoleTone{ looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..1usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let names = [7]str{ "rest", "hover handle", "pressed handle", "focus", "disabled", "step 10", "touching" }
     var i = 0usize
     while i < 7usize {

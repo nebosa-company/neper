@@ -9,6 +9,7 @@ use e.ui.looks
 use e.ui.looks_a
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_y87
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
@@ -23,7 +24,18 @@ fn actions_of(a: *mem.Arena, n: usize) -> ([]widget.Submit, err) {
     ret (list, ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [2]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0040DDu32, dark: 0x66B2FFu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..2usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (toggle, toggle_error) = actions_of(a, 1usize)
     if toggle_error != ok { ret (0usize, toggle_error) }
     let (items, items_error) = actions_of(a, 3usize)
@@ -55,7 +67,18 @@ fn one_node(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
     ret held[0usize..1usize]
 }
 
-fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Cupertino only: the roles this sheet draws with take tones that hold 4.5:1 (any other look is passed through unchanged).
+fn build_open(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [2]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0040DDu32, dark: 0x66B2FFu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..2usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build_open_base(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
+fn build_open_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (toggle, toggle_error) = actions_of(a, 1usize)
     if toggle_error != ok { ret (0usize, toggle_error) }
     let (items, items_error) = actions_of(a, 3usize)
