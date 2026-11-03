@@ -19621,11 +19621,18 @@ type Win3Ultra = struct { kind: u32 }
 fn win3_ultra_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let f = mem.cast[*Win3Ultra](ctx)
     let x = area.x
-    let y = area.y
+    var y = area.y
+    // round 85: the dark sheets centre the cell on a half pixel; the rules stay on whole pixels
+    if style.windark_active() { y = f32(i64(area.y + 0.5)) }
     let w = area.width
     let h = area.height
-    let dark = style.hex(5592405u32)
-    let light = style.hex(10526880u32)
+    var dark = style.hex(5592405u32)
+    var light = style.hex(10526880u32)
+    // round 85: the dark strip's rules are #808080 and #9A9A9A (the mapped greys were 2.2 to 2.8 : 1 on the dark page)
+    if style.windark_active() {
+        dark = style.hex_raw(0x808080u32)
+        light = style.hex_raw(0x9A9A9Au32)
+    }
     if f.kind == 0u32 {
         try win3_rect(b, x, y, w, h, style.hex(15790320u32))
         try win3_rect(b, x, y, w, 1.0, dark)
@@ -19643,6 +19650,10 @@ fn win3_ultra_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if f.kind == 1u32 { ret ok }
     // looks5 group d: kind 4, the strip of tabs without pictures (About), sits on another phase: #5A5A5A, #9B9B9B.
     if f.kind == 4u32 {
+        if style.windark_active() {
+            try win3_rect(b, x, y + h - 2.0, w, 1.0, dark)
+            ret win3_rect(b, x, y + h - 1.0, w, 1.0, light)
+        }
         try win3_rect(b, x, y + h - 2.0, w, 1.0, style.hex(5921370u32))
         ret win3_rect(b, x, y + h - 1.0, w, 1.0, style.hex(10197915u32))
     }
