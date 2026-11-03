@@ -64,7 +64,7 @@ type BuilderState = struct { commands: []Command, count: usize, finished: bool, 
 
 // A texture is premultiplied RGBA, four floats per pixel.
 // `version` counts the pixel writes (a texture updated in place keeps its generation), for a cache of the pixels on a device.
-type Texture = struct { live: bool, generation: u32, version: u32, width: u32, height: u32, pixels: []f32 }
+type Texture = struct { live: bool, generation: u32, version: u32, width: u32, height: u32, pixels: []f32, opaque: bool }
 type Scene = struct { live: bool, released: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
 type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize, cff: *cffhint.Cff }
 type Edge = struct { x0: f32, y0: f32, x1: f32, y1: f32 }
@@ -72,7 +72,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64 }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [16]*tthint.Hinter, hint_tried: [16]bool, hint_ok: [16]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64, cover: usize, vid: []u32, vid_ok: bool, vid_x0: usize, vid_y0: usize, vid_x1: usize, vid_y1: usize, vid_dirty_ok: bool, vid_dirty: geometry.Rect }
 type F32x4 = Vec[f32, 4]
 type I32x4 = Vec[i32, 4]
 type I16x8 = Vec[i16, 8]
@@ -314,24 +314,107 @@ fn replay_shifted(r: *Renderer, id: SceneId, from: usize, to: usize, dx: f32, dy
 }
 
 // The current box of the canvas as packed pixels in the frame's channel order.
-fn convert_box(s: *RendererState, bgra: bool) {
+fn convert_span(s: *RendererState, y: usize, xa: usize, xb: usize, bgra: bool) {
     let canvas = s.canvases[0usize].data
+    var i = y * s.width + xa
+    let end = y * s.width + xb
+    while i < end {
+        let at = i * 4usize
+        let r8 = channel_byte(canvas[at])
+        let g8 = channel_byte(canvas[at + 1usize])
+        let b8 = channel_byte(canvas[at + 2usize])
+        let a8 = channel_byte(canvas[at + 3usize])
+        if bgra {
+            s.pixels[i] = b8 | (g8 << 8u32) | (r8 << 16u32) | (a8 << 24u32)
+        } else {
+            s.pixels[i] = r8 | (g8 << 8u32) | (b8 << 16u32) | (a8 << 24u32)
+        }
+        i += 1usize
+    }
+}
+
+// Pixels whose bytes an opaque image left in `vid` (red first), to the frame in its channel order.
+fn copy_span(s: *RendererState, y: usize, xa: usize, xb: usize, bgra: bool) {
+    var i = y * s.width + xa
+    let end = y * s.width + xb
+    var swap: U8x16 = zero
+    var j = 0usize
+    while j < 4usize {
+        swap.lanes[j * 4usize] = u8(j * 4usize + 2usize)
+        swap.lanes[j * 4usize + 1usize] = u8(j * 4usize + 1usize)
+        swap.lanes[j * 4usize + 2usize] = u8(j * 4usize)
+        swap.lanes[j * 4usize + 3usize] = u8(j * 4usize + 3usize)
+        j += 1usize
+    }
+    @nocheck {
+    while i + 4usize <= end {
+        var four = *mem.cast[*U8x16](&s.vid[i])
+        if bgra { four = simd.shuffle_bytes[U8x16](four, swap) }
+        *mem.cast[*U8x16](&s.pixels[i]) = four
+        i += 4usize
+    }
+    while i < end {
+        let p = s.vid[i]
+        if bgra {
+            s.pixels[i] = (p & 4278255360u32) | ((p & 255u32) << 16u32) | ((p >> 16u32) & 255u32)
+        } else {
+            s.pixels[i] = p
+        }
+        i += 1usize
+    }
+    }
+}
+
+// The current box of the canvas as packed pixels in the frame's channel order; where an opaque image left its bytes and nothing
+// was drawn after it they are copied, the rest is converted from the canvas.
+fn convert_box(s: *RendererState, bgra: bool) {
+    var cx0 = s.dx0
+    var cx1 = s.dx0
+    var cy0 = s.dy0
+    var cy1 = s.dy0
+    var fast = s.vid_ok
+    if fast {
+        cx0 = s.vid_x0
+        cx1 = s.vid_x1
+        cy0 = s.vid_y0
+        cy1 = s.vid_y1
+        if cx0 < s.dx0 { cx0 = s.dx0 }
+        if cy0 < s.dy0 { cy0 = s.dy0 }
+        if cx1 > s.dx1 { cx1 = s.dx1 }
+        if cy1 > s.dy1 { cy1 = s.dy1 }
+        if cx1 <= cx0 || cy1 <= cy0 { fast = false }
+    }
+    var ex0 = 0usize
+    var ey0 = 0usize
+    var ex1 = 0usize
+    var ey1 = 0usize
+    if fast && s.vid_dirty_ok {
+        let (a0, b0, a1, b1) = scissor_bounds(s, s.vid_dirty)
+        ex0 = a0
+        ey0 = b0
+        ex1 = a1
+        ey1 = b1
+    }
     var y = s.dy0
     while y < s.dy1 {
-        var i = y * s.width + s.dx0
-        let end = y * s.width + s.dx1
-        while i < end {
-            let at = i * 4usize
-            let r8 = channel_byte(canvas[at])
-            let g8 = channel_byte(canvas[at + 1usize])
-            let b8 = channel_byte(canvas[at + 2usize])
-            let a8 = channel_byte(canvas[at + 3usize])
-            if bgra {
-                s.pixels[i] = b8 | (g8 << 8u32) | (r8 << 16u32) | (a8 << 24u32)
+        if !fast || y < cy0 || y >= cy1 {
+            convert_span(s, y, s.dx0, s.dx1, bgra)
+        } else {
+            convert_span(s, y, s.dx0, cx0, bgra)
+            if y >= ey0 && y < ey1 && ex1 > ex0 {
+                var left = ex0
+                if left < cx0 { left = cx0 }
+                if left > cx1 { left = cx1 }
+                var right = ex1
+                if right < left { right = left }
+                if right > cx1 { right = cx1 }
+                copy_span(s, y, cx0, left, bgra)
+                convert_span(s, y, left, right, bgra)
+                copy_span(s, y, right, cx1, bgra)
             } else {
-                s.pixels[i] = r8 | (g8 << 8u32) | (b8 << 16u32) | (a8 << 24u32)
+                copy_span(s, y, cx0, cx1, bgra)
             }
-            i += 1usize
+            convert_span(s, y, cx1, s.dx1, bgra)
         }
         y += 1usize
     }
@@ -594,6 +677,7 @@ fn half_of(d: []const u8, at: usize) -> f32 {
 
 fn fill_texture(t: *Texture, view: image.ConstImage) {
     t.version += 1u32
+    t.opaque = true
     var y = 0usize
     while y < usize(view.height) {
         var x = 0usize
@@ -614,6 +698,7 @@ fn fill_texture(t: *Texture, view: image.ConstImage) {
             t.pixels[at + 1usize] = g
             t.pixels[at + 2usize] = b
             t.pixels[at + 3usize] = a
+            if a != 1.0 { t.opaque = false }
             x += 1usize
         }
         y += 1usize
@@ -2613,6 +2698,24 @@ fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *con
         if pix[q] != 1.0 { opaque = false }
         q += 4usize
     }
+    // the bytes of an opaque image, for the frame, found while the rows are still in the cache
+    var keep_bytes = opaque && state.layer == 0usize
+    if keep_bytes && s.vid.len < s.width * s.height {
+        let (made_bytes, made_bytes_error) = mem.alloc[u32](s.arena, s.width * s.height)
+        if made_bytes_error != ok { keep_bytes = false } else { s.vid = made_bytes }
+    }
+    var first = n
+    var last = 0usize
+    i = 0usize
+    while i < n {
+        if colv[i] {
+            if i < first { first = i }
+            last = i + 1usize
+        }
+        i += 1usize
+    }
+    var row_first = y1
+    var row_last = y0
     let none = 18446744073709551615usize
     var tag0 = none
     var tag1 = none
@@ -2660,6 +2763,21 @@ fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *con
                     i += 1usize
                 }
                 }
+                if keep_bytes {
+                    var from = (y * s.width + x0 + first) * 4usize
+                    var to = y * s.width + x0 + first
+                    i = first
+                    @nocheck {
+                    while i < last {
+                        s.vid[to] = vid_byte(canvas[from]) | (vid_byte(canvas[from + 1usize]) << 8u32) | (vid_byte(canvas[from + 2usize]) << 16u32) | (vid_byte(canvas[from + 3usize]) << 24u32)
+                        from += 4usize
+                        to += 1usize
+                        i += 1usize
+                    }
+                    }
+                    if y < row_first { row_first = y }
+                    row_last = y + 1usize
+                }
                 y += 1usize
                 continue
             }
@@ -2684,6 +2802,14 @@ fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *con
             }
         }
         y += 1usize
+    }
+    if keep_bytes && row_last > row_first && last > first {
+        s.vid_ok = true
+        s.vid_dirty_ok = false
+        s.vid_x0 = x0 + first
+        s.vid_x1 = x0 + last
+        s.vid_y0 = row_first
+        s.vid_y1 = row_last
     }
 }
 
@@ -3613,6 +3739,130 @@ fn fill_rect_fast(s: *RendererState, state: DrawState, fill: FillRect) -> bool {
     ret true
 }
 
+// The last image of the scene that replaces every pixel of a part of the box by itself -- opaque, at full weight, axis-aligned, outside
+// any clip but the box and any layer -- with that part (most of the box, a pixel in from the image's edges), or `none`: what is drawn
+// before it is never seen there, and the part need not be cleared.
+fn find_cover(s: *RendererState, scene: *const Scene) -> (usize, usize, usize, usize, usize) {
+    let none = 18446744073709551615usize
+    if s.dx1 - s.dx0 > 2048usize { ret (none, 0usize, 0usize, 0usize, 0usize) }
+    var transforms: [32]geometry.Transform = zero
+    var scissors: [32]geometry.Rect = zero
+    var depth = 0usize
+    var t = geometry.transform_scale(s.scale, s.scale)
+    let box = geometry.Rect { x: f32(s.dx0), y: f32(s.dy0), width: f32(s.dx1 - s.dx0), height: f32(s.dy1 - s.dy0) }
+    var scissor = box
+    var best = none
+    var bx0 = 0usize
+    var by0 = 0usize
+    var bx1 = 0usize
+    var by1 = 0usize
+    var i = 0usize
+    while i < scene.count {
+        switch scene.commands[i] {
+        case .Save:
+            if depth >= MAX_STATES { ret (none, 0usize, 0usize, 0usize, 0usize) }
+            transforms[depth] = t
+            scissors[depth] = scissor
+            depth += 1usize
+        case .Restore:
+            if depth == 0usize { ret (none, 0usize, 0usize, 0usize, 0usize) }
+            depth = depth - 1usize
+            t = transforms[depth]
+            scissor = scissors[depth]
+        case .Transform as m:
+            t = transform_compose(t, m)
+        case .Clip as clip:
+            switch clip {
+            case .Rect as r:
+                if t.m01 != 0.0 || t.m10 != 0.0 { ret (none, 0usize, 0usize, 0usize, 0usize) }
+                let device = transform_rect(t, r)
+                scissor = geometry.intersect(scissor, device)
+            default:
+                ret (none, 0usize, 0usize, 0usize, 0usize)
+            }
+        case .OpacityLayer:
+            ret (none, 0usize, 0usize, 0usize, 0usize)
+        case .Image as draw:
+            if !(i < s.skip.len && s.skip[i]) && draw.opacity == 1.0 && t.m01 == 0.0 && t.m10 == 0.0 && t.m00 > 0.0 && t.m11 > 0.0 {
+                let (slot, slot_error) = texture_slot(s, draw.texture)
+                if slot_error == ok && s.textures[slot].opaque {
+                    let device = transform_rect(t, draw.destination)
+                    let area = geometry.intersect(scissor, device)
+                    if area.width > 2.0 && area.height > 2.0 {
+                        var ax0 = usize(math.ceil[f32](area.x - 0.5)) + 1usize
+                        var ay0 = usize(math.ceil[f32](area.y - 0.5)) + 1usize
+                        var ax1 = usize(math.ceil[f32](area.x + area.width - 0.5)) - 1usize
+                        var ay1 = usize(math.ceil[f32](area.y + area.height - 0.5)) - 1usize
+                        if ax0 < s.dx0 + 1usize { ax0 = s.dx0 }
+                        if ay0 < s.dy0 + 1usize { ay0 = s.dy0 }
+                        if ax1 > s.dx1 { ax1 = s.dx1 }
+                        if ay1 > s.dy1 { ay1 = s.dy1 }
+                        if ax1 > ax0 && ay1 > ay0 && (ax1 - ax0) * (ay1 - ay0) * 2usize >= (s.dx1 - s.dx0) * (s.dy1 - s.dy0) {
+                            best = i
+                            bx0 = ax0
+                            by0 = ay0
+                            bx1 = ax1
+                            by1 = ay1
+                        }
+                    }
+                }
+            }
+        default:
+            i += 0usize
+        }
+        i += 1usize
+    }
+    ret (best, bx0, by0, bx1, by1)
+}
+
+// What a command after an opaque image can change, as a rectangle, joined into one; the bytes the image left for the frame are used
+// outside it. A command whose reach is unknown drops them.
+fn note_vid_dirty(s: *RendererState, t: geometry.Transform, command: Command) {
+    var reach: geometry.Rect = zero
+    switch command {
+    case .OpacityLayer as layer:
+        let device = transform_rect(t, layer.bounds)
+        reach = geometry.Rect { x: device.x - 2.0, y: device.y - 2.0, width: device.width + 4.0, height: device.height + 4.0 }
+    case .FillRect:
+        let (b, known) = command_bounds(t, &command)
+        if !known { s.vid_ok = false }
+        reach = b
+    case .FillPath:
+        let (b, known) = command_bounds(t, &command)
+        if !known { s.vid_ok = false }
+        reach = b
+    case .StrokePath:
+        let (b, known) = command_bounds(t, &command)
+        if !known { s.vid_ok = false }
+        reach = b
+    case .Image:
+        let (b, known) = command_bounds(t, &command)
+        if !known { s.vid_ok = false }
+        reach = b
+    case .Text:
+        let (b, known) = command_bounds(t, &command)
+        if !known { s.vid_ok = false }
+        reach = b
+    default:
+        ret
+    }
+    if !s.vid_dirty_ok {
+        s.vid_dirty = reach
+        s.vid_dirty_ok = true
+        ret
+    }
+    let d = s.vid_dirty
+    var x0 = d.x
+    var y0 = d.y
+    var x1 = d.x + d.width
+    var y1 = d.y + d.height
+    if reach.x < x0 { x0 = reach.x }
+    if reach.y < y0 { y0 = reach.y }
+    if reach.x + reach.width > x1 { x1 = reach.x + reach.width }
+    if reach.y + reach.height > y1 { y1 = reach.y + reach.height }
+    s.vid_dirty = geometry.Rect { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
 fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err {
     var states: [32]DrawState = zero
     var depth = 0usize
@@ -3629,6 +3879,28 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
             i += 1usize
             continue
         }
+        if s.cover != 18446744073709551615usize && i < s.cover {
+            switch command {
+            case .FillRect:
+                i += 1usize
+                continue
+            case .FillPath:
+                i += 1usize
+                continue
+            case .StrokePath:
+                i += 1usize
+                continue
+            case .Image:
+                i += 1usize
+                continue
+            case .Text:
+                i += 1usize
+                continue
+            default:
+                i += 0usize
+            }
+        }
+        if s.vid_ok { note_vid_dirty(s, current.transform, command) }
         switch command {
         case .Save:
             if depth >= MAX_STATES { ret TooLarge }
@@ -3898,10 +4170,62 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     while k < s.box_count {
         take_box(s, &s.scenes[slot], k)
         if s.dx1 > s.dx0 && s.dy1 > s.dy0 {
-            clear_box(s, s.canvases[0usize].data, s.dx0, s.dy0, s.dx1, s.dy1)
-            s.edge_count = 0usize
-            let run_error = run_commands(s, &s.scenes[slot], coverage)
-            if run_error != ok { ret run_error }
+            let (cover, cx0, cy0, cx1, cy1) = find_cover(s, &s.scenes[slot])
+            if cover == 18446744073709551615usize {
+                s.cover = cover
+                clear_box(s, s.canvases[0usize].data, s.dx0, s.dy0, s.dx1, s.dy1)
+                s.edge_count = 0usize
+                s.vid_ok = false
+                s.vid_dirty_ok = false
+                let run_error = run_commands(s, &s.scenes[slot], coverage)
+                if run_error != ok { ret run_error }
+            } else {
+                // the strips round the part an opaque image covers take every command, the part itself those from the image on
+                let bx0 = s.dx0
+                let by0 = s.dy0
+                let bx1 = s.dx1
+                let by1 = s.dy1
+                var strip = 0usize
+                while strip < 5usize {
+                    s.dx0 = bx0
+                    s.dx1 = bx1
+                    s.dy0 = by0
+                    s.dy1 = by1
+                    s.cover = 18446744073709551615usize
+                    if strip == 0usize { s.dy1 = cy0 }
+                    if strip == 1usize { s.dy0 = cy1 }
+                    if strip == 2usize {
+                        s.dy0 = cy0
+                        s.dy1 = cy1
+                        s.dx1 = cx0
+                    }
+                    if strip == 3usize {
+                        s.dy0 = cy0
+                        s.dy1 = cy1
+                        s.dx0 = cx1
+                    }
+                    if strip == 4usize {
+                        s.dx0 = cx0
+                        s.dx1 = cx1
+                        s.dy0 = cy0
+                        s.dy1 = cy1
+                        s.cover = cover
+                    }
+                    if s.dx1 > s.dx0 && s.dy1 > s.dy0 {
+                        if strip < 4usize { clear_box(s, s.canvases[0usize].data, s.dx0, s.dy0, s.dx1, s.dy1) }
+                        s.edge_count = 0usize
+                        s.vid_ok = false
+                        s.vid_dirty_ok = false
+                        let run_error = run_commands(s, &s.scenes[slot], coverage)
+                        if run_error != ok { ret run_error }
+                    }
+                    strip += 1usize
+                }
+                s.dx0 = bx0
+                s.dx1 = bx1
+                s.dy0 = by0
+                s.dy1 = by1
+            }
         }
         k += 1usize
     }
@@ -3962,6 +4286,13 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     // Keep the previous scene comparison until its pixels have actually presented.
     commit_render(s, slot, width, height, scale)
     ret ok
+}
+
+// The byte of a channel value in 0..1 with no float to integer conversion, which saturates and checks: v * 255 is exact in f64, adding
+// 2^52 rounds it to an integer, ties to even, and the integer is the sum's low bits. That is `channel_byte` except where the f32 steps
+// of `v * 255.0 + 0.5` round across a half (128 values of v in 0..1, one level apart, never 0.5 itself).
+fn vid_byte(v: f32) -> u32 {
+    ret u32(mem.bitcast[u64](f64(v) * 255.0f64 + 4503599627370496.0f64) & 255u64)
 }
 
 fn channel_byte(v: f32) -> u32 {
