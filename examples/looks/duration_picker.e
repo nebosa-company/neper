@@ -7,6 +7,7 @@ use e.time
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_y85
+use e.ui.looks_z87
 use e.ui.overlay
 use e.ui.widget
 
@@ -35,6 +36,8 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
             held[0usize] = node
             shown = widget.aligned(0u64, .Center, .Center, looks.size_style(300.0, 40.0), held[0usize..1usize])
         }
+        // Android: the pointer on the Minutes plus button (the centre of the cell falls on the gap between steppers, so Hover equalled Rest)
+        if i == 3usize { looks_z87.aim(t, i, 45.0, 0.0) }
         cells[i] = looks.Cell { caption: names[i], node: shown, drive: drives[i] }
         i += 1usize
     }

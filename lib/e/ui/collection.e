@@ -24,6 +24,7 @@ use e.ui.looks_x87
 use e.ui.overlay
 use e.ui.looks_z84_edge
 use e.ui.looks_z85
+use e.ui.looks_z88
 use e.ui.style
 use e.ui.vgridlook as vg
 use e.ui.widget
@@ -2569,6 +2570,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if look.on { band.background = paint.Brush { Solid: look.header } }
+    // Android (looks_z88): the header is the surface, as Flutter's DataTable header.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike && !look.on { band.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
@@ -3795,6 +3798,13 @@ fn selection_check(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = mark
+    // Android (looks_z88): the mark stands in the middle of the cell, as Flutter's DataTable checkbox, not at its top.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike {
+        let (middle, middle_error) = mem.alloc[widget.Node](a, 1usize)
+        if middle_error != ok { ret (zero, TooLarge) }
+        middle[0usize] = mark
+        held[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(side, tall), middle[0usize..1usize])
+    }
     held[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](press), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(side, tall), held[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 4u8
