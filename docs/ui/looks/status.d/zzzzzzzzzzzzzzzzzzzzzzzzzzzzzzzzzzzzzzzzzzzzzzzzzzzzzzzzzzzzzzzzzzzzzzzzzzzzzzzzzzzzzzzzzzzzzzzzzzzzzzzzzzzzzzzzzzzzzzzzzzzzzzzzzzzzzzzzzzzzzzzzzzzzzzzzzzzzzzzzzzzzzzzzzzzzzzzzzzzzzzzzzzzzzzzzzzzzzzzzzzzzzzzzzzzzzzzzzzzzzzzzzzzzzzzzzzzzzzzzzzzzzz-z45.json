@@ -1,0 +1,52 @@
+{
+ "ribbon": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/ribbon.png",
+    "notes": "AUDIT 45 (1): downgraded from ready to review. Viewed at 1x and 1.5x, light and dark: the command glyphs are stand-ins, not toolbar artwork: Cut is an X, Copy a check mark, Bold, Italic and Underline the same pencil, Paste a plus, Table a calendar. A user reads those as other commands, so the cells are not drawn correctly (the Material ribbon is held at review for the same defect). Contrast and shape hold: Save and Undo 0040DD 6.78:1 on F2F2F7 (409CFF 6.01:1 dark; the quick bar is 6.8:1, not 7.6:1), tab labels 5.5:1 and 7.6:1, Table Tools label 4.6:1 and 6.1:1, chosen tab a raised pill, no clipping. Fix: real icons for the Home commands, or distinct glyphs per command. | Round 86 (y3): the macOS toolbar idiom: a segmented tab strip (chosen tab a raised pill), a toolbar items row with no group captions or dialog launchers, the contextual tab band a plain section label, Save and Undo in 0040DD / 409CFF (7.6:1 light, 6:1 dark; Redo is disabled). Viewed at 1x and 1.5x light and dark. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it",
+     "Stand-in command glyphs (Cut X, Copy check, Bold, Italic and Underline one pencil)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/ribbon.png",
+    "notes": "AUDIT 45 (1): downgraded from ready to review. Viewed at 1x and 1.5x, light and dark: the command glyphs are stand-ins, not toolbar artwork: Cut is an X, Copy a check mark, Bold, Italic and Underline the same pencil, Paste a plus, Table a calendar. A user reads those as other commands, so the cells are not drawn correctly (the Material ribbon is held at review for the same defect). Contrast and shape hold: Save and Undo 0040DD 6.78:1 on F2F2F7 (409CFF 6.01:1 dark; the quick bar is 6.8:1, not 7.6:1), tab labels 5.5:1 and 7.6:1, Table Tools label 4.6:1 and 6.1:1, chosen tab a raised pill, no clipping. Fix: real icons for the Home commands, or distinct glyphs per command. | Round 86 (y3): the macOS toolbar idiom: a segmented tab strip (chosen tab a raised pill), a toolbar items row with no group captions or dialog launchers, the contextual tab band a plain section label, Save and Undo in 0040DD / 409CFF (7.6:1 light, 6:1 dark; Redo is disabled). Viewed at 1x and 1.5x light and dark. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it",
+     "Stand-in command glyphs (Cut X, Copy check, Bold, Italic and Underline one pencil)"
+    ]
+   }
+  }
+ },
+ "scroll_area": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/scroll_area.png",
+    "notes": "AUDIT 45 (1): downgraded from ready to review. Viewed at 1x and 1.5x, light and dark: the thumb is 7F7A84 on FEF7FF 3.98:1 (938F99 on 141218 5.87:1, above 3:1), but the Hover and Pressed cells are pixel for pixel the Rest cell (thumb 7F7A84 in all three, 938F99 dark): the 90 % hover level and the pressed state are not drawn in the sheet, so two of its seven cells show a state they do not draw. Fix: aim the hover and pressed cells at the thumb, or draw the 90 % level, then re-render. | ROUND 86: Thumb now 70 % of on-surface-variant at rest (7f7a84 on fef7ff 4.1:1, dark 939099 on 141218 6:1) and 90 % over its strip, 4 wide, 48 shortest; against the 3:1 control rule (was 2.4:1). Deviation recorded: Flutter's thumb is lighter. The Pressed cell equals Hover (a drag is 100 %, not driven by the sheet). Viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells.",
+    "gaps": [
+     "Pressed cell shows the hover thumb; a drag (full colour) is not driven",
+     "Thumb is darker than Flutter's default to meet 3:1",
+     "Hover and Pressed cells equal Rest: the thumb states are not drawn in the sheet"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/scroll_area.png",
+    "notes": "AUDIT 45 (1): downgraded from ready to review. Viewed at 1x and 1.5x, light and dark: the thumb is 7F7A84 on FEF7FF 3.98:1 (938F99 on 141218 5.87:1, above 3:1), but the Hover and Pressed cells are pixel for pixel the Rest cell (thumb 7F7A84 in all three, 938F99 dark): the 90 % hover level and the pressed state are not drawn in the sheet, so two of its seven cells show a state they do not draw. Fix: aim the hover and pressed cells at the thumb, or draw the 90 % level, then re-render. | ROUND 86: Thumb now 70 % of on-surface-variant at rest (7f7a84 on fef7ff 4.1:1, dark 939099 on 141218 6:1) and 90 % over its strip, 4 wide, 48 shortest; against the 3:1 control rule (was 2.4:1). Deviation recorded: Flutter's thumb is lighter. The Pressed cell equals Hover (a drag is 100 %, not driven by the sheet). Viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells.",
+    "gaps": [
+     "Pressed cell shows the hover thumb; a drag (full colour) is not driven",
+     "Thumb is darker than Flutter's default to meet 3:1",
+     "Hover and Pressed cells equal Rest: the thumb states are not drawn in the sheet"
+    ]
+   }
+  }
+ }
+}

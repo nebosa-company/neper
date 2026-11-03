@@ -1,0 +1,10 @@
+{
+  "voice": "Microsoft George",
+  "note": "Local Windows voice. Neper is spelled Nee-per for the synthesizer only; captions use the real spelling.",
+  "scenes": [
+    { "id": "clone", "caption": "Clone the repository from GitHub and build the compiler once.", "say": "Getting started with Nee-per: clone the repository from Git Hub, and build the compiler once." },
+    { "id": "prompt", "caption": "Give your coding agent one prompt.", "say": "Then give your coding agent one prompt: write the program, run the tests, and build for Windows, Linux, and macOS." },
+    { "id": "cross", "caption": "No third-party toolchains. One machine builds for any OS.", "say": "No third party toolchains. No L L V M, no S D K, no system linker. One machine cross compiles for any operating system." },
+    { "id": "end", "caption": "neper.dev/get-started", "say": "Get started at nee-per dot dev." }
+  ]
+}

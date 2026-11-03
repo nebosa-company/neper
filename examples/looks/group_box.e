@@ -5,6 +5,7 @@ use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_t81
 use e.ui.style
 use e.ui.widget
 
@@ -49,7 +50,15 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 4usize { count = 0usize }
         let (node, node_error) = group(a, t, u64(100usize * (i + 1usize)), label, variant, enabled, count)
         if node_error != ok { ret (0usize, node_error) }
-        cells[i] = looks.Cell { caption: captions[i], node: node, drive: .None }
+        var shown = node
+        if t.tokens.profile == .Windows && t.tokens.palette == .Dark {
+            var left: f32 = 45.0
+            if i == 2usize { left = 10.0 }
+            let (pinned, pinned_error) = looks_t81.pinned(a, node, 230.0, 90.0, left, 14.0)
+            if pinned_error != ok { ret (0usize, pinned_error) }
+            shown = pinned
+        }
+        cells[i] = looks.Cell { caption: captions[i], node: shown, drive: .None }
         i += 1usize
     }
     var bar: widget.Node = zero

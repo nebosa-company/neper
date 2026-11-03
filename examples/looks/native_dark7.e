@@ -20,23 +20,28 @@ fn solid(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, value: u32) -> widget.No
     ret at(a, x, y, widget.box(0u64, s, zero))
 }
 
-fn word(a: *mem.Arena, t: *const control.Theme, value: str) -> (widget.Node, err) {
+fn word(a: *mem.Arena, t: *const control.Theme, value: str, ink: u32) -> (widget.Node, err) {
     var options = control.text_options()
     options.face = 7u32
     options.size = 12.0
     options.wrap = .None
     let (dark_t, dark_error) = control.windows_edit_theme(a, t, 13.0)
     if dark_error != ok { ret (zero, dark_error) }
-    let (made, made_error) = control.colored_text(a, 0u64, value, &dark_t, options, style.hex_raw(0x000000u32))
+    let (made, made_error) = control.colored_text(a, 0u64, value, &dark_t, options, style.hex_raw(ink))
     ret (made, made_error)
 }
 
 fn header(a: *mem.Arena, t: *const control.Theme, pressed: bool, sorted: bool) -> (widget.Node, err) {
-    let (name, name_error) = word(a, t, "Name")
+    // round 80: white captions on the dark band (the capture's are black); the pressed cell is #838383, where black reads
+    var lit = 0x000000u32
+    if t.tokens.profile == .Windows && t.tokens.palette == .Dark { lit = 0xFFFFFFu32 }
+    var ink_size = lit
+    if pressed { ink_size = 0x000000u32 }
+    let (name, name_error) = word(a, t, "Name", lit)
     if name_error != ok { ret (zero, name_error) }
-    let (size, size_error) = word(a, t, "Size")
+    let (size, size_error) = word(a, t, "Size", ink_size)
     if size_error != ok { ret (zero, size_error) }
-    let (kind, kind_error) = word(a, t, "Kind")
+    let (kind, kind_error) = word(a, t, "Kind", lit)
     if kind_error != ok { ret (zero, kind_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 13usize)
     if parts_error != ok { ret (zero, parts_error) }

@@ -5,11 +5,18 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Apple's increased-contrast blue for the accent and the keyboard ring (3:1 on the ground); this sheet only
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var local = *base
+    local.tokens = tokens
+    let t = &local
     let (picks, picks_error) = mem.alloc[widget.Submit](a, 4usize)
     if picks_error != ok { ret (0usize, picks_error) }
     var n = 0usize

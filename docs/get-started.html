@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Get started — Neper</title>
+  <meta name="description" content="Clone Neper, submit one prompt to your coding agent, and cross compile for Windows, Linux and macOS from one machine with no third-party toolchain.">
+  <link rel="canonical" href="https://neper.dev/get-started.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Get started with Neper">
+  <meta property="og:description" content="One prompt, one machine, every OS. No third-party toolchain.">
+  <meta property="og:url" content="https://neper.dev/get-started.html">
+  <meta property="og:image" content="https://neper.dev/gtm/get-started-og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    .yt { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; padding: 0; cursor: pointer; color: #fff; font: inherit; background: #0c0e14 center / cover no-repeat; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); }
+    .yt span { display: grid; place-items: center; gap: 12px; text-align: center; padding: 0 16px; text-shadow: 0 1px 6px #000; }
+    .yt span::before { content: "\25B6"; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 28px; padding-left: 4px; }
+    .yt:hover span::before, .yt:focus-visible span::before { background: #c00; }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
+  </style>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="./" aria-label="Neper home"><img src="gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="play.html">try it</a>
+        <a href="./#llm">llm stack</a>
+        <a href="blog/">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; get started_</div>
+      <h1>Get started with Neper</h1>
+      <p class="lede">Clone the repository, build the compiler once, then hand your coding agent one prompt. The same machine produces Windows, Linux and macOS executables, and <strong>none of it needs a third-party toolchain.</strong></p>
+
+      <figure>
+        <button type="button" class="yt" data-yt="cls4S3nBWBM" data-title="Get started with Neper in 30 seconds" style="background-image:url(gtm/get-started-poster.jpg)"><span>Play: get started with Neper in 30 seconds</span></button>
+        <figcaption>30 seconds: clone, prompt, cross compile. Narrated with a Windows voice.</figcaption>
+      </figure>
+
+      <div class="callout">
+        <strong>No third-party toolchains. For any OS.</strong>
+        <p>No LLVM, no MSVC or MinGW, no Xcode or macOS SDK, no system linker, no Docker, no sysroot. Neper's own emitter and linker write the Windows PE, the Linux ELF and the macOS Mach-O directly, so a Windows laptop builds for all three.</p>
+      </div>
+
+      <h2>1. Get Neper</h2>
+      <pre><code><span class="prompt">$</span> git clone https://github.com/nebosa-company/neper
+<span class="prompt">$</span> cd neper
+<span class="prompt">$</span> scripts/build-selfhost.ps1   <span class="com"># Windows; on Linux and macOS: scripts/build-selfhost.sh</span></code></pre>
+      <p>The script prints the path of the compiler it built. Put that folder on your <code>PATH</code> as <code>neper</code>.</p>
+      <p class="note">The one place a third-party tool appears: the very first compiler is built from a small C99 bootstrap, so that one step needs a C compiler on the machine. After it, Neper compiles itself, and building programs, for any target, uses nothing else.</p>
+
+      <h2>2. Run a first program</h2>
+      <pre><code><span class="kw">use</span> e.io
+
+<span class="kw">fn</span> <span class="fn">main</span>(args: []str) -&gt; err {
+    <span class="kw">try</span> io.print(<span class="str">"Hello, Neper"</span>)
+    <span class="kw">ret</span> ok
+}</code></pre>
+      <pre><code><span class="prompt">$</span> neper run hello.e
+Hello, Neper</code></pre>
+
+      <h2>3. Submit this prompt</h2>
+      <p>Neper is built for coding agents. Open Claude Code, Codex, OpenCode or any agent in the cloned repository and submit:</p>
+      <pre><code>Read docs/llm-neper-card.md first. Then write a Neper command-line
+program, wordfreq.e, that reads a text file and prints its ten most
+frequent words. Add @test functions, run them, and fix every
+diagnostic by its code and span. Then build it for x64 windows,
+x64 linux and aarch64 macos with emit-executable.</code></pre>
+      <p>The card is the compiler-issued summary of the grammar and traps, so the model starts from the language as it is today. Diagnostics carry a stable code, an exact span and the expected type, which is what lets the agent repair its own mistakes.</p>
+
+      <h2>4. Cross compile for any OS</h2>
+      <pre><code><span class="prompt">$</span> neper emit-executable wordfreq.e . x64 windows   wordfreq.exe   --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . x64 linux     wordfreq-linux --release
+<span class="prompt">$</span> neper emit-executable wordfreq.e . aarch64 macos wordfreq-mac   --release
+<span class="com"># also: aarch64 linux, x64 macos, wasm32 wasi</span></code></pre>
+      <p>That is the whole build system. The output builds from one machine, with no SDK to download for the target, no cross compiler to configure and no container. Copy the file to the target machine and run it.</p>
+      <p class="note">What this does not claim: a macOS binary is ad-hoc signed and not notarized, and you still need a Mac, or a runner, to run it. The <a href="https://github.com/nebosa-company/neper/blob/master/docs/macos-cross-compilation.md">macOS notes</a> list what is verified. <a href="blog/desktop-toolchains.html">Ten languages, one window</a> measures what other languages need to do the same.</p>
+
+      <h2>Where next</h2>
+      <div class="tiles">
+        <div class="tile"><h3><a href="play.html">Try it in your browser</a></h3><p>Edit Neper and compile it to WebAssembly on the page, with the compiler itself running as WebAssembly. Nothing to install.</p></div>
+        <div class="tile"><h3><a href="https://github.com/nebosa-company/neper">Source on GitHub</a></h3><p>MIT licensed. Star it, fork it, read the compiler.</p></div>
+        <div class="tile"><h3><a href="https://github.com/nebosa-company/neper#readme">The README</a></h3><p>Language shape, the standard library and build-from-source notes.</p></div>
+        <div class="tile"><h3><a href="https://github.com/nebosa-company/neper/blob/master/docs/llm-neper-card.md">The LLM card</a></h3><p>What your agent reads first: grammar, keywords, traps.</p></div>
+        <div class="tile"><h3><a href="https://github.com/nebosa-company/neper/discussions/new?category=show-and-tell">Show what you built</a></h3><p>Tell us what you made. <a href="https://discord.gg/AdRneEsbCu">Discord</a> is the fastest place to ask.</p></div>
+      </div>
+
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="https://github.com/nebosa-company/neper">Clone Neper on GitHub →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="./">← home</a>
+    </footer>
+  </div>
+  <script src="yt.js" defer></script>
+</body>
+</html>

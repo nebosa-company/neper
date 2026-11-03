@@ -1,0 +1,613 @@
+{
+ "spin_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "AUDIT 43 (1): ready to review. The cells captioned 'hover (plus half)' and 'pressed (plus half)' hover and press the MINUS half: cup_stepper.e drives them with the harness pointer at the cell centre (no looks.aim), the stepper stands in the right of its 190 px cell and the centre falls on the minus half (the darker half is the left one in both looks, viewed 1x). The plus half's hover and pressed states are drawn nowhere. Contrast numbers hold (glyph 007AFF on E3E3E9 3.14:1, reproduced). Fix: looks.aim in cup_stepper.e as cup_splitter.e does. | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (2) fixed: cup_stepper.e aims the pointer at the plus half with looks.aim (also the spin box hover), so 'hover (plus half)' and 'pressed (plus half)' now draw the plus half darker; viewed all twelve cells light and dark at 1x and 1.5x. Glyph contrast unchanged (3.14:1 light, 3.5:1 dark, controls).",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "AUDIT 43 (1): ready to review. The cells captioned 'hover (plus half)' and 'pressed (plus half)' hover and press the MINUS half: cup_stepper.e drives them with the harness pointer at the cell centre (no looks.aim), the stepper stands in the right of its 190 px cell and the centre falls on the minus half (the darker half is the left one in both looks, viewed 1x). The plus half's hover and pressed states are drawn nowhere. Contrast numbers hold (glyph 007AFF on E3E3E9 3.14:1, reproduced). Fix: looks.aim in cup_stepper.e as cup_splitter.e does. | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (2) fixed: cup_stepper.e aims the pointer at the plus half with looks.aim (also the spin box hover), so 'hover (plus half)' and 'pressed (plus half)' now draw the plus half darker; viewed all twelve cells light and dark at 1x and 1.5x. Glyph contrast unchanged (3.14:1 light, 3.5:1 dark, controls).",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "rating": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/rating.png",
+    "notes": "AUDIT 43 (2): ready to review. The 'focus' cell is the rest cell (no ring or layer, viewed and zoomed 3x, light and dark); the hovered and pressed unfilled star is 5BA4F6 on its E3E3E8 disc, 2.33:1 light (2.67:1 dark), under the 3:1 control line; and the committed pictures are stale against the code (re-render differs by about 2000 px, up to 37 levels, outlined stars darker after the secondary-label change of batch 2). | ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; drawn in the look's own tokens: SF-style star glyphs, system blue fill, system fill hover and pressed discs, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all six cells. Measured: filled stars 007AFF 3.6:1 light and 0A84FF dark, empty star outline 3.29:1 light and 5.94:1 dark against the ground (controls, 3:1); the captions are label colour. Star geometry is the generic five point star, not the SF Symbols glyph. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (3) fixed. The sheet takes Apple's increased-contrast blue (0040DD, 409CFF) and a keyboard ring at 80 % of it (ring 4.0 to 4.7:1 light, 3.8 to 4.3:1 dark, was about 2:1); the focus cell is reached with Tab (the Material route), so the ring now draws; a hovered preview star is the full accent (control.e, Cupertino only: 60 % was 2.33:1; now 5.9:1 hover and 4.9:1 pressed light, 5.1:1 and 3.9:1 dark). Pictures re-rendered, all six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "The star is the sheet's five point star, not the SF Symbols glyph"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/rating.png",
+    "notes": "AUDIT 43 (2): ready to review. The 'focus' cell is the rest cell (no ring or layer, viewed and zoomed 3x, light and dark); the hovered and pressed unfilled star is 5BA4F6 on its E3E3E8 disc, 2.33:1 light (2.67:1 dark), under the 3:1 control line; and the committed pictures are stale against the code (re-render differs by about 2000 px, up to 37 levels, outlined stars darker after the secondary-label change of batch 2). | ROUND 84 (lane y, batch 5, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard for generic rows (no Apple control; drawn in the look's own tokens: SF-style star glyphs, system blue fill, system fill hover and pressed discs, no ripple or elevation). Viewed light and dark, 1x and 1.5x, all six cells. Measured: filled stars 007AFF 3.6:1 light and 0A84FF dark, empty star outline 3.29:1 light and 5.94:1 dark against the ground (controls, 3:1); the captions are label colour. Star geometry is the generic five point star, not the SF Symbols glyph. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (3) fixed. The sheet takes Apple's increased-contrast blue (0040DD, 409CFF) and a keyboard ring at 80 % of it (ring 4.0 to 4.7:1 light, 3.8 to 4.3:1 dark, was about 2:1); the focus cell is reached with Tab (the Material route), so the ring now draws; a hovered preview star is the full accent (control.e, Cupertino only: 60 % was 2.33:1; now 5.9:1 hover and 4.9:1 pressed light, 5.1:1 and 3.9:1 dark). Pictures re-rendered, all six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "The star is the sheet's five point star, not the SF Symbols glyph"
+    ]
+   }
+  }
+ },
+ "divider": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/divider.png",
+    "notes": "AUDIT 43 (3): ready to review. The note cites Apple's opaque separator C6C6C8 light and 38383A dark (1.53:1 and 1.45:1 on the grounds, computed); the picture draws EAEAEF on F2F2F7 (1.07:1) and 272729 on 1C1C1E (1.14:1) for the full-width hairline and E5E5E9 / 303032 for Strong, so the drawing is neither the cited value nor visibly present at 1x (full width, inset and vertical cells are nearly invisible, viewed light and dark). Raise it when the hairline is the cited colour. | ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard. Apple separators are hairlines by design (opaque separator C6C6C8 light, 38383A dark): they are decorative and carry no state, so WCAG 1.4.11 asks no 3:1 of them (about 1.1 to 1.5:1 here). All seven cells (full width, inset 56, middle inset 16, labelled, label leading, strong, vertical) are drawn and the labels ('Or') are secondary label colour at 5:1 and better. Viewed light and dark, 1x and 1.5x. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (4) fixed. The Cupertino rule draws the cited opaque separator colours C6C6C8 (light) and 38383A (dark) one whole pixel thick on whole pixels (1.53:1 and 1.45:1 on the F2F2F7 and 1C1C1E grounds, measured from the picture; at 1.5x a 1.5 px rule, one pixel of it half covered); the strong rule is 8A8A8E / 6C6C70 (3:1 or better). A separator is decorative (WCAG 1.4.11), so 1.5:1 is stated, not claimed as a control. Labelled and vertical cells viewed.",
+    "gaps": [
+     "The hairline is 1.1 to 1.5:1 by design; the Vertical cell is faint"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/divider.png",
+    "notes": "AUDIT 43 (3): ready to review. The note cites Apple's opaque separator C6C6C8 light and 38383A dark (1.53:1 and 1.45:1 on the grounds, computed); the picture draws EAEAEF on F2F2F7 (1.07:1) and 272729 on 1C1C1E (1.14:1) for the full-width hairline and E5E5E9 / 303032 for Strong, so the drawing is neither the cited value nor visibly present at 1x (full width, inset and vertical cells are nearly invisible, viewed light and dark). Raise it when the hairline is the cited colour. | ROUND 84 (lane y, batch 6, docs/ui/looks/cupertino-complete-y.md): raised to ready by the coordinator's standard. Apple separators are hairlines by design (opaque separator C6C6C8 light, 38383A dark): they are decorative and carry no state, so WCAG 1.4.11 asks no 3:1 of them (about 1.1 to 1.5:1 here). All seven cells (full width, inset 56, middle inset 16, labelled, label leading, strong, vertical) are drawn and the labels ('Or') are secondary label colour at 5:1 and better. Viewed light and dark, 1x and 1.5x. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (4) fixed. The Cupertino rule draws the cited opaque separator colours C6C6C8 (light) and 38383A (dark) one whole pixel thick on whole pixels (1.53:1 and 1.45:1 on the F2F2F7 and 1C1C1E grounds, measured from the picture; at 1.5x a 1.5 px rule, one pixel of it half covered); the strong rule is 8A8A8E / 6C6C70 (3:1 or better). A separator is decorative (WCAG 1.4.11), so 1.5:1 is stated, not claimed as a control. Labelled and vertical cells viewed.",
+    "gaps": [
+     "The hairline is 1.1 to 1.5:1 by design; the Vertical cell is faint"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "ROUND 84 (lane y, batch 3, docs/ui/looks/cupertino-complete-y.md): review kept. The 'strip focus' ring is a rectangle round the label text (13 high) and cuts through the word; making it follow the 24 high strip needs a change in the focus ring of pressables, not attempted. Tab-bar labels 6C6C70 (5.2:1). | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Tab-bar labels raised from 8E8E93 (3.1:1) to 6C6C70 (5.2:1 light); dark 98989D already 6.5:1. Not raised: the 'strip focus' cell draws a square-cornered ring on a rounded segment. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: not verified: 5 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.8:1). | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (page_control) fixed. Cause found: the runtime insets the ring of a tab (semantic role 19) by 3 px, which left a 12 px box through the label; cup_segments now sets a negative focus_inset on the segments of a tab strip only (widget.e: a negative inset keeps the ring outside the bounds), so the ring follows the segment (rounded, clear of the label). segmented_control uses role 3 and its pictures are byte for byte as committed. The sheet takes the increased-contrast blue and ring (0040DD, 409CFF). All ten cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "The segmented strip's keyboard ring wraps the label only and crosses the text",
+     "The segmented strip's keyboard ring is a plain rectangle round the segment",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "ROUND 84 (lane y, batch 3, docs/ui/looks/cupertino-complete-y.md): review kept. The 'strip focus' ring is a rectangle round the label text (13 high) and cuts through the word; making it follow the 24 high strip needs a change in the focus ring of pressables, not attempted. Tab-bar labels 6C6C70 (5.2:1). | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Tab-bar labels raised from 8E8E93 (3.1:1) to 6C6C70 (5.2:1 light); dark 98989D already 6.5:1. Not raised: the 'strip focus' cell draws a square-cornered ring on a rounded segment. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: 19 cells measured on page_control.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 206 levels mean difference from the light twin, no light-only chrome. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (page_control) fixed. Cause found: the runtime insets the ring of a tab (semantic role 19) by 3 px, which left a 12 px box through the label; cup_segments now sets a negative focus_inset on the segments of a tab strip only (widget.e: a negative inset keeps the ring outside the bounds), so the ring follows the segment (rounded, clear of the label). segmented_control uses role 3 and its pictures are byte for byte as committed. The sheet takes the increased-contrast blue and ring (0040DD, 409CFF). All ten cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "The segmented strip's keyboard ring wraps the label only and crosses the text",
+     "The segmented strip's keyboard ring is a plain rectangle round the segment",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "The keyboard focus of the segmented strip is the runtime's square rectangle inside the segment (no rounding)",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "card": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the cupertino look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Cupertino card is a grouped inset card: white (dark 2C2C2E) face, 10 pt radius, no shadow (a dragged card keeps a small lift), outlined = 1 px opaque separator C6C6C8 / 38383A, selected outline, check disc and keyboard ring in 0A60FF / 409CFF (white tick 5.08:1, ring 3:1 or better). Eleven cells viewed light and dark at 1x and 1.5x. Known: the Loading cell is taller than the 64 px cell grid and touches its caption (shared sheet height, other looks unchanged).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/card.png",
+    "notes": "Round 62 lane c. Elevated, filled, outlined, selected, disabled, loading, pressable, hovered, pressed, focused and dragged. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Cupertino card is a grouped inset card: white (dark 2C2C2E) face, 10 pt radius, no shadow (a dragged card keeps a small lift), outlined = 1 px opaque separator C6C6C8 / 38383A, selected outline, check disc and keyboard ring in 0A60FF / 409CFF (white tick 5.08:1, ring 3:1 or better). Eleven cells viewed light and dark at 1x and 1.5x. Known: the Loading cell is taller than the 64 px cell grid and touches its caption (shared sheet height, other looks unchanged).",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The card draws through the shared Material-derived tokens: no libadwaita boxed list, no Fluent card (stroke and layer fill) and no Apple grouped inset shape"
+    ]
+   }
+  }
+ },
+ "toggle_button": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Accent text 0045E6 light / 409CFF dark on the ground, selected fill 0045E6 / 0B57D0 with white text 7.0:1 / 6.4:1 at rest, 6.3 and 5.4:1 light and 5.7 and 4.8:1 dark hovered and pressed; keyboard ring 3:1 or better. Fifteen cells viewed light and dark at 1x and 1.5x; the capsule is a Cupertino bordered button (iOS has no toggle button).",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/toggle_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Off as outlined and tonal and on (selected) in rest, hover, pressed, keyboard focus and disabled. Dark: the platform's published dark palette, no live reference. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Accent text 0045E6 light / 409CFF dark on the ground, selected fill 0045E6 / 0B57D0 with white text 7.0:1 / 6.4:1 at rest, 6.3 and 5.4:1 light and 5.7 and 4.8:1 dark hovered and pressed; keyboard ring 3:1 or better. Fifteen cells viewed light and dark at 1x and 1.5x; the capsule is a Cupertino bordered button (iOS has no toggle button).",
+    "gaps": [
+     "No Windows 11, GTK, UIKit or Material toggle-button capture; every state is derived from the button's tokens",
+     "Windows draws the selected state with the button's selected ring; the Material focus ring is not visible in the sheet"
+    ]
+   }
+  }
+ },
+ "split_button": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Fill 0045E6 light / 0B57D0 dark, white text 7.0, 6.3 and 5.4:1 light (rest, hover, pressed), 6.4, 5.7 and 4.8:1 dark; ring 3:1 or better; six cells viewed light and dark at 1x and 1.5x. The capsule with a trailing chevron half is the macOS pull-down button family.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/split_button.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Primary half and menu half at rest, each hovered, pressed, keyboard focus, and with the menu open (chevron expanded). Dark: the platform's published dark palette, no live reference. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Fill 0045E6 light / 0B57D0 dark, white text 7.0, 6.3 and 5.4:1 light (rest, hover, pressed), 6.4, 5.7 and 4.8:1 dark; ring 3:1 or better; six cells viewed light and dark at 1x and 1.5x. The capsule with a trailing chevron half is the macOS pull-down button family.",
+    "gaps": [
+     "The menu itself is the caller's overlay and is not drawn",
+     "No disabled state: the control has no enabled parameter",
+     "Windows draws v3's drop-down button shape from windows_split; Linux, Cupertino and Material use the shared pill halves; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "banner": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Accent links now 0A60FF light / 409CFF dark (4.5:1 or better). Not raised: the pressed cell dims the plain action label to 35 % (about 1.9:1 light, unreadable dark; the Cupertino plain-button rule, shared with the matched button row, so not changed here), and the severity wells are Material's tonal icon chips, not an iOS idiom.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell",
+     "Pressed 'Details' is the 35 % dimmed label (illegible)",
+     "Severity wells are Material tonal chips"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/banner.png",
+    "notes": "Round 62 lane c. Info, success, warning, error, two actions, a long wrapped message, and the action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Accent links now 0A60FF light / 409CFF dark (4.5:1 or better). Not raised: the pressed cell dims the plain action label to 35 % (about 1.9:1 light, unreadable dark; the Cupertino plain-button rule, shared with the matched button row, so not changed here), and the severity wells are Material's tonal icon chips, not an iOS idiom.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell",
+     "Pressed 'Details' is the 35 % dimmed label (illegible)",
+     "Severity wells are Material tonal chips"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Reshaped for Cupertino: a 22 pt rounded banner with a soft shadow in place of Material's stacked heavy shadow bands, the count pill 16 pt, the action text 0040DD / 70B0FF (4.5:1 or better on the banner). Not raised: the info and error severity wells are Material tonal chips whose glyph is about 2.6:1 on the dark well, and a toast is not an iOS notification (no title weight, no app icon). Three sheets viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets",
+     "Severity well glyph about 2.6:1 on the dark well",
+     "Not an iOS notification"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toast.png",
+    "notes": "Round 63 (x): the sheet cell is wide enough that the stack no longer covers the caption, and a message that wraps beside the action and the close stands as tall as its lines (the last line spilled into the padding in every look). Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Reshaped for Cupertino: a 22 pt rounded banner with a soft shadow in place of Material's stacked heavy shadow bands, the count pill 16 pt, the action text 0040DD / 70B0FF (4.5:1 or better on the banner). Not raised: the info and error severity wells are Material tonal chips whose glyph is about 2.6:1 on the dark well, and a toast is not an iOS notification (no title weight, no app icon). Three sheets viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets",
+     "Severity well glyph about 2.6:1 on the dark well",
+     "Not an iOS notification"
+    ]
+   }
+  }
+ },
+ "ribbon": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/ribbon.png",
+    "notes": "Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it"
+    ]
+   }
+  }
+ },
+ "sheet": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple HIG tokens (style.cupertino), derived. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. This row is the spreadsheet grid (A to F columns, row headers), not a modal sheet (that is the bottom_sheet row), so there is no 10 pt sheet to draw. Not raised: the Card column text 'Swords to Plowsha' and the last column are cut without an ellipsis in every cell, and the header band is a Windows style grey bar.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "Cell text cut without an ellipsis (Swords to Plowsha)",
+     "Windows style header band"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple dark tokens, derived. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. This row is the spreadsheet grid (A to F columns, row headers), not a modal sheet (that is the bottom_sheet row), so there is no 10 pt sheet to draw. Not raised: the Card column text 'Swords to Plowsha' and the last column are cut without an ellipsis in every cell, and the header band is a Windows style grey bar.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "Cell text cut without an ellipsis (Swords to Plowsha)",
+     "Windows style header band"
+    ]
+   }
+  }
+ },
+ "pagination": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page). | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF so the keyboard ring is 3:1 or better; picture re-rendered and viewed light and dark. Not raised: a page-number strip is a web idiom (iOS has the page-control dots), not compared with an Apple control.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page). | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF so the keyboard ring is 3:1 or better; picture re-rendered and viewed light and dark. Not raised: a page-number strip is a web idiom (iOS has the page-control dots), not compared with an Apple control.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "shortcut_recorder": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (rings, recording tint); re-rendered and viewed. Not raised: the chord shows Ctrl, Shift and S in web key caps, where macOS shows the symbols.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/shortcut_recorder.png",
+    "notes": "Round 63 (x): Windows and Linux draw their keyboard focus ring. Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (rings, recording tint); re-rendered and viewed. Not raised: the chord shows Ctrl, Shift and S in web key caps, where macOS shows the symbols.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ]
+   }
+  }
+ },
+ "key_value_editor": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (Add variable link, focus ring); re-rendered and viewed in the stale refresh. Not raised: not defended cell by cell.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/key_value_editor.png",
+    "notes": "Round 63 (x): the column labels have a line of their own over the first row in the Windows, Linux and Cupertino looks (the Neper and Material fields carry the label in the border), no heading is drawn over an empty list, and the Windows fields are the 22 px edit with the text centred. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (Add variable link, focus ring); re-rendered and viewed in the stale refresh. Not raised: not defended cell by cell.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   }
+  }
+ },
+ "accordion": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (hover tint, keyboard ring); re-rendered and viewed light and dark. Not raised: the opened section text touches the header in the hovered and pressed cells, and an accordion is a disclosure group with a web look.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/accordion.png",
+    "notes": "Round 62 lane f. Stacked headers with one section open: first, second, none, disabled section, header hovered, pressed, keyboard focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (hover tint, keyboard ring); re-rendered and viewed light and dark. Not raised: the opened section text touches the header in the hovered and pressed cells, and an accordion is a disclosure group with a web look.",
+    "gaps": [
+     "focus lands on the second header in some looks and its ring is a fill in Windows and Material",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "breadcrumbs": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/breadcrumbs.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (ring); re-rendered and viewed. Not raised: the inactive crumbs are a light grey not measured against 4.5:1, and the macOS path bar is a different control.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/breadcrumbs.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (ring); re-rendered and viewed. Not raised: the inactive crumbs are a light grey not measured against 4.5:1, and the macOS path bar is a different control.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (field halo); re-rendered and viewed in the stale refresh. Not raised: not defended cell by cell.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/autocomplete.png",
+    "notes": "Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. The field closed (empty, typed, hover, keyboard focus, disabled; autocomplete.png) and open with three suggestions and the first active (autocomplete_open.png). Dark: the platform's published dark palette, no live reference. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (field halo); re-rendered and viewed in the stale refresh. Not raised: not defended cell by cell.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "date_range_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (ring); re-rendered. Not raised: the open range calendar was not viewed.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (ring); re-rendered. Not raised: the open range calendar was not viewed.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "navigation_rail": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_rail.png",
+    "notes": "ROUND 63 y: draws an iPad / macOS tab rail: icon over label, the selected item tinted with the accent and a 12 % wash. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (selected label and tonal pill 5.6:1); re-rendered and viewed. Not raised: the rail with its tonal selection pill is Material's NavigationRail shape.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_rail.png",
+    "notes": "ROUND 63 y: draws an iPad / macOS tab rail: icon over label, the selected item tinted with the accent and a 12 % wash. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Sheet takes 0045E6 / 409CFF (selected label and tonal pill 5.6:1); re-rendered and viewed. Not raised: the rail with its tonal selection pill is Material's NavigationRail shape.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   }
+  }
+ },
+ "navigation_drawer": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the AppKit source list: 30 px rows, 6 px radius, accent fill with white text; the modal sheet is square. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): The selected row fill is 0045E6 / 0B57D0 so the white label is 7:1 and 6.4:1 (was 4.0:1); re-rendered and viewed. Not raised: the row list is the macOS sidebar, covered by the sidebar row; the drawer shape itself is Material's.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the AppKit source list: 30 px rows, 6 px radius, accent fill with white text; the modal sheet is square. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): The selected row fill is 0045E6 / 0B57D0 so the white label is 7:1 and 6.4:1 (was 4.0:1); re-rendered and viewed. Not raised: the row list is the macOS sidebar, covered by the sidebar row; the drawer shape itself is Material's.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   }
+  }
+ },
+ "duration_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the steppers are cut off at the right edge of their cells in the Zero, Long and Focus cells. A defect, not fixed in this round.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Steppers clipped at the cell edge"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the steppers are cut off at the right edge of their cells in the Zero, Long and Focus cells. A defect, not fixed in this round.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Steppers clipped at the cell edge"
+    ]
+   }
+  }
+ },
+ "time_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/picker_wheels.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: in 'With seconds' the last stepper is cut at the cell edge. A defect, not fixed in this round.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Seconds stepper clipped at the cell edge"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/picker_wheels.png",
+    "notes": "Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: in 'With seconds' the last stepper is cut at the cell edge. A defect, not fixed in this round.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Seconds stepper clipped at the cell edge"
+    ]
+   }
+  }
+ },
+ "command_palette": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the light picture shows no active row for 'second command active' (the dark one does). A defect, not fixed.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Light active row not drawn"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/command_palette.png",
+    "notes": "Round 62 lane f. Modal command palette over a scrim: open with the second command active. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the light picture shows no active row for 'second command active' (the dark one does). A defect, not fixed.",
+    "gaps": [
+     "one state only: no typed query, no empty result, no hover; Cupertino light barely shows the active row",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Light active row not drawn"
+    ]
+   }
+  }
+ },
+ "document_tabs": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the light picture has no tab track and the 'Keyboard focus' cell shows no ring in either look. A defect, not fixed.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Keyboard focus cell draws no ring"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/document_tabs.png",
+    "notes": "Round 62 lane f. Tab strip of open documents: current, unsaved, pinned, hover, pressed, focus. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: the light picture has no tab track and the 'Keyboard focus' cell shows no ring in either look. A defect, not fixed.",
+    "gaps": [
+     "keyboard focus ring does not show in the sheet (the drive lands on the current tab); pinned tab is told only by its missing close button",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Keyboard focus cell draws no ring"
+    ]
+   }
+  }
+ }
+}

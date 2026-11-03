@@ -1,10 +1,10 @@
-"""Bakes v3's edition pictures of the Filter tree (the 15 visible editions of Core Sets, 22 x 16 px each) into lib/e/ui/wintreeicon.e and wintreeicon1.e.
+"""Bakes v3's edition pictures of the Filter tree (the 16 editions of Core Sets, 22 x 16 px each) into lib/e/ui/wintreeicon.e and wintreeicon1.e.
 Cut from docs/ui/looks/ref/windows/tree_list_expanded.png (wintreeicon.e, which the Windows dark tree keeps) and from the 1:1 capture
 ref/windows-1to1/tree_list_expanded.png (wintreeicon1.e, the Windows light tree): edition k (0 Foundations ...) is the row at y 85 + 17 k, the picture sits
 at x 96 to 117 under the row face (#EFEFEF on an even row, white on an odd one), which is not painted. Edit this script, not the generated files."""
 from PIL import Image
 
-N, W, H = 15, 22, 16
+N, W, H = 16, 22, 16
 for ref, out in (('windows', 'wintreeicon'), ('windows-1to1', 'wintreeicon1')):
     im = Image.open('docs/ui/looks/ref/%s/tree_list_expanded.png' % ref).convert('RGB')
     vals = []

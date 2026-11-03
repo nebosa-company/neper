@@ -27,6 +27,8 @@ use e.time
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.looks_c
+use e.ui.looks_z84
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -38,7 +40,7 @@ type Look = enum u8 { Neper, Windows, Cupertino, Material, WindowsDark, Material
 // disabled), Hover (the pointer over it), Press (the primary button held on it), Focus (keyboard
 // focus, ring visible), Select (focus, then Ctrl+A: an edit's whole text selected), Settle (the pointer over it as Hover, then
 // four more frames of 100 ms so that a fade-in, an open menu's, has finished).
-type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle }
+type Drive = enum u8 { None, Hover, Press, Focus, Select, SelectPress, Caret2, Caret33, FocusHover, FocusPress, Settle, Tabs, PressSettle, FocusSettle }
 type Cell = struct { caption: str, node: widget.Node, drive: Drive }
 // Fills `cells` (up to its length) with the control in its states and answers how many; called
 // again for every driven cell, so it must build the same keys every time. Control keys must be
@@ -47,7 +49,7 @@ type Build = fn(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []Cel
 // A sheet: `name` is the file stem (the control), `columns` cells per row, each cell a box of
 // `cell_w` x `cell_h` logical px with the control centred in it and its caption above.
 type Sheet = struct { name: str, cells: usize, columns: usize, cell_w: f32, cell_h: f32, ctx: *void, build: Build }
-type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font, linux_fonts: []shape.Font }
+type Rig = struct { a: *mem.Arena, device: *gpu.Device, renderer: scene.Renderer, runtime: widget.Runtime, harness: testing.Harness, tokens: style.ThemeTokens, fonts: []shape.Font, frame_storage: []u8, frame: mem.Arena, flip: bool, width: f32, height: f32, scale: f32, material_fonts: []shape.Font, linux_fonts: []shape.Font, semibold_fonts: []shape.Font }
 error Failed
 
 // looks5-e: where a driven cell's pointer goes, as an offset from the cell's centre (default none): an app sets it
@@ -114,6 +116,19 @@ var shared_fonts: [6][]u8 = zero
 var shared_fonts_read: bool = false
 var shared_linux: [3][]u8 = zero
 var shared_linux_read: bool = false
+// Round 81, lane u: Segoe UI Semibold (font id 16) for a Cupertino sheet that asks for it (`read_semibold`, as `read_linux_fonts`
+// is for the Linux sheets): weight 600 then draws semibold, not bold. Other sheets keep their chain, so their PNGs do not move.
+var shared_semibold: []u8 = zero
+var shared_semibold_read: bool = false
+fn semibold_path() -> str { ret "C:/Windows/Fonts/seguisb.ttf" }
+fn read_semibold(a: *mem.Arena) -> err {
+    if shared_semibold_read { ret ok }
+    let (bytes, read_error) = fs.read_file(stable(a), semibold_path(), 16777216usize)
+    if read_error != ok { ret read_error }
+    shared_semibold = bytes
+    shared_semibold_read = true
+    ret ok
+}
 var shared_storage: []u8 = zero
 
 fn read_fonts(a: *mem.Arena) -> err {
@@ -127,6 +142,8 @@ fn read_fonts(a: *mem.Arena) -> err {
         shared_fonts[i] = bytes
         i += 1usize
     }
+    // Round 82, lane v: every rig carries Segoe UI Semibold so the Cupertino looks draw weight 600 as semibold in every control.
+    try read_semibold(a)
     shared_fonts_read = true
     ret ok
 }
@@ -204,6 +221,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 64u32)
     if renderer_error != ok { ret (rig, renderer_error) }
     rig.renderer = r
+    try looks_c.sample_picture(a, &rig.renderer)
     // The Android look: Roboto Regular (id 11) and Medium (id 12), led by themselves, then the Windows faces for glyphs Roboto lacks.
     let roboto_bytes = shared_fonts[4usize]
     let medium_bytes = shared_fonts[5usize]
@@ -245,11 +263,26 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
         try scene.register_font(&rig.renderer, gtk[2usize])
         rig.linux_fonts = gtk[0usize..7usize]
     }
+    if shared_semibold_read {
+        let (cup, cup_error) = mem.alloc[shape.Font](a, 5usize)
+        if cup_error != ok { ret (rig, cup_error) }
+        cup[0usize] = fonts[0usize]
+        cup[1usize] = fonts[1usize]
+        cup[2usize] = fonts[2usize]
+        cup[3usize] = fonts[3usize]
+        cup[4usize] = shape.Font { id: 16u32, data: shared_semibold, face_index: 0u32 }
+        try scene.register_font(&rig.renderer, cup[4usize])
+        rig.semibold_fonts = cup[0usize..5usize]
+    } else {
+        var no_fonts: []shape.Font = zero
+        rig.semibold_fonts = no_fonts
+    }
     let (rt, runtime_error) = widget.runtime(a, &rig.renderer, widget.Limits { max_elements: 16384usize, max_states: 1024usize, state_bytes: 65536usize, state_classes: 8u16, max_depth: 48u16, max_commands: 49152usize })
     if runtime_error != ok { ret (rig, runtime_error) }
     rig.runtime = rt
     // The app sets this from the window; here, so that pixel art lands on whole device pixels. Left alone at 100 %.
     if scale != 1.0 { widget.set_snap(&rig.runtime, 1.0 / scale) }
+    scene.set_device_scale(scale)
     let physical_w = u32(width * scale + 0.5)
     let physical_h = u32(height * scale + 0.5)
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)
@@ -281,7 +314,7 @@ fn set_look(rig: *Rig, look: Look) {
     // The Windows dark look maps the light literals of its tile painters (style.hex) to dark; nothing else does.
     style.set_windark(look == .WindowsDark)
     style.set_neperdark(look == .NeperDark)
-    widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux)
+    widget.set_arc_corners(rig.tokens.profile == .MaterialLike || rig.tokens.profile == .Linux || rig.tokens.profile == .Neper)
     widget.set_skia_corners(rig.tokens.profile == .MaterialLike)
     control.set_material_icons(rig.tokens.profile == .MaterialLike)
     // The Android captures are taken with the caret in its blink-off phase.
@@ -314,6 +347,7 @@ fn set_look(rig: *Rig, look: Look) {
     scene.set_pixel_exact_at_one((exact_error == ok && exact_text.len > 0usize) || rig.tokens.profile == .MaterialLike)
     if look == .Material || look == .MaterialDark { rig.fonts = rig.material_fonts }
     if (look == .Linux || look == .LinuxDark) && rig.linux_fonts.len > 0usize { rig.fonts = rig.linux_fonts }
+    if (look == .Cupertino || look == .CupertinoDark) && rig.semibold_fonts.len > 0usize { rig.fonts = rig.semibold_fonts }
 }
 
 // The control theme of the rig: its tokens, fonts and runtime.
@@ -431,6 +465,8 @@ fn drop_shot(rig: *Rig) {
 
 // One frame of `root` and its pixels.
 fn shoot(rig: *Rig, root: widget.Node, step: i64) -> (image.Image, err) {
+    // Android: offset shadows draw as the M3 levels; the flag follows the rig's look so no other look inherits it.
+    widget.set_soft_shadows(rig.tokens.profile == .MaterialLike)
     let pumped = testing.pump(&rig.harness, root, instant(step))
     if pumped != ok { ret (zero, pumped) }
     shot_from = rig.a.off
@@ -460,22 +496,24 @@ fn render(rig: *Rig, root: widget.Node, path: str) -> err {
 
 // What a driven cell needs the runtime to have seen before its frame.
 fn drive_cell(rig: *Rig, drive: Drive, x: f32, y: f32) -> err {
+    if drive == .Tabs { ret looks_z84.walk(&rig.harness) }
     if drive == .Hover || drive == .Settle { ret testing.hover(&rig.harness, x, y) }
     if drive == .FocusHover {
         // The keyboard focus in an edit (the click lands 60 px left of the point), then the pointer over the point.
         try testing.tap(&rig.harness, x - 60.0, y)
         ret testing.hover(&rig.harness, x, y)
     }
-    if drive == .Press {
+    if drive == .Press || drive == .PressSettle {
         try testing.hover(&rig.harness, x, y)
         ret testing.send(&rig.harness, input.Event { PointerDown: testing.pointer_at(x, y) })
     }
-    if drive == .Focus {
+    if drive == .Focus || drive == .FocusSettle {
         // A click focuses it by pointer; Tab and Shift+Tab bring the keyboard focus back
         // to it (a ring only shows for keyboard focus), then the pointer leaves.
         try testing.tap(&rig.harness, x, y)
         try testing.tab(&rig.harness, false)
         try testing.tab(&rig.harness, true)
+        try widget.focus_last_behind_modal(&rig.runtime)
         ret testing.hover(&rig.harness, -500.0, -500.0)
     }
     if drive == .FocusPress {
@@ -580,7 +618,7 @@ fn render_sheet(rig: *Rig, s: *const Sheet, path: str) -> (image.Image, err) {
                 if shot_two_error != ok { ret (zero, shot_two_error) }
                 shot = shot_two
             }
-            if drive == .Settle {
+            if drive == .Settle || drive == .PressSettle || drive == .FocusSettle {
                 var more = 0usize
                 while more < 4usize {
                     drop_shot(rig)
@@ -671,6 +709,42 @@ fn load_reference(a: *mem.Arena, path: str) -> (image.Image, bool) {
     ret (decoded, true)
 }
 
+// A sheet app whose Neper cells (or Windows dark ones, which have no capture of their own) need more room than the Windows
+// capture's (the menus there are taller and wider) sets factors here before run_all; those looks then render the sheet that
+// many times larger in both directions. Default (zero) none.
+var neper_grow: f32 = zero
+var dark_grow: f32 = zero
+fn grow_sheets(neper: f32, windows_dark: f32) {
+    neper_grow = neper
+    dark_grow = windows_dark
+}
+
+// The factor an app multiplies a cell's own sizes by under the Neper looks (1 when none is set).
+fn neper_scale() -> f32 {
+    if neper_grow > 0.0 { ret neper_grow }
+    ret 1.0
+}
+
+// Extra logical px a sheet app adds to every cell's width and height under the Neper looks only (a focus ring, a shadow or an
+// open list reaches past a cell sized for the 22 px Windows control). Default (zero) none.
+var neper_pad_w: f32 = zero
+var neper_pad_h: f32 = zero
+// A sheet that reproduces a Windows capture pixel for pixel (22 px fields at the capture's window y): the Neper
+// pictures of it would squeeze 48 px fields into those boxes, so run_all leaves them out.
+var windows_capture_only: bool = zero
+fn windows_capture() { windows_capture_only = true }
+
+fn pad_neper(width: f32, height: f32) {
+    neper_pad_w = width
+    neper_pad_h = height
+}
+
+// The same under Windows dark.
+fn dark_scale() -> f32 {
+    if dark_grow > 0.0 { ret dark_grow }
+    ret 1.0
+}
+
 // Renders `s` under the Neper, Windows and Windows dark looks at 100 % and 150 %.
 fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
     let only_scale = env_scale(a)
@@ -693,12 +767,25 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
                 look_index += 1usize
                 continue
             }
+            if windows_capture_only && (look_index == 0usize || look_index == 3usize) {
+                look_index += 1usize
+                continue
+            }
             var look: Look = .Neper
             if look_index == 1usize { look = .Windows }
             if look_index == 2usize { look = .WindowsDark }
             if look_index == 3usize { look = .NeperDark }
             let ra = rig_scope(a)
-            let (rig, open_error) = open(ra, sheet_width(s), sheet_height(s), scale)
+            var sized = *s
+            if look == .Neper || look == .NeperDark {
+                sized.cell_w = s.cell_w * neper_scale() + neper_pad_w
+                sized.cell_h = s.cell_h * neper_scale() + neper_pad_h
+            }
+            if look == .WindowsDark {
+                sized.cell_w = s.cell_w * dark_scale()
+                sized.cell_h = s.cell_h * dark_scale()
+            }
+            let (rig, open_error) = open(ra, sheet_width(&sized), sheet_height(&sized), scale)
             if open_error != ok { ret open_error }
             set_look(rig, look)
             let (folder, folder_error) = path_of(ra, look_dir(look), "", "", 1.0, "")
@@ -706,7 +793,7 @@ fn run_all(a: *mem.Arena, s: *const Sheet) -> err {
             try fs.make_dirs(ra, folder)
             let (path, path_error) = path_of(ra, look_dir(look), s.name, "", scale, ".png")
             if path_error != ok { ret path_error }
-            let (ours, render_error) = render_sheet(rig, s, path)
+            let (ours, render_error) = render_sheet(rig, &sized, path)
             if render_error != ok { ret render_error }
             if look == .Windows {
                 // the true 1:1 capture composite (ref/windows-1to1) when the sheet has one, else the old resampled one
@@ -854,4 +941,17 @@ fn run_linux(a: *mem.Arena, s: *const Sheet) -> err {
         scale_index += 1usize
     }
     ret ok
+}
+
+// A control of `w` x `h` on whole pixels in a `cell_w` x `cell_h` cell: the sheet centres a node, so a box of the other parity lands on a half
+// pixel. The node is held at the top left of a holder of the cell's parity (one more wide or high when the room would leave a half).
+fn pin(a: *mem.Arena, node: widget.Node, w: f32, h: f32, cell_w: f32, cell_h: f32) -> (widget.Node, err) {
+    var hw = w
+    if (u32(cell_w) + u32(hw)) % 2u32 == 1u32 { hw += 1.0 }
+    var hh = h
+    if (u32(cell_h) + u32(hh)) % 2u32 == 1u32 { hh += 1.0 }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, inner_error) }
+    inner[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), control.mem_one_node(a, node))
+    ret (widget.stack(0u64, control.sized_style(hw, hh), inner[0usize..1usize]), ok)
 }

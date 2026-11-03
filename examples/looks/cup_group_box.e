@@ -5,6 +5,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.widget
 
 fn row_texts(a: *mem.Arena, t: *const control.Theme) -> ([]widget.Node, err) {
@@ -21,7 +22,14 @@ fn row_texts(a: *mem.Arena, t: *const control.Theme) -> ([]widget.Node, err) {
     ret (nodes, ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// The invalid message and frame take the increased-contrast red (4.5:1 on the grouped ground).
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [1]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Error, light: 0xD70015u32, dark: 0xFF453Au32 } }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..1usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let t = &themed
     let names = [8]str{ "macOS box", "iOS section", "macOS, disabled", "iOS, disabled", "iOS, long caption", "plain", "macOS, invalid", "iOS, empty" }
     var i = 0usize
     while i < 8usize {
@@ -34,7 +42,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         options.variant = .Outlined
         if i == 1usize || i == 3usize || i == 4usize || i == 7usize { options.variant = .Filled }
         if i == 2usize || i == 3usize { options.enabled = false }
-        if i == 4usize { label = "Probability of drawing the current combo" }
+        if i == 4usize { label = "Probability of drawing a combo" }
         if i == 5usize { options.variant = .Plain }
         if i == 6usize { options.message = "Pick one operator" }
         if i == 7usize { count = 0usize }

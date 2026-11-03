@@ -1,0 +1,388 @@
+{
+ "ribbon": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the toolbar draws real command glyphs as SF-Symbols-style outline vector paths: scissors (Cut), two pages (Copy), clipboard (Paste), B, I, U letters, undo and redo arrows, a down-arrow into a tray (Save); the quick bar is icon-only like a macOS toolbar (the name stays the accessible label). Quick bar glyph ink 6.78:1 light (0040DD on F2F2F7) and 6.01:1 dark (409CFF on 1C1C1E); inactive tab text 5.6 and 7.6:1; Redo is disabled. Viewed at 1x and 1.5x light and dark. Glyph drawing is from memory, no Apple capture.",
+    "gaps": [],
+    "screenshot": "cupertino/ribbon.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the toolbar draws real command glyphs as SF-Symbols-style outline vector paths: scissors (Cut), two pages (Copy), clipboard (Paste), B, I, U letters, undo and redo arrows, a down-arrow into a tray (Save); the quick bar is icon-only like a macOS toolbar (the name stays the accessible label). Quick bar glyph ink 6.78:1 light (0040DD on F2F2F7) and 6.01:1 dark (409CFF on 1C1C1E); inactive tab text 5.6 and 7.6:1; Redo is disabled. Viewed at 1x and 1.5x light and dark. Glyph drawing is from memory, no Apple capture.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/ribbon.png"
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the filled action takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1), the Import link its own text blue 0040DD / 409CFF; hovered and pressed cells differ. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/empty_state.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the filled action takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1), the Import link its own text blue 0040DD / 409CFF; hovered and pressed cells differ. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/empty_state.png"
+   }
+  }
+ },
+ "avatar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the grey monogram of Contacts (E5E5EA / 3A3A3C disc, 3C3C43 / F2F2F7 initials, about 8:1 and 11:1) replaces the tertiary container peach discs; presence dots keep their rings; the keyboard ring is the strong blue. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/avatar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the grey monogram of Contacts (E5E5EA / 3A3A3C disc, 3C3C43 / F2F2F7 initials, about 8:1 and 11:1) replaces the tertiary container peach discs; presence dots keep their rings; the keyboard ring is the strong blue. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/avatar.png"
+   }
+  }
+ },
+ "icon": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the warning role takes C93400 / FF9F0A (4.7:1 and 8:1) instead of systemOrange (2.1:1 on the light ground). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/icon.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the warning role takes C93400 / FF9F0A (4.7:1 and 8:1) instead of systemOrange (2.1:1 on the light ground). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/icon.png"
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): links take 0040DD / 409CFF (6.8:1 and 6.0:1 over the page) in both sheets. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/markdown_view.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): links take 0040DD / 409CFF (6.8:1 and 6.0:1 over the page) in both sheets. Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/markdown_view.png"
+   }
+  }
+ },
+ "code_editor": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): token colours at contrast: keyword 0040DD / 409CFF, type C93400 / FF9F0A, number 6C6C70 / AEAEB2, string 1F7A35 / 30D158 (all 4.5:1 or better on white and 1C1C1E). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/code_editor.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): token colours at contrast: keyword 0040DD / 409CFF, type C93400 / FF9F0A, number 6C6C70 / AEAEB2, string 1F7A35 / 30D158 (all 4.5:1 or better on white and 1C1C1E). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/code_editor.png"
+   }
+  }
+ },
+ "canvas": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the bars stand on a baseline 10 pt above the foot so the frame corner no longer clips them (the small cell as well). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/canvas.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the bars stand on a baseline 10 pt above the foot so the frame corner no longer clips them (the small cell as well). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/canvas.png"
+   }
+  }
+ },
+ "speed_dial": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): text 0040DD on its tinted tile 5.3:1 light and 66B2FF on dark 5.0:1; the ring is the strong blue. A tinted Menu button idiom, no UIKit speed dial exists.",
+    "gaps": [],
+    "screenshot": "cupertino/speed_dial.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): text 0040DD on its tinted tile 5.3:1 light and 66B2FF on dark 5.0:1; the ring is the strong blue. A tinted Menu button idiom, no UIKit speed dial exists.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/speed_dial.png"
+   }
+  }
+ },
+ "gauge": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): arcs take 0040DD / 409CFF, warning C93400 / FF9F0A and error D70015 / FF453A (3:1 or better on the ground); the SwiftUI circular Gauge shape, from memory. Viewed 1x light and dark and 1.5x light.",
+    "gaps": [],
+    "screenshot": "cupertino/gauge.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): arcs take 0040DD / 409CFF, warning C93400 / FF9F0A and error D70015 / FF453A (3:1 or better on the ground); the SwiftUI circular Gauge shape, from memory. Viewed 1x light and dark and 1.5x light.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/gauge.png"
+   }
+  }
+ },
+ "level": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): warning and error tones as the gauge; the NSLevelIndicator continuous, discrete (segments) and capacity forms. Viewed 1x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/level.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): warning and error tones as the gauge; the NSLevelIndicator continuous, discrete (segments) and capacity forms. Viewed 1x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/level.png"
+   }
+  }
+ },
+ "window_switcher": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the panel casts a one point edge instead of the hard 3 pt band; active row white on 0A60FF 5.1:1 (6.4:1 dark). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/window_switcher.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): the panel casts a one point edge instead of the hard 3 pt band; active row white on 0A60FF 5.1:1 (6.4:1 dark). Viewed 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/window_switcher.png"
+   }
+  }
+ },
+ "accordion": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 87 (y4): grouped inset disclosure rows (DisclosureGroup), chevrons, hovered, pressed, disabled and keyboard focus cells all differ and read in both palettes. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/accordion.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 87 (y4): grouped inset disclosure rows (DisclosureGroup), chevrons, hovered, pressed, disabled and keyboard focus cells all differ and read in both palettes. Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/accordion.png"
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/table.png",
+    "notes": "ROUND 87: AUDIT 45 follow-up: re-rendered with the round 86 scroll thumb (4 wide, 48 shortest, on-surface-variant 70 percent) and viewed light and dark at 1x and 1.5x: five cells, thumb clear of the Type text, hover e/ece5ed, focus e8e1e9 and selected e8def8 layers unchanged. Re-measured against ref/flutter/material datatable-rest@1x: the rule is cac4d0 against the reference cac4cf (one level), but the header is f3edf7 against the reference's plain surface fdf7ff, rows are 28 dp against 48 in the reference, and the reference has a checkbox column and right-aligned numerics. Rules and row layers measure; header fill and row pitch do not, so the matched claim is withdrawn.",
+    "gaps": [
+     "Header fill f3edf7 where Flutter's DataTable header is the surface colour",
+     "Rows are 28 dp against 48 (Flutter) and 52 (M3 data table)",
+     "No checkbox column, numbers left-aligned",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/table.png",
+    "notes": "ROUND 87: AUDIT 45 follow-up: re-rendered with the round 86 scroll thumb (4 wide, 48 shortest, on-surface-variant 70 percent) and viewed light and dark at 1x and 1.5x: five cells, thumb clear of the Type text, hover e/ece5ed, focus e8e1e9 and selected e8def8 layers unchanged. Re-measured against ref/flutter/material datatable-rest@1x: the rule is cac4d0 against the reference cac4cf (one level), but the header is f3edf7 against the reference's plain surface fdf7ff, rows are 28 dp against 48 in the reference, and the reference has a checkbox column and right-aligned numerics. Rules and row layers measure; header fill and row pitch do not, so the matched claim is withdrawn.",
+    "gaps": [
+     "Header fill f3edf7 where Flutter's DataTable header is the surface colour",
+     "Rows are 28 dp against 48 (Flutter) and 52 (M3 data table)",
+     "No checkbox column, numbers left-aligned",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "notification_list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/notification_list.png",
+    "notes": "ROUND 87: Re-rendered with the round 86 scroll thumb and viewed light and dark at 1x and 1.5x: the thumb reads (4 wide) beside the cut third notice. The defects of round 85 stand (third row wraps 3 dp left of the others, View action not aligned with the supporting text).",
+    "gaps": [
+     "Third row misaligned by 3 dp when it wraps",
+     "Action label does not align with the supporting text"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/notification_list.png",
+    "notes": "ROUND 87: Re-rendered with the round 86 scroll thumb and viewed light and dark at 1x and 1.5x: the thumb reads (4 wide) beside the cut third notice. The defects of round 85 stand (third row wraps 3 dp left of the others, View action not aligned with the supporting text).",
+    "gaps": [
+     "Third row misaligned by 3 dp when it wraps",
+     "Action label does not align with the supporting text"
+    ]
+   }
+  }
+ },
+ "scroll_area": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/scroll_area.png",
+    "notes": "ROUND 87: The Hover and Pressed cells now aim at the thumb (looks_z87.aim, Android only). Measured at the pixel, light then dark, against the surface: rest 7f7a84 3.98:1 / 938f99 5.87:1 (on-surface-variant 49454f / cac4d0 at 70 percent), hover 5b5761 6.7:1 / b8b2be 9.0:1 (90 percent), pressed 49454f 8.9:1 / cac4d0 10.9:1 (the drag, full on-surface-variant); all three distinct, all above the 3:1 control rule. Thumb 4 wide in every state and 48 dp shortest, as Flutter's scrollbar. Vertical, horizontal, scrolled and fits cells viewed light and dark at 1x and 1.5x. Deviation kept: Flutter's idle thumb is lighter; 70 percent is what reaches 3:1.",
+    "gaps": [
+     "Thumb at rest is darker than Flutter's default to meet 3:1",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/scroll_area.png",
+    "notes": "ROUND 87: The Hover and Pressed cells now aim at the thumb (looks_z87.aim, Android only). Measured at the pixel, light then dark, against the surface: rest 7f7a84 3.98:1 / 938f99 5.87:1 (on-surface-variant 49454f / cac4d0 at 70 percent), hover 5b5761 6.7:1 / b8b2be 9.0:1 (90 percent), pressed 49454f 8.9:1 / cac4d0 10.9:1 (the drag, full on-surface-variant); all three distinct, all above the 3:1 control rule. Thumb 4 wide in every state and 48 dp shortest, as Flutter's scrollbar. Vertical, horizontal, scrolled and fits cells viewed light and dark at 1x and 1.5x. Deviation kept: Flutter's idle thumb is lighter; 70 percent is what reaches 3:1.",
+    "gaps": [
+     "Thumb at rest is darker than Flutter's default to meet 3:1",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/swipe_actions.png",
+    "notes": "ROUND 87: Hover and focus cells now show the state layer on More: hover aimed at the button (primary 8 percent over surface), focus the keyboard layer (10 percent); Delete in the revealed cell is the destructive action, on-error on error (b3261e, 6.5:1; dark 601410 on f2b8b5), Archive on-primary on primary 6.4:1 (dark 381e72 on d0bcff). Rest text 16:1. Four cells viewed light and dark at 1x and 1.5x. The Cupertino picture of this sheet is made by y84_swipe_actions and was restored.",
+    "gaps": [
+     "The mid-swipe drag is not drawn",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/swipe_actions.png",
+    "notes": "ROUND 87: Hover and focus cells now show the state layer on More: hover aimed at the button (primary 8 percent over surface), focus the keyboard layer (10 percent); Delete in the revealed cell is the destructive action, on-error on error (b3261e, 6.5:1; dark 601410 on f2b8b5), Archive on-primary on primary 6.4:1 (dark 381e72 on d0bcff). Rest text 16:1. Four cells viewed light and dark at 1x and 1.5x. The Cupertino picture of this sheet is made by y84_swipe_actions and was restored.",
+    "gaps": [
+     "The mid-swipe drag is not drawn",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "duration_picker": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/duration_picker.png",
+    "notes": "ROUND 87: The step marks were degenerate (a dot and a hairline) because the 250 wide sheet squeezed three steppers of 40 dp icon buttons to 22 px; the Android sheet is now 520 wide (the other looks keep 250). The 24 dp dash and plus read at 1x and 1.5x, light and dark (on-surface-variant 49454f on the 40 dp tonal buttons, md.comp.icon-button); disabled marks at 38 percent are exempt; hover and keyboard focus layers (8 and 10 percent) drawn. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no duration picker; built from the stepper and 40 dp icon buttons"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/duration_picker.png",
+    "notes": "ROUND 87: The step marks were degenerate (a dot and a hairline) because the 250 wide sheet squeezed three steppers of 40 dp icon buttons to 22 px; the Android sheet is now 520 wide (the other looks keep 250). The 24 dp dash and plus read at 1x and 1.5x, light and dark (on-surface-variant 49454f on the 40 dp tonal buttons, md.comp.icon-button); disabled marks at 38 percent are exempt; hover and keyboard focus layers (8 and 10 percent) drawn. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no duration picker; built from the stepper and 40 dp icon buttons"
+    ]
+   }
+  }
+ },
+ "bottom_app_bar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/bottom_app_bar.png",
+    "notes": "ROUND 87: Actions are 48 dp icon buttons with Material icons (search, share, archive and delete: new outlines in matglyph_z87) in on-surface-variant 49454f on surface-container f3edf7 (md.comp.bottom-app-bar); disabled share at 38 percent; hover (8 percent circle on search) and focus cells added for Android. Six cells viewed light and dark at 1x and 1.5x. The FAB cell focus is the FAB layer.",
+    "gaps": [
+     "Action icons are chosen from the label (Search, Share, Archive, Delete); Action has no glyph field",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/bottom_app_bar.png",
+    "notes": "ROUND 87: Actions are 48 dp icon buttons with Material icons (search, share, archive and delete: new outlines in matglyph_z87) in on-surface-variant 49454f on surface-container f3edf7 (md.comp.bottom-app-bar); disabled share at 38 percent; hover (8 percent circle on search) and focus cells added for Android. Six cells viewed light and dark at 1x and 1.5x. The FAB cell focus is the FAB layer.",
+    "gaps": [
+     "Action icons are chosen from the label (Search, Share, Archive, Delete); Action has no glyph field",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "carousel": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/carousel.png",
+    "notes": "ROUND 87: Pager arrows are now the M3 chevrons in 40 dp icon buttons (were text glyphs), viewed light and dark at 1x and 1.5x. Still review: the hover, pressed and focus cells show no state layer on the arrows (the pointer aim and a Tab walk were tried; the layers do not draw), and the page dots are grey 3:1.",
+    "gaps": [
+     "Hover, pressed and focus equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/carousel.png",
+    "notes": "ROUND 87: Pager arrows are now the M3 chevrons in 40 dp icon buttons (were text glyphs), viewed light and dark at 1x and 1.5x. Still review: the hover, pressed and focus cells show no state layer on the arrows (the pointer aim and a Tab walk were tried; the layers do not draw), and the page dots are grey 3:1.",
+    "gaps": [
+     "Hover, pressed and focus equal rest"
+    ]
+   }
+  }
+ },
+ "reorderable_list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/reorderable_list.png",
+    "notes": "ROUND 87: Aiming the hover and pressed cells at the third row changed no pixel: the plain rows draw no pointer layer and no drag handle for the Android look. Not raised.",
+    "gaps": [
+     "No drag handle; states equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/reorderable_list.png",
+    "notes": "ROUND 87: Aiming the hover and pressed cells at the third row changed no pixel: the plain rows draw no pointer layer and no drag handle for the Android look. Not raised.",
+    "gaps": [
+     "No drag handle; states equal rest"
+    ]
+   }
+  }
+ },
+ "terminal_view": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/terminal_view.png",
+    "notes": "ROUND 87: Not changed: the focus cell equals rest because the scrollback list (collection.virtual_list) is not focusable and takes no ring in any look; the fix is a library change shared by every look.",
+    "gaps": [
+     "Focus cell equals rest: the list has no focus indicator"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/terminal_view.png",
+    "notes": "ROUND 87: Not changed: the focus cell equals rest because the scrollback list (collection.virtual_list) is not focusable and takes no ring in any look; the fix is a library change shared by every look.",
+    "gaps": [
+     "Focus cell equals rest: the list has no focus indicator"
+    ]
+   }
+  }
+ }
+}

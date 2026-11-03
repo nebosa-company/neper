@@ -17,7 +17,14 @@ use e.ui.gridlook as gl
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.linux_card
+use e.ui.looks_x84
+use e.ui.looks_x85
+use e.ui.looks_x86
+use e.ui.looks_x87
 use e.ui.overlay
+use e.ui.looks_z84_edge
+use e.ui.looks_z85
+use e.ui.looks_z88
 use e.ui.style
 use e.ui.vgridlook as vg
 use e.ui.widget
@@ -54,6 +61,8 @@ fn is_selected(selected: []const widget.Key, key: widget.Key) -> bool {
 // A row of a list: the item over a hairline separator (when asked), `extent` tall
 // and `width` wide, a list item in the tree at `index` of `count`, selected when
 // its key is.
+fn row_noop_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }
+
 fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Key, index: usize, count: usize, extent: f32, width: f32, separator: bool, selected: bool) -> (widget.Node, err) {
     if index >= count || !a11y_count_fits(count) { ret (zero, TooLarge) }
     var parts_count = 1usize
@@ -75,9 +84,30 @@ fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Ke
     if extent > 0.0 { row_style.height = style.Length { Px: extent } }
     // v2 (D979, docs/ux/components/Row): selected is `secondary-container`.
     if selected { row_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
+    // Android (looks_z85): the pointer over a row lays on-surface at the hover opacity over it.
+    if looks_z85.hover_rows && t.tokens.profile == .MaterialLike {
+        let over = control.control_state(t, key, true, selected)
+        if over.hovered {
+            var ground = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            if selected { ground = style.color(t.tokens, .SecondaryContainer) }
+            row_style.background = paint.Brush { Solid: style.layer(ground, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
+        }
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, row_style, parts[0usize..parts_count])
+    if looks_z85.hover_rows && t.tokens.profile == .MaterialLike {
+        // A region carries the key so the pointer can hover the row (a plain flex is no pointer target).
+        let none_gesture = widget.GestureAction { ctx: zero, invoke: row_noop_gesture }
+        var region_style = style.defaults()
+        region_style.width = style.Length { Px: width }
+        if extent > 0.0 { region_style.height = style.Length { Px: extent } }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, row_style, parts[0usize..parts_count])
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = column[0usize]
+        column[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 4u8, enabled: true, focusable: false }, region_style, held[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 11u8
     sem.row = u32(index + 1usize)
@@ -1157,12 +1187,23 @@ fn carousel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []co
     var back = control.button_options()
     back.variant = .Plain
     back.enabled = current > 0usize
-    let (back_button, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], back)
+    var (back_button, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], back)
+    // Android: the pager arrows are 40 dp icon buttons with the M3 chevrons (the text glyphs read as stray marks)
+    if t.tokens.profile == .MaterialLike {
+        let (icon_back, icon_back_error) = control.material_icon_button(a, key + 1u64, t, .ChevronLeft, "Previous", &actions[0usize], .Plain, current > 0usize, false)
+        back_button = icon_back
+        back_error = icon_back_error
+    }
     if back_error != ok { ret (zero, back_error) }
     var forward = control.button_options()
     forward.variant = .Plain
     forward.enabled = current + 1usize < pages.len
-    let (next_button, next_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], forward)
+    var (next_button, next_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], forward)
+    if t.tokens.profile == .MaterialLike {
+        let (icon_next, icon_next_error) = control.material_icon_button(a, key + 2u64, t, .ChevronRight, "Next", &actions[1usize], .Plain, current + 1usize < pages.len, false)
+        next_button = icon_next
+        next_error = icon_next_error
+    }
     if next_error != ok { ret (zero, next_error) }
     let (across, across_error) = mem.alloc[widget.Node](a, 3usize)
     if across_error != ok { ret (zero, TooLarge) }
@@ -1414,6 +1455,22 @@ fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         var row_style = style.defaults()
         row_style.width = style.Length { Px: width }
         row_style.height = style.Length { Px: extent }
+        // Android (round 88): a 24 dp drag handle leads the row, and the row takes the list item's state layers (on-surface 8 % hover, 10 % focus and pressed).
+        if t.tokens.profile == .MaterialLike {
+            let state = control.control_state(t, keys[i], true, false)
+            row_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state)) }
+            let (handle, handle_error) = control.icon_square(a, style.color(t.tokens, .OnSurfaceVariant), .DragHandle, 24.0)
+            if handle_error != ok { ret (zero, handle_error) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = handle
+            pair[1usize] = items[i]
+            var inset = style.defaults()
+            inset.width = style.Length { Px: width }
+            inset.height = style.Length { Px: extent }
+            inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+            body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, inset, pair[0usize..2usize])
+        }
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         control.focus_look(t)
@@ -1514,12 +1571,21 @@ fn pull_to_refresh(a: *mem.Arena, key: widget.Key, t: *const control.Theme, cont
     view_style.overflow = .Clip
     parts[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&pulls[0usize]), invoke: pull_drag }, gestures: 2u8, enabled: true, focusable: false }, view_style, body[0usize..1usize])
     if refreshing {
-        let (ring, ring_error) = control.progress_ring(a, key + 2u64, t, "Refreshing", 0.0, true, t.tokens.metrics.control_height)
+        var ring_value: f32 = 0.0
+        var ring_sweeps = true
+        if looks_z84_edge.ring() >= 0.0 {
+            ring_value = looks_z84_edge.ring()
+            ring_sweeps = false
+        }
+        // Android: the M3 circular indicator is 40 dp across (a 48 dp container); the other looks keep the control height.
+        var ring_size = t.tokens.metrics.control_height
+        if t.tokens.profile == .MaterialLike { ring_size = 48.0 }
+        let (ring, ring_error) = control.progress_ring(a, key + 2u64, t, "Refreshing", ring_value, ring_sweeps, ring_size)
         if ring_error != ok { ret (zero, ring_error) }
         let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
         if lifted_error != ok { ret (zero, TooLarge) }
         lifted[0usize] = ring
-        parts[2usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: (width - t.tokens.metrics.control_height) * 0.5, y: 0.0 - height }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+        parts[2usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: (width - ring_size) * 0.5, y: 0.0 - height }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -1645,7 +1711,10 @@ fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, conten
         while i < labels.len {
             runs[i] = SwipeTileRun { action: actions[i], reveal: reveal }
             closed[i] = widget.Submit { ctx: ctx_of(&runs[i]), invoke: swipe_tile_run }
-            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &closed[i], control.button_options())
+            var chosen = control.button_options()
+            // Android: Delete is the destructive action, in the error colour (the others stay primary)
+            if t.tokens.profile == .MaterialLike && control.same_text(labels[i], "Delete") { chosen.variant = .Danger }
+            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &closed[i], chosen)
             if act_error != ok { ret (zero, act_error) }
             parts[1usize + i] = act
             i += 1usize
@@ -1977,18 +2046,38 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
         var glyph_header = false
+        var fav_hot = false
         // a picture column (2) has no side padding; a star column (1) shows the star as its title
         // round 15: a dialog grid's picture column (the Sort dialog's Sort Order) keeps its left aligned title
-        if look.on && !look.dialog_lines && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
+        if look.on && !look.dialog_lines && !look.dialog_grid && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 1u8 {
             glyph_header = true
             // a column marked with the favourite star shows it in place of a title
             var star_pix = gl.gx_star()
             if crisp_head { star_pix = gl.gx_star_c() }
-            let (star, star_error) = gl.pixels(a, star_pix, gl.gx_star_w(), gl.gx_star_h())
+            var star_node: widget.Node = zero
+            var star_error: err = ok
+            if style.windows_dark_on() && !look.dialog_lines {
+                // round 87: the Dark star is final colours (2.2 : 1 mapped; round 88: 3.1 : 1 at the dimmest glyph pixel except the edge fringe)
+                let (dark_star, dark_star_error) = gl.pixels_raw(a, looks_x87.star_dark(), gl.gx_star_w(), gl.gx_star_h())
+                star_node = dark_star
+                star_error = dark_star_error
+            } else {
+                let (plain_star, plain_star_error) = gl.pixels(a, star_pix, gl.gx_star_w(), gl.gx_star_h())
+                star_node = plain_star
+                star_error = plain_star_error
+            }
+            let star = star_node
             if star_error != ok { ret (zero, star_error) }
             // looks4-e: the live capture's faint star, 2 px below the top of the header row
             body[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, star))
+            if crisp_head && state.hovered && !state.pressed && t.tokens.profile == .Windows && !style.windows_dark_on() {
+                // round 86: the hot Favorite header of the 1:1 capture (star and filter button on the hot fill), as it is
+                let (hot_fav, hot_fav_error) = looks_x86.fav_hot(a)
+                if hot_fav_error != ok { ret (zero, hot_fav_error) }
+                body[0usize] = hot_fav
+                fav_hot = true
+            }
         }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             glyph_header = true
@@ -1998,11 +2087,20 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (glyph_node, glyph_error) = gl.pixels(a, list_pix, gl.gx_list_w(), gl.gx_list_h())
             if glyph_error != ok { ret (zero, glyph_error) }
             body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
+            if crisp_head {
+                // round 86: the capture's glyph has five lines of dots and bars, the cell centres it
+                let (list_node, list_error) = looks_x86.list_glyph(a)
+                if list_error != ok { ret (zero, list_error) }
+                // round 87: one pixel higher, as the capture (the centred cell put it a row lower)
+                body[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, 2.0, style.defaults(), one_node(a, list_node))
+            }
         }
         var b = 1usize
         // round 15: the Options Shortcuts grid's hot header shows no filter button (live hover grabs)
         var hot_glyph = state.hovered
         if look.on && look.top_edge_on && t.tokens.profile == .Windows { hot_glyph = false }
+        if fav_hot { hot_glyph = false }
+        if look.crisp && look.dialog_grid && t.tokens.profile == .Windows { hot_glyph = false }
         if sorted || hot_glyph {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
@@ -2028,7 +2126,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = arrow
-            body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
+            body[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * flipped, skew: 0.0, offset: zero }, control.sized_style(t.tokens.sizes.icon_sm, t.tokens.sizes.icon_sm), turning[0usize..1usize])
             if has_cup_chevron { body[1usize] = cup_chevron }
             b = 2usize
             if look.on {
@@ -2053,6 +2151,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (picture_node, picture_error) = gl.pixels(a, gl.gx_picture_header(), gl.gx_picture_header_w(), gl.gx_picture_header_h())
             if picture_error != ok { ret (zero, picture_error) }
             body[0usize] = picture_node
+            if crisp_head {
+                let (head_node, head_error) = looks_x86.pic_head(a)
+                if head_error != ok { ret (zero, head_error) }
+                body[0usize] = head_node
+            }
             b = 1usize
         }
         var line_style = style.defaults()
@@ -2090,6 +2193,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var win_hot = state.hovered || state.pressed
         // round 15: the Shortcuts grid's hot header has no filter button
         if look.top_edge_on { win_hot = false }
+        if look.crisp && look.dialog_grid { win_hot = false }
         // round 43: a centred caption of the 1:1 grid is placed from the left (see the padding below), not centred by the flex
         let crisp_text = control.choices_hinted_width(columns[i].title)
         let crisp_centred = crisp_head && numeric_column(look.center_head, i) && !glyph_header && !(win_glyphs && (sorted || win_hot)) && crisp_text > 0.0
@@ -2098,6 +2202,10 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if (sorted || win_hot) && numeric_column(look.center_head, i) {
                 line_main = .Center
                 line_style.width = style.Length { Px: columns[i].width - 23.0 }
+                // round 46: the 1:1 capture's hot caption stands two pixels further right
+                if look.hot_crisp || (crisp_head && state.hovered && !sorted && !state.pressed) { line_style.width = style.Length { Px: columns[i].width - 19.0 } }
+                // round 87: a hot sorted caption of the 1:1 capture stands from the left (the group box sheets), not centred
+                if crisp_head && sorted && state.hovered && !state.pressed { line_main = .Start }
             } else if crisp_centred {
                 line_main = .Start
             } else if numeric_column(look.center_head, i) {
@@ -2122,19 +2230,52 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 var tri_pix = gl.gx_chip_tri_rest()
                 if column_descending { tri_pix = gl.gx_sort_down() }
                 if state.pressed { tri_pix = gl.gx_chip_tri_pressed() } else if state.hovered { tri_pix = gl.gx_chip_tri_hover() }
-                let (tri_node, tri_error) = gl.pixels(a, tri_pix, 8.0, 9.0)
+                var tri_w: f32 = 8.0
+                var tri_h: f32 = 9.0
+                var tri_top: f32 = 4.0
+                if crisp_head && !column_descending {
+                    // round 87: the 1:1 capture's sort triangle, 7 x 8 in #A0A0A0 at rest (the older cut is 8 x 9 and faint), 8 x 8 on the hot and
+                    // pressed fills
+                    tri_pix = gl.gx_chip_tri_c()
+                    tri_w = 7.0
+                    tri_h = 8.0
+                    tri_top = 5.0
+                    if state.pressed {
+                        tri_pix = looks_x87.chip_tri_pressed()
+                        tri_w = 8.0
+                    } else if state.hovered {
+                        tri_pix = looks_x87.chip_tri_hot()
+                    }
+                }
+                let (tri_node, tri_error) = gl.pixels(a, tri_pix, tri_w, tri_h)
                 if tri_error != ok { ret (zero, tri_error) }
-                layers[layer_n] = widget.positioned(0u64, tri_at - pad, 4.0, style.defaults(), one_node(a, tri_node))
+                var tri_dx: f32 = 0.0
+                if crisp_head && !column_descending && filter_shown { tri_dx = 0.0 - 2.0 }
+                layers[layer_n] = widget.positioned(0u64, tri_at - pad + tri_dx, tri_top, style.defaults(), one_node(a, tri_node))
                 layer_n += 1usize
             }
             if filter_shown {
                 var filter_pix = gl.gx_chip_filter_hover()
+                if look.hot_crisp && !state.pressed { filter_pix = gl.gx_chip_filter_hover_c() }
                 if state.pressed { filter_pix = gl.gx_chip_filter_pressed() }
-                let (filter_node, filter_error) = gl.pixels(a, filter_pix, 12.0, 11.0)
-                if filter_error != ok { ret (zero, filter_error) }
+                var filter_w: f32 = 12.0
+                var filter_h: f32 = 11.0
                 var filter_top: f32 = 0.0
+                var filter_left: f32 = 0.0
                 if look.dialog_lines && state.pressed { filter_top = 0.0 - 1.0 }
-                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad, filter_top, style.defaults(), one_node(a, filter_node))
+                if crisp_head && !look.hot_crisp {
+                    // round 87: the 1:1 capture's filter button, 10 x 10, hot or pressed (the older cuts are soft)
+                    filter_pix = looks_x87.chip_filter_hot()
+                    if state.pressed { filter_pix = looks_x87.chip_filter_pressed() }
+                    filter_w = 10.0
+                    filter_h = 10.0
+                    filter_top = 1.0
+                    filter_left = 0.0 - 1.0
+                    if !sorted { filter_left = 1.0 }
+                }
+                let (filter_node, filter_error) = gl.pixels(a, filter_pix, filter_w, filter_h)
+                if filter_error != ok { ret (zero, filter_error) }
+                layers[layer_n] = widget.positioned(0u64, columns[i].width - 15.0 - pad + filter_left, filter_top, style.defaults(), one_node(a, filter_node))
                 layer_n += 1usize
             }
             var layer_style = style.defaults()
@@ -2196,7 +2337,15 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             // (a tree's header has no filter glyphs: its flex centres the caption itself)
             if crisp_centred && win_glyphs { crisp_left = style.Length { Px: f32(i64(columns[i].width - 2.0 - crisp_text) / 2i64) + 1.0 } }
             if win_glyphs && (sorted || win_hot) {
-                head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: 2.0 }, right: sides, bottom: flat }
+                var hot_top: f32 = 2.0
+                if look.hot_crisp { hot_top = 1.0 }
+                // round 87: a pressed sorted header's caption stands one pixel right and down (the 1:1 capture, group box sheets)
+                if sorted && state.hovered && !state.pressed && numeric_column(look.center_head, i) { crisp_left = style.Length { Px: pad + 3.0 } }
+                if state.pressed {
+                    crisp_left = style.Length { Px: pad + 2.0 }
+                    hot_top += 1.0
+                }
+                head_style.padding = style.EdgeLengths { left: crisp_left, top: style.Length { Px: hot_top }, right: sides, bottom: flat }
             } else {
                 // round 44: the capture's caption stands six rows below the header's top in the 22 and the 19 pixel headers alike
                 var crisp_down: f32 = 2.0
@@ -2323,6 +2472,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
                 second_line = control.sized_style(0.0, inner)
                 if state.hovered { first_line.background = paint.Brush { Solid: look.header_hover } }
                 if state.pressed { first_line.background = paint.Brush { Solid: gl.rgb(0xBCDCF4u32) } }
+                // round 46: the dialog grids' last header runs on into the bar with no line
+                if look.dialog_grid && i + 1usize == columns.len && !state.hovered && !state.pressed { first_line.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) } }
             }
             // round 15: a dialog grid's header line (live Sort dialog): #E5E5E5 after a white pixel, none at the last column, and the hot
             // or pressed header's colour runs through both
@@ -2435,6 +2586,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if look.on { band.background = paint.Brush { Solid: look.header } }
+    // Android (looks_z88): the header is the surface, as Flutter's DataTable header.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike && !look.on { band.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
@@ -2699,7 +2852,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         if group_row && look.soft_lines { group_top = style.Length { Px: 2.0 } }
         cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: flat }
         // round 43: Segoe UI 11 in the 18 px rows, ink from the sixth line (the 1:1 capture): two pixels above the centre of the line box
-        if crisp_on && !group_row { cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 4.0 } } }
+        if crisp_on && !group_row { cell_style.padding = style.EdgeLengths { left: sides, top: flat, right: sides, bottom: style.Length { Px: 4.0 - look.cell_down } } }
         // looks5-e: a dialog grid's captions stand a pixel higher than the centre (measured, Sort dialog)
         if look.on && look.dialog_lines { cell_style.padding = style.EdgeLengths { left: sides, top: group_top, right: sides, bottom: style.Length { Px: 2.0 } } }
         // a picture column's cells have no side padding
@@ -2880,7 +3033,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     // the current row carries the line (with several rows selected it is the one with the focus)
     var lined_row = selected
     if look.focus_on { lined_row = row_key == look.focus_key }
-    let dotted_row = look.on && lined_row && look.soft_lines && look.dotted_focus
+    let dotted_row = look.on && lined_row && (look.soft_lines || (look.crisp && look.dialog_grid)) && look.dotted_focus
     // looks5-e: the idle selected row has no frame: its top edge is the line above it and its foot pair the edge colour and #F1F1F1
     if look.on && lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots { row_style.border = style.Border { width: 1.0, color: look.selected_line } }
     let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
@@ -2889,9 +3042,10 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
     if disabled { content_look.opacity = t.tokens.states.disabled_content }
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, content_look, boxed[0usize..n])
     var crisp_rows = false
+    var crisp_edged = false
     if look.on && look.horizontal_on && !(mem.address_of(look.kind_ctx) != 0usize && look.kind(look.kind_ctx, index) != 0u8) {
         // v3's horizontal grid lines: a 1 px line along the bottom of the row
-        let (with_line, with_line_error) = mem.alloc[widget.Node](a, 3usize)
+        let (with_line, with_line_error) = mem.alloc[widget.Node](a, 4usize)
         if with_line_error != ok { ret (zero, TooLarge) }
         var rule_style = control.sized_style(4000.0, 1.0)
         rule_style.background = paint.Brush { Solid: look.line }
@@ -2954,10 +3108,22 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
                 crisp_foot.background = paint.Brush { Solid: gl.rgb(0xDCDCDCu32) }
                 with_line[1usize] = widget.positioned(0u64, pair_x, extent - 1.0, style.defaults(), one_node(a, widget.box(0u64, crisp_foot, zero)))
                 crisp_rows = true
+                // round 85: the 1:1 capture's idle current row ends in its edge colour one pixel above that foot pixel
+                if lined_row && !dotted_row && !look.top_edge_on && !look.tree_dots && !style.windows_dark_on() {
+                    var crisp_edge = control.sized_style(4000.0, 1.0)
+                    crisp_edge.background = paint.Brush { Solid: look.selected_line }
+                    with_line[2usize] = widget.positioned(0u64, pair_x, extent - 2.0, style.defaults(), one_node(a, widget.box(0u64, crisp_edge, zero)))
+                    // round 87: and down its left side, from the end of the indicator column (the capture's frame is closed; the cell fill covered it)
+                    var crisp_side = control.sized_style(1.0, extent - 1.0)
+                    crisp_side.background = paint.Brush { Solid: look.selected_line }
+                    with_line[3usize] = widget.positioned(0u64, pair_x, 0.0, style.defaults(), one_node(a, widget.box(0u64, crisp_side, zero)))
+                    crisp_edged = true
+                }
             }
         }
         var stacked_count = 2usize
         if look.soft_lines && !crisp_rows { stacked_count = 3usize }
+        if crisp_edged { stacked_count = 4usize }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_line[0usize..stacked_count])
         if look.dialog_lines && look.soft_lines && !look.vertical_off && !style.windows_dark_on() {
             // round 31: a dialog grid's column lines run through the two foot pixels of a row (live Sort dialog), not under them
@@ -3068,13 +3234,56 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             dots_total = dots_before + columns[look.cell_select - 1usize].width
         }
         if dots_total > 700.0 { dots_total = 700.0 }
-        let (invert, invert_error) = gl.focus_invert(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - fill.red, 1.0 - fill.green, 1.0 - fill.blue, 1.0))
+        var dots_fill = fill
+        var dots_phase = 0usize
+        // round 46: the dialog grids' rectangle counts its dots from its own corner, over the selected cell's colour
+        if look.dialog_grid {
+            dots_phase = 2usize
+            if look.cell_select != 0usize { dots_fill = look.selected }
+        }
+        let (invert, invert_error) = gl.focus_invert_local(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - dots_fill.red, 1.0 - dots_fill.green, 1.0 - dots_fill.blue, 1.0), dots_phase)
         if invert_error != ok { ret (zero, invert_error) }
-        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 2usize)
+        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 5usize)
         if with_invert_error != ok { ret (zero, TooLarge) }
         with_invert[0usize] = lined[0usize]
         with_invert[1usize] = widget.positioned(0u64, dots_left, 0.0, style.defaults(), one_node(a, invert))
-        lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..2usize])
+        var invert_n = 2usize
+        // round 46: a dialog grid that selects one cell holds the focus rectangle on the whole row: the cells before it carry their own
+        // dots, the inverse of the row's plain fill
+        if look.dialog_grid && look.cell_select > 1usize && dots_left > 0.0 {
+            var plain_fill = look.even
+            if index % 2usize == 1usize { plain_fill = look.odd }
+            let (before_dots, before_error) = gl.focus_invert_local(a, dots_left, extent - 1.0, paint.rgba(1.0 - plain_fill.red, 1.0 - plain_fill.green, 1.0 - plain_fill.blue, 1.0), 2usize)
+            if before_error != ok { ret (zero, before_error) }
+            with_invert[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, before_dots))
+            invert_n = 3usize
+            if !style.windows_dark_on() {
+                // round 86: the capture's rectangle is one piece: its left edge at the selected cell is the column line and the fill
+                with_invert[3usize] = looks_x86.one_box(a, dots_left - 1.0, 1.0, 1.0, extent - 2.0, gl.rgb(0xDCDCDCu32))
+                with_invert[4usize] = looks_x86.one_box(a, dots_left, 1.0, 1.0, extent - 3.0, look.selected)
+                invert_n = 5usize
+            }
+        }
+        lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..invert_n])
+        if look.dialog_grid && !style.windows_dark_on() && look.cell_select == 0usize {
+            // round 86: the column lines run over the rectangle's top and bottom dots (ref/windows-1to1 shortcuts and sort states)
+            let (joins, joins_error) = mem.alloc[widget.Node](a, columns.len * 2usize + 1usize)
+            if joins_error != ok { ret (zero, TooLarge) }
+            joins[0usize] = lined[0usize]
+            var join_n = 1usize
+            var join_x: f32 = 0.0
+            var join_at = 0usize
+            while join_at < columns.len {
+                join_x += columns[join_at].width
+                if join_x > dots_left && join_x <= dots_total {
+                    joins[join_n] = looks_x86.one_px(a, join_x - 1.0, 0.0, gl.rgb(0xDCDCDCu32))
+                    joins[join_n + 1usize] = looks_x86.one_px(a, join_x - 1.0, extent - 2.0, gl.rgb(0xDCDCDCu32))
+                    join_n += 2usize
+                }
+                join_at += 1usize
+            }
+            lined[0usize] = widget.stack(0u64, style.defaults(), joins[0usize..join_n])
+        }
     }
     if dotted_row && !crisp_sel {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
@@ -3337,7 +3546,7 @@ fn zero_look() -> TableLook {
 // A table's measured look (G012, `e.ui.gridlook`): with `on` set the header height and cell
 // padding, the header and row colours, the row zebra, the selected row and the lines are these
 // values and not the theme's; a zero value leaves the theme's look.
-type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool }
+type TableLook = struct { on: bool, header_height: f32, pad: f32, text_size: f32, header: paint.Color, header_hover: paint.Color, header_line: paint.Color, even: paint.Color, odd: paint.Color, selected: paint.Color, selected_line: paint.Color, line: paint.Color, group: paint.Color, kind_ctx: *void, kind: fn(*void, usize) -> u8, glyph: fn(*void, usize) -> u8, track: paint.Color, thumb: paint.Color, scroll_width: f32, focus_on: bool, focus_key: widget.Key, header_hidden: bool, vertical_off: bool, horizontal_on: bool, drag_label: str, center_head: []const bool, footer_fill: paint.Color, footer_extra: f32, also_sorted: []const u8, detail_height: f32, head_text: f32, row_drag: bool, row_drop: widget.Change[u64], has_row_drop: bool, has_head_extra: bool, head_extra: widget.Node, head_extra_height: f32, bar_margin: f32, soft_lines: bool, bar_top: f32, dotted_focus: bool, focus_aware: bool, selected_focus: paint.Color, tree_dots: bool, cell_select: usize, dialog_lines: bool, foot_set: bool, foot_drift: f32, foot_g1: paint.Color, foot_g2: paint.Color, foot_w1: paint.Color, foot_w2: paint.Color, top_edge_on: bool, top_edge: paint.Color, plain_col: usize, soft_a0: f32, soft_x0: f32, soft_slope: f32, top_fit: bool, head_press: usize, group_current: usize, group_solid: bool, thumb_len: f32, thumb_top: f32, crisp: bool, cell_down: f32, dialog_grid: bool, hot_crisp: bool }
 
 // (D1341) A header group: its title over `span` columns from `first`.
 type HeaderGroup = struct { title: str, first: usize, span: usize }
@@ -3605,6 +3814,13 @@ fn selection_check(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = mark
+    // Android (looks_z88): the mark stands in the middle of the cell, as Flutter's DataTable checkbox, not at its top.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike {
+        let (middle, middle_error) = mem.alloc[widget.Node](a, 1usize)
+        if middle_error != ok { ret (zero, TooLarge) }
+        middle[0usize] = mark
+        held[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(side, tall), middle[0usize..1usize])
+    }
     held[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](press), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(side, tall), held[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 4u8
@@ -4950,7 +5166,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             turning[0usize] = twisty
             let (led, led_error) = mem.alloc[widget.Node](a, 2usize)
             if led_error != ok { ret (zero, TooLarge) }
-            led[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, control.sized_style(24.0, 24.0), turning[0usize..1usize])
+            led[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, skew: 0.0, offset: zero }, control.sized_style(24.0, 24.0), turning[0usize..1usize])
             led[1usize] = cells[0usize]
             cells[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), led[0usize..2usize])
         }
@@ -5185,7 +5401,9 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             track_w = lk.scroll_width - 1.0
             thumb_left -= 1.0
         }
-        if lk.dialog_lines {
+        // round 46: the 1:1 dialog grids (`cell_down`) keep the dialog bar: a white first pixel and the crisp 2 px thumb
+        let dialog_bar = lk.dialog_lines || (lk.crisp && lk.dialog_grid)
+        if dialog_bar {
             // pressed or under the pointer: a 6 px pill (live captures, Sort and Shortcuts)
             let widened = thumb_w > 5.0
             thumb_w = 2.0
@@ -5195,6 +5413,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 thumb_w = 6.0
                 thumb_left = 5.0
             }
+            // round 46: the 1:1 capture's thumb stands one pixel further left
+            if lk.dialog_grid { thumb_left -= 1.0 }
         }
         var thumb_style = control.sized_style(thumb_w, thumb_h)
         thumb_style.background = paint.Brush { Solid: lk.thumb }
@@ -5212,6 +5432,45 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             win_style.margin.left = style.Length { Px: thumb_left - 0.5 }
             thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, win_style, one_node(a, win_thumb))
         }
+        if lk.top_fit && lk.crisp && lk.soft_lines && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w < 3.0 && thumb_h >= 6.0 {
+            // round 85: the 1:1 capture's thumb: two crisp columns on whole pixels, 16 rows
+            let (crisp_node, crisp_error) = looks_x85.crisp_thumb(a, thumb_h - 1.0)
+            if crisp_error != ok { ret (zero, crisp_error) }
+            var crisp_style = control.sized_style(2.0, thumb_h - 1.0)
+            crisp_style.margin = thumb_style.margin
+            crisp_style.margin.left = style.Length { Px: 6.0 }
+            crisp_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, crisp_style, one_node(a, crisp_node))
+        }
+        if lk.top_fit && lk.crisp && lk.soft_lines && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w > 5.0 && thumb_h >= 9.0 {
+            // round 87: the 1:1 capture's pressed thumb is a pill of 6 whole columns, 16 rows (the rounded box blurred its sides)
+            let (pill_node, pill_error) = looks_x87.pill(a, thumb_h - 1.0)
+            if pill_error != ok { ret (zero, pill_error) }
+            var pill_style = control.sized_style(6.0, thumb_h - 1.0)
+            pill_style.margin = thumb_style.margin
+            pill_style.margin.left = style.Length { Px: thumb_left - 0.5 }
+            pill_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, pill_style, one_node(a, pill_node))
+        }
+        if lk.crisp && lk.dialog_grid && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w > 5.0 && thumb_h >= 9.0 {
+            // round 87: the same pill in the 1:1 dialog grids (Sort, Shortcuts), one row lower than the rounded box stood
+            let (dialog_pill, dialog_pill_error) = looks_x87.pill(a, thumb_h)
+            if dialog_pill_error != ok { ret (zero, dialog_pill_error) }
+            var dialog_pill_style = control.sized_style(6.0, thumb_h)
+            dialog_pill_style.margin = thumb_style.margin
+            dialog_pill_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, dialog_pill_style, one_node(a, dialog_pill))
+        }
+        if lk.crisp && lk.dialog_grid && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w < 3.0 && thumb_h >= 9.0 {
+            // round 86: the 1:1 dialog grids' resting thumb is the same two crisp columns with the end rows
+            let dialog_h = f32(i64(thumb_h + 0.5))
+            let (dialog_node, dialog_error) = looks_x85.crisp_thumb(a, dialog_h)
+            if dialog_error != ok { ret (zero, dialog_error) }
+            var dialog_style = control.sized_style(2.0, dialog_h)
+            dialog_style.margin = thumb_style.margin
+            dialog_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, dialog_style, one_node(a, dialog_node))
+        }
         // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
         if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {
             let (track_box, has_track_box) = control.keyed_bounds(t.runtime, track_key)
@@ -5226,7 +5485,8 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
                 thumb_holder[0usize] = widget.stack(0u64, style.defaults(), pair[0usize..2usize])
             }
         }
-        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed {
+        // round 87: the 1:1 dialog grids (Shortcuts) show no arrow under the pointer
+        if arrow_hot != 0u8 && !control.control_state(t, track_key, true, false).pressed && !(lk.crisp && lk.dialog_grid) {
             var hot_pix = gl.gx_arrow_hot_up()
             var hot_top: f32 = 4.0
             if arrow_hot == 2u8 {
@@ -5284,7 +5544,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             } else {
                 column_node[0usize] = widget.stack(0u64, over_style, bar_parts[0usize..2usize])
             }
-        } else if lk.dialog_lines {
+        } else if dialog_bar {
             var strip = control.sized_style(1.0, track_h)
             strip.background = paint.Brush { Solid: gl.rgb(0xFFFFFFu32) }
             bar_parts[2usize] = bar_parts[1usize]
@@ -5971,7 +6231,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             if open && !t.tokens.motion.reduced { open_goal = 1.0 }
             let twisty_key = key + 1u64 + 2u64 * u64(i)
             let rotation = 1.5707963 * control.eased_on(t, twisty_key, twisty_key + 1048596u64, open_goal, false, t.tokens.durations.short3)
-            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, offset: zero }, style.defaults(), drawn[1usize..2usize])
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: rotation, skew: 0.0, offset: zero }, style.defaults(), drawn[1usize..2usize])
             var box_style = control.sized_style(24.0, 24.0)
             let around = style.Length { Px: 4.5 }
             box_style.padding = style.EdgeLengths { left: around, top: around, right: around, bottom: around }
@@ -7099,6 +7359,8 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
                     var line_style = style.defaults()
                     line_style.width = style.Length { Px: width - 2.0 * inset }
                     line_style.min_height = style.Length { Px: row_min }
+                    // iOS: the 44 pt cell holds its separator, so a row under a hairline is 0.5 short and the pitch stays 44.
+                    if cup && matched > 0usize { line_style.min_height = style.Length { Px: row_min - 0.5 } }
                     line_style.padding = style.EdgeLengths { left: flat, top: flat, right: style.Length { Px: right_pad }, bottom: flat }
                     // (D1544) The selected row on `secondary-container`.
                     if options.selected != 0u64 && p.key == options.selected { line_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
@@ -7193,7 +7455,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
             if open { open_goal = 1.0 }
             let quarter = 1.5707963 * control.eased_on(t, heading_key, heading_key + 1048597u64, open_goal, false, t.tokens.durations.short3)
             drawn[1usize] = chevron
-            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, offset: zero }, style.defaults(), drawn[1usize..2usize])
+            drawn[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: quarter, skew: 0.0, offset: zero }, style.defaults(), drawn[1usize..2usize])
             let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
             if parts_error != ok { ret (zero, TooLarge) }
             parts[0usize] = widget.padded(0u64, 4.5, 4.5, 4.5, 4.5, control.sized_style(24.0, 24.0), drawn[0usize..1usize])
@@ -7743,9 +8005,12 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         ret (texted, texted_error)
     }
     let dense = density_of(t) == 0usize
-    let field_h = control.if_else(dense, 32.0, 40.0)
+    var field_h = control.if_else(dense, 32.0, 40.0)
+    // The Windows edit is its own 22 tall; in a taller box its text stood at the top.
+    if t.tokens.profile == .Windows { field_h = 22.0 }
     let gap = control.if_else(dense, 4.0, 8.0)
-    let remove_w = control.if_else(dense, 32.0, 40.0)
+    var remove_w = control.if_else(dense, 32.0, 40.0)
+    if t.tokens.profile == .Windows { remove_w = 24.0 }
     // (D1327) An ordered editor's handle takes 24 and a gap from the fields.
     var handle_w: f32 = 0.0
     if options.ordered { handle_w = 24.0 + gap }
@@ -7781,10 +8046,22 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if heads_error != ok { ret (zero, TooLarge) }
     heads[0usize] = name_head
     heads[1usize] = value_head
-    heads[2usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(name_w, 0.0), heads[0usize..1usize])
-    heads[3usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(value_w, 0.0), heads[1usize..2usize])
-    rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, style.defaults(), heads[2usize..4usize])
-    n += 1usize
+    // The Neper and Material outlined fields carry their own label in the border; the other looks' fields have none, so their column
+    // labels take a line of their own over the first row (they stood at zero height and painted over it).
+    var head_h: f32 = 0.0
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike { head_h = style.text_style(t.tokens, .LabelMedium).line_height }
+    heads[2usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(name_w, head_h), heads[0usize..1usize])
+    heads[3usize] = widget.padded(0u64, 8.0, 0.0, 0.0, 0.0, control.sized_style(value_w, head_h), heads[1usize..2usize])
+    // A zero-height heading still paints its text, over the first field's label; those looks have no heading line at all.
+    if head_h == 0.0 {
+        heads[2usize] = widget.box(0u64, control.sized_style(name_w, 0.0), zero)
+        heads[3usize] = widget.box(0u64, control.sized_style(value_w, 0.0), zero)
+    }
+    // No pairs, nothing to label: the headings would stand on the Add button.
+    if pairs.len > 0usize {
+        rows[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, style.defaults(), heads[2usize..4usize])
+        n += 1usize
+    }
     var i = 0usize
     while i < pairs.len {
         if gone_share > 0.0 && gone_at == i {
@@ -10073,7 +10350,7 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         if reflow_left > 0.0 && old_columns > 0usize {
             shift = geometry.Point { x: (f32(r % old_columns) - f32(r % columns)) * (side + 8.0) * reflow_left, y: (f32(r / old_columns) - f32(r / columns)) * (tile_high + 8.0) * reflow_left }
         }
-        moved_cells[r] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[r..r + 1usize])
+        moved_cells[r] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: shift }, style.defaults(), cells[r..r + 1usize])
         r += 1usize
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -10242,7 +10519,7 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         if reflow_left > 0.0 && old_columns > 0usize {
             shift = geometry.Point { x: (f32(index % old_columns) - f32(index % columns)) * (side + 4.0) * reflow_left, y: (f32(index / old_columns) - f32(index / columns)) * extent * reflow_left }
         }
-        moved_cells[m] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: shift }, style.defaults(), cells[m..m + 1usize])
+        moved_cells[m] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: shift }, style.defaults(), cells[m..m + 1usize])
         m += 1usize
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
@@ -11132,6 +11409,20 @@ fn swipe_tile(a: *mem.Arena, key: widget.Key, t: *const control.Theme, act: *con
         fill = style.color(t.tokens, .Error)
         ink = style.color(t.tokens, .OnError)
     }
+    // Cupertino: the label is white 12 px, so the tiles take the darker accent and red that hold 4.5:1 (the system tints are 3.4 to 4.0:1).
+    if t.tokens.profile == .CupertinoLike {
+        let dark = t.tokens.palette == .Dark
+        if act.tone == .Accent {
+            fill = style.hex(0x0062CCu32)
+            if dark { fill = style.hex(0x0A68D6u32) }
+            ink = style.hex(0xFFFFFFu32)
+        }
+        if act.tone == .Destructive {
+            fill = style.hex(0xD70015u32)
+            if dark { fill = style.hex(0xC4281Cu32) }
+            ink = style.hex(0xFFFFFFu32)
+        }
+    }
     let state = control.control_state(t, key, true, false)
     let (mark, mark_error) = control.icon_square(a, ink, act.glyph, t.tokens.sizes.icon_md)
     if mark_error != ok { ret (zero, mark_error) }
@@ -11503,8 +11794,8 @@ fn reorderable_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             let (lifted_row, lifted_error) = mem.alloc[widget.Node](a, 1usize)
             if lifted_error != ok { ret (zero, TooLarge) }
             lifted_row[0usize] = rows[i]
-            var lift = widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: zero }
-            if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
+            var lift = widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: zero }
+            if i == lifted { lift = widget.VisualTransform { scale: 1.02, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: -4.0 } } }
             rows[i] = widget.transformed(0u64, lift, style.defaults(), lifted_row[0usize..1usize])
         }
         nudges[2usize * i] = Nudging { item: keys[i], index: i, count: n, up: true, move: move, cell: cells[i], has_cell: has[i] }
@@ -11818,6 +12109,15 @@ fn windows_property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme
             if !style.windark_active() { said_y = cursor + 3.0 }
             parts[n] = widget.positioned(0u64, band_x, said_y, control.sized_style(280.0, 15.0), said_held[0usize..1usize])
             n += 1usize
+            // round 84: the focus rectangle on the chosen category's caption (Windows light, as the General pressed capture shows it)
+            if !style.windark_active() && options.selected != 0u64 && options.selected == group_key {
+                let (adv, fit, base, metrics_error) = control.run_metrics_faced(a, band_face, caption, head.group)
+                if metrics_error != ok { ret (zero, metrics_error) }
+                let (rect, rect_error) = looks_x84.dots_node(a, f32(i32(fit + 0.5)) + looks_x84.dots_pad_w(), 15.0)
+                if rect_error != ok { ret (zero, rect_error) }
+                parts[n] = widget.positioned(0u64, band_x + looks_x84.dots_dx(), said_y + looks_x84.dots_dy(), style.defaults(), control.mem_one_node(a, rect))
+                n += 1usize
+            }
             bands += 1usize
             cursor += 22.0
         }

@@ -106,7 +106,7 @@ fn columns() -> [4]dg.ColumnSpec {
     specs[0usize] = dg.ColumnSpec { title: "Name", width: 180.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
     specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 100.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
     specs[2usize] = dg.ColumnSpec { title: "Qty", width: 60.0, column: C_QTY, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
-    specs[3usize] = dg.ColumnSpec { title: "Price", width: 84.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
+    specs[3usize] = dg.ColumnSpec { title: "Price", width: 100.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     ret specs
 }
 
@@ -171,7 +171,15 @@ fn framed(a: *mem.Arena, t: *const control.Theme, grid: *dg.Grid, w: f32, h: f32
     ret (widget.padded(0u64, 8.0, 8.0, 8.0, 8.0, face, held[0usize..1usize]), ok)
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // This sheet only: the chosen row's fill is the darker blue 0A60FF so its white text holds 4.5:1 (systemBlue is 4.02:1).
+    let (copy, copy_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copy_error != ok { ret (0usize, copy_error) }
+    copy[0usize] = *base.tokens
+    if base.tokens.palette != .Dark { style.puta(&copy[0usize], .Primary, 0x0A60FFu32, 1.0) }
+    var local = *base
+    local.tokens = &copy[0usize]
+    let t = &local
     let app = mem.cast[*App](ctx)
     // a grid keeps the look it was given: the pass of another look builds its grids afresh
     if app.ready && app.windows != (t.tokens.profile == .Windows) { app.ready = false }

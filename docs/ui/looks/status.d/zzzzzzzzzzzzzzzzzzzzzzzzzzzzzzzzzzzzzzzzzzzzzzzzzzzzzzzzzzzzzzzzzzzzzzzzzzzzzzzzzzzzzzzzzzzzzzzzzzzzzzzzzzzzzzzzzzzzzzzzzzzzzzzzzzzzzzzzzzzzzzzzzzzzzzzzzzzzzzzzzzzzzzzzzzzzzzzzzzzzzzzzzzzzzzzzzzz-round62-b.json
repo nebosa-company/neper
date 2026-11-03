@@ -1,0 +1,1122 @@
+{
+ "shortcut_recorder": {
+  "name": "Shortcut recorder",
+  "extra": true,
+  "neper": "control.shortcut_recorder",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/shortcut_recorder.png",
+    "notes": "Round 62: 8 cells (empty, chord set, recording, hover, focus, pressed, recording and focused, single key) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows and Linux draw no keyboard focus ring on this control (metrics.focus_ring is 0 and the shared pressable does not draw the profile's own); the Focus cell looks like the rest cell there",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned"
+    ]
+   }
+  }
+ },
+ "font_picker": {
+  "name": "Font picker",
+  "extra": true,
+  "neper": "control.font_picker",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   }
+  }
+ },
+ "color_picker": {
+  "name": "Colour picker",
+  "extra": true,
+  "neper": "overlay.color_picker",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/color_picker.png",
+    "notes": "Round 62: 6 cells (opaque, with alpha, black, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ]
+   }
+  }
+ },
+ "calendar": {
+  "name": "Calendar",
+  "extra": true,
+  "neper": "overlay.calendar",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/calendar.png",
+    "notes": "Round 62: 6 cells (nothing chosen, chosen day and today, range 12 to 18, hover, keyboard focus, week numbers and events) for October 2026 in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux draws GtkCalendar's grid (headers, grey neighbour days): it shows no today ring, range band, week numbers or event dots, so those cells look like the plain month",
+     "Windows and Linux draw no keyboard focus ring on the focused day",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)"
+    ]
+   }
+  }
+ },
+ "date_range_picker": {
+  "name": "Date range picker",
+  "extra": true,
+  "neper": "overlay.date_range_picker",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/date_range_picker.png",
+    "notes": "Round 62: field sheet (empty, range chosen, hover, focus, pressed) and date_range_picker_open (the calendar open with the range banded) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "time_picker": {
+  "name": "Time picker",
+  "extra": true,
+  "neper": "overlay.time_picker",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/time_picker.png",
+    "notes": "Round 62: 6 cells (hours and minutes, with seconds, midnight, hover, focus, pressed) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   }
+  }
+ },
+ "duration_picker": {
+  "name": "Duration picker",
+  "extra": true,
+  "neper": "overlay.duration_picker",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/duration_picker.png",
+    "notes": "Round 62: 5 cells (1 h 30 min, zero, long, hover, focus) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Hour, minute and second steppers; Cupertino's stepper shows no readout, so the duration is not legible there",
+     "No platform has this control: nothing to compare with",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "activity_indicator": {
+  "name": "Activity indicator",
+  "extra": true,
+  "neper": "control.progress_ring",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/activity_indicator.png",
+    "notes": "Round 62: 9 cells (spinners 20, 36, 64, rings 0, 35 and 100 %, 64 with its percent, error and paused) in all ten looks at 100 % and 150 %; the spinning arc is frozen at a fixed phase. Status review: rendered, not compared.",
+    "gaps": [
+     "Linux (libadwaita spinner) draws its own spinner and ignores the determinate value and the tone, so all ring cells repeat the spinner there; Cupertino draws a spoke spinner and a ring but ignores the error and paused tones (both stay blue)",
+     "Material draws the arc alone with no track (md-circular-progress), so a 0 % ring is empty",
+     "No disabled state",
+     "Spinner motion and the grow and shrink of the arc are not captured, one frame only"
+    ]
+   }
+  }
+ },
+ "gauge": {
+  "name": "Gauge",
+  "extra": true,
+  "neper": "control.gauge",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/gauge.png",
+    "notes": "Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The loading skeleton block is invisible in the Linux look (its token equals the window colour; the skeleton is not part of this lane)",
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ },
+ "level": {
+  "name": "Level",
+  "extra": true,
+  "neper": "control.level",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/level.png",
+    "notes": "Round 62: 9 cells (40 %, empty, full, warning, danger, small, limit mark, 3 segments, bars) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: bar, limit mark, segments and bars are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ }
+}

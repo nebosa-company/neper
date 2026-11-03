@@ -1,0 +1,861 @@
+{
+ "markdown_view": {
+  "name": "Markdown view",
+  "extra": true,
+  "neper": "markdown_view.build",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Neper baseline tokens.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Neper dark tokens.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/markdown_view.png",
+    "notes": "Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "terminal_view": {
+  "name": "Terminal view",
+  "extra": true,
+  "neper": "terminal_view.list",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Neper baseline tokens.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Neper dark tokens.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/terminal_view.png",
+    "notes": "Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "code_editor": {
+  "name": "Code editor",
+  "extra": true,
+  "neper": "code_editor.Editor",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Neper baseline tokens.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Neper dark tokens.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/code_editor.png",
+    "notes": "Round 62 (d) sheet: the editor is a model with no widget, so the sheet's host draws its lines as token-coloured runs with a gutter, selections, carets, find matches and an error line. Cells: rest, selection, three carets, find matches, error line, disabled. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/code_editor.e is the sheet's, not a shipped control",
+     "No scrolling, folding, wrapping, diagnostics layer, completion popup or minimap",
+     "Runs of spaces are drawn as 4.4 px gaps because the text shaper drops them; the face is not fixed-width",
+     "Token colours are theme roles (primary, tertiary, secondary, success, on surface variant), not a syntax theme from a real editor",
+     "No platform editor was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "schedule": {
+  "name": "Schedule",
+  "extra": true,
+  "neper": "schedule.build",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Neper baseline tokens.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Neper dark tokens.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/schedule.png",
+    "notes": "Round 62 (d) sheet: the scheduler is a model with no widget, so the sheet's host draws its week, day, agenda and month layouts as positioned cells. Cells: week, week with a selected event, day, agenda, month, month with +N more. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "No widget builder exists: the host in examples/looks/schedule.e is the sheet's, not a shipped control",
+     "The model has no hover or focus state, so no such cell; the selected event and the anchor day tint are the host's",
+     "No drag-to-create, resize handles, now line or popover",
+     "No platform calendar was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "flow_editor": {
+  "name": "Flow editor",
+  "extra": true,
+  "neper": "flow.flow_editor",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Neper baseline tokens.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Neper dark tokens.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/flow_editor.png",
+    "notes": "Round 62 (d) sheet: palette, dotted canvas with nodes, ports and links, inspector and lint strip. Cells: rest, node selected, link selected, lint strip open, focus, hover over a node, disabled. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "Hover does not change the drawing; the disabled cell is not visibly dimmed",
+     "Drag states (node, link, palette, pan) are not shown",
+     "No platform has a native node editor: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "sheet": {
+  "name": "Sheet",
+  "extra": true,
+  "neper": "sheet.sheet",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Neper baseline tokens.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Neper dark tokens.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/sheet.png",
+    "notes": "Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "canvas": {
+  "name": "Canvas",
+  "extra": true,
+  "neper": "control.canvas",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Windows 11 Fluent look from the shared Windows tokens, not compared with v3 (v3 has no such control).",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Windows dark palette, derived.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: libadwaita 1.5 tokens (style.adwaita), not compared with the real library for this control.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: libadwaita dark tokens, not compared with the real library for this control.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Neper baseline tokens.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Neper dark tokens.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Material 3 baseline tokens (style.material), derived.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/canvas.png",
+    "notes": "Round 62 (d) sheet: the framed canvas around a bar-chart paint. Cells: framed, padded 16, bare, disabled, small, wide. Derived: Material 3 dark tokens, derived.",
+    "gaps": [
+     "A canvas is not interactive (the pressable form is overlay.interactive_canvas), so no hover, focus or pressed cell",
+     "Loading, empty and error content and the legend are not drawn",
+     "The painted chart is the sheet's own; nothing was compared with a platform",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ }
+}

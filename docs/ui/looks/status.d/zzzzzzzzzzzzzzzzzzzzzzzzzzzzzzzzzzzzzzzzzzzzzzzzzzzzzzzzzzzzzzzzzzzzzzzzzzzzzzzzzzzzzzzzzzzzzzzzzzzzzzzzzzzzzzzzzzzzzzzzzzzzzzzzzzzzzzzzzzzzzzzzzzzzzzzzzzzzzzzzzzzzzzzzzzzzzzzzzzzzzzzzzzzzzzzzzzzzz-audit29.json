@@ -1,0 +1,975 @@
+{
+ "rich_tooltip": {
+  "name": "Rich tooltip",
+  "extra": true,
+  "neper": "overlay.rich_tooltip",
+  "looks": {
+   "neper": {
+    "status": "started",
+    "screenshot": "neper/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/rich_tooltip.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the top left tooltip card is flush with the left image edge (corner and border cut) and every card floats at the bottom of its cell far below its caption; the worker already admitted a clipped line",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Observed in the shared control, not fixed here: a wrapped body without an action row is clipped one line short, so the text-only and subhead-text cells use a one-line text",
+     "The tooltip stands where the overlay places it for the hidden anchor; its position in the cell is not a platform placement"
+    ]
+   }
+  }
+ },
+ "popover": {
+  "name": "Popover",
+  "extra": true,
+  "neper": "control.popover",
+  "looks": {
+   "neper": {
+    "status": "started",
+    "screenshot": "neper/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/popover.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut. Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "audit 29: the third card runs to the right image edge in all ten looks and to the bottom edge in Cupertino, Linux and Material, so the card border and shadow are cut",
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; hover and focus on the close button"
+    ]
+   }
+  }
+ },
+ "toast": {
+  "name": "Toast",
+  "extra": true,
+  "neper": "control.toast",
+  "looks": {
+   "neper": {
+    "status": "started",
+    "screenshot": "neper/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the neper dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the windows dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the linux dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/toast.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap. Round 62 lane c. Three sheets, toast (a titled info toast with an action and a dismiss over a stack of four), toast_error (a titled error) and toast_plain (a message with an action). A toast is an overlay pinned to the top right of its window, so one window shows one stack. Rendered from the material dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "audit 29: the toast stack is drawn over the first caption (\"Titled, action, di...\" is cut in every look), an overlap",
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Hover and pressed states are not captured: the overlay sits in the window corner and the harness aims the pointer at a cell centre",
+     "The success and warning severities are not in the sheet (only info and error); they use the same layout with another well colour",
+     "A ten-toast sheet exceeds the harness limit (e.ui.widget.TooLarge), hence three small sheets"
+    ]
+   }
+  }
+ },
+ "bottom_app_bar": {
+  "name": "Bottom app bar",
+  "extra": true,
+  "neper": "navigation.bottom_app_bar",
+  "looks": {
+   "neper": {
+    "status": "started",
+    "screenshot": "neper/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/bottom_app_bar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the FAB is an empty tinted square with no icon, and one shape serves all ten looks. Action row with and without the floating action button, two and four actions, one disabled. Derived: the Material 3 bottom app bar drawn through each look's tokens; Apple and GNOME have no such bar.",
+    "gaps": [
+     "audit 29: the FAB is an empty tinted square with no icon, and one shape serves all ten looks",
+     "No platform has this bar outside Material: Windows, Linux and Cupertino show the Material shape in their colours and fonts",
+     "Action icons are labels (no glyphs); hover, pressed and focus not driven",
+     "In the Windows look the disabled action reads brighter than disabled text should"
+    ]
+   }
+  }
+ },
+ "key_value_editor": {
+  "name": "Key-value editor",
+  "extra": true,
+  "neper": "collection.key_value_editor",
+  "looks": {
+   "neper": {
+    "status": "started",
+    "screenshot": "neper/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "started",
+    "screenshot": "neper-dark/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "material": {
+    "status": "started",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "started",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header. Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "audit 29: the Name and Value header labels overlap the first row (cut by the fields), the empty cell overlaps its header with the Add variable row, and in Windows the field text is top aligned with a clipped header",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "speed_dial": {
+  "name": "Speed dial",
+  "extra": true,
+  "neper": "control.speed_dial",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png).",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/speed_dial.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. Closed head at rest, hover, pressed and keyboard focus (speed_dial.png) and open with three action pills (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "audit 29: it shows a Material tonal rounded button labelled Actions, not a speed dial and not this look's shape",
+     "The control is a Material 3 idiom: Windows, Linux and Cupertino show the same shape in their palette, with no platform-specific drawing",
+     "The head is a text pill (the label), not an icon-only floating button; open, the head becomes the close circle without a close glyph",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "navigation_rail": {
+  "name": "Navigation rail",
+  "extra": true,
+  "neper": "navigation.navigation_rail",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/navigation_rail.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 pill rail in a look that has no such control shape. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "audit 29: it draws the Material 3 pill rail in a look that has no such control shape",
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   }
+  }
+ },
+ "navigation_drawer": {
+  "name": "Navigation drawer",
+  "extra": true,
+  "neper": "navigation.navigation_drawer",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/navigation_drawer.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape. Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "audit 29: it draws the Material 3 rounded drawer with a pill selection, a different flavor's shape",
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   }
+  }
+ },
+ "sidebar": {
+  "name": "Sidebar",
+  "extra": true,
+  "neper": "navigation.sidebar",
+  "looks": {
+   "windows": {
+    "status": "started",
+    "screenshot": "windows/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "windows_dark": {
+    "status": "started",
+    "screenshot": "windows-dark/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/sidebar.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row. Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived; macOS source-list and GNOME sidebar shapes are not drawn, all looks use the pill selection.",
+    "gaps": [
+     "audit 29: it draws Material 3 pills that touch each other (hover fill meets the selected one), not this look's sidebar row",
+     "No platform capture; no section headings or icons",
+     "Keyboard focus ring is not visible on sidebar rows in any look",
+     "Cupertino and Linux selection is a grey or tinted pill, not the platform's accent row"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "name": "Range slider",
+  "extra": true,
+  "neper": "control.range_slider",
+  "looks": {
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/range_slider.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Windows bar handles, not this look's slider thumbs. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "audit 29: it draws the Windows bar handles, not this look's slider thumbs",
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/range_slider.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Windows bar handles, not this look's slider thumbs. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "audit 29: it draws the Windows bar handles, not this look's slider thumbs",
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/range_slider.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Windows bar handles, not this look's slider thumbs. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together.",
+    "gaps": [
+     "audit 29: it draws the Windows bar handles, not this look's slider thumbs",
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/range_slider.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: it draws the Windows bar handles, not this look's slider thumbs. Round 62 (worker a): drawn through e.ui.looks from the shared tokens of the look and the existing control code; derived, not compared with a real screen or a capture. 25 to 75 of 0 to 100 at rest, first handle hovered and pressed, keyboard focus, disabled, stepped and handles together. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "audit 29: it draws the Windows bar handles, not this look's slider thumbs",
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ },
+ "terminal_view": {
+  "name": "Terminal view",
+  "extra": true,
+  "neper": "terminal_view.list",
+  "looks": {
+   "cupertino": {
+    "status": "started",
+    "screenshot": "cupertino/terminal_view.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the three line selection fill cuts the lower half of the glyphs in the selected rows (visible in \"neper/button.png\"). Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "audit 29: the three line selection fill cuts the lower half of the glyphs in the selected rows (visible in \"neper/button.png\")",
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "started",
+    "screenshot": "cupertino-dark/terminal_view.png",
+    "notes": "AUDIT 29 (master 1fbc387cd): downgraded from review. Viewed in the committed PNG: the three line selection fill cuts the lower half of the glyphs in the selected rows (visible in \"neper/button.png\"). Round 62 (d) sheet: the scrollback as a virtual list of line text. Cells: newest line, scrolled to the oldest, three lines selected, hover, focus, empty. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "audit 29: the three line selection fill cuts the lower half of the glyphs in the selected rows (visible in \"neper/button.png\")",
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "The monospace face is whatever the harness registers; the rendered text is not fixed-width",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ }
+}

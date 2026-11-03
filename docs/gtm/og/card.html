@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><style>
+html,body{margin:0;width:1200px;height:630px;background:#121318;color:#e1e2e9;font:400 28px/1.35 "Segoe UI",sans-serif;overflow:hidden}
+.c{box-sizing:border-box;width:1200px;height:630px;padding:48px 72px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;background:linear-gradient(135deg,#121318 55%,#00468b)}
+.b{display:flex;align-items:center;gap:16px;font-weight:600;font-size:30px}.b img{width:56px;height:56px}
+h1{margin:0 0 14px;font:400 68px/1.08 "Segoe UI Variable Display","Segoe UI",sans-serif;max-width:900px}
+p{margin:0;color:#c3c6d5;max-width:880px}
+pre{margin:0;padding:22px 28px;border:2px solid #434653;border-radius:16px;background:#0c0e14;font:400 24px/1.45 Consolas,"Cascadia Code",monospace;color:#e1e2e9}
+.k{color:#b3c5ff}.s{color:#ffb692}.u{color:#b3c5ff;font-size:26px;letter-spacing:.5px}
+</style><div class="c" id="c"></div><script>
+const cards={
+ 'get-started':{h:'Get started with Neper',p:'Clone it, submit one prompt, cross compile for Windows, Linux and macOS. No third-party toolchain.',x:'<pre><span class="k">$</span> neper emit-executable app.e . x64 windows app.exe\n<span class="k">$</span> neper emit-executable app.e . x64 linux   app\n<span class="k">$</span> neper emit-executable app.e . aarch64 macos app</pre>'},
+ 'play':{h:'Try Neper in your browser',p:'The compiler runs as WebAssembly in the page. Edit, compile, run. Nothing to install, nothing uploaded.',x:'<pre><span class="k">fn</span> main(a: *mem.Arena, args: []str) -&gt; err {\n    <span class="k">try</span> io.print(<span class="s">"hello, neper"</span>)\n    <span class="k">ret</span> ok\n}</pre>'},
+ 'blog':{h:'Notes from measuring Neper',p:'Memory, WebAssembly, desktop toolchains, text rendering, charts, databases and what a model pays to write each language.',x:''}
+}
+const k=new URLSearchParams(location.search).get('card'), d=cards[k]
+document.getElementById('c').innerHTML='<div class="b"><img src="../logo/neper-icon.svg"><span>Neper</span></div><div><h1>'+d.h+'</h1><p>'+d.p+'</p></div>'+(d.x||'<div></div>')+'<div class="u">neper.dev</div>'
+</script>

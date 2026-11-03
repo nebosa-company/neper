@@ -21,6 +21,9 @@ use e.ui.layout as ui_layout
 use e.ui.linux_card
 use e.ui.style
 use e.ui.widget
+use e.ui.looks_b_ov
+use e.ui.looks_n78
+use e.ui.looks_z63
 use e.ui.winchrome
 use e.ui.winmsgicon
 use e.ui.wintile
@@ -88,7 +91,12 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     caption.role = .BodySmall
     caption.wrap = .Word
     caption.max_lines = 2u32
-    if cupertino { caption.size = 11.0 }
+    if cupertino {
+        caption.size = 11.0
+        caption.max_lines = 0u32
+    }
+    // Neper: a plain hint wraps to its width without dropping lines (M3 sets no line cap).
+    if t.tokens.profile == .Neper { caption.max_lines = 0u32 }
     if linux {
         // libadwaita's tooltip: the body text on one line (GTK wraps only past its own width limit).
         caption.role = .Body
@@ -247,7 +255,7 @@ fn slid_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share: 
     sliding[0usize] = surface
     var travel = distance * (1.0 - share)
     if t.tokens.motion.reduced { travel = 0.0 }
-    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - travel } }, style.defaults(), sliding[0usize..1usize])
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 - travel } }, style.defaults(), sliding[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, sliding[1usize..2usize]), ok)
@@ -261,7 +269,7 @@ fn scaled_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, share
     growing[0usize] = surface
     var scale = from + (1.0 - from) * share
     if t.tokens.motion.reduced { scale = 1.0 }
-    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: scale, rotation: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: scale, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), growing[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = share
     ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
@@ -392,6 +400,11 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     }
     // Android: the level-2 shade is drawn (e.ui.matshade), not the offset copy.
     if t.tokens.profile == .MaterialLike { raised.elevation = 0u8 }
+    // iOS popover: a flat system-grey plate, no hard shadow line under it
+    if t.tokens.profile == .CupertinoLike {
+        raised.elevation = 0u8
+        if t.tokens.palette != .Dark { raised.background = .SurfaceContainerLowest }
+    }
     var plate = control.surface_style(t, raised)
     if t.tokens.profile == .MaterialLike { plate.shade = 2u8 }
     if t.tokens.palette == .Dark && t.tokens.profile == .Neper { plate.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
@@ -873,10 +886,10 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
     if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
-    // Android: md-menu-item is 56 dp high (72 with a supporting line).
+    // Android: 48 dp as the M3 menu item and Flutter's PopupMenuItem (md-menu draws 56); 72 with a supporting line.
     let android = t.tokens.profile == .MaterialLike
     if android {
-        row_height = 56.0
+        row_height = 48.0
         if c.supporting.len > 0usize { row_height = 72.0 }
     }
     let slot = control.if_else(touch, 24.0, 18.0)
@@ -2334,7 +2347,7 @@ fn grown_in(a: *mem.Arena, t: *const control.Theme, surface: widget.Node, opened
     let (growing, growing_error) = mem.alloc[widget.Node](a, 2usize)
     if growing_error != ok { ret (zero, TooLarge) }
     growing[0usize] = surface
-    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
+    growing[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: toward } }, style.defaults(), growing[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = opened
     ret (widget.box(0u64, faded, growing[1usize..2usize]), ok)
@@ -2670,33 +2683,35 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     var plate = control.surface_style(t, raised)
     plate.padding.bottom = style.Length { Px: 12.0 }
     plate.width = style.Length { Px: 320.0 }
+    let face = looks_z63.popover_face(t.tokens, plate)
+    if face.styled { plate = face.plate }
     let (card, card_error) = mem.alloc[widget.Node](a, 2usize)
     if card_error != ok { ret (zero, TooLarge) }
-    let fill = style.color(t.tokens, .SurfaceContainerHigh)
+    let fill = face.fill
     let across = placement == .Right || placement == .Left
     var pointing: control.GlyphKind = .ChevronUp
     if placement == .Right { pointing = .ChevronLeft }
     if placement == .Left { pointing = .ChevronRight }
     if placement == .Above || placement == .AboveCenter { pointing = .ChevronDown }
-    let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, 6.0, 12.0), control.if_else(across, 12.0, 6.0))
+    let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, face.beak_h, face.beak_w), control.if_else(across, face.beak_w, face.beak_h))
     if tip_error != ok { ret (zero, tip_error) }
     var inset: f32 = 16.0
-    var offset = gap_offset(placement, 4.0)
+    var offset = gap_offset(placement, face.gap)
     if mem.address_of(t.runtime) != 0usize {
         let (anchor_bounds, has_anchor) = widget.bounds_for_key(t.runtime, anchor)
         if has_anchor {
             if across {
-                offset.y = anchor_bounds.height * 0.5 - 22.0
+                offset.y = anchor_bounds.height * 0.5 - 16.0 - face.beak_w * 0.5
             } else {
                 let surface = widget.surface_size(t.runtime)
                 let first_placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
-                let wanted = anchor_bounds.x + anchor_bounds.width * 0.5 - first_placed.x - 6.0
+                let wanted = anchor_bounds.x + anchor_bounds.width * 0.5 - first_placed.x - face.beak_w * 0.5
                 if wanted < 16.0 { offset.x += wanted - 16.0 }
-                if wanted > 292.0 { offset.x += wanted - 292.0 }
+                if wanted > 304.0 - face.beak_w { offset.x += wanted - (304.0 - face.beak_w) }
                 let placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
-                inset = anchor_bounds.x + anchor_bounds.width * 0.5 - placed.x - 6.0
+                inset = anchor_bounds.x + anchor_bounds.width * 0.5 - placed.x - face.beak_w * 0.5
                 if inset < 16.0 { inset = 16.0 }
-                if inset > 292.0 { inset = 292.0 }
+                if inset > 304.0 - face.beak_w { inset = 304.0 - face.beak_w }
             }
         }
     }
@@ -2716,7 +2731,8 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
         card[0usize] = box_node
         card[1usize] = tip_node
     }
-    let joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
+    var joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
+    if face.styled && !face.beak { joined = box_node }
     var outside = *dismiss
     if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, title, joined, dismiss, outside, offset, key + 1u64)
@@ -3179,7 +3195,7 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     sliding[0usize] = placed
     var sheet_look = style.defaults()
     sheet_look.opacity = sheet_fade
-    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: away }, sheet_look, sliding[0usize..1usize])
+    placed = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: away }, sheet_look, sliding[0usize..1usize])
     // Its own slot: body[4] is the aligned node's child, and a node listed among
     // its own children would nest without end (TooDeep at any depth).
     body[5usize] = placed
@@ -3414,11 +3430,13 @@ fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     var card_options = control.surface_options(t)
     card_options.background = .SurfaceContainerHigh
     card_options.elevation = 3u8
-    card_options.radius = t.tokens.radii.md
+    card_options.radius = t.tokens.radii.xl
     card_options.padding = 0.0
     var card_style = control.surface_style(t, card_options)
     card_style.width = style.Length { Percent: 100.0 }
     card_style.overflow = .Clip
+    // Dark: the ref's actions card is 1f1f1f.
+    if t.tokens.palette == .Dark { card_style.background = paint.Brush { Solid: style.hex(0x1F1F1Fu32) } }
     let action_column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
     let (groups, groups_error) = mem.alloc[widget.Node](a, 2usize)
     if groups_error != ok { ret (zero, TooLarge) }
@@ -3431,7 +3449,16 @@ fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     let (cancel_body, cancel_body_error) = mem.alloc[widget.Node](a, 1usize)
     if cancel_body_error != ok { ret (zero, TooLarge) }
     cancel_body[0usize] = cancel
-    groups[1usize] = widget.box(0u64, card_style, cancel_body[0usize..1usize])
+    // The Cancel card is the lighter of the two (Flutter CupertinoActionSheet: white over the grey actions card, 2c2c2c over 1f1f1f).
+    var cancel_options = card_options
+    cancel_options.background = .SurfaceContainerLowest
+    if t.tokens.palette == .Dark { cancel_options.background = .SurfaceContainerHighest }
+    var cancel_style = control.surface_style(t, cancel_options)
+    cancel_style.width = style.Length { Percent: 100.0 }
+    cancel_style.overflow = .Clip
+    // Dark: the ref's Cancel card is 2c2c2c (the palette's raised grey is lighter).
+    if t.tokens.palette == .Dark { cancel_style.background = paint.Brush { Solid: style.hex(0x2C2C2Cu32) } }
+    groups[1usize] = widget.box(0u64, cancel_style, cancel_body[0usize..1usize])
     var group_style = style.defaults()
     group_style.width = style.Length { Percent: 100.0 }
     let grouped = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 8.0 }, group_style, groups[0usize..2usize])
@@ -4116,6 +4143,10 @@ fn week_unavailable(marks: *const CalendarMarks, d: time.Date, week_start: usize
     ret true
 }
 
+fn date_of_slot(shown: time.Date, slot: usize, first_weekday: i64) -> time.Date {
+    ret time.Date { year: shown.year, month: shown.month, day: u8(slot - usize(first_weekday) + 1usize) }
+}
+
 // The ISO 8601 week of the day `count` days from 1970-01-01: the week holding the
 // year's first Thursday is week 1.
 fn iso_week_of(count: i64) -> i64 {
@@ -4137,7 +4168,7 @@ fn iso_week_of(count: i64) -> i64 {
 // (D1388) Its names follow the theme language (de, fr, es; English otherwise).
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     if t.tokens.profile == .Linux {
-        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick)
+        let (gtk, gtk_error) = linux_calendar(a, key, t, label, shown, selected, has_selected, today, has_today, show, pick, ranged, from, to, marks)
         ret (gtk, gtk_error)
     }
     let year = i64(shown.year)
@@ -4345,7 +4376,14 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 var fill = clear
                 var digit_color = ink
                 var layer_color = ink
-                if inside { digit_color = style.color(t.tokens, .OnPrimaryContainer) }
+                var range_fill = style.color(t.tokens, .PrimaryContainer)
+                var range_ink = style.color(t.tokens, .OnPrimaryContainer)
+                // M3 (and the Flutter ref): the range band is `secondary-container`.
+                if t.tokens.profile == .MaterialLike {
+                    range_fill = style.color(t.tokens, .SecondaryContainer)
+                    range_ink = style.color(t.tokens, .OnSecondaryContainer)
+                }
+                if inside { digit_color = range_ink }
                 if marked { digit_color = primary }
                 if unavailable && !end { digit_color = control.with_alpha(ink, t.tokens.states.disabled_content) }
                 if end {
@@ -4361,6 +4399,11 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 look.border = primary
                 look.border_width = 0.0
                 if marked { look.border_width = 1.0 }
+                // The Windows look draws its keyboard focus ring itself (the runtime ring is off): 2 px in the text colour round the disc.
+                if t.tokens.profile == .Windows && (state.focus_visible || state.focused) && !unavailable {
+                    look.border = style.color(t.tokens, .Text)
+                    look.border_width = 2.0
+                }
                 look.radius = cell * 0.5
                 look.custom_padding = true
                 look.padding = 0.0
@@ -4404,7 +4447,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 sized.style.width = style.Length { Px: cell }
                 sized.style.height = style.Length { Px: cell }
                 made = sized
-                if inside {
+                if inside && !(slot_w > cell) {
                     // The band: the whole cell between the ends, the inner half at an end.
                     var band_x: f32 = 0.0
                     var band_width = cell
@@ -4414,7 +4457,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                     }
                     if same_date(date, to) { band_width = cell * 0.5 }
                     var band = control.sized_style(band_width, cell)
-                    band.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                    band.background = paint.Brush { Solid: range_fill }
                     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
                     if layers_error != ok { ret (zero, TooLarge) }
                     var none: []const widget.Node = zero
@@ -4480,6 +4523,25 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                 if slotted_error != ok { ret (zero, TooLarge) }
                 slotted[0usize] = made
                 made = widget.aligned(0u64, .Center, .Center, control.sized_style(slot_w, cell), slotted[0usize..1usize])
+                if ranged && !same_date(from, to) && within_range(date_of_slot(shown, slot, first_weekday), from, to) {
+                    // A wide slot (docked calendar): the band runs unbroken across the slot, half a slot at an end.
+                    var slot_x: f32 = 0.0
+                    var slot_band = slot_w
+                    if same_date(date_of_slot(shown, slot, first_weekday), from) {
+                        slot_x = slot_w * 0.5
+                        slot_band = slot_w * 0.5
+                    }
+                    if same_date(date_of_slot(shown, slot, first_weekday), to) { slot_band = slot_w * 0.5 }
+                    var slot_style = control.sized_style(slot_band, cell)
+                    slot_style.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                    if t.tokens.profile == .MaterialLike { slot_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
+                    let (slot_layers, slot_layers_error) = mem.alloc[widget.Node](a, 2usize)
+                    if slot_layers_error != ok { ret (zero, TooLarge) }
+                    var slot_none: []const widget.Node = zero
+                    slot_layers[0usize] = widget.positioned(0u64, slot_x, 0.0, slot_style, slot_none)
+                    slot_layers[1usize] = made
+                    made = widget.stack(0u64, control.sized_style(slot_w, cell), slot_layers[0usize..2usize])
+                }
             }
             cells[lead + column] = made
             column += 1usize
@@ -4508,7 +4570,7 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     let (sliding, sliding_error) = mem.alloc[widget.Node](a, 2usize)
     if sliding_error != ok { ret (zero, TooLarge) }
     sliding[0usize] = parts[2usize]
-    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
+    sliding[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: slide, y: 0.0 } }, style.defaults(), sliding[0usize..1usize])
     var clip = style.defaults()
     clip.overflow = .Clip
     parts[2usize] = widget.box(0u64, clip, sliding[1usize..2usize])
@@ -4578,6 +4640,11 @@ fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: con
     look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), muted, control.state_opacity(t, state))
     look.foreground = muted
     look.border_width = 0.0
+    // The Windows look draws its keyboard focus ring itself (the runtime ring is off): 2 px in the text colour.
+    if t.tokens.profile == .Windows && state.focus_visible {
+        look.border = style.color(t.tokens, .Text)
+        look.border_width = 2.0
+    }
     look.radius = size * 0.5
     look.custom_padding = true
     look.padding = 0.0
@@ -4891,6 +4958,7 @@ fn date_entry_within(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     options.width = width
     options.invalid = wrong || outside
     options.placeholder = hint
+    options.on_raised = t.tokens.profile == .MaterialLike
     let (field_node, field_error) = control.text_field(a, key, t, label, buffer, len, change, widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }, options)
     if field_error != ok { ret (zero, field_error) }
     var line = control.Message { validity: .Valid, text: hint }
@@ -5075,7 +5143,7 @@ fn date_range_fullscreen(a: *mem.Arena, key: widget.Key, t: *const control.Theme
         modal_look.opacity = arrived
         arrived = 1.0
     }
-    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, modal_look, framed[2usize..3usize])
+    framed[3usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: height * (1.0 - arrived) } }, modal_look, framed[2usize..3usize])
     ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *close }, style.defaults(), framed[3usize..4usize]), ok)
 }
 
@@ -5197,7 +5265,7 @@ fn date_modal_android(a: *mem.Arena, key: widget.Key, t: *const control.Theme, d
         let (held_entry, held_entry_error) = mem.alloc[widget.Node](a, 1usize)
         if held_entry_error != ok { ret (zero, TooLarge) }
         held_entry[0usize] = entry
-        days_node = widget.padded(0u64, 24.0, 16.0, 24.0, 0.0, style.defaults(), held_entry[0usize..1usize])
+        days_node = widget.padded(0u64, 24.0, 21.0, 24.0, 0.0, style.defaults(), held_entry[0usize..1usize])
     } else {
         var marks: CalendarMarks = zero
         marks.slot = 48.0
@@ -5345,6 +5413,10 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         let (typed_head, typed_head_error) = clocked_field_glyph(a, key, t, label, footer.buffer, footer.len, footer.typed, "", true, open, trigger, typed_look, .Calendar)
         if typed_head_error != ok { ret (zero, typed_head_error) }
         head = typed_head
+    } else if ranged && t.tokens.profile == .Windows {
+        let (range_head, range_head_error) = looks_b_ov.windows_range_head(a, key, t, label, caption, has_value, open, trigger)
+        if range_head_error != ok { ret (zero, range_head_error) }
+        head = range_head
     } else {
         let (plain_head, plain_head_error) = control.field_head(a, key, t, label, caption, has_value, open, trigger, field_height, .Calendar, .Calendar, true)
         if plain_head_error != ok { ret (zero, plain_head_error) }
@@ -5355,7 +5427,10 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     parts[0usize] = head
     var popup_node = widget.box(0u64, style.defaults(), zero)
     if open {
-        let (month, month_error) = calendar(a, base + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
+        // Android: the M3 docked picker is 360 wide, its day cells 48 dp apart (md.comp.date-picker.docked.container.width).
+        var docked_marks: CalendarMarks = zero
+        if t.tokens.profile == .MaterialLike { docked_marks.slot = 48.0 }
+        let (month, month_error) = calendar_with(a, base + 2u64, t, label, shown, value, has_value, ranged, from, to, shown, false, show, pick, docked_marks)
         if month_error != ok { ret (zero, month_error) }
         let (inside, inside_error) = mem.alloc[widget.Node](a, 4usize)
         if inside_error != ok { ret (zero, TooLarge) }
@@ -5394,6 +5469,7 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         var raised_style = control.surface_style(t, raised)
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
+        if t.tokens.profile == .MaterialLike { raised_style.width = style.Length { Px: 360.0 } }
         var gap_below: f32 = 4.0
         if t.tokens.profile == .CupertinoLike {
             // The iOS graphical picker's popover: the cell colour, 14 round, a hairline and a soft shadow.
@@ -5602,6 +5678,8 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         side = 28.0
         size = 18.0
     }
+    // Neper pointer hosts: the 48 field of text_edit and its siblings (Flutter's 56 is the touch height).
+    if t.tokens.profile == .Neper && !touch { h = t.tokens.sizes.control_lg }
     var kept = options
     kept.height = h
     kept.end_space = control.max_zero(side + 4.0 - 16.0)
@@ -5765,17 +5843,24 @@ fn time_box(a: *mem.Arena, key: widget.Key, t: *const control.Theme, digits: str
     look.padding = 0.0
     look.padding_start = 0.0
     look.padding_y = 0.0
-    look.min_width = 80.0
-    look.min_height = 64.0
+    // The Android look: the M3 selector is 96 by 80 (the other looks 80 by 64).
+    var box_w: f32 = 80.0
+    var box_h: f32 = 64.0
+    if t.tokens.profile == .MaterialLike {
+        box_w = 96.0
+        box_h = 80.0
+    }
+    look.min_width = box_w
+    look.min_height = box_h
     var big = control.text_options()
-    big.role = .DisplaySmall
+    big.role = looks_n78.time_digit_role(t)
     big.wrap = .None
     let (said, said_error) = control.colored_text(a, 0u64, digits, t, big, ink)
     if said_error != ok { ret (zero, said_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
-    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(80.0, 64.0), held[0usize..1usize])
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(box_w, box_h), held[0usize..1usize])
     let (made, made_error) = control.pressable_states(a, key, t, 3u8, name, look, true, active, 0u32, 0u32, 0u64, action, centred)
     ret (made, made_error)
 }
@@ -5974,6 +6059,8 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     var band = control.sized_style(width, 36.0)
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
     band.radius = t.tokens.radii.sm
+    // Round 70 b: the Cupertino picker has one selection band across every wheel (wheel_row draws it), not one pill each.
+    if t.tokens.profile == .CupertinoLike { band.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     held[10usize] = widget.positioned(0u64, 0.0, 72.0, band, zero)
     held[11usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, 180.0), rows[0usize..5usize])
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
@@ -6008,6 +6095,22 @@ fn wheel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     sem.value = values[selected]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// Round 70 b: the wheels of a picker side by side. Under Cupertino they touch and share one 36 tall `radius-sm` band across the
+// middle row (the Flutter and UIKit picker), else they stand 8 apart each in its own band.
+fn wheel_row(a: *mem.Arena, t: *const control.Theme, parts: []const widget.Node, total: f32) -> (widget.Node, err) {
+    if t.tokens.profile != .CupertinoLike {
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts), ok)
+    }
+    var band = control.sized_style(total, 36.0)
+    band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+    band.radius = t.tokens.radii.sm
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.positioned(0u64, 0.0, 72.0, band, zero)
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts)
+    ret (widget.stack(0u64, control.sized_style(total, 180.0), layers[0usize..2usize]), ok)
 }
 
 // (D1349) The two-digit strings 00..count-1, for a wheel of hours or minutes.
@@ -6072,7 +6175,9 @@ fn time_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8
     sem.label = "Time"
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..n])
+    let (wheels_row, wheels_row_error) = wheel_row(a, t, parts[0usize..n], 72.0 * f32(n))
+    if wheels_row_error != ok { ret (zero, wheels_row_error) }
+    row[0usize] = wheels_row
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
@@ -6210,7 +6315,9 @@ fn date_wheels(a: *mem.Arena, key: widget.Key, t: *const control.Theme, date: ti
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..3usize])
+    let (wheels_row, wheels_row_error) = wheel_row(a, t, parts[0usize..3usize], 256.0)
+    if wheels_row_error != ok { ret (zero, wheels_row_error) }
+    row[0usize] = wheels_row
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = "Date"
@@ -6287,7 +6394,7 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
         minute_box = minute_node
     }
     var big = control.text_options()
-    big.role = .DisplaySmall
+    big.role = looks_n78.time_digit_role(t)
     big.wrap = .None
     let (colon, colon_error) = control.colored_text(a, 0u64, ":", t, big, style.color(t.tokens, .OnSurface))
     if colon_error != ok { ret (zero, colon_error) }
@@ -6295,7 +6402,18 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
     if row_parts_error != ok { ret (zero, TooLarge) }
     row_parts[0usize] = hour_box
     row_parts[4usize] = colon
-    row_parts[1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(16.0, 64.0), row_parts[4usize..5usize])
+    // The Android look: the M3 row is 96, a 24 colon, 96, then 12 and the 52 period selector (the others: 16 colon, 12 between).
+    var colon_w: f32 = 16.0
+    var colon_h: f32 = 64.0
+    var row_gap: f32 = 12.0
+    var period_pad: f32 = 0.0
+    if t.tokens.profile == .MaterialLike {
+        colon_w = 24.0
+        colon_h = 80.0
+        row_gap = 0.0
+        period_pad = 12.0
+    }
+    row_parts[1usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(colon_w, colon_h), row_parts[4usize..5usize])
     row_parts[2usize] = minute_box
     var row_count = 3usize
     if twelve {
@@ -6304,12 +6422,25 @@ fn time_picker_modal_with(a: *mem.Arena, key: widget.Key, t: *const control.Them
         if am_error != ok || pm_error != ok { ret (zero, TooLarge) }
         row_parts[5usize] = am
         row_parts[6usize] = pm_node
-        row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), row_parts[5usize..7usize])
+        var period_style = style.defaults()
+        period_style.padding = style.EdgeLengths { left: style.Length { Px: period_pad }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, period_style, row_parts[5usize..7usize])
+        if t.tokens.profile == .MaterialLike {
+            // One frame: the PM segment starts on the AM's last row so the two 1 px edges make one divider.
+            let (framed, framed_error) = mem.alloc[widget.Node](a, 2usize)
+            if framed_error != ok { ret (zero, TooLarge) }
+            framed[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), row_parts[5usize..6usize])
+            framed[1usize] = widget.positioned(0u64, 0.0, 39.0, style.defaults(), row_parts[6usize..7usize])
+            let (held_period, held_period_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_period_error != ok { ret (zero, TooLarge) }
+            held_period[0usize] = widget.stack(0u64, control.sized_style(52.0, 80.0), framed[0usize..2usize])
+            row_parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, period_style, held_period[0usize..1usize])
+        }
         row_count = 4usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 12.0 }, style.defaults(), row_parts[0usize..row_count])
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: row_gap }, style.defaults(), row_parts[0usize..row_count])
     var used = 1usize
     if !options.typing {
         let (dial_node, dial_error) = time_dial(a, key, t, hour, minute, editing_minute, twelve, change, choices[4usize..16usize], presses[4usize..16usize])
@@ -6377,12 +6508,30 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
     look.border = style.color(t.tokens, .Outline)
     look.border_width = t.tokens.sizes.divider
     look.radius = t.tokens.radii.sm
+    // The Android look: AM over PM is one 8 round frame (the AM's top corners, the PM's bottom ones).
+    if t.tokens.profile == .MaterialLike {
+        var up: f32 = t.tokens.radii.sm
+        var down: f32 = 0.0
+        if word[0usize] != 65u8 {
+            up = 0.0
+            down = t.tokens.radii.sm
+        }
+        look.corners = style.Corners { top_left: up, top_right: up, bottom_right: down, bottom_left: down }
+    }
     look.custom_padding = true
     look.padding = 0.0
     look.padding_start = 0.0
     look.padding_y = 0.0
-    look.min_width = 48.0
-    look.min_height = 32.0
+    // The Android look: the M3 period selector is 52 by 80, each segment 40 high (the other looks 48 by 64).
+    var seg_w: f32 = 48.0
+    var seg_h: f32 = 32.0
+    if t.tokens.profile == .MaterialLike {
+        seg_w = 52.0
+        seg_h = 40.0
+    }
+    look.min_width = seg_w
+    look.min_height = seg_h
+    if t.tokens.profile == .MaterialLike && word[0usize] != 65u8 { look.min_height = seg_h + 1.0 }
     var caption = control.text_options()
     caption.role = .LabelLarge
     caption.wrap = .None
@@ -6391,7 +6540,7 @@ fn period_segment(a: *mem.Arena, key: widget.Key, t: *const control.Theme, word:
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = said
-    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(48.0, 32.0), held[0usize..1usize])
+    let centred = widget.aligned(0u64, .Center, .Center, control.sized_style(seg_w, look.min_height), held[0usize..1usize])
     var states = 0u32
     if chosen { states = accessibility.STATE_CHECKED }
     let (made, made_error) = control.pressable_states(a, key, t, 5u8, word, look, true, false, states, 0u32, 0u64, action, centred)
@@ -6474,8 +6623,18 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var n = 0usize
-    var face = control.sized_style(224.0, 224.0)
-    face.radius = 112.0
+    // The Android look draws the M3 dial: 256 across, numbers on a 100 ring, a 48 handle (the other looks 224, 88 and 44).
+    var dial_size: f32 = 224.0
+    var spoke: f32 = 88.0
+    var handle: f32 = 44.0
+    if t.tokens.profile == .MaterialLike {
+        dial_size = 256.0
+        spoke = 100.0
+        handle = 48.0
+    }
+    let mid = dial_size * 0.5
+    var face = control.sized_style(dial_size, dial_size)
+    face.radius = mid
     face.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
     layers[n] = widget.box(0u64, face, zero)
     n += 1usize
@@ -6498,28 +6657,28 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     let mode_share = control.eased_on(t, key + 7u64, key + 7u64 + 1048579u64, mode_goal, false, t.tokens.durations.short4)
     var numbers_in = 1.0 - mode_share
     if editing_minute { numbers_in = mode_share }
-    let knob_x = 112.0 + 88.0 * math.sin[f32](angle)
-    let knob_y = 112.0 - 88.0 * math.cos[f32](angle)
+    let knob_x = mid + spoke * math.sin[f32](angle)
+    let knob_y = mid - spoke * math.cos[f32](angle)
     // The hand: a 2 wide bar from the centre to the knob, turned by the angle.
-    var hand = control.sized_style(2.0, 88.0)
+    var hand = control.sized_style(2.0, spoke)
     hand.background = paint.Brush { Solid: primary }
     let (hands, hands_error) = mem.alloc[widget.Node](a, 2usize)
     if hands_error != ok { ret (zero, TooLarge) }
     hands[0usize] = widget.box(0u64, hand, zero)
     // Turned about its own centre, set half way from the dot to the knob.
-    hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, style.defaults(), hands[0usize..1usize])
-    layers[n] = widget.positioned(0u64, 111.0 + 44.0 * math.sin[f32](angle), 68.0 - 44.0 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
+    hands[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, skew: 0.0, offset: zero }, style.defaults(), hands[0usize..1usize])
+    layers[n] = widget.positioned(0u64, mid - 1.0 + spoke * 0.5 * math.sin[f32](angle), mid - spoke * 0.5 - spoke * 0.5 * math.cos[f32](angle), style.defaults(), hands[1usize..2usize])
     n += 1usize
     var dot = control.sized_style(8.0, 8.0)
     dot.radius = 4.0
     dot.background = paint.Brush { Solid: primary }
-    layers[n] = widget.positioned(0u64, 108.0, 108.0, dot, zero)
+    layers[n] = widget.positioned(0u64, mid - 4.0, mid - 4.0, dot, zero)
     n += 1usize
     if on_number {
-        var knob = control.sized_style(44.0, 44.0)
-        knob.radius = 22.0
+        var knob = control.sized_style(handle, handle)
+        knob.radius = handle * 0.5
         knob.background = paint.Brush { Solid: primary }
-        layers[n] = widget.positioned(0u64, knob_x - 22.0, knob_y - 22.0, knob, zero)
+        layers[n] = widget.positioned(0u64, knob_x - handle * 0.5, knob_y - handle * 0.5, knob, zero)
         n += 1usize
     } else {
         var small_knob = control.sized_style(16.0, 16.0)
@@ -6604,8 +6763,8 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
         both[laid] = centred
         both[laid + 1usize] = cells[0usize]
         let a_i = f32(i) * 0.5235988
-        let x = 112.0 + 88.0 * math.sin[f32](a_i) - 24.0
-        let y = 112.0 - 88.0 * math.cos[f32](a_i) - 24.0
+        let x = mid + spoke * math.sin[f32](a_i) - 24.0
+        let y = mid - spoke * math.cos[f32](a_i) - 24.0
         var number_sem: widget.Semantics = zero
         number_sem.role = 5u8
         number_sem.label = digits
@@ -6625,7 +6784,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if editing_minute { dial_sem.label = "Minutes" }
     let (dial, dial_error) = mem.alloc[widget.Node](a, 1usize)
     if dial_error != ok { ret (zero, TooLarge) }
-    dial[0usize] = widget.stack(key + 5u64, control.sized_style(224.0, 224.0), layers[0usize..n])
+    dial[0usize] = widget.stack(key + 5u64, control.sized_style(dial_size, dial_size), layers[0usize..n])
     // (D1306) The keys: on and back a step, and five minutes with the page keys.
     var kind: TimeChoiceKind = .Hour
     var up = (hour + 1u8) % 24u8
@@ -6664,7 +6823,7 @@ fn time_dial(a: *mem.Arena, key: widget.Key, t: *const control.Theme, hour: u8, 
     if turns_error != ok { ret (zero, TooLarge) }
     turns[0usize] = DialTurn { runtime: t.runtime, ring: key + 7u64, hour: hour, editing_minute: editing_minute, change: change }
     var dial_ring = style.defaults()
-    dial_ring.radius = 112.0
+    dial_ring.radius = mid
     control.focus_look(t)
     focused[1usize] = widget.region(key + 7u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&turns[0usize]), invoke: dial_turn_gesture }, gestures: widget.GESTURE_DRAG | widget.GESTURE_HOVER, enabled: true, focusable: true }, dial_ring, focused[0usize..1usize])
     ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: dial_keys[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[1usize..2usize]), ok)
@@ -7351,7 +7510,35 @@ fn color_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         if bar_error != ok { ret (zero, bar_error) }
         var sized = bar
         sized.style.width = style.Length { Px: width - t.tokens.metrics.hit_target - t.tokens.spacing.sm }
+        // Android (round 88): each slider is named by its channel letter and reads its 0 to 255 value, as a colour dialog does (the sliders alone were unlabelled); the slider keeps its width, the letter and the reading stand beside it, so the picker is 68 wider.
         bars[i] = sized
+        if t.tokens.profile == .MaterialLike {
+            let letters = [4]str{ "R", "G", "B", "A" }
+            var small = control.text_options()
+            small.role = .LabelLarge
+            let (letter, letter_error) = control.colored_text(a, 0u64, letters[i], t, small, style.color(t.tokens, .OnSurfaceVariant))
+            if letter_error != ok { ret (zero, letter_error) }
+            let (digits, digits_error) = mem.alloc[u8](a, 8usize)
+            if digits_error != ok { ret (zero, TooLarge) }
+            let shown = control.write_i64(digits, i64(levels[i] * 255.0 + 0.5))
+            let (reading, reading_error) = control.colored_text(a, 0u64, digits[0usize..shown], t, small, style.color(t.tokens, .OnSurfaceVariant))
+            if reading_error != ok { ret (zero, reading_error) }
+            var letter_box = control.sized_style(16.0, 24.0)
+            var reading_box = control.sized_style(28.0, 24.0)
+            let (hold_letter, hold_letter_error) = mem.alloc[widget.Node](a, 1usize)
+            let (hold_reading, hold_reading_error) = mem.alloc[widget.Node](a, 1usize)
+            if hold_letter_error != ok || hold_reading_error != ok { ret (zero, TooLarge) }
+            hold_letter[0usize] = letter
+            hold_reading[0usize] = reading
+            let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
+            if trio_error != ok { ret (zero, TooLarge) }
+            trio[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, letter_box, hold_letter[0usize..1usize])
+            trio[1usize] = sized
+            trio[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, reading_box, hold_reading[0usize..1usize])
+            var whole = style.defaults()
+            whole.width = style.Length { Px: width - t.tokens.metrics.hit_target - t.tokens.spacing.sm + 16.0 + 28.0 + 24.0 }
+            bars[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, whole, trio[0usize..3usize])
+        }
         i += 1usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
@@ -9167,6 +9354,8 @@ fn linux_turn_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sv
     var face = control.sized_style(32.0, 34.0)
     face.background = paint.Brush { Solid: tint }
     face.radius = 6.0
+    // GTK's keyboard focus ring: the accent at 50 %, 2 px inside the edge.
+    if state.focus_visible { face.border = style.Border { width: 2.0, color: control.with_alpha(style.color(t.tokens, .Primary), 0.5) } }
     let held = widget.aligned(0u64, .Center, .Center, face, widget_pair(a, mark))
     let region = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), widget_pair(a, held))
     var sem: widget.Semantics = zero
@@ -9203,13 +9392,20 @@ fn linux_head_group(a: *mem.Arena, t: *const control.Theme, back: widget.Node, n
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, control.sized_style(width, 34.0), parts[0usize..3usize]), ok)
 }
 
-fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], ranged: bool, from: time.Date, to: time.Date, marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
     let days = time.days_in_month(year, month)
     let week_start = week_start_of(t.language)
     let first_weekday = (weekday_of(year, month, 1i64) + 7i64 - i64(week_start)) % 7i64
+    // Week numbers (the GTK calendar's show-week-numbers) add a 29 wide column at the start, dim and small; the widths grow with it.
+    var extra: f32 = 0.0
+    var lead = 0usize
+    if marks.week_numbers {
+        extra = 29.0
+        lead = 1usize
+    }
     // Previous, next, previous year, next year; then 42 cells (the days of the grid).
     let (turns, turns_error) = mem.alloc[DayPick](a, 46usize)
     if turns_error != ok { ret (zero, TooLarge) }
@@ -9249,12 +9445,12 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if head_parts_error != ok { ret (zero, TooLarge) }
     head_parts[0usize] = month_group
-    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0, 1.0), zero)
+    head_parts[1usize] = widget.box(0u64, control.sized_style(15.0 + extra, 1.0), zero)
     head_parts[2usize] = year_group
-    var head_style = control.sized_style(267.0, 34.0)
+    var head_style = control.sized_style(267.0 + extra, 34.0)
     head_style.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     let head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head_parts[0usize..3usize])
-    var rule = control.sized_style(267.0, 1.0)
+    var rule = control.sized_style(267.0 + extra, 1.0)
     rule.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
     // The weekday names.
     let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
@@ -9290,7 +9486,7 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     if rows_error != ok { ret (zero, TooLarge) }
     var week = 0usize
     while week < 6usize {
-        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 8usize)
         if cells_error != ok { ret (zero, TooLarge) }
         var column = 0usize
         while column < 7usize {
@@ -9311,7 +9507,11 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             if !inside { day_key = key + 300u64 + u64(index) }
             turns[index] = DayPick { day: date, pick: pick, runtime: t.runtime, focus: day_key }
             actions[index] = widget.Submit { ctx: mem.cast[*void](&turns[index]), invoke: day_fire }
-            let chosen = has_selected && same_date(date, selected)
+            var chosen = has_selected && same_date(date, selected)
+            // A range: its two ends are the chosen days, the days between wear a band, today an accent ring.
+            if ranged { chosen = inside && (same_date(date, from) || same_date(date, to)) }
+            let banded = ranged && inside && !same_date(from, to) && within_range(date, from, to)
+            let marked = has_today && inside && same_date(date, today) && !chosen
             var digit_color = ink
             if !inside { digit_color = dim }
             if chosen { digit_color = style.color(t.tokens, .OnPrimary) }
@@ -9342,6 +9542,13 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             var box_style = control.sized_style(34.0, 25.0)
             box_style.background = paint.Brush { Solid: fill }
             box_style.radius = 6.0
+            if marked { box_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Primary) } }
+            // GTK draws the keyboard focus ring inside the day: the accent at 50 %, 2 px.
+            if state.focus_visible && inside {
+                var focus_ink = control.with_alpha(style.color(t.tokens, .Primary), 0.5)
+                if chosen { focus_ink = control.with_alpha(style.color(t.tokens, .OnPrimary), 0.6) }
+                box_style.border = style.Border { width: 2.0, color: focus_ink }
+            }
             // GTK's seven cells are whole numbers of unequal widths (38, 38, 39, 38, 37, 37, 38), so a day number lands off an even grid: left of it
             // by a pixel in the last two columns (one digit) and in the seventh (two digits) and by two in a one digit seventh column
             var nudge: f32 = 0.0
@@ -9369,12 +9576,11 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             press_look.min_height = 28.0
             let (pressed, pressed_error) = control.pressable_states_fill(a, day_key, t, 3u8, spoken[0usize..said], press_look, true, chosen, 0u32, 0u32, 0u64, &actions[index], true, widget.aligned(0u64, .Center, .Center, control.sized_style(34.0, 28.0), widget_pair(a, digits_held)))
             if pressed_error != ok { ret (zero, pressed_error) }
+            // A neighbouring month's day is no Tab stop either (the focus wrapped round to the last of them).
             var tabbed = pressed
-            if inside {
-                let (stop, stop_error) = calendar_tab_stop(a, pressed, usize(date.day) == tab_day)
-                if stop_error != ok { ret (zero, stop_error) }
-                tabbed = stop
-            }
+            let (stop, stop_error) = calendar_tab_stop(a, pressed, inside && usize(date.day) == tab_day)
+            if stop_error != ok { ret (zero, stop_error) }
+            tabbed = stop
             var cell_node = tabbed
             if inside {
                 let (moves, moves_error) = mem.alloc[DayMove](a, 4usize)
@@ -9403,24 +9609,64 @@ fn linux_calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
             share.height = style.Length { Px: 28.0 }
             share.min_width = style.Length { Px: 38.0 }
             // GTK's days sit 1.85 px right of the cell's middle
-            cells[column] = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
+            var day_cell = widget.aligned(0u64, .Center, .Start, share, widget_pair(a, widget.padded(0u64, 2.0, 0.0, 0.0, 0.0, style.defaults(), widget_pair(a, cell_node))))
+            let evented = inside && date_listed(marks.events, date)
+            if banded || evented {
+                let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+                if layers_error != ok { ret (zero, TooLarge) }
+                var none: []const widget.Node = zero
+                var band_x: f32 = 0.0
+                var band_w: f32 = 38.0
+                if same_date(date, from) {
+                    band_x = 19.0
+                    band_w = 19.0
+                }
+                if same_date(date, to) { band_w = 19.0 }
+                var band = control.sized_style(band_w, 25.0)
+                if banded { band.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Primary), 0.18) } }
+                layers[0usize] = widget.positioned(0u64, band_x, 1.5, band, none)
+                layers[1usize] = day_cell
+                var dot = control.sized_style(3.0, 3.0)
+                dot.radius = 1.5
+                dot.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+                if chosen { dot.background = paint.Brush { Solid: style.color(t.tokens, .OnPrimary) } }
+                if !evented { dot.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
+                layers[2usize] = widget.positioned(0u64, 19.5, 20.5, dot, none)
+                day_cell = widget.stack(0u64, control.sized_style(38.0, 28.0), layers[0usize..3usize])
+            }
+            cells[1usize + column] = day_cell
             column += 1usize
         }
-        var row_style = control.sized_style(267.0, 28.0)
+        var row_style = control.sized_style(267.0 + extra, 28.0)
         row_style.padding.left = style.Length { Px: 1.0 }
-        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[0usize..7usize])
+        if lead == 1usize {
+            // The ISO week of the row's Monday, small and dim.
+            let row_first = time.days_from_civil(year, month, 1i64) + i64(week * 7usize) - first_weekday
+            let monday = row_first + (8i64 - i64(week_start)) % 7i64
+            let (week_bytes, week_bytes_error) = mem.alloc[u8](a, 4usize)
+            if week_bytes_error != ok { ret (zero, TooLarge) }
+            let week_len = control.write_i64(week_bytes, iso_week_of(monday))
+            var small = control.text_options()
+            small.role = .Body
+            small.size = 12.0
+            small.wrap = .None
+            let (week_text, week_text_error) = control.colored_text(a, 0u64, week_bytes[0usize..week_len], t, small, dim)
+            if week_text_error != ok { ret (zero, week_text_error) }
+            cells[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(extra, 28.0), widget_pair(a, week_text))
+        }
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, row_style, cells[1usize - lead..8usize])
         week += 1usize
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 4usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = head
     body[1usize] = widget.box(0u64, rule, zero)
-    var weekday_row = control.sized_style(267.0, 29.0)
+    var weekday_row = control.sized_style(267.0 + extra, 29.0)
     weekday_row.margin.top = style.Length { Px: 0.5 }
-    weekday_row.padding.left = style.Length { Px: 2.0 }
+    weekday_row.padding.left = style.Length { Px: 2.0 + extra }
     body[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, weekday_row, names[0usize..7usize])
     body[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..6usize])
-    var frame = control.sized_style(269.0, 236.0)
+    var frame = control.sized_style(269.0 + extra, 236.0)
     frame.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     var edge = style.hex(0xDDDDDDu32)
     if t.tokens.palette == .Dark { edge = style.hex(0x454545u32) }

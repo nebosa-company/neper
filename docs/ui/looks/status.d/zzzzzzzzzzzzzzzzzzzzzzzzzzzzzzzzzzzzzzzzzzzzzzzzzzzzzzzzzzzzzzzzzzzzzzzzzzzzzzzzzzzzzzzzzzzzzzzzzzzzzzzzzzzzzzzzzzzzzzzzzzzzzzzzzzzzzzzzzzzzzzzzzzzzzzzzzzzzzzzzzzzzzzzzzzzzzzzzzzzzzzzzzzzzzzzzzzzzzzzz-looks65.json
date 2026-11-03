@@ -1,0 +1,96 @@
+{
+ "range_slider": {
+  "name": "Range slider",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/range_slider.png",
+    "notes": "ROUND 65: the Cupertino slider is now 190 px wide so it fits its cell, and the keyboard ring is the runtime's ring on a rounded 28 px box, closed on all four sides; viewed in the re-rendered PNG. Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A two-thumb slider on the iOS slider's metrics: 4 px track, the accent between two 28 px white round thumbs with a hairline and a soft shadow. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "No label beside the slider"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/range_slider.png",
+    "notes": "ROUND 65: the Cupertino slider is now 190 px wide so it fits its cell, and the keyboard ring is the runtime's ring on a rounded 28 px box, closed on all four sides; viewed in the re-rendered PNG. Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A two-thumb slider on the iOS slider's metrics: 4 px track, the accent between two 28 px white round thumbs with a hairline and a soft shadow. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "No label beside the slider"
+    ]
+   }
+  }
+ },
+ "bottom_app_bar": {
+  "name": "Bottom app bar",
+  "extra": true,
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/bottom_app_bar.png",
+    "notes": "ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a CommandBar: 48 tall, flat commands and the main command as an accent button at the right, 1 px top divider. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/bottom_app_bar.png",
+    "notes": "ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a CommandBar: 48 tall, flat commands and the main command as an accent button at the right, 1 px top divider. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   }
+  }
+ },
+ "gauge": {
+  "name": "Gauge",
+  "extra": true,
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/gauge.png",
+    "notes": "ROUND 65: on Cupertino the unit caption is set in the 11 px label role and lifted into the wider part of the arc, leaving a gap of about 6 px to the arc on each side; viewed in the re-rendered PNG. Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/gauge.png",
+    "notes": "ROUND 65: on Cupertino the unit caption is set in the 11 px label role and lifted into the wider part of the arc, leaving a gap of about 6 px to the arc on each side; viewed in the re-rendered PNG. Round 63 (x): the Linux loading block is drawn in the track grey and is visible. Round 62: 8 cells (42 %, 0 %, 100 %, warning, critical, no data, stale, loading) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "The Linux track uses the progress bar's trough colour (text at 11.6 %, 15 % dark), a guess carried from the progress bar",
+     "No platform draws this control: the arc, readout and status line are the shared v2 design on each look's tokens",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ]
+   }
+  }
+ }
+}

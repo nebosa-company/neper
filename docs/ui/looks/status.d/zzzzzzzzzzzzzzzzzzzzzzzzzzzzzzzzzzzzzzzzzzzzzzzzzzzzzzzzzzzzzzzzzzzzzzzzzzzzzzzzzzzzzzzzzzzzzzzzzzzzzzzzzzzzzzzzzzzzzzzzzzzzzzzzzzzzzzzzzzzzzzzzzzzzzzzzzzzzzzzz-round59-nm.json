@@ -1,0 +1,24 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "ROUND 59: navigation.bar_menu_at no longer errors above 14 commands (all non Windows looks): every command is a row, and a menu taller than the window (or the room bar_menu_limited is given) scrolls between two chevron strips; the submenu keys were key + 15 + 16 i at depth 0 and collided with the item keys past 14 rows, they are key * 32 + 16 + i at every depth now. Neper and Neper dark popup sheets draw all rows (the cells are tall enough, 0 clipped; File 26, View 30, Search 23, Cards 22, Card Art 15), a row flagged selected shows the hovered look so every _h and _sel_ sheet shows its row, and popup_menu-hover is as roomy as the static sheet with its fourth row highlighted. Cupertino, Material and Linux popup sheets come from apps whose menus are under 14 rows and do not go through bar_menu_at, so none of them lost rows. Windows light: View got its Messages picture back (143 px off the raw capture, 317 before) and Windows dark reads the `&` of Sort by Edition & Card Name as a literal ampersand. Left for the audit to decide the status.",
+    "gaps": [
+     "no hover-scroll on the chevron strips (the wheel and the keyboard focus scroll a menu taller than its room; the chevrons are drawn at both ends whatever the offset)",
+     "v3's section headers (Mode, Sort Order, Group By, Cards, General Filter) are drawn as plain items; the Cupertino row ignores the selected flag"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "ROUND 59: navigation.bar_menu_at no longer errors above 14 commands (all non Windows looks): every command is a row, and a menu taller than the window (or the room bar_menu_limited is given) scrolls between two chevron strips; the submenu keys were key + 15 + 16 i at depth 0 and collided with the item keys past 14 rows, they are key * 32 + 16 + i at every depth now. Neper and Neper dark popup sheets draw all rows (the cells are tall enough, 0 clipped; File 26, View 30, Search 23, Cards 22, Card Art 15), a row flagged selected shows the hovered look so every _h and _sel_ sheet shows its row, and popup_menu-hover is as roomy as the static sheet with its fourth row highlighted. Cupertino, Material and Linux popup sheets come from apps whose menus are under 14 rows and do not go through bar_menu_at, so none of them lost rows. Windows light: View got its Messages picture back (143 px off the raw capture, 317 before) and Windows dark reads the `&` of Sort by Edition & Card Name as a literal ampersand. Left for the audit to decide the status.",
+    "gaps": [
+     "no hover-scroll on the chevron strips (the wheel and the keyboard focus scroll a menu taller than its room; the chevrons are drawn at both ends whatever the offset)",
+     "v3's section headers (Mode, Sort Order, Group By, Cards, General Filter) are drawn as plain items; the Cupertino row ignores the selected flag"
+    ]
+   }
+  }
+ }
+}

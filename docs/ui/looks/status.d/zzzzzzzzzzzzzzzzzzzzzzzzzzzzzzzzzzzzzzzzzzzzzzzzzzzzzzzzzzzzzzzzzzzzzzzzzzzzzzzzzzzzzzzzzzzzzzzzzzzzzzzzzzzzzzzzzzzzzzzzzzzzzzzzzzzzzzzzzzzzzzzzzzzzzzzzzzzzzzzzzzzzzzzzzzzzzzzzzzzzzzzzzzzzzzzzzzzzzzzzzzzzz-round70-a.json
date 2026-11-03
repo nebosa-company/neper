@@ -1,0 +1,116 @@
+{
+ "icon_button": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/icon_button.png",
+    "notes": "Compared to Flutter (ref/flutter/material, IconButton standard/tonal/outlined): 40 x 40 circle at 1x in rest, hover, focus, disabled (Flutter 40 x 40, radius 20), halo and tonal fills within 3 levels (palette differs, see flutter-compare.md G4), outlined ring 1 px outline colour. Fixed: a focused outlined icon button kept a primary outline (turned #6e58a8); Flutter keeps the outline colour (#7f7a84 now). Pressed ripple and the hovered black outline in the refs are harness artifacts.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/icon_button.png",
+    "notes": "Compared to Flutter (ref/flutter/material, IconButton standard/tonal/outlined): 40 x 40 circle at 1x in rest, hover, focus, disabled (Flutter 40 x 40, radius 20), halo and tonal fills within 3 levels (palette differs, see flutter-compare.md G4), outlined ring 1 px outline colour. Fixed: a focused outlined icon button kept a primary outline (turned #6e58a8); Flutter keeps the outline colour (#7f7a84 now). Pressed ripple and the hovered black outline in the refs are harness artifacts.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/radio.png",
+    "notes": "Compared to Flutter (radio rest/hover/focus/disabled/selected): halo 40 x 40 matches; ring is 20 x 20 against Flutter's 18 x 18 (M3 spec and Material Web say 20; recorded in flutter-compare.md). Focus layer colour differs from Flutter (see checkbox).",
+    "gaps": [
+     "radio-checked-rest: the reference shows the dot growing (centre coverage 72.4 against 83.4 settled), ours is 79; 212 px over 12 levels in light, 215 in dark.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/radio.png",
+    "notes": "Compared to Flutter (radio rest/hover/focus/disabled/selected): halo 40 x 40 matches; ring is 20 x 20 against Flutter's 18 x 18 (M3 spec and Material Web say 20; recorded in flutter-compare.md). Focus layer colour differs from Flutter (see checkbox).",
+    "gaps": [
+     "radio-checked-rest: the reference shows the dot growing (centre coverage 72.4 against 83.4 settled), ours is 79; 212 px over 12 levels in light, 215 in dark.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "checkbox": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/checkbox.png",
+    "notes": "Compared to Flutter: box 18 x 18, halo 40 x 40, fills within 2 levels at rest, hover and disabled. Gap left: the focused unchecked halo is tinted primary (#efe6f6) while Flutter uses on-surface (#e6e1e8); not fixed.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/checkbox.png",
+    "notes": "Compared to Flutter: box 18 x 18, halo 40 x 40, fills within 2 levels at rest, hover and disabled. Gap left: the focused unchecked halo is tinted primary (#efe6f6) while Flutter uses on-surface (#e6e1e8); not fixed.",
+    "gaps": [
+     "Audit 14: see notes",
+     "The error check box is the M3 error tokens applied to Material Web's element (the library defines them but draws no error state)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/button.png",
+    "notes": "Compared to Flutter (filled, tonal, elevated, outlined, text): 40 tall, pill, state layers 8 and 10 percent as Flutter, outlined focus ring primary; label width differs only by the label text. Palette differs (G4).",
+    "gaps": [
+     "Outlined button and icon button focus: the outline is `primary` (M3 tokens, MDC-Android m3_button_outline_color); Material Web has no token for it, so the capture sets its outline-colour token on the focused element",
+     "The elevated button's hover shade is within 3 levels of the capture (a fitted level-2 layer; the fit is a blurred signed distance, Skia's blur of a pill differs by up to 3 levels)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/button.png",
+    "notes": "Compared to Flutter (filled, tonal, elevated, outlined, text): 40 tall, pill, state layers 8 and 10 percent as Flutter, outlined focus ring primary; label width differs only by the label text. Palette differs (G4).",
+    "gaps": [
+     "Outlined button and icon button focus: the outline is `primary` (M3 tokens, MDC-Android m3_button_outline_color); Material Web has no token for it, so the capture sets its outline-colour token on the focused element",
+     "The elevated button's hover shade is within 3 levels of the capture (a fitted level-2 layer; the fit is a blurred signed distance, Skia's blur of a pill differs by up to 3 levels)",
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/switch.png",
+    "notes": "Compared to Flutter (rest, hover, selected, disabled): track 52 x 32, halo 56 x 40, same radii, fills within 2 levels apart from primary (G4).",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/switch.png",
+    "notes": "Compared to Flutter (rest, hover, selected, disabled): track 52 x 32, halo 56 x 40, same radii, fills within 2 levels apart from primary (G4).",
+    "gaps": [
+     "Evidence: Material Web 1.x rendered in Chromium with greyscale text and unhinted glyphs (round 26; the earlier captures carried ClearType fringes; round 28 re-captured the corrected cells), focus is the 10 % state layer, pressed 10 %, M3 tracking set to zero as Neper's text engine has no letter spacing; Neper's greyscale text equals that unhinted text to within 2 levels in every text pixel of the dialog and tab cells, so no subpixel mode was added to the text engine; no Android device capture"
+    ]
+   }
+  }
+ }
+}

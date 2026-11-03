@@ -1,0 +1,969 @@
+{
+ "list": {
+  "name": "List",
+  "extra": true,
+  "neper": "collection.list",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/list_rows.png",
+    "notes": "Round 62 sheet h_list: static rows over separators, chosen rows on the secondary container; rest, one chosen, two chosen, no separators, long row. A row has no hover or press of its own, so none is drawn.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "grid_view": {
+  "name": "Grid view",
+  "extra": true,
+  "neper": "collection.grid_view",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/grid_view.png",
+    "notes": "Round 62 sheet h_grid_view: tiles wrapped across the width, chosen tile filled; rest, one chosen, two chosen, narrow (two columns).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "carousel": {
+  "name": "Carousel",
+  "extra": true,
+  "neper": "collection.carousel",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/carousel.png",
+    "notes": "Round 62 sheet h_carousel: page view between Previous and Next with a dot indicator; first, middle, last page, hover, pressed, keyboard focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "pagination": {
+  "name": "Pagination",
+  "extra": true,
+  "neper": "collection.pagination",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/pagination.png",
+    "notes": "Round 62 sheet h_pagination: Previous, five page numbers, Next; first, middle, last page, hover, pressed, focus (the pointer lands on the current page).",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "page_view": {
+  "name": "Page view",
+  "extra": true,
+  "neper": "collection.page_view",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/page_view.png",
+    "notes": "Round 62 sheet h_page_view: one page in a clipped box; first, middle, last page, hover, pressed, keyboard focus ring.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "pull_to_refresh": {
+  "name": "Pull to refresh",
+  "extra": true,
+  "neper": "collection.pull_to_refresh",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/pull_to_refresh.png",
+    "notes": "Round 62 sheet h_pull_to_refresh: feed with a Refresh button and an indicator while refreshing; rest, refreshing, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "name": "Swipe actions",
+  "extra": true,
+  "neper": "collection.swipe_actions",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/swipe_actions.png",
+    "notes": "Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "reorderable_list": {
+  "name": "Reorderable list",
+  "extra": true,
+  "neper": "collection.reorderable_list",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/reorderable_list.png",
+    "notes": "Round 62 sheet h_reorderable_list: rows with drag handles; rest, hover, pressed, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "key_value_editor": {
+  "name": "Key-value editor",
+  "extra": true,
+  "neper": "collection.key_value_editor",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "Round 62 sheet h_key_value_editor: three name and value fields with Remove and an Add button; rest, empty, focus, hover.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ }
+}

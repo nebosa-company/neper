@@ -1,0 +1,296 @@
+{
+ "speed_dial": {
+  "name": "Speed dial",
+  "extra": true,
+  "neper": "control.speed_dial",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A WinUI 3 split button (label and arrow part) over a MenuFlyout: 8 px corners, 1 px stroke, 32 px rows with a hover fill. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png).",
+    "gaps": [
+     "Flyout face, stroke and shadow are the published WinUI tokens, none measured",
+     "The menu opens above the head because the sheet puts the head at the bottom; WinUI flips by itself",
+     "The arrow part and the label fire the same toggle: a speed dial has no separate primary action",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A WinUI 3 split button (label and arrow part) over a MenuFlyout: 8 px corners, 1 px stroke, 32 px rows with a hover fill. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Flyout face, stroke and shadow are the published WinUI tokens, none measured",
+     "The menu opens above the head because the sheet puts the head at the bottom; WinUI flips by itself",
+     "The arrow part and the label fire the same toggle: a speed dial has no separate primary action",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A GtkMenuButton (label and pan-down arrow) over a popover menu: 12 px corners, 6 px padding, 32 px rows, libadwaita 1.5 metrics. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png).",
+    "gaps": [
+     "The menu's shade is the shared soft shade, not the fitted GTK popover shadow (the menu's size is not fixed)",
+     "No arrow on the menu (GtkPopoverMenu has none)",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A GtkMenuButton (label and pan-down arrow) over a popover menu: 12 px corners, 6 px padding, 32 px rows, libadwaita 1.5 metrics. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The menu's shade is the shared soft shade, not the fitted GTK popover shadow (the menu's size is not fixed)",
+     "No arrow on the menu (GtkPopoverMenu has none)",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A tinted pull-down button (ellipsis and label) over an iOS style context menu: 14 px corners, 44 px rows, hairlines between. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png).",
+    "gaps": [
+     "The context menu's material blur is not drawn: an opaque fill stands for it",
+     "Rows carry no trailing icons",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/speed_dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A tinted pull-down button (ellipsis and label) over an iOS style context menu: 14 px corners, 44 px rows, hairlines between. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The context menu's material blur is not drawn: an opaque fill stands for it",
+     "Rows carry no trailing icons",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "name": "Range slider",
+  "extra": true,
+  "neper": "control.range_slider",
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/range_slider.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A GtkScale with two knobs: 4 px trough, the accent between the knobs, 20 px white knobs with the 1 px ring and soft shadow, the 2 px accent ring on the focused knob. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching.",
+    "gaps": [
+     "GtkScale has no range form: the knobs are the single scale's, the fill between them is the scale's highlight",
+     "No label beside the slider (the single Linux scale has none)",
+     "The runtime does not say which handle the pointer is over: the nearer one wears the hover and the ring",
+     "Dark knob #d2d2d2 until hovered is read from the single scale"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/range_slider.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A GtkScale with two knobs: 4 px trough, the accent between the knobs, 20 px white knobs with the 1 px ring and soft shadow, the 2 px accent ring on the focused knob. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "GtkScale has no range form: the knobs are the single scale's, the fill between them is the scale's highlight",
+     "No label beside the slider (the single Linux scale has none)",
+     "The runtime does not say which handle the pointer is over: the nearer one wears the hover and the ring",
+     "Dark knob #d2d2d2 until hovered is read from the single scale"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/range_slider.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A two-thumb slider on the iOS slider's metrics: 4 px track, the accent between two 28 px white round thumbs with a hairline and a soft shadow. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "Keyboard focus is the runtime's rectangular ring round the slider, as on the single Cupertino slider",
+     "No label beside the slider"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/range_slider.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A two-thumb slider on the iOS slider's metrics: 4 px track, the accent between two 28 px white round thumbs with a hairline and a soft shadow. 25 to 75 of 0 to 100 at rest, hover and pressed, keyboard focus, disabled, stepped and touching. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "Keyboard focus is the runtime's rectangular ring round the slider, as on the single Cupertino slider",
+     "No label beside the slider"
+    ]
+   }
+  }
+ },
+ "dial": {
+  "name": "Dial",
+  "extra": true,
+  "neper": "control.dial",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A circular slider in the WinUI 3 Slider's vocabulary: a 4 px track in ControlStrongFill over a 270 degree sweep, the accent arc, a 20 px thumb with a 12 px accent dot (14 hovered, 10 pressed), a 2 px focus ring. 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, 0 and 100.",
+    "gaps": [
+     "WinUI 3 has no dial: the shape is invented from the Slider's parts",
+     "Track and thumb colours are the published ControlStrongFill and ControlSolidFill, not measured",
+     "The readout in the middle is the shared one (title-large)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A circular slider in the WinUI 3 Slider's vocabulary: a 4 px track in ControlStrongFill over a 270 degree sweep, the accent arc, a 20 px thumb with a 12 px accent dot (14 hovered, 10 pressed), a 2 px focus ring. 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "WinUI 3 has no dial: the shape is invented from the Slider's parts",
+     "Track and thumb colours are the published ControlStrongFill and ControlSolidFill, not measured",
+     "The readout in the middle is the shared one (title-large)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A circular scale in libadwaita's vocabulary: a 4 px trough arc, the accent arc, the GtkScale knob (20 px white, 1 px ring, soft shadow, accent ring on keyboard focus). 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, 0 and 100.",
+    "gaps": [
+     "GTK has no dial: the shape is invented from GtkScale's parts",
+     "The readout in the middle is the shared one (title-large)",
+     "Hover only lightens the trough, as the scale does"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A circular scale in libadwaita's vocabulary: a 4 px trough arc, the accent arc, the GtkScale knob (20 px white, 1 px ring, soft shadow, accent ring on keyboard focus). 96 px knob at 35 of 100 at rest, hover, pressed and keyboard focus, a 64 px one, 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "GTK has no dial: the shape is invented from GtkScale's parts",
+     "The readout in the middle is the shared one (title-large)",
+     "Hover only lightens the trough, as the scale does"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An AppKit circular slider: eleven tick marks over three quarters of a turn round a white knob with a dot at the value, the knob lifted by a soft shadow. 96 px knob at 35 of 100 at rest, hover, pressed (a grey wash) and keyboard focus, a 64 px one, 0 and 100.",
+    "gaps": [
+     "AppKit's circular slider shows no number: the readout over the knob is the shared one",
+     "Keyboard focus is the runtime's ring round the whole control",
+     "Hover draws nothing different from rest",
+     "Dot and tick colours are the label colours at fixed alphas, not measured"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/dial.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An AppKit circular slider: eleven tick marks over three quarters of a turn round a white knob with a dot at the value, the knob lifted by a soft shadow. 96 px knob at 35 of 100 at rest, hover, pressed (a grey wash) and keyboard focus, a 64 px one, 0 and 100. Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "AppKit's circular slider shows no number: the readout over the knob is the shared one",
+     "Keyboard focus is the runtime's ring round the whole control",
+     "Hover draws nothing different from rest",
+     "Dot and tick colours are the label colours at fixed alphas, not measured"
+    ]
+   }
+  }
+ },
+ "popover": {
+  "name": "Popover",
+  "extra": true,
+  "neper": "control.popover",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. The v2 card (surface-container-high, 12 px corners, a beak). Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png).",
+    "gaps": [
+     "Unchanged shape: the sheet is wider and taller so the third card is no longer cut",
+     "Derived: no real-screen capture exists"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. The v2 card (surface-container-high, 12 px corners, a beak). Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Unchanged shape: the sheet is wider and taller so the third card is no longer cut",
+     "Derived: no real-screen capture exists"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A WinUI 3 Flyout: #FCFCFC (#2C2C2C Dark), 1 px stroke, 8 px corners, 16 px padding, 8 px off the anchor, no arrow. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png).",
+    "gaps": [
+     "Face, stroke and shadow are the published WinUI tokens, none measured",
+     "The close button is the Windows glyph button; a WinUI Flyout has none (kept for the dismiss action)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A WinUI 3 Flyout: #FCFCFC (#2C2C2C Dark), 1 px stroke, 8 px corners, 16 px padding, 8 px off the anchor, no arrow. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "Face, stroke and shadow are the published WinUI tokens, none measured",
+     "The close button is the Windows glyph button; a WinUI Flyout has none (kept for the dismiss action)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A libadwaita GtkPopover: the popover colour, 12 px corners, 12 px padding, a 14 x 7 arrow on the anchor side. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png).",
+    "gaps": [
+     "The shade is the shared soft shade, not the fitted GTK popover shadow (the card's height is not fixed)",
+     "The arrow carries no outline, the card's 1 px ring stops at it",
+     "The close button is the Linux glyph button; GtkPopover has none (kept for the dismiss action)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A libadwaita GtkPopover: the popover colour, 12 px corners, 12 px padding, a 14 x 7 arrow on the anchor side. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The shade is the shared soft shade, not the fitted GTK popover shadow (the card's height is not fixed)",
+     "The arrow carries no outline, the card's 1 px ring stops at it",
+     "The close button is the Linux glyph button; GtkPopover has none (kept for the dismiss action)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An iOS popover: white (#2C2C2E Dark), 13 px corners, 16 px padding, a 22 x 11 arrow on the anchor side. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png).",
+    "gaps": [
+     "The popover material's blur is not drawn: an opaque fill stands for it",
+     "The arrow is low contrast against a light page, as the card's own shade stops at it",
+     "The close button is the shared one; iOS popovers have none (kept for the dismiss action)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An iOS popover: white (#2C2C2E Dark), 13 px corners, 16 px padding, a 22 x 11 arrow on the anchor side. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The popover material's blur is not drawn: an opaque fill stands for it",
+     "The arrow is low contrast against a light page, as the card's own shade stops at it",
+     "The close button is the shared one; iOS popovers have none (kept for the dismiss action)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An M3 menu surface: surface-container, 4 px corners, level 2 shade, no beak, 16 px padding. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png).",
+    "gaps": [
+     "M3 has no popover with a title and a close button: the menu surface carries the card's content",
+     "Derived: no Material Web capture of this card"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/popover.png",
+    "notes": "Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. An M3 menu surface: surface-container, 4 px corners, level 2 shade, no beak, 16 px padding. Three placements (below, above, with actions) in a 1116 x 380 sheet, so no card is cut at the edge; hover and focus on the close button (popover_hover.png, popover_focus.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "M3 has no popover with a title and a close button: the menu surface carries the card's content",
+     "Derived: no Material Web capture of this card"
+    ]
+   }
+  }
+ }
+}

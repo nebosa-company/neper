@@ -7,11 +7,23 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.navigation
+use e.ui.style
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // This sheet only: Apple's increased-contrast blue (0040DD light, 409CFF dark) for the accent, so the bar text holds 4.5:1; every
+    // other sheet keeps systemBlue.
+    let (copy, copy_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if copy_error != ok { ret (0usize, copy_error) }
+    copy[0usize] = *base.tokens
+    var blue = 0x0040DDu32
+    if base.tokens.palette == .Dark { blue = 0x409CFFu32 }
+    style.puta(&copy[0usize], .Primary, blue, 1.0)
+    var local = *base
+    local.tokens = &copy[0usize]
+    let t = &local
     let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
     if actions_error != ok { ret (0usize, actions_error) }
     actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }

@@ -1,0 +1,24 @@
+{
+ "bottom_app_bar": {
+  "looks": {
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "ROUND 67: the bar's button labels sat off centre in the four actions cell because the row was wider than the bar and the flex shrank every button below label plus padding, leaving the content at the left edge. The bar now measures its labels (GTK hinted widths) and takes the overflow out of the side padding, equally on both sides, so no button shrinks. Measured in the PNGs: Compose is 85 px wide with 13 px left and 13 right at 1x (19 and 20 at 1.5x), 93 px with 17 and 17 in the other cells (25 and 26 at 1.5x); vertical centring unchanged. Other looks re-render byte for byte.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "ROUND 67: the bar's button labels sat off centre in the four actions cell because the row was wider than the bar and the flex shrank every button below label plus padding, leaving the content at the left edge. The bar now measures its labels (GTK hinted widths) and takes the overflow out of the side padding, equally on both sides, so no button shrinks. Measured in the PNGs: Compose is 85 px wide with 13 px left and 13 right at 1x (19 and 20 at 1.5x), 93 px with 17 and 17 in the other cells (25 and 26 at 1.5x); vertical centring unchanged. Other looks re-render byte for byte.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   }
+  }
+ }
+}

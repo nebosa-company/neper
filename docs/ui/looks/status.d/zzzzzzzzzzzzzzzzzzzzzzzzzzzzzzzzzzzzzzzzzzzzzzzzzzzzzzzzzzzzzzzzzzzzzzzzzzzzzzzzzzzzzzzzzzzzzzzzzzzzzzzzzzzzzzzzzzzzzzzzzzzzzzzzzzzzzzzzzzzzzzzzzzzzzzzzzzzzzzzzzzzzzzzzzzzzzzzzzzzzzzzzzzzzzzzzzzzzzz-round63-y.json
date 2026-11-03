@@ -1,0 +1,284 @@
+{
+ "bottom_app_bar": {
+  "name": "Bottom app bar",
+  "extra": true,
+  "neper": "navigation.bottom_app_bar",
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/bottom_app_bar.png",
+    "notes": "ROUND 63 y: the Material 3 shape is kept; the floating action button now draws an Edit glyph instead of an empty square. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: rendered from the look's tokens, nothing measured on a real screen"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/bottom_app_bar.png",
+    "notes": "ROUND 63 y: the Material 3 shape is kept; the floating action button now draws an Edit glyph instead of an empty square. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: rendered from the look's tokens, nothing measured on a real screen"
+    ]
+   },
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a CommandBar: 48 tall, flat commands and the main command as an accent button at the right, 1 px top divider. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a CommandBar: 48 tall, flat commands and the main command as an accent button at the right, 1 px top divider. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a UIToolbar: 44 tall, accent text items spaced across the bar, hairline on top. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/bottom_app_bar.png",
+    "notes": "ROUND 63 y: draws a UIToolbar: 44 tall, accent text items spaced across the bar, hairline on top. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "material": {
+    "status": "review",
+    "screenshot": "material/bottom_app_bar.png",
+    "notes": "ROUND 63 y: the Material 3 shape is kept; the floating action button now draws an Edit glyph instead of an empty square. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: rendered from the look's tokens, nothing measured on a real screen"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/bottom_app_bar.png",
+    "notes": "ROUND 63 y: the Material 3 shape is kept; the floating action button now draws an Edit glyph instead of an empty square. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: rendered from the look's tokens, nothing measured on a real screen"
+    ]
+   }
+  }
+ },
+ "navigation_rail": {
+  "name": "Navigation rail",
+  "extra": true,
+  "neper": "navigation.navigation_rail",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_rail.png",
+    "notes": "ROUND 63 y: draws the NavigationView compact pane: 48 wide, 40 px icon items with the 3 x 16 accent indicator (generic glyphs stand in for the pictures). Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_rail.png",
+    "notes": "ROUND 63 y: draws the NavigationView compact pane: 48 wide, 40 px icon items with the 3 x 16 accent indicator (generic glyphs stand in for the pictures). Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_rail.png",
+    "notes": "ROUND 63 y: draws a narrow GNOME sidebar: icon over a small label in a 6 px rounded item with the 10 % wash. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_rail.png",
+    "notes": "ROUND 63 y: draws a narrow GNOME sidebar: icon over a small label in a 6 px rounded item with the 10 % wash. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_rail.png",
+    "notes": "ROUND 63 y: draws an iPad / macOS tab rail: icon over label, the selected item tinted with the accent and a 12 % wash. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_rail.png",
+    "notes": "ROUND 63 y: draws an iPad / macOS tab rail: icon over label, the selected item tinted with the accent and a 12 % wash. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   }
+  }
+ },
+ "navigation_drawer": {
+  "name": "Navigation drawer",
+  "extra": true,
+  "neper": "navigation.navigation_drawer",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the NavigationView pane: 40 px rows, 4 px radius, subtle fill, accent indicator; the modal pane rounds its end corners 8. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the NavigationView pane: 40 px rows, 4 px radius, subtle fill, accent indicator; the modal pane rounds its end corners 8. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws libadwaita .navigation-sidebar rows: 36 px, 6 px radius, 10 % wash; the modal sheet is square. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws libadwaita .navigation-sidebar rows: 36 px, 6 px radius, 10 % wash; the modal sheet is square. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the AppKit source list: 30 px rows, 6 px radius, accent fill with white text; the modal sheet is square. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_drawer.png",
+    "notes": "ROUND 63 y: draws the AppKit source list: 30 px rows, 6 px radius, accent fill with white text; the modal sheet is square. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   }
+  }
+ },
+ "sidebar": {
+  "name": "Sidebar",
+  "extra": true,
+  "neper": "navigation.sidebar",
+  "looks": {
+   "windows": {
+    "status": "review",
+    "screenshot": "windows/sidebar.png",
+    "notes": "ROUND 63 y: draws NavigationView pane rows: 40 px, 4 px radius, subtle fill, accent indicator. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "windows_dark": {
+    "status": "review",
+    "screenshot": "windows-dark/sidebar.png",
+    "notes": "ROUND 63 y: draws NavigationView pane rows: 40 px, 4 px radius, subtle fill, accent indicator. Metrics are Windows 11 Fluent public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux": {
+    "status": "review",
+    "screenshot": "linux/sidebar.png",
+    "notes": "ROUND 63 y: draws libadwaita .navigation-sidebar rows: 36 px, 6 px radius, 2 px apart, 10 % wash. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "review",
+    "screenshot": "linux-dark/sidebar.png",
+    "notes": "ROUND 63 y: draws libadwaita .navigation-sidebar rows: 36 px, 6 px radius, 2 px apart, 10 % wash. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/sidebar.png",
+    "notes": "ROUND 63 y: draws AppKit source list rows: 30 px, 6 px radius, accent fill with white text. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/sidebar.png",
+    "notes": "ROUND 63 y: draws AppKit source list rows: 30 px, 6 px radius, accent fill with white text. Metrics are Apple HIG (AppKit source list / UIKit) public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,69 @@
+{
+ "button": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/button_states.png",
+    "notes": "ROUND 46 (A): the ring, focus rectangle and caption of every captured state redrawn from the 1:1 captures (box W-2 by H-2, 1 px rails, bottom row darker, six small baked 6x6 corner tiles per state from the crisp captures, focus rectangle = face inverted on pixels with x+y odd, caption origin, disabled caption #838383). Counted before to after: button_states 22264 to 323 (16 outside the glyph zone, 0 flat chrome), button_hover 12709 to 453 (15, 0), button 5121 to 36 (0, 0), button_kinds 3046 to 549 (21, 0), button_shift 1644 to 2, button_arrows 1004 to 485 (0, 0); what remains is text fringes and the pictures of the icon buttons (drawn glyphs, v3's are bitmaps). Method: scratch comparer against the true 1:1 composites (ref/windows-1to1, rebuilt with scripts/looks_ref1to1.py); counted = more than 2 levels off at offset 0, glyph zone = text components (5 to 16 px tall) grown 2 px, flat = reference pixel in a run of 11 equal pixels with its eight neighbours also in runs. The next audit decides.",
+    "gaps": [
+     "Icon button pictures are drawn glyphs, not v3's image list bitmaps (artwork, about 500 px per icon button)",
+     "Hover and pressed of the icon and picture-only buttons, a split or toggle button and a disabled hover have no 1:1 capture (unverified)",
+     "The opt-in crisp option is on in the button sheets only; the library default keeps the old ring so the other Windows light sheets stay byte identical"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/group_box_dialog.png",
+    "notes": "ROUND 46 (A): the group frame is four 1 px #DCDCDC lines on whole rows and columns and the options page header (TGradient) has its 1 px #808080 border on the control's own pixels, as the 1:1 captures show. group_box_dialog 19270 to 1552 counted (90 outside the glyph zone, 0 flat chrome; the rest is captions, the header icons and ClearType); the Select Format frame has 0 chrome px off outside its caption. Method: scratch comparer against the true 1:1 composites (ref/windows-1to1, rebuilt with scripts/looks_ref1to1.py); counted = more than 2 levels off at offset 0, glyph zone = text components (5 to 16 px tall) grown 2 px, flat = reference pixel in a run of 11 equal pixels with its eight neighbours also in runs. The next audit decides.",
+    "gaps": [
+     "Disabled, plain, empty and long caption group boxes have no capture (unverified)",
+     "The header icons (page pictures) are not drawn",
+     "Opt-in through control.set_group_crisp, on in the group box dialog and radio sheets only"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/token_edit_dialog.png",
+    "notes": "ROUND 46 (A): the empty token edit is single rows (rim #ECECEC, highlight #FEFEFE, foot #DDDDDD then #838383) on a box one row shorter than the DFM height plus one, as the 1:1 capture shows (the resampled one blurred each line over two rows). token_edit_dialog 3768 to 0 counted over its three crops (46, 46 and 27 high), 0 flat chrome. Method: scratch comparer against the true 1:1 composites (ref/windows-1to1, rebuilt with scripts/looks_ref1to1.py); counted = more than 2 levels off at offset 0, glyph zone = text components (5 to 16 px tall) grown 2 px, flat = reference pixel in a run of 11 equal pixels with its eight neighbours also in runs. The next audit decides.",
+    "gaps": [
+     "Focused and filled token edits have no capture; the focused foot keeps its old rows on the new box height (unverified)"
+    ]
+   }
+  }
+ },
+ "radio": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_states.png",
+    "notes": "ROUND 46 (A): the 13 x 13 mark is one fixed tile per state (off, on, on pressed, off pressed; hover is the rest look), painted with the page's share in its alpha so #F0F0F0 and #F9F9F9 faces both work; the focus rectangle is DrawFocusRect's XOR dots (x+y odd from its corner, the right side following the width), the mnemonic underline a whole row, the caption one pixel nearer the mark and a row higher in the 42 high rows. Counted before to after: radio_states 3732 to 43 (10 outside the glyph zone, 0 flat), radio_hover 8803 to 136, radio_dialog 5295 to 894 (the Missing set cards dialog crop, 772 px, has no 1:1 twin and is still compared to the old capture: not claimed). Marks: 0 px off in every state that has a capture. Method: scratch comparer against the true 1:1 composites (ref/windows-1to1, rebuilt with scripts/looks_ref1to1.py); counted = more than 2 levels off at offset 0, glyph zone = text components (5 to 16 px tall) grown 2 px, flat = reference pixel in a run of 11 equal pixels with its eight neighbours also in runs. The next audit decides.",
+    "gaps": [
+     "Disabled radio and a hovered selected radio on a modified page have no capture",
+     "radio_dialog's 280 x 120 Options crop still rests on the old resampled capture",
+     "Opt-in through control.set_radio_crisp, on in the radio sheets only"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/radio_group_dialog.png",
+    "notes": "ROUND 46 (A): the group frame (whole pixel lines), its radios (as the radio row above) and the dotted rectangle follow the 1:1 captures. radio_group_dialog 16200 to 211 counted (29 outside the glyph zone, 0 flat), radio_group_states 19404 to 293 (35, 0); what remains is caption ClearType. Method: scratch comparer against the true 1:1 composites (ref/windows-1to1, rebuilt with scripts/looks_ref1to1.py); counted = more than 2 levels off at offset 0, glyph zone = text components (5 to 16 px tall) grown 2 px, flat = reference pixel in a run of 11 equal pixels with its eight neighbours also in runs. The next audit decides.",
+    "gaps": [
+     "Disabled group and the states of the Options pages' third radio have no capture (unverified)",
+     "Opt-in through control.set_group_crisp and set_radio_crisp"
+    ]
+   }
+  }
+ }
+}

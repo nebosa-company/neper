@@ -36,7 +36,10 @@ fn anchored(a: *mem.Arena, t: *const control.Theme, action: *const widget.Submit
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = button
     parts[1usize] = tip
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    var stack_style = style.defaults()
+    // Neper: the rich hint (260 wide) hangs from the anchor's right edge, so the anchor stands 180 in from the cell's left and 60 down, so the hint keeps clear of the sheet edge and the caption.
+    if rich && t.tokens.profile == .Neper { stack_style.padding = style.EdgeLengths { left: style.Length { Px: 180.0 }, top: style.Length { Px: 60.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, stack_style, parts[0usize..2usize]), ok)
 }
 
 // Five cells, each an anchor with its hint shown: one line, wrapped lines, a shortcut, the rich
@@ -140,6 +143,7 @@ fn run_hinted(a: *mem.Arena, n: usize) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(12.0, 50.0)
     if args.len == 2usize && args[1usize][0usize] == 84u8 { ret run_hinted(a, usize(args[1usize][1usize]) - 48usize) }
     let sheet = looks.Sheet { name: "hint", cells: 5usize, columns: 3usize, cell_w: 260.0, cell_h: 110.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)

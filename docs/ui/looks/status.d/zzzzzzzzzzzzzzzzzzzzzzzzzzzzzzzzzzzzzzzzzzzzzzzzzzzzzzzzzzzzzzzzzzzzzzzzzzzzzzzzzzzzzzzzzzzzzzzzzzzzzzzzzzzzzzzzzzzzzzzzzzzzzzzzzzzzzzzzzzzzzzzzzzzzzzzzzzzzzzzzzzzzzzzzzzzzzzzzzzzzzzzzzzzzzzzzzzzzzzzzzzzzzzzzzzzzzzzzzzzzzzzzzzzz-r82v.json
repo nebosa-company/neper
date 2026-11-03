@@ -1,0 +1,431 @@
+{
+ "button": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | AUDIT 41 (6): note added, status unchanged. cup_button_weight asks 600 for filled and tinted buttons (control.e), and only label.e's sheet registers Segoe UI Semibold, so every Cupertino button label is drawn in Segoe UI Bold (672 coverage class, wider than semibold). This row's gaps do not say so (13 other matched Cupertino rows carry the 'semibold mapped to Segoe UI Bold' line, button does not). The matched claim here is a shapes-only comparison (fill, radius, height) that does not depend on the label weight, so the status holds; alert_dialog, action_sheet, dialog, date_picker and time_picker were not checked for the same stand-in. | ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, light): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 007aff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | AUDIT 41 (6): note added, status unchanged. cup_button_weight asks 600 for filled and tinted buttons (control.e), and only label.e's sheet registers Segoe UI Semibold, so every Cupertino button label is drawn in Segoe UI Bold (672 coverage class, wider than semibold). This row's gaps do not say so (13 other matched Cupertino rows carry the 'semibold mapped to Segoe UI Bold' line, button does not). The matched claim here is a shapes-only comparison (fill, radius, height) that does not depend on the label weight, so the status holds; alert_dialog, action_sheet, dialog, date_picker and time_picker were not checked for the same stand-in. | ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, dark): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 0a84ff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: not verified: 5 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.8:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: 19 cells measured on page_control.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 206 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "The keyboard focus of the segmented strip is the runtime's square rectangle inside the segment (no rounding)",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/dialog.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill f4f4f6 against f1f1f1 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/dialog.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill 2c2c2e against 242424 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 202 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | ROUND 78 (n): Viewed: glyph buttons rest, hover, pressed, focus, on and the three navigation bars render; the only pairs under 3:1 are the 007aff glyph on its hover and pressed layers (2.9 to 3.6, a tinted layer by design). Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.6:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 15 cells measured on toolbar_button.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.9:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 214 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/label.png",
+    "notes": "AUDIT 41 (5): held at matched. Own comparer, ink coverage of 'Deck Properties' in the committed label.png (light and dark): 505 and 504 against PIL Segoe UI Semibold 17 px 514 (Regular 391, Bold 672), width 119 against 121 at coverage 0.5; the cell is Semibold. The claim 'other Cupertino controls asking weight 600 draw Bold' is recorded in this row's gap and note (and flutter-compare-u.md). | ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for this sheet only): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) still draw Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in every Cupertino sheet colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/label.png",
+    "notes": "AUDIT 41 (5): held at matched. Own comparer, ink coverage of 'Deck Properties' in the committed label.png (light and dark): 505 and 504 against PIL Segoe UI Semibold 17 px 514 (Regular 391, Bold 672), width 119 against 121 at coverage 0.5; the cell is Semibold. The claim 'other Cupertino controls asking weight 600 draw Bold' is recorded in this row's gap and note (and flutter-compare-u.md). | ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for this sheet only): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) still draw Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in every Cupertino sheet colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/segmented_control.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: container 181 x 32 against sliding 165 x 32 (label width), thumb 69 x 28 r7 against 57 x 28 r6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 32 pt track in tertiary fill, pressed, focus, disabled states. UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v), not SF Semibold, so widths are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/segmented_control.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 74 (h): compared to Flutter CupertinoSlidingSegmentedControl dark (shapes only): container 181 x 32 fill 323236 against ref 165 x 32 fill 1c1c1f on black; same token (tertiary fill 767680 at 24 percent), different ground (ours 1c1c1e), computed 323236; thumb raised 636366 equal to the ref. Width is the labels, thumb 69 x 28 against 57 x 28; recorded in flutter-compare-h.md for dark as well as light.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v), not SF Semibold, so widths are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/large_title.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/large_title.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   }
+  }
+ },
+ "speed_dial": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/speed_dial.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A tinted pull-down button (ellipsis and label) over an iOS style context menu: 14 px corners, 44 px rows, hairlines between. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png).",
+    "gaps": [
+     "The context menu's material blur is not drawn: an opaque fill stands for it",
+     "Rows carry no trailing icons",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/speed_dial.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 63 (z): derived from the platform's public design rules, not compared with a real screen or a capture. A tinted pull-down button (ellipsis and label) over an iOS style context menu: 14 px corners, 44 px rows, hairlines between. Closed at rest, hover, pressed and keyboard focus (speed_dial.png) and open (speed_dial_open.png). Dark: the platform's published dark palette, no live reference.",
+    "gaps": [
+     "The context menu's material blur is not drawn: an opaque fill stands for it",
+     "Rows carry no trailing icons",
+     "The menu opens above the head because the sheet puts the head at the bottom",
+     "No disabled state: the control has no enabled parameter"
+    ]
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/empty_state.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/empty_state.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 lane c. Glyph art with one action, two actions, compact, text only, a picture as the art, and the action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture art is a drawn sample landscape (lib/e/ui/looks_c.e) standing in for an illustration, not a real asset",
+     "No keyboard focus cell"
+    ]
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/markdown_view.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/markdown_view.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "alert_dialog": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/alert_dialog.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/alert_dialog.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   }
+  }
+ },
+ "breadcrumbs": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/breadcrumbs.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/breadcrumbs.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Four-level trail at rest, hover, pressed, focus, two levels and collapsed into an overflow crumb. Derived from the library's trail through each look's tokens.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ]
+   }
+  }
+ },
+ "wizard": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/wizard.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/wizard.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 lane f. Step indicator, content and Back, Next, Finish, Cancel: first, middle, last step, Next disabled. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/swipe_actions.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/swipe_actions.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/font_picker.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/font_picker.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62: 5 cells (rest, second family and bold, hover, focus, large size) in all ten looks at 100 % and 150 %. Status review: rendered, not compared.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ]
+   }
+  }
+ }
+}

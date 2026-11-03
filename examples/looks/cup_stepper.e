@@ -5,12 +5,19 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_change(ctx: *void, value: i64) -> err { ret ok }
 fn noop_typed(ctx: *void, value: str) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: glyphs and the keyboard ring take the increased-contrast blue (3:1 on the stepper face in every state).
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let names = [12]str{ "rest", "lower bound", "upper bound", "hover (plus half)", "pressed (plus half)", "keyboard focus", "disabled", "spin box", "spin box at bound", "spin box hover", "spin box disabled", "spin box invalid" }
     let values = [12]i64{ 5i64, 0i64, 10i64, 5i64, 5i64, 5i64, 5i64, 12i64, 0i64, 12i64, 12i64, 120i64 }
     let change = widget.Change[i64] { ctx: zero, invoke: noop_change }
@@ -40,6 +47,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 3usize || i == 9usize { drive = .Hover }
         if i == 4usize { drive = .Press }
         if i == 5usize { drive = .Focus }
+        // the stepper stands right of its value; aim at the plus half
+        if i == 3usize || i == 4usize { looks.aim(i, 45.0, 0.0) }
+        if i == 9usize { looks.aim(i, 78.0, 0.0) }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
     }

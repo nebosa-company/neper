@@ -6516,6 +6516,12 @@ $uiContent2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiContent2V2Written -ne 'executable written') { throw 'ui_content2_v2 emission failed' }
 $uiContent2V2Output = & $uiContent2V2Path
 if ($LASTEXITCODE -ne 0 -or $uiContent2V2Output -ne 'ui content2 v2 ok') { throw "ui_content2_v2 answered wrongly: exit $LASTEXITCODE" }
+# a popup menu taller than its room: wheel, keyboard focus and hover over a chevron strip scroll it
+$uiPopupMenuScrollPath = Join-Path $testBuild 'ui-popup-menu-scroll-selfhost.exe'
+$uiPopupMenuScrollWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_popup_menu_scroll\src\main.e') $repo 'x64' 'windows' $uiPopupMenuScrollPath
+if ($LASTEXITCODE -ne 0 -or $uiPopupMenuScrollWritten -ne 'executable written') { throw 'ui_popup_menu_scroll emission failed' }
+$uiPopupMenuScrollOutput = & $uiPopupMenuScrollPath
+if ($LASTEXITCODE -ne 0 -or $uiPopupMenuScrollOutput -ne 'ui popup menu scroll ok') { throw "ui_popup_menu_scroll answered wrongly: exit $LASTEXITCODE" }
 # v2 rich text: wrap across spans, baseline, code/key/mention, links, max_lines (D964)
 $uiContent3V2Path = Join-Path $testBuild 'ui-content3-v2-selfhost.exe'
 $uiContent3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_content3_v2\src\main.e') $repo 'x64' 'windows' $uiContent3V2Path

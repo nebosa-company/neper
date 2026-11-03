@@ -1,0 +1,172 @@
+{
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "ROUND 76 (looks76-j, viewed 1x and 1.5x, light and dark): the drop button now draws a 32 px calendar icon button at the field's end (the 210 px sheet column had squeezed the 256 px field to 200 and left the glyph outside it, drawn 2 px wide); hot and pressed cells aim the pointer at it and show the 8 and 10 percent state circle (dark 202127 and 24252b over 121318); field 256 x 48, 1 px outline, padding 16, as the text field. Flutter DatePicker input is 56 high (recorded density deviation). | Audit 35 finding (fixed): Audit 35: drop button: every cell draws it as a 2 x 15 px dark bar 26 px right of the field (x 323 in the 1494 px sheet), not a button; 'Drop button hot' and 'Drop button pressed' are indistinguishable from rest (the field rings differ, the bar does not). The same bar is in the render before lane i, so the lane's geometry numbers hold and the defect was never looked at."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "ROUND 76 (looks76-j, viewed 1x and 1.5x, light and dark): the drop button now draws a 32 px calendar icon button at the field's end (the 210 px sheet column had squeezed the 256 px field to 200 and left the glyph outside it, drawn 2 px wide); hot and pressed cells aim the pointer at it and show the 8 and 10 percent state circle (dark 202127 and 24252b over 121318); field 256 x 48, 1 px outline, padding 16, as the text field. Flutter DatePicker input is 56 high (recorded density deviation). Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: drop button: every cell draws it as a 2 x 15 px dark bar 26 px right of the field (x 323 in the 1494 px sheet), not a button; 'Drop button hot' and 'Drop button pressed' are indistinguishable from rest (the field rings differ, the bar does not). The same bar is in the render before lane i, so the lane's geometry numbers hold and the defect was never looked at.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/search_field_all.png",
+    "notes": "ROUND 76 (looks76-j): every cell, empty included, is now a 200 x 40 pill (the Clear button's 32 px plus the line's own padding stretched the filled ones to 52); fills, hover, focus and invalid rings as lane i recorded. Flutter SearchBar is 378 x 56 with icons (recorded: the Neper bar is the 40 px SearchBar spec of docs/ux). | Audit 35 finding (fixed): Audit 35: states change the pill height: the empty cell is 198 x 40 (200 x 40 with the edge) where filled, hover, focus, disabled and invalid are 200 x 52 (196 x 48 plus the 2 px edge); a search bar must not grow 12 px when it holds text. Lane i's 200 x 52 holds for five of six cells. Colours hold (rest e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; dark 292a2f",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/search_field_all.png",
+    "notes": "ROUND 76 (looks76-j): every cell, empty included, is now a 200 x 40 pill (the Clear button's 32 px plus the line's own padding stretched the filled ones to 52); fills, hover, focus and invalid rings as lane i recorded. Flutter SearchBar is 378 x 56 with icons (recorded: the Neper bar is the 40 px SearchBar spec of docs/ux). Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: states change the pill height: the empty cell is 198 x 40 (200 x 40 with the edge) where filled, hover, focus, disabled and invalid are 200 x 52 (196 x 48 plus the 2 px edge); a search bar must not grow 12 px when it holds text. Lane i's 200 x 52 holds for five of six cells. Colours hold (rest e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; dark 292a2f",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/autocomplete.png",
+    "notes": "ROUND 76 (looks76-j): the open list is as wide as the field (200) and starts 4 px under its bottom edge, so the field's lower outline stays whole; its rows fill the list, so the hovered or active row is a 200 x 36 band, not a 58 x 36 patch (Flutter's DropdownMenu list is field wide and flush under the field). | Audit 35 finding (fixed): Audit 35: open list (autocomplete_open): the hovered row is a 58 x 36 patch (d7d9df, dark 313338) inside a 168 x 124 list, it should span the row; the list starts 8 px above the field's bottom edge and hides the field's lower outline between x 48 and 216. Field 200 x 48 with 1 px 737784 outline (ref 74777f), list rows 36 and the 168 x 124 surface hold.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/autocomplete.png",
+    "notes": "ROUND 76 (looks76-j): the open list is as wide as the field (200) and starts 4 px under its bottom edge, so the field's lower outline stays whole; its rows fill the list, so the hovered or active row is a 200 x 36 band, not a 58 x 36 patch (Flutter's DropdownMenu list is field wide and flush under the field). Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: open list (autocomplete_open): the hovered row is a 58 x 36 patch (d7d9df, dark 313338) inside a 168 x 124 list, it should span the row; the list starts 8 px above the field's bottom edge and hides the field's lower outline between x 48 and 216. Field 200 x 48 with 1 px 737784 outline (ref 74777f), list rows 36 and the 168 x 124 surface hold.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "text_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/text_edit.png",
+    "notes": "ROUND 76 (looks76-j): ROOT CAUSE: the Neper and Android field builder (control.field) never clipped its value stack, where the Windows, Cupertino and Linux builders do, so a value wider than the content box ran over the outline. Neper now clips the value to the content box (140 wide field: ink stops 17 px from the right edge, padding 16, as Flutter's TextField). Disabled outlined field has no fill and a 12 percent outline (221,222,228 against Flutter 222,222,228). Outline 1 px 737784, radius 4, left padding 16 equal to the ref; height 48 against 56 is the recorded density deviation. Viewed 1x and 1.5x, light and dark. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: 'Heroic Intervention of the Marvel Universe' is not clipped to the field, it leaves the 200 px field and prints over the next cell's 'Empty, focused' field (light and dark). Field outlines, focus and invalid rings are whole and equal the ref colours within palette (737784 against 74777f)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/text_edit.png",
+    "notes": "ROUND 76 (looks76-j): ROOT CAUSE: the Neper and Android field builder (control.field) never clipped its value stack, where the Windows, Cupertino and Linux builders do, so a value wider than the content box ran over the outline. Neper now clips the value to the content box (140 wide field: ink stops 17 px from the right edge, padding 16, as Flutter's TextField). Disabled outlined field has no fill and a 12 percent outline (221,222,228 against Flutter 222,222,228). Outline 1 px 737784, radius 4, left padding 16 equal to the ref; height 48 against 56 is the recorded density deviation. Viewed 1x and 1.5x, light and dark. Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: 'Heroic Intervention of the Marvel Universe' is not clipped to the field, it leaves the 200 px field and prints over the next cell's 'Empty, focused' field (light and dark). Field outlines, focus and invalid rings are whole and equal the ref colours within palette (737784 against 74777f).",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Long text cell is clipped to the field's content box (ink ends 16 px from the right outline, field 140 x 48); same root cause and fix as text_edit. Viewed 1x and 1.5x, light and dark. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: the digits run through the field's right outline and on to the sheet edge (field right edge 3 px from the image edge); a field must clip its text. Other cells are whole."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/mask_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Long text cell is clipped to the field's content box (ink ends 16 px from the right outline, field 140 x 48); same root cause and fix as text_edit. Viewed 1x and 1.5x, light and dark. Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: the digits run through the field's right outline and on to the sheet edge (field right edge 3 px from the image edge); a field must clip its text. Other cells are whole.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Long text cell no longer runs over the '...' button (text clipped before the end button, 15 px clear); same root cause and fix as text_edit. Hover and press button circles unchanged. Viewed 1x and 1.5x, light and dark. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: 'D:/Games/Magic/Dec' crosses the field outline, overprints the '...' button and runs to the sheet edge (4 px of text at the last column); the other cells and the focus ring are whole."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/button_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Long text cell no longer runs over the '...' button (text clipped before the end button, 15 px clear); same root cause and fix as text_edit. Hover and press button circles unchanged. Viewed 1x and 1.5x, light and dark. Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: 'Long text' cell: 'D:/Games/Magic/Dec' crosses the field outline, overprints the '...' button and runs to the sheet edge (4 px of text at the last column); the other cells and the focus ring are whole.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/token_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Wrapped cell is 320 wide with five tokens (3 and 2 per line) and fits its row (Neper chips are about 90 wide and 32 tall: at 200 wide they wrapped one to a line, seven of them, and ran under the sheet edge); the hover, hover close and focused cells now aim the pointer at the chip, its cross and the input line so each shows its state (hover layer on the chip, state circle on the cross, 2 px focus ring). Viewed 1x and 1.5x, light and dark. | Audit 35 finding (fixed): Audit 35: 'Wrapped' cell: the field outline closes under three tokens and the fourth is drawn below it and cut by the bottom of the sheet (2 px of ink on the last row); the box does not grow with its wrapped tokens."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/token_edit.png",
+    "notes": "ROUND 76 (looks76-j): the Wrapped cell is 320 wide with five tokens (3 and 2 per line) and fits its row (Neper chips are about 90 wide and 32 tall: at 200 wide they wrapped one to a line, seven of them, and ran under the sheet edge); the hover, hover close and focused cells now aim the pointer at the chip, its cross and the input line so each shows its state (hover layer on the chip, state circle on the cross, 2 px focus ring). Viewed 1x and 1.5x, light and dark. Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: 'Wrapped' cell: the field outline closes under three tokens and the fourth is drawn below it and cut by the bottom of the sheet (2 px of ink on the last row); the box does not grow with its wrapped tokens.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/hint.png",
+    "notes": "ROUND 76 (looks76-j): the rich tooltip hangs from its anchor's right edge, so the anchor stands 180 px in from the cell's left and 60 px lower: the tooltip is now whole (shadow included) and clear of the caption. STILL REVIEW: the Wrapped cell prints two lines and silently drops the third ('whatever their edition or condition'): the plain tooltip is capped at 2 lines (overlay.tooltip_of max_lines) with no ellipsis; not caused by this round and not a Flutter parity item, needs a decision (raise the cap or ellipsise). | Audit 35 finding (fixed): Audit 35: rich tooltip ('Price refresh') is flush with the sheet's left edge: 69 rows of ink on column 0, its left shadow and the outer pixel of its border are cut (light and dark); tooltips Plain, Wrapped, With shortcut, Short are whole and the dark fill 2f3035 equals the inverse surface."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "ROUND 76 (looks76-j): the rich tooltip hangs from its anchor's right edge, so the anchor stands 180 px in from the cell's left and 60 px lower: the tooltip is now whole (shadow included) and clear of the caption. STILL REVIEW: the Wrapped cell prints two lines and silently drops the third ('whatever their edition or condition'): the plain tooltip is capped at 2 lines (overlay.tooltip_of max_lines) with no ellipsis; not caused by this round and not a Flutter parity item, needs a decision (raise the cap or ellipsise). Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: rich tooltip ('Price refresh') is flush with the sheet's left edge: 69 rows of ink on column 0, its left shadow and the outer pixel of its border are cut (light and dark); tooltips Plain, Wrapped, With shortcut, Short are whole and the dark fill 2f3035 equals the inverse surface.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "ROUND 76 (looks76-j): the value is clipped before the chevron button in all eight cells (content box right padding 16 plus the 20 px reserved for the 32 px chevron); the Drop button hot and pressed cells show the full combo with the pointer on the chevron (state circle visible); the Focus cell's tap now lands on the editor so it shows the 2 px primary ring (it showed the rest outline). Open lists (combo_box_lists) are field wide, 4 px under the field, with the room below them, row hover on the second row. Flutter DropdownMenu: field 138 x 56, list as wide as the field and flush under it (ours 4 px gap, recorded). | Audit 35 finding (fixed): Audit 35: every cell draws the value ('Against Card Color') under the drop arrow, so the last letters and the arrow overprint; 'Drop button hot' and 'Drop button pressed' show no field at all, only a 22 x 46 outlined bar with a halo and the label beside it. The sheet is built for the 22 px Windows field and the Neper control is not laid out for it; lane i recorded the sibling sheets (combo_box_foc"
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "ROUND 76 (looks76-j): the value is clipped before the chevron button in all eight cells (content box right padding 16 plus the 20 px reserved for the 32 px chevron); the Drop button hot and pressed cells show the full combo with the pointer on the chevron (state circle visible); the Focus cell's tap now lands on the editor so it shows the 2 px primary ring (it showed the rest outline). Open lists (combo_box_lists) are field wide, 4 px under the field, with the room below them, row hover on the second row. Flutter DropdownMenu: field 138 x 56, list as wide as the field and flush under it (ours 4 px gap, recorded). Dark: role colours and the same geometry. | Audit 35 finding (fixed): Audit 35: every cell draws the value ('Against Card Color') under the drop arrow, so the last letters and the arrow overprint; 'Drop button hot' and 'Drop button pressed' show no field at all, only a 22 x 46 outlined bar with a halo and the label beside it. The sheet is built for the 22 px Windows field and the Neper control is not laid out for it; lane i recorded the sibling sheets (combo_box_foc",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}

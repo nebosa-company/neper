@@ -1,0 +1,28 @@
+{
+ "image_combo_box": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/image_combo_box_dialog.png",
+    "notes": "ROUND 55: the hovered-row lists (list_art3, list_condition3, list_condition4) were stale PNGs: the committed sheets still carried the soft right and bottom lines and the 3 level ghost row of the resampled fit, although win_sheet draws the whole pixel frame since round 53. Re-rendered with no code change, they equal the raw captures hover-combo-list-options-card-art-position-row2 and -condition-row2, -row3 at 19, 22 and 22 px (own comparer, counted = more than 2 levels in any channel, glyphs included; 0 flat chrome px; list_art3 was 1251 with 292 flat in the same comparer, list_condition3 4033, list_condition4 3699). Whole set against the raw files: list_art 19, list_art2 19, list_art3 19, list_condition 22, 22, 22, 22, list_auth 13, list_auth2 13, list_sort 1495 with 0 flat (the three pictures of v3 and ClearType text). Heads, hover, cell and dialog crops as audit 24. No capture exists of the open_* sheets as one piece (unverified, minor).",
+    "gaps": [
+     "Pictures are v3's coloured bitmaps drawn as placeholders (artwork excluded)",
+     "Disabled: a guess (button grey), no capture",
+     "open_* sheets (head plus list as one piece) have no single capture"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "windows": {
+    "status": "matched",
+    "screenshot": "windows/popup_menu_dialog.png",
+    "notes": "ROUND 55: the three rest menus follow the raw 1:1 captures. popup_menu_cards and popup_menu_online take the item states of the capture (Add to Collection, Add Foil to Collection and Select All enabled in Cards; all four Online items enabled; no row highlighted), the same item strings as the sel_cards_1 and sel_online_1 sheets. popup_menu_view draws the whole 626 px menu with the Messages row for the Windows profile (the spec keeps its 618 px clip and scroll arrow for the other profiles, so their sheets are byte identical); the sheet size is unchanged. Own comparer over all 28 raw popup captures (menu-*@1x in dialogs and menu-item-selected, menu-reports-deck-mode, menu-submenu-open-cards-export in states, our cell located by squared difference, counted = more than 2 levels in any channel, glyphs included): 28 of 28 reproduce, largest 188 px (sel_cardart_1), 0 flat chrome px in all except 6 Exit text pixels of the File sheets; before: cards 2802, online 2998, view 2759 with 918 flat. Now cards 153, online 17, view 163. popup_menu_dialog (Cards beside View) follows. Windows dark rest sheets of Cards, Online and View change with it (no dark capture; derived from the light one).",
+    "gaps": [
+     "a few v3 pictures differ by up to 29 px each (framed grounds, disabled pictures; artwork excluded)"
+    ]
+   }
+  }
+ }
+}

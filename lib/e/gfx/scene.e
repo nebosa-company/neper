@@ -123,6 +123,19 @@ fn set_pixel_exact(on: bool) {
     pixel_exact = on
 }
 
+// The device scale of the window being built or drawn (1.5 for 150 %), set by the application with the widget snap and by the looks
+// harness; a Windows control that draws a 1 device pixel line asks for it.
+var device_scale_milli: u32 = 0u32
+
+fn set_device_scale(scale: f32) {
+    device_scale_milli = u32(scale * 1000.0 + 0.5)
+}
+
+fn device_scale_now() -> f32 {
+    if device_scale_milli == 0u32 { ret 1.0 }
+    ret f32(device_scale_milli) / 1000.0
+}
+
 fn pixel_exact_on() -> bool {
     ret pixel_exact
 }

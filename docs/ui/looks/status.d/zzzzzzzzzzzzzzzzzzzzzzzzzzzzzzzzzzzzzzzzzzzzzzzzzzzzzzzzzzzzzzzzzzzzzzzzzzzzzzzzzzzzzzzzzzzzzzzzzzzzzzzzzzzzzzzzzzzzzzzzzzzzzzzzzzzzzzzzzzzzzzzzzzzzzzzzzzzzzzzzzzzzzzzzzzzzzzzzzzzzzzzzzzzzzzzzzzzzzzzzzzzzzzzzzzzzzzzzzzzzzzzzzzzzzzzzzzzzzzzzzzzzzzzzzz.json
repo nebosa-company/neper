@@ -1,0 +1,144 @@
+{
+ "duration_picker": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/duration_picker.png",
+    "notes": "ROUND 88: the Hover cell aimed at the gap between two steppers, so it drew Rest. It now aims at the Minutes plus button: hover layer d9d4dd over e6e0e9 (dark 424047 over 36343b), the 8 percent state layer of md.comp.icon-button; Focus (10 percent, third plus) unchanged. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no duration picker; built from the stepper and 40 dp icon buttons"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/duration_picker.png",
+    "notes": "ROUND 88: the Hover cell aimed at the gap between two steppers, so it drew Rest. It now aims at the Minutes plus button: hover layer d9d4dd over e6e0e9 (dark 424047 over 36343b), the 8 percent state layer of md.comp.icon-button; Focus (10 percent, third plus) unchanged. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no duration picker; built from the stepper and 40 dp icon buttons"
+    ]
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/table.png",
+    "notes": "ROUND 88: follows Flutter's DataTable. Measured against ref/flutter/material/*/datatable-rest@1x: header 56 high on the surface colour (fef7ff, dark 141218, equal to the table ground as in the reference), 48 dp rows (rules at a 48 px pitch), rule cac4d0 against cac4cf (dark 49454f against 49454e), checkbox column with the 18 px box centred in header and rows (within 1 px of the reference), numbers at the end. Hover 8 percent, focus 10 percent, selected secondary-container with the selection bar. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Checkbox column margin is 16 dp against Flutter's 24, so text starts 9 px earlier; the Type column is left aligned",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/table.png",
+    "notes": "ROUND 88: follows Flutter's DataTable. Measured against ref/flutter/material/*/datatable-rest@1x: header 56 high on the surface colour (fef7ff, dark 141218, equal to the table ground as in the reference), 48 dp rows (rules at a 48 px pitch), rule cac4d0 against cac4cf (dark 49454f against 49454e), checkbox column with the 18 px box centred in header and rows (within 1 px of the reference), numbers at the end. Hover 8 percent, focus 10 percent, selected secondary-container with the selection bar. Five cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Checkbox column margin is 16 dp against Flutter's 24, so text starts 9 px earlier; the Type column is left aligned",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "notification_list": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/notification_list.png",
+    "notes": "ROUND 88: the three-notice list stands 330 high in a 370 cell, so the third notice and its Details action are whole (the 260 list cut it); a wrapped message no longer squeezes the 40 dp well and the 32 dp dismiss button (they drew 30 and 24 wide): the text column takes the exact room. Hover and pressed layers on Mark all read distinct (aim follows the list height). Viewed light and dark at 1x and 1.5x; text on-surface 16:1, actions primary 6.1:1 (dark 10.9:1).",
+    "gaps": [
+     "Derived: M3 has no notification list; text buttons keep their 64 dp minimum width, so View and Details are centred in it"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/notification_list.png",
+    "notes": "ROUND 88: the three-notice list stands 330 high in a 370 cell, so the third notice and its Details action are whole (the 260 list cut it); a wrapped message no longer squeezes the 40 dp well and the 32 dp dismiss button (they drew 30 and 24 wide): the text column takes the exact room. Hover and pressed layers on Mark all read distinct (aim follows the list height). Viewed light and dark at 1x and 1.5x; text on-surface 16:1, actions primary 6.1:1 (dark 10.9:1).",
+    "gaps": [
+     "Derived: M3 has no notification list; text buttons keep their 64 dp minimum width, so View and Details are centred in it"
+    ]
+   }
+  }
+ },
+ "carousel": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/carousel.png",
+    "notes": "ROUND 88: hover and pressed cells aimed 6 px below the Next button (outside its 40 dp circle); they now hit it: hover 8 percent f0e9f1, pressed 10 percent ece5ed (dark layers drawn). The focus cell lands on the Previous button with four Tab presses and draws its 10 percent layer. M3 chevron icon buttons, primary dot indicator. Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 carousel is a different component; this is a pager with arrows and dots"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/carousel.png",
+    "notes": "ROUND 88: hover and pressed cells aimed 6 px below the Next button (outside its 40 dp circle); they now hit it: hover 8 percent f0e9f1, pressed 10 percent ece5ed (dark layers drawn). The focus cell lands on the Previous button with four Tab presses and draws its 10 percent layer. M3 chevron icon buttons, primary dot indicator. Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 carousel is a different component; this is a pager with arrows and dots"
+    ]
+   }
+  }
+ },
+ "reorderable_list": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/reorderable_list.png",
+    "notes": "ROUND 88: Android rows are 56 dp list items led by a 24 dp drag handle (on-surface-variant, 5.9:1 dark 10.9:1 or better), with the list item state layers: hover 8 percent, pressed and focus 10 percent on-surface. The sheet aims at the third row (the pointer used to sit on a seam). Four cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no reorderable list; dragging is not drawn in a still"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/reorderable_list.png",
+    "notes": "ROUND 88: Android rows are 56 dp list items led by a 24 dp drag handle (on-surface-variant, 5.9:1 dark 10.9:1 or better), with the list item state layers: hover 8 percent, pressed and focus 10 percent on-surface. The sheet aims at the third row (the pointer used to sit on a seam). Four cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no reorderable list; dragging is not drawn in a still"
+    ]
+   }
+  }
+ },
+ "ribbon": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/ribbon.png",
+    "notes": "ROUND 88: Android draws the real command glyphs (clipboard, scissors, pages, B, I, U, table grid) in place of the stand-in plus, cross, check and pencil. Ink on-surface, bold toggle on its secondary-container tonal fill, command hover and pressed layers distinct, disabled Redo at 38 percent. Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no ribbon"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/ribbon.png",
+    "notes": "ROUND 88: Android draws the real command glyphs (clipboard, scissors, pages, B, I, U, table grid) in place of the stand-in plus, cross, check and pencil. Ink on-surface, bold toggle on its secondary-container tonal fill, command hover and pressed layers distinct, disabled Redo at 38 percent. Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no ribbon"
+    ]
+   }
+  }
+ },
+ "color_picker": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/color_picker.png",
+    "notes": "ROUND 88: each slider has its channel letter (R, G, B, A) and 0 to 255 reading beside it (on-surface-variant 8.9:1, dark 10.9:1); the sheet cell is 340 wide so the 68 wider picker fits. Slider thumb layers at 8 percent hover, 10 percent focus and pressed (md.comp.slider). Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no colour picker"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/color_picker.png",
+    "notes": "ROUND 88: each slider has its channel letter (R, G, B, A) and 0 to 255 reading beside it (on-surface-variant 8.9:1, dark 10.9:1); the sheet cell is 340 wide so the 68 wider picker fits. Slider thumb layers at 8 percent hover, 10 percent focus and pressed (md.comp.slider). Six cells viewed light and dark at 1x and 1.5x.",
+    "gaps": [
+     "Derived: M3 has no colour picker"
+    ]
+   }
+  }
+ }
+}

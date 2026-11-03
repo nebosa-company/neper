@@ -103,7 +103,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // `column` place the element in a collection of `row_count` by `column_count`;
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
 // leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
-// control; a platform action the element offers reaches `on_action` as its bit;
+// control (negative: keeps it outside, even for a tab); a platform action the element offers reaches `on_action` as its bit;
 // `promote_actions` keeps nested Button/Link descendants beside this control.
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
@@ -161,8 +161,8 @@ fn zoom_values_valid(value: ZoomState, min_scale: f32, max_scale: f32) -> bool {
 fn zoom_valid(z: Zoom) -> bool {
     ret zoom_values_valid(z.state, z.min_scale, z.max_scale)
 }
-// A paint-only transform about the node's centre. Layout and hit bounds stay put.
-type VisualTransform = struct { scale: f32, rotation: f32, offset: geometry.Point }
+// A paint-only transform about the node's centre. Layout and hit bounds stay put. `skew` leans the node: a point moves right by skew times its height above the centre (negative leans right, like an italic).
+type VisualTransform = struct { scale: f32, rotation: f32, skew: f32, offset: geometry.Point }
 // A drop (D844): what a drag begun with `begin_drag` carried, released over a region
 // that takes drops.
 type Dropped = struct { position: geometry.Point, payload: u64 }
@@ -214,6 +214,9 @@ const GESTURE_HOVER: u8 = 4u8
 const GESTURE_DROP: u8 = 8u8
 const GESTURE_SPACE: u8 = 16u8
 const GESTURE_WHEEL: u8 = 32u8
+// (looks) A hover-scroll strip: while the pointer rests on it (with GESTURE_HOVER) the viewport its semantic parent `controls` scrolls
+// toward the strip's side, at 360 px a second, a frame at a time (a menu's chevron).
+const GESTURE_HOLD: u8 = 64u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -357,6 +360,7 @@ fn set_snap(widget_runtime: *Runtime, snap: f32) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize { ret }
     s.snap = snap
+    if snap > 0.0 { scene.set_device_scale(1.0 / snap) }
 }
 
 // A measure remembered for the frame: the node (by its address in the frame's
@@ -479,6 +483,9 @@ type State = struct {
     // (D1470) When edge auto-scroll last stepped, so a step covers the time since.
     edge_scrolled_at: time.Instant,
     has_edge_scrolled: bool,
+    // When the hover-scroll strip last stepped, so a step covers the time since.
+    hold_scrolled_at: time.Instant,
+    has_hold_scrolled: bool,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -1025,6 +1032,22 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     let (index, found) = element_of(s, element)
     if !found { ret InvalidTree }
     s.focus = u32(index)
+    s.has_focus = true
+    s.focus_visible = true
+    ret ok
+}
+
+// Keyboard focus on the last focusable element of the page, while a modal overlay is open. Tab and Shift+Tab stay inside
+// the overlay then, so a frame that shows a control behind an open list cannot reach the page's last tab stop any other way.
+fn focus_last_behind_modal(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (modal, has_modal) = topmost_modal(s)
+    if !has_modal || !s.has_root { ret ok }
+    let order = s.focus_order
+    let count = collect_focusable(s, usize(s.root), order, 0usize)
+    if count == 0usize { ret ok }
+    s.focus = order[count - 1usize]
     s.has_focus = true
     s.focus_visible = true
     ret ok
@@ -1728,6 +1751,9 @@ fn measure_uncached(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layo
     if has_own_width && own_width - padding.left - padding.right < inner.max_width { inner.max_width = own_width - padding.left - padding.right }
     let (own_height, has_own_height) = style.px_of(node.style.height)
     if has_own_height && own_height - padding.top - padding.bottom < inner.max_height { inner.max_height = own_height - padding.top - padding.bottom }
+    // A maximum width bounds the content too, so a wrapped text under it measures its rows at that width.
+    let (own_cap, has_own_cap) = style.px_of(node.style.max_width)
+    if has_own_cap && own_cap - padding.left - padding.right < inner.max_width { inner.max_width = own_cap - padding.left - padding.right }
     if inner.max_width < 0.0 { inner.max_width = 0.0 }
     if inner.max_height < 0.0 { inner.max_height = 0.0 }
     let (content, content_error) = measure_content(s, a, node, inner)
@@ -1832,7 +1858,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
         if children_error != ok { ret (zero, children_error) }
         let (result, layout_error) = ui_layout.wrap(a, w, ui_layout.Constraints { min_width: 0.0, max_width: inner.max_width, min_height: 0.0, max_height: inner.max_height }, children)
-        if layout_error != ok { ret (zero, InvalidTree) }
+        if layout_error != ok && layout_error != ui_layout.Overflow { ret (zero, InvalidTree) }
         ret (result.size, ok)
     case .Scroll as sc:
         var open = inner
@@ -1946,7 +1972,17 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         if corner.top_left > shade_radius { shade_radius = corner.top_left }
         try matshade.paint_level(b, bounds, shade_radius, node.style.shade)
     }
-    if node.style.shadow.color.alpha > 0.0 {
+    if node.style.shadow.color.alpha > 0.0 && soft_shadows && node.style.shade == 0u8 {
+        // Android (looks_z85): the offset copy becomes the drawn M3 level its offset asks for (1 to 5), a soft two-part shadow, not a hard foot.
+        var shadow_radius = node.style.radius
+        if corner.top_left > shadow_radius { shadow_radius = corner.top_left }
+        var level = 1u8
+        if node.style.shadow.offset.y > 1.5 { level = 2u8 }
+        if node.style.shadow.offset.y > 2.5 { level = 3u8 }
+        if node.style.shadow.offset.y > 4.5 { level = 4u8 }
+        if node.style.shadow.offset.y > 6.5 { level = 5u8 }
+        try matshade.paint_level(b, bounds, shadow_radius, level)
+    } else if node.style.shadow.color.alpha > 0.0 {
         let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
         try fill_corners(a, b, shifted, corner, paint.Brush { Solid: node.style.shadow.color })
     }
@@ -2155,6 +2191,16 @@ fn native_caret_blinked_off(c: paint.Color) -> bool {
     ret c.alpha > 0.0027 && c.alpha < 0.0035
 }
 
+// round 46: the light (GDI) edit of v3: `Edit.caret` with alpha 0.004 (its rgb the face colour) draws the inverting one pixel caret and
+// the selection on whole pixels running one pixel past the last glyph, as the native edit does, but the glyphs stay on the line box.
+fn gdi_caret(face: paint.Color) -> paint.Color {
+    ret paint.rgba(face.red, face.green, face.blue, 0.004)
+}
+
+fn gdi_caret_face(c: paint.Color) -> bool {
+    ret native_caret_face(c) || (c.alpha > 0.0038 && c.alpha < 0.0042)
+}
+
 // An editor paints its selection under the text, then the text, then -- focused --
 // an underline beneath the composition and a one-pixel caret.
 fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometry.Rect, b: *scene.Builder) -> err {
@@ -2193,7 +2239,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             var i = 0usize
             while i < rects.len {
                 var sel = rects[i]
-                if native_caret_face(ed.caret) {
+                if gdi_caret_face(ed.caret) {
                     // round 13 (native Windows 11 edit, GDI): whole pixel edges, and the fill runs one pixel past the last glyph (under the caret)
                     let left = floor_f(origin.x + sel.x + 0.5)
                     let right = floor_f(origin.x + sel.x + sel.width + 0.5) + 1.0
@@ -2208,7 +2254,51 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
     // round 15: the native dark (GDI) edit sets its glyphs one row above the line box its selection and caret fill
     var glyph_origin = origin
     if native_caret_face(ed.caret) { glyph_origin = geometry.Point { x: origin.x, y: origin.y - 1.0 } }
-    try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+    // round 46 (the light GDI edit, one selection rectangle): GDI sets the unselected glyphs in the text colour and the selected ones once,
+    // in the selection text colour, so the text colour pass keeps off the selection (a pass over it would darken the edges of the second).
+    var gdi_split = false
+    var split_left: f32 = 0.0
+    var split_right: f32 = 0.0
+    var split_top: f32 = 0.0
+    var split_bottom: f32 = 0.0
+    if focused_here && gdi_caret_face(ed.caret) && !native_caret_face(ed.caret) && ed.marked.alpha > 0.0 {
+        let (lo, hi) = selection_of(e)
+        if lo < hi {
+            let (srects, srects_error) = layout.selection(a, &copies[0usize], lo, hi)
+            if srects_error != ok { ret InvalidTree }
+            if srects.len == 1usize {
+                gdi_split = true
+                split_left = floor_f(origin.x + srects[0usize].x + 0.5)
+                split_right = floor_f(origin.x + srects[0usize].x + srects[0usize].width + 0.5)
+                split_top = origin.y + srects[0usize].y
+                split_bottom = split_top + srects[0usize].height
+            }
+        }
+    }
+    if gdi_split {
+        var save_text: scene.Command = .Save
+        var restore_text: scene.Command = .Restore
+        let far: f32 = 4096.0
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: origin.x - far, y: origin.y - far, width: split_left - origin.x + far, height: far * 2.0 } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_right, y: origin.y - far, width: origin.x + far - split_right, height: far * 2.0 } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        // round 80: the rows above and below the selection's row keep the glyphs between the band's edges (a wrapped second line)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_left, y: origin.y - far, width: split_right - split_left, height: split_top - origin.y + far } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+        try scene.push(b, save_text)
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: split_left, y: split_bottom, width: split_right - split_left, height: origin.y + far - split_bottom } } })
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+        try scene.push(b, restore_text)
+    } else {
+        try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: glyph_origin, brush: paint.Brush { Solid: ed.color } } })
+    }
     if focused_here && scene.cff_text_on() {
         let (lo, hi) = selection_of(e)
         if lo < hi {
@@ -2231,7 +2321,8 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             if marks_error != ok { ret InvalidTree }
             var m = 0usize
             while m < marks.len {
-                let r = marks[m]
+                var r = marks[m]
+                if gdi_split { r = geometry.Rect { x: split_left - origin.x, y: r.y, width: split_right - split_left, height: r.height } }
                 var save: scene.Command = .Save
                 var restore: scene.Command = .Restore
                 try scene.push(b, save)
@@ -2260,7 +2351,7 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             caret_color = ed.caret
             caret_width = 2.0
         }
-        if native_caret_face(ed.caret) {
+        if gdi_caret_face(ed.caret) {
             // round 13: the native edit's caret inverts what is under it, one whole pixel column at the glyph run's end: the face
             // colour (the sentinel carries it) or, inside the selection, the selection colour
             let col = floor_f(origin.x + c.x + 0.5)
@@ -2372,19 +2463,31 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         // ponytail: no touch fast-scroll handle.
         let viewport = e.viewport_extent
         var length = viewport * viewport / content
-        if length < 32.0 { length = min_f(32.0, viewport) }
+        // Android (the Material look): Flutter's scrollbar keeps 48 as the shortest thumb and 4 wide in every state; a drag is on-surface at 60 % against the 50 % at rest.
+        var shortest: f32 = 32.0
+        if skia_corners { shortest = 48.0 }
+        if length < shortest { length = min_f(shortest, viewport) }
         var at = offset / content * viewport
         if at > viewport - length { at = viewport - length }
         if at < 0.0 { at = 0.0 }
         var wide: f32 = 4.0
+        var near_thumb = false
         let p = s.arena_state.last
         if s.has_pointer && geometry.contains(inner, p) {
-            if (vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0) { wide = 8.0 }
+            if ((vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0)) {
+                if !skia_corners { wide = 8.0 }
+                near_thumb = true
+            }
         }
         var thumb = geometry.Rect { x: inner.x + inner.width - 2.0 - wide, y: inner.y + at, width: wide, height: length }
         if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
         var thumb_ink = sc.thumb
         var thumb_shown = true
+        // Android (round 86): the thumb is never fainter than 70 % of its colour, which keeps it 3:1 against the surface (50 % read 2.4:1).
+        if skia_corners && thumb_ink.alpha < 0.7 { thumb_ink.alpha = 0.7 }
+        // and over its strip it darkens to 90 % (a drag, below, to full), so hover and drag read apart from rest
+        if skia_corners && near_thumb { thumb_ink.alpha = 0.9 }
+        if skia_corners && s.thumb_drag { thumb_ink.alpha = min_f(1.0, thumb_ink.alpha * 1.2) }
         if sc.fades {
             let idle = s.animation_time.nanos - e.scrolled_at
             if e.scrolled_at == 0i64 || idle >= 1750000000i64 {
@@ -2541,7 +2644,7 @@ fn rounded(r: geometry.Rect, radius: f32) -> geometry.RRect {
 }
 
 // The Android look draws a rounded corner as a quarter circle (a cubic) so a radius of half the side is a true circle;
-// every other look keeps the quadratic corner its pictures were taken with. Set by `set_arc_corners`.
+// every other look keeps the quadratic corner its pictures were taken with (the Neper look joins the arcs through the sheet harness only). Set by `set_arc_corners`.
 var arc_corners: bool = false
 
 fn set_arc_corners(on: bool) {
@@ -2554,6 +2657,13 @@ fn set_arc_corners(on: bool) {
 // the 4x anti-aliasing accuracy): 4 lines for a radius under about 11 px, 8 up to about 46, the true arc beyond. The radio
 // ring of the captures is that polygon (a 20 px circle is a 16-gon), 8 percent lighter than the circle. Set by `set_skia_corners`.
 var skia_corners: bool = false
+
+// Set by `control.focus_look` for the Android look: offset shadows are drawn as the M3 elevation levels.
+var soft_shadows: bool = false
+
+fn set_soft_shadows(on: bool) {
+    soft_shadows = on
+}
 
 fn set_skia_corners(on: bool) {
     skia_corners = on
@@ -2792,6 +2902,9 @@ fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bound
     let inset = semantic_focus_inset(s, element)
     if inset > 0.0 {
         grow = 0.0 - inset - w * 0.5
+    } else if inset < 0.0 {
+        // a negative inset keeps the ring outside the bounds (a tab that should not take the 3 px inset)
+        grow = s.ring_offset + w * 0.5
     } else if menu_item || tab_item {
         grow = 0.0 - 3.0 - w * 0.5
     } else if s.has_clip {
@@ -3087,7 +3200,8 @@ fn place_transformed(s: *State, a: *mem.Arena, node: *const Node, element: usize
     let cx = inner.x + inner.width * 0.5
     let cy = inner.y + inner.height * 0.5
     let moved = geometry.transform_translate(cx + value.offset.x, cy + value.offset.y)
-    let changed = geometry.transform_multiply(geometry.transform_rotate(value.rotation), geometry.transform_scale(scale, scale))
+    var changed = geometry.transform_multiply(geometry.transform_rotate(value.rotation), geometry.transform_scale(scale, scale))
+    if value.skew != 0.0 { changed = geometry.transform_multiply(geometry.Transform { m00: 1.0, m01: value.skew, m02: 0.0, m10: 0.0, m11: 1.0, m12: 0.0 }, changed) }
     let about = geometry.transform_multiply(moved, geometry.transform_multiply(changed, geometry.transform_translate(0.0 - cx, 0.0 - cy)))
     var save: scene.Command = .Save
     var restore: scene.Command = .Restore
@@ -3190,7 +3304,7 @@ fn place_wrap(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     let (children, children_error) = children_of(s, a, node, limits, spec.axis == .Horizontal)
     if children_error != ok { ret children_error }
     let (result, layout_error) = ui_layout.wrap(a, spec, limits, children)
-    if layout_error != ok { ret InvalidTree }
+    if layout_error != ok && layout_error != ui_layout.Overflow { ret InvalidTree }
     var i = 0usize
     while i < node.children.len {
         let r = result.children[i]
@@ -3691,6 +3805,48 @@ fn edge_scroll_step(s: *State, candidate: usize) -> (usize, f32) {
     ret (viewport, 0.0)
 }
 
+// (looks) A frame of hover scroll: the hovered strip (GESTURE_HOLD) scrolls the viewport its semantic parent controls, up when the
+// strip sits above the viewport's middle and down otherwise, until the pointer leaves or the end is reached. The step covers the
+// time since the last one (a 60 Hz frame's at the first, and at most 100 ms after a stall).
+fn hold_scroll(s: *State) -> err {
+    var hovered = false
+    var viewport = 0usize
+    var up = false
+    if s.arena_state.has_hovered && usize(s.arena_state.hovered) < s.elements.len {
+        let r = &s.elements[usize(s.arena_state.hovered)]
+        if r.live && r.kind == REGION_TAG && (r.gestures & GESTURE_HOLD) != 0u8 && r.has_parent {
+            let owner = &s.elements[usize(r.parent)]
+            if owner.has_semantics && owner.sem.controls != 0u64 {
+                let (found, count) = find_by_key(s, owner.sem.controls)
+                if count != 0usize {
+                    viewport = usize(found.slot)
+                    let v = &s.elements[viewport]
+                    if v.kind == SCROLL_TAG && v.viewport_extent > 0.0 {
+                        hovered = true
+                        up = r.bounds.y + r.bounds.height * 0.5 < v.bounds.y + v.bounds.height * 0.5
+                    }
+                }
+            }
+        }
+    }
+    if !hovered {
+        s.has_hold_scrolled = false
+        ret ok
+    }
+    var frames: f32 = 1.0
+    let since = s.animation_time.nanos - s.hold_scrolled_at.nanos
+    if s.has_hold_scrolled && since > 0i64 && since <= 100000000i64 { frames = f32(since) * 60.0 / 1000000000.0 }
+    s.hold_scrolled_at = s.animation_time
+    s.has_hold_scrolled = true
+    let speed: f32 = 360.0
+    var step = speed / 60.0 * frames
+    if up { step = 0.0 - step }
+    let before = s.elements[viewport].scroll_offset
+    try scroll_by(s, viewport, step, false)
+    if s.elements[viewport].scroll_offset != before { s.animation_due = true } else { s.has_hold_scrolled = false }
+    ret ok
+}
+
 // (D1199) A frame of edge auto-scroll for the region being dragged: the viewport
 // moves, the drag's start moves with the content, and the region hears a
 // DragMove at the unmoved pointer, so its travel includes the scroll.
@@ -4040,7 +4196,7 @@ fn semantic_focus_inset(s: *State, index: usize) -> f32 {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && e.sem.focus_inset > 0.0 { ret e.sem.focus_inset }
+        if e.has_semantics && e.sem.focus_inset != 0.0 { ret e.sem.focus_inset }
         if !e.has_parent { ret 0.0 }
         at = usize(e.parent)
     }
@@ -5487,6 +5643,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_over {
             s.arena_state.hovered = u32(over)
             s.arena_state.has_hovered = true
+            if (s.elements[over].gestures & GESTURE_HOLD) != 0u8 { s.animation_due = true }
             ret fire_gesture(s.elements[over].gesture, Gesture { Hover: p.position })
         }
         let (found, has_found) = hit_action(s, usize(s.root), p.position)
@@ -5623,6 +5780,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret ok
     case .Frame as w:
         try settle_scrolls(s)
+        try hold_scroll(s)
         ret edge_scroll(s)
     case .Close as w:
         ret ok

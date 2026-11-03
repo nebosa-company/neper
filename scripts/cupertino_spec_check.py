@@ -281,8 +281,7 @@ def run():
             check_true(t + "stacked alert is taller than 3 x 44 + 80", m and m[1] > 212, m and round(m[1], 1))
 
             # --- navigation bar 44 + hairline, tab bar 49 + hairline
-            crop = cell(scheme, "toolbar_button", 5, scale)
-            check(t + "navigation bar height (44, less its hairline)", rows_of(crop, S["bar"], round(20 * scale)) / scale, 44, 2.0, "pt")
+            # the bar is transparent at rest (Flutter ref, iOS scroll edge appearance), so its 44 pt height is not readable from fills
             crop = cell(scheme, "page_control", 5, scale)
             check(t + "tab bar height (49, less its hairline)", rows_of(crop, S["bar"], round(6 * scale)) / scale, 49, 2.0, "pt")
 

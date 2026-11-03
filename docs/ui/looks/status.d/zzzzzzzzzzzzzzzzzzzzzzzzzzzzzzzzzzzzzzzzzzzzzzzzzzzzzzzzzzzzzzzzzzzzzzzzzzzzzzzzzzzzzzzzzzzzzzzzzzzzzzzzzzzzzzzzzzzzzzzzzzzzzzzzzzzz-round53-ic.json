@@ -1,0 +1,65 @@
+{
+  "image_combo_box": {
+    "looks": {
+      "windows": {
+        "status": "matched",
+        "screenshot": "windows/image_combo_box_dialog.png",
+        "notes": "ROUND 53: the open drop lists draw their 1 px #0078D7 frame on whole pixels on all four sides, with no soft right and bottom line and no ghost row under the top line (the soft lines of round 5 were fitted to the resampled grabs; the raw popup captures in ref/windows-1to1/states are crisp). Windows light only (win_sheet, profile Windows, palette light); Windows dark and the other looks are unchanged. Scratch comparer, counted = more than 2 levels in any channel, the sheet's list cell placed by pixel equality in combo-box-open-list-options-*: list_auth 13, list_auth2 13, list_art 19 (was 236), list_art2 19 (was 234), list_condition 22 (was 573), list_condition2 22 (was 573); 0 flat chrome pixels in all six, the rest is ClearType glyph pixels. With the heads (2 to 13 px), the closed cell, the held cell (the 16 x 16 picture), the dialog crops and both hover captures every captured state is within tolerance, so matched is claimed. Uncaptured, so unverified: list_art3, list_condition3, list_condition4 (hover rows 2 of Card Art, 8 and 15 of Condition) and list_sort (the Sort window's list); the open_* sheets (head plus list as one piece) have no single capture. | ROUND 46-b: the closed head, its chevron, the open heads and the Sort window's cell editor are drawn from the 1:1 captures (winedit.combo_chrome, cell_chrome). Counted against windows-1to1 (glyphs included): dialog crops 13 (all three), hover over the drop part 6, hover over the edit 6, cell editor 140 (rest and held), open heads 2 to 6 (Auth, Auth 2, Art, Art 2, Condition, Condition 2). Stays review: the open drop lists, the hover rows and the toolbar combos have no 1:1 capture (popups are separate windows the grab fell back to the resampled one for), so those states still compare with the blurred references.",
+        "gaps": [
+          "Pictures are v3's coloured bitmaps drawn as placeholders (artwork excluded)",
+          "Disabled: a guess (button grey), no capture",
+          "No raw capture for the sheets list_art3, list_condition3, list_condition4 and list_sort (hover rows and the Sort list)"
+        ]
+      }
+    }
+  },
+  "menu_bar": {
+    "looks": {
+      "windows": {
+        "status": "matched",
+        "screenshot": "windows/menu_bar.png",
+        "notes": "ROUND 53: the two hot cells that showed no hover in the reference are fixed in the reference, not in our drawing. hover-menubar-title-view@1x (1:1) does show the raised View box; the composite cell had been located in the old rest grab of the main window (the pointer happened to rest on View there, the 1:1 rest grab has no hover), an exact tie that the locator broke towards the rest grab. scripts/looks_ref1to1.py now prefers a hover grab on an exact tie; ref/windows-1to1/menu_bar_hot.png and menu_bar_hot_view.png were rebuilt (11 cells, none flagged state). The sheets menu_bar_hot (2576 to 2462 px) and menu_bar_hot_view (2260 to 2146 px) lose exactly the two 114 px cells; the rest is ClearType glyph pixels (and, in menu_bar_hot_view, the strip to the right of the 298 px the reference holds). Our renders are byte for byte unchanged. Matched is claimed for every captured title and open state. | ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. The bar rows (a white row above, a #A0A0A0 and a #FFFFFF row below, no highlight line), the grip and the raised and sunken title boxes (one px: #FFFFFF and #A0A0A0 swapped) are now drawn as the crisp captures show them; the drift tables fitted to the resampled references are gone. Flat chrome px off: menu_bar 0 (11 of 11 cells), menu_bar_hot 0 chrome in 100 of 101 cells, menu_bar_hot_view 7 of 8, the nine open sheets 10 of 10 each; Reports and Search have no 1:1 twin of their hover-switch grab, their cell is cut from states/menu-bar-open-title-* (scripts/looks_bar_ref1to1.py). Review: in two hot cells (one title of menu_bar_hot, the View title sheet) the capture shows no hover look at all (v3's pointer did not reach it) while ours draws the raised box, 114 flat px each. Glyph px (ClearType) are not claimed.",
+        "gaps": [
+          "text glyph pixels (ClearType against our hinted text) are not exact"
+        ]
+      }
+    }
+  },
+  "popup_menu": {
+    "looks": {
+      "windows": {
+        "status": "matched",
+        "screenshot": "windows/popup_menu_dialog.png",
+        "notes": "ROUND 53: popup_menu_file now follows the 1:1 capture: Print Proxies is disabled (the 1:1 File menu shows it grey, the old grab, taken with a deck open, showed it enabled) and the checked row is the 1:1 one (tile and tick are pixel equal; the earlier note that it differed no longer applies). Placed in ref/windows-1to1/popup_menu_file.png: 877 px off before, 175 after, none of them chrome (every cluster is under 12 px, ClearType glyphs). The old popup_menu_file reference has no Exit row and a live Print Proxies row, so it cannot be matched together with the 1:1 one; the 1:1 capture is the newer and is used. Windows dark keeps its enabled Print Proxies (no capture in that palette). The other 75 sheets are byte for byte unchanged. Matched is claimed; v3 picture artwork is excluded as everywhere. | ROUND 46 (lane c, Windows light; own scratch comparer, reference = the committed ref/windows-1to1 composites, a reference flat pixel (run of 11 equal pixels, colour seen 30 times) is off when ours differs by more than 2 levels, glyph zones (strong edge components 5 to 16 px tall, grown 2 px) left out and counted separately, ink boxes by scripts/looks_strict.py). Popup windows are not resampled (README of ref/windows-1to1), so the old popup captures are crisp too. Against the old popup captures (crisp, see the README) 75 of 76 sheets pass looks_strict and the flat chrome px off total 80 in the whole set, every one inside a 16 x 16 v3 picture (framed picture ground, disabled pictures); the File menu now lists its Exit item (baked from the 1:1 composite, light look only: scripts/gen_winmenuicon.py reads ref/windows then ref/windows-1to1 and fills pictures the old grab lacked). popup_menu_file does not pass either reference: the old file has no Exit row, the 1:1 capture of the same menu shows the checked row without our sunken dither frame (0 flat chrome px, text exact, ink boxes differ on that row), and no single capture agrees with the sheets that pass. Review.",
+        "gaps": [
+          "a few v3 pictures differ by up to 29 px each (framed grounds, disabled pictures; artwork excluded)"
+        ]
+      }
+    }
+  },
+  "text_edit": {
+    "looks": {
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/text_edit.png",
+        "notes": "ROUND 53: searched for a plain edit or memo in the 1:1 captures: the controls.json of every dialog and state (705 raw files) lists no TcxTextEdit, TcxMemo, TMemo or TRichEdit. The only plain edit is the VCL TEdit page box (37 x 15, text 1, inner Win32 Edit 30 x 13) of the FastReport preview toolbar in the six report dialogs, and it is a borderless white box with no frame, so it carries none of the control's chrome and cannot be compared. TcxMaskEdit, TcxSpinEdit and TcxButtonEdit (same family) stay the equivalence. No status change. | ROUND 33 (Windows light): references: Windows 11 uxtheme light captures exist (ref/windows-native/light/edit, edit-password, edit-readonly); v3 grabs show edits only inside dialogs; not compared at this round (the native captures are not v3, and the strict comparer places a sheet by its structure, so a control inside a dialog scores nothing); stays review, capped there. ROUND 31 (Windows light): no v3 reference (no TcxTextEdit capture). The native Win11 light edit (windows-native/light; LOOKS_THEME=light LOOKS_GLYPHS=1 scripts/looks_dark_native.py edit) is 800 to 1450 flat px off per single-line capture and 1440 to 5730 per multi-line one: Win11's frame is not v3's, so it cannot stand in; no change. | Round 17 (w3): unchanged. No TcxTextEdit capture exists; the strict metric has no reference here, so it stays review. The chrome equals the mask edit's, which holds at 0 flat px off against the v3 captures (same TcxCustomTextEdit family), that is equivalence, not a capture. | Round 15: the light sheet is unchanged (verified by a full re-render). No TcxTextEdit exists in any v3 capture (every dialog's controls.json lists only TcxMaskEdit, TcxButtonEdit, TcxSpinEdit, TcxComboBox and TcxImageComboBox): the chrome is the mask edit's, which matches the v3 captures at 0 chrome px (same TcxCustomTextEdit family and LookAndFeel in the DFM), but that is equivalence, not a capture, so the status stays review. The native Win11 light edit is not a proxy: its border is #ECECEC and its foot #838383 against v3's #EDEDED and #929292.",
+        "gaps": [
+          "No TcxTextEdit capture: every state is unverified (selection, disabled, read-only, invalid)",
+          "Text: ClearType colour fringes not reproduced (grayscale)"
+        ]
+      }
+    }
+  },
+  "memo": {
+    "looks": {
+      "windows": {
+        "status": "review",
+        "screenshot": "windows/memo.png",
+        "notes": "ROUND 53: searched for a plain edit or memo in the 1:1 captures: the controls.json of every dialog and state (705 raw files) lists no TcxTextEdit, TcxMemo, TMemo or TRichEdit. The only plain edit is the VCL TEdit page box (37 x 15, text 1, inner Win32 Edit 30 x 13) of the FastReport preview toolbar in the six report dialogs, and it is a borderless white box with no frame, so it carries none of the control's chrome and cannot be compared. TcxMaskEdit, TcxSpinEdit and TcxButtonEdit (same family) stay the equivalence. No status change. | ROUND 33 (Windows light): references: Windows 11 uxtheme light captures exist (edit-multiline, -explorer, -readonly, -vscroll); v3 grabs show memos only inside dialogs; not compared at this round (the native captures are not v3, and the strict comparer places a sheet by its structure, so a control inside a dialog scores nothing); stays review, capped there. ROUND 31 (Windows light): no v3 reference (no TcxMemo capture); the native light multi-line edit (1440 to 5730 flat px off) is Win11's frame, not v3's; no change. | Round 17 (w3): unchanged. No TcxMemo capture; the native light multi-line edit has a frame 8 to 15 levels off v3's, so it cannot stand in. | Round 15: the light sheet is unchanged (verified by a full re-render). No TcxMemo in any v3 capture (only the Notes window and the Import wizard use one, neither was grabbed). The native light multi-line captures (edit-multiline-*, new this round) are the native Win11 edit, whose frame differs from v3's by 8 to 15 levels (border #ECECEC against #EDEDED, foot #838383 against #929292), so they cannot stand in.",
+        "gaps": [
+          "Every state is unverified; the scroll bar is the thin Neper bar, the native one is the system bar"
+        ]
+      }
+    }
+  }
+}

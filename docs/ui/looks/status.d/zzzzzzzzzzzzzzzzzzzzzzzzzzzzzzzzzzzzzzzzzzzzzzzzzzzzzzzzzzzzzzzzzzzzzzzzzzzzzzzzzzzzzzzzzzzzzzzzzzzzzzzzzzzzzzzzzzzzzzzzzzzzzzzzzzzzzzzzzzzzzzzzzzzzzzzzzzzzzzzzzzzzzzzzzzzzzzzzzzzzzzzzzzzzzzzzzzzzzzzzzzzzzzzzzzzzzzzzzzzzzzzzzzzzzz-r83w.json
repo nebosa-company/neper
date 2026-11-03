@@ -1,0 +1,24 @@
+{
+ "key_value_editor": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "Round 83 lane w: the doubled Name / Value label over the first field is fixed. Cause: round 74's notch change (62689b75f) stopped the label's notch fill covering the half above the box's top edge; that exposed the column headings the key-value editor builds for every look, which have zero height under the Neper and Material profiles (their fields carry the label in the notch) but still paint their text over the first row. The editor now builds empty boxes there. Viewed, light and dark, 1x. Not compared with Flutter: no ref/flutter capture of a key-value editor exists (composite control), so the status is not raised.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the field is the shared Material text field and the editor has no Flutter widget to measure",
+     "Mid-gesture states are not drawn; hover and focus are driven at the cell centre only (the Material focus cell shows no ring on the name field)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "Round 83 lane w: the doubled Name / Value label over the first field is fixed. Cause: round 74's notch change (62689b75f) stopped the label's notch fill covering the half above the box's top edge; that exposed the column headings the key-value editor builds for every look, which have zero height under the Neper and Material profiles (their fields carry the label in the notch) but still paint their text over the first row. The editor now builds empty boxes there. Viewed, light and dark, 1x. Not compared with Flutter: no ref/flutter capture of a key-value editor exists (composite control), so the status is not raised.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the field is the shared Material text field and the editor has no Flutter widget to measure",
+     "Mid-gesture states are not drawn; hover and focus are driven at the cell centre only (the Material focus cell shows no ring on the name field)"
+    ]
+   }
+  }
+ }
+}

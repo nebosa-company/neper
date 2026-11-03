@@ -23,6 +23,7 @@ use e.gfx.scene
 use e.gfx.svg
 use e.ui.layout as ui_layout
 use e.ui.style
+use e.ui.looks_x85
 use e.ui.winpx
 use e.ui.widget
 
@@ -121,7 +122,15 @@ type Look = struct {
     ring_rows: bool,
     // round 43: the light grid as the true 1:1 capture of v3 draws it (one pixel rules, an inverting focus rectangle, no soft pairs); the
     // fits of the older knobs were made to the resampled captures and are not used when this is set
-    crisp: bool
+    crisp: bool,
+    // round 46: pixels the crisp cell text stands lower (v3's dialog grids)
+    cell_down: f32,
+    // round 46: v3's dialog grid under the 1:1 look (the dialog bar with a white first pixel)
+    dialog_grid: bool,
+    // round 46: the hot header as the 1:1 capture draws it (its filter button's crisp bitmap, the caption placed from the capture)
+    hot_crisp: bool,
+    // round 46: the crisp navigator thumb's offset from the buttons' row (the collection grid's capture has it one pixel lower)
+    hthumb_dy: f32
 }
 
 // A colour from 0xRRGGBB; under the Windows dark map (`style.set_windark`) the dark counterpart of a light literal.
@@ -225,7 +234,11 @@ fn v3() -> Look {
         ring_bar: 0u8,
         ring_thumb: 0u8,
         ring_rows: false,
-        crisp: false
+        crisp: false,
+        cell_down: 0.0,
+        dialog_grid: false,
+        hot_crisp: false,
+        hthumb_dy: 0.0
     }
 }
 
@@ -289,26 +302,26 @@ fn v3_dark() -> Look {
 // The ink v3 draws a card's row in, by the card's colour letter (`card_color.pas`, GetForegroundColor):
 // W dirty white, U blue, B black, R red, G green, M multicolour orange, N colourless grey.
 fn card_ink(letter: u8) -> (paint.Color, bool) {
-    if letter == 87u8 { ret (rgb(0x646464u32), true) }
-    if letter == 85u8 { ret (rgb(0x0000FFu32), true) }
-    if letter == 66u8 { ret (rgb(0x000000u32), true) }
-    if letter == 82u8 { ret (rgb(0xFF0000u32), true) }
-    if letter == 71u8 { ret (rgb(0x008000u32), true) }
-    if letter == 77u8 { ret (rgb(0xFF5F11u32), true) }
-    if letter == 78u8 { ret (rgb(0x858585u32), true) }
+    if letter == 87u8 { ret (looks_x85.lift_dark(rgb(0x646464u32)), true) }
+    if letter == 85u8 { ret (looks_x85.lift_dark(rgb(0x0000FFu32)), true) }
+    if letter == 66u8 { ret (looks_x85.lift_dark(rgb(0x000000u32)), true) }
+    if letter == 82u8 { ret (looks_x85.lift_dark(rgb(0xFF0000u32)), true) }
+    if letter == 71u8 { ret (looks_x85.lift_dark(rgb(0x008000u32)), true) }
+    if letter == 77u8 { ret (looks_x85.lift_dark(rgb(0xFF5F11u32)), true) }
+    if letter == 78u8 { ret (looks_x85.lift_dark(rgb(0x858585u32)), true) }
     ret (rgb(0x000000u32), false)
 }
 
 // The ink v3 draws a rarity in (`card_rarity.pas`): common black, uncommon silver, rare dark gold,
 // timeshift purple, mythic red-orange, bonus brick red, special pale orange.
 fn rarity_ink(letter: u8) -> (paint.Color, bool) {
-    if letter == 67u8 { ret (rgb(0x000000u32), true) }
-    if letter == 85u8 { ret (rgb(0x8C8C8Cu32), true) }
-    if letter == 82u8 { ret (rgb(0xA07D00u32), true) }
-    if letter == 84u8 { ret (rgb(0x845D99u32), true) }
-    if letter == 77u8 { ret (rgb(0xED9030u32), true) }
-    if letter == 66u8 { ret (rgb(0xB63426u32), true) }
-    if letter == 83u8 { ret (rgb(0xE69D54u32), true) }
+    if letter == 67u8 { ret (looks_x85.lift_dark(rgb(0x000000u32)), true) }
+    if letter == 85u8 { ret (looks_x85.lift_dark(rgb(0x8C8C8Cu32)), true) }
+    if letter == 82u8 { ret (looks_x85.lift_dark(rgb(0xA07D00u32)), true) }
+    if letter == 84u8 { ret (looks_x85.lift_dark(rgb(0x845D99u32)), true) }
+    if letter == 77u8 { ret (looks_x85.lift_dark(rgb(0xED9030u32)), true) }
+    if letter == 66u8 { ret (looks_x85.lift_dark(rgb(0xB63426u32)), true) }
+    if letter == 83u8 { ret (looks_x85.lift_dark(rgb(0xE69D54u32)), true) }
     ret (rgb(0x000000u32), false)
 }
 
@@ -320,7 +333,7 @@ fn theme() -> Look {
 
 // ---- small marks the grid draws itself (the favourite star, the navigator's arrows) --------
 
-type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert, PixelsA, TreeLines }
+type Shape = enum u8 { StarOutline, StarFilled, Left, Right, FirstBar, LastBar, UpOutline, PlusBox, MinusBox, DoubleLeft, DoubleRight, ArrowDown, ArrowUp, Check, ListGlyph, Minus, ArrowLong, DotLine, DotEdges, TreePlus, TreeMinus, TreeBox, Pixels, DotsSoft, DotsSoftLeft, SelDots, GroupRect, ChipRing, TreeFocus, FocusInvert, PixelsA, TreeLines, PixelsRaw }
 
 type Mark = struct { arena: *mem.Arena, color: paint.Color, inner: paint.Color, shape: Shape, pix: str, cols: usize, skip: usize }
 
@@ -385,7 +398,7 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     var side = area.width
     if area.height < side { side = area.height }
     if m.shape == Shape.TreePlus || m.shape == Shape.TreeMinus || m.shape == Shape.TreeBox { ret tree_mark_paint(m, b, area) }
-    if m.shape == Shape.Pixels || m.shape == Shape.PixelsA { ret pixels_paint(m, b, area) }
+    if m.shape == Shape.Pixels || m.shape == Shape.PixelsA || m.shape == Shape.PixelsRaw { ret pixels_paint(m, b, area) }
     if m.shape == Shape.TreeLines { ret tree_lines_paint(m, b, area) }
     if m.shape == Shape.DotsSoft || m.shape == Shape.DotsSoftLeft { ret dots_soft_paint(m, b, area) }
     if m.shape == Shape.SelDots { ret sel_dots_paint(m, b, area) }
@@ -1058,6 +1071,8 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
         let bi = u32(pix_digit(m.pix[at + 4usize]) * 16.0 + pix_digit(m.pix[at + 5usize]))
         // (round 7) under the Windows dark map the bitmap's pixels take their dark counterpart (a no-op in light)
         var shown = rgb(ri * 65536u32 + gi * 256u32 + bi)
+        // round 87: a bitmap whose pixels are already the dark counterpart (the Dark star): no second mapping
+        if m.shape == Shape.PixelsRaw { shown = style.hex_raw(ri * 65536u32 + gi * 256u32 + bi) }
         // Neper dark: a dark glyph pixel of the bitmap (the row arrow, the star's outline) is drawn in light ink so that it reads on the dark tile
         if style.neperdark_active() && (ri + gi + bi) / 3u32 < 110u32 { shown = style.hex_raw((225u32 - ri / 2u32) * 65536u32 + (226u32 - gi / 2u32) * 256u32 + (233u32 - bi / 2u32)) }
         if m.shape == Shape.PixelsA {
@@ -1076,10 +1091,16 @@ fn pixels_paint(m: *Mark, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // A `w` x `h` pixel glyph from `pix` (see the gx_ functions).
 fn pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
+    let (node, node_error) = pixels_with(a, pix, w, h, false)
+    ret (node, node_error)
+}
+
+fn pixels_with(a: *mem.Arena, pix: str, w: f32, h: f32, final_colours: bool) -> (widget.Node, err) {
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, marks_error) }
     var shape = Shape.Pixels
     if pix.len == usize(w) * usize(h) * 8usize { shape = Shape.PixelsA }
+    if final_colours { shape = Shape.PixelsRaw }
     marks[0usize] = Mark { arena: a, color: rgb(0u32), inner: rgb(0u32), shape: shape, pix: pix, cols: usize(w), skip: 0usize }
     var size = style.defaults()
     size.width = style.Length { Px: w }
@@ -1088,6 +1109,12 @@ fn pixels(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
     size.min_height = style.Length { Px: h }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: size, children: none }, ok)
+}
+
+// round 87: a bitmap in final colours, not mapped by the dark look
+fn pixels_raw(a: *mem.Arena, pix: str, w: f32, h: f32) -> (widget.Node, err) {
+    let (node, node_error) = pixels_with(a, pix, w, h, true)
+    ret (node, node_error)
 }
 
 // looks9-w1: the same glyph without its first `skip` columns (the node is `w - skip` wide)
@@ -1721,6 +1748,8 @@ fn gx_chip_tri_rest() -> str { ret "FFFFFFFFFFFFFFFFFFCECECEF6F6F6FFFFFFFFFFFFFF
 fn gx_chip_tri_hover() -> str { ret "D9EBF9D9EBF9D9EBF9BBC4CBD4E4F0D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9A9ACAED0DFEBD9EBF9D9EBF9D9EBF9D9EBF9D9EBF9BBC4CBC1CBD3B8C0C6D4E4F0D9EBF9D9EBF9D9EBF9D9EBF9A9ABAED0DFEBA9ACAED0DFEBD9EBF9D9EBF9D9EBF9BCC4CBC1CBD3D6E6F4C6D2DCB8C0C6D4E4F1D9EBF9D9EBF9A9ABAED0E0EBD9EBF9D9EBF9A9ACAED0DFEBD9EBF9BCC4CBC1CBD3D6E7F4D9EBF9D9EBF9C6D2DCB8C0C6D4E4F1A9ABAEB3B9BDB6BDC3B6BDC3B6BDC3B6BDC3A3A5A5D0DFEBC6D2DCC3CED6C3CED6C3CED6C3CED6C3CED6C3CED6D6E6F4" }
 fn gx_chip_tri_pressed() -> str { ret "BCDCF4BCDCF4BCDCF4AEBDC9B9D6ECBCDCF4BCDCF4BCDCF4BCDCF4BCDCF4BCDCF4A4A9ADB8D3E7BCDCF4BCDCF4BCDCF4BCDCF4BCDCF4ADBDC8B0C3D1ACB9C3B9D6ECBCDCF4BCDCF4BCDCF4BCDCF4A4A9ADB8D3E7A4A9ADB8D3E7BCDCF4BCDCF4BCDCF4AEBDC9B0C3D0BAD8EFB3C8D8ACB9C4B9D6ECBCDCF4BCDCF4A4A9ADB8D3E7BCDCF4BCDCF4A4A9ADB8D3E7BCDCF4AEBDC9B0C3D0BAD8EFBCDCF4BCDCF4B3C8D8ACB9C4B9D6ECA4A9ADA9B4BCABB7C1ABB7C1ABB7C1ABB7C1A2A4A5B8D3E7B3C8D8B1C5D3B1C5D3B1C5D3B1C5D3B1C5D3B1C5D3BAD8EF" }
 fn gx_chip_filter_hover() -> str { ret "D9EBF9C1CFDAB7C4CEB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDBCCAD4D4E6F3D9EBF9ACB7C0BECCD7C3D1DDC3D1DDC3D1DDC3D1DDC3D1DDC3D1DDC3D1DDA9B4BDD0E1EED9EBF9A9B4BDCCDCE8AAB5BDB3BFC9B6C3CDB6C3CDB6C3CDA6B1B8D0E1EEA9B4BDD0E0EDD9EBF9A9B4BDCEDEEAA8B3BBA4AEB5BECCD7C2D0DCA3ADB5A6B1B9D1E2EFA9B4BDD0E0EDD9EBF9A9B4BDD0E0EDCDDDEABAC7D2B7C4CEB1BDC6B7C4CFCCDCE9D7E9F7A9B4BDD0E0EDD9EBF9A9B4BDD0E0EDD9EBF9D1E2EFA8B2BB9EA7AECBDAE7D8EAF8D9EBF9A9B4BDD0E0EDD9EBF9A9B4BDD0E0EDD9EBF9D9EBF9A6B0B9A3ACB5D0E1EED9EBF9D9EBF9A9B4BDD0E0EDD9EBF9A9B4BDD0E0EDD9EBF9D9EBF9A3ACB4A7B2BAD1E2EFD9EBF9D9EBF9A9B4BDD0E0EDD9EBF9A9B4BDD0E0EDD9EBF9D9EBF9C3D2DDC6D5E1D6E8F5D9EBF9D9EBF9A9B4BDD0E0EDD9EBF9AEBAC3B4C0CAB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDB6C3CDA9B4BDD1E2EFD9EBF9CAD9E5C3D2DEC3D1DDC3D1DDC3D1DDC3D1DDC3D1DDC3D1DDC3D1DDC6D6E1D6E8F5" }
+// round 46: the same button cut from the 1:1 capture (data_grid_bottom, the Used header under the pointer)
+fn gx_chip_filter_hover_c() -> str { ret "D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9AAB5BDA0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1ABB7BFD9EBF9D9EBF9A0A9B1D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D2E2EF7F8387A0A9B1A0A9B1A0A9B1A0A9B1818689D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9B4C0CAA8B2BAD9EBF9D7E8F69CA5ACC1D0DBD9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9C1CFDAA2ABB398A0A6CBDBE8D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9D9EBF99FA9B0A1AAB2D9EBF9D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9D9EBF99BA3AAA6B0B9D9EBF9D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9D9EBF9979FA5ADB8C1D9EBF9D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9D9EBF9A0A9B1D9EBF9D9EBF9AAB5BDA0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1A0A9B1ABB7BFD9EBF9" }
 fn gx_chip_filter_pressed() -> str { ret "BCDCF4A9C3D6A2B9CAA2B8C9A2B8C9A2B8C9A2B8C9A2B8C9A2B8C9A2B8C9A6BED0B8D7EEBCDCF49AAEBDA8C0D3ABC5D9ABC5D9ABC5D9ABC5D9ABC5D9ABC5D9ABC5D998ABBAB5D3E9BCDCF498AAB9B2CEE498ABBA9FB4C5A2B8C9A2B8C9A2B8C995A8B6B5D3E998ABB9B5D2E9BCDCF498AAB9B3D0E697AAB894A5B3A8C0D3AAC4D794A5B396A9B6B6D4EA98ABB9B5D2E9BCDCF498AAB9B5D3E9B3D0E5A5BCCEA2B9CA9EB3C3A3BACBB2CFE4BBDAF298ABB9B5D2E9BCDCF498AAB9B5D3E9BCDCF4B6D4EA97AAB78F9FABB1CDE2BBDBF3BCDCF498ABB9B5D2E9BCDCF498AAB9B5D3E9BCDCF4BCDCF496A8B693A4B2B5D3E9BCDCF4BCDCF498ABB9B5D2E9BCDCF498AAB9B5D3E9BCDCF4BCDCF493A4B296A9B7B6D4EBBCDCF4BCDCF498ABB9B5D2E9BCDCF498AAB9B5D3E9BCDCF4BCDCF4ACC6D9AEC9DDBAD9F1BCDCF4BCDCF498ABB9B5D2E9BCDCF49BB0BFA0B5C6A2B8C9A2B8C9A2B8C9A2B8C9A2B8C9A2B8C9A2B8C998ABBAB6D4EABCDCF4B0CCE1ACC6D9ABC5D9ABC5D9ABC5D9ABC5D9ABC5D9ABC5D9ABC5D9AEC9DDBAD9F0" }
 
 fn chip_px(pix: str, i: usize) -> paint.Color {

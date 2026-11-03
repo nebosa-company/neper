@@ -44,6 +44,8 @@ type App = struct {
     light: bool
 }
 
+fn noop_submit(ctx: *void) -> err { ret ok }
+
 fn name_of(row: usize) -> str {
     if row == 9usize { ret "Dust to Dust" }
     if row == 10usize { ret "Euru, Acorn Scrounger" }
@@ -305,7 +307,7 @@ fn setup(app: *App) -> err {
         // the View > Group by captures: group rows carry their counts, the group box is shown
         if k >= 25usize && k < 31usize { look.group_counts = true }
         // round 12: the pointer states (hover and pressed grabs) show the solid focus rectangle on the current group row; the first two cells are at rest
-        if k == 27usize || k == 28usize || k == 30usize { look.group_solid = true }
+        if k == 25usize || k == 27usize || k == 28usize || k == 30usize { look.group_solid = true }
         // round 31: the Windows light frame, bar ends and foot line are drawn (Look.ring_model), not stamped, in both palettes
         if app.windows {
             look.ring_model = 1u8
@@ -332,8 +334,11 @@ fn setup(app: *App) -> err {
         dg.set_row_ink(&app.grids[k], zero, ink)
         dg.set_grid_lines(&app.grids[k], dg.GridLines.Both)
         dg.show_navigator(&app.grids[k], true)
+        // round 85: v3's funnel is an enabled button (its hover frame shows in the captures)
+        if app.windows { dg.set_filter_action(&app.grids[k], widget.Submit { ctx: zero, invoke: noop_submit }) }
         if app.windows { dg.show_footer(&app.grids[k], false) }
         dg.set_pane_hint(&app.grids[k], 573.0)
+        if app.windows { dg.set_pane_hint(&app.grids[k], 574.0) }
         app.grids[k].aligns[4usize] = 2u8
         app.grids[k].aligns[5usize] = 2u8
         app.grids[k].aligns[7usize] = 2u8
@@ -428,7 +433,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if i == 9usize {
             drive = .Press
-            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 187.0 - 106.5)
+            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 188.0 - 106.5)
         }
         if i >= 10usize && i < 23usize {
             // the pointer over: the header cells, the navigator buttons, the bar's thumb and arrows (cell coordinates)

@@ -54,7 +54,7 @@ fn dot(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, v: u32) -> (widget.Node, e
     ret (widget.positioned(0u64, x, y, style.defaults(), one[0usize..1usize]), ok)
 }
 
-// The hot key edit (THotKey, Options Shortcuts) 325 x 22: the grey two-pixel frame as the capture shows it (the corner
+// The hot key edit as the first (resampled) captures showed it, still drawn in the other looks: the grey two-pixel frame as the capture shows it (the corner
 // pixels differ between rest and focus), white face, "Ctrl + N" at rest or "Ctrl + O" focused and, focused, the caret after it.
 fn hot_key(a: *mem.Arena, t: *const control.Theme, focused: bool, hovered: bool, shortcut: str) -> (widget.Node, err) {
     let (layers, layers_error) = mem.alloc[widget.Node](a, 40usize)
@@ -120,6 +120,40 @@ fn hot_key(a: *mem.Arena, t: *const control.Theme, focused: bool, hovered: bool,
     ret (widget.stack(0u64, sized(325.0, 22.0), layers[0usize..n]), ok)
 }
 
+// The hot key edit (THotKey, Options Shortcuts) 324 x 21 as the 1:1 captures show it: a one pixel #8D8D8D frame whose four corner pixels
+// are #A9A9A9 at rest and #8E8E8E focused or hovered, a white face and "Ctrl + N" ("Ctrl + O" focused; the capture caret is in its blink-off phase).
+fn hot_key_crisp(a: *mem.Arena, t: *const control.Theme, focused: bool, hovered: bool, shortcut: str) -> (widget.Node, err) {
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 12usize)
+    if layers_error != ok { ret (zero, layers_error) }
+    var corner = 169u32
+    if focused || hovered { corner = 142u32 }
+    let xs = [9]f32{ 0.0, 1.0, 1.0, 0.0, 323.0, 0.0, 323.0, 0.0, 323.0 }
+    let ys = [9]f32{ 0.0, 0.0, 20.0, 1.0, 1.0, 0.0, 0.0, 20.0, 20.0 }
+    let ws = [9]f32{ 324.0, 322.0, 322.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }
+    let hs = [9]f32{ 21.0, 1.0, 1.0, 19.0, 19.0, 1.0, 1.0, 1.0, 1.0 }
+    let vs = [9]u32{ 255u32, 141u32, 141u32, 141u32, 141u32, corner, corner, corner, corner }
+    var n = 0usize
+    while n < 9usize {
+        let (bar, bar_error) = dot(a, xs[n], ys[n], ws[n], hs[n], vs[n])
+        if bar_error != ok { ret (zero, bar_error) }
+        layers[n] = bar
+        n += 1usize
+    }
+    let (ft, ft_error) = control.windows_edit_theme_kerned(a, t, 13.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    var words = control.text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    let (label, label_error) = control.colored_text(a, 0u64, shortcut, &ft, words, control.win_rgb(0u32, 0u32, 0u32))
+    if label_error != ok { ret (zero, label_error) }
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret (zero, one_error) }
+    one[0usize] = label
+    layers[n] = widget.positioned(0u64, 3.0, 3.0, style.defaults(), one[0usize..1usize])
+    n += 1usize
+    ret (widget.stack(0u64, sized(324.0, 21.0), layers[0usize..n]), ok)
+}
+
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let captions = [14]str{ "Mask edit, hover (Options Passwords, Old Password)", "Button edit, hover over the text (Options Decks)", "Button edit, hover over the ellipsis (Options Decks)", "Button edit, hover over the ellipsis (Options Card Art)", "Spin edit with fast buttons, hover over the text (Options Decks)", "Spin edit, hover over the up arrow (Options Decks)", "Spin edit, hover over the down arrow (Options Decks)", "Spin edit, hover over the left button (Options Decks)", "Spin edit, hover over the right button (Options Decks)", "Spin edit, hover over the text (Options Morph)", "Spin edit, hover over the up arrow (Options Morph)", "Spin edit, hover over the down arrow (Options Morph)", "Hot key edit, hover (Options Shortcuts)", "Mask edit, rest (control: no hover)" }
     let drives = [14]looks.Drive{ .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .Hover, .None, .None }
@@ -166,7 +200,17 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             node = made
         }
         if i == 12usize {
-            let (made, made_error) = hot_key(a, t, false, true, "Ctrl + N")
+            var made: widget.Node = zero
+            var made_error: err = ok
+            if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+                let (crisp, crisp_error) = hot_key_crisp(a, t, false, true, "Ctrl + N")
+                made = crisp
+                made_error = crisp_error
+            } else {
+                let (blurred, blurred_error) = hot_key(a, t, false, true, "Ctrl + N")
+                made = blurred
+                made_error = blurred_error
+            }
             if made_error != ok { ret (0usize, made_error) }
             node = made
         }
@@ -185,6 +229,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.windows_capture()
     let sheet = looks.Sheet { name: "edits_hover", cells: 14usize, columns: 1usize, cell_w: 990.0, cell_h: 40.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

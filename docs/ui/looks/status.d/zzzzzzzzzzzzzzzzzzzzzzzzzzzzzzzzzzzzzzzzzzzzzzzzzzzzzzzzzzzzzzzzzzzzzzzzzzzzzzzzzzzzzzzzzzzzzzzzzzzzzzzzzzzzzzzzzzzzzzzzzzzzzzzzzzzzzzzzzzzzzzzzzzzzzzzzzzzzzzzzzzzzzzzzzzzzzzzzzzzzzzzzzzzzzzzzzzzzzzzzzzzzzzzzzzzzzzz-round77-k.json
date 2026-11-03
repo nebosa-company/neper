@@ -1,0 +1,44 @@
+{
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "ROUND 77 (looks77-k), measured with an own comparer against ref/flutter/neper/light/textfield-outlined-rest (252 x 56, outline rows 22 to 77): the field is now 256 x 48 (outline rows 357 to 404 in the sheet, light and dark; was 40), the height of the text_edit, mask_edit, button_edit and autocomplete fields; Flutter's 56 is the same recorded deviation as theirs (4 px grid, 40 px pointer control). Cause: overlay.clocked_field_glyph used the 40 pointer height; Neper pointer hosts now use control_lg (touch stays 56). 'Open, day hover' now hovers Thursday the 15th: 806 pixels differ from the Open cell in a 32 x 32 circle (bbox 540,448 to 571,479), the day circle size of the calendar, light and dark. Non-Neper PNGs byte-identical. Recorded in flutter-compare-k.md."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "ROUND 77 (looks77-k), measured with an own comparer against ref/flutter/neper/light/textfield-outlined-rest (252 x 56, outline rows 22 to 77): the field is now 256 x 48 (outline rows 357 to 404 in the sheet, light and dark; was 40), the height of the text_edit, mask_edit, button_edit and autocomplete fields; Flutter's 56 is the same recorded deviation as theirs (4 px grid, 40 px pointer control). Cause: overlay.clocked_field_glyph used the 40 pointer height; Neper pointer hosts now use control_lg (touch stays 56). 'Open, day hover' now hovers Thursday the 15th: 806 pixels differ from the Open cell in a 32 x 32 circle (bbox 540,448 to 571,479), the day circle size of the calendar, light and dark. Non-Neper PNGs byte-identical. Recorded in flutter-compare-k.md. Dark pictures checked at 1x."
+   }
+  }
+ },
+ "combo_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/combo_box.png",
+    "notes": "ROUND 77 (looks77-k): (1) 'Open, scrolling' now shows its field (150 x 48) with the list 4 px under it: past seven rows a Neper list scrolls in a 252 px viewport (control.suggesting_wide) instead of squeezing 22 rows into the window; label ink pitch measured 36 px (290, 326, 362, 398, 434, 470, 506), hover band on row 1 and active band on row 3 whole rows, no half-row offset (the pointer aim for the cell is 43 px). (2) Drop button hot and pressed: the value ends 4 px earlier (end space +4, Neper only), so the 32 px circle no longer touches the last letter (ink ends at x 546, circle starts at 568 in the sheet). (3) Windows-capture sheets (combo_box_dialog, _edit, _focus, _held, _pick, _search_held, _flat*, _open_*, _list_* and edits_*, combo_hover, native_dark_open*) no longer write Neper pictures: they reproduce 22 px Windows fields at fixed window y and crushed Neper fields (empty values); looks.windows_capture. native_dark shows Bravo in the hover-arrow cell. Field 150 x 48 against Flutter DropdownMenu 56, list rows 36 against 48: recorded (flutter-compare-k.md)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/combo_box.png",
+    "notes": "ROUND 77 (looks77-k): (1) 'Open, scrolling' now shows its field (150 x 48) with the list 4 px under it: past seven rows a Neper list scrolls in a 252 px viewport (control.suggesting_wide) instead of squeezing 22 rows into the window; label ink pitch measured 36 px (290, 326, 362, 398, 434, 470, 506), hover band on row 1 and active band on row 3 whole rows, no half-row offset (the pointer aim for the cell is 43 px). (2) Drop button hot and pressed: the value ends 4 px earlier (end space +4, Neper only), so the 32 px circle no longer touches the last letter (ink ends at x 546, circle starts at 568 in the sheet). (3) Windows-capture sheets (combo_box_dialog, _edit, _focus, _held, _pick, _search_held, _flat*, _open_*, _list_* and edits_*, combo_hover, native_dark_open*) no longer write Neper pictures: they reproduce 22 px Windows fields at fixed window y and crushed Neper fields (empty values); looks.windows_capture. native_dark shows Bravo in the hover-arrow cell. Field 150 x 48 against Flutter DropdownMenu 56, list rows 36 against 48: recorded (flutter-compare-k.md). Dark pictures checked at 1x."
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "ROUND 77 (looks77-k): the Neper plain tooltip no longer caps at two lines (overlay.tooltip_of: max_lines 0 for Neper; other looks unchanged and byte-identical): the Wrapped cell prints all three lines, 198 x 56 (was two lines). Measured against ref/flutter/neper/light/tooltip-open: Flutter box 104 x 32 and fill 707070 (its test default grey), Neper 24 high plain tooltip (Short 52 x 24, Plain 88 x 24; M3 spec 24 dp) in inverse-surface 2f3035: height and fill deviations recorded in flutter-compare-k.md. Rich tooltip as round 76."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "ROUND 77 (looks77-k): the Neper plain tooltip no longer caps at two lines (overlay.tooltip_of: max_lines 0 for Neper; other looks unchanged and byte-identical): the Wrapped cell prints all three lines, 198 x 56 (was two lines). Measured against ref/flutter/neper/light/tooltip-open: Flutter box 104 x 32 and fill 707070 (its test default grey), Neper 24 high plain tooltip (Short 52 x 24, Plain 88 x 24; M3 spec 24 dp) in inverse-surface 2f3035: height and fill deviations recorded in flutter-compare-k.md. Rich tooltip as round 76. Dark pictures checked at 1x."
+   }
+  }
+ }
+}

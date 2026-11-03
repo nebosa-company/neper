@@ -6,6 +6,7 @@ use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_y84
 use e.ui.style
 use e.ui.widget
 
@@ -20,30 +21,39 @@ fn pane(t: *const control.Theme) -> widget.Node {
     ret widget.box(0u64, s, zero)
 }
 
-// Eight cells, a split of 200 x 120: the sash standing upright (panes side by side) at rest,
+// Sixteen cells, a split of 200 x 120: the sash standing upright (panes side by side) at rest,
 // hovered, dragged and keyboard-focused, then the same four lying down (panes above and below).
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let captions = [8]str{ "Rest", "Hover", "Dragged", "Focus", "Rest", "Hover", "Dragged", "Focus" }
+    let captions = [16]str{ "Rest", "Hover", "Dragged", "Focus", "Rest", "Hover", "Dragged", "Focus", "Thin rest", "Thin hover", "Thin dragged", "Thin focus", "Thin rest", "Thin hover", "Thin dragged", "Thin focus" }
     var i = 0usize
-    while i < 8usize {
+    while i < 16usize {
         var axis: ui_layout.Axis = .Horizontal
-        var position: f32 = 91.0
-        if i >= 4usize {
+        var position: f32 = 96.0
+        if i % 8usize >= 4usize {
             axis = .Vertical
-            position = 51.0
+            position = 56.0
+        }
+        // HIG Split views: the thin divider measures one point; the sheet's first eight cells are the thick one.
+        looks_y84.set_thin(i >= 8usize)
+        if i >= 8usize {
+            position = 99.0
+            if i % 8usize >= 4usize { position = 60.0 }
         }
         let change = widget.Change[f32] { ctx: zero, invoke: noop_change }
-        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, pane(t), pane(t), position, 40.0, 40.0, change, 200.0, 120.0)
+        let (node, node_error) = control.split_view(a, u64(1000usize * (i + 1usize)), t, axis, pane(t), pane(t), position, 40.0, 40.0, change, 201.0, 121.0)
+        looks_y84.set_thin(false)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         let step = i % 4usize
         if step == 1usize { drive = .Hover }
         if step == 2usize { drive = .Press }
         if step == 3usize { drive = .Focus }
+        // The divider stands at two thirds of `position`; the harness pointer goes to its middle, not the cell's.
+        if i % 8usize >= 4usize { looks.aim(i, 0.0, -20.0) } else if i >= 8usize { looks.aim(i, -34.0, 0.0) } else { looks.aim(i, -32.0, 0.0) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
-    ret (8usize, ok)
+    ret (16usize, ok)
 }
 
 // The splitter of v3's Filter window (ref/windows/dialogs/search-filter-top: TcxSplitter, simple hot
@@ -123,7 +133,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let live = looks.Sheet { name: "splitter_live", cells: 1usize, columns: 1usize, cell_w: 8.0, cell_h: 463.0, ctx: zero, build: build_live }
         ret looks.run_cupertino(a, &live)
     }
-    let sheet = looks.Sheet { name: "splitter", cells: 8usize, columns: 4usize, cell_w: 200.0, cell_h: 120.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "splitter", cells: 16usize, columns: 4usize, cell_w: 201.0, cell_h: 121.0, ctx: zero, build: build }
     ret looks.run_cupertino(a, &sheet)
 }
 

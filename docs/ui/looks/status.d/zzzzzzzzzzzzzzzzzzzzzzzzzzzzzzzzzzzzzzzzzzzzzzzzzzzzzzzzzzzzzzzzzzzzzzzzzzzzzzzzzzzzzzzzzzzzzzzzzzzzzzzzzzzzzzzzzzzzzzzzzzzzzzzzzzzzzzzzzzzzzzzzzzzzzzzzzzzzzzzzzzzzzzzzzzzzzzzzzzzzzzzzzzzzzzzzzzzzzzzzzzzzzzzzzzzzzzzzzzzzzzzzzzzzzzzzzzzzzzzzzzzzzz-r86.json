@@ -1,0 +1,282 @@
+{
+ "terminal_view": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/terminal_view.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark at 1x. Downgraded from ready: the focus cell is identical to rest (the scrollback list draws no focus indicator in any look; widget.scroll takes no ring), so a state the row draws is not drawn. Rows, selection (secondary-container e8def8 / 4a4458), hover layer (8 %) and the 4 wide thumb read; Cascadia Mono 12 sp text on-surface 16:1.",
+    "gaps": [
+     "Focus cell equals rest: the list has no focus indicator"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/terminal_view.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark at 1x. Downgraded from ready: the focus cell is identical to rest (the scrollback list draws no focus indicator in any look; widget.scroll takes no ring), so a state the row draws is not drawn. Rows, selection (secondary-container e8def8 / 4a4458), hover layer (8 %) and the 4 wide thumb read; Cascadia Mono 12 sp text on-surface 16:1.",
+    "gaps": [
+     "Focus cell equals rest: the list has no focus indicator"
+    ]
+   }
+  }
+ },
+ "code_editor": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/code_editor.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x. Fixed: the disabled cell drew a caret and the current-line tint (Android sheet only; now none, the 38 % content level exempt). Text and keyword colours nominal 6:1 or better on surface (comment on-surface-variant 8.9:1), selection and find marks read, error line on error-container with on-surface text.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/code_editor.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x. Fixed: the disabled cell drew a caret and the current-line tint (Android sheet only; now none, the 38 % content level exempt). Text and keyword colours nominal 6:1 or better on surface (comment on-surface-variant 8.9:1), selection and find marks read, error line on error-container with on-surface text.",
+    "gaps": []
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/markdown_view.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: document and narrow cells, headings, code pill, table, quote bar, lists read; link text primary 6.1:1. Fixed: the link focus cell showed nothing (rich-text links on the Android look now lay the 10 % focus layer and a 2 dp underline, as the link control does) and the pressed cell now waits for its eased 10 % layer. Recorded: a two-word link lays its layer on the word under the pointer only (both words share one key).",
+    "gaps": [
+     "A link's state layer covers the word under the pointer, not the whole link"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/markdown_view.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: document and narrow cells, headings, code pill, table, quote bar, lists read; link text primary 6.1:1. Fixed: the link focus cell showed nothing (rich-text links on the Android look now lay the 10 % focus layer and a 2 dp underline, as the link control does) and the pressed cell now waits for its eased 10 % layer. Recorded: a two-word link lays its layer on the word under the pointer only (both words share one key).",
+    "gaps": [
+     "A link's state layer covers the word under the pointer, not the whole link"
+    ]
+   }
+  }
+ },
+ "popover": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/popover.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: below, flipped above and with actions; no clipping, close icon on-surface-variant 8.9:1, Later on the container 5.6:1 (dark 9.6:1); the hover and focus sheets equal rest (the popover itself has no state layer, the anchor and close targets are the pointer targets).",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/popover.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: below, flipped above and with actions; no clipping, close icon on-surface-variant 8.9:1, Later on the container 5.6:1 (dark 9.6:1); the hover and focus sheets equal rest (the popover itself has no state layer, the anchor and close targets are the pointer targets).",
+    "gaps": []
+   }
+  }
+ },
+ "key_caps": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/key_caps.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x. Fixed: the compact cap's label sat flush at the top (3 dp above, 9 dp below the glyph); it now sits in the 20 dp cap with 2 dp above and below (control.compact_key_caps, Android only). Labels on-surface-variant 8.1:1 on surface-container-lowest; the 1 dp outline-variant edge is decorative (the cap is not a control).",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/key_caps.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x. Fixed: the compact cap's label sat flush at the top (3 dp above, 9 dp below the glyph); it now sits in the 20 dp cap with 2 dp above and below (control.compact_key_caps, Android only). Labels on-surface-variant 8.1:1 on surface-container-lowest; the 1 dp outline-variant edge is decorative (the cap is not a control).",
+    "gaps": []
+   }
+  }
+ },
+ "skeleton": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/skeleton.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: placeholders are surface-container-highest on surface (1.15:1, decorative, no text), the on-highest cell and the mid shimmer draw, no clipping.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/skeleton.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: placeholders are surface-container-highest on surface (1.15:1, decorative, no text), the on-highest cell and the mid shimmer draw, no clipping.",
+    "gaps": []
+   }
+  }
+ },
+ "empty_state": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/empty_state.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: 72 dp tonal disc with the primary glyph, title on-surface 16:1, body on-surface-variant 8.9:1, filled and outlined actions (on-primary 6.4:1, dark 7.7:1), hovered and pressed layers distinct, text-only and compact cells; no clipping.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/empty_state.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: 72 dp tonal disc with the primary glyph, title on-surface 16:1, body on-surface-variant 8.9:1, filled and outlined actions (on-primary 6.4:1, dark 7.7:1), hovered and pressed layers distinct, text-only and compact cells; no clipping.",
+    "gaps": []
+   }
+  }
+ },
+ "toolbar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/toolbar.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: primary actions on surface-container 5.6:1 (dark 9.6:1), the disabled Copy at 38 % exempt, hover, pressed and focus layers on Paste (8 and 10 %), five-action bar fits; no clipping.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/toolbar.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: primary actions on surface-container 5.6:1 (dark 9.6:1), the disabled Copy at 38 % exempt, hover, pressed and focus layers on Paste (8 and 10 %), five-action bar fits; no clipping.",
+    "gaps": []
+   }
+  }
+ },
+ "pagination": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/pagination.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: 40 dp page buttons, the current page on secondary-container, the disabled previous and next arrows at 38 % exempt, hover (8 %), pressed and focus (10 %) layers over the current page; numbers on-surface 16:1 on surface.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/pagination.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: 40 dp page buttons, the current page on secondary-container, the disabled previous and next arrows at 38 % exempt, hover (8 %), pressed and focus (10 %) layers over the current page; numbers on-surface 16:1 on surface.",
+    "gaps": []
+   }
+  }
+ },
+ "key_value_editor": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/key_value_editor.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: outlined fields 56 dp with floating labels (outline 79747e 4.3:1 on surface), the focused field 3 dp primary ring, remove icons and Add variable (primary 6.1:1), hovered Add variable layer, empty cell shows only the add action; no clipping.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/key_value_editor.png",
+    "notes": "ROUND 86: AUDIT 44 view, light and dark, 1x and 1.5x: outlined fields 56 dp with floating labels (outline 79747e 4.3:1 on surface), the focused field 3 dp primary ring, remove icons and Add variable (primary 6.1:1), hovered Add variable layer, empty cell shows only the add action; no clipping.",
+    "gaps": []
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/font_picker.png",
+    "notes": "ROUND 86: Back to ready (audit 44 downgraded it). The family rows draw in Roboto, Segoe UI or Tahoma where the rig has the face (looks_z86.face_of) and the sample line draws in the chosen family's face, Bold as the face's bold (Roboto Medium, Segoe UI Bold, Tahoma Bold), Italic as a synthetic oblique (VisualTransform skew -0.25, Skia's fake italic as Flutter); a family the rig has no face for (Cantarell, SF Pro, Verdana) shows its name alone in the preview. The list shows whole 48 dp rows (the cut rows at the Focus cell are gone). Viewed light and dark at 1x and 1.5x: font_picker.png (five cells) and the new font_picker_faces.png (Roboto Italic, Segoe UI Regular and Italic, Tahoma Regular and Bold, SF Pro name only). Text on-surface 16:1 (dark 14:1), selected row on-secondary-container on secondary-container 13:1 (dark 7.2:1), style control and stepper unchanged from the matched parts.",
+    "gaps": [
+     "Families without a rig face are not previewed (name only)",
+     "Style control 6 dp wider than its 250 dp cell"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "ROUND 86: Back to ready (audit 44 downgraded it). The family rows draw in Roboto, Segoe UI or Tahoma where the rig has the face (looks_z86.face_of) and the sample line draws in the chosen family's face, Bold as the face's bold (Roboto Medium, Segoe UI Bold, Tahoma Bold), Italic as a synthetic oblique (VisualTransform skew -0.25, Skia's fake italic as Flutter); a family the rig has no face for (Cantarell, SF Pro, Verdana) shows its name alone in the preview. The list shows whole 48 dp rows (the cut rows at the Focus cell are gone). Viewed light and dark at 1x and 1.5x: font_picker.png (five cells) and the new font_picker_faces.png (Roboto Italic, Segoe UI Regular and Italic, Tahoma Regular and Bold, SF Pro name only). Text on-surface 16:1 (dark 14:1), selected row on-secondary-container on secondary-container 13:1 (dark 7.2:1), style control and stepper unchanged from the matched parts.",
+    "gaps": [
+     "Families without a rig face are not previewed (name only)",
+     "Style control 6 dp wider than its 250 dp cell"
+    ]
+   }
+  }
+ },
+ "scroll_area": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/scroll_area.png",
+    "notes": "ROUND 86: Thumb now 70 % of on-surface-variant at rest (7f7a84 on fef7ff 4.1:1, dark 939099 on 141218 6:1) and 90 % over its strip, 4 wide, 48 shortest; against the 3:1 control rule (was 2.4:1). Deviation recorded: Flutter's thumb is lighter. The Pressed cell equals Hover (a drag is 100 %, not driven by the sheet). Viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells.",
+    "gaps": [
+     "Pressed cell shows the hover thumb; a drag (full colour) is not driven",
+     "Thumb is darker than Flutter's default to meet 3:1"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/scroll_area.png",
+    "notes": "ROUND 86: Thumb now 70 % of on-surface-variant at rest (7f7a84 on fef7ff 4.1:1, dark 939099 on 141218 6:1) and 90 % over its strip, 4 wide, 48 shortest; against the 3:1 control rule (was 2.4:1). Deviation recorded: Flutter's thumb is lighter. The Pressed cell equals Hover (a drag is 100 %, not driven by the sheet). Viewed light and dark at 1x and 1.5x: vertical, horizontal, scrolled and fits cells.",
+    "gaps": [
+     "Pressed cell shows the hover thumb; a drag (full colour) is not driven",
+     "Thumb is darker than Flutter's default to meet 3:1"
+    ]
+   }
+  }
+ },
+ "grid_view": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/grid_view.png",
+    "notes": "ROUND 86: Tile labels sit 12 dp in from the tile edges (the sheet pads each tile's content on the Android look; tiles surface-container-low 12 dp, chosen secondary-container with on-secondary-container labels 13:1 (dark 7.2:1)). Viewed light and dark at 1x and 1.5x; four cells, narrow wraps to two columns. The chosen tile differs from rest by fill only (e8def8 against f7f2fa, M3's selected container, not a 3:1 indicator).",
+    "gaps": [
+     "Selection is a container fill only (M3), under 3:1 against rest"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/grid_view.png",
+    "notes": "ROUND 86: Tile labels sit 12 dp in from the tile edges (the sheet pads each tile's content on the Android look; tiles surface-container-low 12 dp, chosen secondary-container with on-secondary-container labels 13:1 (dark 7.2:1)). Viewed light and dark at 1x and 1.5x; four cells, narrow wraps to two columns. The chosen tile differs from rest by fill only (e8def8 against f7f2fa, M3's selected container, not a 3:1 indicator).",
+    "gaps": [
+     "Selection is a container fill only (M3), under 3:1 against rest"
+    ]
+   }
+  }
+ },
+ "breadcrumbs": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/breadcrumbs.png",
+    "notes": "ROUND 86: The crumbs and the overflow dots are centred in their 48 dp target (navigation.trail_crumb_icon and the overflow crumb, Android only), so the trail is on one baseline with the chevrons and the current place (was 8 px high). Crumbs on-surface-variant 8.9:1, current on-surface bold, hover, pressed and focus layers; collapsed cell with the dots. Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/breadcrumbs.png",
+    "notes": "ROUND 86: The crumbs and the overflow dots are centred in their 48 dp target (navigation.trail_crumb_icon and the overflow crumb, Android only), so the trail is on one baseline with the chevrons and the current place (was 8 px high). Crumbs on-surface-variant 8.9:1, current on-surface bold, hover, pressed and focus layers; collapsed cell with the dots. Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   }
+  }
+ },
+ "sidebar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/sidebar.png",
+    "notes": "ROUND 86: The four-item cell's frame is 248 high on the Android look (the sheet app, was a fixed 200 that squeezed the 56 dp rows to 44) and the Material sheet is drawn in a 320 cell, so every cell has the 56 dp pitch (items 56 dp pills, hover 8 %, pressed 10 %, focus ring 3 dp primary). Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/sidebar.png",
+    "notes": "ROUND 86: The four-item cell's frame is 248 high on the Android look (the sheet app, was a fixed 200 that squeezed the 56 dp rows to 44) and the Material sheet is drawn in a 320 cell, so every cell has the 56 dp pitch (items 56 dp pills, hover 8 %, pressed 10 %, focus ring 3 dp primary). Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   }
+  }
+ },
+ "canvas": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/canvas.png",
+    "notes": "ROUND 86: The sample bars stand on a baseline 12 dp above the frame's foot (the frame's 12 dp corner radius) so the rounded corners no longer cut them (sheet app, Android only; bare cell unchanged). Frame outline-variant edge decorative, bars primary 6.1:1 (dark 10.9:1), secondary bar, disabled at 38 %. The chart is sample artwork: no M3 spec, the frame is the measured part. Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/canvas.png",
+    "notes": "ROUND 86: The sample bars stand on a baseline 12 dp above the frame's foot (the frame's 12 dp corner radius) so the rounded corners no longer cut them (sheet app, Android only; bare cell unchanged). Frame outline-variant edge decorative, bars primary 6.1:1 (dark 10.9:1), secondary bar, disabled at 38 %. The chart is sample artwork: no M3 spec, the frame is the measured part. Viewed light and dark at 1x and 1.5x.",
+    "gaps": []
+   }
+  }
+ }
+}

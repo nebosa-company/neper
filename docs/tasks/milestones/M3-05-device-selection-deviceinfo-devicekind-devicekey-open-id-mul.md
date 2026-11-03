@@ -54,7 +54,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `DeviceInfo`: `lib/e/gpu.e`×28‡
+- `DeviceInfo`: `lib/e/gpu.e`×30‡
 - `DeviceKind`: `lib/e/gpu.e`×2‡
 - `DeviceKey`: `lib/e/gpu.e`×4‡, `lib/e/gpu/vulkan.e`×2†
 - `open_id`: `lib/e/gpu.e`×1‡

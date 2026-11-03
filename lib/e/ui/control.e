@@ -22,6 +22,7 @@ use e.ui.accessibility
 use e.ui.adwicon_l2 as adwicon
 use e.ui.linuxshadow_l2 as linuxshadow
 use e.ui.matglyph
+use e.ui.matglyph_z87
 use e.ui.animation
 use e.ui.gridlook as gl
 use e.ui.input
@@ -32,11 +33,24 @@ use e.ui.linux_card
 use e.ui.linuxsoft_lb as linuxsoft
 use e.ui.linuxspin_lb as linuxspin
 use e.ui.linuxmark_lb as linuxmark
+use e.ui.looks_b
+use e.ui.looks_z63
+use e.ui.looks_o78
+use e.ui.looks_t81
+use e.ui.looks_x84
+use e.ui.looks_x85
+use e.ui.looks_y84
+use e.ui.looks_y85
+use e.ui.looks_y87
+use e.ui.looks_y88
+use e.ui.looks_z84_edge
+use e.ui.looks_z86
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
 use e.ui.winmark
 use e.ui.winnative
+use e.ui.winradio
 use e.ui.wintile
 use e.ui.winpageicon
 use e.ui.wintoolicon
@@ -54,6 +68,8 @@ type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Fon
 // window that has just opened has its default button focused: v3's About), for the looks sheets. `ring_x`, `ring_y` (looks9) the exact
 // phase at the top left of the ring (`ring_x2`, `ring_y2` at the right and bottom edge, else it grows by 0.00074 per pixel)
 // of the ring of such a button (the native ring drawn at a fractional position); when both are zero `shift_x`, `shift_y` serve.
+// Windows light always draws (`windows_crisp`): the ring and focus rectangle of the true 1:1 v3 captures (docs/ui/looks/ref/windows-1to1): a box W - 2 by H - 2,
+// one pixel rails, no sub-pixel phase (every shift above is ignored), the focus dots the face inverted on alternate pixels.
 type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool, width: f32, height: f32, shift_x: f32, shift_y: f32, focused: bool, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, circular: bool }
 // (D1453) `weight` (0: the face's own), `italic` and `mono` ask for a face: the
 // theme's fonts that match best lead the fallback chain (`text_style_faced`).
@@ -623,7 +639,10 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     // `+ 1048601`; a link broken over two lines changes at once); reduced motion
     // changes at once.
     var wash_goal: f32 = 0.0
+    // Android (round 86): keyboard focus lays the 10 % layer and the 2 dp underline, as the link control does.
+    let android_focus = t.tokens.profile == .MaterialLike && state.focus_visible
     if state.hovered { wash_goal = t.tokens.states.hover }
+    if android_focus { wash_goal = t.tokens.states.focus }
     if state.pressed { wash_goal = t.tokens.states.pressed }
     var wash = wash_goal
     if live_link { wash = eased_on(t, link_key, link_key + 1048601u64, wash_goal, false, t.tokens.durations.short2) }
@@ -632,7 +651,7 @@ fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const Ri
     var count = 1usize
     if span.kind == .Link {
         var thick = t.tokens.sizes.divider
-        if state.hovered { thick = 2.0 }
+        if state.hovered || android_focus { thick = 2.0 }
         var rule = sized_style(piece.fit, thick)
         rule.background = paint.Brush { Solid: ink }
         parts[2usize] = widget.positioned(0u64, 0.0, math.round[f32](lb + 3.0), rule, zero)
@@ -688,7 +707,23 @@ fn icon(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, size: f32, lab
 fn image(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, width: f32, height: f32, fit: widget.Fit, label: str) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: fit }, sized_style(width, height))
+    if texture.generation == 0u32 {
+        // No texture yet (a live one never has generation 0): a neutral frame with the picture mark, so the space is held and the paint cannot fail.
+        let grey = style.hex_raw(0x8A8A8Au32)
+        var mark_size = width * 0.5
+        if height < width { mark_size = height * 0.5 }
+        if mark_size > 36.0 { mark_size = 36.0 }
+        let (mark, mark_error) = icon_square(a, with_alpha(grey, 0.9), .Picture, mark_size)
+        if mark_error != ok { ret (zero, mark_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = mark
+        var ground = sized_style(width, height)
+        ground.background = paint.Brush { Solid: with_alpha(grey, 0.22) }
+        body[0usize] = widget.aligned(0u64, .Center, .Center, ground, held[0usize..1usize])
+    } else {
+        body[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: fit }, sized_style(width, height))
+    }
     var sem: widget.Semantics = zero
     sem.role = ROLE_IMAGE
     sem.label = label
@@ -1226,6 +1261,7 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
         if size > 32.0 { mark = 12.0 }
         if size > 40.0 { mark = 14.0 }
         if size > 56.0 { mark = 16.0 }
+        if t.tokens.profile == .CupertinoLike { mark = looks_y88.badge_size(size) }
         let ring_color = style.color(t.tokens, options.ground)
         var dot = sized_style(mark, mark)
         dot.radius = mark * 0.5
@@ -1258,7 +1294,10 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
         ring.radius = (mark + 4.0) * 0.5
         ring.background = paint.Brush { Solid: ring_color }
         marks[1usize] = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, ring, marks[0usize..1usize])
-        layers[1usize] = widget.positioned(0u64, size - mark - 4.0, size - mark - 4.0, style.defaults(), marks[1usize..2usize])
+        var corner = size - mark - 4.0
+        // Cupertino: the badge hangs off the lower right corner of the disc (iOS status badge, 12 pt) and stays clear of the monogram.
+        if t.tokens.profile == .CupertinoLike { corner = size - mark - 4.0 + looks_y88.badge_hang(size) }
+        layers[1usize] = widget.positioned(0u64, corner, corner, style.defaults(), marks[1usize..2usize])
         count = 2usize
     }
     layers[2usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..count])
@@ -1443,8 +1482,14 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         ground = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container)
         raised = 0usize
     }
+    // Cupertino: a grouped inset card, a white (dark 2C2C2E) face with a 10 pt radius and no shadow, as a grouped table section is
+    let grouped = t.tokens.profile == .CupertinoLike
+    if grouped && options.enabled && options.variant != .Filled && options.variant != .Outlined && !options.dragged && !(interactive && (state.hovered || state.pressed)) {
+        ground = style.hex_raw(looks_y85.card_face(t.tokens.palette == .Dark))
+    }
     s.background = paint.Brush { Solid: ground }
     s.radius = t.tokens.radii.md
+    if grouped { s.radius = 10.0 }
     if options.width > 0.0 {
         s.width = style.Length { Px: options.width }
         if options.width < 120.0 { s.radius = t.tokens.radii.sm }
@@ -1456,7 +1501,12 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
     s.overflow = .Clip
     if options.variant == .Outlined { s.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.variant == .Outlined && grouped { s.border = style.Border { width: 1.0, color: style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, false)) } }
     if options.selected { s.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    if grouped {
+        raised = 0usize
+        if options.dragged && options.enabled { raised = 2usize }
+    }
     if raised > 0usize { s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) } }
     var column_style = style.defaults()
     if !options.enabled { column_style.opacity = t.tokens.states.disabled_content }
@@ -1535,7 +1585,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
         holder[2usize] = widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize])
         if options.dragged && options.enabled && !t.tokens.motion.reduced {
             holder[3usize] = holder[2usize]
-            ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+            ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, skew: 0.0, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
         }
         ret (holder[2usize], ok)
     }
@@ -1547,7 +1597,7 @@ fn card_render(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOpt
     holder[2usize] = widget.semantics(key, sem, style.defaults(), holder[0usize..1usize])
     if options.dragged && options.enabled && !t.tokens.motion.reduced {
         holder[3usize] = holder[2usize]
-        ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
+        ret (widget.transformed(0u64, widget.VisualTransform { scale: 1.02, rotation: 0.02617994, skew: 0.0, offset: zero }, style.defaults(), holder[3usize..4usize]), ok)
     }
     ret (holder[2usize], ok)
 }
@@ -1887,6 +1937,11 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
     if options.strong { ink = style.color(t.tokens, .Outline) }
     let horizontal = options.axis == .Horizontal
     var thick = style.Length { Px: t.tokens.sizes.divider }
+    // Cupertino: the opaque separator colour the picture cites (the translucent token composes to 1.07:1), one whole pixel thick so the colour is drawn
+    if t.tokens.profile == .CupertinoLike {
+        ink = style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, options.strong))
+        thick = style.Length { Px: 1.0 }
+    }
     // The Linux look (worker l3): libadwaita's GtkSeparator is a #dddddd (#454545 Dark) fill of its whole allocation; `thick` sets it.
     if t.tokens.profile == .Linux {
         ink = linux_rule(t)
@@ -1911,6 +1966,14 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
         line.width = thick
         line.height = style.Length { Flex: 1.0 }
         outer.padding = style.EdgeLengths { left: none, top: lead, right: none, bottom: tail }
+    }
+    // Cupertino: a 2 px box holds the 1 px line at its top edge, so the centred rule lands on whole pixels
+    if t.tokens.profile == .CupertinoLike && options.label.len == 0usize {
+        if horizontal {
+            outer.padding.bottom = style.Length { Px: 1.0 }
+        } else {
+            outer.padding.right = style.Length { Px: 1.0 }
+        }
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -1997,7 +2060,7 @@ fn badge_grown(a: *mem.Arena, t: *const Theme, key: widget.Key, made: widget.Nod
     held[0usize] = made
     // (D1497) The scale carries the badge's key and its kept state, so the pill
     // inside may change shape (a count cross-fading) without losing them.
-    ret (widget.transformed(key, widget.VisualTransform { scale: grown, rotation: 0.0, offset: zero }, style.defaults(), held[0usize..1usize]), ok)
+    ret (widget.transformed(key, widget.VisualTransform { scale: grown, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), held[0usize..1usize]), ok)
 }
 
 fn badge_bare(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str, kind: BadgeKind) -> (widget.Node, err) {
@@ -2427,8 +2490,9 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
 // The theme's focus ring on the page's runtime (D940): the runtime paints it round
 // whichever element the keyboard focuses, so a control need only hand it the look.
 fn focus_look(t: *const Theme) {
-    widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux)
+    if t.tokens.profile != .Neper { widget.set_arc_corners(t.tokens.profile == .MaterialLike || t.tokens.profile == .Linux) }
     widget.set_skia_corners(t.tokens.profile == .MaterialLike)
+    widget.set_soft_shadows(t.tokens.profile == .MaterialLike)
     scene.set_fine_curves(t.tokens.profile == .Linux)
     scene.set_cff_text(t.tokens.profile == .Linux)
     if mem.address_of(t.runtime) == 0usize { ret }
@@ -2593,7 +2657,7 @@ fn windows_dots(a: *mem.Arena, color: paint.Color, width: f32, height: f32) -> (
 // with the dotted focus rectangle laid over it while the keyboard has the focus. `ring` below 3 is the
 // pixel-exact native ring (e.ui.winbutton) drawn under everything in the whole box, and the focus rectangle
 // is then v3's: the control rect (the box plus 1 above and left) less 3 on every side.
-fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32) -> (widget.Node, err) {
+fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedControl, state: style.ControlState, enabled: bool, content_w: f32, row: widget.Node, ring: u32, face: u32, shift_x: f32, shift_y: f32, ring_x: f32, ring_y: f32, ring_x2: f32, ring_y2: f32, crisp: bool) -> (widget.Node, err) {
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     inner[0usize] = row
@@ -2625,7 +2689,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     if ringed {
         // a button of a DPI-scaled form draws its focus rectangle with the ring, shifted with it
         var dots_kind = 0u32
-        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark {
+        if focus && (shift_x != 0.0 || shift_y != 0.0) && t.tokens.palette != .Dark && !crisp {
             dots_kind = 1u32
             if state.pressed { dots_kind = 2u32 }
         }
@@ -2635,7 +2699,7 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
             phase_x = ring_x
             phase_y = ring_y
         }
-        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark)
+        let (face_node, face_error) = winbutton.ring_node(a, ring, face, look.min_width, look.min_height, phase_x, phase_y, ring_x2, ring_y2, dots_kind, t.tokens.palette == .Dark, crisp)
         if face_error != ok { ret (zero, face_error) }
         layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, face_node))
         n += 1usize
@@ -2643,8 +2707,8 @@ fn windows_button_shown(a: *mem.Arena, t: *const Theme, look: style.ResolvedCont
     layers[n] = centred
     n += 1usize
     if focus {
-        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark) {
-            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark)
+        if ringed && ((shift_x == 0.0 && shift_y == 0.0) || t.tokens.palette == .Dark || crisp) {
+            let (dots, dots_error) = winbutton.focus_node(a, state.pressed, look.min_width, look.min_height, t.tokens.palette == .Dark, crisp, face)
             if dots_error != ok { ret (zero, dots_error) }
             layers[n] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), mem_one_node(a, dots))
             n += 1usize
@@ -2677,6 +2741,7 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     }
     var look = style.windows_resolve(t.tokens, variant, state)
     look.corners = corners
+    let crisp = windows_crisp(t)
     if !show_label { look.min_width = 29.33 }
     // The native ring (looks3 group a): a whole button, not a split's head, not the plain one.
     var rk: u32 = 9u32
@@ -2699,13 +2764,17 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         look.min_width = 73.0
         if !show_label { look.min_width = 29.0 }
         look.min_height = 22.0
+        if crisp { look.min_height = 21.0 }
         if options.width > 0.0 { look.min_width = options.width - 2.0 }
         if options.height > 0.0 { look.min_height = options.height - 1.0 }
+        if crisp && options.height > 0.0 { look.min_height = options.height - 2.0 }
     }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
     var ink = look.foreground
+    // the 1:1 captures show a disabled caption in #838383 where it is solid (the resampled ones blurred it to #878787)
+    if crisp && state.disabled { ink = style.hex(0x838383u32) }
     if options.loading { ink.alpha = 0.0 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -2715,6 +2784,9 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
     // to its right (the caption's middle 11.5 px right of the face's); the picture is not part of the caption row
     let dark_picture = has_icon && !options.loading && t.tokens.palette == .Dark && t.tokens.profile == .Windows && corners.top_left == 0.0
     var shift_caption = options.shift_x
+    if crisp { shift_caption = 0.0 }
+    // v3 centres a picture and its caption by integer arithmetic: a half pixel of room goes to the left
+    if crisp && has_icon { shift_caption = 1.0 }
     if dark_picture { shift_caption = 23.0 }
     if has_icon && !options.loading && !dark_picture {
         parts[count] = picture
@@ -2807,7 +2879,19 @@ fn windows_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, p
         row = widget.stack(0u64, style.defaults(), layers[1usize..3usize])
         states = accessibility.STATE_BUSY
     }
-    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, options.shift_y, options.ring_x, options.ring_y, options.ring_x2, options.ring_y2)
+    var shift_y_used = options.shift_y
+    var ring_x_used = options.ring_x
+    var ring_y_used = options.ring_y
+    var ring_x2_used = options.ring_x2
+    var ring_y2_used = options.ring_y2
+    if crisp {
+        shift_y_used = 0.0
+        ring_x_used = 0.0
+        ring_y_used = 0.0
+        ring_x2_used = 0.0
+        ring_y2_used = 0.0
+    }
+    let (shown_plain, shown_error) = windows_button_shown(a, t, look, state, options.enabled, content_w, row, rk, face, shift_caption, shift_y_used, ring_x_used, ring_y_used, ring_x2_used, ring_y2_used, crisp)
     if shown_error != ok { ret (zero, shown_error) }
     var shown = shown_plain
     if dark_picture {
@@ -2919,7 +3003,7 @@ fn windows_split(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ac
     look.padding = 3.0
     let (chevron, chevron_error) = icon_square(a, look.foreground, .ChevronDown, 12.0)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    let (shown, shown_error) = windows_button_shown(a, t, look, state, options.enabled, 12.0, chevron, 9u32, 0u32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false)
     if shown_error != ok { ret (zero, shown_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
@@ -3377,7 +3461,10 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     caption.wrap = .None
     let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
     if label_error != ok { ret (zero, label_error) }
-    let active = state.hovered || state.pressed
+    var active = state.hovered || state.pressed
+    // Android: keyboard focus draws the 10 % layer and the underline, as the pointer states do.
+    let android_focus = t.tokens.profile == .MaterialLike && state.focus_visible
+    if android_focus { active = true }
     // (D1335) Over a link, the hand.
     if state.hovered && mem.address_of(t.runtime) != 0usize { widget.request_cursor(t.runtime, 2u8) }
     var count = 1usize
@@ -3387,14 +3474,16 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     lines[0usize] = label_node
     if active {
         var under = style.defaults()
-        under.width = style.Length { Percent: 100.0 }
         under.height = style.Length { Px: t.tokens.sizes.divider }
         under.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
         lines[1usize] = widget.box(0u64, under, zero)
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..count])
+    var body_style = style.defaults()
+    // Android: the label sits in the middle of its 48 dp target, so the layer is centred on it.
+    if t.tokens.profile == .MaterialLike { body_style.min_height = style.Length { Px: t.tokens.metrics.hit_target } }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Stretch, gap: 0.0 }, body_style, lines[0usize..count])
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     // A link is at least the hit target, so a short one is still reachable.
@@ -3407,6 +3496,7 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     // `key + 1048594`); reduced motion changes at once.
     var opacity: f32 = 0.0
     if state.hovered { opacity = t.tokens.states.hover }
+    if android_focus { opacity = t.tokens.states.focus }
     if state.pressed { opacity = t.tokens.states.pressed }
     let washed = eased_on(t, key, key + 1048594u64, opacity, false, t.tokens.durations.short2)
     target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), washed) }
@@ -3441,7 +3531,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh, Add, Visibility, VisibilityOff, Edit, Settings, Filter, Table, Sigma, Scissors, Pages, Clipboard, LetterB, LetterI, LetterU, Undo, Redo, SaveTray, Share, Archive, Delete }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32, filled: bool, ground: paint.Color }
 
 // (D1530) Whether a glyph has a body its filled "on" form fills; one without (a
@@ -3629,6 +3719,19 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if drawn { ret ok }
     }
     if g.filled && glyph_has_body(g.kind) { ret filled_glyph_paint(g, b, area) }
+    if g.kind >= .Scissors {
+        var code = 0u8
+        if g.kind == .Pages { code = 1u8 }
+        if g.kind == .Clipboard { code = 2u8 }
+        if g.kind == .LetterB { code = 3u8 }
+        if g.kind == .LetterI { code = 4u8 }
+        if g.kind == .LetterU { code = 5u8 }
+        if g.kind == .Undo { code = 6u8 }
+        if g.kind == .Redo { code = 7u8 }
+        if g.kind == .SaveTray { code = 8u8 }
+        let drawn = looks_y87.command_glyph(g.arena, b, code, area.x, area.y, area.width, area.height, g.color, g.stroke)
+        ret drawn
+    }
     // (D1302) The gear's two rings and eight teeth need the larger builder.
     var verbs = 16usize
     var points = 24usize
@@ -3888,6 +3991,28 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.7 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.43, y: y + h * 0.55 })
         try geometry.close_path(&builder)
+    }
+    if g.kind == .Table {
+        // A grid: a frame with a header rule, a second rule and one column rule.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.8 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.8 })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.4 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.4 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.6 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.6 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.4 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.8 })
+    }
+    if g.kind == .Sigma {
+        // A capital sigma: the top bar, the two diagonals meeting at the middle and the bottom bar.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.78, y: y + h * 0.22 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.24, y: y + h * 0.22 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.52, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.24, y: y + h * 0.78 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.78, y: y + h * 0.78 })
     }
     if g.kind == .ArrowUp || g.kind == .ArrowDown {
         // (D980) A shaft and a head, pointing up or down.
@@ -4172,6 +4297,42 @@ fn radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: 
     ret (node, node_error)
 }
 
+// A radio of a group: the Windows dark look draws its caption light (`group_context` 1000), every other look as `radio`.
+fn radio_in_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool, group_context: u32) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows {
+        let (row, row_error) = windows_choice_high(a, key, t, 5u8, label, selected, false, true, action, enabled, 21.0, false, Phase { context: group_context, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+        ret (row, row_error)
+    }
+    let (node, node_error) = radio(a, key, t, label, selected, action, enabled)
+    ret (node, node_error)
+}
+
+// round 84: the Windows Dark radio group as the sized group the dialogs use (whole device pixel lines), its extent from the 22 high rows.
+fn windows_dark_radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, items: []const widget.Node, enabled: bool) -> (widget.Node, err) {
+    let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (placed, placed_error) = mem.alloc[widget.Node](a, items.len)
+    if placed_error != ok { ret (zero, TooLarge) }
+    var wide: f32 = 0.0
+    var i = 0usize
+    while i < labels.len {
+        let (shown, mark_at, shown_error) = winbutton.mnemonic(a, labels[i])
+        if shown_error != ok { ret (zero, shown_error) }
+        let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
+        if metrics_error != ok { ret (zero, metrics_error) }
+        if 20.0 + fit > wide { wide = 20.0 + fit }
+        placed[i] = widget.positioned(0u64, 8.0, 18.0 + 22.0 * f32(i), style.defaults(), mem_one_node(a, items[i]))
+        i += 1usize
+    }
+    let width = wide + 15.0
+    let height = 23.0 + 22.0 * f32(labels.len)
+    let (framed, framed_error) = windows_group_exact(a, key, t, label, enabled, width, height, 0.15, 6.45, width + 0.5, height - 0.45, placed[0usize..labels.len])
+    ret (framed, framed_error)
+}
+
 // A radio group: a radio per label in a column, keyed `key + 1 + index`, the
 // selected one marked, each firing its own action (one per label, caller-owned);
 // a group in the tree under `label`.
@@ -4181,13 +4342,19 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
     if items_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < labels.len {
-        let (item, item_error) = radio(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled)
+        var group_context = 0u32
+        if t.tokens.profile == .Windows { group_context = 1000u32 }
+        let (item, item_error) = radio_in_group(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled, group_context)
         if item_error != ok { ret (zero, item_error) }
         items[i] = item
         i += 1usize
     }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
     if stacked_error != ok { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Dark {
+        let (framed, framed_error) = windows_dark_radio_group(a, key, t, label, labels, items[0usize..labels.len], enabled)
+        ret (framed, framed_error)
+    }
     if t.tokens.profile == .Windows {
         let (framed, framed_error) = windows_group(a, key, t, label, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len]), enabled)
         ret (framed, framed_error)
@@ -4219,7 +4386,7 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
 // pixels (121 to 135 levels over 130 px) and why the offset depends on where the control stands. The other
 // windows' rectangles are drawn without the scale (crisp dots of 90 and 165 levels).
 // `lw`, `tw`: the window coordinates of the rectangle's left column and top row (negative: unknown, no scale).
-type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32 }
+type Dotted = struct { color: paint.Color, s: f32, line: f32, lw: f32, tw: f32, span: f32, whole: bool }
 // The dots are the inverse of the face (DrawFocusRect's XOR): a dot over a face of 240 is 15, over 249 it is 6.
 
 // A rectangle `w` x `h` at (x, y) as the pixels it covers, each filled with its share of the colour's alpha (the
@@ -4279,6 +4446,29 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let d = mem.cast[*Dotted](ctx)
     let x0 = f32(i32(area.x + 0.01))
     let y0 = f32(i32(area.y + 0.01))
+    if d.whole {
+        // DrawFocusRect, an XOR: every other pixel of a one pixel line, the pixels with x + y odd from the corner; 15 rows, `span` + 1 columns.
+        // The origin rounds as the mark's tile does (a row that stands on a half pixel goes down with its mark).
+        let wx = f32(i32(area.x + 0.5))
+        let wy = f32(i32(area.y + 0.5))
+        let last = i32(d.span)
+        var cx: i32 = 1
+        while cx < last {
+            if cx % 2 == 1 {
+                try winpx.fill(b, wx + f32(cx), wy, 1.0, 1.0, d.color)
+                try winpx.fill(b, wx + f32(cx), wy + 14.0, 1.0, 1.0, d.color)
+            }
+            cx += 1
+        }
+        var cy: i32 = 1
+        while cy < 14 {
+            if cy % 2 == 1 { try winpx.fill(b, wx, wy + f32(cy), 1.0, 1.0, d.color) }
+            // the pattern runs on along the line, so the right side's dots follow the rectangle's width
+            if (cy + last) % 2 == 1 { try winpx.fill(b, wx + d.span, wy + f32(cy), 1.0, 1.0, d.color) }
+            cy += 1
+        }
+        ret ok
+    }
     var lw = d.lw
     var tw = d.tw
     var s = d.s
@@ -4314,17 +4504,22 @@ fn dotted_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 
 // Where a rectangle stands: the window coordinates of its left column and top row (negative: unknown), the window's
 // scale and its line offset (see `Dotted`).
-type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32 }
+// `whole` (the radio of the 1:1 captures, Windows light): DrawFocusRect's dots on whole pixels, the underline on a whole row.
+type DotGeom = struct { s: f32, line: f32, lw: f32, tw: f32, face: f32, whole: bool }
 
 // The dotted focus rectangle as a node `width` x `height` (the rectangle is `width` wide: its right line sits 2 in).
 fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom: DotGeom) -> (widget.Node, err) {
     let (dots, dots_error) = mem.alloc[Dotted](a, 1usize)
     if dots_error != ok { ret (zero, TooLarge) }
     let ink = (255.0 - geom.face) / 255.0
-    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0 }
+    dots[0usize] = Dotted { color: paint.rgba(ink, ink, ink, 1.0), s: geom.s, line: geom.line, lw: geom.lw, tw: geom.tw, span: width - 2.0, whole: geom.whole }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&dots[0usize]), measure: mark_measure, paint: dotted_paint, state: widget.bytes_of[Dotted](&dots[0usize]) } }, style: sized_style(width, height), children: none }, ok)
 }
+
+// The crisp geometry of the true 1:1 v3 captures (button ring, radio marks, group frames) is what Windows light draws; the tiles go through
+// winpx, so it holds at every device scale (looks_scale_check). Windows dark and the other looks keep the older paths.
+fn windows_crisp(t: *const Theme) -> bool { ret t.tokens.profile == .Windows && t.tokens.palette == .Light }
 
 // The 13 unit mark: a box (round for a radio) with its tick, dash or dot.
 // looks5: which window's marks to paint and the control's y in it (negative: unknown, the family's first table):
@@ -4332,7 +4527,26 @@ fn dotted_focus(a: *mem.Arena, color: paint.Color, width: f32, height: f32, geom
 // scripts/gen_winmark.py for the contexts).
 type Phase = struct { context: u32, x: f32, y: f32 }
 
+// Windows light radio marks as the true 1:1 captures show them (e.ui.winradio): off, on, on under the pointer or pressed, off pressed; the same
+// at every position, so no sub-pixel phase. The default of Windows light (`windows_crisp`); the other looks keep the old marks.
+
 fn windows_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, chosen: bool, mixed: bool, round: bool, high: f32, phase: Phase) -> (widget.Node, err) {
+    if windows_crisp(t) && round && !state.disabled && !mixed {
+        var tile = winradio.radio_off()
+        if chosen {
+            tile = winradio.radio_on()
+            if state.pressed { tile = winradio.radio_onpressed() }
+        } else if state.pressed {
+            tile = winradio.radio_offpressed()
+        }
+        let (crisp_mark, crisp_error) = wintile.tile_node(a, 13usize, 13usize, tile[0usize..169usize])
+        if crisp_error != ok { ret (zero, crisp_error) }
+        let (crisp_cell, crisp_cell_error) = mem.alloc[widget.Node](a, 1usize)
+        if crisp_cell_error != ok { ret (zero, TooLarge) }
+        crisp_cell[0usize] = widget.positioned(0u64, 0.0, f32(i32((high - 14.0) * 0.5 + 0.5)), style.defaults(), mem_one_node(a, crisp_mark))
+        // the 1:1 captures start the caption at 14 (the old layout 13)
+        ret (widget.stack(0u64, sized_style(14.0, high), crisp_cell[0usize..1usize]), ok)
+    }
     // round 10: the native Windows 11 marks (docs/ui/looks/ref/windows-native, e.ui.winnative). Dark: every state (hover is the rest
     // look natively). Light: the states v3 never showed, disabled and indeterminate; v3's own captures keep the rest.
     if t.tokens.palette == .Dark || (t.tokens.palette == .Light && (state.disabled || mixed)) {
@@ -4553,7 +4767,9 @@ fn windows_caption(a: *mem.Arena, t: *const Theme, label: str, focused: bool, en
     if focused {
         let (dots, dots_error) = dotted_focus(a, style.color(t.tokens, .Text), f32(i32(whole + 0.5)) + 3.0, 16.0, geom)
         if dots_error != ok { ret (zero, dots_error) }
-        parts[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), mem_one_node(a, dots))
+        var dots_x: f32 = 2.0
+        if geom.whole { dots_x = 1.0 }
+        parts[1usize] = widget.positioned(0u64, dots_x, 1.0, style.defaults(), mem_one_node(a, dots))
         n = 2usize
     }
     if mark_at < shown.len {
@@ -4592,20 +4808,29 @@ fn windows_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, lab
 
 // `windows_choice` in a row `high` tall (a TcxCheckBox is 21, 17 without its transparent border; a
 // radio group's rows are 42). A check box has 2 units of transparent border at its left, a radio none.
-fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase: Phase) -> (widget.Node, err) {
+fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, high: f32, flush: bool, phase_raw: Phase) -> (widget.Node, err) {
+    // round 79, lane p: a context of 1000 and up marks a derived radio whose dark caption is light text, not the capture's black
+    let lit = phase_raw.context >= 1000u32
+    let phase = Phase { context: phase_raw.context % 1000u32, x: phase_raw.x, y: phase_raw.y }
     let state = control_state(t, key, enabled, false)
     // round 12: a stand-alone dark check box or radio follows the native Windows 11 dark one (22 high, Segoe UI 9 pt).
     if t.tokens.palette == .Dark && t.tokens.profile == .Windows && high <= 24.0 {
-        let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state)
+        let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state, lit)
         ret (native_row, native_error)
     }
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
+    var mark_state = state
+    mark_state.pressed = looks_x84.lit_pressed(t.tokens.palette == .Dark && round && high > 24.0, chosen, state.pressed)
+    let (mark_node, mark_error) = windows_mark(a, t, mark_state, chosen, mixed, round, high, phase)
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
     // looks5: where the focus rectangle stands in its window (the caption is 2 right of the mark's 13, the check box's row
     // 2 in; the rectangle 1 under the caption's top) and which window's scale it is drawn at.
-    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0 }
+    var geom = DotGeom { s: 0.0, line: 0.333, lw: 0.0 - 1.0, tw: 0.0 - 1.0, face: 240.0, whole: false }
+    if windows_crisp(t) && round {
+        geom.whole = true
+        geom.line = 0.0
+    }
     if phase.context == 4u32 || phase.context == 5u32 { geom.face = 249.0 }
     // Dark: the dots are the XOR of the page, #202020 (the tab page of the Filter dialog #272727).
     if t.tokens.palette == .Dark {
@@ -4615,6 +4840,10 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if phase.context == 0u32 { geom.s = 0.0007 }
     if phase.context == 6u32 { geom.s = 0.00073 }
     if phase.context == 0u32 || phase.context == 6u32 { geom.line = 0.3125 }
+    if geom.whole {
+        geom.line = 0.0
+        geom.s = 0.0
+    }
     if phase.x >= 0.0 && phase.y >= 0.0 {
         var lead: f32 = 15.0
         if !round && !flush { lead = 17.0 }
@@ -4627,6 +4856,12 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = mark_node
     parts[1usize] = label_node
+    // the 42 high radio rows (the Options pages and the Search dialog): the 1:1 captures put the caption a row higher than the resampled ones
+    if windows_crisp(t) && round && high > 40.0 {
+        var raised = style.defaults()
+        raised.margin = edges(0.0, 0.0, 0.0, 2.0)
+        parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, raised, mem_one_node(a, label_node))
+    }
     var row_style = style.defaults()
     row_style.min_height = style.Length { Px: high }
     if !round && !flush { row_style.padding = edges(2.0, 0.0, 0.0, 0.0) }
@@ -4702,8 +4937,10 @@ fn dark_dots_phase(a: *mem.Arena, w: f32, h: f32, rgb: u32, phase: i32) -> (widg
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&made[0usize]), measure: dark_dots_measure, paint: dark_dots_paint, state: widget.bytes_of[DarkDots](&made[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 
-fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState) -> (widget.Node, err) {
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState, lit: bool) -> (widget.Node, err) {
+    var mark_state = state
+    mark_state.pressed = looks_x84.lit_pressed(lit, chosen, state.pressed)
+    let (mark_node, mark_error) = windows_mark(a, t, mark_state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     if mark_error != ok { ret (zero, mark_error) }
     let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
     if ft_error != ok { ret (zero, ft_error) }
@@ -4714,9 +4951,7 @@ fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
     caption.wrap = .None
     var ink = style.hex_raw(0xFFFFFFu32)
     if !enabled { ink = style.hex_raw(0xCCCCCCu32) }
-    // round 13: the native dark radio's enabled caption is BLACK on the #202020 page (radio-*-rest, -pressed, -focus: the gallery's
-    // WM_CTLCOLORSTATIC colouring does not reach a radio's text); copied as captured
-    if round && enabled { ink = style.hex_raw(0x000000u32) }
+    // round 80: the capture's enabled radio caption is black on #202020 (unreadable); every dark radio caption is white
     let (words, words_error) = colored_text(a, 0u64, shown, &ft, caption, ink)
     if words_error != ok { ret (zero, words_error) }
     let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
@@ -4778,7 +5013,7 @@ fn windows_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ro
     nodes[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, shift, nodes[1usize..2usize])
     nodes[3usize] = rows
     var edge = style.defaults()
-    edge.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) }
+    edge.border = style.Border { width: 1.0, color: looks_o78.dark_group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)) }
     edge.radius = 3.0
     edge.padding = edges(7.0, 10.0, 7.0, 5.0)
     nodes[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, edge, nodes[3usize..4usize])
@@ -5000,10 +5235,16 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         if current {
             var bar = sized_style(light_w, light_tall)
             bar.background = paint.Brush { Solid: check_highlight(t) }
+            // round 84: the dark chosen row is outlined like the Rules list's (#1A364D alone is 1.3 : 1 on the page)
+            if t.tokens.palette == .Dark && t.tokens.profile == .Windows {
+                var art_fill = looks_x84.chosen_fill(state.focused)
+                bar.background = paint.Brush { Solid: art_fill }
+                bar.border = style.Border { width: 1.0, color: looks_x84.chosen_line(state.focused) }
+            }
             parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
             n += 1usize
         }
-        if below {
+        if below && !(t.tokens.palette == .Dark && t.tokens.profile == .Windows) {
             var tail = sized_style(light_w, light_top)
             tail.background = paint.Brush { Solid: check_highlight(t) }
             parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
@@ -5033,8 +5274,9 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         if dark_list {
             // round 13: the native dark list view's chosen row: #1A364D in a #0078D4 line while the list has the focus, #1B1B1B in a
             // #131313 line without it (checklist-selected-focused, -selected-unfocused)
-            var fill_color = style.hex_raw(0x1B1B1Bu32)
-            var line_color = style.hex_raw(0x131313u32)
+            // round 84: the unfocused chosen row was #1B1B1B in #131313 (1.1 : 1, invisible): #3A3A3A in the dark control frame #828790 (4.5 : 1)
+            var fill_color = style.hex_raw(0x3A3A3Au32)
+            var line_color = looks_x84.frame_line()
             if state.focused {
                 fill_color = style.hex_raw(0x1A364Du32)
                 line_color = style.hex_raw(0x0078D4u32)
@@ -5380,6 +5622,8 @@ fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var frame = style.defaults()
     frame.border = style.Border { width: 1.0, color: edge }
     frame.radius = outer
+    // The Android look: the edge sits outside the segments (M3: 40 dp over the edge), as the Flutter ref draws it.
+    if t.tokens.profile == .MaterialLike { frame.padding = style.EdgeLengths { left: style.Length { Px: 1.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 1.0 }, bottom: style.Length { Px: 1.0 } } }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, frame, items[0usize..count])
@@ -5413,6 +5657,71 @@ fn slider_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
     let (node, node_error) = ranged(a, key, t, label, first, second, true, low, high, step, change, change_second, enabled)
     ret (node, node_error)
+}
+
+// Round 63 (z): the Linux and Cupertino two-knob slider (looks_z63 draws it); the runtime's own slider, drawn clear, takes the pointer and
+// keys. The pointer picks the knob that wears the hover and the ring (the runtime does not say which handle it is over).
+fn range_z63(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    var lo: f32 = 0.0
+    var hi: f32 = 0.0
+    if high > low {
+        lo = (first - low) / (high - low)
+        hi = (second - low) / (high - low)
+    }
+    lo = math.min[f32](math.max[f32](lo, 0.0), 1.0)
+    hi = math.min[f32](math.max[f32](hi, 0.0), 1.0)
+    if lo > hi {
+        let swapped = lo
+        lo = hi
+        hi = swapped
+    }
+    let gtk = t.tokens.profile == .Linux
+    let state = control_state(t, key, enabled, false)
+    var hot = 0u8
+    if enabled && (state.hovered || state.pressed || state.focus_visible) {
+        hot = 2u8
+        if mem.address_of(t.runtime) != 0usize && (state.hovered || state.pressed) {
+            let (bounds, has_bounds) = widget.bounds_for_key(t.runtime, key)
+            if has_bounds {
+                let spot = widget.pointer_position(t.runtime).x - bounds.x
+                var reach: f32 = 180.0
+                var origin: f32 = 10.0
+                if !gtk {
+                    reach = 162.0
+                    origin = 8.0
+                }
+                if math.abs[f32](spot - (origin + lo * reach)) < math.abs[f32](spot - (origin + hi * reach)) { hot = 1u8 }
+            }
+        }
+    }
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var hidden_style = sized_style(200.0, 28.0)
+    if gtk {
+        hidden_style = sized_style(200.0, 34.0)
+        hidden_style.position = .Absolute
+    } else {
+        hidden_style = sized_style(178.0, 28.0)
+        hidden_style.radius = 14.0
+    }
+    let hidden = widget.slider(key, widget.Slider { value: first, second: second, range: true, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: change_second, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }, hidden_style)
+    var body: widget.Node = zero
+    var body_error: err = ok
+    if gtk {
+        let (made, made_error) = looks_z63.linux_range(a, t.tokens, lo, hi, hot, state.focus_visible, enabled, hidden)
+        body = made
+        body_error = made_error
+    } else {
+        let (made, made_error) = looks_z63.cup_range(a, t.tokens, lo, hi, enabled, hidden)
+        body = made
+        body_error = made_error
+    }
+    if body_error != ok { ret (zero, body_error) }
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, body)), ok)
 }
 
 // A slider's value in its pill (D958): rounded digits in `label-large`
@@ -5450,6 +5759,10 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     if t.tokens.profile == .Linux && !range {
         let (linux, linux_error) = linux_scale(a, key, t, label, first, low, high, step, change, enabled)
         ret (linux, linux_error)
+    }
+    if range && (t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike) {
+        let (shaped, shaped_error) = range_z63(a, key, t, label, first, second, low, high, step, change, change_second, enabled)
+        ret (shaped, shaped_error)
     }
     if t.tokens.profile == .MaterialLike {
         let (droid, droid_error) = material_slider(a, key, t, label, first, second, range, low, high, step, change, change_second, enabled)
@@ -5867,7 +6180,7 @@ fn material_slider_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, label
         var square = sized_style(14.0, 14.0)
         square.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
         diamond_held[0usize] = widget.box(0u64, square, zero)
-        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
+        let turned = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.7853982, skew: 0.0, offset: geometry.Point { x: 0.0, y: 0.0 } }, sized_style(14.0, 14.0), diamond_held[0usize..1usize])
         let (turned_held, turned_error) = mem.alloc[widget.Node](a, 1usize)
         if turned_error != ok { ret (zero, TooLarge) }
         turned_held[0usize] = turned
@@ -6004,8 +6317,6 @@ fn progress_ink(t: *const Theme, tone: ProgressTone) -> paint.Color {
 fn progress_ground(t: *const Theme, tone: ProgressTone) -> paint.Color {
     if tone == .Error { ret style.color(t.tokens, .ErrorContainer) }
     if tone == .Paused { ret style.color(t.tokens, .SurfaceContainerHighest) }
-    // md-linear-progress: the track is surface-container-highest.
-    if t.tokens.profile == .MaterialLike { ret style.color(t.tokens, .SurfaceContainerHighest) }
     ret style.color(t.tokens, .SecondaryContainer)
 }
 
@@ -6275,13 +6586,13 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     var rim_color = style.hex(12369084u32)
     var ink_track = style.hex(0u32)
     var ink_fill = style.hex(16777215u32)
-    // The Windows 11 dark bar: a #3A3A3A track in a #5A5A5A rim, the accent #60CDFF fill, white on the track and black over the fill.
+    // The Windows 11 dark bar: a #3A3A3A track in a #828790 rim (the native dark list and tree frame, 4.5 : 1 on the page), the accent #60CDFF fill, white on the track and black over the fill.
     if t.tokens.palette == .Dark {
         fill_color = style.hex_raw(0x60CDFFu32)
         if options.tone == .Paused { fill_color = style.hex_raw(0xFCE100u32) }
         if options.tone == .Error { fill_color = style.hex_raw(0xFF99A4u32) }
         track_color = style.hex_raw(0x3A3A3Au32)
-        rim_color = style.hex_raw(0x5A5A5Au32)
+        rim_color = style.hex_raw(0x828790u32)
         ink_track = style.hex_raw(0xFFFFFFu32)
         ink_fill = style.hex_raw(0x000000u32)
     }
@@ -6296,7 +6607,7 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     words.wrap = .None
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(2i64))
-        let seg = inner_w * 0.6
+        let seg = inner_w * 0.72
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = bar_piece(key + 1u64, seg, inner_h, fill_color, 0.0)
@@ -6840,10 +7151,10 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // (D1453) `mono` sets the typed text in the theme's fixed-pitch face.
 // (looks) `flat`: under the Windows look, a combo box as a toolbar hosts it (v3's dxBar editors:
 // no rounded native frame, a flat white face and a grey drop button with a black triangle).
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32, mono: bool, flat: bool, chrome_kind: u32, chrome_pressed: bool, window_y: f32, chrome_dim: u32, edge_y: f32, edge_x: f32, chrome_hover: u32, chrome_press: u32, classic_bar: bool, on_raised: bool }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0, mono: false, flat: false, chrome_kind: 0u32, chrome_pressed: false, window_y: -1.0, chrome_dim: 0u32, edge_y: 0.0, edge_x: 0.0, chrome_hover: 0u32, chrome_press: 0u32, classic_bar: false, on_raised: false }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -6876,9 +7187,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let focused = state.focused && options.enabled
     var over = state.hovered
     // Android: the runtime hovers regions, not editors, so the field answers through a hover region round its box (as the Windows field does).
-    if t.tokens.profile == .MaterialLike { over = over || control_state(t, key + 1048650u64, options.enabled, false).hovered }
+    if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) { over = over || control_state(t, key + 1048650u64, options.enabled, false).hovered }
     // Android: in a multi-line field the pointer is over the scrolling viewport, not the editor.
-    if t.tokens.profile == .MaterialLike && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
+    if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) && options.rows > 1u32 { over = over || control_state(t, key + 1048612u64, options.enabled, false).hovered }
     let hovered = over && options.enabled
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     var h = t.tokens.metrics.control_height + 16.0
@@ -6920,7 +7231,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         label_color = edge
         value_color = edge
         // M3: a disabled outline is on-surface at 12 % (the filled indicator stays at 38 %).
-        if t.tokens.profile == .MaterialLike && !options.filled { edge = with_alpha(ink, t.tokens.states.disabled_container) }
+        if (t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper) && !options.filled { edge = with_alpha(ink, t.tokens.states.disabled_container) }
     }
     var value_role: style.TextRole = .BodyLarge
     if dense || h <= t.tokens.sizes.control_md { value_role = .BodyMedium }
@@ -6949,6 +7260,9 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         var hint_text = options.placeholder
         if resting { hint_text = label }
         var hint_color = with_alpha(muted, value_color.alpha)
+        if t.tokens.profile == .CupertinoLike { hint_color = muted }
+        // round 85: the Windows light placeholder is #6B6B6B (5.3 : 1 on white, 4.8 : 1 on the dialog face; v3's clGray #808080 is 3.95 : 1)
+        if t.tokens.profile == .Windows && !style.windows_dark_on() { hint_color = with_alpha(style.hex_raw(0x6B6B6Bu32), value_color.alpha) }
         // Android: the resting label has the label's colour (on-surface under the pointer, error when invalid, on-surface at 38 % when disabled).
         if resting && t.tokens.profile == .MaterialLike { hint_color = label_color }
         let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, hint_color)
@@ -7029,6 +7343,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
+    // Neper: the value stays inside the field's content box (as Flutter's TextField clips its text), as the other looks' fields do.
+    if t.tokens.profile == .Neper { grow.overflow = .Clip }
     let value_stack = widget.stack(0u64, grow, editor[0usize..at])
     // The prefix and suffix around the value, in `on-surface-variant`.
     let (row_parts, row_error) = mem.alloc[widget.Node](a, 3usize)
@@ -7095,7 +7411,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         lines[parts_at] = widget.box(0u64, indicator, zero)
         parts_at += 1usize
     } else {
-        if !options.enabled && t.tokens.profile != .MaterialLike { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
+        // Neper: a disabled outlined field has no fill, as Flutter's (the fill showed the label's notch as a light patch).
+        if !options.enabled && t.tokens.profile != .MaterialLike && t.tokens.profile != .Neper { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
         frame_style.border = style.Border { width: edge_width, color: edge }
         frame_style.radius = t.tokens.radii.xs
     }
@@ -7104,11 +7421,11 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     // stack that holds the notch is there floated or not.
     var boxed = frame
     if can_float && !options.filled {
-        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated)
+        let (notched_node, notched_error) = notched(a, t, frame, label, label_color, pad_x, floated, options.on_raised)
         if notched_error != ok { ret (zero, notched_error) }
         boxed = notched_node
     }
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         var no_gesture: widget.GestureAction = zero
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
@@ -7167,7 +7484,7 @@ fn named_editor(a: *mem.Arena, key: widget.Key, label: str, hint: str, invalid: 
 
 // An outlined box with its floated label in a notch over its top edge, `pad_x` in;
 // not `shown`, the box alone in the same stack.
-fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32, shown: bool) -> (widget.Node, err) {
+fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color: paint.Color, pad_x: f32, shown: bool, raised: bool) -> (widget.Node, err) {
     if !shown {
         let (alone, alone_error) = mem.alloc[widget.Node](a, 1usize)
         if alone_error != ok { ret (zero, TooLarge) }
@@ -7181,14 +7498,23 @@ fn notched(a: *mem.Arena, t: *const Theme, frame: widget.Node, label: str, color
     if notch_error != ok { ret (zero, notch_error) }
     let (notch_parts, notch_parts_error) = mem.alloc[widget.Node](a, 3usize)
     if notch_parts_error != ok { ret (zero, TooLarge) }
-    notch_parts[0usize] = notch_node
+    // The label hangs half above the box's top edge, but the cut that hides the edge behind it starts at the edge, so a
+    // focus ring (which sits outside the edge) runs on unbroken above the cut.
+    let half = style.text_style(t.tokens, .BodySmall).line_height * 0.5
+    var lift = style.defaults()
+    lift.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 - half }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    if lifted_error != ok { ret (zero, TooLarge) }
+    lifted[0usize] = notch_node
+    notch_parts[0usize] = widget.box(0u64, lift, lifted[0usize..1usize])
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if raised { cut.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) } }
     let four = style.Length { Px: 4.0 }
     let none = style.Length { Px: 0.0 }
     cut.padding = style.EdgeLengths { left: four, top: none, right: four, bottom: none }
     notch_parts[1usize] = frame
-    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5, cut, notch_parts[0usize..1usize])
+    notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0, cut, notch_parts[0usize..1usize])
     ret (widget.stack(0u64, style.defaults(), notch_parts[1usize..3usize]), ok)
 }
 
@@ -7223,7 +7549,9 @@ fn windows_edit_theme(a: *mem.Arena, t: *const Theme, line_height: f32) -> (Them
     let (copies, copies_error) = mem.alloc[style.ThemeTokens](a, 1usize)
     if copies_error != ok { ret (*t, TooLarge) }
     copies[0usize] = *t.tokens
+    // v3 edits set Tahoma 8 pt, 11 px, through GDI (the 1:1 captures): a whole pixel size, so the text is hinted ClearType
     var small = style.TextStyle { size: 10.8, line_height: line_height, weight: 400u16, italic: false }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light { small = style.TextStyle { size: 11.0, line_height: line_height, weight: 400u16, italic: false } }
     // round 12: the dark edits follow the native Windows 11 dark ones: Segoe UI 9 pt (12 px), no Tahoma swap.
     let dark_native = win_dark(t)
     if dark_native { small = style.TextStyle { size: 12.0, line_height: 15.0, weight: 400u16, italic: false } }
@@ -7250,7 +7578,7 @@ fn windows_edit_theme_kerned(a: *mem.Arena, t: *const Theme, line_height: f32) -
     let (made, made_error) = windows_edit_theme(a, t, line_height)
     if made_error != ok { ret (zero, made_error) }
     var kerned = made
-    if win_dark(t) { kerned.language = "kern" }
+    if win_dark(t) || t.tokens.palette == .Light { kerned.language = "kern" }
     ret (kerned, ok)
 }
 
@@ -7319,6 +7647,8 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     // round 13: the native dark edit's GDI caret and selection (widget.native_caret)
     var edit_caret: paint.Color = zero
     if win_dark(t) { edit_caret = native_caret_phase(face) }
+    // round 46: the light edit of v3 is GDI too: whole pixel selection and an inverting caret (the glyphs stay on the line box)
+    if !win_dark(t) { edit_caret = widget.gdi_caret(face) }
     if bullets { edit_ink = with_alpha(ink, 0.0) }
     var value_options = text_options()
     value_options.role = .BodyMedium
@@ -7394,7 +7724,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         var hint = text_options()
         hint.role = .BodyMedium
         hint.wrap = .None
-        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, win_rgb(128u32, 128u32, 128u32))
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, win_placeholder_ink())
         if hint_error != ok { ret (zero, hint_error) }
         layers[at] = hint_node
         at += 1usize
@@ -7450,7 +7780,11 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     let value_stack = widget.stack(0u64, grow, layers[0usize..at])
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: options.width }
-    frame_style.height = style.Length { Px: h }
+    // The light edit is one row shorter than the layout box: the capture's frame is 21 rows high (the extra row of the old
+    // tiles was the double resample), so the face stops there and the last row is whatever lies behind.
+    var frame_h = h
+    if !win_dark(t) { frame_h = h - 1.0 }
+    frame_style.height = style.Length { Px: frame_h }
     frame_style.background = paint.Brush { Solid: face }
     frame_style.border = style.Border { width: 1.0, color: side }
     frame_style.radius = t.tokens.radii.xs
@@ -7458,7 +7792,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     frame_style.border = style.Border { width: 1.0, color: face }
     frame_style.radius = 0.0
     frame_style.overflow = .Clip
-    var pad_y: f32 = 3.384
+    var pad_y: f32 = 3.0
     if win_dark(t) { pad_y = 3.0 }
     if multiline { pad_y = 3.0 }
     // round 15: the glyphs sit one row above the line box (see widget.place_edit), so the box starts one row lower
@@ -7493,7 +7827,14 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         rim = made_rim
         rim_error = made_error
     } else {
-        let (made_rim, made_error) = winedit.chrome(a, options.chrome_kind, chrome_state, w, h, options.window_y, options.chrome_dim, false)
+        // Hover (round 6): the edit rim a shade darker, and the arrow or fast button under the pointer blue
+        // (`options.chrome_hover`: 1 the edit, 1 + zone of winedit.light_chrome for a button); the face does not change.
+        var over_it = 0u32
+        if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 {
+            over_it = 1u32
+            if options.chrome_hover > 1u32 { over_it = options.chrome_hover }
+        }
+        let (made_rim, made_error) = winedit.light_chrome(a, options.chrome_kind, chrome_state, over_it, w, h, options.chrome_dim)
         rim = made_rim
         rim_error = made_error
     }
@@ -7506,23 +7847,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         if bars_error != ok { ret (zero, TooLarge) }
         bars[0usize] = windows_bar(w, 1.0, side)
         bars[1usize] = windows_bar(w, 1.0, side)
-        bars[2usize] = windows_bar(1.0, h - 2.0, side)
-        bars[3usize] = windows_bar(1.0, h - 2.0, side)
+        bars[2usize] = windows_bar(1.0, frame_h - 2.0, side)
+        bars[3usize] = windows_bar(1.0, frame_h - 2.0, side)
         stacked[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), bars[0usize..1usize])
-        stacked[3usize] = widget.positioned(0u64, 0.0, h - 1.0, style.defaults(), bars[1usize..2usize])
+        stacked[3usize] = widget.positioned(0u64, 0.0, frame_h - 1.0, style.defaults(), bars[1usize..2usize])
         stacked[4usize] = widget.positioned(0u64, 0.0, 1.0, style.defaults(), bars[2usize..3usize])
         stacked[5usize] = widget.positioned(0u64, w - 1.0, 1.0, style.defaults(), bars[3usize..4usize])
         layers_at = 6usize
-    }
-    // Round 6, hover (states/hover-*): the rim ring 2 levels darker over the whole edit, the button under the pointer blue
-    // (`options.chrome_hover`: 1 the edit, 2 + zone of winedit.hover_chrome for a button); the face does not change.
-    if (hovered || options.chrome_hover != 0u32) && options.enabled && !focused && chrome_state == 0u32 && !dark_edit {
-        var zone = 0u32
-        if options.chrome_hover > 1u32 { zone = options.chrome_hover - 1u32 }
-        let (veil, veil_error) = winedit.hover_chrome(a, options.chrome_kind, zone, w, h, options.window_y, t.tokens.palette == .Dark)
-        if veil_error != ok { ret (zero, veil_error) }
-        stacked[layers_at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), win_one(a, veil))
-        layers_at += 1usize
     }
     if dark_bar && !options.classic_bar {
         // the themed bar belongs to DarkMode_Explorer, whose frame is white (edit-multiline-explorer)
@@ -7545,7 +7876,13 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.stack(0u64, style.defaults(), stacked[0usize..layers_at])
+    // the layout box stays `options.width` x `h` although the light face is one row shorter
+    var column_style = style.defaults()
+    if !win_dark(t) {
+        column_style.width = style.Length { Px: options.width }
+        column_style.height = style.Length { Px: h }
+    }
+    column[0usize] = widget.stack(0u64, column_style, stacked[0usize..layers_at])
     var no_gesture: widget.GestureAction = zero
     let (over, over_error) = mem.alloc[widget.Node](a, 1usize)
     if over_error != ok { ret (zero, TooLarge) }
@@ -7565,6 +7902,7 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
     look.background = win_rgb(232u32, 232u32, 232u32)
     look.border = win_rgb(210u32, 210u32, 210u32)
     look.border_width = 1.0
+    if t.tokens.palette == .Dark { look.border = looks_x84.frame_line() }
     if state.hovered { look.background = win_rgb(220u32, 235u32, 247u32) }
     look.radius = 3.0
     look.custom_padding = true
@@ -7580,6 +7918,8 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
     if label_error != ok { ret (zero, label_error) }
     var ink = win_rgb(109u32, 109u32, 109u32)
     if cross_state.hovered { ink = win_rgb(196u32, 43u32, 28u32) }
+    // round 84: the dark chip's remove cross was #5E5E5E (1.9 : 1 on its #2E2E2E face)
+    if t.tokens.palette == .Dark { ink = looks_x84.chip_cross(cross_state.hovered) }
     let (cross, cross_error) = stroked_glyph(a, ink, .Cross, 8.0, 1.2)
     if cross_error != ok { ret (zero, cross_error) }
     let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)
@@ -7644,7 +7984,7 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         var hint = text_options()
         hint.role = .BodyMedium
         hint.wrap = .None
-        let (hint_node, hint_error) = colored_text(a, 0u64, label, &ft, hint, win_rgb(128u32, 128u32, 128u32))
+        let (hint_node, hint_error) = colored_text(a, 0u64, label, &ft, hint, win_placeholder_ink())
         if hint_error != ok { ret (zero, hint_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
@@ -7682,12 +8022,23 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     frame_style.width = style.Length { Px: width }
     frame_style.min_height = style.Length { Px: 22.0 }
     if height > 0.0 { frame_style.height = style.Length { Px: height } }
+    // the 1:1 capture's light box is one row shorter than the DFM height + 1 (e.ui.winedit.token_chrome)
+    if height > 0.0 && t.tokens.palette == .Light { frame_style.height = style.Length { Px: height - 1.0 } }
     frame_style.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
     if t.tokens.palette == .Dark { frame_style.background = paint.Brush { Solid: style.hex_raw(0x202020u32) } }
     frame_style.border = style.Border { width: 1.0, color: win_rgb(237u32, 237u32, 237u32) }
     frame_style.radius = t.tokens.radii.xs
     frame_style.padding = style.EdgeLengths { left: style.Length { Px: 2.0 }, top: style.Length { Px: 1.0 }, right: style.Length { Px: 2.0 }, bottom: style.Length { Px: 1.0 } }
     var framed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..line_count])
+    if height <= 0.0 && t.tokens.palette == .Dark {
+        // round 78: the dark token edit wears the native dark edit frame like the dark text edit (it had the light underline)
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..1usize])
+        let (dark_frame, dark_frame_error) = looks_o78.dark_edit_frame(a, width, state.focused, inner[0usize])
+        if dark_frame_error != ok { ret (zero, dark_frame_error) }
+        framed = dark_frame
+    }
     if height > 0.0 {
         frame_style.border = style.Border { width: 1.0, color: style.color(t.tokens, .Surface) }
         frame_style.radius = 0.0
@@ -7906,6 +8257,8 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         ink = style.color(t.tokens, .Primary)
         eye = .VisibilityOff
     }
+    // Android: a disabled field's trailing icon is on-surface at the 38 % content level.
+    if t.tokens.profile == .MaterialLike && !options.enabled { ink = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     let (mark, mark_error) = icon_square(a, ink, eye, glyph)
     if mark_error != ok { ret (zero, mark_error) }
     let (held, held_error) = mem.alloc[widget.Node](a, 4usize)
@@ -7923,7 +8276,10 @@ fn password_field_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](reveal), invoke: reveal_semantic_action }
     if revealed { sem.states = accessibility.STATE_CHECKED }
     held[3usize] = widget.semantics(0u64, sem, style.defaults(), held[2usize..3usize])
-    let h = t.tokens.metrics.control_height + 16.0
+    // The reveal button centres on the field's own height: the Windows edit is 22 and the Cupertino one 34, not the Neper control height + 16.
+    var h = t.tokens.metrics.control_height + 16.0
+    if t.tokens.profile == .Windows { h = 22.0 }
+    if t.tokens.profile == .CupertinoLike { h = 34.0 }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = editor
@@ -7951,7 +8307,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var state = control_state(t, key, options.enabled, false)
     // Android: the runtime hovers regions, not editors, so the bar answers through a hover region round it.
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         let region_state = control_state(t, key + 1048650u64, options.enabled, false)
         if region_state.hovered { state.hovered = true }
         if region_state.pressed { state.pressed = true }
@@ -8004,6 +8360,12 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         if len != 0usize { room = room - 16.0 - 40.0 }
         editor_style.width = style.Length { Px: max_zero(room) }
     }
+    if t.tokens.profile == .Neper {
+        // The Clear button is 64 wide; a percentage of the unsized stack would ask for the query's intrinsic width and push the button past the bar.
+        var room = options.width - lead - trail - 12.0
+        if len != 0usize { room = room - 64.0 }
+        editor_style.width = style.Length { Px: max_zero(room) }
+    }
     editor_style.min_height = style.Length { Px: line }
     layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: material_caret(t), untabbed: false, ringed: false }, editor_style)
     var search_name = options.placeholder
@@ -8048,14 +8410,24 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var fill = style.color(t.tokens, .SurfaceContainerHigh)
     if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
     if state.pressed && android { fill = style.layer(style.color(t.tokens, .SurfaceContainerHigh), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) }
+    // Android: the M3 search bar's focused state layer (md.comp.search-bar, on-surface 10 %).
+    if android && state.focus_visible && !state.hovered && !state.pressed { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.focus) }
     if android && !options.enabled { fill = style.layer(fill, style.color(t.tokens, .OnSurface), 0.0) }
     bar.background = paint.Brush { Solid: fill }
     bar.radius = h * 0.5
+    if t.tokens.profile == .Neper {
+        // The pill carries no outline at rest; keyboard focus and an invalid query draw the field outline (accent, error).
+        if options.invalid { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } } else if state.focused { bar.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    }
+    // Android: M3 has no search error state; an invalid query takes the text field's error outline (error, 1 dp; the focused width when focused).
+    if android && options.invalid { bar.border = style.Border { width: if_else(state.focused, t.tokens.sizes.outline_focused, t.tokens.sizes.divider), color: style.color(t.tokens, .Error) } }
     var pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
     // Android: the bar is centred on its 56 dp, a taller clear button must not grow it.
     if android { pad_y = style.Length { Px: 0.0 } }
+    // Neper: with the 32 tall Clear button in it the bar stays 40 (the line's padding on top of the button stretched it to 52).
+    if t.tokens.profile == .Neper && len != 0usize { pad_y = style.Length { Px: 0.0 } }
     bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
-    if android && !options.enabled {
+    if (android || t.tokens.profile == .Neper) && !options.enabled {
         // Disabled: the bar at the 38 % content level.
         bar.opacity = t.tokens.states.disabled_content
     }
@@ -8063,7 +8435,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var bar_gap: f32 = 12.0
     if android { bar_gap = 16.0 }
     let bar_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: bar_gap }, bar, parts[0usize..count])
-    if t.tokens.profile == .MaterialLike {
+    if t.tokens.profile == .MaterialLike || t.tokens.profile == .Neper {
         var no_gesture: widget.GestureAction = zero
         let (held_bar, held_bar_error) = mem.alloc[widget.Node](a, 1usize)
         if held_bar_error != ok { ret (zero, TooLarge) }
@@ -8158,6 +8530,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var edge = style.color(t.tokens, .Outline)
     var edge_width = t.tokens.sizes.divider
     if state.hovered { edge = ink }
+    if looks_z84_edge.on() { edge = with_alpha(ink, 0.12 / t.tokens.states.disabled_content) }
     var point = muted
     var label_color = muted
     if open || (state.focused && t.tokens.profile == .MaterialLike) {
@@ -8220,7 +8593,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     if head_error != ok { ret (zero, head_error) }
     var framed = head_node
     if label.len != 0usize && notch {
-        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x, chosen)
+        let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x, chosen, false)
         if notched_error != ok { ret (zero, notched_error) }
         framed = notched_node
     }
@@ -8356,7 +8729,7 @@ fn select_icons(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         let (popup, popup_error) = mem.alloc[widget.Node](a, 3usize)
         if popup_error != ok { ret (zero, TooLarge) }
         popup[2usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
-        popup[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 0.8 + 0.2 * opened, rotation: 0.0, offset: zero }, style.defaults(), popup[2usize..3usize])
+        popup[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 0.8 + 0.2 * opened, rotation: 0.0, skew: 0.0, offset: zero }, style.defaults(), popup[2usize..3usize])
         var fading = style.defaults()
         fading.opacity = opened
         popup[0usize] = widget.box(0u64, fading, popup[1usize..2usize])
@@ -8550,6 +8923,8 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var caption = text_options()
         caption.role = role
         caption.wrap = .None
+        // Android (round 86): a font list shows each family in its own face where the rig has one.
+        if looks_z86.faces_on() { caption.face = looks_z86.face_of(options[i]) }
         let (text_item, text_error) = colored_text(a, 0u64, options[i], t, caption, words)
         if text_error != ok { ret (zero, text_error) }
         let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
@@ -8629,6 +9004,8 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     var view_style = style.defaults()
     view_style.width = style.Length { Px: width }
     view_style.height = style.Length { Px: f32(rows) * row_height + 8.0 }
+    // Android (round 86): the font list shows whole rows (one fewer than asked, whose pitch is the 48 dp target), so none is cut at the foot.
+    if looks_z86.faces_on() { view_style.height = style.Length { Px: f32(rows - 1u32) * t.tokens.metrics.hit_target + 10.0 } }
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
     view_style.border = style.Border { width: t.tokens.sizes.divider, color: style.frame_ink(t.tokens) }
     view_style.radius = t.tokens.radii.sm
@@ -9064,7 +9441,7 @@ fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, ex
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = chevron
-            head[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+            head[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: angle, skew: 0.0, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
         }
     }
     var caption = text_options()
@@ -9251,7 +9628,7 @@ fn section_header_marked(a: *mem.Arena, key: widget.Key, t: *const Theme, title:
             let (turning, turning_error) = mem.alloc[widget.Node](a, 1usize)
             if turning_error != ok { ret (zero, TooLarge) }
             turning[0usize] = chevron
-            row[cells] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * turned, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
+            row[cells] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 3.1415927 * turned, skew: 0.0, offset: zero }, sized_style(t.tokens.sizes.icon_md, t.tokens.sizes.icon_md), turning[0usize..1usize])
         }
     }
     cells += 1usize
@@ -10661,6 +11038,30 @@ fn win5_cell_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 }
 
 fn image_select_cell(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, held: bool) -> (widget.Node, err) {
+    if t.tokens.profile == .Windows && t.tokens.palette == .Light {
+        // round 46: drawn from the 1:1 captures (winedit.cell_chrome); the text stands where they put it
+        let (chrome, chrome_error) = winedit.cell_chrome(a, width, held)
+        if chrome_error != ok { ret (zero, chrome_error) }
+        let (light_t, light_error) = win3_dialog_theme(a, t)
+        if light_error != ok { ret (zero, light_error) }
+        var light_words = text_options()
+        light_words.role = .BodyMedium
+        light_words.wrap = .None
+        // the Sort list and its editor set Tahoma 12 px at GDI whole pixel advances (see win_row)
+        let (light_said, _, light_said_error) = win_gdi_glyphs(a, &light_t, light_words, style.color(t.tokens, .Text), label)
+        if light_said_error != ok { ret (zero, light_said_error) }
+        let (light_layers, light_layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if light_layers_error != ok { ret (zero, TooLarge) }
+        let (light_text, light_text_error) = mem.alloc[widget.Node](a, 1usize)
+        if light_text_error != ok { ret (zero, TooLarge) }
+        light_text[0usize] = light_said
+        var light_line = style.defaults()
+        light_line.height = style.Length { Px: 21.0 }
+        light_line.padding = edges(24.0, 0.0, 0.0, 2.0)
+        light_layers[0usize] = chrome
+        light_layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, light_line, light_text[0usize..1usize])
+        ret (widget.stack(key, sized_style(width, 21.0), light_layers[0usize..2usize]), ok)
+    }
     let (cells, cells_error) = mem.alloc[Win5Cell](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     cells[0usize] = Win5Cell { held: held }
@@ -10979,6 +11380,7 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     let cupertino = t.tokens.profile == .CupertinoLike
     // macOS: the thick divider is 9 across with a 1 px separator line in it.
     if cupertino { hit = 9.0 }
+    if cupertino && looks_y84.thin() { hit = 1.0 }
     // libadwaita's GtkPaned: a 1 px #dddddd handle between the panes (worker l3).
     let linux = t.tokens.profile == .Linux
     if linux { hit = 1.0 }
@@ -11059,8 +11461,8 @@ fn pane_with_collapse(a: *mem.Arena, key: widget.Key, t: *const Theme, label: st
     if cupertino {
         // The separator line; a dimple shows under the pointer; held or keyboard-focused the line takes the accent.
         sashes_line = style.cupertino_separator(t.tokens)
-        if t.tokens.palette == .Dark { sashes_line = style.hex(0x48484Au32) }
-        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0xD1D1D6u32) }
+        if t.tokens.palette == .Dark { sashes_line = style.hex(0xAEAEB2u32) }
+        if !(t.tokens.palette == .Dark) { sashes_line = style.hex(0x6C6C70u32) }
         line_width = 1.0
         grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
         if state.hovered { grip_color = style.color(t.tokens, .TextMuted) }
@@ -11481,7 +11883,15 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
     if marks_error != ok { ret (zero, TooLarge) }
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
     var none: []const widget.Node = zero
-    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    var chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    // Android: the M3 split button's trailing icon is a chevron that turns up while its menu is open.
+    if t.tokens.profile == .MaterialLike {
+        var turned = GlyphKind.ChevronDown
+        if open { turned = .ChevronUp }
+        let (arrow, arrow_error) = stroked_glyph(a, look.foreground, turned, 20.0, 20.0 * 1.75 / 24.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        chevron = arrow
+    }
     let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
     if tail_error != ok { ret (zero, tail_error) }
     parts[1usize] = tail
@@ -11500,6 +11910,10 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
 // button says expanded in the tree and controls the list.
 fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike {
+        let (flat, flat_error) = speed_dial_flat(a, key, t, label, labels, actions, open, toggle)
+        ret (flat, flat_error)
+    }
     // v2 (D944, docs/ux/components/SpeedDial): the head is the FAB -- 56 tall,
     // `radius-lg`, `primary-container`, elevation 3 -- and, open, the `primary`
     // close circle; the items are 56-tall `primary-container` pills at elevation 2,
@@ -11566,6 +11980,124 @@ fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, label
         if lifted_error != ok { ret (zero, TooLarge) }
         lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
         parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - 8.0 }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// Round 63 (z): the speed dial under the platform looks. Windows: a split button over a MenuFlyout; Linux: a GtkMenuButton (label and
+// arrow) over a popover menu; Cupertino: a tinted pull-down button over a context menu. The head is keyed `key` (Windows: `key + 1` is
+// its arrow part), the menu `key + 2` and the actions `key + 4 + index`; a press outside fires `toggle`. Material and Neper keep the FAB.
+fn speed_dial_flat(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    let profile = t.tokens.profile
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    var head: widget.Node = zero
+    var head_error: err = ok
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    if profile == .Windows {
+        let (made, made_error) = windows_split(a, key, t, label, toggle, open, toggle, button_options())
+        head = made
+        head_error = made_error
+    }
+    if profile == .Linux {
+        let state = control_state(t, key, true, open)
+        var look = style.adwaita_resolve(t.tokens, .Outlined, state)
+        look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.padding_y = look.padding_y - 1.0
+        let (word, word_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+        if word_error != ok { ret (zero, word_error) }
+        let (arrow, arrow_error) = linux_glyph_square(a, look.foreground, .ChevronDown, 16.0)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = word
+        pair[1usize] = arrow
+        let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 6.0 }, style.defaults(), pair[0usize..2usize])
+        let (made, made_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_EXPAND, key + 2u64, toggle, row)
+        head = made
+        head_error = made_error
+    }
+    if profile == .CupertinoLike {
+        var options = button_options()
+        options.variant = .Tonal
+        let state = control_state(t, key, true, open)
+        let (dots, dots_error) = icon_square(a, style.cupertino_resolve(t.tokens, .Tonal, state, 34.0).foreground, .MoreHoriz, 17.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (made, made_error) = cupertino_button(a, key, t, label, dots, true, toggle, options)
+        head = made
+        head_error = made_error
+    }
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let rows = labels.len
+        var slots = rows
+        if profile == .CupertinoLike { slots = rows * 2usize - 1usize }
+        let (items, items_error) = mem.alloc[widget.Node](a, slots)
+        if items_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < rows {
+            let item_key = key + 4u64 + u64(i)
+            let state = control_state(t, item_key, true, false)
+            var look = style.windows_resolve(t.tokens, .Plain, state)
+            var words = text_options()
+            words.wrap = .None
+            var at = i
+            if profile == .Linux {
+                look = style.adwaita_resolve(t.tokens, .Plain, state)
+                look.padding = 8.0
+                look.padding_y = 5.5
+                look.min_height = 32.0
+            } else if profile == .CupertinoLike {
+                look = style.cupertino_resolve(t.tokens, .Plain, state, 44.0)
+                look.radius = 0.0
+                look.corners = style.Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 }
+                look.padding = 16.0
+                look.padding_y = 11.0
+                look.min_height = 44.0
+                at = i * 2usize
+            } else {
+                look.radius = 4.0
+                look.custom_padding = true
+                look.padding = 11.0
+                look.padding_y = 7.0
+                look.min_height = 32.0
+            }
+            var word: widget.Node = zero
+            var word_error: err = ok
+            if profile == .CupertinoLike {
+                let (made, made_error) = cup_label(a, t, labels[i], 17.0, 400u32, style.color(t.tokens, .Text))
+                word = made
+                word_error = made_error
+            } else {
+                let (made, made_error) = colored_text(a, 0u64, labels[i], t, words, look.foreground)
+                word = made
+                word_error = made_error
+            }
+            if word_error != ok { ret (zero, word_error) }
+            let (item, item_error) = pressable_states_fill(a, item_key, t, 3u8, labels[i], look, true, false, 0u32, 0u32, 0u64, &actions[i], false, word)
+            if item_error != ok { ret (zero, item_error) }
+            items[at] = item
+            if profile == .CupertinoLike && i + 1usize < rows { items[at + 1usize] = looks_z63.menu_rule(t.tokens) }
+            i += 1usize
+        }
+        let menu_card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, looks_z63.menu_panel(t.tokens), items[0usize..slots])
+        var sem: widget.Semantics = zero
+        sem.role = 2u8
+        sem.label = label
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
+        lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), mem_one_node(a, menu_card))
+        var gap: f32 = 4.0
+        if profile == .Linux { gap = 6.0 }
+        if profile == .CupertinoLike { gap = 8.0 }
+        parts[1usize] = widget.overlay(key + 2u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - gap }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }
@@ -11858,6 +12390,8 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         if filled { ink = primary }
         if hovered < count && i <= hovered && !filled {
             ink = with_alpha(primary, 0.6)
+            // Cupertino: the full accent, a 60 % one is under 3:1 on the hover layer
+            if t.tokens.profile == .CupertinoLike { ink = primary }
             filled = true
         }
         stars[i] = Star { color: ink, filled: filled, arena: a }
@@ -12318,7 +12852,7 @@ fn arrow_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
 // A dial's paint and pointer: the value's share of the turn, where it is, whom to
 // tell. The knob is a stroked circle with a line from the middle at the share's
 // angle, which runs three quarters of a turn from the lower left clockwise.
-type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena }
+type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena, halo: f32, ringed: bool, ring: paint.Color }
 
 // v2 (D953, docs/ux/components/Dial): a 270-degree track from the lower left,
 // radius 40% of the face and 6% wide in `secondary-container` with round caps, the
@@ -12344,6 +12878,17 @@ fn knob_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: active, brush: paint.Brush { Solid: k.fill }, stroke: stroke } })
     }
     let end = start + sweep
+    // Android (looks_z85): a state layer round the handle (hover 8 %, focus and pressed 10 %) and a 3 dp keyboard ring 2 dp outside it.
+    if k.halo > 0.0 {
+        let (halo, halo_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.2, 1.0)
+        if halo_error != ok { ret halo_error }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: halo, brush: paint.Brush { Solid: with_alpha(k.fill, k.halo) } } })
+    }
+    if k.ringed {
+        let (ring, ring_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.07 + 3.5, 1.0)
+        if ring_error != ok { ret ring_error }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring, brush: paint.Brush { Solid: k.ring }, stroke: paint.Stroke { width: 3.0, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+    }
     let (handle, handle_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.07, 1.0)
     if handle_error != ok { ret handle_error }
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: handle, brush: paint.Brush { Solid: k.fill } } })
@@ -12421,7 +12966,16 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     if share > 1.0 { share = 1.0 }
     let (knobs, knobs_error) = mem.alloc[Knob](a, 1usize)
     if knobs_error != ok { ret (zero, TooLarge) }
-    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .SecondaryContainer), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a }
+    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .SecondaryContainer), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a, halo: 0.0, ringed: false, ring: style.color(t.tokens, .FocusRing) }
+    if t.tokens.profile == .MaterialLike {
+        let hand_state = control_state(t, key, true, false)
+        if hand_state.hovered { knobs[0usize].halo = t.tokens.states.hover }
+        if hand_state.focus_visible {
+            knobs[0usize].halo = t.tokens.states.focus
+            knobs[0usize].ringed = true
+        }
+        if hand_state.pressed { knobs[0usize].halo = t.tokens.states.pressed }
+    }
     let (turns, turns_error) = mem.alloc[Turn](a, 2usize)
     if turns_error != ok { ret (zero, TooLarge) }
     turns[0usize] = Turn { knob: &knobs[0usize], up: false }
@@ -12438,6 +12992,16 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     if body_error != ok { ret (zero, TooLarge) }
     var none: []const widget.Node = zero
     body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint, state: zero } }, style: sized_style(size, size), children: none }
+    if t.tokens.profile == .Windows || t.tokens.profile == .Linux || t.tokens.profile == .CupertinoLike {
+        // Round 63 (z): the platform's knob (looks_z63).
+        let hand = control_state(t, key, true, false)
+        var knob_kind = 1u8
+        if t.tokens.profile == .Linux { knob_kind = 2u8 }
+        if t.tokens.profile == .CupertinoLike { knob_kind = 3u8 }
+        let (platform, platform_error) = looks_z63.dial_face(a, t.tokens, knob_kind, share, size, hand.hovered, hand.pressed, hand.focus_visible)
+        if platform_error != ok { ret (zero, platform_error) }
+        body[0usize] = platform
+    }
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
     // The readout in the middle: `title-large` (`label-large` on a small face) in
@@ -12579,6 +13143,12 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     look.padding_y = max_zero((box_h - 24.0) * 0.5)
     look.min_height = box_h
     look.min_width = 220.0
+    // The Linux and Windows looks draw their keyboard focus themselves (the runtime ring is off): GTK's is the accent at 50 % inside the
+    // edge, 2 px; the Windows one is v3's dotted rectangle, added over the field below.
+    if t.tokens.profile == .Linux && state.focus_visible {
+        look.border = with_alpha(style.color(t.tokens, .Primary), 0.5)
+        look.border_width = 2.0
+    }
     var content: widget.Node = zero
     if recording || chord.key == 0u32 {
         var hint = text_options()
@@ -12596,8 +13166,18 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         if caps_error != ok { ret (zero, caps_error) }
         content = caps
     }
-    let (field_node, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, content)
+    let (pressed_field, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, content)
     if field_error != ok { ret (zero, field_error) }
+    var field_node = pressed_field
+    if t.tokens.profile == .Windows && state.focus_visible {
+        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), 220.0 - 8.0, box_h - 8.0)
+        if dots_error != ok { ret (zero, dots_error) }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret (zero, TooLarge) }
+        layers[0usize] = pressed_field
+        layers[1usize] = widget.positioned(0u64, 4.0, 4.0, style.defaults(), widget_one_of(a, dots))
+        field_node = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+    }
     var keys: widget.Change[input.KeyEvent] = zero
     if recording {
         let (recorders, recorders_error) = mem.alloc[Recorder](a, 1usize)
@@ -12672,7 +13252,10 @@ fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, er
 }
 
 fn compact_key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
-    let (made, made_error) = key_caps_of(a, t, chord_text, 20.0, 20.0, 4.0, 0.0, .LabelSmall)
+    // Android (round 86): the 16 dp label line sits in the 20 dp cap with 2 dp above and below, not flush at the top.
+    var vertical: f32 = 0.0
+    if t.tokens.profile == .MaterialLike { vertical = 2.0 }
+    let (made, made_error) = key_caps_of(a, t, chord_text, 20.0, 20.0, 4.0, vertical, .LabelSmall)
     ret (made, made_error)
 }
 
@@ -12788,6 +13371,11 @@ fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active:
     caption.wrap = .None
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, ink)
     if label_error != ok { ret (zero, label_error) }
+    // Neper: the row fills the list's width, so a hover or the active row lights the whole row (a hugging button lit a patch).
+    if t.tokens.profile == .Neper {
+        let (filled, filled_error) = pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, accessibility.ACTION_PRESS, 0u64, action, true, label_node)
+        ret (filled, filled_error)
+    }
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, label_node)
     ret (node, node_error)
 }
@@ -12856,9 +13444,25 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
             sheet_style.radius = 4.0
             if menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
         }
+        // Neper: the list is as wide as the field (a combo's, an autocomplete's) and stands under its bottom edge, not over its lower outline.
+        if t.tokens.profile == .Neper && menu_w > 0.0 { sheet_style.width = style.Length { Px: menu_w } }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
+        if t.tokens.profile == .Neper && suggestions.len > 7usize {
+            // Neper: past seven 36 px rows the list scrolls in a viewport instead of squeezing its rows into the window.
+            var view_style = style.defaults()
+            view_style.width = style.Length { Percent: 100.0 }
+            view_style.height = style.Length { Px: 7.0 * 36.0 }
+            view_style.overflow = .Clip
+            let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
+            if stacked_error != ok { ret (zero, TooLarge) }
+            stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), items[0usize..suggestions.len])
+            let (view, view_error) = mem.alloc[widget.Node](a, 1usize)
+            if view_error != ok { ret (zero, TooLarge) }
+            view[0usize] = widget.scroll(list_key + 1048576u64, widget.Scroll { axis: .Vertical, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0, fades: false, virtual_extras: zero }, view_style, stacked[0usize..1usize])
+            column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, view[0usize..1usize])
+        }
         if t.tokens.profile == .Linux {
             // The popover's soft shadow lies under it: a zero-size node first in the column paints it round the popover's box
             // (the width is the anchor's less 2, the height the rows and the padding).
@@ -12920,6 +13524,14 @@ fn suggesting_wide(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
                 shift = -16.0
             }
         }
+        if t.tokens.profile == .Neper {
+            // The anchor is the editor, (field height less its line) / 2 above the field's bottom edge and 16 in from its side.
+            below = max_zero((t.tokens.metrics.control_height + 16.0 - style.text_style(t.tokens, .BodyLarge).line_height) * 0.5) + 4.0
+            if menu_w > 0.0 {
+                placed_at = .Below
+                shift = -16.0
+            }
+        }
         parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: placed_at, offset: geometry.Point { x: shift, y: below }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
         if active < picks.len { default_action = picks[active] }
     }
@@ -12959,7 +13571,9 @@ fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buf
     let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
     if field_error != ok { ret (zero, field_error) }
     var none: []const widget.Node = zero
-    let (made, made_error) = suggesting(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss)
+    var menu_w: f32 = 0.0
+    if t.tokens.profile == .Neper || t.tokens.profile == .MaterialLike { menu_w = options.width }
+    let (made, made_error) = suggesting_wide(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss, menu_w)
     ret (made, made_error)
 }
 
@@ -12991,6 +13605,8 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     // The value stops before the chevron: its 4 in plus its width, less the side.
     var kept = options
     kept.end_space = max_zero(side + 4.0 - 16.0)
+    // Neper: 4 px between the value and the state circle, which would otherwise touch the last letter.
+    if t.tokens.profile == .Neper { kept.end_space += 4.0 }
     let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, kept)
     if field_error != ok { ret (zero, field_error) }
     let state = control_state(t, key + 1u64, true, false)
@@ -13336,7 +13952,7 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
             if sliding_error != ok { ret (zero, TooLarge) }
             sliding[0usize] = centred[0usize]
-            centred[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: drop } }, centre, sliding[0usize..1usize])
+            centred[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: drop } }, centre, sliding[0usize..1usize])
         }
         var none: []const widget.Shortcut = zero
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -13550,7 +14166,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         fill = muted
         ink = muted
     }
-    var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
+    var ring = Ring { track: looks_b.track_color(t.tokens), fill: fill, share: drawn_share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
     if options.no_data || options.loading { ring.share = 0.0 }
     // The stroke's centre line at 40% of the size: the ring square 90% of it.
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
@@ -13574,6 +14190,13 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
         let (bone, bone_error) = skeleton_of(a, key + 2u64, t, size * 0.5, size * 0.2, block)
         if bone_error != ok { ret (zero, bone_error) }
         readout = bone
+        if t.tokens.profile == .Linux {
+            // libadwaita's surface is the skeleton's own colour, so the block would vanish: draw it in the track's grey.
+            var no_sweep: *Sweep = zero
+            let (grey, grey_error) = loading_shape(a, key + 2u64, size * 0.5, size * 0.2, size * 0.1, ring.track, no_sweep)
+            if grey_error != ok { ret (zero, grey_error) }
+            readout = grey
+        }
     }
     let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize)
     if inner_error != ok { ret (zero, TooLarge) }
@@ -13582,6 +14205,7 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     if options.unit.len != 0usize {
         var small = text_options()
         small.role = .BodySmall
+        if t.tokens.profile == .CupertinoLike { small.role = .LabelSmall }
         small.wrap = .None
         let (unit_node, unit_error) = colored_text(a, 0u64, options.unit, t, small, muted)
         if unit_error != ok { ret (zero, unit_error) }
@@ -13593,7 +14217,12 @@ fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     let pad = size * 0.05
     layers[2usize] = painted
     layers[0usize] = widget.padded(0u64, pad, pad, pad, pad, sized_style(size, size), layers[2usize..3usize])
-    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, sized_style(size, size), inner[0usize..inner_count])
+    var inner_style = sized_style(size, size)
+    if t.tokens.profile == .CupertinoLike && inner_count == 2usize {
+        // HIG: keep the unit caption clear of the arc ends, which close in toward the open bottom: lift the pair into the wider part.
+        inner_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: size * 0.1 } }
+    }
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, inner_style, inner[0usize..inner_count])
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..2usize])
@@ -13671,7 +14300,7 @@ fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: 
     var tone: style.ColorRole = .Primary
     if share >= warn { tone = .Warning }
     if share >= danger { tone = .Error }
-    let rest_color = style.color(t.tokens, .SurfaceContainerHighest)
+    let rest_color = looks_b.track_color(t.tokens)
     var shown = options.value_text
     if shown.len == 0usize {
         let (digits, digits_error) = rounded_digits(a, value)
@@ -14051,6 +14680,24 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
         grown = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, style.defaults(), titled[0usize..2usize])
     }
     grown.style.width = style.Length { Flex: 1.0 }
+    // A message that wraps beside the action and the close stands as tall as its wrapped lines: bound it by the room the row leaves it
+    // (the row measures each child at its whole width, so a wrapped last line spilled into the padding).
+    if !bottom && notices.len > 0usize {
+        var row_parts = at + 2usize
+        if head.action_label.len != 0usize { row_parts += 1usize }
+        // The toast is 340 wide with 16 and 8 at its sides, 8 between the parts, the severity well 32 and the close control-md.
+        var room = 340.0 - 16.0 - 8.0 - t.tokens.sizes.control_md - 8.0 * f32(row_parts - 1usize)
+        if at > 0usize { room = room - 32.0 }
+        if head.action_label.len != 0usize {
+            let (action_width, _, _, action_error) = run_metrics(a, t, .LabelLarge, head.action_label)
+            if action_error != ok { ret (zero, action_error) }
+            let action_look = button_look(t, style.resolve(t.tokens, .Plain, control_state(t, key + 1u64, true, false)), true)
+            var action_box = action_width + 2.0 * action_look.padding
+            if action_box < action_look.min_width { action_box = action_look.min_width }
+            room = room - action_box
+        }
+        grown.style.max_width = style.Length { Px: max_zero(room) }
+    }
     parts[at] = grown
     at += 1usize
     if head.action_label.len != 0usize {
@@ -14076,6 +14723,11 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     if !bottom {
         options.background = .SurfaceContainerHigh
         options.radius = t.tokens.radii.md
+        // Cupertino: a rounded banner with a soft shadow, not Material's stacked heavy one
+        if t.tokens.profile == .CupertinoLike {
+            options.radius = 22.0
+            options.elevation = 0u8
+        }
         wide = 340.0
         pad_y = style.Length { Px: 12.0 }
     }
@@ -14172,6 +14824,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
             column[4usize] = more_words
             var pill = style.defaults()
             pill.radius = t.tokens.radii.md
+            if t.tokens.profile == .CupertinoLike { pill.radius = 16.0 }
             pill.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
             let across = style.Length { Px: 12.0 }
             let down = style.Length { Px: 6.0 }
@@ -14201,7 +14854,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
     let (entering, entering_error) = mem.alloc[widget.Node](a, 2usize)
     if entering_error != ok { ret (zero, TooLarge) }
     entering[0usize] = kept[0usize]
-    entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
+    entering[1usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: 0.0, offset: geometry.Point { x: 0.0, y: rise } }, style.defaults(), entering[0usize..1usize])
     var faded = style.defaults()
     faded.opacity = entered
     kept[0usize] = widget.box(0u64, faded, entering[1usize..2usize])
@@ -14246,6 +14899,10 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     options.background = .SurfaceContainerHigh
     options.radius = t.tokens.radii.md
     options.elevation = 3u8
+    if t.tokens.profile == .CupertinoLike {
+        options.radius = 22.0
+        options.elevation = 0u8
+    }
     var sheet = surface_style(t, options)
     sheet.overflow = .Visible
     sheet.width = style.Length { Px: 340.0 }
@@ -14722,7 +15379,12 @@ fn empty_with_art(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, m
         if options.other_label.len != 0usize && !compact {
             var plain = button_options()
             plain.variant = .Plain
-            let (alt, alt_error) = button(a, key + 2u64, t, options.other_label, options.other, plain)
+            // Cupertino: the link takes the text blue (the fill's blue is a different one in dark).
+            let (link_tokens, link_tokens_error) = looks_y85.tinted_ring(a, t.tokens, 0x0040DDu32, 0x409CFFu32)
+            if link_tokens_error != ok { ret (zero, link_tokens_error) }
+            var link_theme = *t
+            link_theme.tokens = link_tokens
+            let (alt, alt_error) = button(a, key + 2u64, &link_theme, options.other_label, options.other, plain)
             if alt_error != ok { ret (zero, alt_error) }
             buttons[n] = alt
             n += 1usize
@@ -14965,7 +15627,9 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     if style_error != ok { ret (zero, style_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
+    looks_z86.set_faces(t.tokens.profile == .MaterialLike)
     let (listed_families, listed_error) = list_box(a, key + 1u64, t, "Family", families, family, family_actions, rows, width)
+    looks_z86.set_faces(false)
     if listed_error != ok { ret (zero, listed_error) }
     parts[0usize] = listed_families
     let (segments, segments_error) = segmented_control(a, key + 64u64, t, "Style", styles, style_index, style_actions, true)
@@ -14979,16 +15643,58 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     caption.wrap = .None
     caption.ellipsis = "..."
     caption.max_lines = 1u32
-    let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
+    var sample_size = size
+    if sample_size > 20i64 { sample_size = 20i64 }
+    // Android: the sample follows the chosen style and size (the family needs a face the rig does not have).
+    if t.tokens.profile == .MaterialLike {
+        // Round 86: the sample is drawn in the family's own face where the rig has one (Roboto, Segoe UI, Tahoma); Bold is the face's bold
+        // (Roboto Medium), Italic a synthetic oblique (below).
+        caption.face = looks_z86.face_of(families[family])
+        if style_index == 2usize {
+            caption.weight = 500u32
+            if caption.face != 0u32 { caption.weight = 700u32 }
+        }
+        // the sheet's cell is 300 high, so the sample grows with the size up to 20 sp and ellipsizes past the box
+        caption.size = f32(sample_size)
+        caption.wrap = .Word
+    }
+    // Android: the rig loads no face per family, so the family's name leads the sample, which is drawn in the available face.
+    var shown_sample = sample
+    if t.tokens.profile == .MaterialLike && !looks_z86.has_face(families[family]) {
+        // no face for this family on the rig: its name alone, not a sample in a stand-in face
+        shown_sample = families[family]
+    } else if t.tokens.profile == .MaterialLike {
+        let (sample_text, sample_text_error) = mem.alloc[u8](a, families[family].len + 2usize + sample.len)
+        if sample_text_error != ok { ret (zero, TooLarge) }
+        var at = copy_text(sample_text, families[family])
+        at += copy_text(sample_text[at..sample_text.len], ": ")
+        at += copy_text(sample_text[at..sample_text.len], sample)
+        shown_sample = sample_text[0usize..at]
+    }
+    let (preview, preview_error) = text_node(a, key + 81u64, shown_sample, t, caption)
     if preview_error != ok { ret (zero, preview_error) }
     let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
     if previewed_error != ok { ret (zero, TooLarge) }
     previewed[0usize] = preview
+    if t.tokens.profile == .MaterialLike && style_index == 1usize {
+        // Flutter's fake italic: the run sheared by 1/4 (the families have no italic face on the rig)
+        var lean = style.defaults()
+        lean.width = style.Length { Px: width - 2.0 * t.tokens.spacing.sm - 2.0 }
+        let (leaning, leaning_error) = mem.alloc[widget.Node](a, 1usize)
+        if leaning_error != ok { ret (zero, TooLarge) }
+        leaning[0usize] = preview
+        previewed[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, skew: looks_z86.oblique(), offset: zero }, lean, leaning[0usize..1usize])
+    }
     var frame_options = surface_options(t)
     frame_options.bordered = true
     frame_options.padding = t.tokens.spacing.sm
     var frame_style = surface_style(t, frame_options)
     frame_style.width = style.Length { Px: width }
+    if t.tokens.profile == .MaterialLike {
+        frame_style.overflow = .Clip
+        let need = f32(sample_size) * 1.4 + 2.0 * t.tokens.spacing.sm
+        if need > 2.0 * t.tokens.text[0usize].line_height { frame_style.min_height = style.Length { Px: need } }
+    }
     frame_style.min_height = style.Length { Px: 2.0 * t.tokens.text[0usize].line_height }
     parts[3usize] = widget.box(0u64, frame_style, previewed[0usize..1usize])
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
@@ -15563,6 +16269,12 @@ fn notification_list_with(a: *mem.Arena, key: widget.Key, t: *const Theme, label
         cells[0usize] = well
         var grow = style.defaults()
         grow.width = style.Length { Flex: 1.0 }
+        // Android (round 88): a wrapped message gave the well and the dismiss button their width back (they drew 30 and 24 wide); the text column takes the exact room instead.
+        if t.tokens.profile == .MaterialLike {
+            var room = inner - 24.0 - 40.0 - 32.0 - 24.0
+            if item.unread { room -= 20.0 }
+            grow.width = style.Length { Px: room }
+        }
         cells[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, grow, lines[0usize..line_count])
         var cell_count = 2usize
         if item.unread {
@@ -15793,11 +16505,14 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let face = style.color(t.tokens, .Background)
     var ink = style.color(t.tokens, .Text)
     if !options.enabled { ink = style.mix(ink, face, 0.55) }
+    let dark = t.tokens.palette == .Dark
+    ink = looks_t81.group_caption_ink(dark, ink)
     var frame = style.defaults()
-    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 6.35 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
-    frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: 13.65 }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
-    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: style.color(t.tokens, .OutlineVariant) } }
-    if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
+    frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: looks_t81.group_margin_top(dark, 6.35) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: looks_t81.group_padding_top(dark, 13.65) }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
+    if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: looks_t81.group_line(dark, looks_o78.dark_group_line(dark, style.color(t.tokens, .OutlineVariant))) } }
+    let lines = dark && options.variant != .Plain
+    if lines { frame.border = style.Border { width: looks_x84.device_line(), color: frame.border.color } }
     let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -15810,21 +16525,56 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     caption.size = 11.0
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
-    let (heading, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
+    let (words, heading_width, heading_error) = choices_words(a, &dialog_t, caption, ink, label)
     if heading_error != ok { ret (zero, heading_error) }
+    var heading = words
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
-    held[0usize] = heading
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    var cut_x: f32 = 8.0
+    var fit_w: f32 = heading_width
+    if dark {
+        // the native dark capture's caption: Segoe UI 12 px, 9 in from the frame, its gap starting 7 in
+        var native = text_options()
+        native.face = 7u32
+        native.size = 12.0
+        native.wrap = .None
+        let (dark_t, dark_error) = windows_edit_theme(a, t, 13.0)
+        if dark_error != ok { ret (zero, dark_error) }
+        let (native_heading, native_error) = colored_text(a, 0u64, label, &dark_t, native, ink)
+        if native_error != ok { ret (zero, native_error) }
+        heading = native_heading
+        let (text_width, text_fit, text_base, text_error) = run_metrics_faced(a, &dark_t, native, label)
+        if text_error != ok { ret (zero, text_error) }
+        cut = looks_t81.group_cut(cut, text_width)
+        cut_x = looks_x84.group_stub()
+        fit_w = text_width
+    }
+    if options.width > 0.0 {
+        frame.width = style.Length { Px: options.width }
+        cut = looks_x84.group_clip(cut, options.width, fit_w, cut_x)
+    }
+    held[0usize] = heading
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
-    parts[1usize] = widget.positioned(0u64, 8.0, -2.0, style.defaults(), parts[2usize..3usize])
+    parts[1usize] = widget.positioned(0u64, cut_x, -2.0, style.defaults(), parts[2usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
+    if false {
+        let (edge, edge_error) = looks_x84.lines_node(a, looks_t81.group_line(dark, style.color(t.tokens, .OutlineVariant)), looks_t81.group_margin_top(dark, 6.35))
+        if edge_error != ok { ret (zero, TooLarge) }
+        parts[3usize] = edge
+        let (order, order_error) = mem.alloc[widget.Node](a, 3usize)
+        if order_error != ok { ret (zero, TooLarge) }
+        order[0usize] = parts[0usize]
+        order[1usize] = parts[3usize]
+        order[2usize] = parts[1usize]
+        ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, order[0usize..3usize])), ok)
+    }
     ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, parts[0usize..2usize])), ok)
 }
 
@@ -15840,7 +16590,8 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // The section header of v3's option pages (a plain panel with a grey gradient): 24 tall,
 // #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
-type SectionBar = struct { stops: [2]paint.Stop }
+// `whole` (Windows light with the group frames on whole pixels, Windows light): the 1:1 captures put the border on the control's own pixels.
+type SectionBar = struct { stops: [2]paint.Stop, whole: bool, line: bool, line_color: paint.Color }
 
 // v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
 // border over it. looks4: fitted to the live 100 % capture's border pixels (fill compositing included):
@@ -15849,13 +16600,20 @@ type SectionBar = struct { stops: [2]paint.Stop }
 // (a fill reaching the border's soft outer pixels would count twice), then the four border lines.
 fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let s = mem.cast[*SectionBar](ctx)
-    let x0 = area.x + 0.15
-    let y0 = area.y + 0.34
-    let w = area.width + 0.35
-    let h = area.height + 0.01
+    var x0 = area.x + 0.15
+    var y0 = area.y + 0.34
+    var w = area.width + 0.35
+    var h = area.height + 0.01
+    if s.whole {
+        x0 = area.x
+        y0 = area.y
+        w = area.width
+        h = area.height
+    }
     let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x0, y: y0 }, end: geometry.Point { x: x0 + w, y: y0 }, stops: s.stops[0usize..2usize] } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x + 1.0, area.y + 1.0, area.width - 1.0, area.height - 1.0), brush: brush } })
-    let edge = paint.Brush { Solid: s.stops[0usize].color }
+    var edge = paint.Brush { Solid: s.stops[0usize].color }
+    if s.line { edge = paint.Brush { Solid: s.line_color } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, w, 1.0), brush: edge } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0 + h - 1.0, w, 1.0), brush: edge } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, 1.0, h), brush: edge } })
@@ -15869,6 +16627,9 @@ fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
 fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, aside: str, width: f32) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
+    bars[0usize].whole = windows_crisp(t)
+    bars[0usize].line = false
+    bars[0usize].line_color = style.hex_raw(0u32)
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
     // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
@@ -15879,6 +16640,12 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
         bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex_raw(0x2B2B2Bu32) }
         title_ink = style.hex_raw(0xFFFFFFu32)
         aside_ink = style.hex_raw(0xC5C5C5u32)
+        // round 84: the 1 px border is the dark control frame #828790 (4.5 : 1 on the page; the gradient's #4A4A4A start was 2 : 1), on whole pixels
+        bars[0usize].whole = true
+        bars[0usize].line = true
+        bars[0usize].line_color = looks_x84.frame_line()
+        // round 84: the 1 px border is the dark control frame #828790 (4.5 : 1 on the page; the #4A4A4A of the gradient's start was 2 : 1), on whole pixels
+        bars[0usize].whole = windows_crisp(t)
     }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
@@ -16564,7 +17331,10 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
     let vertical = axis == .Vertical
     var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     // The Cupertino indicator: the label colour at 35 %, a thin pill that needs no track (iOS; macOS overlay scrollers).
-    if t.tokens.profile == .CupertinoLike { thumb = with_alpha(style.color(t.tokens, .Text), 0.35) }
+    if t.tokens.profile == .CupertinoLike {
+        thumb = with_alpha(style.color(t.tokens, .Text), 0.48)
+        if t.tokens.palette == .Dark { thumb = with_alpha(style.color(t.tokens, .Text), 0.44) }
+    }
     var view = sized_style(width, height)
     view.overflow = .Clip
     var along = height
@@ -16731,46 +17501,6 @@ fn windows_bar_look(state: style.ControlState, ink: paint.Color) -> style.Resolv
     ret style.ResolvedControl { background: face, foreground: face_ink, border: edge, border_width: 1.0, focus_ring: 0.0, opacity: 1.0, radius: 0.0, elevation: 0u8, padding: 2.0, padding_start: 0.0, padding_y: 2.0, custom_padding: true, min_width: 23.0, min_height: 22.0, corners: zero }
 }
 
-// (looks5-f) A grey that drifts along the main window: `table` holds one digit per measured toolbar button
-// (x 384, 407, 466, 489, 512, 617, 640 of the 800 px window) as an offset from `base`; between them it
-// interpolates, past them it holds.
-fn windows_tool_drift(along: f32, table: str, base: f32) -> u32 {
-    var k = 0usize
-    var x0: f32 = 384.0
-    var x1: f32 = 407.0
-    if along >= 407.0 {
-        k = 1usize
-        x0 = 407.0
-        x1 = 466.0
-    }
-    if along >= 466.0 {
-        k = 2usize
-        x0 = 466.0
-        x1 = 489.0
-    }
-    if along >= 489.0 {
-        k = 3usize
-        x0 = 489.0
-        x1 = 512.0
-    }
-    if along >= 512.0 {
-        k = 4usize
-        x0 = 512.0
-        x1 = 617.0
-    }
-    if along >= 617.0 {
-        k = 5usize
-        x0 = 617.0
-        x1 = 640.0
-    }
-    var frac = (along - x0) / (x1 - x0)
-    if frac < 0.0 { frac = 0.0 }
-    if frac > 1.0 { frac = 1.0 }
-    let v0 = f32(u32(table[k]) - 48u32)
-    let v1 = f32(u32(table[k + 1usize]) - 48u32)
-    ret u32(base + v0 + (v1 - v0) * frac + 0.5)
-}
-
 fn windows_tool_part(x: f32, y: f32, w: f32, h: f32, grey: u32) -> widget.Node {
     var s = style.defaults()
     s.background = paint.Brush { Solid: style.hex(grey * 65793u32) }
@@ -16779,81 +17509,23 @@ fn windows_tool_part(x: f32, y: f32, w: f32, h: f32, grey: u32) -> widget.Node {
     ret widget.positioned(0u64, x, y, s, zero)
 }
 
-// (looks5-f) The 2 px box of a hot or pressed toolbar button, 24 x 23 with its top left at the cell's (0, -1) (the
-// pixels of states/hover-toolbar-button-search-*, drifting along the window as the bar greys do; `along` is the
-// button's x in the 800 px window): hot is raised (#FA and #F5 above and left, #BE, #D2 and #B9 below and right),
-// pressed sunken (#BD, #D3 and #B8 dark above and left, #F9, #F6 light below and right, #F0 inside). Parts are
-// placed by the caller at (-2, -3) from the content's origin, which the button's 2 px padding puts at (2, 2) of the cell.
+// The 1 px box of a hot or pressed toolbar button, 23 x 22 (the 1:1 captures states/hover-toolbar-button-*): hot is raised
+// (#FFFFFF above and at the left, #A0A0A0 at the right and below), pressed sunken (the two swapped). `along` is unused: the
+// greys no longer drift along the window. The caller places the box at (-2, -3) from the content's origin.
 fn windows_tool_box(a: *mem.Arena, pressed: bool, along: f32) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let ox: f32 = 0.0
-    let oy: f32 = 0.0
-    var n = 0usize
-    if !pressed {
-        let l0 = windows_tool_drift(along, "3222110", 249.0)
-        let l1 = windows_tool_drift(along, "0111223", 243.0)
-        let l1_top = windows_tool_drift(along, "0000011", 248.0)
-        let corner = windows_tool_drift(along, "1111100", 246.0)
-        let r0_top = windows_tool_drift(along, "013459:", 203.0)
-        let r0_second = windows_tool_drift(along, "01467<=", 180.0)
-        let r0 = windows_tool_drift(along, "01456;<", 179.0)
-        let r0_foot = windows_tool_drift(along, "0122245", 167.0)
-        let r1_top = windows_tool_drift(along, "8755410", 220.0)
-        let r1 = windows_tool_drift(along, "<;87610", 209.0)
-        let r1_foot = windows_tool_drift(along, "5433310", 228.0)
-        let l_foot = windows_tool_drift(along, "0023366", 206.0)
-        let l_last = windows_tool_drift(along, "0122355", 216.0)
-        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
-        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 250u32)
-        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
-        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, r1_top)
-        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
-        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
-        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
-        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 245u32)
-        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
-        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
-        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
-        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, l_foot)
-        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, 192u32)
-        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 190u32)
-        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, r0_foot)
-        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, l_last)
-        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 210u32)
-        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, r1_foot)
-        n += 18usize
-    } else {
-        let corner = windows_tool_drift(along, "0000111", 203.0)
-        let r0_top = windows_tool_drift(along, "1111000", 231.0)
-        let l0 = windows_tool_drift(along, "0001222", 182.0)
-        let l1_top = windows_tool_drift(along, "1111000", 196.0)
-        let r0_second = windows_tool_drift(along, "1111000", 241.0)
-        let r1 = windows_tool_drift(along, "0001111", 244.0)
-        let l1 = windows_tool_drift(along, "2221000", 216.0)
-        let r0 = windows_tool_drift(along, "1111000", 250.0)
-        let l1_foot = windows_tool_drift(along, "1111000", 240.0)
-        parts[n] = windows_tool_part(ox, oy, 1.0, 1.0, corner)
-        parts[n + 1usize] = windows_tool_part(ox + 1.0, oy, 21.0, 1.0, 189u32)
-        parts[n + 2usize] = windows_tool_part(ox + 22.0, oy, 1.0, 1.0, r0_top)
-        parts[n + 3usize] = windows_tool_part(ox + 23.0, oy, 1.0, 1.0, 243u32)
-        parts[n + 4usize] = windows_tool_part(ox, oy + 1.0, 1.0, 20.0, l0)
-        parts[n + 5usize] = windows_tool_part(ox + 1.0, oy + 1.0, 1.0, 1.0, l1_top)
-        parts[n + 6usize] = windows_tool_part(ox + 1.0, oy + 2.0, 1.0, 19.0, l1)
-        parts[n + 7usize] = windows_tool_part(ox + 2.0, oy + 1.0, 20.0, 1.0, 211u32)
-        parts[n + 8usize] = windows_tool_part(ox + 22.0, oy + 1.0, 1.0, 1.0, r0_second)
-        parts[n + 9usize] = windows_tool_part(ox + 22.0, oy + 2.0, 1.0, 19.0, r0)
-        parts[n + 10usize] = windows_tool_part(ox + 23.0, oy + 1.0, 1.0, 21.0, r1)
-        parts[n + 11usize] = windows_tool_part(ox, oy + 21.0, 1.0, 1.0, 225u32)
-        parts[n + 12usize] = windows_tool_part(ox + 1.0, oy + 21.0, 1.0, 1.0, l1_foot)
-        parts[n + 13usize] = windows_tool_part(ox + 2.0, oy + 21.0, 20.0, 1.0, 249u32)
-        parts[n + 14usize] = windows_tool_part(ox + 22.0, oy + 21.0, 1.0, 1.0, 253u32)
-        parts[n + 15usize] = windows_tool_part(ox, oy + 22.0, 1.0, 1.0, 244u32)
-        parts[n + 16usize] = windows_tool_part(ox + 1.0, oy + 22.0, 22.0, 1.0, 246u32)
-        parts[n + 17usize] = windows_tool_part(ox + 23.0, oy + 22.0, 1.0, 1.0, 242u32)
-        n += 18usize
+    var lit = 255u32
+    var shade = 160u32
+    if pressed {
+        lit = 160u32
+        shade = 255u32
     }
-    ret (widget.stack(0u64, sized_style(24.0, 23.0), parts[0usize..n]), ok)
+    parts[0usize] = windows_tool_part(0.0, 0.0, 22.0, 1.0, lit)
+    parts[1usize] = windows_tool_part(0.0, 1.0, 1.0, 20.0, lit)
+    parts[2usize] = windows_tool_part(22.0, 0.0, 1.0, 21.0, shade)
+    parts[3usize] = windows_tool_part(0.0, 21.0, 23.0, 1.0, shade)
+    ret (widget.stack(0u64, sized_style(23.0, 22.0), parts[0usize..4usize]), ok)
 }
 
 // A TdxBarButton with a picture: 22 square, the 16 glyph in a dark ink (v3 draws bitmaps). Hot and pressed draw v3's
@@ -16874,15 +17546,25 @@ fn windows_glyph_toggle_art(a: *mem.Arena, key: widget.Key, t: *const Theme, kin
     style.windows_dark_enter(t.tokens)
     let state = control_state(t, key, enabled, checked)
     var look = windows_bar_look(state, style.hex(4210752u32))
+    // round 85: the rim of v3's hot button is #A0A0A0 in the 1:1 capture (toolbar_button_hot, 9824 px); on the dark bar the hot rim is its counterpart #828282 (3.6 : 1) and the pressed one #9D9D9D
+    if style.windows_dark_on() && enabled && !state.selected {
+        if state.pressed { look.border = style.hex_raw(0x9D9D9Du32) } else if state.hovered { look.border = style.hex_raw(0x828282u32) }
+    }
     // v3's disabled pictures are pale bitmaps (mean #D4D4D4 over the glyph area, measured);
     // a drawn glyph in #C8C8C8 stands in.
     var ink = look.foreground
     if !enabled { ink = style.hex(13158600u32) }
     if !enabled && style.windows_dark_on() { ink = style.hex_raw(0x6B6B6Bu32) }
     var mark: widget.Node = zero
-    if art < 1000usize && !style.windows_dark_on() {
+    if art < 1000usize {
         let atlas = wintoolicon.atlas()
-        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, atlas[art * 272usize..art * 272usize + 272usize])
+        var tile_px = atlas[art * 272usize..art * 272usize + 272usize]
+        if style.windows_dark_on() {
+            let (mapped, mapped_error) = looks_x85.dark_tile(a, tile_px, !enabled)
+            if mapped_error != ok { ret (zero, mapped_error) }
+            tile_px = mapped
+        }
+        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, tile_px)
         if tile_error != ok { ret (zero, tile_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, held_error) }
@@ -17005,6 +17687,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     let state = control_state(t, key, enabled, false)
     var c = win_look(t, state.hovered, state.pressed, false, open, enabled, false)
     let dark = t.tokens.palette == .Dark
+    let drawn_light = t.tokens.profile == .Windows && t.tokens.palette == .Light
     // round 10: the native dark list-style combo: white text, #6D6D6D disabled
     if dark {
         c.ink = style.hex_raw(0xFFFFFFu32)
@@ -17035,7 +17718,7 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var chevron_scale: f32 = 1.0
     // looks5 group d: no chevron change under the pointer (the captured hovers have the rest chevron).
     if !enabled { chevron_scale = 0.5 }
-    if dark { chevron_scale = 0.0 }
+    if dark || drawn_light { chevron_scale = 0.0 }
     let focused = state.focused && enabled
     let (chevron, chevron_error) = win3_chevron(a, c.ink, focused, false, chevron_scale)
     if chevron_error != ok { ret (zero, chevron_error) }
@@ -17051,8 +17734,9 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var spread = style.defaults()
     spread.width = style.Length { Px: head_w }
     spread.height = style.Length { Px: text_h }
+    // round 46: the light head's text starts at x 5 of the box in the 1:1 captures
     spread.padding = edges(3.0, 0.0, 0.0, 0.0)
-    if dark { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
+    if dark || drawn_light { spread.padding = edges(4.0, 0.0, 0.0, 0.0) }
     let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, spread, bits[0usize..2usize])
     var tone: f32 = 0.0
     if !enabled { tone = 0.5 }
@@ -17071,6 +17755,16 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
         let (made_frame, made_error) = winedit.native_combo(a, 1u32, native_state, head_w, text_h)
         frame = made_frame
         frame_error = made_error
+    } else if drawn_light {
+        // round 46: the drop-down box is drawn (the button look of the ellipsis over the dialog face) with its chevron
+        var box_style = 0u32
+        if head_look == 4u32 { box_style = 1u32 }
+        if head_look == 1u32 || head_look == 2u32 || head_look == 3u32 { box_style = 2u32 }
+        if box_style == 2u32 && head_look == 1u32 && edge_x >= 10000.0 { box_style = 4u32 }
+        if !enabled { box_style = 3u32 }
+        let (made_frame, made_error) = winedit.combo_chrome(a, box_style, head_w, 21.0)
+        frame = made_frame
+        frame_error = made_error
     } else {
         let (made_frame, made_error) = win3_frame(a, c.face, style.color(t.tokens, .Background), tone, false, head_w, 21.0, edge_y, edge_x, head_look)
         frame = made_frame
@@ -17084,7 +17778,18 @@ fn win_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
     var count = 2usize
     if focused && !dark {
         // v3 rings a focused list-style combo's text area with its dotted focus rectangle.
-        let (dots, dots_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
+        var dots: widget.Node = zero
+        var dots_error: err = ok
+        if drawn_light {
+            // round 48: the 1:1 capture's rectangle is the XOR of the white face, black dots on the pixels with x + y odd, 15 rows
+            let (crisp, crisp_error) = win_lb_dots(a, style.hex(131586u32), 1u32, max_zero(head_w - 22.0), 15.0)
+            dots = crisp
+            dots_error = crisp_error
+        } else {
+            let (soft, soft_error) = win3_dots(a, style.color(t.tokens, .Text), max_zero(head_w - 22.0), 16.0)
+            dots = soft
+            dots_error = soft_error
+        }
         if dots_error != ok { ret (zero, dots_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
@@ -17299,6 +18004,8 @@ fn win_sheet(a: *mem.Arena, t: *const Theme, scroll_key: widget.Key, items: []co
         inner = 16711423u32
     }
     if lit + 1usize == items.len { soft_bottom = 1.0 }
+    // round 53: the raw 1:1 popup captures have a whole 1 px frame on all four sides (the soft lines above were fitted to the resampled grabs): light draws the plain box
+    if t.tokens.profile == .Windows && t.tokens.palette != .Dark { ret (framed, ok) }
     if soft_bottom == 1.0 && soft_right == 1.0 { ret (framed, ok) }
     let (cells, cells_error) = mem.alloc[Win5Edges](a, 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
@@ -17453,7 +18160,9 @@ fn win_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, optio
 // plain select: no icons.
 fn image_select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, icons: []const widget.Node, selected: usize, open: bool, enabled: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if t.tokens.profile == .MaterialLike {
+        looks_z84_edge.set(!enabled)
         let (pictured, pictured_error) = select_led(a, key, t, label, options, selected, open, toggle, picks, icons)
+        looks_z84_edge.set(false)
         if pictured_error != ok { ret (zero, pictured_error) }
         if enabled { ret (pictured, ok) }
         // Disabled: the whole field at the M3 `on-surface` 38 % content level.
@@ -18173,14 +18882,21 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         var count = 1usize
         if state.focused {
             // looks9: on the chosen row the live list's rectangle is 20 tall in the fill-tinted greys (win_list_dots).
-            let (dots, dots_error) = win_list_dots(a, max_zero(width - 2.0), 20.0)
+            var dot_ground = style.hex(16777215u32)
+            if i == selected && list_focused { dot_ground = style.hex(14281721u32) }
+            let (dots, dots_error) = win_lb_dots(a, paint.rgba(1.0 - dot_ground.red, 1.0 - dot_ground.green, 1.0 - dot_ground.blue, 1.0), 1u32, max_zero(width - 2.0), 19.0)
             if dots_error != ok { ret (zero, dots_error) }
             layers[1usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, dots))
             count = 2usize
         }
         var row_style = style.defaults()
-        row_style.width = style.Length { Percent: 100.0 }
+        // the chosen row's fill runs to the list's inner right line, the other rows stop short of it
+        var row_w = max_zero(width - 3.0)
+        if i == selected && list_focused { row_w = max_zero(width - 2.0) }
+        row_style.width = style.Length { Px: row_w }
         row_style.height = style.Length { Px: 19.0 }
+        // the rows are white on the list's #F0F0F0 face (it shows below the last one)
+        row_style.background = paint.Brush { Solid: style.hex(16777215u32) }
         if i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex(14281721u32) } }
         if t.tokens.palette == .Dark && i == selected && list_focused { row_style.background = paint.Brush { Solid: style.hex_raw(0x0078D7u32) } }
         var stack_style = style.defaults()
@@ -18205,12 +18921,14 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
         i += 1usize
     }
     var view_style = style.defaults()
-    view_style.width = style.Length { Px: max_zero(width - 3.0) }
+    view_style.width = style.Length { Px: max_zero(width - 2.0) }
     view_style.height = style.Length { Px: f32(rows) * 19.0 }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
-    let (lines, lines_error) = win3_lines(a)
+    var shown_rows = options.len
+    if shown_rows > usize(rows) { shown_rows = usize(rows) }
+    let (lines, lines_error) = win_lb_frame(a, f32(shown_rows) * 19.0)
     if lines_error != ok { ret (zero, lines_error) }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
     if stacked_error != ok { ret (zero, TooLarge) }
@@ -18227,6 +18945,65 @@ fn win_list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, opt
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+
+// ---- round 46: the Windows light list box as the 1:1 captures show it ---------------------------------------------------------------
+// v3's list box has a flat sunken edge: a #A0A0A0 line along the top and the left, a #E5E5E5 one inside the right and the foot and a white one
+// outside them (docs/ui/looks/ref/windows-1to1/states/list-box-*): the frame paints over the #F0F0F0 face. The chosen row's fill runs to the inner
+// right line and its XOR focus rectangle, one pixel dots where (x + y + the row's index) is even, is the colour inverse of what it lies on.
+type WinLbDots = struct { ink: paint.Color, parity: u32 }
+
+fn win_lb_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let w = area.width
+    let h = area.height
+    try win3_rect(b, area.x, area.y, w, h, style.hex(15790320u32))
+    try win3_rect(b, area.x, area.y, w - 1.0, 1.0, style.hex(10526880u32))
+    try win3_rect(b, area.x, area.y + 1.0, 1.0, h - 2.0, style.hex(10526880u32))
+    try win3_rect(b, area.x + 1.0, area.y + h - 2.0, w - 2.0, 1.0, style.hex(15066597u32))
+    // the inner right line runs beside the rows only (`shade` is their height); the face shows below them
+    let m = mem.cast[*Win3Lines](ctx)
+    try win3_rect(b, area.x + w - 2.0, area.y + 1.0, 1.0, m.shade, style.hex(15066597u32))
+    try win3_rect(b, area.x + w - 1.0, area.y, 1.0, h, style.hex(16777215u32))
+    ret win3_rect(b, area.x, area.y + h - 1.0, w, 1.0, style.hex(16777215u32))
+}
+
+fn win_lb_frame(a: *mem.Arena, rows_h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[Win3Lines](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = Win3Lines { shade: rows_h }
+    var none: []const widget.Node = zero
+    var fill = style.defaults()
+    fill.width = style.Length { Percent: 100.0 }
+    fill.height = style.Length { Percent: 100.0 }
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_frame_paint, state: widget.bytes_of[Win3Lines](&cells[0usize]) } }, style: fill, children: none }, ok)
+}
+
+fn win_lb_dots_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*WinLbDots](ctx)
+    let w = u32(area.width)
+    let h = u32(area.height)
+    var i = 0u32
+    while i < w {
+        if ((i + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y, 1.0, 1.0, m.ink) }
+        if ((i + h - 1u32 + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(i), area.y + f32(h - 1u32), 1.0, 1.0, m.ink) }
+        i += 1u32
+    }
+    var j = 1u32
+    while j + 1u32 < h {
+        if ((j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x, area.y + f32(j), 1.0, 1.0, m.ink) }
+        if ((w - 1u32 + j + m.parity) & 1u32) == 0u32 { try win3_rect(b, area.x + f32(w - 1u32), area.y + f32(j), 1.0, 1.0, m.ink) }
+        j += 1u32
+    }
+    ret ok
+}
+
+fn win_lb_dots(a: *mem.Arena, ink: paint.Color, parity: u32, w: f32, h: f32) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[WinLbDots](a, 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    cells[0usize] = WinLbDots { ink: ink, parity: parity }
+    var none: []const widget.Node = zero
+    ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&cells[0usize]), measure: win3_measure, paint: win_lb_dots_paint, state: widget.bytes_of[WinLbDots](&cells[0usize]) } }, style: sized_style(w, h), children: none }, ok)
 }
 
 // ---- looks3-e: the Windows dialog font ---------------------------------------------------------
@@ -18643,11 +19420,25 @@ fn windows_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 }
 
 // The frame's four lines (1 unit, #DCDCDC) on explicit outer extents relative to the group's top left.
-type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color }
+type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color, whole: bool, thin: bool }
+
+// Windows light, the true 1:1 captures: a group frame is four one pixel lines of #DCDCDC on whole rows and columns (the 6.35 and 0.65 of the
+// resampled captures are where the lines blurred to). Frames built while this is on take the line pixel that holds their fractional edge.
 
 fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*GroupFrame](ctx)
     let brush = paint.Brush { Solid: g.color }
+    if g.thin { ret looks_x84.thin_frame(b, area.x + g.left, area.y + g.top, area.x + g.right, area.y + g.bottom, g.color) }
+    if g.whole {
+        let first_x = f32(i32(area.x + g.left + 0.001))
+        let first_y = f32(i32(area.y + g.top + 0.001))
+        let last_x = f32(i32(area.x + g.right - 1.0 + 0.001))
+        let last_y = f32(i32(area.y + g.bottom - 1.0 + 0.001))
+        try winpx.fill(b, first_x, first_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, last_y, last_x - first_x + 1.0, 1.0, g.color)
+        try winpx.fill(b, first_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+        ret winpx.fill(b, last_x, first_y + 1.0, 1.0, last_y - first_y - 1.0, g.color)
+    }
     let x = area.x + g.left
     let y = area.y + g.top
     let w = g.right - g.left
@@ -18676,7 +19467,7 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
-    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant) }
+    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: looks_t81.group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)), whole: windows_crisp(t), thin: t.tokens.palette == .Dark && t.tokens.profile == .Windows }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
@@ -18972,11 +19763,18 @@ type Win3Ultra = struct { kind: u32 }
 fn win3_ultra_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let f = mem.cast[*Win3Ultra](ctx)
     let x = area.x
-    let y = area.y
+    var y = area.y
+    // round 85: the dark sheets centre the cell on a half pixel; the rules stay on whole pixels
+    if style.windark_active() { y = f32(i64(area.y + 0.5)) }
     let w = area.width
     let h = area.height
-    let dark = style.hex(5592405u32)
-    let light = style.hex(10526880u32)
+    var dark = style.hex(5592405u32)
+    var light = style.hex(10526880u32)
+    // round 85: the dark strip's rules are #808080 and #9A9A9A (the mapped greys were 2.2 to 2.8 : 1 on the dark page)
+    if style.windark_active() {
+        dark = style.hex_raw(0x808080u32)
+        light = style.hex_raw(0x9A9A9Au32)
+    }
     if f.kind == 0u32 {
         try win3_rect(b, x, y, w, h, style.hex(15790320u32))
         try win3_rect(b, x, y, w, 1.0, dark)
@@ -18994,6 +19792,10 @@ fn win3_ultra_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if f.kind == 1u32 { ret ok }
     // looks5 group d: kind 4, the strip of tabs without pictures (About), sits on another phase: #5A5A5A, #9B9B9B.
     if f.kind == 4u32 {
+        if style.windark_active() {
+            try win3_rect(b, x, y + h - 2.0, w, 1.0, dark)
+            ret win3_rect(b, x, y + h - 1.0, w, 1.0, light)
+        }
         try win3_rect(b, x, y + h - 2.0, w, 1.0, style.hex(5921370u32))
         ret win3_rect(b, x, y + h - 1.0, w, 1.0, style.hex(10197915u32))
     }
@@ -19813,6 +20615,8 @@ fn material_icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: G
             var layer_ink = look.foreground
             if state.pressed { layer_ink = style.color(t.tokens, .OnSurface) }
             look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), layer_ink, state_opacity(t, state))
+            // Flutter keeps the outline colour when an outlined icon button is focused (only the outlined button turns it primary).
+            if state.focus_visible && !state.invalid { look.border = style.color(t.tokens, .Outline) }
         }
     }
     if variant == .Tonal && !toggled {
@@ -20102,14 +20906,28 @@ fn cup_mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         if h < w { r = h * 0.5 }
         ret cup_ring(m, b, cx, cy, r - m.a * 0.5, m.color, m.a)
     }
+    if m.kind == 21u32 {
+        // CupertinoActivityIndicator (cupertino/activity_indicator.dart): eight ticks, each from a third of the radius to the radius,
+        // a fifth of the radius wide with round ends; the alpha ramp 47..147 of 255 runs behind the active tick (b: the turn).
+        var r = w * 0.5
+        if h < w { r = h * 0.5 }
+        let ramp = [8]f32{ 47.0, 47.0, 47.0, 47.0, 72.0, 97.0, 122.0, 147.0 }
+        let active = usize(m.b * 8.0) % 8usize
+        var i = 0usize
+        while i < 8usize {
+            let angle = 6.2831853 * f32(i) / 8.0
+            let dx = math.sin[f32](angle)
+            let dy = 0.0 - math.cos[f32](angle)
+            var color = m.color
+            color.alpha = m.color.alpha * ramp[(i + 8usize - active) % 8usize] / 255.0
+            try cup_line(m, b, cx + dx * (r / 3.0 + m.a * 0.5), cy + dy * (r / 3.0 + m.a * 0.5), cx + dx * (r - m.a * 0.5), cy + dy * (r - m.a * 0.5), color, m.a)
+            i += 1usize
+        }
+        ret ok
+    }
     if m.kind == 20u32 {
-        // The Apple mark, simplified: two shoulders, a waist, a leaf and a bite (`other`: the ground colour).
-        try cup_disc(m, b, x + w * 0.34, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.66, y + h * 0.62, w * 0.34, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.78, w * 0.3, m.color)
-        try cup_disc(m, b, x + w * 0.5, y + h * 0.40, w * 0.18, m.color)
-        try cup_disc(m, b, x + w * 0.62, y + h * 0.12, w * 0.12, m.color)
-        ret cup_disc(m, b, x + w * 0.98, y + h * 0.5, w * 0.17, m.other)
+        // The Apple mark (looks_y84.apple): a traced silhouette with its bite and leaf.
+        ret looks_y84.apple(m.arena, b, x, y + h * 0.03, w, h * 0.94, m.color)
     }
     if m.kind == 19u32 {
         // A bare cross.
@@ -20305,7 +21123,8 @@ fn cupertino_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     var face = style.hexa(0xFFFFFFu32, 1.0)
     var edge = style.hexa(0x000000u32, 0.30)
     if dark {
-        face = style.hexa(0xFFFFFFu32, 0.10)
+        // CupertinoCheckbox dark unchecked: the flat 383838 the ref reads (a 10 % white veil on the sheet ground gave 333335).
+        face = style.hex(0x383838u32)
         edge = style.hexa(0xFFFFFFu32, 0.30)
     }
     if state.pressed && !filled {
@@ -20318,6 +21137,17 @@ fn cupertino_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
         edge = cup_clear()
         edge_w = 0.0
         if state.pressed { face = style.mix(accent, style.hex(0x000000u32), 0.22) }
+    }
+    // CupertinoRadio unselected: a 14 disc, white (grey in dark) with a rim a few percent dark in light and none in dark.
+    if round && !filled {
+        edge = style.hexa(0x000000u32, 0.035)
+        face = style.hexa(0xFFFFFFu32, 1.0)
+        if state.pressed { face = style.hex(0xD9D9D9u32) }
+        if dark {
+            edge = cup_clear()
+            face = style.hex(0x383838u32)
+            if state.pressed { face = style.hex(0x565656u32) }
+        }
     }
     var mark_ink = style.hex(0xFFFFFFu32)
     var words = style.color(t.tokens, .Text)
@@ -20535,6 +21365,17 @@ fn cup_segments(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lab
         let (item, item_error) = pressable(a, item_key, t, item_role, labels[k], look, live, chosen, &actions[k], content)
         if item_error != ok { ret (zero, item_error) }
         items[k] = item
+        // A tab strip (role 19): the runtime insets a tab's ring 3 px, which left a 12 px box through the label; here the ring stays outside the segment
+        if item_role == 19u8 {
+            switch items[k].kind {
+            case .Semantics as item_sem:
+                var ringed_sem = item_sem
+                ringed_sem.focus_inset = -1.0
+                items[k].kind = widget.Kind { Semantics: ringed_sem }
+            default:
+                items[k] = item
+            }
+        }
         k += 1usize
     }
     layers[used] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])))
@@ -20552,7 +21393,7 @@ fn cupertino_segmented(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
     ret (made, made_error)
 }
 
-// The iOS slider: a 4 px track in the fill colour, the accent (minimum track) up to a 28 white thumb with a soft
+// The iOS slider: a 2 px track (Flutter CupertinoSlider) in the fill colour, the accent (minimum track) up to a 28 white thumb with a soft
 // shadow. The runtime's slider element, drawn in no colour, sits over it for the pointer, keys and the tree; its
 // geometry (the thumb centre 8 in, 8 out, from slider_at) is the one painted here.
 fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
@@ -20566,11 +21407,11 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     var rest = style.hexa(0x787880u32, 0.16)
     if dark { rest = style.hexa(0x787880u32, 0.32) }
     let accent = style.color(t.tokens, .Primary)
-    var track = sized_style(width - 16.0, 4.0)
-    track.radius = 2.0
+    var track = sized_style(width - 16.0, 2.0)
+    track.radius = 1.0
     track.background = paint.Brush { Solid: rest }
-    var lit = sized_style(max_zero(centre - 8.0), 4.0)
-    lit.radius = 2.0
+    var lit = sized_style(max_zero(centre - 8.0), 2.0)
+    lit.radius = 1.0
     lit.background = paint.Brush { Solid: accent }
     let state = control_state(t, key, enabled, false)
     let (thumb, thumb_error) = cup_pill_node(a, style.hex(0xFFFFFFu32), style.hex(0x000000u32), 14.0, 1.0, 28.0, 28.0)
@@ -20579,8 +21420,8 @@ fn cupertino_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     let hidden = widget.Slider { value: value, second: value, range: false, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: clear, fill: clear, thumb: clear, change: change, change_second: zero, enabled: enabled, halo: clear, handle: 4.0, tick_on: clear, tick_off: clear }
     let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
     if layers_error != ok { ret (zero, TooLarge) }
-    layers[0usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
-    layers[1usize] = widget.positioned(0u64, 14.0, 12.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
+    layers[0usize] = widget.positioned(0u64, 14.0, 13.0, style.defaults(), widget_one_of(a, widget.box(0u64, track, zero)))
+    layers[1usize] = widget.positioned(0u64, 14.0, 13.0, style.defaults(), widget_one_of(a, widget.box(0u64, lit, zero)))
     layers[2usize] = widget.positioned(0u64, 6.0 + centre - 14.0, 0.0, style.defaults(), widget_one_of(a, thumb))
     layers[3usize] = widget.positioned(0u64, 6.0, 0.0, style.defaults(), widget_one_of(a, widget.slider(key, hidden, sized_style(width, 28.0))))
     var frame_style = sized_style(width + 12.0, 28.0)
@@ -20690,7 +21531,11 @@ fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, v
     sem.label = label
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(1i64))
-        let (made, made_error) = cup_mark(a, 10u32, ink, ink, size * 0.1, turn, size, size)
+        // Flutter's ticks are 3C3C44 (dark EBEBF5) with their own alpha ramp.
+        var tick = style.hex(0x3C3C44u32)
+        if dark { tick = style.hex(0xEBEBF5u32) }
+        if options.content.alpha > 0.0 { tick = options.content }
+        let (made, made_error) = cup_mark(a, 21u32, tick, tick, size * 0.1, turn, size, size)
         if made_error != ok { ret (zero, made_error) }
         node = made
         sem.states = accessibility.STATE_BUSY
@@ -20699,6 +21544,7 @@ fn cupertino_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, v
         var ground = style.hexa(0x787880u32, 0.2)
         if dark { ground = style.hexa(0x787880u32, 0.36) }
         var arc = style.color(t.tokens, .Primary)
+        if options.tone != .Active { arc = progress_ink(t, options.tone) }
         if options.content.alpha > 0.0 { arc = options.content }
         let (made, made_error) = cup_arc_node(a, arc, ground, size * 0.12, clamp_share(value), size)
         if made_error != ok { ret (zero, made_error) }
@@ -20729,8 +21575,8 @@ fn cup_field_edge(t: *const Theme) -> paint.Color {
 }
 
 fn cup_placeholder(t: *const Theme) -> paint.Color {
-    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.3) }
-    ret style.hexa(0x3C3C43u32, 0.3)
+    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.7) }
+    ret style.hexa(0x3C3C43u32, 0.72)
 }
 
 // The clear control of a field: a 17 grey disc with a white cross (iOS clearButtonMode), pressing it tells `owner`
@@ -21008,18 +21854,47 @@ fn cup_step_pill(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.box(0u64, track, zero)
     layers[1usize] = widget.positioned(0u64, 46.5, 8.0, style.defaults(), widget_one_of(a, widget.box(0u64, rule, zero)))
-    layers[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, sized_style(94.0, 32.0), halves[0usize..2usize])
-    ret (widget.stack(0u64, sized_style(94.0, 32.0), layers[0usize..3usize]), ok)
+    // The half holding the keyboard focus is painted last so its ring is not cut by the other half.
+    let (placed, placed_error) = mem.alloc[widget.Node](a, 2usize)
+    if placed_error != ok { ret (zero, TooLarge) }
+    placed[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, left))
+    placed[1usize] = widget.positioned(0u64, 47.0, 0.0, style.defaults(), widget_one_of(a, right))
+    layers[2usize] = placed[0usize]
+    let (rest, rest_error) = mem.alloc[widget.Node](a, 4usize)
+    if rest_error != ok { ret (zero, TooLarge) }
+    rest[0usize] = layers[0usize]
+    rest[1usize] = layers[1usize]
+    rest[2usize] = placed[0usize]
+    rest[3usize] = placed[1usize]
+    ret (widget.stack(0u64, sized_style(94.0, 32.0), rest[0usize..4usize]), ok)
 }
 
-// The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, no value (the app shows it beside).
+// The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, with the value in the body face to its left.
 fn cupertino_stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err) {
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let (pill, pill_error) = cup_step_pill(a, t, key + 1u64, key + 2u64, &shortcuts[0usize].action, &shortcuts[1usize].action, value > low, value < high)
     if pill_error != ok { ret (zero, pill_error) }
+    // The value stands to the pill's left in the body face (UIKit apps show it beside the stepper; a bare pill hid it).
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    let digit_count = write_i64(digits, value)
+    var caption = text_options()
+    caption.role = .Body
+    caption.color = .OnSurface
+    caption.wrap = .None
+    caption.align = .End
+    let (shown, shown_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
+    if shown_error != ok { ret (zero, shown_error) }
+    var fixed = shown
+    fixed.style.min_width = style.Length { Px: 28.0 }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = fixed
+    parts[1usize] = pill
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
     var none: []widget.Node = zero
-    let (made, made_error) = stepped(a, key, t, label, value, pill, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
+    let (made, made_error) = stepped(a, key, t, label, value, row, none, shortcuts, accessibility.ROLE_SPIN_BUTTON)
     ret (made, made_error)
 }
 
@@ -21057,7 +21932,7 @@ fn cupertino_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []
     var each: f32 = 80.0
     if options.width > 0.0 { each = options.width / f32(labels.len) }
     var face = style.hex(0xF9F9F9u32)
-    var quiet = style.hex(0x8E8E93u32)
+    var quiet = style.hex(0x6C6C70u32)
     var hair = style.hexa(0x000000u32, 0.30)
     if dark {
         face = style.hex(0x1D1D1Du32)
@@ -21376,7 +22251,12 @@ fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, labe
     var face = cup_clear()
     var ink = style.cup_alpha(style.color(t.tokens, .Text), 0.85)
     var muted = style.color(t.tokens, .TextMuted)
-    if destructive { ink = style.color(t.tokens, .Error) }
+    if destructive {
+        ink = style.color(t.tokens, .Error)
+        // The label is 13 pt text: the accessible red holds 4.5:1 (systemRed is 3.3:1 on the menu face).
+        ink = style.hex(0xD70015u32)
+        if t.tokens.palette == .Dark { ink = style.hex(0xFF6961u32) }
+    }
     if !enabled {
         ink = style.cup_alpha(style.color(t.tokens, .Text), 0.25)
         muted = ink
@@ -21450,6 +22330,12 @@ fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, labe
 // ---- end the Cupertino look (block 5) ---------------------------------------------------------------
 
 // The selected tab's frame: v3's near-black #2B2B2B; in the Windows dark look a #9D9D9D line (black on the dark strip would be invisible, white too harsh).
+// round 85: v3's null prompt is clGray #808080 (3.95 : 1 on white); the light look draws #6B6B6B (5.3 : 1 on white, 4.8 : 1 on the dialog face), the dark map keeps #808080
+fn win_placeholder_ink() -> paint.Color {
+    if style.windows_dark_on() { ret win_rgb(128u32, 128u32, 128u32) }
+    ret win_rgb(107u32, 107u32, 107u32)
+}
+
 fn win_tab_edge() -> paint.Color {
     if style.windark_active() { ret style.hex_raw(0x9D9D9Du32) }
     ret style.hex(2829099u32)
@@ -23767,7 +24653,7 @@ fn chip_icon_stroke(t: *const Theme) -> f32 {
 fn set_material_icons(on: bool) { looks_material_icons = on }
 
 fn material_has_icon(kind: GlyphKind) -> bool {
-    ret kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
+    ret kind == .Share || kind == .Archive || kind == .Delete || kind == .Cross || kind == .ChevronLeft || kind == .ChevronRight || kind == .Search || kind == .Menu || kind == .Alert || kind == .Person || kind == .Edit || kind == .Add || kind == .MoreVert || kind == .Settings || kind == .Refresh || kind == .Picture
 }
 
 fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bool, err) {
@@ -23815,6 +24701,12 @@ fn material_icon_paint(g: *Glyph, b: *scene.Builder, area: geometry.Rect) -> (bo
         try matglyph.mat_refresh(&builder, x, y, w, h)
     } else if g.kind == .Picture {
         try matglyph.mat_image(&builder, x, y, w, h)
+    } else if g.kind == .Share {
+        try matglyph_z87.mat_share(&builder, x, y, w, h)
+    } else if g.kind == .Archive {
+        try matglyph_z87.mat_archive(&builder, x, y, w, h)
+    } else if g.kind == .Delete {
+        try matglyph_z87.mat_delete(&builder, x, y, w, h)
     } else {
         made = false
     }

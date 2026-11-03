@@ -1,0 +1,924 @@
+{
+ "radio_group": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/radio_group.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Compared to Flutter CupertinoRadio (shapes only, lane e, round 72): unselected is now a 14 px disc, white with a 3.5 percent rim (light) and flat 383838 without rim (dark) as the ref; selected 14 px disc, 4 px ring, 6 px dot as ref. Dark selected 0a84ff against ref 3264d7 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/radio_group.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Compared to Flutter CupertinoRadio (shapes only, lane e, round 72): unselected is now a 14 px disc, white with a 3.5 percent rim (light) and flat 383838 without rim (dark) as the ref; selected 14 px disc, 4 px ring, 6 px dot as ref. Dark selected 0a84ff against ref 3264d7 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/image_combo_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Disabled value 1.8:1 and the faint picture chip are the only text under 4.5:1 (disabled, exempt); the macOS pop-up button, open list and focus ring all draw. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.8:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/image_combo_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 16 cells measured on image_combo_box.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.2:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 208 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Pictures are the drawn glyph stand-ins of the sheet, not a real image list",
+     "The menu is not widened to its longest row (long names clip)",
+     "Hover on the closed button is the faint bezel change only",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/date_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 14 cells measured on date_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 4.0:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/date_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 14 cells measured on date_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.8:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 212 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The iOS compact picker (a grey date capsule) and the macOS stepper date field are not drawn: this is the DevExpress edit-plus-drop-button idiom in Apple colours",
+     "Today is not marked with an accent ring",
+     "The chosen-day disc is the shared 34 squircle stand-in (circular arcs)",
+     "Month and year picking (wheels) not drawn",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/mask_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge (34 high), r7 inside, dark edge 464649, fill 2c2c2e; ref 36 high, 2 px edge, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/mask_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge (34 high), r7 inside, dark edge 464649, fill 2c2c2e; ref 36 high, 2 px edge, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 20 cells measured on mask_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 205 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "memo": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/memo.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 197 x 97 box, 2 px soft edge, fill ffffff (dark 2c2c2e on 1c1c1e, ref dark black); ring 3 px, none in ref; macOS field against CupertinoTextField 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/memo.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: 197 x 97 box, 2 px soft edge, fill ffffff (dark 2c2c2e on 1c1c1e, ref dark black); ring 3 px, none in ref; macOS field against CupertinoTextField 250 x 36, 2 px e6e6e6, r5. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 15 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge, trailing 28 x 27 button r2 f0f0f1 (no ref); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 168 x 32 inside a 1 px dcdcdd edge, trailing 28 x 27 button r2 f0f0f1 (no ref); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/token_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 298 x 32 inside a 1 px dcdcdd edge, chips 24 high d6eaff r12 (no Flutter equivalent); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/token_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino textfield, shapes only: field 298 x 32 inside a 1 px dcdcdd edge, chips 24 high d6eaff r12 (no Flutter equivalent); ref 36 high, 2 px edge. Recorded AppKit deviations in flutter-compare-f.md. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 16 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 211 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/check_list_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoCheckbox (shapes only): Neper draws the iOS list multi-select circle, 22 px, the ref a 14 px rounded square; recorded as the HIG list idiom. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/check_list_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoCheckbox (shapes only): Neper draws the iOS list multi-select circle, 22 px, the ref a 14 px rounded square; recorded as the HIG list idiom. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/group_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: macOS box, iOS section, disabled, invalid and empty render; the long caption of the iOS cell runs into the next cell (sheet geometry shared by all looks, not changed). Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.1:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The macOS box title sits above the box instead of in a notch (NSBox style 'above top')",
+     "Fill and hairline alphas of the macOS box are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/group_box.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 18 cells measured on group_box.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 209 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The macOS box title sits above the box instead of in a notch (NSBox style 'above top')",
+     "Fill and hairline alphas of the macOS box are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "splitter": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/splitter.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/splitter.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | HIG Split views (cited, read): \"The thin divider measures one point in width\". The sheet draws a divider about 6 px wide with a grip (the thick idiom, uncited) and no 1 pt thin divider, so the cited number is not met. Not raised; a thin divider cell would be the next step. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 1 cells measured on splitter.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The harness hover and press do not reach the divider (the same in the Neper sheet), so the dimple and the accent line of a held divider are drawn by code but not shown in a PNG",
+     "The thick-divider dimple is the existing 4 x 44 rounded grip, not Apple's pane splitter grip",
+     "The pane keeps its own focus ring while the divider is focused (a second line above)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/status_bar.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 7 cells measured on status_bar.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.1:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Panel dividers and the size grip are not drawn (macOS has neither)",
+     "Item hover is drawn so the state is visible (macOS status text is not pressable)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/status_bar.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 6 cells measured on status_bar.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 4.2:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 206 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Panel dividers and the size grip are not drawn (macOS has neither)",
+     "Item hover is drawn so the state is visible (macOS status text is not pressable)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "menu_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/menu_bar.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG The menu bar: \"The menu bar's height is 24 pt\" (cited, read); the sheet's bar is 24 high (rows 32 to 55, light and dark), matches. Not raised: the Apple logo is drawn from discs and is visibly not the glyph, the open-title chip colour and radius have no published number, the hover and pressed cells draw a bar clipped narrower than the rest cell (sheet geometry, not measured further), no open menu is shown. The macOS menu row height (22) and titles' 13 pt rest on memory of AppKit (13 pt is the HIG macOS Body size, cited). | HIG The menu bar: \"The menu bar's height is 24 pt\" (cited, read); the sheet's bar is 24 high (rows 32 to 55, light and dark), matches. Not raised: the Apple logo is drawn from discs and is visibly not the glyph, the open-title chip colour and radius have no published number, the hover and pressed cells draw the bar 372 wide against 700 (shared sheet geometry), no open menu is shown. The macOS menu row height (22) and titles' 13 pt rest on memory of AppKit (13 pt is the HIG macOS Body size, cited). | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 5 cells measured on menu_bar.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "The Apple logo is a drawn approximation (discs), not the glyph",
+     "Shortcuts are written as Cmd+ words, not command symbols",
+     "The title chip colour is an approximation of the menu-bar highlight",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/menu_bar.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | HIG The menu bar: \"The menu bar's height is 24 pt\" (cited, read); the sheet's bar is 24 high (rows 32 to 55, light and dark), matches. Not raised: the Apple logo is drawn from discs and is visibly not the glyph, the open-title chip colour and radius have no published number, the hover and pressed cells draw a bar clipped narrower than the rest cell (sheet geometry, not measured further), no open menu is shown. The macOS menu row height (22) and titles' 13 pt rest on memory of AppKit (13 pt is the HIG macOS Body size, cited). | HIG The menu bar: \"The menu bar's height is 24 pt\" (cited, read); the sheet's bar is 24 high (rows 32 to 55, light and dark), matches. Not raised: the Apple logo is drawn from discs and is visibly not the glyph, the open-title chip colour and radius have no published number, the hover and pressed cells draw the bar 372 wide against 700 (shared sheet geometry), no open menu is shown. The macOS menu row height (22) and titles' 13 pt rest on memory of AppKit (13 pt is the HIG macOS Body size, cited). | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 5 cells measured on menu_bar.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 208 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The bar is opaque: the real bar is a translucent material over the wallpaper",
+     "The Apple logo is a drawn approximation (discs), not the glyph",
+     "Shortcuts are written as Cmd+ words, not command symbols",
+     "The title chip colour is an approximation of the menu-bar highlight",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/tree_list.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 49 cells measured on tree_list.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The focused selection is an accent tint with dark text: row text is built by the caller and is not recoloured white as AppKit does",
+     "No icons in the rows (a source list has SF Symbols)",
+     "Columns, headers and the v3 filter list are not shown (see data_grid for the table form)",
+     "Indentation is 20 per level (AppKit uses about 14)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/tree_list.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 49 cells measured on tree_list.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 208 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The focused selection is an accent tint with dark text: row text is built by the caller and is not recoloured white as AppKit does",
+     "No icons in the rows (a source list has SF Symbols)",
+     "Columns, headers and the v3 filter list are not shown (see data_grid for the table form)",
+     "Indentation is 20 per level (AppKit uses about 14)",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/vertical_grid.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): the inset grouped rows were 44 plus a 0.5 hairline drawn as 45 px apart; they are now 44 px apart (UIKit draws the separator inside the cell), section of 6 rows 264 = 6 x 44. Cited: HIG Buttons, hit region at least 44 x 44 pt; HIG Typography iOS Body 17 and Footnote 13. UITableView.rowHeight is documented as automaticDimension (no number), so the 44 row, the 10 pt section corner and the 16 pt insets rest on memory of UIKit and are unverified: review is the cap. | Round 80 (s): the inset grouped rows were 44 plus a 0.5 hairline drawn as 45 px apart; they are now 44 px apart (UIKit draws the separator inside the cell), section of 6 rows 264 = 6 x 44. Cited: HIG Buttons, hit region at least 44 x 44 pt; HIG Typography iOS Body 17 and Footnote 13. UITableView.rowHeight is documented as automaticDimension (no number), so the 44 row, the 10 pt section corner and the 16 pt insets rest on memory of UIKit and are unverified: review is the cap. | ROUND 78 (n): Viewed: inset grouped sections open and shut render; the pairs under the floor are the white section card on the f2f2f7 ground (1.1:1, no edge on iOS) and secondary values. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 13 cells under the floor (text 4.5:1, other UI 3:1; lowest 2.9:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Editors are plain text at rest; the focused row's editor (field, combo, ellipsis) is not styled in this sheet",
+     "Section headers are written in capitals in the data, not by the control",
+     "No trailing disclosure chevron on rows",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/vertical_grid.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): the inset grouped rows were 44 plus a 0.5 hairline drawn as 45 px apart; they are now 44 px apart (UIKit draws the separator inside the cell), section of 6 rows 264 = 6 x 44. Cited: HIG Buttons, hit region at least 44 x 44 pt; HIG Typography iOS Body 17 and Footnote 13. UITableView.rowHeight is documented as automaticDimension (no number), so the 44 row, the 10 pt section corner and the 16 pt insets rest on memory of UIKit and are unverified: review is the cap. | Round 80 (s): the inset grouped rows were 44 plus a 0.5 hairline drawn as 45 px apart; they are now 44 px apart (UIKit draws the separator inside the cell), section of 6 rows 264 = 6 x 44. Cited: HIG Buttons, hit region at least 44 x 44 pt; HIG Typography iOS Body 17 and Footnote 13. UITableView.rowHeight is documented as automaticDimension (no number), so the 44 row, the 10 pt section corner and the 16 pt insets rest on memory of UIKit and are unverified: review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on vertical_grid.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Editors are plain text at rest; the focused row's editor (field, combo, ellipsis) is not styled in this sheet",
+     "Section headers are written in capitals in the data, not by the control",
+     "No trailing disclosure chevron on rows",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/data_grid.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: list and grouped forms with the filter row, stripes, accent row, sort chevron, footer; the pairs under the floor are the secondary header and filter hint. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 16 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.4:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/data_grid.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: list and grouped forms, accent row, stripes, footer; secondary header and filter hint are the only low pairs. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 illegible words.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "switch": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/switch.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: knob 26 (ref 26), on track 34c759 (dark 30d158) equal, off dedee4 against eaeaeb (dark 39393d against 262629). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 51 x 31 track at 1x and 1.5x, 27 pt thumb, systemGreen on, secondarySystemFill off, pressed, focus, disabled. UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/switch.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: knob 26 (ref 26), on track 34c759 (dark 30d158) equal, off dedee4 against eaeaeb (dark 39393d against 262629). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 51 x 31 track at 1x and 1.5x, 27 pt thumb, systemGreen on, secondarySystemFill off, pressed, focus, disabled. UISwitch: 51 x 31 capsule, systemGreen when on, tertiary grey when off, 27 white thumb with a soft shadow; hover, pressed (wider thumb), focus ring, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "slider": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/slider.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: track 2 px (fixed from 4, ref 2), thumb 26 (ref 26 to 27), accent 007aff (dark 0a84ff) equal, rest track dedee4 against e4e4e6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 4 pt track, round 28 pt thumb at 0 and 100 %, focus, disabled. UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/slider.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: track 2 px (fixed from 4, ref 2), thumb 26 (ref 26 to 27), accent 007aff (dark 0a84ff) equal, rest track dedee4 against e4e4e6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 4 pt track, round 28 pt thumb at 0 and 100 %, focus, disabled. UISlider: 4 tall track, accent minimum side, white 27 thumb with shadow; hover, dragged, focus, disabled. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "stepper": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 63 (x): the Cupertino stepper shows its value to the left of the pill. Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 94 x 32 pill, 8 pt radius, hover, pressed, focus and disabled states. UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 63 (x): the Cupertino stepper shows its value to the left of the pill. Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 94 x 32 pill, 8 pt radius, hover, pressed, focus and disabled states. UIStepper: 94 x 32 tertiary pill with accent plus and minus and a divider; hover and pressed half, bound states (30 % glyph); also the spin box (field plus stepper) on the same sheet. Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/search_field.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: 220 x 36 r10 against 300 x 36 r9, fill e3e3e9 against efeff0 (flattened translucent fill). Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 36 pt high, 10 pt radius, tertiary fill, secondaryLabel placeholder and glyph, focus, disabled. UISearchBar field: 36 tall, 10 round tertiary fill, magnifier and Search placeholder, clear button once typed, halo on focus, disabled.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/search_field.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 74 (h): compared to Flutter CupertinoSearchTextField dark (shapes only): ours 220 x 36 fill 323236, ref 300 x 36 fill 1c1c1f on a black ground. Both are the same token, tertiary fill 767680 at 24 percent (ref: 24 percent over 000000 is 1c1c1f; the same token over our sheet ground 1c1c1e gives 323236 exactly, computed). The 22 level difference is the ground (Flutter systemBackground dark is black, ours is the 1c1c1e grouped ground), not the fill; width and r10 against r9 as the light note. Recorded in flutter-compare-h.md for dark as well as light.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): bar now transparent with no hairline at rest as the ref (hairline and face only when scrolled); title centre 0.5 px from the 44 pt bar centre (ref 22), trailing action 20 from the edge (ref 21). Back chevron inset 19 against 30 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): bar now transparent with no hairline at rest as the ref (hairline and face only when scrolled); title centre 0.5 px from the 44 pt bar centre (ref 22), trailing action 20 from the edge (ref 21). Back chevron inset 19 against 30 recorded in flutter-compare-e.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "tab_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 77 (m, compared to Flutter CupertinoTabBar, shapes only, docs/ui/looks/flutter-compare-m.md): the 'bar' cells: face f9f9f9 equal, hairline d2d2d3 against d3d3d3, 49 pt bar plus hairline = Flutter's 50, 10 pt labels, accent 007aff. Recorded deviations: icon box 25 (HIG) against Flutter's 30, inactive 8e8e93 (HIG systemGray) against b7b7b7. The macOS strip cells have no Flutter counterpart and are not measured (page_control stays review).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | ROUND 77 (m, compared to Flutter CupertinoTabBar, shapes only, docs/ui/looks/flutter-compare-m.md): the 'bar' cells: face 1d1d1d against 1b1b1b, hairline 2f2f30 where Flutter's dark bar shows none, 49 pt bar plus hairline = Flutter's 50, 10 pt labels, accent 007aff. Recorded deviations: icon box 25 (HIG) against Flutter's 30, inactive 8e8e93 (HIG systemGray) against b7b7b7. The macOS strip cells have no Flutter counterpart and are not measured (page_control stays review).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "button": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button.png",
+    "notes": "AUDIT 42 (3): held at matched. Pills keep their top and bottom edges (rows 44 to 74 at 1x), only the left and right edges move 1 px each (94 to 92 wide, label 2 px narrower, centred); fills equal the Flutter fills (filled 007aff light and 0a84ff dark, gray e5e5ea / 2c2c2e against ours e3e3e9 / 323236, unchanged by this commit). Viewed all 8 groups, light and dark: no clipping. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | AUDIT 41 (6), superseded by round 82 v: the labels asking weight 600 now draw Segoe UI Semibold (audit 42 viewed button, alert_dialog and dialog, light and dark). | ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, light): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 007aff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button.png",
+    "notes": "AUDIT 42 (3): held at matched. Pills keep their top and bottom edges (rows 44 to 74 at 1x), only the left and right edges move 1 px each (94 to 92 wide, label 2 px narrower, centred); fills equal the Flutter fills (filled 007aff light and 0a84ff dark, gray e5e5ea / 2c2c2e against ours e3e3e9 / 323236, unchanged by this commit). Viewed all 8 groups, light and dark: no clipping. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | AUDIT 41 (6), superseded by round 82 v: the labels asking weight 600 now draw Segoe UI Semibold (audit 42 viewed button, alert_dialog and dialog, light and dark). | ROUND 74 (h): compared to Flutter CupertinoButton (shapes only, own measurement, dark): the Flutter-equivalent size is the large variant: ours 112 x 50 r12.2 against ref filled 86 x 52 r12.6 (width is the label, Roboto against ours; height 50 is the UIKit large configuration, Flutter 52 comes from its padding and Roboto line height); fills filled 0a84ff equal at rest. The default medium button is 94 x 34 r9.4 (UIButton.Configuration medium) and has no Flutter counterpart: kept per round 26 and HIG, whose 44 pt minimum is a touch-target rule that the visible button does not need to fill (AppKit regular is 22); the pointer area is the 34 px box, no hit slop (recorded). Deviations: tinted ours 15 percent tint (light cee0f8 on f2f2f7) against Flutter 12 percent on white (e0efff), dark about 22 percent against 26 percent; pressed darkens (iOS) where Flutter fades to 40 percent opacity; disabled fills are grey on our ground (dcdce2) against Flutter's flat efeff0; ground differences as flutter-compare-h.md.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Radii 12/10/8 by size and 5 for the 22 bezel are approximations",
+     "Pressed and hover shades, disabled colours and the bezel face, hairline and shadow are approximated",
+     "Picture, split and toggle buttons are not styled (fall back to Neper)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)",
+     "Button labels asking weight 600 now draw Segoe UI Semibold (round 82 v); button widths are 2 px narrower, not compared with the Roboto-driven Flutter widths"
+    ]
+   }
+  }
+ },
+ "label": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/label.png",
+    "notes": "AUDIT 41 (5): held at matched. Own comparer, ink coverage of 'Deck Properties' in the committed label.png (light and dark): 505 and 504 against PIL Segoe UI Semibold 17 px 514 (Regular 391, Bold 672), width 119 against 121 at coverage 0.5; the cell is Semibold. (Superseded by round 82 v: every Cupertino sheet now draws weight 600 as Segoe UI Semibold.) | ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for every Cupertino sheet since round 82 v): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) draw it too since round 82 v; only weight 700 draws Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in every Cupertino sheet colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/label.png",
+    "notes": "AUDIT 41 (5): held at matched. Own comparer, ink coverage of 'Deck Properties' in the committed label.png (light and dark): 505 and 504 against PIL Segoe UI Semibold 17 px 514 (Regular 391, Bold 672), width 119 against 121 at coverage 0.5; the cell is Semibold. (Superseded by round 82 v: every Cupertino sheet now draws weight 600 as Segoe UI Semibold.) | ROUND 81 (u, flutter-compare-u.md; shapes only): the Headline 17 semibold cell is now drawn in Segoe UI Semibold (seguisb.ttf, registered for every Cupertino sheet since round 82 v): ink coverage 504 against 514 for PIL Segoe UI Semibold at 17 px (regular 391, bold 672), width 121 against 121; at 1.5x 1137 against 1163, width 180 against 181. Sizes were already within 1 px of the cited HIG type sizes (round 80 s). Recorded: Segoe UI stands for SF Pro; other Cupertino controls that ask for weight 600 (buttons, segmented) draw it too since round 82 v; only weight 700 draws Segoe UI Bold. | AUDIT 40 (3): downgraded to review. Held: the sizes (17, 22, 34, 13, 12; ink heights within 1 px of PIL Segoe UI at the cited size in all 12 cells, widths within 4 px) and the HIG Typography numbers are the published ones (Body 17, Headline 17 semibold, Title 2 22, Large Title 34, Footnote 13, Caption 1 12). Fails: the cell 'Headline 17 semibold' (Deck Properties) is drawn in Segoe UI Regular, not semibold and not bold: summed ink coverage 381 against 391 for Regular, 514 for Semibold, 672 for Bold at 17 px, ink width 117 against 118 / 122 / 127. The note's deviation line (semibold is drawn in Segoe UI Bold) is true only for Large Title (Library: 1168 against 1167 for Bold). A cited property of the row is not reproduced and the stated deviation is wrong for it. Raise when the Headline cell is semibold or bold and the deviation line says what is drawn. | ROUND 80 (s), shapes only (type sizes; the typeface is Segoe UI, a stand-in for SF). Cited, read from the published HIG Typography page (HIG pages read from developer.apple.com/tutorials/data/design/human-interface-guidelines/typography): iOS Body 17, Headline 17 semibold, Title 2 22, Large Title 34 bold, Footnote 13, Caption 1 12; macOS Body 13. Measured with an own comparer: the ink box of each of the 12 cells against Segoe UI rendered by PIL at the cited size, same string: heights equal within 1 px in every cell (17: 14 vs 13, 22: 18 vs 17, 34: 35 vs 34, 13: 10 to 14 vs 9 to 13, 12: 12 vs 12), widths 0 to 4 px narrower (Library 110 vs 114, Deck Properties 117 vs 122: hinting and the bold stand-in). Light and dark identical, all cells viewed. Colours are not claimed: the HIG now lists iOS 26 system colours (blue 0088FF) where this look follows iOS 17 / macOS 14 (007AFF), and it publishes no label or secondary label values. flutter-compare-s.md.",
+    "gaps": [
+     "Recorded deviations: Segoe UI replaces SF Pro; semibold is drawn in Segoe UI Semibold in every Cupertino sheet colours are iOS 17 / macOS 14 values, the current HIG lists iOS 26 values (system blue 0088FF)",
+     "Link underline and mnemonics are not drawn (Apple links are not underlined)",
+     "Text styles are the iOS defaults; macOS uses 13 pt for body (shown in one cell)",
+     "Corners are circular arcs, not the continuous curve; no blur or vibrancy"
+    ]
+   }
+  }
+ },
+ "swipe_actions": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/swipe_actions.png",
+    "notes": "AUDIT 42 (2): new defect from the narrower label. In the revealed cell \"Message from Ada\" used to wrap to two lines against the Archive tile; it now fits on one line and its last glyph touches the tile with no gap (viewed, 1x, light and dark). Heights unchanged. Review stays the ceiling; raise only with a gap or a wrap. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Audit 42: \"Message from Ada\" runs flush against the Archive tile in the revealed cell (semibold narrowed it from a two-line wrap to one line)",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/swipe_actions.png",
+    "notes": "AUDIT 42 (2): new defect from the narrower label. In the revealed cell \"Message from Ada\" used to wrap to two lines against the Archive tile; it now fits on one line and its last glyph touches the tile with no gap (viewed, 1x, light and dark). Heights unchanged. Review stays the ceiling; raise only with a gap or a wrap. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (2 px at 1x, 3 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 sheet h_swipe_actions: row with a More button, revealed Archive and Delete tiles; rest, revealed, hover, focus.",
+    "gaps": [
+     "Audit 42: \"Message from Ada\" runs flush against the Archive tile in the revealed cell (semibold narrowed it from a two-line wrap to one line)",
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ]
+   }
+  }
+ },
+ "segmented_control": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/segmented_control.png",
+    "notes": "AUDIT 42 (3): held at matched. The track keeps its height and y (32 at 1x); the selected thumb and the separator move 3 px at 1x, 5 px at 1.5x. Viewed light and dark: labels centred, the separator still hugs \"Month\" as before the font change. Flutter segmented-sliding thumb 174 x 32 (ref) is a different width model and was never comparable. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (3 px at 1x, 5 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (3 px at 1x, 5 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 72 (f): measured own comparer vs ref/flutter/cupertino, shapes only: container 181 x 32 against sliding 165 x 32 (label width), thumb 69 x 28 r7 against 57 x 28 r6. Recorded deviations in flutter-compare-f.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 32 pt track in tertiary fill, pressed, focus, disabled states. UISegmentedControl / NSSegmentedControl: tertiary fill track, raised white (grey Dark) selected segment, separators, hover and pressed segment, disabled segment.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v), not SF Semibold, so widths are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/segmented_control.png",
+    "notes": "AUDIT 42 (3): held at matched. The track keeps its height and y (32 at 1x); the selected thumb and the separator move 3 px at 1x, 5 px at 1.5x. Viewed light and dark: labels centred, the separator still hugs \"Month\" as before the font change. Flutter segmented-sliding thumb 174 x 32 (ref) is a different width model and was never comparable. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (3 px at 1x, 5 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (3 px at 1x, 5 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 74 (h): compared to Flutter CupertinoSlidingSegmentedControl dark (shapes only): container 181 x 32 fill 323236 against ref 165 x 32 fill 1c1c1f on black; same token (tertiary fill 767680 at 24 percent), different ground (ours 1c1c1e), computed 323236; thumb raised 636366 equal to the ref. Width is the labels, thumb 69 x 28 against 57 x 28; recorded in flutter-compare-h.md for dark as well as light.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v), not SF Semibold, so widths are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/markdown_view.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (0 px at 1x, 7 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (0 px at 1x, 7 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple HIG tokens (style.cupertino), derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/markdown_view.png",
+    "notes": "ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (0 px at 1x, 7 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (0 px at 1x, 7 px at 1.5x (audit 42 measured), ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Round 62 (d) sheet: the viewer is a model, so the sheet's host builds a real widget tree from its nodes (control.paragraph of the rich spans, list markers, quote bar, code box, table cells, rule). Cells: document, narrow wrap, plus markdown_view_links for link hover, focus, pressed and display-only. Derived: Apple dark tokens, derived.",
+    "gaps": [
+     "The viewer has no widget of its own: the host in examples/looks/markdown_view.e is the sheet's, so this shows the shared tokens, not a shipped control",
+     "The model's grid line breaks are not used; paragraphs wrap by their own shaped text",
+     "Link hover, focus and pressed come from control.paragraph; in some looks they are not visibly different",
+     "No platform renders Markdown natively: nothing was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens"
+    ]
+   }
+  }
+ },
+ "alert_dialog": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/alert_dialog.png",
+    "notes": "AUDIT 42 (3): held at matched. Own comparer (flat 5 x 5 components, light and dark, 1x and 1.5x): the committed new PNG and the one re-rendered from master are byte for byte equal; against the pre-font render the card, rows and rules do not move at all (0 px), only glyphs differ (1428 px at 1x). Title and button text viewed, no clipping; the \"Keep\" default action stays Bold (weight 700) on purpose. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/alert_dialog.png",
+    "notes": "AUDIT 42 (3): held at matched. Own comparer (flat 5 x 5 components, light and dark, 1x and 1.5x): the committed new PNG and the one re-rendered from master are byte for byte equal; against the pre-font render the card, rows and rules do not move at all (0 px), only glyphs differ (1428 px at 1x). Title and button text viewed, no clipping; the \"Keep\" default action stays Bold (weight 700) on purpose. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   }
+  }
+ },
+ "dialog": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/dialog.png",
+    "notes": "AUDIT 42 (3): held at matched. 17 and 21 flat components move 0 px against the pre-font render (light and dark, 1x and 1.5x); viewed all five cells, titles wrap as before, nothing clipped. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill f4f4f6 against f1f1f1 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/dialog.png",
+    "notes": "AUDIT 42 (3): held at matched. 17 and 21 flat components move 0 px against the pre-font render (light and dark, 1x and 1.5x); viewed all five cells, titles wrap as before, nothing clipped. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 78 (n): Compared to Flutter CupertinoAlertDialog (shapes only, own comparer against ref/flutter/cupertino alertdialog-open@1x; Cupertino text is Roboto in the ref): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), side-by-side buttons split by a 1 px rule at the middle, corner profile reaches full coverage at 10 / 13 px along the top / left edge (ref 9 / 12), so the radius is 14 within 1 px. Fill 2c2c2e against 242424 (the HIG elevated surface; the ref composites a translucent card over its scrim), so the colour is not claimed. Recorded: the sheet shows the card on the page with no scrim, so the card is only 2 levels off the ground in light. Pressed row not compared (ref has none). flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 270 pt alert, 14 pt radius (Dark), 44 pt buttons, pressed row. Audit 3: 8 cells measured on dialog.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 202 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Blur material not reproduced",
+     "Form dialogs with other content get the same card",
+     "macOS NSAlert and sheets not drawn",
+     "Press on the right button of a pair is not captured (cell centre)",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/large_title.png",
+    "notes": "AUDIT 42 (3): held at matched. Flat components move 0 px against the pre-font render; viewed in the navigation sheets, title and inline cells intact. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/large_title.png",
+    "notes": "AUDIT 42 (3): held at matched. Flat components move 0 px against the pre-font render; viewed in the navigation sheets, title and inline cells intact. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | Compared to Flutter CupertinoNavigationBar (shapes only, lane e, round 72): the ref draws only the inline row (no large title), so only the bar row was compared: transparent with no hairline at rest as the ref, face and hairline when scrolled. The 34 pt large title has no counterpart, recorded in flutter-compare-e.md.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   }
+  }
+ },
+ "navigation_stack": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_stack.png",
+    "notes": "AUDIT 42 (5): the committed picture was stale (it drew a #FAFAFB nav bar face and hairline at rest; the code draws the bar transparent at rest, flutter-compare-e.md) and is regenerated; the title is now semibold. Status unchanged. | Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_stack.png",
+    "notes": "AUDIT 42 (5): the committed picture was stale (it drew a #FAFAFB nav bar face and hairline at rest; the code draws the bar transparent at rest, flutter-compare-e.md) and is regenerated; the title is now semibold. Status unchanged. | Three depths and a focused back button under the app bar of each look. Derived. Linux gets a header-bar back button and Cupertino a back label of the previous title (hooks added this round).",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ]
+   }
+  }
+ },
+ "navigation_split": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/navigation_split.png",
+    "notes": "AUDIT 42 (5): the committed picture was stale (it drew a #FAFAFB nav bar face and hairline at rest; the code draws the bar transparent at rest, flutter-compare-e.md) and is regenerated; the title is now semibold. Status unchanged. | Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/navigation_split.png",
+    "notes": "AUDIT 42 (5): the committed picture was stale (it drew a #FAFAFB nav bar face and hairline at rest; the code draws the bar transparent at rest, flutter-compare-e.md) and is regenerated; the title is now semibold. Status unchanged. | Wide (side by side), compact list and compact detail under its back bar. Derived from the library's split.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ]
+   }
+  }
+ }
+}

@@ -74,7 +74,9 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
         if i != 0usize { x = 350.0 - 188.0 }
-        let (shifted, shifted_error) = placed(a, menu_bar, x, 0.0, 700.0, 24.0)
+        let (sized, sized_error) = placed(a, menu_bar, 0.0, 0.0, 400.0, 24.0)
+        if sized_error != ok { ret (0usize, sized_error) }
+        let (shifted, shifted_error) = placed(a, sized, x, 0.0, 700.0, 24.0)
         if shifted_error != ok { ret (0usize, shifted_error) }
         cells[i] = looks.Cell { caption: captions[i], node: shifted, drive: drive }
         i += 1usize

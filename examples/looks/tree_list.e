@@ -17,6 +17,7 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.gridlook as gl
 use e.ui.looks
+use e.ui.looks_x85
 use e.ui.widget
 use e.ui.wintile
 use e.ui.wintreeicon
@@ -267,7 +268,7 @@ fn build_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *
         *out = widget.spacer(0u64, 1.0)
         ret ok
     }
-    let (made, made_error) = control.colored_text(a, 0u64, name_of(node), t, control.text_options(), gl.rgb(ink_of(node)))
+    let (made, made_error) = control.colored_text(a, 0u64, name_of(node), t, control.text_options(), looks_x85.lift_dark(gl.rgb(ink_of(node))))
     if made_error != ok { ret made_error }
     *out = made
     // round 15: an edition's name starts 2 px further right in the live capture

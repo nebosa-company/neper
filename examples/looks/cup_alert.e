@@ -69,7 +69,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         let (words_node, words_error) = message(a, t, words)
         if words_error != ok { ret (0usize, words_error) }
-        let (card, card_error) = overlay.cupertino_alert_card(a, u64((i + 1usize) * 100usize), t, title, words_node, buttons)
+        let (card, card_error) = overlay.cupertino_alert_card(a, u64((i + 1usize) * 100usize), t, title, words_node, buttons, false)
         if card_error != ok { ret (0usize, card_error) }
         var drive: looks.Drive = .None
         if i == 4usize { drive = .Press }

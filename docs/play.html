@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Try Neper in your browser</title>
+  <meta name="description" content="Edit Neper source and compile it to WebAssembly in your browser with neper.wasm, the compiler itself running as WebAssembly. Nothing is uploaded.">
+  <link rel="canonical" href="https://neper.dev/play.html">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Try Neper in your browser">
+  <meta property="og:description" content="The Neper compiler, running as WebAssembly in the page: edit, compile, run. No install, nothing uploaded.">
+  <meta property="og:url" content="https://neper.dev/play.html">
+  <meta property="og:image" content="https://neper.dev/gtm/play-og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("gtm/neper-cursor.svg") 9 7, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.win { color: var(--primary); font-weight: 600; }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+    figure iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    .text-table th, .text-table td { text-align: left; white-space: normal; vertical-align: top; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin: var(--space-8) 0; }
+    .stat { padding: var(--space-5) var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); text-align: center; }
+    .stat b { display: block; color: var(--primary); font: 400 32px/40px var(--font-display); }
+    .stat span { display: block; margin-top: var(--space-1); color: var(--on-surface-variant); font: 400 13px/18px var(--font-sans); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: var(--space-6) 0; }
+    .tiles.three { grid-template-columns: 1fr; }
+    .tile { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: var(--surface-container-low); }
+    .tile h3 { margin: 0 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    .tile p { margin: 0; color: var(--on-surface-variant); font-size: 15px; line-height: 23px; }
+    .note { color: var(--on-surface-variant); font-size: 14px; line-height: 22px; }
+    .score th, .score td { font-size: 14px; line-height: 20px; }
+    .score tr.neper td { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip { display: inline-block; padding: 0 9px; border-radius: var(--radius-full); font: 600 12px/20px var(--font-sans); }
+    .chip.ok { background: var(--primary-container); color: var(--on-primary-container); }
+    .chip.warn { background: var(--secondary-container); color: var(--on-secondary-container); }
+    .score tr.neper .chip.ok { background: var(--surface); color: var(--on-surface); }
+    .bars { margin: var(--space-6) 0 var(--space-3); }
+    .bar-row { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-3); align-items: center; margin: var(--space-2) 0; font-size: 14px; line-height: 20px; }
+    .bar-track { display: flex; align-items: center; gap: var(--space-3); }
+    .bar-fill { height: 24px; min-width: 6px; border-radius: var(--radius-xs); background: var(--outline-variant); }
+    .bar-fill.n { background: var(--primary); }
+    .bar-track em { font-style: normal; color: var(--on-surface-variant); white-space: nowrap; }
+    details.lang { margin: 0 0 var(--space-2); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-low); }
+    details.lang summary { cursor: pointer; padding: var(--space-3) var(--space-4); font: 600 16px/24px var(--font-sans); }
+    details.lang[open] summary { border-bottom: 1px solid var(--outline-variant); }
+    details.lang ul { margin: 0; padding: var(--space-4) var(--space-5) var(--space-2) 36px; font-size: 15px; line-height: 23px; }
+    @media (max-width: 599px) {
+      .stats, .tiles { grid-template-columns: 1fr 1fr; }
+      .tiles { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 1fr; gap: var(--space-1); }
+    }
+    .play { width: 100%; max-width: 1040px; margin: auto; padding: var(--space-8) 0 var(--space-12); }
+    .bar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-4) 0; }
+    select { min-height: var(--control-md); padding: 0 var(--space-3); border: 1px solid var(--outline); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: inherit; font: 400 14px/20px var(--font-sans); }
+    [hidden] { display: none !important; }
+    .button[disabled] { opacity: .6; cursor: progress; }
+    #status { color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .panes { display: grid; grid-template-columns: 1fr; gap: var(--space-4); }
+    .editor { position: relative; height: 380px; }
+    textarea, #hl, #out { width: 100%; margin: 0; padding: var(--space-4); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); color: inherit; font: 400 14px/22px var(--font-mono); tab-size: 4; letter-spacing: 0; }
+    textarea, #hl { position: absolute; inset: 0; height: 100%; white-space: pre; overflow: auto; resize: none; }
+    #hl { pointer-events: none; }
+    textarea { background: transparent; color: transparent; caret-color: var(--on-surface); }
+    textarea::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: transparent; }
+    .note { margin-top: var(--space-6); }
+    .about { max-width: 720px; margin-top: var(--space-12); }
+    .about h3 { margin: var(--space-6) 0 var(--space-2); font: 600 17px/24px var(--font-sans); }
+    #hl .kw { color: var(--primary); }
+    #hl .fn { color: var(--primary); font-weight: 600; }
+    #hl .str { color: var(--tertiary); }
+    #hl .com { color: var(--on-surface-variant); }
+    #out { min-height: 120px; max-height: 280px; overflow: auto; white-space: pre-wrap; }
+    #out:empty::before { content: "Output appears here."; color: var(--on-surface-variant); }
+    #out.err { color: var(--tertiary); }
+    @media (max-width: 799px) { .editor { height: 280px; } }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="./" aria-label="Neper home"><img src="gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="get-started.html">get started</a>
+        <a href="blog/">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <main class="play">
+      <div class="eyebrow">&gt; play_</div>
+      <h1>Try Neper in your browser</h1>
+      <p class="lede">The compiler on this page is Neper's own, compiled to WebAssembly (<code>neper.wasm</code>, 4.4 MB). It reads your source, writes a <code>wasm32-wasi</code> module, and the page runs it. Nothing is uploaded and nothing is installed.</p>
+
+      <div class="bar">
+        <select id="sample" aria-label="Sample program">
+          <option value="hello">hello.e</option>
+          <option value="strings">strings.e</option>
+          <option value="squares">squares.e</option>
+          <option value="sort">sort.e</option>
+          <option value="regex">regex.e</option>
+          <option value="json">json.e</option>
+          <option value="sha256">sha256.e</option>
+          <option value="math">math.e</option>
+        </select>
+        <button class="button nu-btn lg" id="run" type="button" disabled>Compile and run ▶</button>
+        <button class="button secondary nu-btn tonal lg" id="stop" type="button" hidden>Stop ■</button>
+        <a id="download" class="button secondary nu-btn tonal lg" hidden download="main.wasm">Download .wasm</a>
+        <span id="status" role="status">Loading the compiler…</span>
+      </div>
+      <div class="panes">
+        <div class="editor">
+          <pre id="hl" aria-hidden="true"></pre>
+          <textarea id="src" spellcheck="false" aria-label="Neper source"></textarea>
+        </div>
+        <pre id="out" aria-label="Output" aria-live="polite"></pre>
+      </div>
+      <p class="note">This page hosts a small part of the standard library, enough for the samples: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.math</code>, <code>e.bytes</code>, <code>e.algo.sort</code>, <code>e.text.regex</code>, <code>e.fmt.json</code> and <code>e.crypto.hash</code>, with what they use. A <code>use</code> of any other module reports that it is missing. The full compiler and library are on <a href="https://github.com/nebosa-company/neper">GitHub</a>, and <a href="get-started.html">Get started</a> shows how to cross compile for any OS with no third-party toolchain.</p>
+      <section class="about">
+        <h2>What happens when you press Compile and run</h2>
+        <p>Your source goes to <code>neper.wasm</code>, Neper's own compiler built for WebAssembly. It checks the program, writes a <code>wasm32-wasi</code> module with its own emitter, and the page runs that module in a separate Worker. The compiler, the library files and your program all run in your browser, and nothing is uploaded.</p>
+
+        <h2>What the samples show</h2>
+        <ul>
+          <li><strong>hello.e</strong> is the smallest program: the root arena, the arguments and one <code>io.print</code>.</li>
+          <li><strong>strings.e</strong> builds, joins and formats strings in an arena, with the format string checked at compile time.</li>
+          <li><strong>squares.e</strong> is a loop, an accumulator and a formatted line.</li>
+          <li><strong>sort.e</strong> sorts in place with <code>e.algo.sort</code>, then again with a comparison function you pass.</li>
+          <li><strong>regex.e</strong> finds every match of a pattern and replaces them with <code>e.text.regex</code>, a Pike VM with no backtracking blow-up.</li>
+          <li><strong>json.e</strong> parses a document with <code>e.fmt.json</code> and walks the result.</li>
+          <li><strong>sha256.e</strong> hashes a string with <code>e.crypto.hash</code> and prints it as hex with <code>e.bytes</code>.</li>
+          <li><strong>math.e</strong> calls <code>floor</code>, <code>sin</code> and <code>pow</code> from <code>e.math</code>, which is Neper code and not libm.</li>
+        </ul>
+
+        <h2>Questions</h2>
+        <h3>Is my code sent anywhere?</h3>
+        <p>No. The page fetches the compiler and the library files it needs from neper.dev, and everything after that happens locally.</p>
+        <h3>Why is the first compile slower?</h3>
+        <p>The compiler asks for each library module the program uses, and the page fetches those files once. The browser caches them, so later compiles take a few hundred milliseconds.</p>
+        <h3>What does it compile to?</h3>
+        <p><code>wasm32-wasi</code>, which the page runs. The same compiler builds native Windows, Linux and macOS executables from one machine with no third-party toolchain; <a href="get-started.html">Get started</a> shows the commands.</p>
+        <h3>What are the limits?</h3>
+        <p>A program is stopped after 10 seconds, a compile after 30 seconds, and output is cut at 100 KB. The Stop button ends either at once. Only the library modules listed above are hosted here.</p>
+      </section>
+    </main>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="./">← home</a>
+    </footer>
+  </div>
+  <script type="module">
+    import { compile, execute, libraries, stopAll } from './play/playground.js'
+    const COMPILE_SECONDS = 30, RUN_SECONDS = 10, OUTPUT_LIMIT = 100000
+    let cancel
+    // Races a job against its time limit and the Stop button; either ends the Workers, which never answer again.
+    const guarded = (job, seconds, what) => new Promise((resolve, reject) => {
+      const stop = (why) => { clearTimeout(timer); stopAll(); reject(new Error(why)) }
+      const timer = setTimeout(() => stop(what + ' stopped after ' + seconds + ' seconds.'), seconds * 1000)
+      cancel = () => stop(what + ' stopped.')
+      job().then(resolve, reject).finally(() => clearTimeout(timer))
+    })
+    const $ = (id) => document.getElementById(id)
+    $('stop').onclick = () => cancel && cancel()
+    const status = (t) => { $('status').textContent = t }
+    const show = (t, err) => { $('out').textContent = t; $('out').className = err ? 'err' : '' }
+    const bytes = async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer())
+    // Troubleshooting: ?debug adds the browser and the full error to the output; ?args=--time passes flags to the compiler.
+    const query = new URLSearchParams(location.search)
+    const extra = (query.get('args') || '').split(/\s+/).filter((a) => /^--[a-z0-9-]+$/.test(a))
+    const debug = query.has('debug') || extra.length > 0
+    const environment = () => ['userAgent: ' + navigator.userAgent, 'crossOriginIsolated: ' + globalThis.crossOriginIsolated, 'deviceMemory: ' + navigator.deviceMemory, 'Atomics.waitAsync: ' + typeof Atomics.waitAsync, 'compileStreaming: ' + typeof WebAssembly.compileStreaming, version, 'args: ' + extra.join(' ')].join('\n')
+    const fail = (e) => (e && e.stack ? e.name + ': ' + e.message + '\n' + e.stack : String(e))
+    let compiler, fetchLib, downloadUrl, version = ''
+    const seed = {}
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const highlight = (text) => esc(text).replace(/(\/\/[^\n]*)|("(?:\\.|[^"\\\n])*")|\b(fn)(\s+)([A-Za-z_]\w*)|\b(as|break|case|const|continue|default|defer|else|enum|error|extern|false|for|if|in|let|nil|nocheck|own|ok|resource|ret|shared|struct|switch|true|try|type|undef|union|use|var|when|while|zero|fn)\b/g,
+      (m, com, str, fnw, sp, name, kw) => com ? '<span class="com">' + com + '</span>' : str ? '<span class="str">' + str + '</span>' : fnw ? '<span class="kw">fn</span>' + sp + '<span class="fn">' + name + '</span>' : '<span class="kw">' + kw + '</span>') + '\n'
+    const paint = () => { $('hl').innerHTML = highlight($('src').value) }
+    $('src').addEventListener('input', paint)
+    $('src').addEventListener('scroll', () => { $('hl').scrollTop = $('src').scrollTop; $('hl').scrollLeft = $('src').scrollLeft })
+    async function load(name) {
+      $('src').value = await (await fetch('play/samples/' + name + '.e')).text()
+      paint()
+      show('')
+    }
+    const first = load('hello') // the editor fills while the 4.4 MB compiler is still loading
+    try {
+      const [index, image] = await Promise.all([fetch('play/lib/index.json').then((r) => r.json()), bytes('play/neper.wasm')])
+      compiler = await WebAssembly.compile(image)
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', image)).slice(0, 4), (b) => b.toString(16).padStart(2, '0')).join('')
+      version = 'compiler ' + image.length.toLocaleString() + ' bytes, sha256 ' + digest
+      fetchLib = libraries(index, (p) => bytes('play/' + p))
+      await Promise.all(index.map(async (p) => { seed[p] = await bytes('play/' + p) }))
+      await first
+      $('run').disabled = false
+      status('Ready. ' + version)
+    } catch (e) { status('Could not load the compiler: ' + e.message); if (debug) show(fail(e) + '\n\n' + environment(), true) }
+    $('sample').onchange = (e) => load(e.target.value)
+    $('run').onclick = async () => {
+      $('run').disabled = true; $('stop').hidden = false; $('download').hidden = true; show(''); status('Compiling…')
+      let out = ''
+      try {
+        const t0 = performance.now()
+        const r = await guarded(() => compile(compiler, $('src').value, fetchLib, extra, seed), COMPILE_SECONDS, 'The compiler')
+        if (r.error) { show(r.error + (debug ? '\n\n' + environment() : ''), true); status('The compiler refused the source.'); return }
+        const ms = Math.round(performance.now() - t0)
+        if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+        downloadUrl = URL.createObjectURL(new Blob([r.wasm], { type: 'application/wasm' }))
+        $('download').href = downloadUrl; $('download').hidden = false
+        status('Running…')
+        if (debug && r.said) { out = 'compiler: ' + r.said + '\n'; show(out) }
+        const code = await guarded(() => execute(r.wasm, (s) => {
+          if (out.length < OUTPUT_LIMIT) { out += s; show(out) } else if (cancel) cancel()
+        }), RUN_SECONDS, 'The program')
+        status('Compiled in ' + ms + ' ms to ' + r.wasm.length.toLocaleString() + ' bytes. Exit status ' + code + '. ' + version)
+      } catch (e) { show(out + (out ? '\n' : '') + (debug ? fail(e) + '\n\n' + environment() : String(e.message || e)), true); status('Did not finish.') } finally { $('run').disabled = false; $('stop').hidden = true }
+    }
+  </script>
+</body>
+</html>

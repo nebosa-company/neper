@@ -94,6 +94,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.windows_capture()
     if args.len == 2usize { variant = usize(args[1usize][0usize]) - 48usize }
     var name = "native_dark_open0"
     if variant == 1usize { name = "native_dark_open1" }

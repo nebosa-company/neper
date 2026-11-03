@@ -1,0 +1,452 @@
+{
+ "navigation_rail": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_rail.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationRail (seed 1b3a6b): rail 80 wide, selected pill 56x32 r16, surface fills within 2 levels; deviations recorded in flutter-compare.md (no icon slot, selected pill d6e3ff vs dae2f9, 3 px focus ring, spec state layers). | Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_rail.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationRail (seed 1b3a6b): rail 80 wide, selected pill 56x32 r16, surface fills within 2 levels; deviations recorded in flutter-compare.md (no icon slot, selected pill d6e3ff vs dae2f9, 3 px focus ring, spec state layers). Dark: same measures. | Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/navigation_rail.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationRail (seed 6750A4): rail 80, selected pill 56x32 r16 e8def8 exact, bar fill within 3 levels (token); recorded deviations: no icon slot, 3 px focus ring, spec state layers. | Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/navigation_rail.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationRail (seed 6750A4): rail 80, selected pill 56x32 r16 e8def8 exact, bar fill within 3 levels (token); recorded deviations: no icon slot, 3 px focus ring, spec state layers. Dark: same measures. | Three destinations at rest, hover, pressed, focus, and four with the last selected. Derived: the Material 3 rail through each look's tokens.",
+    "gaps": [
+     "No platform capture; icons are not drawn, labels only",
+     "Keyboard focus ring is not visible on rail items in any look"
+    ]
+   }
+  }
+ },
+ "navigation_drawer": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/navigation_drawer.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationDrawer: indicator 56 high pill inset 12, end corners r16, sheet fill within 2 levels; recorded: drawer 256 wide vs 300 in the ref, no header or icons, selected pill d6e3ff vs dae2f9. | Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/navigation_drawer.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationDrawer: indicator 56 high pill inset 12, end corners r16, sheet fill within 2 levels; recorded: drawer 256 wide vs 300 in the ref, no header or icons, selected pill d6e3ff vs dae2f9. Dark: same measures. | Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/navigation_drawer.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationDrawer: indicator 56 pill inset 12 e8def8 exact, end corners r16; recorded: drawer 256 vs 300 wide, no icons or header. | Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/navigation_drawer.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationDrawer: indicator 56 pill inset 12 e8def8 exact, end corners r16; recorded: drawer 256 vs 300 wide, no icons or header. Dark: same measures. | Modal drawer open over its scrim (navigation_drawer) and the standing drawer rows at rest, hover, pressed, focus and four rows (navigation_drawer_rows). Derived; every look shows the Material 3 drawer shape.",
+    "gaps": [
+     "No platform capture; Apple and GNOME use sidebars, not modal drawers",
+     "Keyboard focus ring is not visible on drawer rows in any look",
+     "Section headings and badges not shown"
+    ]
+   }
+  }
+ },
+ "navigation_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/navigation_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationBar: bar 80 high, indicator 64x32 r16 e8def8 exact (ink extents 64 and 64), labels and badge as ref; bar fill f3edf7 vs f2ecf4 recorded (M3 baseline token). | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 33 (still review, closer): the three-destination cell is flat 0 off and the four-destination rest cell is flat 0 off with 2 glyph px. The bell's count badge was a squeezed 12 dp pill, 3 dp left and 1 dp low; it now keeps 16 dp and sits 2 dp further out. The hover and pressed cells still have 12 flat px off at the badge (max 12 to 16 levels): the capture's state layer is drawn over the badge, ours under it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Hover and pressed: the destination's state layer covers the badge in the capture (12 px off, ring 2 to 17).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/navigation_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter NavigationBar: bar 80 high, indicator 64x32 r16 e8def8 exact (ink extents 64 and 64), labels and badge as ref; bar fill f3edf7 vs f2ecf4 recorded (M3 baseline token). Dark: same measures. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 33 (still review, closer): the three-destination cell is flat 0 off and the four-destination rest cell is flat 0 off with 2 glyph px. The bell's count badge was a squeezed 12 dp pill, 3 dp left and 1 dp low; it now keeps 16 dp and sits 2 dp further out. The hover and pressed cells still have 12 flat px off at the badge (max 12 to 16 levels): the capture's state layer is drawn over the badge, ours under it. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Hover and pressed: the destination's state layer covers the badge in the capture (12 px off, ring 2 to 17).",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoNavigationBar (shapes only): inline bar 44 high with a 1 px hairline, as the ref; text is Roboto in the ref. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): 44 pt bar. UINavigationBar: 44 tall, back chevron with the previous title in the accent, centred bold title, accent actions at the end (cells 'nav: back, action' and 'nav: actions').",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoNavigationBar (shapes only): inline bar 44 high with a 1 px hairline, as the ref; text is Roboto in the ref. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): 44 pt bar. UINavigationBar: 44 tall, back chevron with the previous title in the accent, centred bold title, accent actions at the end (cells 'nav: back, action' and 'nav: actions'). Dark palette: systemBackground grouped #1C1C1E, secondary #2C2C2E / #3A3A3C, label #FFFFFF, secondaryLabel #9E9EA6 (60 % flattened), systemBlue #0A84FF, separator #545458 at 60 %; unverified against a real screen.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Round 5 sheet, not re-measured in round 7",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces"
+    ]
+   }
+  }
+ },
+ "alert_dialog": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AlertDialog: card r28, surface fill within 2 levels (e6e8ef vs e8e7ee); recorded: width, filled action pills in the sheet's three-action example. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AlertDialog: card r28, surface fill within 2 levels (e6e8ef vs e8e7ee); recorded: width, filled action pills in the sheet's three-action example. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AlertDialog: card r28, fill ece6f0 vs ece6ee (2 levels); recorded: sheet is 380 wide vs 298 and has a three-action example. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AlertDialog: card r28, fill ece6f0 vs ece6ee (2 levels); recorded: sheet is 380 wide vs 298 and has a three-action example. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/alert_dialog.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoAlertDialog (shapes only): card 270 wide, r14 (inset profile 13,9,7,6.. vs 9,7,6,4.. under translucency), rows 43 plus 1 px rule = 44, two-action cell as ref; fill f4f4f6 vs translucent f1f1f1 recorded. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed and focus on the default button"
+    ]
+   }
+  }
+ },
+ "bottom_sheet": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/bottom_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter modal bottom sheet: palette within 2 levels, top corners r28 with handle; recorded: sheet is a 480 by 360 window. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/bottom_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter modal bottom sheet: palette within 2 levels, top corners r28 with handle; recorded: sheet is a 480 by 360 window. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/bottom_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter modal bottom sheet: fill f7f2fa vs f8f2fa (1 level), top corners r28, handle; no gap found. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/bottom_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter modal bottom sheet: fill f7f2fa vs f8f2fa (1 level), top corners r28, handle; no gap found. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ },
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter PopupMenuButton and MenuAnchor: Neper's popup menu is the v3 command menu (r8, stepped 4 px shadow, 48 rows with shortcuts), M3 menu is r4; recorded as intentional desktop command menu. | AUDIT 28 (master 76715f0e9): upgraded from review. Round 61's four defects hold up under own measurement. (1) Clipping: 312 Neper and Neper dark popup PNGs at 1x and 1.5x have no menu pixel on any cell edge (smallest gap right 40 px, bottom 69 px), and 6 sheets per palette at 1.25x and 2x too. (2) Fill: the hovered fill is 32 px tall and the text sits 1.0 px below its centre by cap height (light 0.97, dark 1.15), 2.3 to 2.5 px by x-height, ink centroid 1.7 (max 2.1) light and 1.9 (max 2.6) dark; v3's own selected row measures 0.0, 1.5 and 0.9. (3) tests/selfhost/fixtures/link/ui_popup_menu_scroll builds, passes, and fails when hover scroll is off (26), headers are off (35), the speed is cut (26) or the direction is swapped (26). (4) Headers are dim small labels (contrast 7.5 and 9.2 to 1) with no key and no focus stop. All popup sheets and 34 other apps re-render byte for byte except neper-dark menu_bar-open (stale, see gaps).",
+    "gaps": [
+     "a flagged row that is disabled draws no fill in Neper (sel_cards_1 and _4, sel_file_1, sel_reports_1 and _4) where v3 draws the blue row",
+     "both chevron strips are drawn whenever the menu overflows, including the up strip at offset 0; hover scroll keeps requesting frames at an end",
+     "the test does not cover the fill centring, the chevron ends or the sheet sizing; neper-dark/menu_bar-open.png (and @1.5x) is stale after round 61 (4213 px differ, text now 6 px lower in each row) and needs regenerating"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter PopupMenuButton and MenuAnchor: Neper's popup menu is the v3 command menu (r8, stepped 4 px shadow, 48 rows with shortcuts), M3 menu is r4; recorded as intentional desktop command menu. Dark: same measures. | AUDIT 28 (master 76715f0e9): upgraded from review. Round 61's four defects hold up under own measurement. (1) Clipping: 312 Neper and Neper dark popup PNGs at 1x and 1.5x have no menu pixel on any cell edge (smallest gap right 40 px, bottom 69 px), and 6 sheets per palette at 1.25x and 2x too. (2) Fill: the hovered fill is 32 px tall and the text sits 1.0 px below its centre by cap height (light 0.97, dark 1.15), 2.3 to 2.5 px by x-height, ink centroid 1.7 (max 2.1) light and 1.9 (max 2.6) dark; v3's own selected row measures 0.0, 1.5 and 0.9. (3) tests/selfhost/fixtures/link/ui_popup_menu_scroll builds, passes, and fails when hover scroll is off (26), headers are off (35), the speed is cut (26) or the direction is swapped (26). (4) Headers are dim small labels (contrast 7.5 and 9.2 to 1) with no key and no focus stop. All popup sheets and 34 other apps re-render byte for byte except neper-dark menu_bar-open (stale, see gaps).",
+    "gaps": [
+     "a flagged row that is disabled draws no fill in Neper (sel_cards_1 and _4, sel_file_1, sel_reports_1 and _4) where v3 draws the blue row",
+     "both chevron strips are drawn whenever the menu overflows, including the up strip at offset 0; hover scroll keeps requesting frames at an end",
+     "the test does not cover the fill centring, the chevron ends or the sheet sizing; neper-dark/menu_bar-open.png (and @1.5x) is stale after round 61 (4213 px differ, text now 6 px lower in each row) and needs regenerating"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter PopupMenuButton: Material menu r4, fill f3edf7 vs f2ecf4 (token); the ref's black outline is a harness artifact and ignored. | AUDIT 19 (matched confirmed, text gap found): own comparer (reference crop template-placed in the committed 1x sheet; flat = 3 x 3 spread of at most 6 levels; glyph zone = text mask or difference from the -notext twin, grown 2 px; off = any channel over 2 levels). Fill, shadow and rim: 0 flat px off outside the sheet's caption row, 0 px over 12 levels outside the glyph zone (36 flat px counted in the glyph zone of the hover cell, state layer pixels under text); the fill spans the same columns as the reference (168 px at my row scan, equal in both) in rest and hover, so the round 37 width fix holds, and a re-render at 48316ea1f is byte for byte the committed sheet. But text ink within 2 levels fell from 99.0 % (before round 37) to 83.9 %: the right aligned shortcut column (x 140 to 160 of the crop) now sits a fraction of a pixel off the reference (218 of its 220 text mask px differ), because the width rounding moved its start; the labels stay at about 99 %. Matched stands on the strict metric and on the precedent of the slider and switch (text 56 to 66 %); md-menu is a real Material Web reference, so the spec-written cap does not apply. | ROUND 37 (review back to matched, audit 18 downgrade answered): the menu fill was 167.6 wide after the round 35 text widths and was painted on the fraction; Blink lays the box out on the pixel grid, so the width is now rounded to whole pixels (137 px, the reference). Strict scripts/material/cmp.py menu: off 0, ring 0, shadow 0, rim 0 in light and dark. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 18 (matched to review, answered): own comparer (tm2.py: reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet by the pixels outside the text mask and then by the whole crop; flat = 3 x 3 spread of at most 6 levels, ink margin 2 px). Text ink within 2 levels: 99.0 % light, 99.5 % dark, flat px off 0 in both, so round 35 text did make the glyphs exact. But the menu box lost a pixel: light: the menu fill is 136 px wide against the reference 137 (md-menu-rest), so the right edge column is off in all 301 rows, 301 px over 12 levels per cell (0 at audit 17); the shadow tail beside it is the same 306 rows over 2 levels as before. The same comparer on the sheets of audit 17 (113b678bf) gives 0, so the round 35 line and width change caused it, and no other Android control changed outside its text. A shape error over the full height of the menu is not a rounding difference; one column of width fixes it. | ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap. The menu width is now snapped to the pixel grid as Blink paints it (overlay.menu_panel), so the right edge column is exact again. | ROUND 39 (shortcut gap fixed): Blink lays the shortcut out from the right edge of the unrounded row and snaps at paint, so the row now keeps the shortcut at its unrounded position while the 137 px box stays on the pixel grid. Text ink within 2 levels is back to 99.0 % (the shortcut column is exact again), and scripts/material/cmp.py menu and menu_hover stay at off 0, ring 0, shadow 0 in light and dark.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter PopupMenuButton: Material menu r4, fill f3edf7 vs f2ecf4 (token); the ref's black outline is a harness artifact and ignored. Dark: same measures. | AUDIT 19 (matched confirmed, text gap found): own comparer (reference crop template-placed in the committed 1x sheet; flat = 3 x 3 spread of at most 6 levels; glyph zone = text mask or difference from the -notext twin, grown 2 px; off = any channel over 2 levels). Fill, shadow and rim: 0 flat px off outside the sheet's caption row, 0 px over 12 levels outside the glyph zone; the fill spans the same columns as the reference (168 px at my row scan, equal in both) in rest and hover, so the round 37 width fix holds, and a re-render at 48316ea1f is byte for byte the committed sheet. But text ink within 2 levels fell from 99.5 % (before round 37) to 85.0 %: the right aligned shortcut column (x 140 to 160 of the crop) now sits a fraction of a pixel off the reference (218 of its 220 text mask px differ), because the width rounding moved its start; the labels stay at about 99 %. Matched stands on the strict metric and on the precedent of the slider and switch (text 56 to 66 %); md-menu is a real Material Web reference, so the spec-written cap does not apply. | ROUND 37 (review back to matched, audit 18 downgrade answered): the menu fill was 167.6 wide after the round 35 text widths and was painted on the fraction; Blink lays the box out on the pixel grid, so the width is now rounded to whole pixels (137 px, the reference). Strict scripts/material/cmp.py menu: off 0, ring 0, shadow 0, rim 0 in light and dark. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 18 (matched to review, answered): own comparer (tm2.py: reference crop trimmed to the component plus 6 px, template-placed in the committed 1x sheet by the pixels outside the text mask and then by the whole crop; flat = 3 x 3 spread of at most 6 levels, ink margin 2 px). Text ink within 2 levels: 99.0 % light, 99.5 % dark, flat px off 0 in both, so round 35 text did make the glyphs exact. But the menu box lost a pixel: dark: the same one column, 311 rows more than 2 levels off at the right edge, 57 px over 12 levels in the hover cell (0 at audit 17). The same comparer on the sheets of audit 17 (113b678bf) gives 0, so the round 35 line and width change caused it, and no other Android control changed outside its text. A shape error over the full height of the menu is not a rounding difference; one column of width fixes it. | ROUND 31 (review to matched): the Search row's text and shortcut sat 4 px off because the row put its 16 dp gap on both sides of the filler and so overflowed the menu; md-menu-item's gaps are now paddings. The gallery's star and plus placeholders for Settings and Refresh are replaced by the settings, refresh and image Material Icons paths that matglyph.e draws and the references re-captured. Flat px off 26 to 0 and with glyphs 228 to 18 (light and dark, rest and hover). | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap. The menu width is now snapped to the pixel grid as Blink paints it (overlay.menu_panel), so the right edge column is exact again. | ROUND 39 (shortcut gap fixed): Blink lays the shortcut out from the right edge of the unrounded row and snaps at paint, so the row now keeps the shortcut at its unrounded position while the 137 px box stays on the pixel grid. Text ink within 2 levels is back to 99.5 % (the shortcut column is exact again), and scripts/material/cmp.py menu and menu_hover stay at off 0, ring 0, shadow 0 in light and dark.",
+    "gaps": [
+     "Rows are 56 dp, as md-menu draws them (the M3 spec says 48)",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/popup_menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoContextMenu: ours is the macOS menu (r8, small rows), the ref is the iOS context menu (r14 card, trailing icons, 250 wide, 43 rows); recorded, shapes not matched. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 10 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.8:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Shortcuts are written as Ctrl+ words, not command symbols",
+     "Item pictures, group heads and the submenu panel are not restyled beyond the row",
+     "Panel radius 10, inset 5, row radius 5 are approximations",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/popup_menu.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoContextMenu: ours is the macOS menu (r8, small rows), the ref is the iOS context menu (r14 card, trailing icons, 250 wide, 43 rows); recorded, shapes not matched. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 20 cells measured on popup_menu.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.3:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.025, 202 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Shortcuts are written as Ctrl+ words, not command symbols",
+     "Item pictures, group heads and the submenu panel are not restyled beyond the row",
+     "Panel radius 10, inset 5, row radius 5 are approximations",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/page_control.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter TabBar primary: indicator, divider and fills as ref; hover and pressed layers are spec 8/10 against the ref's mid-fade frames (recorded). | The baseline: v2 tabs (primary indicator) and the tab view."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/page_control.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter TabBar primary: indicator, divider and fills as ref; hover and pressed layers are spec 8/10 against the ref's mid-fade frames (recorded). Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in page_control. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/tabs.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter TabBar: primary and secondary indicators, divider and fills as ref; no gap found beyond the surfaceContainer token. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 31 (review to matched): the middle tab now draws the Material image icon and the reference draws the same icon (the gallery's star placeholder was replaced and the reference re-captured); flat px off 0 in all seven cells, light and dark, ring 0, the indicator corners 10 px at rim level as before. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/tabs.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter TabBar: primary and secondary indicators, divider and fills as ref; no gap found beyond the surfaceContainer token. Dark: same measures. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | ROUND 31 (review to matched): the middle tab now draws the Material image icon and the reference draws the same icon (the gallery's star placeholder was replaced and the reference re-captured); flat px off 0 in all seven cells, light and dark, ring 0, the indicator corners 10 px at rim level as before. | Compared with Material Web (docs/ui/looks/ref/material) in Chromium with greyscale text; strict metric of scripts/material/cmp.py (reference flat px off beyond the ink margin, ring px over 12 levels). Round 31: Roboto is placed on a whole baseline and fitted vertically (x-height rounded up from a 0.375 fraction, cap height, ascender and descender to whole rows), Android profile only. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "top_app_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/app_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AppBar: small bar 64 high on the surface fill at rest as the ref; scrolled state (f3edf7) has no ref. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html; Material Web has no top app bar). Own comparer: flat 0 off, 0 px over 12 levels outside ink in all four cells, light and dark, confirmed; text ink 40 percent (light) and 47 percent (dark) of ink pixels over 12 levels, rms 19 to 23. Baselines measured on the reference: the 22 px title baseline is row 55 of the capture (21 px under its 28 px line box) and the 16 px search text row 49 (17 under its 24 px box), which the ceil rule gives. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/app_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter AppBar: small bar 64 high on the surface fill at rest as the ref; scrolled state (f3edf7) has no ref. Dark: same measures. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 17 (matched to review, capped): the reference is CSS written from the M3 specification (gallery.html; Material Web has no top app bar). Own comparer: flat 0 off, 0 px over 12 levels outside ink in all four cells, light and dark, confirmed; text ink 40 percent (light) and 47 percent (dark) of ink pixels over 12 levels, rms 19 to 23. Baselines measured on the reference: the 22 px title baseline is row 55 of the capture (21 px under its 28 px line box) and the 16 px search text row 49 (17 under its 24 px box), which the ceil rule gives. Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): all four cells flat 0 off, 0 ring, 0 rim, 0 shadow with glyph pixels counted (off+glyph 0, was 21) in light and dark; the 22 dp title sits on the Blink baseline. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "The app bar reference is plain CSS written from the M3 spec, not a Material Web capture; its icons are the legacy Material Icons paths the gallery's author picked.",
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "search_bar": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/search_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter SearchBar: 56 high r28 pill, fills within the surfaceContainer token; ref focus and disabled frames carry the harness black outline and are ignored. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 17 (matched to review, capped): the reference is plain HTML and CSS written from the M3 specification (scripts/material/gallery.html '.searchbar'; Material Web has no search bar), so a pixel match proves the spec reading, not the platform. Own comparer (reference crop plus 6 px, text ink masked in the search, every state): flat 0 off and 0 px over 12 levels outside the 2 px ink margin in all five cells in light and dark, confirmed, but 19 to 40 percent of the text ink pixels differ by more than 12 levels (rms 11 to 23 levels). Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/search_bar.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter SearchBar: 56 high r28 pill, fills within the surfaceContainer token; ref focus and disabled frames carry the harness black outline and are ignored. Dark: same measures. | ROUND 37 (restated): Android text follows the Chrome-on-Windows DirectWrite model (93 to 96 percent of ink exact; a second mode, AndroidSkia, exists beside ChromeWin) and the references are Chrome for Testing on Windows with greyscale text, not Linux Chromium. Older notes below that describe another text model are history. | AUDIT 17 (matched to review, capped): the reference is plain HTML and CSS written from the M3 specification (scripts/material/gallery.html '.searchbar'; Material Web has no search bar), so a pixel match proves the spec reading, not the platform. Own comparer (reference crop plus 6 px, text ink masked in the search, every state): flat 0 off and 0 px over 12 levels outside the 2 px ink margin in all five cells in light and dark, confirmed, but 19 to 40 percent of the text ink pixels differ by more than 12 levels (rms 11 to 23 levels). Policy: a spec-written reference caps at review. | ROUND 33 (review to matched): every cell is flat 0 px off, 0 ring, 0 rim, 0 shadow, with glyph pixels counted too (off+glyph 0), in light and dark. Two causes fixed: the query field asked for its intrinsic width and squeezed the 24 dp search icon to 21 dp wide (the editor is now as wide as the room the bar leaves), which also moved the text 6 px left; and the Roboto line metrics (Blink: ascent up, descent down) that had put every 14 dp label one row low. | ROUND 33 method: scripts/material/cmp.py (flat px off, ring px over 12 levels, rim px over 40, shadow) on the committed 1x sheets, light and dark, plus a text ink comparison (ink = reference pixels that differ from its -notext render; rms of the per-pixel difference); scripts/looks_scale_check.py material:<sheet> passes at 1.25, 1.5 and 2.0 (all runs within a device pixel). Round 33 changes sit behind the Android profile: Blink line metrics (ascent up, descent down to whole pixels, floored half leading), svg icons on whole device pixels, quarter pixel glyph positions with a 7 % sideways spread and a luminance keyed power on text coverage, Skia's corner polygons and a 1.2 power on path coverage. Sampled Linux, Windows, Cupertino and Neper sheets re-rendered stay byte for byte. ROUND 37: the text edge percentages and 'not pixel equal' findings above predate the round 35 DirectWrite model and are superseded by the last gap.",
+    "gaps": [
+     "Text follows the Chrome-on-Windows DirectWrite model of android-text.md (hinted outline, six by five samples, ClearType boxes averaged to grey, Skia's pre-blend table), which is how the Chrome for Testing on Windows references are drawn: 93 to 96 % of text ink pixels are exact (every channel within 2 levels) on the Material sheets, the rest are anti-aliasing edges of single glyphs. A second mode, AndroidSkia (a device's Skia over FreeType), exists next to it for Android devices; no device capture exists to measure it against."
+    ]
+   }
+  }
+ },
+ "large_title": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/large_title.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter SliverAppBar large: Neper large title row is a desktop header (recorded). | Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/large_title.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter SliverAppBar large: Neper large title row is a desktop header (recorded). Dark: same measures. | Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/large_title.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoNavigationBar and large title (shapes only): bar 44 high with hairline; large title cell as ref in height. | Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/large_title.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoNavigationBar and large title (shapes only): bar 44 high with hairline; large title cell as ref in height. Dark: same measures. | Large-title navigation bar in six cells (inline, large, back plus action, scrolled flag, cancel plus edit, disabled action). Derived: Cupertino from HIG numbers; the other looks draw the library's large app bar through their tokens.",
+    "gaps": [
+     "Not compared with a real screen or a capture in any look",
+     "The scrolled flag adds a hairline; the title does not collapse in the Cupertino bar",
+     "Hover, pressed and focus of the bar's actions are not driven"
+    ]
+   }
+  }
+ },
+ "action_sheet": {
+  "looks": {
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/action_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoActionSheet (shapes only): now floating cards inset 8, r14, separate Cancel card (white, 2c2c2c dark), 56 rows; was a bottom sheet with handle. Fill translucency (e9e9eb vs f2f2f2) recorded. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/action_sheet.png",
+    "notes": "ROUND 70 (compared to Flutter): compared to Flutter CupertinoActionSheet (shapes only): now floating cards inset 8, r14, separate Cancel card (white, 2c2c2c dark), 56 rows; was a bottom sheet with handle. Fill translucency (e9e9eb vs f2f2f2) recorded. Dark: same measures. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on a row",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  }
+ }
+}

@@ -44,6 +44,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var count = 3usize
         if i == 4usize || i == 5usize { count = 0usize }
         if i == 6usize { count = 7usize }
+        // Neper's chips are 90 wide and 32 tall: 200 wraps one to a line, so the Wrapped cell is wide enough for three a line and holds five.
+        var edit_w: f32 = 200.0
+        if t.tokens.profile == .Neper && i == 6usize {
+            count = 5usize
+            edit_w = 320.0
+        }
         if i == 3usize { count = 2usize }
         if i == 7usize { count = 1usize }
         let (shown, shown_error) = mem.alloc[str](a, 8usize)
@@ -62,7 +68,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         let picks = [1]widget.Submit{ widget.Submit { ctx: zero, invoke: noop_submit } }
         let dismiss = widget.Submit { ctx: zero, invoke: noop_submit }
         let key = u64(100usize * (i + 1usize))
-        let (edit, edit_error) = control.token_field(a, key, t, "Add keyword", shown[0usize..count], removes[0usize..count], buffer, 0usize, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, none_words[0usize..0usize], 0usize, false, picks[0usize..0usize], widget.Change[usize] { ctx: zero, invoke: noop_active }, &dismiss, 200.0)
+        let (edit, edit_error) = control.token_field(a, key, t, "Add keyword", shown[0usize..count], removes[0usize..count], buffer, 0usize, widget.Change[str] { ctx: zero, invoke: noop_change }, widget.Submit { ctx: zero, invoke: noop_submit }, none_words[0usize..0usize], 0usize, false, picks[0usize..0usize], widget.Change[usize] { ctx: zero, invoke: noop_active }, &dismiss, edit_w)
         if edit_error != ok { ret (0usize, edit_error) }
         var node = edit
         var drive: looks.Drive = .None
@@ -86,6 +92,26 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             drive = .Focus
         }
         if i == 4usize { drive = .Focus }
+        // Neper: its chips are 116 wide and 32 tall (Windows' are 60 and 17), so the pointer is aimed from the cell's centre by hand: the first
+        // chip's middle (the edit, 200 wide, stands centred in the cell), its close cross, and the input line under two chips.
+        var aim_dx: f32 = 0.0
+        var aim_dy: f32 = 0.0
+        if t.tokens.profile == .Neper {
+            if i >= 1usize && i <= 3usize { node = edit }
+            if i == 1usize {
+                aim_dx = 0.0 - 42.0
+                aim_dy = 0.0 - 36.0
+            }
+            if i == 2usize {
+                aim_dx = 0.0 - 15.0
+                aim_dy = 0.0 - 36.0
+            }
+            if i == 3usize {
+                aim_dx = 0.0 - 48.0
+                aim_dy = 41.0
+            }
+        }
+        looks.aim(i, aim_dx, aim_dy)
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
@@ -95,6 +121,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 fn noop_active(ctx: *void, value: usize) -> err { ret ok }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(12.0, 40.0)
     let sheet = looks.Sheet { name: "token_edit", cells: 8usize, columns: 4usize, cell_w: 330.0, cell_h: 70.0, ctx: zero, build: build }
     ret looks.run_all(a, &sheet)
 }

@@ -1,0 +1,22 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "AUDIT 25 (own scan: a sheet is blank when it has fewer than 200 pixels other than the page colour below the caption row): 77 of the 78 committed Neper popup sheets show no menu at all, among them the status picture neper/popup_menu.png (the Cards, File, View, Online, Search, Tools, Reports, Help, Admin, CardArt, dialog and every _sel_ and _sub_ sheet); only popup_menu-hover.png draws one (a 4 item menu whose first row is greyed). They have been blank since 2026-10-15 (e6a15847b, 39951d6d3), so ready stood on a picture of nothing; Windows, Linux, Cupertino and Material draw their popups in the same sheet app, and menu_bar-open (Neper) highlights its title and draws no list under it either. Neper has no reference, so the sheet is the only evidence; back to review until the Neper profile paints the menu in every popup_menu sheet and they are re-rendered.",
+    "gaps": [
+     "77 of 78 Neper popup sheets, including popup_menu.png, render no menu (blank below the caption); menu_bar-open draws no list either"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "AUDIT 25 (own scan: a sheet is blank when it has fewer than 200 pixels other than the page colour below the caption row): 76 of the 78 committed Neper dark popup sheets show no menu (Cards, File, View, Online, Search, Tools, Reports, Help, Admin, CardArt, dialog and every _sel_ and _sub_ sheet); only popup_menu.png (the status picture) and popup_menu-hover.png draw menus, and in both the shortcut column is cut by the sheet edge (Ctrl+, Ctrl+Alt+, Ctrl+Alt+Shift+Del). Blank since 2026-10-15 (e6a15847b, 39951d6d3). Back to review until every popup_menu sheet paints its menu and the two that do are not clipped.",
+    "gaps": [
+     "76 of 78 Neper dark popup sheets render no menu; the two that do clip the shortcut column at the sheet edge"
+    ]
+   }
+  }
+ }
+}

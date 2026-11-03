@@ -1,0 +1,521 @@
+{
+ "memo": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in memo. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. | Audit 3: 28 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. Dark: same measures. | Audit 3: 28 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 214 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The hover outline of the multi-line field is not drawn in the sheet (the pointer lands on its scrolling viewport)",
+     "The scroll thumb is the Neper 4 dp thumb 8 dp from the end, not the Android overlay scrollbar",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/memo.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 15 cells measured on memo.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No scroll indicator is drawn (Apple overlay scrollers appear only while scrolling)",
+     "The text view has the field's frame; a macOS text view in a scroll view would have a square hairline",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "mask_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in mask_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. | Audit 3: 29 cells measured on mask_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.3:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The prefix's trailing space is trimmed by the text layout",
+     "The mask is a validator only: it does not insert separators while typing",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. Dark: same measures. | Audit 3: 29 cells measured on mask_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.0:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.006, 221 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The prefix's trailing space is trimmed by the text layout",
+     "The mask is a validator only: it does not insert separators while typing",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/mask_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 20 cells measured on mask_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 2.4:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 205 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No mask-specific chrome: the mask itself is the control's behaviour, not a look",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "token_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in token_edit, token_edit_dialog. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. | Audit 3: 18 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. Dark: same measures. | Audit 3: 18 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.006, 228 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "M3 has no token field: this is the input-chip pattern in an outlined box",
+     "The close icon has no separate hover layer; hover shows on the chip",
+     "A field with three chips wraps the input to a second row at 360 dp wide",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.7:1).",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/token_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 16 cells measured on token_edit.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.4:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 211 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "NSTokenField draws a disclosure chevron on hover instead of a cross; the cross is kept so removal stays visible",
+     "The selected-token state (accent fill) is not drawn",
+     "The token capsule radius and fill alpha are approximations",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "button_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. | The baseline: the existing v2 outlined field, unchanged."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in button_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. | Audit 3: 33 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 6750A4): height 56 as ref, rest outline 1 px 79747e vs 7a757f (1 level), hover on-surface, radius 4; recorded: 3 px focus ring and baseline primary 6750a4 vs seed-derived 65558f. Dark: same measures. | Audit 3: 33 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 2 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 226 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The icon is three dots (the v3 ellipsis), not a task icon such as a folder",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.1:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/button_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoTextField (shapes only): Neper is the macOS field (1 px hairline, 3 px blue focus ring) against the iOS field (2 px e6e6e6 border, caret only, no ring); recorded as intentional AppKit look. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 21 cells measured on button_edit.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.6:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 210 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The ellipsis is three drawn discs, not SF Symbols ellipsis",
+     "No separator between the field and the button",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring; the calendar popup is not compared. | The baseline: overlay.date_picker_with with a typed field (stray carets are the harness's focus slot, as in the other sheets)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter TextField outlined (seed 1b3a6b): rest outline 1 px 737784 vs 74777f, focus 2 px primary, error and disabled as ref, corner radius 4 as ref; hover outline now on-surface (1a1b20 vs 1a1c20) after fixing the missing hover region; recorded: 48 px desktop height vs 56, Neper palette tokens (primary 145db2 vs 425e91), 3 px focus ring; the calendar popup is not compared. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in date_edit. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "check_list_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Checkbox: box 18x18 as ref (ink 17 to 18), tonal selected rows are Neper's. | The baseline: the v2 multi-select list (selection fill, 40 px rows, state circles)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Checkbox: box 18x18 as ref (ink 17 to 18), tonal selected rows are Neper's. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in check_list_box, check_list_box_dialog, check_list_box_hover, check_list_box_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Checkbox: box 18x18 r2 as ref, primary 6750a4 vs 65558f (token). | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 1.6:1).",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Checkbox: box 18x18 r2 as ref, primary 6750a4 vs 65558f (token). Dark: same measures. | Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 2.0:1).",
+    "gaps": [
+     "No disabled or error row is drawn",
+     "The frame has no scrollbar in the sheet (three rows fit)",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoCheckbox (shapes only): Neper draws the iOS list multi-select circle, 22 px, the ref a 14 px rounded square; recorded as the HIG list idiom. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/check_list_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoCheckbox (shapes only): Neper draws the iOS list multi-select circle, 22 px, the ref a 14 px rounded square; recorded as the HIG list idiom. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 7 cells measured on check_list_box.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.025, 204 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "The keyboard focus is the runtime's rectangular ring (iOS shows none, macOS a rounded one)",
+     "The scroll indicator is the shared thin grey thumb",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "radio_group": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Radio: ring 20 and dot 10 vs the ref's 18 and 8 (Flutter's own painting; Neper follows the M3 20 dp spec), rows as a list; recorded. | The baseline: v2 radios stacked with no frame."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Radio: ring 20 and dot 10 vs the ref's 18 and 8 (Flutter's own painting; Neper follows the M3 20 dp spec), rows as a list; recorded. Dark: same measures. | Round 22: scripts/neper_dark_contrast.py finds no violation in radio_group, radio_group_dialog, radio_group_states. It checks, on the 1.0 PNG, text >= 4.5:1 and icons and marks >= 3:1 against the local background, and drawn borders >= 3:1 against the page; disabled content (38 % ink) is exempt. The light Neper PNGs and the other looks are byte-identical to a render of the commit before the round.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Radio: ring 20, dot 10 vs 18 and 8 (Flutter's painting, M3 spec is 20/10); recorded. | Audit 3: 39 cells measured on radio_group.png: text at least 4.5:1 and other parts at least 3:1, except 6 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The group label is not drawn under the Android look (M3 groups have none; the label only names the group for accessibility)",
+     "No error state for the group as a whole",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Radio: ring 20, dot 10 vs 18 and 8 (Flutter's painting, M3 spec is 20/10); recorded. Dark: same measures. | Audit 3: 39 cells measured on radio_group.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 226 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The group label is not drawn under the Android look (M3 groups have none; the label only names the group for accessibility)",
+     "No error state for the group as a whole",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino": {
+    "status": "matched",
+    "screenshot": "cupertino/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoRadio (shapes only): 14 px blue disc as ref. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 8 cells measured on radio_group.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 2.1:1 or better that is equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "matched",
+    "screenshot": "cupertino-dark/radio_group.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter CupertinoRadio (shapes only): 14 px blue disc as ref. Dark: same measures. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 8 cells measured on radio_group.png: text at least 4.5:1 and other parts at least 3:1, except 1 cell at 3.8:1 or better that is equally low in the light twin (disabled or secondary); page luminance 0.012, 211 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "No group box or title is drawn around the group",
+     "Focus ring is the runtime ring around one row",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight (mapped to Segoe UI Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "hint": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/hint.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Tooltip: Neper 24 px high inverse-surface 2f3035 (M3 plain tooltip) vs the ref's 32 px grey 700 at 90% (707070, Flutter's default, not the M3 token); dark e1e2e9 vs e8e8e8; recorded. | The baseline: the dark plain tooltip and the raised rich tooltip."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/hint.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Tooltip: Neper 24 px high inverse-surface 2f3035 (M3 plain tooltip) vs the ref's 32 px grey 700 at 90% (707070, Flutter's default, not the M3 token); dark e1e2e9 vs e8e8e8; recorded. Dark: same measures. | Round 26: the five hint_toolbar_* sheets and hint_grid_header_name drew the v3 hint (pale yellow bevel, light grey grid box) under the dark look's text, 1.27:1 and 1.73:1. Under Neper dark the v3 hint window is now the palette's inverse surface (#E1E2E9) with its ink (InverseOnSurface), the same bubble as the plain hint: text above 12:1, the face 12:1 against the page. scripts/neper_dark_contrast.py finds no violation in hint and the six sheets. The Windows, Windows dark and Neper light sheets are byte for byte those of a render of the commit before.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/data_grid.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter DataTable: divider c3c6d5 vs c4c6d0, Neper rows 28 px and header dense (v3 grid parity) vs 48 and 56; recorded intentional desktop density. | The baseline: the theme's own data grid. The sheets build their grids afresh per look, so the Windows look no longer leaks into the Neper passes (the earlier 1.5x Neper render showed the Windows grid)."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/data_grid.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter DataTable: divider c3c6d5 vs c4c6d0, Neper rows 28 px and header dense (v3 grid parity) vs 48 and 56; recorded intentional desktop density. Dark: same measures. | Round 26: the v3 grid chrome that stayed light in the Neper dark pictures (white column and row rules, pale footer cells, ring lines, navigator buttons, filter funnel, indicator column) now takes dark tints: under Neper dark a light literal of gridlook.rgb (mean 200 or more) is a dark tint of itself, and a dark pixel of the 96 DPI bitmaps (row arrow, star) is drawn in light ink. The selection edge keeps #B3C5FF. data_grid_top, bottom, main, hover, states and sort sheets re-rendered; no violation in scripts/neper_dark_contrast.py or neper_dark_focus.py. Not changed: the v3 dialogs of datagrid.e (page setup, format rules, statistics) that no sheet shows, and the disabled navigator glyphs (exempt, disabled). The Windows, Windows dark and Neper light sheets are byte for byte those of a render of the commit before.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders",
+     "The disabled navigator glyphs of the baked bitmaps are mapped by value and read as noise at 100 % (disabled content, exempt)"
+    ]
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/group_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Card outlined: no Flutter group box exists; Neper's is a captioned row list with a 2 px soft edge d8dbe6 vs the ref's 1 px c4c6d0, recorded. | The baseline: the v2 outlined group (rows with dividers); the section header cell shows a plain title."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/group_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Card outlined: no Flutter group box exists; Neper's is a captioned row list with a 2 px soft edge d8dbe6 vs the ref's 1 px c4c6d0, recorded. Dark: same measures. | Round 24: the frame and the row hairlines were OutlineVariant (#434653), 1.98:1 on the page (1.8:1 as drawn, a blended pixel). Under Neper dark they now take Outline (#8D909E): 5.8:1, and 3.5:1 or better where a hairline falls a third of a pixel off the grid (the row divider of the sheet is drawn at 103,105,117 on 18,19,24). Neper light and every other look keep the token (group_rule_color). scripts/neper_dark_contrast.py could not see the old frame, because the 12 % ink of a disabled edge is the very colour of OutlineVariant, so it now also measures long one pixel hairlines in the group box sheets (frame lines and dividers need 3:1 unless they are the disabled 12 % mix); it flags the old frame (1.84, 1.55 and 1.98:1) and passes group_box and group_box_dialog now. Text, as before, passes 4.5:1.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   },
+   "material": {
+    "status": "matched",
+    "screenshot": "material/group_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Card outlined: outline 1 px cac4d0 vs cac4cf, as ref. | Audit 3: 40 cells measured on group_box.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 2.3:1 or better that are equally low in the dark twin (disabled or secondary); no reference screen, so only rendering and contrast are verified.",
+    "gaps": [
+     "The filled card uses surface-container-low where M3 filled cards use surface-container-highest",
+     "No elevated card",
+     "Evidence is the published Material 3 spec geometry and the baseline colour tokens from memory, not a capture of an Android device: nothing here was measured against a screenshot",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/group_box.png",
+    "notes": "ROUND 70 (compared to Flutter, lane d): compared to Flutter Card outlined: outline 1 px cac4d0 vs cac4cf, as ref. Dark: same measures. | Audit 3: 40 cells measured on group_box.png: text at least 4.5:1 and other parts at least 3:1, except 4 cells at 3.0:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.006, 226 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The filled card uses surface-container-low where M3 filled cards use surface-container-highest",
+     "No elevated card",
+     "Dark uses the M3 dark baseline tokens (surface #141218, on-surface #E6E0E9, primary #D0BCFF, secondary-container #4A4458, outline #938F99) and the same 8/10/10/16 % state layers; derived from the published palette, never compared with a device",
+     "Elevation is the Neper shadow (a hard offset, no blur) and no surface tint is drawn; the M3 tonal surface colours stand in for tint",
+     "No letter spacing (the M3 type scale tracks its text) and no ripple: pressed is the 10 % state layer only",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}

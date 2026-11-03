@@ -1,0 +1,76 @@
+{
+ "spin_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "AUDIT 44 (1): downgraded from ready to review. Measured at the pixel: the stepper glyph (systemBlue 007AFF / 0A84FF) on the hovered plus half is 2.89:1 light and 2.96:1 dark, on the pressed half 2.57:1 and 2.34:1, under 3:1; the keyboard focus ring (a 40 percent blue) is 2.03:1 light and 2.26:1 dark against the page. The rest cell is 3.14:1 and 3.50:1. The sheet does not use the increased-contrast tinted blues of looks_y85. Fix: tint the glyph and the ring like card and rating. | AUDIT 43 (1): ready to review. The cells captioned 'hover (plus half)' and 'pressed (plus half)' hover and press the MINUS half: cup_stepper.e drives them with the harness pointer at the cell centre (no looks.aim), the stepper stands in the right of its 190 px cell and the centre falls on the minus half (the darker half is the left one in both looks, viewed 1x). The plus half's hover and pressed states are drawn nowhere. Contrast numbers hold (glyph 007AFF on E3E3E9 3.14:1, reproduced). Fix: looks.aim in cup_stepper.e as cup_splitter.e does. | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (2) fixed: cup_stepper.e aims the pointer at the plus half with looks.aim (also the spin box hover), so 'hover (plus half)' and 'pressed (plus half)' now draw the plus half darker; viewed all twelve cells light and dark at 1x and 1.5x. Glyph contrast unchanged (3.14:1 light, 3.5:1 dark, controls).",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "AUDIT 44 (1): downgraded from ready to review. Measured at the pixel: the stepper glyph (systemBlue 007AFF / 0A84FF) on the hovered plus half is 2.89:1 light and 2.96:1 dark, on the pressed half 2.57:1 and 2.34:1, under 3:1; the keyboard focus ring (a 40 percent blue) is 2.03:1 light and 2.26:1 dark against the page. The rest cell is 3.14:1 and 3.50:1. The sheet does not use the increased-contrast tinted blues of looks_y85. Fix: tint the glyph and the ring like card and rating. | AUDIT 43 (1): ready to review. The cells captioned 'hover (plus half)' and 'pressed (plus half)' hover and press the MINUS half: cup_stepper.e drives them with the harness pointer at the cell centre (no looks.aim), the stepper stands in the right of its 190 px cell and the centre falls on the minus half (the darker half is the left one in both looks, viewed 1x). The plus half's hover and pressed states are drawn nowhere. Contrast numbers hold (glyph 007AFF on E3E3E9 3.14:1, reproduced). Fix: looks.aim in cup_stepper.e as cup_splitter.e does. | ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): AUDIT 43 (2) fixed: cup_stepper.e aims the pointer at the plus half with looks.aim (also the spin box hover), so 'hover (plus half)' and 'pressed (plus half)' now draw the plus half darker; viewed all twelve cells light and dark at 1x and 1.5x. Glyph contrast unchanged (3.14:1 light, 3.5:1 dark, controls).",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "time_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/picker_wheels.png",
+    "notes": "AUDIT 44 (2): downgraded from matched to review. The wheels measured against Flutter stand, but the time_picker steppers sheet (time_picker.png) clips: in 'With seconds' the last stepper is cut at the cell edge and the plus crowds its divider (viewed light and dark, 1x), the defect lane y recorded and left. A cell that clips cannot be matched. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: in 'With seconds' the last stepper is cut at the cell edge. A defect, not fixed in this round.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Seconds stepper clipped at the cell edge"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/picker_wheels.png",
+    "notes": "AUDIT 44 (2): downgraded from matched to review. The wheels measured against Flutter stand, but the time_picker steppers sheet (time_picker.png) clips: in 'With seconds' the last stepper is cut at the cell edge and the plus crowds its divider (viewed light and dark, 1x), the defect lane y recorded and left. A cell that clips cannot be matched. | Compared to Flutter (docs/ui/looks/flutter-compare.md, round 70 b): wheels, shapes only: one 36 px band radius 8 across hour, minute and AM/PM wheels (fixed this round); recorded: rows 36 vs 32 px, no perspective squeeze. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed in the round 85 refresh: in 'With seconds' the last stepper is cut at the cell edge. A defect, not fixed in this round.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Seconds stepper clipped at the cell edge"
+    ]
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/font_picker.png",
+    "notes": "AUDIT 44 (3): downgraded from ready to review. The sample is always drawn in Roboto: the family named in it (Cantarell, Segoe UI, SF Pro) is not previewed and Italic never renders italic, so the cells for a second family and for Italic are not drawn correctly; the Focus cell shows a half row cut at the top and bottom of the list. Naming the family in the sample does not preview it; a rig limit is not a reason for ready. | ROUND 85: the preview now leads with the family name ('Cantarell: The quick brown fox'), the sample following the chosen style (bold as Roboto Medium) and size up to 20 sp in the available face. The rig loads Roboto, Segoe UI and Tahoma only, so a per-family preview is a rig limit, stated here, not a drawing defect. Viewed light and dark at 1x and 1.5x: the list rows are 48 dp with the chosen row secondary-container and its check, hover is the M3 8 percent on-surface layer (on the list's white surface-container-lowest ground it reads neutral grey, ededed), the segmented style control, the stepper and the preview box. The Focus cell is the list scrolled to the focused row so its first row is partly out of the viewport (a scroll state); the Hover cell's style control is 6 dp wider than the 250 dp cell.",
+    "gaps": [
+     "Family preview needs per-family faces the rig lacks (the name leads the sample)",
+     "Style control 6 dp wider than the cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "AUDIT 44 (3): downgraded from ready to review. The sample is always drawn in Roboto: the family named in it (Cantarell, Segoe UI, SF Pro) is not previewed and Italic never renders italic, so the cells for a second family and for Italic are not drawn correctly; the Focus cell shows a half row cut at the top and bottom of the list. Naming the family in the sample does not preview it; a rig limit is not a reason for ready. | ROUND 85: the preview now leads with the family name ('Cantarell: The quick brown fox'), the sample following the chosen style (bold as Roboto Medium) and size up to 20 sp in the available face. The rig loads Roboto, Segoe UI and Tahoma only, so a per-family preview is a rig limit, stated here, not a drawing defect. Viewed light and dark at 1x and 1.5x: the list rows are 48 dp with the chosen row secondary-container and its check, hover is the M3 8 percent on-surface layer (on the list's white surface-container-lowest ground it reads neutral grey, ededed), the segmented style control, the stepper and the preview box. The Focus cell is the list scrolled to the focused row so its first row is partly out of the viewport (a scroll state); the Hover cell's style control is 6 dp wider than the 250 dp cell.",
+    "gaps": [
+     "Family preview needs per-family faces the rig lacks (the name leads the sample)",
+     "Style control 6 dp wider than the cell"
+    ]
+   }
+  }
+ }
+}

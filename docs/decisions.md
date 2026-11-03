@@ -43714,18 +43714,24 @@ readback and GDI, as fast as the CPU path. `NEPER_RASTER=gpu` tries the GPU rast
 animation frames at 1180x780 and compiles its kernel for 30 to 50 s the first time on a machine; on the RTX it refuses itself. Recommended default: Intel (the screen's GPU) the CPU renderer until the kernel compiles faster, or
 `SLUST_BACKEND=vulkan NEPER_RASTER=gpu` where the first-run wait is acceptable; RTX the CPU renderer (the discrete GPU adds nothing for this UI until the kernel runs there).
 
-## D5952 — Multicol columns start where whole lines and unbreakable boxes do
+## D5952 — The playground compiler is built with `--arena 192m`, and a wasm reservation never exceeds the root
+
+Safari on iPadOS 17 stopped the playground with `E-TYPE-9999 ... the compiler's arena is exhausted`. The compiler used about 105 MB, but its memory size was 1.03 GB after the passes that only name a missing module and 1.9 GB after the last: the engine grows a module's memory to the highest byte touched, and the 1 GiB root arena puts every reservation above it, each 805 MB (`platform.reservation`, D5640). Desktop engines and a newer iPad grant that; the older one refuses a grow somewhere between the two sizes.
+
+`platform.wasi.e` now gives a reservation the smaller of a quarter of what the root leaves and the root's own size, so the default 1 GiB build is unchanged byte for byte, and `--arena 192m` makes 192 MB reservations. `docs/play/neper.wasm` is built that way: the peak memory size is 500 MB, and the eight samples compile to the same bytes as before. 128m also works (372 MB), 64m does not (`hello.e` exhausts it). A program that needs more than 192 MB per pool now reports the arena diagnostic in the playground; the regular `neper.wasm` is unaffected.
+
+## D5953 — Multicol columns start where whole lines and unbreakable boxes do
 
 A balanced multicol container was cut into columns at multiples of the column height, and a line whose top was inside a column stayed there even when its bottom crossed the cut, so later columns carried a fractional offset (13 px, 6 px) and held 7 or 8 lines by luck. `mc_prepare` now collects the tops and bottoms of lines and unbreakable boxes in the one-column layout and builds a table of column starts: a column ends before the first atom that would cross its bottom, and an atom taller than the column overflows. `column_of`, `col_start`, `col_end` and `col_dy` read the table, and balancing finds the shortest height by bisection. Not covered: spanner runs and wrapping containers (`column-wrap`), which keep the old slicing, and a nested multicol that fragments across its parent's columns. css-multicol 157 to 182 of 402; CSS2, grid, flexbox, css-sizing and css-overflow unchanged.
 
-## D5953 — The browser app: page scripts, taps and fonts
+## D5954 — The browser app: page scripts, taps and fonts
 
 Three things stopped a page from working in `examples/browser` without any error. A tab's arena was 128 MB and the page's JavaScript runtime needs more, so `start_scripts` failed silently and a page showed its static markup (now 512 MB). A pending timer never ran in an idle window (a build now asks for an animation frame while one is due). A tap reached only links, never `onclick` (the view records the tap, the app calls `page.click`, and a handler that cancels the click cancels the link). The font list is per host: Windows files, DejaVu on Linux, the two Jost files a wasm host provides, and a renderer holds 32 fonts, not 16, since the last four of twenty registered faces were silently dropped. A build needs `--arena 4g` or an https chain check runs out of memory and reports an untrusted certificate (an RSA verify that cannot allocate returns false; not fixed).
 
-## D5954 — The browser on wasm32-wasi
+## D5955 — The browser on wasm32-wasi
 
 `examples/browser` builds for `wasm32 wasi` and runs on a canvas through `tests/wasm/browser/neper_browser.html` (served by `scripts/serve-wasm.mjs --isolated`). It needs a compiler built with a larger arena (`neper-self emit-executable src/main.e . x64 windows OUT --arena 6g`); the stock one runs out of arena on a program this size. The host has no sockets, so only `data:` pages and the files the page seeds load, and a host with no trust store no longer ends the program. Verified in the Browser pane with a `data:` page (heading, reversed list, aspect-ratio box); not verified: scripts, clicks and scrolling on the web target.
 
-## D5952 — NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
+## D5956 — NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
 
 After a roll back the shell's `home_floor` is marked above the restored version's image, and the installed-app prompt allocates its own frame without resetting, so the next `show_home` in the prompt's Cancel branch found no room and `ret ok` ended the shell with no output; every later tap was ignored (`install_update` stopped one marker short, `shell prompt cancelled`). The Cancel branch now releases the last scene and `mem.reset(a, home_floor)` first, as the widget refresh does. Diagnose a silent shell by adding a `say` before each `ret ok` after `show_home`. Separately, Settings' clipboard lifetime (setting 35) defaults to 30 s, so a fixture whose copy-to-paste gap is longer (`clipboard_long`, 12 s taps) must pick a longer choice first, as `clipboard` does. A longer tap delay does not help either failure.

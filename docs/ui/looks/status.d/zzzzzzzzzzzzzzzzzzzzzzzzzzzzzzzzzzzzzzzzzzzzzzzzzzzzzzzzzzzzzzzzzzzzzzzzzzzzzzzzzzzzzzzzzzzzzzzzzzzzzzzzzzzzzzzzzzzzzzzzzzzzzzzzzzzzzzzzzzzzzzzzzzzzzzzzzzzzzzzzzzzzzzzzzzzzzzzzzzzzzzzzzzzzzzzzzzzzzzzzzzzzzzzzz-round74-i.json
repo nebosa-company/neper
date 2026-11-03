@@ -1,0 +1,170 @@
+{
+ "icon_button": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/icon_button.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): icon button 32 px (flat 30 plus edge) against Flutter 40 (G2 density); 1.5x is 48 against 60, exact scale; state layers hover 8, focus and pressed 10 per cent equal (e6edf9 over f8f9ff is 7.9 per cent of the accent); tonal disabled dddee4 against dedee4; focus is the 3 px ring 2 px outside (G3). Layer tint is the accent, Flutter tints standard and tonal with on-surface-variant. Recorded in flutter-compare-i.md.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/icon_button.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): icon button 32 px (flat 30 plus edge) against Flutter 40 (G2 density); 1.5x is 48 against 60, exact scale; state layers hover 8, focus and pressed 10 per cent equal (e6edf9 over f8f9ff is 7.9 per cent of the accent); tonal disabled dddee4 against dedee4; focus is the 3 px ring 2 px outside (G3). Layer tint is the accent, Flutter tints standard and tonal with on-surface-variant. Recorded in flutter-compare-i.md. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "The sheet draws a control-kit Settings glyph (a rig has no loaded texture), so control.icon_button itself, which takes a texture, is not what is shown: examples/looks/icon_button.e builds it through e.ui.looks_a.icon_button_glyph",
+     "Linux shows the Adwaita edit-copy symbolic icon through button_with_svg, Material its own material_icon_button; neither is the Settings glyph of the other looks",
+     "Windows draws a guessed 32 x 24 box (no capture of a v3 or Windows 11 icon-only button); Windows dark places the glyph about 2 px low and right because the dark picture-button path assumes a caption beside it"
+    ]
+   }
+  }
+ },
+ "search_field": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/search_field_all.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the Clear label was clipped at the pill edge, hover darken did not show (editors are not hovered, now a hover region), disabled drew like filled (now the 38 per cent content level), no focus or invalid outline (now 2 px accent and error). Pill 200 x 52 r26 against SearchBar 378 x 56 r28 (full pill both); fill e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; 1.5x 300 x 78. Flutter shows no focus change; the outline is the Neper field rule.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/search_field_all.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the Clear label was clipped at the pill edge, hover darken did not show (editors are not hovered, now a hover region), disabled drew like filled (now the 38 per cent content level), no focus or invalid outline (now 2 px accent and error). Pill 200 x 52 r26 against SearchBar 378 x 56 r28 (full pill both); fill e6e8ef against e8e7ee, hover d6d8de against d8d7de, disabled f1f3f9 against f2f2f8; 1.5x 300 x 78. Flutter shows no focus change; the outline is the Neper field rule. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Neper and Windows draw the clear button as the word Clear and a leading hint without a magnifier; Linux, Cupertino and Material draw a magnifier and a clear mark",
+     "Cupertino keeps the row and sheet of cup_text_field.e (search_field.png); this round's search_field_all.png also renders under Cupertino but is not linked from that row"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/range_slider.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): handles are 4 x 44 bars (halo 16 x 56 on hover) against Flutter 20 px round thumbs and 46 px halos; track 4 px in both (Flutter active 6); intended per the Neper component spec. Focus ring is a 3 px rectangle round slider and label (G3), Flutter a halo on the thumb. Disabled thumbs grey at 38 per cent against a4a5aa. 1.5x is exactly 1.5 times.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/range_slider.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): handles are 4 x 44 bars (halo 16 x 56 on hover) against Flutter 20 px round thumbs and 46 px halos; track 4 px in both (Flutter active 6); intended per the Neper component spec. Focus ring is a 3 px rectangle round slider and label (G3), Flutter a halo on the thumb. Disabled thumbs grey at 38 per cent against a4a5aa. 1.5x is exactly 1.5 times. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/autocomplete.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): no Flutter Autocomplete capture; nearest are textfield-outlined (252 x 56, 1 px 74777f, focus 2 px accent) and the DropdownMenu list (rows 48, r4): ours is 200 x 48 with a 1 px 737784 outline (5 levels off in blue, palette G1), 2 px accent on focus, list rows 36 (4 px grid) in a 168 wide eceef4 surface. 1.5x field 296 x 68 flat, list 252 x 186, exact scale. Heights recorded (G2).",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/autocomplete.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): no Flutter Autocomplete capture; nearest are textfield-outlined (252 x 56, 1 px 74777f, focus 2 px accent) and the DropdownMenu list (rows 48, r4): ours is 200 x 48 with a 1 px 737784 outline (5 levels off in blue, palette G1), 2 px accent on focus, list rows 36 (4 px grid) in a 168 wide eceef4 surface. 1.5x field 296 x 68 flat, list 252 x 186, exact scale. Heights recorded (G2). Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ]
+   }
+  }
+ },
+ "calendar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/calendar.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): against showDatePicker (ref datepicker-calendar-open): day circle 32 against 40, row pitch 32 against 48, range band 32 high; the bare calendar is the desktop density (G2), the M3 picker is a 360 wide modal. Selected day, today ring and the 3 px keyboard ring fit their cells; no cut rings.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/calendar.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): against showDatePicker (ref datepicker-calendar-open): day circle 32 against 40, row pitch 32 against 48, range band 32 high; the bare calendar is the desktop density (G2), the M3 picker is a 360 wide modal. Selected day, today ring and the 3 px keyboard ring fit their cells; no cut rings. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ]
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/date_edit.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): the open calendar popup is 256 x 292 r12 e6e8ef (7 columns, pitch 32, day circle 32) against the 360 wide r28 modal with 40 px circles; field 200 x 48 against 56. The sheet cells were too small and cut the popup at the cell bottom and right edge: Neper cells now carry 150 x 330 px of padding (looks.pad_neper), the whole popup shows. 1.5x popup 383 x 438, exact scale."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/date_edit.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): the open calendar popup is 256 x 292 r12 e6e8ef (7 columns, pitch 32, day circle 32) against the 360 wide r28 modal with 40 px circles; field 200 x 48 against 56. The sheet cells were too small and cut the popup at the cell bottom and right edge: Neper cells now carry 150 x 330 px of padding (looks.pad_neper), the whole popup shows. 1.5x popup 383 x 438, exact scale. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/image_combo_box.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the focus ring and the open lists were cut at the cell edges (Neper cells now 330 x 680, lists of six rows show whole). Still open: the 3 px focus ring is interrupted where the label notch sits (the notch background box overdraws the ring top), a gap of about 60 px in the Focus cell; the field needs its notch painted under the ring."
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/image_combo_box.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the focus ring and the open lists were cut at the cell edges (Neper cells now 330 x 680, lists of six rows show whole). Still open: the 3 px focus ring is interrupted where the label notch sits (the notch background box overdraws the ring top), a gap of about 60 px in the Focus cell; the field needs its notch painted under the ring. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "neper": {
+    "status": "ready",
+    "screenshot": "neper/status_bar.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the sheet placed 19 px bars (v3 capture) and clipped the 14 px text of the Neper bar; Neper bars are now 24 tall as the v2 StatusBar spec says, panels and text centred. Reviewed against Material 3 (no status bar; nearest 24 dp dense bar), see flutter-compare-i.md."
+   },
+   "neper_dark": {
+    "status": "ready",
+    "screenshot": "neper-dark/status_bar.png",
+    "notes": "ROUND 74 (lane i, compared to Flutter with my own comparer, ref/flutter/neper at 1x and 1.5x; dark by role colours and the same geometry): fixed: the sheet placed 19 px bars (v3 capture) and clipped the 14 px text of the Neper bar; Neper bars are now 24 tall as the v2 StatusBar spec says, panels and text centred. Reviewed against Material 3 (no status bar; nearest 24 dp dense bar), see flutter-compare-i.md. Dark: role colours checked, geometry identical.",
+    "gaps": [
+     "Derived from the Neper dark palette, not compared to any reference screen (there is none): started/review only, never matched",
+     "Neper dark has no reference screen: never matched; ready here means the checker's criteria hold in every state the sheet renders"
+    ]
+   }
+  }
+ }
+}

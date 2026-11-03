@@ -1,0 +1,26 @@
+{
+ "bottom_app_bar": {
+  "looks": {
+   "linux": {
+    "status": "started",
+    "screenshot": "linux/bottom_app_bar.png",
+    "notes": "AUDIT 31 (round 65 commit 66ed62c1b): downgraded from review. Measured in the committed PNG: in the four actions cell the Compose button is 83 px wide at 1x (93 px in the two action cell) and its label starts 16 px from the left edge but ends 7 px from the right edge (11 px against 25 at 1.5x), so the label sits 4.5 px right of the button centre and hugs the edge. The vertical centring holds (capital C centre within 0.5 px of the button centre). ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "audit 31: the Compose label is not centred horizontally in the four actions cell (16 px left, 7 px right at 1x); the button is narrower than label plus padding",
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   },
+   "linux_dark": {
+    "status": "started",
+    "screenshot": "linux-dark/bottom_app_bar.png",
+    "notes": "AUDIT 31 (round 65 commit 66ed62c1b): downgraded from review. Measured in the committed PNG: in the four actions cell the Compose button is 83 px wide at 1x (93 px in the two action cell) and its label starts 16 px from the left edge but ends 7 px from the right edge (11 px against 25 at 1.5x), so the label sits 4.5 px right of the button centre and hugs the edge. The vertical centring holds (capital C centre within 0.5 px of the button centre). ROUND 65: the bar button's label is centred in its button (a centring row of the button's height); viewed in the re-rendered PNG. ROUND 63 y: draws a GtkActionBar: 46 tall, flat commands at the start and the main one as a suggested-action button at the end, 1 px top divider. Metrics are libadwaita 1.5 public values, derived; the keyboard focus ring is drawn on the rows. Re-rendered and viewed.",
+    "gaps": [
+     "audit 31: the Compose label is not centred horizontally in the four actions cell (16 px left, 7 px right at 1x); the button is narrower than label plus padding",
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ]
+   }
+  }
+ }
+}

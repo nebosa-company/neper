@@ -14,6 +14,8 @@ const NAME_KEY: u64 = 101u64
 
 fn noop_key(ctx: *void, value: widget.Key) -> err { ret ok }
 
+// Each cell has its own row keys: the runtime finds an interaction by key, so shared keys would hover the first cell's row.
+var base: u64 = 0u64
 fn names(index: usize) -> str {
     if index == 0usize { ret "Name" }
     if index == 1usize { ret "Author" }
@@ -45,7 +47,7 @@ fn values(index: usize) -> str {
 fn property_at(ctx: *void, index: usize) -> collection.Property {
     var group = "General"
     if index > 8usize { group = "Computed" }
-    ret collection.Property { key: NAME_KEY + u64(index), name: names(index), group: group }
+    ret collection.Property { key: base + NAME_KEY + u64(index), name: names(index), group: group }
 }
 
 fn count_of(ctx: *void) -> usize { ret COUNT }
@@ -60,15 +62,16 @@ fn editor_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err 
 }
 
 fn grid(a: *mem.Arena, t: *const control.Theme, key: widget.Key, collapsed: []const widget.Key, selected: u64) -> (widget.Node, err) {
+    base = key * 4096u64
     let source = collection.PropertySource { ctx: mem.cast[*void](t), count: count_of, property: property_at, editor: editor_of }
     var options = collection.property_grid_options()
-    options.selected = selected
-    options.height = 400.0
+    if selected != 0u64 { options.selected = base + selected }
+    options.height = 0.0
     let (made, made_error) = collection.property_grid_of(a, key, t, "Deck properties", source, collapsed, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 150.0, 360.0, options)
     ret (made, made_error)
 }
 
-// Three cells: all categories open with the Name row selected, General shut, a row hovered.
+// Three cells: all categories open with the Name row selected, General shut, the General heading hovered (a property row has no pointer layer of its own: its value editor is the control).
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
     let (shut, shut_error) = mem.alloc[widget.Key](a, 2usize)
     if shut_error != ok { ret (0usize, shut_error) }
@@ -82,11 +85,12 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     if three_error != ok { ret (0usize, three_error) }
     cells[0usize] = looks.Cell { caption: "Enabled, Name selected", node: one, drive: .None }
     cells[1usize] = looks.Cell { caption: "General shut", node: two, drive: .None }
-    cells[2usize] = looks.Cell { caption: "Row hovered", node: three, drive: .Hover }
+    looks.aim(2usize, 0.0, -356.0)
+    cells[2usize] = looks.Cell { caption: "Group heading hovered", node: three, drive: .Hover }
     ret (3usize, ok)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let sheet = looks.Sheet { name: "vertical_grid", cells: 3usize, columns: 3usize, cell_w: 370.0, cell_h: 410.0, ctx: zero, build: build }
+    let sheet = looks.Sheet { name: "vertical_grid", cells: 3usize, columns: 3usize, cell_w: 370.0, cell_h: 780.0, ctx: zero, build: build }
     ret looks.run_material(a, &sheet)
 }

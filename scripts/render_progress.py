@@ -467,7 +467,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 </head>
 <body>
 <main>
-<header><p class="eyebrow">neper</p><h1>Readiness</h1></header>
+<header><p class="eyebrow">neper</p><h1>Readiness</h1><nav class="sub" aria-label="Related pages"><a href="browser-progress.html">browser-progress</a> · <a href="ui/looks-progress.html">looks-progress</a> · <a href="charts.html">charts</a></nav></header>
 <section class="cards" aria-label="Readiness by group">
 __CARDS__
 </section>

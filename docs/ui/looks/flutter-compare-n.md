@@ -1,0 +1,26 @@
+# Flutter comparison, round 78 lane n (Android and macOS / iOS completion)
+
+Own comparer (python, numpy, scipy; not committed): exact-colour flat components with bounding boxes, ink boxes of thresholded glyphs, row and column colour runs, edge coverage profiles. Palette difference of Android primary (6750a4 against Flutter 65558f) and the black harness outline are accepted and not repeated. Cupertino is shapes only (the ref text is Roboto). Flutter pressed and hover refs are mid-fade frames and are not compared fill for fill.
+
+## Audit 37 downgrades
+
+- time_picker, Android and dark, fixed: the hour and minute digits (and the colon) are now display-large, 57, as M3 and Flutter (`looks_n78.time_digit_role`, hooked in `overlay.time_box` and `overlay.time_picker_modal_with`; other looks keep display-small). Ink of "30" 58 x 43 (dark 59 x 43) against Flutter 59 x 42, "10" 56 x 43 against 56 x 42, ink rows 108 to 150 against 107 to 148. Only `material/time_picker_dial` and `material-dark/time_picker_dial` changed (1x and 1.5x).
+- time_picker, scrim: ours 32 % (ada8ad, dark 0e0c10), Flutter 54 % (747175, dark 09080b). M3 spec scrim is 32 %: kept, recorded. Selector 96 wide (M3) against Flutter's 111 stays as recorded in round 77.
+- range_slider, Android and dark, recorded and kept: rest inactive track e6e0e9 (dark 36343b) is the M3 token `md.comp.slider.inactive.track.color` (surface-container-highest) and equals the Material Web ref (`ref/material` slider-labeled-rest) exactly; Flutter paints secondary-container of its fromSeed palette (d9d0e4, dark 413b4f), which is the accepted palette difference as well (baseline secondary-container is e8def8). Spec value wins.
+
+## Rows raised to `matched` (measured)
+
+- toolbar_button, Android and dark (the glyph button is the M3 icon button; picture re-pointed from `fab.png` to `icon_button.png`): circle flat fill, 38 flat for the 40 circle (Flutter 38), 36 flat inside the 1 px ring for outlined. Light, ours against Flutter: standard hover f0e9f1 / efe9f1, focus ece5ed / ebe5ed; tonal rest e6e0e9 / e6e0e9, hover d9d4dd / dad4dd, focus d6d1da / d6d0d9, disabled e3dde4 / e2dce4; outlined hover f0e9f1 / efe9f1. Dark equal within 1 level (standard hover 232027 / 222026, tonal rest 36343b / 36343a, hover 424047 / 423f46, focus 45424a / 454349, disabled 2d2b31 / 2e2b31). Deviations recorded: outlined focus fill ours e8e1e9 (dark 29272d, a 10 % layer of on-surface) against Flutter's efe9f1 (222026, the hover tone; its focus frame is a fade), 7 levels; pressed not compared (Flutter ripple frame cac5ce).
+- menu_bar, Android and dark (the M3 navigation bar is the idiom of the menu bar; picture already `navigation_bar.png`): bar 360 x 80 (Flutter 360 x 80), fill f3edf7 against f2ecf4 (dark 211f26 against 211f24), indicator 62 x 32 flat against 64 x 32 (dark 62 x 32), e8def8 and 4a4458 exact. Hover and pressed layers not compared.
+- dialog, Cupertino and dark (shapes only, against CupertinoAlertDialog): card 270 wide (ref 270), button row 44 under a 1 px rule (ref 44 + 1), corner profile full at 10 px along the top and 13 along the left edge against 9 and 12: radius 14 within 1 px. Fill f4f4f6 (dark 2c2c2e) against f1f1f1 (242424): the ref composites over a scrim; colours are not claimed. The sheet draws the cards on the page with no scrim, so the light card is 2 levels off the ground.
+
+## Rows raised from `started` to `review` (no matched claim)
+
+Cupertino: image_combo_box, group_box, toolbar_button, vertical_grid, data_grid, scroll_bar; Cupertino dark: data_grid, scroll_bar; Android: image_combo_box, date_edit, tree_list; Android dark: date_edit, tree_list. Each picture was viewed. The old `started` came from counting fills and secondary text as contrast failures (white card on f2f2f7 is 1.1:1 and has no edge on iOS; glyph on its 8 to 10 % layer is 2.9 to 3.6:1; disabled value 1.8:1). None has a Flutter widget (or the Android date field form is unmeasured), so review is the ceiling.
+
+- scroll_bar, Cupertino dark, picture fixed: the sheet's content boxes were white on the dark page, so the horizontal thumbs (35 % label colour) were invisible; the box is now the elevated surface 3a3a3c (`examples/looks/cup_scroll.e`, dark only), thumbs show in all seven cells.
+- date_edit, Android (modal picker against `datepicker-calendar-open@1x`): dialog 360 wide (360), header 120 (119), selected circle 38 (38), fill ece6f0 (ece6ee); ours stops after the 4 week rows of its month where Flutter fixes the body at 448; `date_input.png` is stale on master and not measured, so the row stays review.
+
+## Still short, with the reason
+
+Cupertino and Android below `matched` after this round: label, spin_edit, splitter, status_bar, hint (Android; plain tooltip 24 high on inverse-surface by M3 against Flutter's 32 grey, rich tooltip left edge half a pixel off Material Web), scroll_bar, vertical_grid, data_grid, tree_list, image_combo_box, date_edit (Android); label, spin_edit, combo_box, image_combo_box, date_edit, progress_bar, group_box, page_control (strip cells), splitter, status_bar, toolbar_button, menu_bar, popup_menu (macOS menu against Flutter's iOS context menu), hint, scroll_bar, tree_list, vertical_grid, data_grid (Cupertino). No Flutter widget or ref exists for them; judged against the HIG and M3 numbers they stay at review.

@@ -1,0 +1,24 @@
+{
+ "popup_menu": {
+  "looks": {
+   "neper": {
+    "status": "review",
+    "screenshot": "neper/popup_menu.png",
+    "notes": "ROUND 61: audit 27's four defects. (1) Every Neper and Neper dark popup sheet is sized from its menu (rows 32, separators 17, headers 20, the 320 wide maximum and the shadow) so the whole menu sits inside its cell: a pixel scan of all 312 Neper and Neper dark popup PNGs (78 sheets, two palettes, 1x and 1.5x) finds no menu pixel on the cell's right or bottom edge (the menu hangs from the cell's top left corner by design); the 8 clipped sheets of audit 27 (Online x4, Admin, three child menus) are whole. (2) The row content now fills the 32 high row (navigation.bar_menu_clamped, Neper only), so the hover and selected fill is centred on its text: the ink centroid sits 1.8 px below the fill's centre on average (the x-height bias of a centred baseline), max 2.2, against 4.2 mean and 5.0 max before. (3) The chevron strips scroll on hover: widget.e has a GESTURE_HOLD region bit and a Frame tick (hold_scroll) that moves the viewport named by the strip's semantic parent at 360 px a second toward the strip until the pointer leaves or an end is reached; tests/selfhost/fixtures/link/ui_popup_menu_scroll drives the wheel, Tab focus and hover over both chevrons and checks the visible window moves and clamps. (4) Neper draws v3's section headers (BarCommand.header, already in the model) as dim LabelSmall lines with no hover, press or focus stop. Windows, Windows dark, Linux, Cupertino and Material popup sheets and the sampled apps re-render byte for byte. Left for the audit to decide the status.",
+    "gaps": [
+     "the submenu parent sheets show the highlighted row but not the opened child (the child has its own sheet)",
+     "a selected row that is disabled shows no fill; the Cupertino row ignores the selected flag; the chevron strips stay drawn at an end where the hover scroll has nothing to do"
+    ]
+   },
+   "neper_dark": {
+    "status": "review",
+    "screenshot": "neper-dark/popup_menu.png",
+    "notes": "ROUND 61: audit 27's four defects. (1) Every Neper and Neper dark popup sheet is sized from its menu (rows 32, separators 17, headers 20, the 320 wide maximum and the shadow) so the whole menu sits inside its cell: a pixel scan of all 312 Neper and Neper dark popup PNGs (78 sheets, two palettes, 1x and 1.5x) finds no menu pixel on the cell's right or bottom edge (the menu hangs from the cell's top left corner by design); the 8 clipped sheets of audit 27 (Online x4, Admin, three child menus) are whole. (2) The row content now fills the 32 high row (navigation.bar_menu_clamped, Neper only), so the hover and selected fill is centred on its text: the ink centroid sits 1.8 px below the fill's centre on average (the x-height bias of a centred baseline), max 2.2, against 4.2 mean and 5.0 max before. (3) The chevron strips scroll on hover: widget.e has a GESTURE_HOLD region bit and a Frame tick (hold_scroll) that moves the viewport named by the strip's semantic parent at 360 px a second toward the strip until the pointer leaves or an end is reached; tests/selfhost/fixtures/link/ui_popup_menu_scroll drives the wheel, Tab focus and hover over both chevrons and checks the visible window moves and clamps. (4) Neper draws v3's section headers (BarCommand.header, already in the model) as dim LabelSmall lines with no hover, press or focus stop. Windows, Windows dark, Linux, Cupertino and Material popup sheets and the sampled apps re-render byte for byte. Left for the audit to decide the status.",
+    "gaps": [
+     "the submenu parent sheets show the highlighted row but not the opened child (the child has its own sheet)",
+     "a selected row that is disabled shows no fill; the Cupertino row ignores the selected flag; the chevron strips stay drawn at an end where the hover scroll has nothing to do"
+    ]
+   }
+  }
+ }
+}

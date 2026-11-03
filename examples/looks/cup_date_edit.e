@@ -5,6 +5,7 @@ use e.mem
 use e.time
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y87
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
@@ -80,7 +81,15 @@ fn drive_of(i: usize) -> looks.Drive {
 // empty edit, focused. Open cells are driven so that they
 // stand open in their own frame only (the focused cell is last: the runtime keeps the focus on a
 // tree slot, which a later pass could land in a cell).
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+// Increased-contrast accent: the chosen day's digit holds 4.5:1 (white on 0A60FF in light, near-black on 409CFF in dark), the Today
+// and Clear links 4.5:1 or better on the panel.
+fn build(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let tones = [3]looks_y87.RoleTone{ looks_y87.RoleTone { role: .Primary, light: 0x0A60FFu32, dark: 0x409CFFu32 }, looks_y87.RoleTone { role: .OnPrimary, light: 0xFFFFFFu32, dark: 0x0B0B0Cu32 }, looks_y87.ring_tone() }
+    let (tokens, tokens_error) = looks_y87.retoned(a, original.tokens, tones[0usize..3usize])
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let t = &themed
     let captions = [6]str{ "Open", "Open, day hover", "Normal", "Hover", "Empty", "Focus" }
     var drives = [6]looks.Drive{ .None, .None, .None, .None, .None, .None }
     var i = 0usize
@@ -112,7 +121,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if i == 1usize {
             open = now == i
-            above = cell_h() * 0.5 - 17.0 - 34.0 - 6.0 - 12.0 - 38.0 - 17.0 - 38.0 - 34.0
+            above = cell_h() * 0.5 - 17.0 - 34.0 - 6.0 - 12.0 - 38.0 - 17.0 - 38.0 - 34.0 + 38.0
         }
         let (node, node_error) = overlay.date_picker_with(a, u64(i + 1usize) * 100u64, t, "Created", chosen, n > 0usize, open, &actions[0usize], chosen, zero, zero, footer)
         if node_error != ok { ret (0usize, node_error) }

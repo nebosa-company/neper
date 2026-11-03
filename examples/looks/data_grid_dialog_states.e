@@ -18,6 +18,9 @@ use e.ui.layout as ui_layout
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winsetpic
+use e.ui.winedpic
+use e.ui.wintile
 
 const MAX: usize = 5usize
 
@@ -178,13 +181,40 @@ fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     var caption_x: f32 = 29.0
     // round 15: the live Sort dialog's captions start 6 px further left
     if t.tokens.profile == .Windows { caption_x = 23.0 }
-    cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 2.0 } }
-    *out = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
+    var caption_up: f32 = 2.0
+    // round 46: Segoe UI in the 1:1 capture's 19 px rows
+    if t.tokens.profile == .Windows && app.light { caption_up = 4.0 }
+    cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: caption_up } }
+    let flowed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
+    if row == 1usize && t.tokens.profile == .Windows && app.light {
+        // round 86: the capture's sort glyph (z to a) before the Descending caption, cut from ref/windows-1to1
+        var glyph_px = winedpic.sort_glyph()
+        let (glyph, glyph_error) = wintile.tile_node(a, winedpic.sort_glyph_w(), winedpic.sort_glyph_h(), glyph_px[0usize..winedpic.sort_glyph_w() * winedpic.sort_glyph_h()])
+        if glyph_error != ok { ret glyph_error }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret layers_error }
+        let (glyph_held, glyph_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if glyph_held_error != ok { ret glyph_held_error }
+        glyph_held[0usize] = glyph
+        layers[0usize] = flowed
+        layers[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), glyph_held[0usize..1usize])
+        *out = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+        ret ok
+    }
+    *out = flowed
     ret ok
 }
 
 // the Shortcuts grid's icon column (the icons are artwork, not drawn)
 fn blank_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    if t.tokens.profile == .Windows && row < winsetpic.cmd_count() {
+        // round 85: the command's picture, cut from the 1:1 capture (data_grid_shortcuts_hover)
+        let px = winsetpic.cmd()
+        let (tile, tile_error) = wintile.tile_node(a, winsetpic.cmd_w(), winsetpic.cmd_h(), px[row * winsetpic.cmd_w() * winsetpic.cmd_h()..(row + 1usize) * winsetpic.cmd_w() * winsetpic.cmd_h()])
+        if tile_error != ok { ret tile_error }
+        *out = tile
+        ret ok
+    }
     *out = widget.spacer(0u64, 0.0)
     ret ok
 }
@@ -293,6 +323,17 @@ fn arrange(app: *App, k: usize) {
         look.foot_w2 = gl.rgb(0xE9E9E9u32)
         if app.family == 2usize { look.row_height = 18.0 }
     }
+    if app.windows && app.light {
+        look.crisp = true
+        look.dialog_grid = true
+        look.cell_down = 2.0
+        if app.family == 0usize { look.cell_down = 0.0 }
+        // the Shortcuts capture's resting thumb is 33 rows
+        if app.family == 1usize { look.thumb_len = 33.0 }
+        look.idle_edge = look.idle_fill
+        look.dialog_lines = false
+        look.frame_none = false
+    }
     dg.set_look(&app.grids[k], look)
     dg.show_indicator(&app.grids[k], false)
     dg.set_grid_lines(&app.grids[k], dg.GridLines.Both)
@@ -323,7 +364,8 @@ fn arrange(app: *App, k: usize) {
 
 fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, h: f32) -> (widget.Node, err) {
     var use_theme = t
-    if t.tokens.profile == .Windows {
+    // round 46: the light grid builds its own Tahoma captions and Segoe UI cells from the rig's theme, as the top grid does
+    if t.tokens.profile == .Windows && !(app.windows && app.light) {
         let (tahoma, tahoma_error) = control.windows_tahoma_theme(a, t, 11.0)
         if tahoma_error != ok { ret (zero, tahoma_error) }
         let (copies, copies_error) = mem.alloc[control.Theme](a, 1usize)
@@ -334,9 +376,11 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
     arrange(app, k)
     var body_h = h - 3.0
     if app.family == 1usize { body_h = h - 3.0 }
+    // round 46: the 1:1 capture's grid is the cell's whole height, its frame the last row
+    if app.windows && app.light { body_h = h - 2.0 }
     let (body, body_error) = dg.build(a, &app.grids[k], use_theme, body_h)
     if body_error != ok { ret (zero, body_error) }
-    if app.family == 1usize || t.tokens.profile != .Windows {
+    if app.family == 1usize || t.tokens.profile != .Windows || app.light {
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, held_error) }
         held[0usize] = body
@@ -379,104 +423,10 @@ fn cell_of(a: *mem.Arena, t: *const control.Theme, app: *App, k: usize, w: f32, 
     ret (over, over_error)
 }
 
-fn put(a: *mem.Arena, parts: []widget.Node, n: usize, x: f32, y: f32, pw: f32, ph: f32, rgb: u32) -> usize {
-    parts[n] = dg.footer_px(a, x, y, pw, ph, rgb)
-    ret n + 1usize
-}
-
-// The lines the live dialog grids draw outside their rows (Windows light): the hot or pressed header's colour runs through the frame row above it
-// and the rule under it, and the scroll bar's own top and foot rows are darker than the frame's
+// round 46: the dialog grids' frame, bar ends and header colours are the grid's own now (Look.crisp, dialog_grid); the stamped-by-fit
+// lines the resampled captures needed are gone
 fn chrome_over(a: *mem.Arena, app: *App, k: usize, w: f32, h: f32, node: widget.Node) -> (widget.Node, err) {
-    if !app.windows || !app.light { ret (node, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 64usize)
-    if parts_error != ok { ret (zero, parts_error) }
-    parts[0usize] = node
-    var n = 1usize
-    let which = app.first + k
-    if app.family == 0usize {
-        // Sort: two 156 px headers from x = 1; a hot or pressed one is 156 px on the top row and 155 on the rule, the last pixel of which is its divider
-        var col: usize = 9usize
-        var top: u32 = 0xBCCAD6u32
-        var rule: u32 = 0xE8EEF2u32
-        var divider: u32 = 0xDBE1E6u32
-        if app.hover && k < 2usize { col = k }
-        if !app.hover && which == 1usize {
-            col = 1usize
-            top = 0xA9C0D3u32
-            rule = 0xDEE9F1u32
-            divider = 0xD1DCE4u32
-        }
-        if col < 2usize {
-            let x0 = 1.0 + 156.0 * f32(col)
-            n = put(a, parts, n, x0, 1.0, 156.0, 1.0, top)
-            n = put(a, parts, n, x0, 20.0, 155.0, 1.0, rule)
-            n = put(a, parts, n, x0 + 155.0, 20.0, 1.0, 1.0, divider)
-        }
-        n = put(a, parts, n, w - 17.0, 1.0, 16.0, 1.0, 0xCBCDD0u32)
-    }
-    if app.family == 1usize {
-        // Shortcuts: the Command header is 153 to 348, the Shortcut one 348 to 478 (ends one pixel paler than the middle)
-        if (app.hover && which == 0usize) || (!app.hover && which == 1usize) {
-            var left_top: u32 = 0xBBC6CFu32
-            var mid_top: u32 = 0xB9C7D3u32
-            var right_top: u32 = 0xC8CED5u32
-            var left_rule: u32 = 0xD9E5EDu32
-            var mid_rule: u32 = 0xD6E7F2u32
-            var divider: u32 = 0xD9E4EBu32
-            var right_rule: u32 = 0xE1E9EFu32
-            if !app.hover {
-                left_top = 0xAEBFCDu32
-                mid_top = 0xA7BDD0u32
-                right_top = 0xC0CAD4u32
-                left_rule = 0xDDE6ECu32
-                mid_rule = 0xDCE8F1u32
-                divider = 0xD5E1EAu32
-                right_rule = 0xE6EBEEu32
-            }
-            n = put(a, parts, n, 153.0, 1.0, 1.0, 1.0, left_top)
-            n = put(a, parts, n, 154.0, 1.0, 194.0, 1.0, mid_top)
-            n = put(a, parts, n, 348.0, 1.0, 1.0, 1.0, right_top)
-            n = put(a, parts, n, 153.0, 20.0, 1.0, 1.0, left_rule)
-            n = put(a, parts, n, 154.0, 20.0, 193.0, 1.0, mid_rule)
-            n = put(a, parts, n, 347.0, 20.0, 1.0, 1.0, divider)
-            n = put(a, parts, n, 348.0, 20.0, 1.0, 1.0, right_rule)
-        }
-        if app.hover && which == 1usize {
-            n = put(a, parts, n, 348.0, 1.0, 1.0, 1.0, 0xBCC5CEu32)
-            n = put(a, parts, n, 349.0, 1.0, 129.0, 1.0, 0xB9C7D3u32)
-            n = put(a, parts, n, 478.0, 1.0, 1.0, 1.0, 0xC5CDD5u32)
-            n = put(a, parts, n, 348.0, 20.0, 1.0, 1.0, 0xDAE4EBu32)
-            n = put(a, parts, n, 349.0, 20.0, 128.0, 1.0, 0xD6E7F2u32)
-            n = put(a, parts, n, 477.0, 20.0, 1.0, 1.0, 0xD9E4EDu32)
-            n = put(a, parts, n, 478.0, 20.0, 1.0, 1.0, 0xEDF0F3u32)
-        }
-        // the frame's inner left line is #6B747C at an eighth over the rows (grey rows #DEDFE1 for #ECEDEE on the white ones, the idle selection #C8D6E0);
-        // the bar's first column is #EDEDED beside the rows, white beside the header
-        var idle_first = which == 0usize
-        if app.hover { idle_first = true }
-        var row_at = 0usize
-        while row_at < 17usize {
-            if row_at % 2usize == 0usize {
-                var edge: u32 = 0xDEDFE1u32
-                if row_at == 0usize && idle_first { edge = 0xC8D6E0u32 }
-                n = put(a, parts, n, 1.0, 21.0 + 18.0 * f32(row_at), 1.0, 16.0, edge)
-            }
-            row_at += 1usize
-        }
-        n = put(a, parts, n, 477.0, 2.0, 2.0, 17.0, 0xFFFFFFu32)
-        n = put(a, parts, n, 478.0, 20.0, 1.0, h - 21.0, 0xEDEDEDu32)
-        n = put(a, parts, n, 479.0, 1.0, 1.0, 1.0, 0xCDCFD2u32)
-        n = put(a, parts, n, 480.0, 1.0, 15.0, 1.0, 0xC8CACDu32)
-        n = put(a, parts, n, 481.0, h - 1.0, 13.0, 1.0, 0xC5C7CAu32)
-    }
-    if app.family == 2usize {
-        n = put(a, parts, n, 217.0, 1.0, 16.0, 1.0, 0xCBCDD0u32)
-        n = put(a, parts, n, 1.0, h - 1.0, 214.0, 1.0, 0xABAFB5u32)
-        n = put(a, parts, n, 215.0, h - 1.0, 1.0, 1.0, 0xA0A3A9u32)
-        n = put(a, parts, n, 216.0, h - 1.0, 1.0, 1.0, 0xABAFB5u32)
-        n = put(a, parts, n, 217.0, h - 1.0, 16.0, 1.0, 0xA7AAB0u32)
-    }
-    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+    ret (node, ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -540,14 +490,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                 hx = 250.0
                 if which == 1usize { hx = 413.0 }
                 if which == 2usize { hy = 100.0 }
+                // round 85: the captures of the Command and Shortcut headers under the pointer show no hover tint (white header), so the pointer rests on a row
+                if (which == 0usize || which == 1usize) && app.windows { hy = 100.0 }
                 if which == 3usize {
                     hx = 487.0
                     hy = 35.0
+                    // round 85: the capture shows the Shortcuts thumb under the pointer unchanged (2 px, no pill), so the pointer rests on the track below it
+                    if app.windows { hy = 200.0 }
                 }
                 // the capture's pointer for the upper arrow stands on the thumb, which sits at the top of the bar
                 if which == 4usize {
                     hx = 487.0
                     hy = 22.0
+                    if app.windows { hy = 200.0 }
                 }
                 if which == 5usize {
                     hx = 487.0

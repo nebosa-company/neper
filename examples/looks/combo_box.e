@@ -178,7 +178,23 @@ fn build_set(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.
     let now = pass_of(ctx, n, drives[0usize..n])
     i = 0usize
     while i < n {
-        let s = spec_of(sheet_no, i)
+        var s = spec_of(sheet_no, i)
+        // Neper: the drop button is not a field of its own (the 24 px one is Windows'), so the full combo stands and the pointer goes to its chevron.
+        var aim_dx: f32 = 0.0
+        if t.tokens.profile == .Neper && sheet_no == 0usize && (i == 2usize || i == 3usize) {
+            s.options.width = 150.0
+            s.value = "Against Card Color"
+            s.left = 10.0
+            aim_dx = 55.0
+        }
+        // Neper: the Focus tap must land on the editor (its line, 12 px under the cell centre), not on the frame padding above it.
+        var aim_dy: f32 = 0.0
+        if t.tokens.profile == .Neper && sheet_no == 0usize && i == 7usize { aim_dy = 12.0 }
+        // Neper lists: the second row's middle is 70 px under the column's centre (field 48 high, list 4 under it, 8 of padding, 36 rows).
+        if t.tokens.profile == .Neper && sheet_no == 1usize && i == 1usize { aim_dy = 70.5 }
+        // Neper scrolling list: the pointer on the second row (field 48, 4 gap, 8 padding, 36 rows; the cell's centre is 71 under the field's top).
+        if t.tokens.profile == .Neper && sheet_no == 1usize && i == 2usize { aim_dy = 43.0 }
+        looks.aim(i, aim_dx, aim_dy)
         var choices: []const str = colors[0usize..4usize]
         if s.rows == 22usize { choices = numbers[0usize..22usize] }
         let (node, node_error) = one(a, t, u64(i + 1usize) * 100u64, s.value, choices, s.active, s.open && now == i, s.options, s.above, s.left, s.high, cell_w())
@@ -705,6 +721,9 @@ fn run_head(a: *mem.Arena, n: usize) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    looks.pad_neper(30.0, 36.0)
+    // Only the states and the `lists` sheets are Neper pictures; the other arguments reproduce Windows captures.
+    if args.len > 1usize && args[1usize][0usize] != 108u8 { looks.windows_capture() }
     if args.len == 2usize {
         let first = args[1usize][0usize]
         if first == 115u8 {
@@ -763,6 +782,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }
     if args.len > 1usize {
+        // Neper: the open lists hang below their fields (a Windows cell is 150 high and cut them over the field).
+        looks.pad_neper(30.0, 360.0)
         let lists = looks.Sheet { name: "combo_box_lists", cells: 4usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build_lists }
         ret looks.run_all(a, &lists)
     }

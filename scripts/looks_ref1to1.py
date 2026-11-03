@@ -44,7 +44,8 @@ def locate(cell, files):
         cg = cv2.cvtColor(c[:, :, ::-1].copy(), cv2.COLOR_BGR2GRAY).astype(np.float32)
         r = cv2.matchTemplate(cg, g, cv2.TM_SQDIFF)
         mn, _, loc, _ = cv2.minMaxLoc(r)
-        if best is None or mn < best[0]:
+        # an exact tie goes to a hover grab: the old rest grab of the main window had the pointer on View, its 1:1 twin has not
+        if best is None or mn < best[0] or (mn == best[0] and "hover" in os.path.basename(f) and "hover" not in os.path.basename(best[1])):
             best = (mn, f, loc)
     mn, f, (x, y) = best
     crop = load(f)[y:y + h, x:x + w]

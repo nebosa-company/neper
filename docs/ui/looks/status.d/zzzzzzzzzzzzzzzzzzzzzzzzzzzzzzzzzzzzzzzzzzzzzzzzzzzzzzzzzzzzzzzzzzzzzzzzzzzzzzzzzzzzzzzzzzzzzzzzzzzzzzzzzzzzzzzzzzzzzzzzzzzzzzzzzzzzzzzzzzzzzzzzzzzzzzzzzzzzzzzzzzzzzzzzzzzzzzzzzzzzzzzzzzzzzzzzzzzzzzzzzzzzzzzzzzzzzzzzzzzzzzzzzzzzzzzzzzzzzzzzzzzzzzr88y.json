@@ -1,0 +1,956 @@
+{
+ "avatar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the presence badge now hangs off the lower right corner (iOS 12 pt dot, 4 pt ring) and no longer covers the N, B or K of the monogram; presence tones 1F7A35 / C93400 / D70015 light and 30D158 / FF9F0A / FF453A dark (4.7:1 or better on the ground, 4.2:1 on the disc). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/avatar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the presence badge now hangs off the lower right corner (iOS 12 pt dot, 4 pt ring) and no longer covers the N, B or K of the monogram; presence tones 1F7A35 / C93400 / D70015 light and 30D158 / FF9F0A / FF453A dark (4.7:1 or better on the ground, 4.2:1 on the disc). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/avatar.png"
+   }
+  }
+ },
+ "image_combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button with the menu list. The lit row takes the 0A60FF / 0B57D0 accent (white text 5.5:1 / 6.4:1) and its template picture is drawn white (the red stand-in was 1.3:1 on the accent); hover equals rest as on the macOS pop-up (the ready combo_box row does the same). Viewed 1x and 1.5x light and dark. Colour pictures stand in for an image list and are content, not controls.",
+    "gaps": [],
+    "screenshot": "cupertino/image_combo_box.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button with the menu list. The lit row takes the 0A60FF / 0B57D0 accent (white text 5.5:1 / 6.4:1) and its template picture is drawn white (the red stand-in was 1.3:1 on the accent); hover equals rest as on the macOS pop-up (the ready combo_box row does the same). Viewed 1x and 1.5x light and dark. Colour pictures stand in for an image list and are content, not controls.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/image_combo_box.png"
+   }
+  }
+ },
+ "date_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the field with the macOS graphical-date-picker popover. Chosen day white on 0A60FF (5.5:1) light, near-black on 409CFF dark; Today and Clear links 5.5:1 and 6:1; the day-hover cell now hovers day 1 (it hovered the chosen 8 and showed nothing). Viewed 1x and 1.5x light and dark. Not drawn: the iOS compact capsule and the macOS stepper field, and Today is marked by the footer button only (the docked picker does not ring it).",
+    "gaps": [],
+    "screenshot": "cupertino/date_edit.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the field with the macOS graphical-date-picker popover. Chosen day white on 0A60FF (5.5:1) light, near-black on 409CFF dark; Today and Clear links 5.5:1 and 6:1; the day-hover cell now hovers day 1 (it hovered the chosen 8 and showed nothing). Viewed 1x and 1.5x light and dark. Not drawn: the iOS compact capsule and the macOS stepper field, and Today is marked by the footer button only (the docked picker does not ring it).",
+    "gaps": [],
+    "screenshot": "cupertino-dark/date_edit.png"
+   }
+  }
+ },
+ "group_box": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS box, iOS inset section, plain, disabled, empty, invalid all legible; the long caption no longer runs into the next cell; the invalid frame and message take D70015 / FF453A (4.8:1 and 5.0:1). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino/group_box.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS box, iOS inset section, plain, disabled, empty, invalid all legible; the long caption no longer runs into the next cell; the invalid frame and message take D70015 / FF453A (4.8:1 and 5.0:1). Viewed 1x and 1.5x light and dark.",
+    "gaps": [],
+    "screenshot": "cupertino-dark/group_box.png"
+   }
+  }
+ },
+ "calendar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): chosen days white on 0A60FF (5.1:1) light, near-black on 409CFF (7.0:1) dark; range band digits 0040DD on DCE8FF (6.1:1) and 9CC8FF on 1E3A66 (6.5:1); week numbers 5.6 and 7.6:1; keyboard ring 80 % blue; today ring and hover tile drawn; Viewed 1x and 1.5x light and dark. Event dots are decorative markers.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ],
+    "screenshot": "cupertino/calendar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): chosen days white on 0A60FF (5.1:1) light, near-black on 409CFF (7.0:1) dark; range band digits 0040DD on DCE8FF (6.1:1) and 9CC8FF on 1E3A66 (6.5:1); week numbers 5.6 and 7.6:1; keyboard ring 80 % blue; today ring and hover tile drawn; Viewed 1x and 1.5x light and dark. Event dots are decorative markers.",
+    "gaps": [
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look.",
+     "Weekday and month names are English with the theme's default week start (Monday)",
+     "Linux range band, today ring, week numbers and event dots follow libadwaita colours but GtkCalendar has no range or events, so they are derived; the Windows ring is 2 px in the text colour"
+    ],
+    "screenshot": "cupertino-dark/calendar.png"
+   }
+  }
+ },
+ "toolbar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the toolbar draws iOS text buttons in 0040DD / 409CFF (6:1 or better on the ground), hover tile, faded pressed label, disabled grey, ring at 80 %. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ],
+    "screenshot": "cupertino/toolbar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the toolbar draws iOS text buttons in 0040DD / 409CFF (6:1 or better on the ground), hover tile, faded pressed label, disabled grey, ring at 80 %. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Not compared with a real screen or a capture",
+     "Actions are text labels, not toolbar glyphs",
+     "The Windows toolbar draws a thin grip and underline, not checked against v3's full toolbar"
+    ],
+    "screenshot": "cupertino-dark/toolbar.png"
+   }
+  }
+ },
+ "bottom_app_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the iOS bottom toolbar of text buttons (the compose action is a text button, there is no floating button in UIKit) in 0040DD / 409CFF, hairline top edge, disabled grey; Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ],
+    "screenshot": "cupertino/bottom_app_bar.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the iOS bottom toolbar of text buttons (the compose action is a text button, there is no floating button in UIKit) in 0040DD / 409CFF, hairline top edge, disabled grey; Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)"
+    ],
+    "screenshot": "cupertino-dark/bottom_app_bar.png"
+   }
+  }
+ },
+ "title_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS traffic lights (red, amber, green; grey when inactive; faded when the window cannot use one) with the title; the hovered light now shows its glyph (cross, dash or arrows) as macOS does. Lights are decorative (3.2:1 red), title 7:1 and 5.8:1 inactive. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino/title_bar_all.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS traffic lights (red, amber, green; grey when inactive; faded when the window cannot use one) with the title; the hovered light now shows its glyph (cross, dash or arrows) as macOS does. Lights are decorative (3.2:1 red), title 7:1 and 5.8:1 inactive. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Material draws the Windows layout (Android has no caption); Linux and Cupertino hovered states are not compared with a real window. The older Windows v3 caption sheet title_bar.png is separate and unchanged",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino-dark/title_bar_all.png"
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): NSTableView look: header with sort arrow, banded rows, grey selection and hover, overlay scroll thumb; the Type column is 104 wide on Cupertino so 'Creature' is no longer cut; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino/table.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): NSTableView look: header with sort arrow, banded rows, grey selection and hover, overlay scroll thumb; the Type column is 104 wide on Cupertino so 'Creature' is no longer cut; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, row selected, sorted descending, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino-dark/table.png"
+   }
+  }
+ },
+ "tree_table": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): NSOutlineView look: disclosure chevrons, indented children, header with sort arrow, banded rows; the Type column no longer cuts 'Creature'; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino/tree_table.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): NSOutlineView look: disclosure chevrons, indented children, header with sort arrow, banded rows; the Type column no longer cuts 'Creature'; keyboard ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: collapsed, folder open, file selected, row hover, keyboard focus",
+     "Hover and focus cells land by fixed offset: the hover tint on a row and the focus ring position were not verified against a reference",
+     "Column sort arrow on a descending sort overlaps the header caption in several looks"
+    ],
+    "screenshot": "cupertino-dark/tree_table.png"
+   }
+  }
+ },
+ "popover": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): the iOS popover with its arrow above and below the anchor, rounded plate, Prices button white on 0A60FF (5.1:1) light and near-black on 409CFF dark, links 5.5:1 and 7:1. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "The popover material's blur is not drawn: an opaque fill stands for it",
+     "The arrow is low contrast against a light page, as the card's own shade stops at it",
+     "The close button is the shared one; iOS popovers have none (kept for the dismiss action)"
+    ],
+    "screenshot": "cupertino/popover.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): the iOS popover with its arrow above and below the anchor, rounded plate, Prices button white on 0A60FF (5.1:1) light and near-black on 409CFF dark, links 5.5:1 and 7:1. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "The popover material's blur is not drawn: an opaque fill stands for it",
+     "The arrow is low contrast against a light page, as the card's own shade stops at it",
+     "The close button is the shared one; iOS popovers have none (kept for the dismiss action)"
+    ],
+    "screenshot": "cupertino-dark/popover.png"
+   }
+  }
+ },
+ "side_sheet": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): iPad trailing sheet with the dimmed scrim, rounded leading corners, Apply white on 0A60FF and near-black on 409CFF, close glyph in the accent; Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ],
+    "screenshot": "cupertino/side_sheet.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): iPad trailing sheet with the dimmed scrim, rounded leading corners, Apply white on 0A60FF and near-black on 409CFF, close glyph in the accent; Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ],
+    "screenshot": "cupertino-dark/side_sheet.png"
+   }
+  }
+ },
+ "date_range_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button holding the range, with the graphical calendar popover. Ends white on 0A60FF and near-black on 409CFF; band digits 0040DD on DCE8FF and 9CC8FF on 1E3A66; focus ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ],
+    "screenshot": "cupertino/date_range_picker.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS pop-up button holding the range, with the graphical calendar popover. Ends white on 0A60FF and near-black on 409CFF; band digits 0040DD on DCE8FF and 9CC8FF on 1E3A66; focus ring 80 % blue. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "The Windows field was clipped at v3's 112 px date edit width: a 200 px drop-down face is used for the range (a guess, v3 has no range field)",
+     "Linux shows a menu button with a popover; the open Linux popover has no range band",
+     "The open sheet holds one cell; the open flyout is not driven by hover or focus",
+     "Derived, not compared with a real screen: no platform reference exists for this control; colours, metrics and shapes come from the shared tokens of each look."
+    ],
+    "screenshot": "cupertino-dark/date_range_picker.png"
+   }
+  }
+ },
+ "workspace": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS document tabs (chosen tab a raised pill, close glyphs 5.6:1 and 7.6:1, unsaved dot, pinned tab without a close glyph) over the editor and the empty state. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino/workspace.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): macOS document tabs (chosen tab a raised pill, close glyphs 5.6:1 and 7.6:1, unsaved dot, pinned tab without a close glyph) over the editor and the empty state. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "no hover, drag or overflow state; the view is a plain text line",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino-dark/workspace.png"
+   }
+  }
+ },
+ "key_value_editor": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "notes": "Round 88 (y): rounded fields, remove glyph 5.6:1 and 7.6:1, Add variable link 0045E6 / 409CFF, focus ring 80 % blue with the clear glyph. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ],
+    "screenshot": "cupertino/key_value_editor.png"
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "notes": "Round 88 (y): rounded fields, remove glyph 5.6:1 and 7.6:1, Add variable link 0045E6 / 409CFF, focus ring 80 % blue with the clear glyph. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only",
+     "Column captions clip under the first row and the empty state's captions overlap the Add button in this look (layout of the shared control, not fixed here)"
+    ],
+    "screenshot": "cupertino-dark/key_value_editor.png"
+   }
+  }
+ },
+ "navigation_stack": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): back button and ring now 0040DD / 409CFF (6:1 or better) and the pictures are clean; left at review because the title sits beside the back button at depth 2 and 3 instead of centred as in a UINavigationBar. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ],
+    "screenshot": "cupertino/navigation_stack.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): back button and ring now 0040DD / 409CFF (6:1 or better) and the pictures are clean; left at review because the title sits beside the back button at depth 2 and 3 instead of centred as in a UINavigationBar. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture; pop and push animation not shown",
+     "Cupertino title is not centred beside a back label"
+    ],
+    "screenshot": "cupertino-dark/navigation_stack.png"
+   }
+  }
+ },
+ "navigation_drawer": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): the chosen row takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1). Left at review: the drawer is the Material scrim-and-panel shape, iOS has the sidebar and the side sheet instead. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino/navigation_drawer.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): the chosen row takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1). Left at review: the drawer is the Material scrim-and-panel shape, iOS has the sidebar and the side sheet instead. Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino-dark/navigation_drawer.png"
+   }
+  }
+ },
+ "sidebar": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): the chosen row takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1). Left at review: the hover and pressed rows still draw like rest (the pointer does not land on a row, and the macOS sidebar has no hover tile; the pressed row is not drawn). Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino/sidebar.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): the chosen row takes 0A60FF / 0B57D0 (white 5.1:1 and 6.4:1). Left at review: the hover and pressed rows still draw like rest (the pointer does not land on a row, and the macOS sidebar has no hover tile; the pressed row is not drawn). Viewed 1x and 1.5x light and dark.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "Destinations are text only in the sheet (no pictures, badges or sections drawn)",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino-dark/sidebar.png"
+   }
+  }
+ },
+ "autocomplete": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. The suggestion list is never drawn (only the field), hover equals rest; nothing changed.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ],
+    "screenshot": "cupertino/autocomplete.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. The suggestion list is never drawn (only the field), hover equals rest; nothing changed.",
+    "gaps": [
+     "Material draws the open list over the lower half of its outlined field (the overlay is anchored to the inner editor, not the 56 px box); the cell is clipped there",
+     "Cupertino draws the list without a border and Linux with a check beside the active item; Windows uses the list-box chrome of v3; none compared with a real control"
+    ],
+    "screenshot": "cupertino-dark/autocomplete.png"
+   }
+  }
+ },
+ "banner": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material severity wells and tonal icon discs; wrapped text sits against the card bottom (layout of the shared control); no iOS banner idiom; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell",
+     "Pressed 'Details' is the 35 % dimmed label (illegible)",
+     "Severity wells are Material tonal chips"
+    ],
+    "screenshot": "cupertino/banner.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material severity wells and tonal icon discs; wrapped text sits against the card bottom (layout of the shared control); no iOS banner idiom; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The banner action is a text button in every look: no look has its own InfoBar or Adwaita banner drawing",
+     "No keyboard focus cell",
+     "Pressed 'Details' is the 35 % dimmed label (illegible)",
+     "Severity wells are Material tonal chips"
+    ],
+    "screenshot": "cupertino-dark/banner.png"
+   }
+  }
+ },
+ "breadcrumbs": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Chevrons sit below the text line; a web idiom (macOS has the path control); nothing changed.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ],
+    "screenshot": "cupertino/breadcrumbs.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Chevrons sit below the text line; a web idiom (macOS has the path control); nothing changed.",
+    "gaps": [
+     "No platform capture; Windows Explorer and Finder path bars are not matched",
+     "Editable path form and sibling menus not shown"
+    ],
+    "screenshot": "cupertino-dark/breadcrumbs.png"
+   }
+  }
+ },
+ "carousel": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Plain left-aligned page text with a rectangular focus box, no card; not an iOS paging view; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/carousel.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Plain left-aligned page text with a rectangular focus box, no card; not an iOS paging view; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/carousel.png"
+   }
+  }
+ },
+ "color_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Sliders with a faint rectangular focus box and a swatch; not NSColorWell or the iOS colour picker; nothing changed.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ],
+    "screenshot": "cupertino/color_picker.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Sliders with a faint rectangular focus box and a swatch; not NSColorWell or the iOS colour picker; nothing changed.",
+    "gaps": [
+     "A swatch beside RGB(A) sliders: each look draws the sliders as its own slider; no platform colour dialog (NSColorPanel, GtkColorChooser, Windows Choose Color) or hex field is drawn",
+     "The swatch shows no checkerboard under a translucent colour",
+     "Hover and pressed cells land between sliders, so the cue is faint"
+    ],
+    "screenshot": "cupertino-dark/color_picker.png"
+   }
+  }
+ },
+ "dial": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Knob with a rounded-square focus ring and hover equal to rest; no Apple knob; nothing changed.",
+    "gaps": [
+     "AppKit's circular slider shows no number: the readout over the knob is the shared one",
+     "Keyboard focus is the runtime's ring round the whole control",
+     "Hover draws nothing different from rest",
+     "Dot and tick colours are the label colours at fixed alphas, not measured"
+    ],
+    "screenshot": "cupertino/dial.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Knob with a rounded-square focus ring and hover equal to rest; no Apple knob; nothing changed.",
+    "gaps": [
+     "AppKit's circular slider shows no number: the readout over the knob is the shared one",
+     "Keyboard focus is the runtime's ring round the whole control",
+     "Hover draws nothing different from rest",
+     "Dot and tick colours are the label colours at fixed alphas, not measured"
+    ],
+    "screenshot": "cupertino-dark/dial.png"
+   }
+  }
+ },
+ "dock_panel": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Legible but 11 pt panel title and tiny close glyph; no Apple idiom; nothing changed.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino/dock_panel.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Legible but 11 pt panel title and tiny close glyph; no Apple idiom; nothing changed.",
+    "gaps": [
+     "busy shows a bar under the title only; no tabbed or maximised variant",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino-dark/dock_panel.png"
+   }
+  }
+ },
+ "flyout": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1.5x light and dark. Accent button now 5.1:1 (white on 0A60FF; near-black on 409CFF dark); the plate has no arrow and the light one keeps a hard shadow band under it.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ],
+    "screenshot": "cupertino/flyout.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1.5x light and dark. Accent button now 5.1:1 (white on 0A60FF; near-black on 409CFF dark); the plate has no arrow and the light one keeps a hard shadow band under it.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: three placements; text-only content so no hover or focus state"
+    ],
+    "screenshot": "cupertino-dark/flyout.png"
+   }
+  }
+ },
+ "font_picker": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Focus cell shows the first row cut at the top of the list; nothing changed.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ],
+    "screenshot": "cupertino/font_picker.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Focus cell shows the first row cut at the top of the list; nothing changed.",
+    "gaps": [
+     "Family rows and the sample use the theme's face: the control takes no per-family fonts, so the preview does not change with the family or the size",
+     "The size stepper shows no readout in the Cupertino look (UIStepper has none) and the size is not visible there",
+     "No disabled state; no platform font panel (NSFontPanel, GtkFontChooser, Windows ChooseFont) is drawn or measured"
+    ],
+    "screenshot": "cupertino-dark/font_picker.png"
+   }
+  }
+ },
+ "grid_view": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Tiles are 1.05:1 against the ground in light and the chosen tile is a grey 1.2:1 step with no accent; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/grid_view.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Tiles are 1.05:1 against the ground in light and the chosen tile is a grey 1.2:1 step with no accent; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/grid_view.png"
+   }
+  }
+ },
+ "image": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Bordered cell shows no visible border and the empty placeholder glyph is about 2:1; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ],
+    "screenshot": "cupertino/image.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Bordered cell shows no visible border and the empty placeholder glyph is about 2:1; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The picture is a drawn 96 by 64 landscape (lib/e/ui/looks_c.e) standing in for a photograph",
+     "Rounded and bordered are a box around the image (the control has no radius or border of its own)"
+    ],
+    "screenshot": "cupertino-dark/image.png"
+   }
+  }
+ },
+ "key_caps": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Web key caps at 9 pt; macOS shows shortcuts as glyphs in the menu; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ],
+    "screenshot": "cupertino/key_caps.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Web key caps at 9 pt; macOS shows shortcuts as glyphs in the menu; nothing changed.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The Cupertino look has no symbol keys (command, option glyphs): chords are the words Ctrl, Shift and so on in every look"
+    ],
+    "screenshot": "cupertino-dark/key_caps.png"
+   }
+  }
+ },
+ "list": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Flush rows without inset or chevrons, selected row a 1.1:1 grey step; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/list_rows.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Flush rows without inset or chevrons, selected row a 1.1:1 grey step; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/list_rows.png"
+   }
+  }
+ },
+ "navigation_rail": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material rail shape; no iOS or macOS equivalent; nothing changed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino/navigation_rail.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material rail shape; no iOS or macOS equivalent; nothing changed.",
+    "gaps": [
+     "No platform capture: shapes and metrics come from the platform's public design rules, nothing measured on a real screen",
+     "The rail's pictures are generic glyphs picked by index; the sheet passes labels only",
+     "The accent focus ring on the accent-filled selected row has no contrast against the fill"
+    ],
+    "screenshot": "cupertino-dark/navigation_rail.png"
+   }
+  }
+ },
+ "navigation_split": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Pane text sits top left with no list rows; wide cell has a hard divider and no sidebar rows; nothing changed.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ],
+    "screenshot": "cupertino/navigation_split.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Pane text sits top left with no list rows; wide cell has a hard divider and no sidebar rows; nothing changed.",
+    "gaps": [
+     "No platform capture; the divider drag handle is shown only where the look draws one",
+     "Panes are empty text, no real list or detail content",
+     "The supporting third pane is not shown"
+    ],
+    "screenshot": "cupertino-dark/navigation_split.png"
+   }
+  }
+ },
+ "pagination": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Numbered pages are a web idiom (UIKit uses dots); nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/pagination.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Numbered pages are a web idiom (UIKit uses dots); nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/pagination.png"
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Two iOS thumbs on one track with a stadium focus ring; no UIKit or AppKit range slider exists; hover and pressed handle equal rest; nothing changed.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "No label beside the slider"
+    ],
+    "screenshot": "cupertino/range_slider.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Two iOS thumbs on one track with a stadium focus ring; no UIKit or AppKit range slider exists; hover and pressed handle equal rest; nothing changed.",
+    "gaps": [
+     "iOS has no two-thumb slider (macOS neither): the thumbs reuse UISlider's size, the lit part runs between them",
+     "Hover and pressed draw nothing different from rest, as on the single Cupertino slider",
+     "No label beside the slider"
+    ],
+    "screenshot": "cupertino-dark/range_slider.png"
+   }
+  }
+ },
+ "scroll_area": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Hover and pressed thumb equal rest; test-pattern bands; nothing changed.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino/scroll_area.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Hover and pressed thumb equal rest; test-pattern bands; nothing changed.",
+    "gaps": [
+     "Linux draws GNOME's overlay indicator only while the content moves, and the harness cannot scroll, so no Linux cell shows a thumb",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino-dark/scroll_area.png"
+   }
+  }
+ },
+ "shortcut_recorder": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Web key caps in a box; no AppKit recorder look; nothing changed.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ],
+    "screenshot": "cupertino/shortcut_recorder.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Web key caps in a box; no AppKit recorder look; nothing changed.",
+    "gaps": [
+     "No disabled state: the control has no enabled option",
+     "Key caps show chord text (Ctrl, Shift, S) on every look; macOS glyphs (command, option) are not drawn",
+     "Windows text sits at the top of the field in the empty and recording cells (shared pressable layout); not tuned",
+     "The Windows ring is v3's dotted rectangle and the Linux one the accent at 50 %, 2 px inside the edge: derived, not captured"
+    ],
+    "screenshot": "cupertino-dark/shortcut_recorder.png"
+   }
+  }
+ },
+ "terminal_view": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. The empty cell draws nothing and the focus cell equals rest; nothing changed.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "The fixed-pitch face is Consolas (Menlo and SF Mono are not installed), so the Cupertino rows are not Apple type"
+    ],
+    "screenshot": "cupertino/terminal_view.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. The empty cell draws nothing and the focus cell equals rest; nothing changed.",
+    "gaps": [
+     "The list draws plain line text: terminal colours, cursor and attributes are not drawn",
+     "No platform terminal was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "The fixed-pitch face is Consolas (Menlo and SF Mono are not installed), so the Cupertino rows are not Apple type"
+    ],
+    "screenshot": "cupertino-dark/terminal_view.png"
+   }
+  }
+ },
+ "wizard": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material step indicator; Next white on 007AFF is 4.0:1; nothing changed.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino/wizard.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Material step indicator; Next white on 007AFF is 4.0:1; nothing changed.",
+    "gaps": [
+     "hover and pressed cells of Next show no visible change in several looks (the pointer aim is a guess)",
+     "Derived: no platform capture or reference crop exists for this control in this look"
+    ],
+    "screenshot": "cupertino-dark/wizard.png"
+   }
+  }
+ },
+ "reorderable_list": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Hover and pressed equal rest, no drag handles; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/reorderable_list.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Hover and pressed equal rest, no drag handles; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/reorderable_list.png"
+   }
+  }
+ },
+ "pull_to_refresh": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Refresh text button instead of the UIRefreshControl spinner at the top of the list; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino/pull_to_refresh.png"
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "notes": "Round 88 (y): viewed 1x light and dark. Refresh text button instead of the UIRefreshControl spinner at the top of the list; nothing changed.",
+    "gaps": [
+     "Derived, not compared with a real control or screen: the control draws through the shared tokens of each look, with no profile-specific drawing added in round 62",
+     "No reference capture exists for this control in any look; platform widgets of this kind (UITableView / GridView, ViewPager, RecyclerView, GtkListBox) were not measured",
+     "Mid-gesture states (a drag in flight, a half-revealed swipe, a pull past the threshold) are not drawn; hover, pressed and focus are driven at the cell centre only"
+    ],
+    "screenshot": "cupertino-dark/pull_to_refresh.png"
+   }
+  }
+ }
+}

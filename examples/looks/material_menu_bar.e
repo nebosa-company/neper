@@ -1,0 +1,115 @@
+// The Android look's menu bar, docs/ui/looks/material/menu_bar.png (rest, hover, pressed) and menu_bar-open.png (Cards open).
+// Flutter has no MenuBar reference image; the numbers are Flutter's MenuBar defaults, see lib/e/ui/looks_q79.e. Run from the
+// repository root.
+
+use e.mem
+use e.str as strs
+use e.ui.control
+use e.ui.looks
+use e.ui.navigation
+use e.ui.style
+use e.ui.widget
+
+fn noop_submit(ctx: *void) -> err { ret ok }
+
+// `node` at (x, y) inside a `w` x `h` box, so that a driven pointer at the box's centre lands
+// where the cell wants it.
+fn placed(a: *mem.Arena, node: widget.Node, x: f32, y: f32, w: f32, h: f32) -> (widget.Node, err) {
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, inner_error) }
+    inner[0usize] = node
+    ret (widget.padded(0u64, x, y, 8.0, 8.0, control.sized_style(w, h), inner[0usize..1usize]), ok)
+}
+
+fn command(label: str, shortcut: str, enabled: bool, separated: bool, action: widget.Submit) -> navigation.BarCommand {
+    var c: navigation.BarCommand = zero
+    c.label = label
+    c.shortcut = shortcut
+    c.enabled = enabled
+    c.separated = separated
+    c.action = action
+    ret c
+}
+
+fn bar(a: *mem.Arena, t: *const control.Theme, action: widget.Submit, base: widget.Key, open: usize, only_cards: bool) -> (widget.Node, err) {
+    let plain = [10]str{ "File", "Cards", "Search", "View", "Card Art", "Online", "Reports", "Tools", "Admin", "Help" }
+    // The Windows look underlines the letter after the `&` (v3's mnemonics: Card &Art, A&dmin).
+    let marked = [10]str{ "&File", "&Cards", "&Search", "&View", "Card &Art", "&Online", "&Reports", "&Tools", "A&dmin", "&Help" }
+    var titles = plain
+    if t.tokens.profile == .Windows { titles = marked }
+    var count = 10usize
+    if only_cards { count = 4usize }
+    let (cards, cards_error) = mem.alloc[navigation.BarCommand](a, 6usize)
+    if cards_error != ok { ret (zero, cards_error) }
+    cards[0usize] = command("Add to Deck", "", false, false, action)
+    cards[1usize] = command("Add 4 to Deck", "Ctrl+Ins", false, false, action)
+    cards[2usize] = command("Add to Collection", "", true, true, action)
+    cards[3usize] = command("Increase Quantity", "Num +", true, false, action)
+    cards[4usize] = command("Cut", "Ctrl+X", true, true, action)
+    cards[5usize] = command("Select All", "Ctrl+A", true, false, action)
+    let (menus, menus_error) = mem.alloc[navigation.BarMenu](a, count)
+    if menus_error != ok { ret (zero, menus_error) }
+    let (toggles, toggles_error) = mem.alloc[widget.Submit](a, count)
+    if toggles_error != ok { ret (zero, toggles_error) }
+    var i = 0usize
+    while i < count {
+        toggles[i] = action
+        var commands: []const navigation.BarCommand = zero
+        commands = cards[0usize..6usize]
+        // Neper dark's open sheet: the menu hangs under the bar and must fit the sheet's window (238 px) or it is moved up over the
+        // titles; Neper's rows are taller than v3's, so it shows the first four commands (the light picture keeps all six).
+        if open == 1usize && only_cards && t.tokens.profile == .Neper && t.tokens.palette == .Dark { commands = cards[0usize..4usize] }
+        menus[i] = navigation.BarMenu { label: titles[i], commands: commands }
+        i += 1usize
+    }
+    let (made, made_error) = navigation.menu_bar_of(a, base, t, "Main menu", menus[0usize..count], open, toggles[0usize..count])
+    ret (made, made_error)
+}
+
+fn actions_of(a: *mem.Arena) -> (*widget.Submit, err) {
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (zero, actions_error) }
+    actions[0usize] = widget.Submit { ctx: zero, invoke: noop_submit }
+    ret (&actions[0usize], ok)
+}
+
+// Four cells: the bar at rest, the View title (under the cell's centre) hovered and pressed, keyboard focus.
+fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (action, action_error) = actions_of(a)
+    if action_error != ok { ret (0usize, action_error) }
+    let captions = [4]str{ "Rest", "Hover (View)", "Pressed (View)", "Keyboard focus" }
+    var i = 0usize
+    while i < 4usize {
+        let (menu_bar, bar_error) = bar(a, t, *action, 10000u64 * u64(i + 1usize), 99usize, true)
+        if bar_error != ok { ret (0usize, bar_error) }
+        var drive: looks.Drive = .None
+        if i == 1usize { drive = .Hover }
+        if i == 2usize { drive = .Press }
+        if i == 3usize { drive = .Focus }
+        let (shifted, shifted_error) = placed(a, menu_bar, 8.0, 4.0, 496.0, 60.0)
+        if shifted_error != ok { ret (0usize, shifted_error) }
+        cells[i] = looks.Cell { caption: captions[i], node: shifted, drive: drive }
+        i += 1usize
+    }
+    ret (4usize, ok)
+}
+
+fn build_open(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (action, action_error) = actions_of(a)
+    if action_error != ok { ret (0usize, action_error) }
+    let (menu_bar, bar_error) = bar(a, t, *action, 10000u64, 1usize, true)
+    if bar_error != ok { ret (0usize, bar_error) }
+    let (shifted, shifted_error) = placed(a, menu_bar, 0.0, 0.0, 400.0, 400.0)
+    if shifted_error != ok { ret (0usize, shifted_error) }
+    cells[0usize] = looks.Cell { caption: "Open (Cards)", node: shifted, drive: .Hover }
+    ret (1usize, ok)
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    if args.len > 1usize {
+        let open_sheet = looks.Sheet { name: "menu_bar-open", cells: 1usize, columns: 1usize, cell_w: 400.0, cell_h: 400.0, ctx: zero, build: build_open }
+        ret looks.run_material(a, &open_sheet)
+    }
+    let sheet = looks.Sheet { name: "menu_bar", cells: 4usize, columns: 1usize, cell_w: 496.0, cell_h: 64.0, ctx: zero, build: build }
+    ret looks.run_material(a, &sheet)
+}

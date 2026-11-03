@@ -16,6 +16,10 @@ use e.ui.datagrid as dg
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winsetpic
+use e.ui.wintile
+
+fn noop_submit(ctx: *void) -> err { ret ok }
 
 const CC_NAME: usize = 0usize
 const CC_EDITION: usize = 1usize
@@ -90,6 +94,15 @@ fn coll_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
 
 // The icon column: v3's orange card-back disc (the real picture is not in this repo).
 fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    if t.tokens.profile == .Windows {
+        // round 85: v3's set symbol, cut from the 1:1 capture (the Mirage symbol; row 0 is the Timeshifted disc)
+        var px = winsetpic.mar()
+        if row == 0usize { px = winsetpic.tmt() }
+        let (tile, tile_error) = wintile.tile_node(a, winsetpic.set_w(), winsetpic.set_h(), px[0usize..winsetpic.set_w() * winsetpic.set_h()])
+        if tile_error != ok { ret tile_error }
+        *out = tile
+        ret ok
+    }
     var disc = style.defaults()
     disc.width = style.Length { Px: 15.0 }
     disc.height = style.Length { Px: 15.0 }
@@ -103,7 +116,7 @@ fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     ret ok
 }
 
-fn coll_specs(a: *mem.Arena, windows: bool) -> ([]dg.ColumnSpec, err) {
+fn coll_specs(a: *mem.Arena, windows: bool, light: bool) -> ([]dg.ColumnSpec, err) {
     let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
@@ -117,6 +130,13 @@ fn coll_specs(a: *mem.Arena, windows: bool) -> ([]dg.ColumnSpec, err) {
     specs[7usize] = dg.ColumnSpec { title: "Sell at", width: 65.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[8usize] = dg.ColumnSpec { title: "Sell At Value", width: 80.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[9usize] = dg.ColumnSpec { title: "Price", width: 1595.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    if windows && light {
+        // v3's current row shows its editors: spin buttons on Qty and Used, a three-dots button on Buy at and Sell at
+        specs[4usize].editable = true
+        specs[5usize].editable = true
+        specs[6usize].editable = true
+        specs[7usize].editable = true
+    }
     // the live footer has a sum under the Price column too (its cell is scrolled off, only its left edge shows)
     if windows { specs[9usize].summary = 2
         specs[9usize].summary_kind = grp.SummaryKind.Sum }
@@ -149,7 +169,7 @@ fn setup(m: *Bottom) -> err {
     sums[1usize] = grp.SummarySpec { column: CC_USED }
     sums[2usize] = grp.SummarySpec { column: CC_BUY }
     try grp.apply_summaries(&m.groups[k], sums[0usize..3usize], &m.store)
-    let (cs, cs_error) = coll_specs(a, m.windows)
+    let (cs, cs_error) = coll_specs(a, m.windows, m.light)
     if cs_error != ok { ret cs_error }
     var events = dg.no_events()
     events.custom_cell = coll_cell
@@ -182,13 +202,27 @@ fn setup(m: *Bottom) -> err {
         look.ring_rows = true
     }
     // round 43: the light grid is drawn as the true 1:1 captures of v3 have it
-    if m.windows && m.light { look.crisp = true }
+    if m.windows && m.light {
+        look.crisp = true
+        look.hot_crisp = true
+        look.hthumb_adj = 4.0
+        look.hthumb_dy = 1.0
+    }
     dg.set_look(&m.grids[k], look)
     dg.set_row_ink(&m.grids[k], mem.cast[*void](m), coll_ink)
     dg.set_footer_label(&m.grids[k], "Rows")
     dg.set_grid_lines(&m.grids[k], dg.GridLines.Both)
     dg.set_immediate_edit(&m.grids[k], true)
+    if m.windows && m.light {
+        // v3's current row shows its editors: spin buttons on Qty and Used, a three-dots button on Buy at and Sell at
+        dg.set_editor(&m.grids[k], 4usize, dg.EDITOR_SPIN)
+        dg.set_editor(&m.grids[k], 5usize, dg.EDITOR_SPIN)
+        dg.set_editor(&m.grids[k], 6usize, dg.EDITOR_BUTTON)
+        dg.set_editor(&m.grids[k], 7usize, dg.EDITOR_BUTTON)
+    }
     dg.show_navigator(&m.grids[k], true)
+    // v3's funnel is an enabled button (its hover frame shows in the captures)
+    if m.windows && m.light { dg.set_filter_action(&m.grids[k], widget.Submit { ctx: zero, invoke: noop_submit }) }
     dg.set_pane_hint(&m.grids[k], 573.0)
     dg.show_sort(&m.grids[k], 1usize, true)
     m.grids[k].aligns[3usize] = 2u8
@@ -211,23 +245,6 @@ fn setup(m: *Bottom) -> err {
 fn grid_height(t: *const control.Theme) -> f32 {
     if t.tokens.profile == .Windows { ret 268.0 }
     ret 267.0
-}
-
-// The pointer over the Name header: its colour runs through the frame's top row above it and the rule under it (live capture,
-// Windows light): #ACB8C3 over 35 to 183 between two paler end pixels, #E3EDF4 on the rule
-fn hot_header(a: *mem.Arena, m: *Bottom, k: usize, card: widget.Node) -> (widget.Node, err) {
-    if k != 2usize || !m.windows || !m.light { ret (card, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 9usize)
-    if parts_error != ok { ret (zero, parts_error) }
-    parts[0usize] = card
-    parts[1usize] = dg.footer_px(a, 34.0, 1.0, 1.0, 1.0, 0xADB7C2u32)
-    parts[2usize] = dg.footer_px(a, 35.0, 1.0, 149.0, 1.0, 0xACB8C3u32)
-    parts[3usize] = dg.footer_px(a, 184.0, 1.0, 1.0, 1.0, 0xBBBFC6u32)
-    parts[4usize] = dg.footer_px(a, 34.0, 20.0, 1.0, 1.0, 0xE3EBF1u32)
-    parts[5usize] = dg.footer_px(a, 35.0, 20.0, 148.0, 1.0, 0xE3EDF4u32)
-    parts[6usize] = dg.footer_px(a, 183.0, 20.0, 1.0, 1.0, 0xDDE6EDu32)
-    parts[7usize] = dg.footer_px(a, 184.0, 20.0, 1.0, 1.0, 0xF1F3F5u32)
-    ret (widget.stack(0u64, style.defaults(), parts[0usize..8usize]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -271,9 +288,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             looks.aim(k - m.first, px - 288.0, py - 121.0)
         }
         let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize])
-        let (card_over, card_over_error) = hot_header(a, m, k, card)
-        if card_over_error != ok { ret (0usize, card_over_error) }
-        cells[k - m.first] = looks.Cell { caption: captions[k], node: card_over, drive: drive }
+        cells[k - m.first] = looks.Cell { caption: captions[k], node: card, drive: drive }
         k += 1usize
     }
     ret (m.count, ok)

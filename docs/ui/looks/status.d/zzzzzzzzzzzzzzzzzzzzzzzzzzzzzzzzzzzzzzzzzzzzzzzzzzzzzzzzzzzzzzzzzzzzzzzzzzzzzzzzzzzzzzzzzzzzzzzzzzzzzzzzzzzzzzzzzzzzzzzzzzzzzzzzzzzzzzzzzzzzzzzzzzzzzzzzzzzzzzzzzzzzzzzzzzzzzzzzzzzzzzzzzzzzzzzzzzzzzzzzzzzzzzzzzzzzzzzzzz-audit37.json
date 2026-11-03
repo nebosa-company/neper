@@ -1,0 +1,48 @@
+{
+ "time_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/time_picker_dial.png",
+    "notes": "AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill e6e0e9 exact. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/time_picker_dial.png",
+    "notes": "AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill 36343b against 36343a. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet.",
+    "gaps": [
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn"
+    ]
+   }
+  }
+ },
+ "range_slider": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/range_slider.png",
+    "notes": "AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb a9a3aa against a8a3aa. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter b5b0b7.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/range_slider.png",
+    "notes": "AUDIT 37 (round 77 m check, reproduced with an own comparer): held: thumb flat 19 x 18 (Flutter 18 to 19 x 18), inactive track 4 high, disabled thumb a9a3aa against a8a3aa, disabled inactive track e3dde4 against e2dce4 (dark 2d2b31 against 2e2b31). Downgraded to review: (1) the rest inactive track is e6e0e9 against Flutter's d9d0e4 (dark 36343b against 413b4f), 13 and 11 levels; e6e0e9 is surface-container-highest as Material Web draws it, M3 secondary-container would be e8def8, neither equals the ref, and the note records only the thickness (4 against 4). Record the colour as a deviation (Material Web evidence) or move the track to the Flutter value, then raise again. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): RangeSlider rest, focus and disabled refs: thumb 20 (20), inactive track 4 (4), disabled thumb 646067 against 646068. Recorded deviations: active track 4 against Flutter 6, state layer 40 against 48 (M3 spec kept), focus halo on both handles against the first only, disabled active track at M3's 38 % on-surface against Flutter's lighter 58545b.",
+    "gaps": [
+     "Only Material draws round handles (material_slider); Neper, Windows, Linux and Cupertino draw the Neper bar handles because the platform slider branches skip a two-handle slider (Cupertino and Linux have no range slider of their own)",
+     "The Neper focus ring boxes the whole track; no value pill for a range"
+    ]
+   }
+  }
+ }
+}
