@@ -38,6 +38,7 @@ use e.ui.looks_o78
 use e.ui.looks_t81
 use e.ui.looks_x84
 use e.ui.looks_y84
+use e.ui.looks_y85
 use e.ui.looks_z84_edge
 use e.ui.winbutton
 use e.ui.winhint
@@ -1913,6 +1914,11 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
     if options.strong { ink = style.color(t.tokens, .Outline) }
     let horizontal = options.axis == .Horizontal
     var thick = style.Length { Px: t.tokens.sizes.divider }
+    // Cupertino: the opaque separator colour the picture cites (the translucent token composes to 1.07:1), one whole pixel thick so the colour is drawn
+    if t.tokens.profile == .CupertinoLike {
+        ink = style.hex_raw(looks_y85.separator(t.tokens.palette == .Dark, options.strong))
+        thick = style.Length { Px: 1.0 }
+    }
     // The Linux look (worker l3): libadwaita's GtkSeparator is a #dddddd (#454545 Dark) fill of its whole allocation; `thick` sets it.
     if t.tokens.profile == .Linux {
         ink = linux_rule(t)
@@ -1937,6 +1943,14 @@ fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerO
         line.width = thick
         line.height = style.Length { Flex: 1.0 }
         outer.padding = style.EdgeLengths { left: none, top: lead, right: none, bottom: tail }
+    }
+    // Cupertino: a 2 px box holds the 1 px line at its top edge, so the centred rule lands on whole pixels
+    if t.tokens.profile == .CupertinoLike && options.label.len == 0usize {
+        if horizontal {
+            outer.padding.bottom = style.Length { Px: 1.0 }
+        } else {
+            outer.padding.right = style.Length { Px: 1.0 }
+        }
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -12333,6 +12347,8 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         if filled { ink = primary }
         if hovered < count && i <= hovered && !filled {
             ink = with_alpha(primary, 0.6)
+            // Cupertino: the full accent, a 60 % one is under 3:1 on the hover layer
+            if t.tokens.profile == .CupertinoLike { ink = primary }
             filled = true
         }
         stars[i] = Star { color: ink, filled: filled, arena: a }
@@ -21212,6 +21228,17 @@ fn cup_segments(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, lab
         let (item, item_error) = pressable(a, item_key, t, item_role, labels[k], look, live, chosen, &actions[k], content)
         if item_error != ok { ret (zero, item_error) }
         items[k] = item
+        // A tab strip (role 19): the runtime insets a tab's ring 3 px, which left a 12 px box through the label; here the ring stays outside the segment
+        if item_role == 19u8 {
+            switch items[k].kind {
+            case .Semantics as item_sem:
+                var ringed_sem = item_sem
+                ringed_sem.focus_inset = -1.0
+                items[k].kind = widget.Kind { Semantics: ringed_sem }
+            default:
+                items[k] = item
+            }
+        }
         k += 1usize
     }
     layers[used] = widget.positioned(0u64, 2.0, 2.0, style.defaults(), widget_one_of(a, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])))

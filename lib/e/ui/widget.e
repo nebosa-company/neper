@@ -103,7 +103,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // `column` place the element in a collection of `row_count` by `column_count`;
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
 // leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
-// control; a platform action the element offers reaches `on_action` as its bit;
+// control (negative: keeps it outside, even for a tab); a platform action the element offers reaches `on_action` as its bit;
 // `promote_actions` keeps nested Button/Link descendants beside this control.
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
@@ -2875,6 +2875,9 @@ fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bound
     let inset = semantic_focus_inset(s, element)
     if inset > 0.0 {
         grow = 0.0 - inset - w * 0.5
+    } else if inset < 0.0 {
+        // a negative inset keeps the ring outside the bounds (a tab that should not take the 3 px inset)
+        grow = s.ring_offset + w * 0.5
     } else if menu_item || tab_item {
         grow = 0.0 - 3.0 - w * 0.5
     } else if s.has_clip {
@@ -4165,7 +4168,7 @@ fn semantic_focus_inset(s: *State, index: usize) -> f32 {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && e.sem.focus_inset > 0.0 { ret e.sem.focus_inset }
+        if e.has_semantics && e.sem.focus_inset != 0.0 { ret e.sem.focus_inset }
         if !e.has_parent { ret 0.0 }
         at = usize(e.parent)
     }
