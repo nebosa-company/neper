@@ -518,6 +518,7 @@ fn outer_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err) {
 }
 
 fn inner_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err) {
+    if d.nodes[usize(id)].kind == .Element && d.nodes[usize(id)].namespace == .Html && html.is_void(d.nodes[usize(id)].name) { ret ("", ok) }
     var b = try str.builder(a, 256usize)
     var w = io.writer(mem.cast[*void](&b), builder_write)
     let doc = view(d)

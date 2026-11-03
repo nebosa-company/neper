@@ -302,8 +302,8 @@ fn write_escaped(writer: *io.Writer, text: str, in_attribute: bool) -> err {
         let c = text[at]
         var replacement = ""
         if c == 38u8 { replacement = "&amp;" }
-        if c == 60u8 && !in_attribute { replacement = "&lt;" }
-        if c == 62u8 && !in_attribute { replacement = "&gt;" }
+        if c == 60u8 { replacement = "&lt;" }
+        if c == 62u8 { replacement = "&gt;" }
         if c == 34u8 && in_attribute { replacement = "&quot;" }
         if c == 160u8 && at > 0usize && text[at - 1usize] == 194u8 {
             try io.write_all(writer, text[run..at - 1usize])
@@ -319,6 +319,15 @@ fn write_escaped(writer: *io.Writer, text: str, in_attribute: bool) -> err {
         at += 1usize
     }
     ret io.write_all(writer, text[run..])
+}
+
+fn after_colon(name: str) -> str {
+    var i = name.len
+    while i > 0usize {
+        if name[i - 1usize] == 58u8 { ret name[i..] }
+        i -= 1usize
+    }
+    ret name
 }
 
 fn write_node(writer: *io.Writer, document: *const Document, id: NodeId) -> err {
@@ -344,10 +353,14 @@ fn write_node(writer: *io.Writer, document: *const Document, id: NodeId) -> err 
         var i = 0usize
         while i < n.attributes.len {
             try io.write_all(writer, " ")
-            if n.attributes[i].namespace == .Xlink { try io.write_all(writer, "xlink:") }
-            if n.attributes[i].namespace == .Xml { try io.write_all(writer, "xml:") }
-            if n.attributes[i].namespace == .Xmlns && !str.eq(n.attributes[i].name, "xmlns") { try io.write_all(writer, "xmlns:") }
-            try io.write_all(writer, n.attributes[i].name)
+            var an: str = n.attributes[i].name
+            if n.attributes[i].namespace == .Xlink || n.attributes[i].namespace == .Xml || n.attributes[i].namespace == .Xmlns {
+                an = after_colon(an)
+                if n.attributes[i].namespace == .Xlink { try io.write_all(writer, "xlink:") }
+                if n.attributes[i].namespace == .Xml { try io.write_all(writer, "xml:") }
+                if n.attributes[i].namespace == .Xmlns && !str.eq(an, "xmlns") { try io.write_all(writer, "xmlns:") }
+            }
+            try io.write_all(writer, an)
             try io.write_all(writer, "=\"")
             try write_escaped(writer, n.attributes[i].value, true)
             try io.write_all(writer, "\"")
