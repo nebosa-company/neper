@@ -14695,7 +14695,7 @@ fn noticed_with(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []cons
         // Cupertino: a rounded banner with a soft shadow, not Material's stacked heavy one
         if t.tokens.profile == .CupertinoLike {
             options.radius = 22.0
-            options.elevation = 1u8
+            options.elevation = 0u8
         }
         wide = 340.0
         pad_y = style.Length { Px: 12.0 }
@@ -14870,7 +14870,7 @@ fn stacked_toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notice: *Notic
     options.elevation = 3u8
     if t.tokens.profile == .CupertinoLike {
         options.radius = 22.0
-        options.elevation = 1u8
+        options.elevation = 0u8
     }
     var sheet = surface_style(t, options)
     sheet.overflow = .Visible

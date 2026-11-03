@@ -8666,6 +8666,11 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
         look.padding_y = 0.0
         look.min_width = widths[i]
         look.min_height = 32.0
+        // macOS toolbar tab strip: the chosen tab is a raised pill, the others are plain labels
+        if t.tokens.profile == .CupertinoLike {
+            look.corners = style.Corners { top_left: 8.0, top_right: 8.0, bottom_right: 8.0, bottom_left: 8.0 }
+            if chosen { look.background = style.hex_raw(looks_y86.tab_face(t.tokens.palette == .Dark)) }
+        }
         var caption = control.text_options()
         caption.role = .TitleSmall
         caption.wrap = .None
@@ -8753,6 +8758,7 @@ fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const
     strip_parts[placed + 1usize] = collapse_button
     var strip_style = style.defaults()
     strip_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    if t.tokens.profile == .CupertinoLike { strip_style.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     strip_style.height = style.Length { Px: 32.0 }
     strip_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
     let strip = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip_style, strip_parts[0usize..placed + 2usize])
