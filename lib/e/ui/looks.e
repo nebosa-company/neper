@@ -281,6 +281,7 @@ fn open(a: *mem.Arena, width: f32, height: f32, scale: f32) -> (*Rig, err) {
     rig.runtime = rt
     // The app sets this from the window; here, so that pixel art lands on whole device pixels. Left alone at 100 %.
     if scale != 1.0 { widget.set_snap(&rig.runtime, 1.0 / scale) }
+    scene.set_device_scale(scale)
     let physical_w = u32(width * scale + 0.5)
     let physical_h = u32(height * scale + 0.5)
     let (h, harness_error) = testing.harness(a, &rig.runtime, physical_w, physical_h, scale)

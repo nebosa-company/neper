@@ -360,6 +360,7 @@ fn set_snap(widget_runtime: *Runtime, snap: f32) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize { ret }
     s.snap = snap
+    if snap > 0.0 { scene.set_device_scale(1.0 / snap) }
 }
 
 // A measure remembered for the frame: the node (by its address in the frame's

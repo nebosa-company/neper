@@ -35,9 +35,9 @@ fn dark_edit_frame(a: *mem.Arena, width: f32, focused: bool, inner: widget.Node)
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, rings[0usize..1usize]), ok)
 }
 
-// The dark radio group's frame line: #707070, 3.3 : 1 on the #202020 page (the muted #333333 was 1.29 : 1, under the 3 : 1 bar).
-// Derived, no capture (the native group box stays #DCDCDC and unreadable in dark); quieter than the edit's #9B9B9B line.
+// The dark radio group frame line: #DCDCDC, the native dark group box capture (groupbox-rest), 12.7 : 1 on the #202020 page (round 84 replaces the derived #707070).
+// One line colour for every dark group frame.
 fn dark_group_line(dark: bool, base: paint.Color) -> paint.Color {
-    if dark { ret style.hex_raw(0x707070u32) }
+    if dark { ret style.hex_raw(0xDCDCDCu32) }
     ret base
 }

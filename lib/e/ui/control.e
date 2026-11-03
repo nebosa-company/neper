@@ -36,6 +36,7 @@ use e.ui.looks_b
 use e.ui.looks_z63
 use e.ui.looks_o78
 use e.ui.looks_t81
+use e.ui.looks_x84
 use e.ui.winbutton
 use e.ui.winhint
 use e.ui.winedit
@@ -4246,6 +4247,32 @@ fn radio_in_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, s
     ret (node, node_error)
 }
 
+// round 84: the Windows Dark radio group as the sized group the dialogs use (whole device pixel lines), its extent from the 22 high rows.
+fn windows_dark_radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, items: []const widget.Node, enabled: bool) -> (widget.Node, err) {
+    let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
+    if ft_error != ok { ret (zero, ft_error) }
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (placed, placed_error) = mem.alloc[widget.Node](a, items.len)
+    if placed_error != ok { ret (zero, TooLarge) }
+    var wide: f32 = 0.0
+    var i = 0usize
+    while i < labels.len {
+        let (shown, mark_at, shown_error) = winbutton.mnemonic(a, labels[i])
+        if shown_error != ok { ret (zero, shown_error) }
+        let (advance, fit, base, metrics_error) = run_metrics_faced(a, &ft, caption, shown)
+        if metrics_error != ok { ret (zero, metrics_error) }
+        if 20.0 + fit > wide { wide = 20.0 + fit }
+        placed[i] = widget.positioned(0u64, 8.0, 18.0 + 22.0 * f32(i), style.defaults(), mem_one_node(a, items[i]))
+        i += 1usize
+    }
+    let width = wide + 15.0
+    let height = 23.0 + 22.0 * f32(labels.len)
+    let (framed, framed_error) = windows_group_exact(a, key, t, label, enabled, width, height, 0.15, 6.45, width + 0.5, height - 0.45, placed[0usize..labels.len])
+    ret (framed, framed_error)
+}
+
 // A radio group: a radio per label in a column, keyed `key + 1 + index`, the
 // selected one marked, each firing its own action (one per label, caller-owned);
 // a group in the tree under `label`.
@@ -4264,6 +4291,10 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
     }
     let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
     if stacked_error != ok { ret (zero, TooLarge) }
+    if t.tokens.profile == .Windows && t.tokens.palette == .Dark {
+        let (framed, framed_error) = windows_dark_radio_group(a, key, t, label, labels, items[0usize..labels.len], enabled)
+        ret (framed, framed_error)
+    }
     if t.tokens.profile == .Windows {
         let (framed, framed_error) = windows_group(a, key, t, label, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len]), enabled)
         ret (framed, framed_error)
@@ -4727,7 +4758,9 @@ fn windows_choice_high(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8
         let (native_row, native_error) = windows_dark_choice(a, key, t, role, label, chosen, mixed, round, action, enabled, state, lit)
         ret (native_row, native_error)
     }
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, high, phase)
+    var mark_state = state
+    mark_state.pressed = looks_x84.lit_pressed(t.tokens.palette == .Dark && round && high > 24.0, chosen, state.pressed)
+    let (mark_node, mark_error) = windows_mark(a, t, mark_state, chosen, mixed, round, high, phase)
     if mark_error != ok { ret (zero, mark_error) }
     let (dialog_t, dialog_error) = windows_dialog_theme(a, t)
     if dialog_error != ok { ret (zero, dialog_error) }
@@ -4845,7 +4878,9 @@ fn dark_dots_phase(a: *mem.Arena, w: f32, h: f32, rgb: u32, phase: i32) -> (widg
 }
 
 fn windows_dark_choice(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool, state: style.ControlState, lit: bool) -> (widget.Node, err) {
-    let (mark_node, mark_error) = windows_mark(a, t, state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
+    var mark_state = state
+    mark_state.pressed = looks_x84.lit_pressed(lit, chosen, state.pressed)
+    let (mark_node, mark_error) = windows_mark(a, t, mark_state, chosen, mixed, round, 22.0, Phase { context: 0u32, x: 0.0 - 1.0, y: 0.0 - 1.0 })
     if mark_error != ok { ret (zero, mark_error) }
     let (ft, ft_error) = windows_edit_theme(a, t, 15.0)
     if ft_error != ok { ret (zero, ft_error) }
@@ -6484,13 +6519,13 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     var rim_color = style.hex(12369084u32)
     var ink_track = style.hex(0u32)
     var ink_fill = style.hex(16777215u32)
-    // The Windows 11 dark bar: a #3A3A3A track in a #5A5A5A rim, the accent #60CDFF fill, white on the track and black over the fill.
+    // The Windows 11 dark bar: a #3A3A3A track in a #828790 rim (the native dark list and tree frame, 4.5 : 1 on the page), the accent #60CDFF fill, white on the track and black over the fill.
     if t.tokens.palette == .Dark {
         fill_color = style.hex_raw(0x60CDFFu32)
         if options.tone == .Paused { fill_color = style.hex_raw(0xFCE100u32) }
         if options.tone == .Error { fill_color = style.hex_raw(0xFF99A4u32) }
         track_color = style.hex_raw(0x3A3A3Au32)
-        rim_color = style.hex_raw(0x5A5A5Au32)
+        rim_color = style.hex_raw(0x828790u32)
         ink_track = style.hex_raw(0xFFFFFFu32)
         ink_fill = style.hex_raw(0x000000u32)
     }
@@ -6505,7 +6540,7 @@ fn progress_bar_windows(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     words.wrap = .None
     if indeterminate {
         let turn = progress_turn(t, options.phase, time.seconds(2i64))
-        let seg = inner_w * 0.6
+        let seg = inner_w * 0.72
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = bar_piece(key + 1u64, seg, inner_h, fill_color, 0.0)
@@ -16293,7 +16328,8 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     frame.margin = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: looks_t81.group_margin_top(dark, 6.35) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
     frame.padding = style.EdgeLengths { left: style.Length { Px: 7.0 }, top: style.Length { Px: looks_t81.group_padding_top(dark, 13.65) }, right: style.Length { Px: 7.0 }, bottom: style.Length { Px: 7.0 } }
     if options.variant != .Plain { frame.border = style.Border { width: 1.0, color: looks_t81.group_line(dark, looks_o78.dark_group_line(dark, style.color(t.tokens, .OutlineVariant))) } }
-    if options.width > 0.0 { frame.width = style.Length { Px: options.width } }
+    let lines = dark && options.variant != .Plain
+    if lines { frame.border = style.Border { width: looks_x84.device_line(), color: frame.border.color } }
     let (rows, rows_error) = mem.alloc[widget.Node](a, children.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -16314,6 +16350,7 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var cut = style.defaults()
     cut.background = paint.Brush { Solid: face }
     var cut_x: f32 = 8.0
+    var fit_w: f32 = heading_width
     if dark {
         // the native dark capture's caption: Segoe UI 12 px, 9 in from the frame, its gap starting 7 in
         var native = text_options()
@@ -16328,10 +16365,15 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         let (text_width, text_fit, text_base, text_error) = run_metrics_faced(a, &dark_t, native, label)
         if text_error != ok { ret (zero, text_error) }
         cut = looks_t81.group_cut(cut, text_width)
-        cut_x = 7.0
+        cut_x = looks_x84.group_stub()
+        fit_w = text_width
+    }
+    if options.width > 0.0 {
+        frame.width = style.Length { Px: options.width }
+        cut = looks_x84.group_clip(cut, options.width, fit_w, cut_x)
     }
     held[0usize] = heading
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[2usize] = widget.box(0u64, cut, held[0usize..1usize])
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, frame, rows[0usize..children.len])
@@ -16339,6 +16381,17 @@ fn windows_group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
+    if false {
+        let (edge, edge_error) = looks_x84.lines_node(a, looks_t81.group_line(dark, style.color(t.tokens, .OutlineVariant)), looks_t81.group_margin_top(dark, 6.35))
+        if edge_error != ok { ret (zero, TooLarge) }
+        parts[3usize] = edge
+        let (order, order_error) = mem.alloc[widget.Node](a, 3usize)
+        if order_error != ok { ret (zero, TooLarge) }
+        order[0usize] = parts[0usize]
+        order[1usize] = parts[3usize]
+        order[2usize] = parts[1usize]
+        ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, order[0usize..3usize])), ok)
+    }
     ret (widget.semantics(key, sem, style.defaults(), widget_stack_of(a, parts[0usize..2usize])), ok)
 }
 
@@ -16355,7 +16408,7 @@ fn widget_stack_of(a: *mem.Arena, nodes: []const widget.Node) -> []const widget.
 // #808080 at the left running to #C0C0C0 at the right, the title bold white 8 in, `aside`
 // (may be empty) in black at the right end. `width` 0 stretches to the parent.
 // `whole` (Windows light with the group frames on whole pixels, Windows light): the 1:1 captures put the border on the control's own pixels.
-type SectionBar = struct { stops: [2]paint.Stop, whole: bool }
+type SectionBar = struct { stops: [2]paint.Stop, whole: bool, line: bool, line_color: paint.Color }
 
 // v3's TGradient (gradient.pas): GDI+ fills (0,0,w-1,h-1) from Gray to Silver and draws a 1 px Gray
 // border over it. looks4: fitted to the live 100 % capture's border pixels (fill compositing included):
@@ -16376,7 +16429,8 @@ fn section_bar_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err 
     }
     let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: x0, y: y0 }, end: geometry.Point { x: x0 + w, y: y0 }, stops: s.stops[0usize..2usize] } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x + 1.0, area.y + 1.0, area.width - 1.0, area.height - 1.0), brush: brush } })
-    let edge = paint.Brush { Solid: s.stops[0usize].color }
+    var edge = paint.Brush { Solid: s.stops[0usize].color }
+    if s.line { edge = paint.Brush { Solid: s.line_color } }
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, w, 1.0), brush: edge } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0 + h - 1.0, w, 1.0), brush: edge } })
     try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x0, y0, 1.0, h), brush: edge } })
@@ -16391,6 +16445,8 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
     let (bars, bars_error) = mem.alloc[SectionBar](a, 1usize)
     if bars_error != ok { ret (zero, TooLarge) }
     bars[0usize].whole = windows_crisp(t)
+    bars[0usize].line = false
+    bars[0usize].line_color = style.hex_raw(0u32)
     bars[0usize].stops[0usize] = paint.Stop { offset: 0.0, color: style.hex(8421504u32) }
     bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex(12632256u32) }
     // Windows 11 dark: the TGradient runs #4A4A4A to #2B2B2B under a white title and a #C5C5C5 aside.
@@ -16401,6 +16457,12 @@ fn windows_section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title
         bars[0usize].stops[1usize] = paint.Stop { offset: 1.0, color: style.hex_raw(0x2B2B2Bu32) }
         title_ink = style.hex_raw(0xFFFFFFu32)
         aside_ink = style.hex_raw(0xC5C5C5u32)
+        // round 84: the 1 px border is the dark control frame #828790 (4.5 : 1 on the page; the gradient's #4A4A4A start was 2 : 1), on whole pixels
+        bars[0usize].whole = true
+        bars[0usize].line = true
+        bars[0usize].line_color = looks_x84.frame_line()
+        // round 84: the 1 px border is the dark control frame #828790 (4.5 : 1 on the page; the #4A4A4A of the gradient's start was 2 : 1), on whole pixels
+        bars[0usize].whole = windows_crisp(t)
     }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
@@ -19160,7 +19222,7 @@ fn windows_group_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
 }
 
 // The frame's four lines (1 unit, #DCDCDC) on explicit outer extents relative to the group's top left.
-type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color, whole: bool }
+type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: paint.Color, whole: bool, thin: bool }
 
 // Windows light, the true 1:1 captures: a group frame is four one pixel lines of #DCDCDC on whole rows and columns (the 6.35 and 0.65 of the
 // resampled captures are where the lines blurred to). Frames built while this is on take the line pixel that holds their fractional edge.
@@ -19168,6 +19230,7 @@ type GroupFrame = struct { left: f32, top: f32, right: f32, bottom: f32, color: 
 fn group_frame_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*GroupFrame](ctx)
     let brush = paint.Brush { Solid: g.color }
+    if g.thin { ret looks_x84.thin_frame(b, area.x + g.left, area.y + g.top, area.x + g.right, area.y + g.bottom, g.color) }
     if g.whole {
         let first_x = f32(i32(area.x + g.left + 0.001))
         let first_y = f32(i32(area.y + g.top + 0.001))
@@ -19206,7 +19269,7 @@ fn windows_group_on(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     if !enabled { ink = style.mix(ink, face, 0.55) }
     let (frames, frames_error) = mem.alloc[GroupFrame](a, 1usize)
     if frames_error != ok { ret (zero, TooLarge) }
-    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: style.color(t.tokens, .OutlineVariant), whole: windows_crisp(t) }
+    frames[0usize] = GroupFrame { left: left, top: top, right: right, bottom: bottom, color: looks_t81.group_line(t.tokens.palette == .Dark, style.color(t.tokens, .OutlineVariant)), whole: windows_crisp(t), thin: t.tokens.palette == .Dark && t.tokens.profile == .Windows }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
