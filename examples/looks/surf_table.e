@@ -10,7 +10,7 @@ use e.ui.control
 use e.ui.looks
 use e.ui.widget
 
-type Host = struct { t: *const control.Theme, base: u64 }
+type Host = struct { t: *const control.Theme, base: u64, first: u64 }
 
 fn noop_sort(ctx: *void, value: usize) -> err { ret ok }
 fn noop_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
@@ -44,7 +44,8 @@ fn text_cell(a: *mem.Arena, t: *const control.Theme, value: str, out: *widget.No
 
 fn table_count(ctx: *void) -> usize { ret 6usize }
 
-fn table_key(ctx: *void, index: usize) -> widget.Key { ret host_of(ctx).base + 1u64 + u64(index) }
+// Android: the table's own parts are keyed key + 1, 2, 3 ..., which the rows' keys base + 1 + index collided with, so a row never hovered; the rows start 100 up.
+fn table_key(ctx: *void, index: usize) -> widget.Key { ret host_of(ctx).base + host_of(ctx).first + u64(index) }
 
 fn table_cell(ctx: *void, a: *mem.Arena, row: usize, column: usize, out: *widget.Node) -> err {
     let h = host_of(ctx)
@@ -100,29 +101,41 @@ fn tree_cell(ctx: *void, a: *mem.Arena, node: widget.Key, column: usize, out: *w
     ret text_cell(a, h.t, value, out)
 }
 
-fn columns_of(a: *mem.Arena) -> ([]collection.Column, err) {
+fn columns_of(a: *mem.Arena, t: *const control.Theme) -> ([]collection.Column, err) {
     let (columns, columns_error) = mem.alloc[collection.Column](a, 3usize)
     if columns_error != ok { ret (zero, columns_error) }
     columns[0usize] = collection.Column { title: "Name", width: 150.0 }
     columns[1usize] = collection.Column { title: "Qty", width: 60.0 }
     columns[2usize] = collection.Column { title: "Type", width: 90.0 }
+    // Android: M3's 16 dp cell padding leaves the sort arrow no room in 60 dp, so it ran over the Qty label.
+    if t.tokens.profile == .MaterialLike {
+        columns[0usize].width = 134.0
+        columns[1usize].width = 76.0
+    }
     ret (columns[0usize..3usize], ok)
 }
 
+// The header's height, so the pointer lands on a row: 33 in the other looks, the 56 dp M3 table header on Android.
+fn header_of(t: *const control.Theme) -> f32 {
+    if t.tokens.profile == .MaterialLike { ret 56.0 }
+    ret 33.0
+}
+
 fn build_table(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let (columns, columns_error) = columns_of(a)
+    let (columns, columns_error) = columns_of(a, t)
     if columns_error != ok { ret (0usize, columns_error) }
     let names = [5]str{ "rest", "row selected", "sorted descending", "row hover", "keyboard focus" }
     var i = 0usize
     while i < 5usize {
         let (hosts, hosts_error) = mem.alloc[Host](a, 1usize)
         if hosts_error != ok { ret (0usize, hosts_error) }
-        hosts[0usize] = Host { t: t, base: u64(i + 1usize) * 1000u64 }
+        hosts[0usize] = Host { t: t, base: u64(i + 1usize) * 1000u64, first: 1u64 }
+        if t.tokens.profile == .MaterialLike { hosts[0usize].first = 101u64 }
         let source = collection.TableSource { ctx: mem.cast[*void](&hosts[0usize]), count: table_count, key: table_key, cell: table_cell }
         let (chosen, chosen_error) = mem.alloc[widget.Key](a, 1usize)
         if chosen_error != ok { ret (0usize, chosen_error) }
         chosen[0usize] = 0u64
-        if i == 1usize { chosen[0usize] = hosts[0usize].base + 3u64 }
+        if i == 1usize { chosen[0usize] = hosts[0usize].base + hosts[0usize].first + 2u64 }
         var sort_column = 0usize
         var descending = false
         if i == 2usize {
@@ -134,11 +147,11 @@ fn build_table(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
         var drive: looks.Drive = .None
         if i == 3usize {
             drive = .Hover
-            looks.aim(i, 0.0, 0.0 - 95.0 + 33.0 + 28.0 * 2.5)
+            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 28.0 * 2.5)
         }
         if i == 4usize {
             drive = .Focus
-            looks.aim(i, 0.0, 0.0 - 95.0 + 33.0 + 14.0)
+            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 14.0)
         }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
@@ -147,14 +160,20 @@ fn build_table(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []look
 }
 
 fn build_tree(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
-    let (columns, columns_error) = columns_of(a)
+    let (columns, columns_error) = columns_of(a, t)
     if columns_error != ok { ret (0usize, columns_error) }
+    // Android: the indent and the disclosure take 56 dp of the name column, so the file names need it wider (they clipped).
+    if t.tokens.profile == .MaterialLike {
+        columns[0usize].width = 188.0
+        columns[2usize].width = 88.0
+        columns[1usize].width = 54.0
+    }
     let names = [5]str{ "collapsed", "folder open", "file selected", "row hover", "keyboard focus" }
     var i = 0usize
     while i < 5usize {
         let (hosts, hosts_error) = mem.alloc[Host](a, 1usize)
         if hosts_error != ok { ret (0usize, hosts_error) }
-        hosts[0usize] = Host { t: t, base: u64(i + 1usize) * 1000u64 }
+        hosts[0usize] = Host { t: t, base: u64(i + 1usize) * 1000u64, first: 1u64 }
         let base = hosts[0usize].base
         let tree = collection.TreeSource { ctx: mem.cast[*void](&hosts[0usize]), count: tree_count, key: tree_key, has_children: tree_has_children, build: tree_build }
         let rows = collection.CellSource { ctx: mem.cast[*void](&hosts[0usize]), cell: tree_cell }
@@ -175,11 +194,11 @@ fn build_tree(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks
         var drive: looks.Drive = .None
         if i == 3usize {
             drive = .Hover
-            looks.aim(i, 0.0, 0.0 - 95.0 + 33.0 + 28.0 * 2.5)
+            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 28.0 * 2.5)
         }
         if i == 4usize {
             drive = .Focus
-            looks.aim(i, 0.0, 0.0 - 95.0 + 33.0 + 14.0)
+            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 14.0)
         }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize

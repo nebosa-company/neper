@@ -20,6 +20,7 @@ use e.ui.linux_card
 use e.ui.looks_x84
 use e.ui.overlay
 use e.ui.looks_z84_edge
+use e.ui.looks_z85
 use e.ui.style
 use e.ui.vgridlook as vg
 use e.ui.widget
@@ -56,6 +57,8 @@ fn is_selected(selected: []const widget.Key, key: widget.Key) -> bool {
 // A row of a list: the item over a hairline separator (when asked), `extent` tall
 // and `width` wide, a list item in the tree at `index` of `count`, selected when
 // its key is.
+fn row_noop_gesture(ctx: *void, g: widget.Gesture) -> err { ret ok }
+
 fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Key, index: usize, count: usize, extent: f32, width: f32, separator: bool, selected: bool) -> (widget.Node, err) {
     if index >= count || !a11y_count_fits(count) { ret (zero, TooLarge) }
     var parts_count = 1usize
@@ -77,9 +80,30 @@ fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Ke
     if extent > 0.0 { row_style.height = style.Length { Px: extent } }
     // v2 (D979, docs/ux/components/Row): selected is `secondary-container`.
     if selected { row_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
+    // Android (looks_z85): the pointer over a row lays on-surface at the hover opacity over it.
+    if looks_z85.hover_rows && t.tokens.profile == .MaterialLike {
+        let over = control.control_state(t, key, true, selected)
+        if over.hovered {
+            var ground = paint.rgba(0.0, 0.0, 0.0, 0.0)
+            if selected { ground = style.color(t.tokens, .SecondaryContainer) }
+            row_style.background = paint.Brush { Solid: style.layer(ground, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
+        }
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, row_style, parts[0usize..parts_count])
+    if looks_z85.hover_rows && t.tokens.profile == .MaterialLike {
+        // A region carries the key so the pointer can hover the row (a plain flex is no pointer target).
+        let none_gesture = widget.GestureAction { ctx: zero, invoke: row_noop_gesture }
+        var region_style = style.defaults()
+        region_style.width = style.Length { Px: width }
+        if extent > 0.0 { region_style.height = style.Length { Px: extent } }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, row_style, parts[0usize..parts_count])
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = column[0usize]
+        column[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 4u8, enabled: true, focusable: false }, region_style, held[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 11u8
     sem.row = u32(index + 1usize)

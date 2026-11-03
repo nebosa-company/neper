@@ -8,11 +8,13 @@ use e.mem
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_x63
+use e.ui.looks_z85
 use e.ui.terminal as tm
 use e.ui.terminal_view as tv
 use e.ui.widget
 
-type Terms = struct { full: tm.Term, empty: tm.Term }
+// One buffer per cell: a row's key is its line number, so cells sharing a buffer would share keys and the pointer would light the first.
+type Terms = struct { cell: [6]tm.Term }
 
 fn feed_text(t: *tm.Term, s: str) {
     tm.feed(t, s)
@@ -23,8 +25,7 @@ fn feed_text(t: *tm.Term, s: str) {
 fn nothing(ctx: *void, value: f32) -> err { ret ok }
 
 fn pick(s: *Terms, i: usize) -> *tm.Term {
-    if i == 5usize { ret &s.empty }
-    ret &s.full
+    ret &s.cell[i]
 }
 
 fn extent() -> f32 { ret 18.0 }
@@ -64,16 +65,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
     ret (6usize, ok)
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (terms, terms_error) = mem.alloc[Terms](a, 1usize)
-    if terms_error != ok { ret terms_error }
-    let (made, made_error) = tm.new(a, 48usize, 6usize, 48usize, 6usize, 100usize)
-    if made_error != ok { ret made_error }
-    terms[0usize].full = made
-    let (made_empty, empty_error) = tm.new(a, 48usize, 6usize, 48usize, 6usize, 100usize)
-    if empty_error != ok { ret empty_error }
-    terms[0usize].empty = made_empty
-    let full = &terms[0usize].full
+fn fill(full: *tm.Term) {
     feed_text(full, "$ neper build examples/looks/button.e")
     feed_text(full, "checking e.ui.control ... ok")
     feed_text(full, "checking e.ui.looks ... ok")
@@ -89,6 +81,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     feed_text(full, "wrote docs/ui/looks/linux/button.png")
     feed_text(full, "done in 17.6 s")
     tm.feed(full, "$ ")
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (terms, terms_error) = mem.alloc[Terms](a, 1usize)
+    if terms_error != ok { ret terms_error }
+    var i = 0usize
+    while i < 6usize {
+        let (made, made_error) = tm.new(a, 48usize, 6usize, 48usize, 6usize, 100usize)
+        if made_error != ok { ret made_error }
+        terms[0usize].cell[i] = made
+        if i != 5usize { fill(&terms[0usize].cell[i]) }
+        terms[0usize].cell[i].sb_dropped = i * 1000usize
+        i += 1usize
+    }
+    looks_z85.rows_hover(true)
     let sheet = looks.Sheet { name: "terminal_view", cells: 6usize, columns: 2usize, cell_w: 360.0, cell_h: 128.0, ctx: mem.cast[*void](&terms[0usize]), build: build }
     try looks.run_all(a, &sheet)
     try looks.run_linux(a, &sheet)

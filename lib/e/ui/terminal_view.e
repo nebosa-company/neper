@@ -69,6 +69,8 @@ fn build_of(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
     options.mono = true
     // The Cupertino body size is taller than a terminal row, so the rows overlapped and the selection fill cut the glyphs: Menlo's 12.
     if v.theme.tokens.profile == .CupertinoLike { options.size = 12.0 }
+    // Android: body-small's 12 sp for the same reason (Cascadia Mono's descenders at 14 sp ran into the row below).
+    if v.theme.tokens.profile == .MaterialLike { options.size = 12.0 }
     let (made, made_error) = control.text(a, 0u64, buf[0usize..n], v.theme, options)
     if made_error != ok { ret made_error }
     *out = made

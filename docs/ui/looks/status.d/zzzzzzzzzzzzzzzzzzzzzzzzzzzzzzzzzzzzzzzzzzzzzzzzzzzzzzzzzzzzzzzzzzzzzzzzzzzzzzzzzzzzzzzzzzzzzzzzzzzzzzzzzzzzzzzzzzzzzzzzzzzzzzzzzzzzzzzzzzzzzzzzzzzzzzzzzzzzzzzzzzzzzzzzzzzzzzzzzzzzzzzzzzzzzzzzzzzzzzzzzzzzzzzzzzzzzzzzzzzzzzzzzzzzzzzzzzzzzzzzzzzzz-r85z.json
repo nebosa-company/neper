@@ -78,5 +78,69 @@
     ]
    }
   }
+ },
+ "terminal_view": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/terminal_view.png",
+    "notes": "ROUND 85: rows are now pointer targets in the Material sheet (looks_z85.hover_rows: collection.row carries a hover-only region and lays on-surface at the 8 % hover opacity over the row, over secondary-container when selected) and each cell has its own buffer so its row keys are unique (a row's key is its line number; cells sharing a buffer lit the first cell's row). The rows are Cascadia Mono 12 sp (the sheet rig has no Roboto Mono; the Cupertino sheet does the same with Consolas; at 14 sp its descenders ran into the next row's fill). Measured: hover layer ece5ed light / 252229 dark on surface (exact for on-surface 8 %), selected rows secondary-container e8def8 / 4a4458, text on-surface 1d1b20 on e8def8 13.2:1 (dark e6e0e9 on 4a4458 7.2:1), on the page 16.2:1 / 14.3:1. All six cells viewed light and dark at 1x and 1.5x, no clipping. The viewer has no focusable element (the host owns keyboard focus and the caret), so its focus cell equals rest by construction; the scrollbar thumb is the shared 4 dp thumb (on-surface-variant 50 %, about 2.4:1 on the surface, as in the ready scroll_bar row). M3 has no terminal: the list row and colours are the M3 list tokens.",
+    "gaps": [
+     "No M3 terminal; monospace face is a stand-in for Roboto Mono; focus cell equals rest by design; shared scroll thumb about 2.4:1"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/terminal_view.png",
+    "notes": "ROUND 85: rows are now pointer targets in the Material sheet (looks_z85.hover_rows: collection.row carries a hover-only region and lays on-surface at the 8 % hover opacity over the row, over secondary-container when selected) and each cell has its own buffer so its row keys are unique (a row's key is its line number; cells sharing a buffer lit the first cell's row). The rows are Cascadia Mono 12 sp (the sheet rig has no Roboto Mono; the Cupertino sheet does the same with Consolas; at 14 sp its descenders ran into the next row's fill). Measured: hover layer ece5ed light / 252229 dark on surface (exact for on-surface 8 %), selected rows secondary-container e8def8 / 4a4458, text on-surface 1d1b20 on e8def8 13.2:1 (dark e6e0e9 on 4a4458 7.2:1), on the page 16.2:1 / 14.3:1. All six cells viewed light and dark at 1x and 1.5x, no clipping. The viewer has no focusable element (the host owns keyboard focus and the caret), so its focus cell equals rest by construction; the scrollbar thumb is the shared 4 dp thumb (on-surface-variant 50 %, about 2.4:1 on the surface, as in the ready scroll_bar row). M3 has no terminal: the list row and colours are the M3 list tokens.",
+    "gaps": [
+     "No M3 terminal; monospace face is a stand-in for Roboto Mono; focus cell equals rest by design; shared scroll thumb about 2.4:1"
+    ]
+   }
+  }
+ },
+ "table": {
+  "looks": {
+   "material": {
+    "status": "matched",
+    "screenshot": "material/table.png",
+    "notes": "ROUND 85: hover and focus cells now land on a row (the sheet's pointer aim assumed a 33 px header, the Android header is 56 dp, so the pointer hit the header; and the rows' keys base + 1 + index collided with the table's own parts keyed key + 1, 2, 3: the Android sheet starts them at base + 101, so a row now resolves its pointer and focus state). Measured at the pixel: hover on-surface 8 % over surface ece5ed / 252229, keyboard focus 10 % e8e1e9 / 29272d, selected secondary-container e8def8 / 4a4458, all exact. The sort arrow no longer runs over the Qty caption in the descending cell (Android columns 134 / 76 / 90). All five cells viewed light and dark at 1x and 1.5x. Earlier ROUND 72 comparison with ref/flutter/material (header, rules, row colours; 28 px rows against Flutter's 48) stands.",
+    "gaps": [
+     "Rows are 28 dp against the M3 data table's 52 and Flutter's 48 (dense, recorded)",
+     "Derived: no real-screen capture"
+    ]
+   },
+   "material_dark": {
+    "status": "matched",
+    "screenshot": "material-dark/table.png",
+    "notes": "ROUND 85: hover and focus cells now land on a row (the sheet's pointer aim assumed a 33 px header, the Android header is 56 dp, so the pointer hit the header; and the rows' keys base + 1 + index collided with the table's own parts keyed key + 1, 2, 3: the Android sheet starts them at base + 101, so a row now resolves its pointer and focus state). Measured at the pixel: hover on-surface 8 % over surface ece5ed / 252229, keyboard focus 10 % e8e1e9 / 29272d, selected secondary-container e8def8 / 4a4458, all exact. The sort arrow no longer runs over the Qty caption in the descending cell (Android columns 134 / 76 / 90). All five cells viewed light and dark at 1x and 1.5x. Earlier ROUND 72 comparison with ref/flutter/material (header, rules, row colours; 28 px rows against Flutter's 48) stands.",
+    "gaps": [
+     "Rows are 28 dp against the M3 data table's 52 and Flutter's 48 (dense, recorded)",
+     "Derived: no real-screen capture"
+    ]
+   }
+  }
+ },
+ "tree_table": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/tree_table.png",
+    "notes": "ROUND 85: Android sheet fixed and viewed light and dark at 1x and 1.5x: hover and focus now land on a row with the 8 % and 10 % on-surface layers (header 56 dp, row keys clear of the table's own part keys), the name column is 188 dp so the file names are no longer clipped ('Llanowar Elves', 'Lightning Bolt'), colours selected e8def8 / 4a4458 secondary-container. Left at review: rows are 28 dp (M3 data table 52 dp, 40 dp at the densest M3 density), a deviation from the M3 size, and there is no Flutter reference for a tree table.",
+    "gaps": [
+     "Rows are 28 dp, M3 data table rows are 52 dp",
+     "No Flutter reference for a tree table"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/tree_table.png",
+    "notes": "ROUND 85: Android sheet fixed and viewed light and dark at 1x and 1.5x: hover and focus now land on a row with the 8 % and 10 % on-surface layers (header 56 dp, row keys clear of the table's own part keys), the name column is 188 dp so the file names are no longer clipped ('Llanowar Elves', 'Lightning Bolt'), colours selected e8def8 / 4a4458 secondary-container. Left at review: rows are 28 dp (M3 data table 52 dp, 40 dp at the densest M3 density), a deviation from the M3 size, and there is no Flutter reference for a tree table.",
+    "gaps": [
+     "Rows are 28 dp, M3 data table rows are 52 dp",
+     "No Flutter reference for a tree table"
+    ]
+   }
+  }
  }
 }
