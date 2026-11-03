@@ -2,7 +2,7 @@
 
 Policy applied (maintainer, 2026-11-03): a Windows or Windows Dark row with no capture to match may be raised to `ready` when every cell is drawn correctly and legible, the drawing was measured with an own comparer against cited public numbers or the captures that exist, every checked number is within tolerance, and the dark colours are the accepted derivation of the light drawing with at least 4.5 : 1 text and 3 : 1 controls. A row that has a capture keeps needing the capture match for `matched`.
 
-Before (status.json + status.d, weights of scripts/render_looks.py, 30 controls): Windows Light 86.7, Windows Dark 78.7. After: Windows Light 88.0, Windows Dark 86.7 (page regenerated with scripts/render_looks.py). Overlay `status.d/zzz...-r84x.json` (one z more than every other file; read and write it through `\\?\`).
+Before (status.json + status.d, weights of scripts/render_looks.py, 30 controls): Windows Light 86.7, Windows Dark 78.7. After batch 1: Windows Light 88.0, Windows Dark 86.7. After batch 2: Windows Light 88.0, Windows Dark 92.0 (page regenerated with scripts/render_looks.py). Overlay `status.d/zzz...-r84x.json` (one z more than every other file; read and write it through `\\?\`).
 
 Tools (committed, `python -I`): `scripts/looks_x84_measure.py` (dark sheet against its light twin: edge pixels lost, new, 9 x 9 windows whose contrast fell under 3 : 1), `scripts/looks_x84_pairs.py` (colour pairs along every edge of a sheet with WCAG contrast), `scripts/looks_x84_place.py` (whole capture placed in a sheet at the best whole-pixel offset, differing pixels and their box).
 
@@ -44,6 +44,26 @@ Dark
 - toolbar_button: the dark bars draw the gallery's line icons, not v3's artwork, and the hot, pressed and checked washes are guesses; the meaning of the icons differs from the light row.
 - page_control: tab outlines 2.4 : 1 (under 3 : 1), about 20 sheets not reviewed; light counterpart is review.
 - tree_list, vertical_grid, data_grid, dialog: light counterparts are review (capture-bound), so a dark derivation cannot rank above them; vertical_grid shows 24 to 120 low-contrast windows per sheet, not reviewed.
+
+## Batch 2: the Dark rows with a named defect
+
+Fixed and raised to `ready` (evidence in each row's note): token_edit (chip outline #444444 1.3 : 1 to #828790 3.8 : 1 on the chip, cross 1.9 to 8.1 : 1), check_list_box (unfocused chosen row 1.1 to 4.5 : 1; the Card Art chosen row outlined), status_bar (the sunken panel bevel drawn through the colour map, lost edge pixels 2525 to 65), menu_bar (hover and open wash 1.5 : 1 outlined at 4.5 : 1). Sheets re-rendered one app at a time (token_edit, token_edit_dialog, the four check_list_box sheets, status_bar with its three arguments, menu_bar with its twelve arguments); Cupertino, Linux and Material status_bar, menu_bar and token_edit re-rendered and byte for byte unchanged; Windows Light PNGs unchanged.
+
+Left: toolbar_button (Dark). v3's artwork exists (the light row draws its icon atlas); the dark bars draw the gallery's line icons instead, so the icons differ in meaning from the light row, and the hot, pressed and checked washes are guesses. Raising it needs the atlas through the dark map, which was not done. The Dark check list's art tiles are v3 bitmaps through the colour map and differ from the page by 1.1 : 1 (recorded, drawn artwork).
+
+## Batch 2: the Light capture-bound rows, re-measured (scripts/looks_strict.py, 0 chrome px off = pass)
+
+The old notes of these rows are stale (they quote round 45 and 46 counts). Fresh numbers, `LOOKS_REF=windows-1to1` where the true 1:1 set has the sheet, else ref/windows (the older resampled set):
+
+- combo_box (ref/windows, no 1:1 set): 42 cells, 31 pass. Failing cells: list_color, list_color2, open_color, open_color2 (778 and 416 px: the reference's rows are soft resampled lines, for example 83, 164, 228 where the drawing has the capture's crisp #0078D7; the 1:1 truth is crisp), list_show3 to 5 (2 to 3 px, 4 levels), list_size3 and 5 (glyph columns, 8 to 16 px), flat_card and flat_card_hover (0 px, ink boxes of the card art differ). No chrome defect of the drawing found; not raised because the cells were not all viewed and disabled and read-only closed combos have no capture.
+- page_control (ref/windows): 21 cells, 18 pass; the 3 failing cells have 0 chrome px and 0 to 8 text px (ink boxes). Not raised: about 20 sheets were not viewed.
+- tree_list (1:1): 18 cells, 15 pass; tree_list_expanded 18 chrome px (one clipped bottom row lacks its 6th Edition icon: artwork not baked) and 22 text px, tree_list_rules 4 px (max 22 levels). Residue is one missing icon plus ClearType.
+- vertical_grid (1:1): 11 cells, 10 pass; vertical_grid_states cell 4 has 2 chrome px and 2 text px (the inverting focus rectangle's top dots are the page colour in ours, inverted in the capture).
+- data_grid (1:1): 165 cells, 58 pass. Residue: 12 to 44 px at the scrollbar thumb column (x 578 and 1164) in the top, bottom, hover and group sheets, 175 to 990 px in the right cell of data_grid_group, _hover8 and _top, and data_grid_main does not place (0.62 equal). Real chrome residue, not ClearType alone.
+- dialog (ref/windows, no 1:1 set): 119 cells, 15 pass: not close.
+- text_edit, memo, date_edit: not measured again. Light date_edit: the Normal cell's drop box is about 17 px (572 to 582 inside a 120 px field) as a Win32 combo drop button (17 px at 100 %), but no capture of a date edit exists and the cell was not compared with the combo capture; left at review.
+
+No Light row was raised in batch 2: tree_list and vertical_grid are close (one icon, a few dots) and are the next candidates; combo_box and page_control need every sheet viewed. The Dark twins of rows still review stay review (batch 3 not started).
 
 ## Regression
 
