@@ -41,7 +41,9 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
         if i == 5usize { drive = .Press }
         if i == 6usize { drive = .Focus }
         // the click that starts the keyboard focus must land on the current tab, the one tab stop (Cupertino pictures only, the others keep theirs)
+        // (looks.aim lasts across the looks of one run, so the other looks set it back to nothing)
         if i == 6usize && t.tokens.profile == .CupertinoLike { looks.aim(i, -150.0, 0.0) }
+        if i == 6usize && t.tokens.profile != .CupertinoLike { looks.aim(i, 0.0, 0.0) }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }

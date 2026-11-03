@@ -35,6 +35,13 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
         }
         let (node, node_error) = overlay.time_picker(a, u64((i + 1usize) * 10usize), t, "Time", value, i == 1usize, widget.Change[time.Time] { ctx: zero, invoke: noop_time })
         if node_error != ok { ret (0usize, node_error) }
+        // Cupertino: the focusing click must land on a stepper half, not on the colon between them (the other looks keep theirs)
+        // (looks.aim lasts across the looks of one run, so the other looks set it back to nothing)
+        if t.tokens.profile != .CupertinoLike { looks.aim(i, 0.0, 0.0) }
+        if t.tokens.profile == .CupertinoLike {
+            if i == 4usize { looks.aim(i, -70.0, 0.0) }
+            if i == 3usize || i == 5usize { looks.aim(i, -23.0, 0.0) }
+        }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drives[i] }
         i += 1usize
     }
