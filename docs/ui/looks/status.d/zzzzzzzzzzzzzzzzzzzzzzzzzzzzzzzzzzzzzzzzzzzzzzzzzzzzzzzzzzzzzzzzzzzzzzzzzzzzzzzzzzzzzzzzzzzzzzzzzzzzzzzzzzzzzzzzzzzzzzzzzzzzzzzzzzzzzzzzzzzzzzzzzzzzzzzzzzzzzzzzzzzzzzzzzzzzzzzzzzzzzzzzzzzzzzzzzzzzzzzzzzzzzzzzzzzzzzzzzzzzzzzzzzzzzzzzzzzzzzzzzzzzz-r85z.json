@@ -1042,21 +1042,25 @@
  "time_picker": {
   "looks": {
    "material": {
-    "status": "review",
+    "status": "matched",
     "screenshot": "material/time_picker_dial.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Steppers read; the 'with seconds' marks are tiny and hover and focus cells show no state. Not raised.",
+    "notes": "ROUND 78 (n): Audit 37 fix. The hour and minute digits were display-small (36); M3 and Flutter use display-large (57), the Android look now does (colon too; Windows, Linux, Neper and Cupertino keep display-small). Own comparer on time_picker_dial.png against ref/flutter/material/light/timepicker-dial-open@1x: '30' ink 58 x 43 (dark 59 x 43) against Flutter 59 x 42, '10' ink 56 x 43 against 56 x 42, vertical ink 108 to 150 against 107 to 148. Dialog, dial, handle, selectors as recorded in round 77. Recorded deviations: scrim 32 % (M3 spec, ada8ad) against Flutter 54 % (747175); selector 96 wide (M3) against 111 (Flutter stretches). docs/ui/looks/flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill e6e0e9 exact. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet. | ROUND 85: viewed light and dark at 1x; status kept (the earlier measurement against ref/flutter/material stands). Observed and not fixed: the seconds-variant step marks are about 4 px and the hover and focus cells show no state change.",
     "gaps": [
-     "Seconds marks tiny",
-     "Hover and focus equal rest"
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Round 85: seconds-variant marks tiny; hover and focus cells equal rest"
     ]
    },
    "material_dark": {
-    "status": "review",
+    "status": "matched",
     "screenshot": "material-dark/time_picker_dial.png",
-    "notes": "ROUND 85: viewed light and dark at 1x. Steppers read; the 'with seconds' marks are tiny and hover and focus cells show no state. Not raised.",
+    "notes": "ROUND 78 (n): Audit 37 fix. The hour and minute digits were display-small (36); M3 and Flutter use display-large (57), the Android look now does (colon too; Windows, Linux, Neper and Cupertino keep display-small). Own comparer on time_picker_dial.png against ref/flutter/material/dark/timepicker-dial-open@1x: '30' ink 58 x 43 (dark 59 x 43) against Flutter 59 x 42, '10' ink 56 x 43 against 56 x 42, vertical ink 108 to 150 against 107 to 148. Dialog, dial, handle, selectors as recorded in round 77. Recorded deviations: scrim 32 % (M3 spec, ada8ad dark 0e0c10) against Flutter 54 % (747175 dark 09080b); selector 96 wide (M3) against 111 (Flutter stretches). docs/ui/looks/flutter-compare-n.md. | AUDIT 37 (round 77 m check, reproduced with an own comparer): held: dialog 328 x 512, dial 256, handle 48 (flat 46), selectors 96 x 80, period selector 52 x 80 (two flat 50 x 38 and 50 x 39), inactive minute fill e6e0e9 exact, dark 36343b against 36343a, handle ring radius 100 against Flutter 99, all within 1 px. Downgraded to review: (1) the hour and minute digits are drawn in DisplaySmall (36) where M3 (time selector label, display large) and the Flutter ref draw 57: the digit ink is 26 high in ours against 42 in the ref (each 'MM' digit pair 36 wide against 49), unrecorded; time_box and the colon use the shared role for every look and the Android look does not override it. (2) The scrim is 32 % black (ada8ad over fef7ff, dark 0e0c10) against Flutter's 54 % (747175, dark 09080b), the deviation flutter-compare-e records for alert_dialog and bottom_sheet but this row's notes do not. Raise again when the Android digits are Display large or the deviation is recorded here. (dark look) | ROUND 77 (m, compared to Flutter, docs/ui/looks/flutter-compare-m.md): the Android look now draws the M3 dial dialog: dial 256 (was 224; Flutter 256), numbers on a 100 ring, handle 48, selectors 96 x 80 (was 80 x 64), 24 colon, AM over PM one 52 x 80 frame (Flutter 52 x 80), dialog 328 x 512 (Flutter 358 x 512), inactive minute fill 36343b against 36343a. Recorded: dialog 328 is the M3 container so Flutter's selectors stretch to 111, section gaps 24 and 24 against 38 and 11 (same total), no keyboard toggle on the sheet, the typed form is not on the sheet. | ROUND 85: viewed light and dark at 1x; status kept (the earlier measurement against ref/flutter/material stands). Observed and not fixed: the seconds-variant step marks are about 4 px and the hover and focus cells show no state change.",
     "gaps": [
-     "Seconds marks tiny",
-     "Hover and focus equal rest"
+     "Steppers for hour, minute and second with colons: Cupertino's stepper shows no readout, so the time is not legible there",
+     "Material's dial time picker dialog (overlay.time_picker_modal) is a different control and is not on this sheet",
+     "No AM/PM field and no 12 hour clock; no platform time picker (UIDatePicker wheels, GtkSpinButton pair, Windows time edit) is drawn",
+     "Round 85: seconds-variant marks tiny; hover and focus cells equal rest"
     ]
    }
   }
