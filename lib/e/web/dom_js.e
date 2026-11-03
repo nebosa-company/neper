@@ -5014,6 +5014,7 @@ fn part17(b: *str.Builder) -> err {
     try str.push(b, "    }\n")
     try str.push(b, "  }\n")
     try str.push(b, "});\n")
+    try str.push(b, "for (const k of ['define', 'upgrade', 'initialize']) { const d = getOwnPropertyDescriptor(CustomElementRegistry.prototype, k); d.value = ceWrap(d.value); defineProperty(CustomElementRegistry.prototype, k, d); }\n")
     try str.push(b, "attributes(Element.prototype, { customElementRegistry: { get() { elSlot(this); return registryOfNode(this); } } });\n")
     try str.push(b, "attributes(ShadowRoot.prototype, { customElementRegistry: { get() { srSlot(this); return registryOfNode(this); } } });\n")
     try str.push(b, "attributes(Document.prototype, { customElementRegistry: { get() { docSlot(this); return registryOfNode(this); } } });\n")
