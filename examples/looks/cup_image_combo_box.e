@@ -5,6 +5,7 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.style
 use e.ui.widget
 use e.ui.layout as ui_layout
@@ -38,7 +39,7 @@ fn placed(a: *mem.Arena, node: widget.Node, above: f32) -> (widget.Node, err) {
 }
 
 // The 16 x 16 picture of an option: a drawn glyph stands in for the image list's bitmap.
-fn picture(a: *mem.Arena, t: *const control.Theme, i: usize) -> (widget.Node, err) {
+fn picture(a: *mem.Arena, t: *const control.Theme, i: usize, lit: bool) -> (widget.Node, err) {
     var ink = style.hex(2723289u32)
     var kind: control.GlyphKind = .Person
     if i == 1usize {
@@ -61,6 +62,8 @@ fn picture(a: *mem.Arena, t: *const control.Theme, i: usize) -> (widget.Node, er
         ink = style.hex(7171437u32)
         kind = .Picture
     }
+    // a template image on the lit row is drawn white, as in a macOS menu (the stand-in colours are 1.3:1 on the accent)
+    if lit { ink = style.hex(0xFFFFFFu32) }
     let (made, made_error) = control.mark_glyph(a, ink, kind, 16.0)
     ret (made, made_error)
 }
@@ -104,6 +107,16 @@ fn drive_of(i: usize) -> looks.Drive {
     ret .None
 }
 
+// The increased-contrast accent: white on the lit row holds 4.5:1 (007AFF gives 4.0:1).
+fn build_y(ctx: *void, a: *mem.Arena, original: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, original.tokens, 0x0A60FFu32, 0x0B57D0u32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *original
+    themed.tokens = tokens
+    let (count, count_error) = build(ctx, a, &themed, cells)
+    ret (count, count_error)
+}
+
 // Eight cells: at rest, hovered; the list open (the chosen row lit), open with the pointer on the
 // third row; disabled; no pictures; nothing chosen; focused (last: the runtime keeps the focus on
 // a tree slot, which a later pass could land in a cell).
@@ -123,7 +136,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if icons_error != ok { ret (0usize, icons_error) }
         var k = 0usize
         while k < 6usize {
-            let (pic, pic_error) = picture(a, t, k)
+            let (pic, pic_error) = picture(a, t, k, i == 3usize && k == 2usize)
             if pic_error != ok { ret (0usize, pic_error) }
             icons[k] = pic
             k += 1usize
@@ -306,7 +319,7 @@ fn build_listed_n(a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell, n
         let (made, made_error) = mem.alloc[widget.Node](a, 3usize)
         if made_error != ok { ret (0usize, made_error) }
         made[0usize] = widget.box(0u64, looks.size_style(0.0, 16.0), zero)
-        let (one, one_error) = picture(a, t, 3usize)
+        let (one, one_error) = picture(a, t, 3usize, false)
         if one_error != ok { ret (0usize, one_error) }
         made[1usize] = one
         made[2usize] = one
@@ -497,6 +510,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (passes, passes_error) = mem.alloc[Pass](a, 1usize)
     if passes_error != ok { ret passes_error }
     passes[0usize] = Pass { call: 0usize }
-    let sheet = looks.Sheet { name: "image_combo_box", cells: 8usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build }
+    let sheet = looks.Sheet { name: "image_combo_box", cells: 8usize, columns: 4usize, cell_w: cell_w(), cell_h: cell_h(), ctx: mem.cast[*void](&passes[0usize]), build: build_y }
     ret looks.run_cupertino(a, &sheet)
 }

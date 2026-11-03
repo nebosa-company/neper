@@ -42,6 +42,7 @@ use e.ui.looks_x85
 use e.ui.looks_y84
 use e.ui.looks_y85
 use e.ui.looks_y87
+use e.ui.looks_y88
 use e.ui.looks_z84_edge
 use e.ui.looks_z86
 use e.ui.winbutton
@@ -1260,6 +1261,7 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
         if size > 32.0 { mark = 12.0 }
         if size > 40.0 { mark = 14.0 }
         if size > 56.0 { mark = 16.0 }
+        if t.tokens.profile == .CupertinoLike { mark = looks_y88.badge_size(size) }
         let ring_color = style.color(t.tokens, options.ground)
         var dot = sized_style(mark, mark)
         dot.radius = mark * 0.5
@@ -1292,7 +1294,10 @@ fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Tex
         ring.radius = (mark + 4.0) * 0.5
         ring.background = paint.Brush { Solid: ring_color }
         marks[1usize] = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, ring, marks[0usize..1usize])
-        layers[1usize] = widget.positioned(0u64, size - mark - 4.0, size - mark - 4.0, style.defaults(), marks[1usize..2usize])
+        var corner = size - mark - 4.0
+        // Cupertino: the badge hangs off the lower right corner of the disc (iOS status badge, 12 pt) and stays clear of the monogram.
+        if t.tokens.profile == .CupertinoLike { corner = size - mark - 4.0 + looks_y88.badge_hang(size) }
+        layers[1usize] = widget.positioned(0u64, corner, corner, style.defaults(), marks[1usize..2usize])
         count = 2usize
     }
     layers[2usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..count])
