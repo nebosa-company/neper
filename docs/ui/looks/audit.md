@@ -1,3 +1,32 @@
+# Looks audit 43, 2026-11-03 (round 84 merge: lanes x Windows, y Cupertino, z Material on master 5c205fcbf)
+
+Independent check of the merged tree `merge84` with the committed `neper-self.exe` copied from the Neper build (`build/windows/`), own scratch comparers (python, numpy, PIL, not committed): exact corner and strip search of native captures in sheets, colour-pair and WCAG contrast probes, band and component measurement, side-by-side light and dark composites viewed at 1x (1.5x for the thin Material rows).
+
+Result. 4 rows downgraded (both looks each), 1 row moved from matched to ready, overlay `status.d/zzz...-a43.json` (250 z). Everything else sampled holds.
+
+(1) Merge sanity and regression. The merged tree compiles (control.e with looks_x84, looks_y84, looks_z84_edge); all 254 apps of examples/looks were re-rendered one at a time without arguments (arena 4g, none needed 8g, no compile or run failure) and `git status` read after each. No Linux, Linux Dark, Neper, Neper Dark or Windows Light picture changed. The pictures that differ are stale in the lanes' commits, not merge damage: Cupertino and Cupertino Dark (about 26 apps, 104 files: autocomplete, calendar, date_range_picker, duration_picker, f_accordion, f_command_palette, f_dock_panel, f_document_tabs, f_ribbon, f_scroll_area, f_title_bar, f_wizard, f_workspace, gauge, h_key_value_editor, h_pagination, h_swipe_actions, level, nav_breadcrumbs, nav_navigation_drawer_rows, nav_navigation_rail, nav_navigation_split, rating, search_field_all, shortcut_recorder, time_picker: lane y's secondary-label and thumb changes were not re-rendered for them), Windows Dark (edits_dialog, edits_hover, edits_states, native_dark4, native_dark_icb), Material search_bar, and Material speed_dial_open (the app `speed_dial.e` without its `x` argument competes with `material_split_open.e x`, as hint does). All restored to the committed bytes (not viewed, so not committed). The lanes' claim "everything outside Cupertino byte-identical" holds in the committed files (git diff against 5c205fcbf: segmented_control, Linux, Neper untouched, Windows pictures only from lane x, Material only from lane z) but not "every Cupertino picture matches its code".
+
+(2) Cupertino spin_edit downgraded to review (both looks). The hover and pressed cells captioned plus half draw the minus half.
+
+(3) Cupertino rating downgraded to review (both looks). Focus cell equals rest; hover star 2.33:1; committed pictures stale.
+
+(4) Cupertino divider downgraded to review (both looks). Drawn 1.07:1 and 1.14:1, cited 1.53:1 and 1.45:1.
+
+(5) Material date_range_picker downgraded from matched to review (both looks). The 360 wide docked calendar splits the range band into five 40 px tiles with 8 px gaps.
+
+(6) Windows Dark group_box moved from matched to ready. Frame, gap and 1.5x lines reproduce exactly against groupbox-rest and -disabled; the caption ink and three cells are not captured.
+
+Held, with what was reproduced.
+- Windows Light: text_edit and memo frame corners and strips against edit-*@1x: Rest, Focus, Selected, Password 0 levels (read-only left strip 10 levels, disabled 3 to 11 levels, as noted); tree_list 2 chrome px (a full black pixel at 115,343, the clipped last row), 6 text, rules 4 px; vertical_grid 10 of 11 cells; combo_box 30 of 42 (lane 31); page_control 18 of 21; date_edit Light hot and pressed differ from Normal (blue wash). Placeholder ink is v3's clGray #808080 on white, 3.95:1, under 4.5:1 in text_edit and memo (and the Windows family): kept, it is v3's colour; the maintainer may rule.
+- Windows Dark: token_edit (placeholder 5.9:1), check_list_box (its note says the native focused row #1A364D in #0078D4 is kept; no pixel of either colour occurs in any of the four sheets, and focused and unfocused cells are identical, in Light too: note wrong, status kept), status_bar, menu_bar, radio_group, button_edit, progress_bar (light cell 50 % label straddles the fill edge legibly), date_edit (Dark hot equals Normal: the native dark combo-edit-hover-arrow differs from rest only in text, so by design).
+- Windows Dark splitter: decided ready. No capture of any splitter state exists; the drawing is the matched Light twin through the colour map; measured frame #828790 3.9:1 on the pane and 4.5:1 on the page, grip #828282 3.7:1, chevrons 14:1; 8 cells legible at 1x and 1.5x. A derivation, not a measurement.
+- Cupertino ready rows viewed light and dark: menu_bar, hint, activity_indicator (tick ramp 1.03 to 3.11:1 by Flutter's alpha ramp; spinner 20 faint, decorative), progress_bar, combo_box, status_bar, tree_list, vertical_grid, scroll_bar, splitter (focus ring drawn beside the sash, not around it), swipe_actions (hover equals rest: touch), popup_menu (macOS menu shows Ctrl+Z, not the Command symbol: from-memory metrics only), toolbar_button, data_grid, skeleton (1.15:1 placeholders, decorative), link, icon_button, password_field. Computed contrasts reproduce (0040DD 6.78:1, 409CFF 6.01:1, white on 0A60FF 5.08:1, 0062CC 5.8:1, D70015 5.38:1).
+- Material ready rows viewed: data_grid (selected e8def8 / 4a4458 and hover ece5ed / 252229 exact at the pixel), tree_list, label, spin_edit, status_bar (Narrow ellipsis now draws), image_combo_box, vertical_grid, date_edit, scroll_bar, splitter (Focused equals Hovered, no ring: lane noted it; tokens from memory), the 13 idiom rows incl. key_caps, skeleton, empty_state and toast at 1.5x light and dark (legible, no clipping; the hovered star of rating 2.45:1 on its disc, a preview). Rows left as they are.
+
+Honest limits. Not every cell of every row was viewed at 1.5x (Windows and Cupertino rows at 1x, thin Material rows at 1.5x); combo_box and page_control were reproduced by number, not re-viewed cell by cell; contrasts are nominal ink colours.
+
+---
+
 # Looks audit 42, 2026-11-01 (round 82: lane v, master faee3b54e)
 
 Independent check of looks82-v (Segoe UI Semibold for every Cupertino sheet, `looks.read_fonts`), scratch worktree `audit42` with the committed `neper-self.exe`. Own scratch comparers (not committed): flat 5 x 5 colour components old against new, edge probes, crops viewed. Compile needed `--arena 8g` for seven sheets (cup_splitter, cup_stepper, nav_navigation_rail, nav_sidebar, nav_toolbar, progress_bar, radio); at 4g the compiler's arena was exhausted.
