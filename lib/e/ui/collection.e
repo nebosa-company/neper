@@ -1186,12 +1186,23 @@ fn carousel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []co
     var back = control.button_options()
     back.variant = .Plain
     back.enabled = current > 0usize
-    let (back_button, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], back)
+    var (back_button, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], back)
+    // Android: the pager arrows are 40 dp icon buttons with the M3 chevrons (the text glyphs read as stray marks)
+    if t.tokens.profile == .MaterialLike {
+        let (icon_back, icon_back_error) = control.material_icon_button(a, key + 1u64, t, .ChevronLeft, "Previous", &actions[0usize], .Plain, current > 0usize, false)
+        back_button = icon_back
+        back_error = icon_back_error
+    }
     if back_error != ok { ret (zero, back_error) }
     var forward = control.button_options()
     forward.variant = .Plain
     forward.enabled = current + 1usize < pages.len
-    let (next_button, next_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], forward)
+    var (next_button, next_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], forward)
+    if t.tokens.profile == .MaterialLike {
+        let (icon_next, icon_next_error) = control.material_icon_button(a, key + 2u64, t, .ChevronRight, "Next", &actions[1usize], .Plain, current + 1usize < pages.len, false)
+        next_button = icon_next
+        next_error = icon_next_error
+    }
     if next_error != ok { ret (zero, next_error) }
     let (across, across_error) = mem.alloc[widget.Node](a, 3usize)
     if across_error != ok { ret (zero, TooLarge) }
@@ -1683,7 +1694,10 @@ fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, conten
         while i < labels.len {
             runs[i] = SwipeTileRun { action: actions[i], reveal: reveal }
             closed[i] = widget.Submit { ctx: ctx_of(&runs[i]), invoke: swipe_tile_run }
-            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &closed[i], control.button_options())
+            var chosen = control.button_options()
+            // Android: Delete is the destructive action, in the error colour (the others stay primary)
+            if t.tokens.profile == .MaterialLike && control.same_text(labels[i], "Delete") { chosen.variant = .Danger }
+            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &closed[i], chosen)
             if act_error != ok { ret (zero, act_error) }
             parts[1usize + i] = act
             i += 1usize

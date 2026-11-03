@@ -8,6 +8,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_h as h
+use e.ui.looks_z87
 use e.ui.widget
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -22,6 +23,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 2usize { drive = .Hover }
+        // Android: the hover cell points at the More button at the row's end
+        if i == 2usize { looks_z87.aim(t, i, 118.0, 15.0) }
         if i == 3usize { drive = .Focus }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize

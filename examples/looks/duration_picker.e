@@ -49,5 +49,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try looks.run_all(a, &sheet)
     try looks.run_linux(a, &sheet)
     try looks.run_cupertino(a, &wide)
-    ret looks.run_material(a, &sheet)
+    // Android: three steppers of 40 dp icon buttons are 450 wide; in 250 the pills squeezed the buttons to 22 and the dash and plus marks degenerated
+    let android = looks.Sheet { name: "duration_picker", cells: 5usize, columns: 2usize, cell_w: 520.0, cell_h: 90.0, ctx: zero, build: build }
+    ret looks.run_material(a, &android)
 }

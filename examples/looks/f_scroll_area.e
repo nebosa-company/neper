@@ -9,6 +9,7 @@ use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
 use e.ui.looks_f
+use e.ui.looks_z87
 use e.ui.style
 use e.ui.widget
 
@@ -88,6 +89,8 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         var drive: looks.Drive = .None
         if i == 1usize { drive = .Hover }
         if i == 2usize { drive = .Press }
+        // Android: the pointer goes to the thumb (the top of the vertical bar, 6 from the area's right edge), so hover and a drag show
+        if i == 1usize || i == 2usize { looks_z87.aim(t, i, 30.0, -31.0) }
         cells[i] = looks.Cell { caption: captions[i], node: held[0usize], drive: drive }
         i += 1usize
     }
