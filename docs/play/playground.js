@@ -34,8 +34,10 @@ export function libraries(index, load) {
 }
 
 // extra: more flags for the compiler (the page's ?args=); what it printed comes back as `said`.
-export async function compile(compiler, source, fetchLib, extra = []) {
-  const files = { 'main.e': enc.encode(source) }
+// seed: library files already in hand ({ 'lib/e/io.e': bytes }); with the whole set a program compiles in one run of the
+// compiler, not one per missing module, which matters where an ended Worker's memory is slow to come back.
+export async function compile(compiler, source, fetchLib, extra = [], seed = {}) {
+  const files = { ...seed, 'main.e': enc.encode(source) }
   for (let round = 0; round < 200; round++) {
     let said = ''
     const r = await run(compiler, { args: ['emit-executable', 'main.e', '.', 'wasm32', 'wasi', 'main.wasm', '--release', ...extra], files, stdout: (s) => (said += text(s)), stderr: (s) => (said += text(s)) })
