@@ -17,6 +17,7 @@ use e.ui.datagrid as dg
 use e.ui.dlggrid as dlg
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_x88
 use e.ui.navigation
 use e.ui.overlay
 use e.ui.style
@@ -234,8 +235,9 @@ fn form(i: usize) -> Form {
         f.width = 684.0
         f.height = 413.0
         f.tkind = 3u32
-        f.items = [24]Item{ itemb(0u32, 18.0, 84.0, 125.0, 25.0, "&New Rule...", false, 0x000000u32), itemb(4u32, 280.0, 84.0, 125.0, 25.0, "&Delete Rule", false, 0x000000u32), itemb(4u32, 149.0, 84.0, 125.0, 25.0, "&Edit Rule...", false, 0x000000u32), itemb(4u32, 597.0, 378.0, 85.0, 25.0, "&Apply", false, 0x000000u32), itemb(0u32, 415.0, 378.0, 85.0, 25.0, "OK", true, 0x000000u32), itemb(0u32, 506.0, 378.0, 85.0, 25.0, "Cancel", false, 0x000000u32), none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none }
-        f.count = 6usize
+        // round 88: the three buttons with icons are part of the skin (e.ui.looks_x88); the OK, Cancel and Apply row stays live
+        f.items = [24]Item{ itemb(4u32, 597.0, 378.0, 85.0, 25.0, "&Apply", false, 0x000000u32), itemb(0u32, 415.0, 378.0, 85.0, 25.0, "OK", true, 0x000000u32), itemb(0u32, 506.0, 378.0, 85.0, 25.0, "Cancel", false, 0x000000u32), none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none }
+        f.count = 3usize
     }
     if i == 12usize {
         f.kx = 0.000769
@@ -251,8 +253,8 @@ fn form(i: usize) -> Form {
         f.height = 479.0
         f.tkind = 1u32
         f.bottom = true
-        f.items = [24]Item{ itemb(0u32, 22.0, 448.0, 75.0, 23.0, "Help", false, 0x000000u32), itemb(3u32, 103.0, 451.0, 270.0, 17.0, "Last update on October 10, 2026", false, 0x000000u32), itemb(0u32, 460.0, 448.0, 75.0, 23.0, "Close", false, 0x000000u32), itemb(0u32, 446.0, 95.0, 75.0, 23.0, "P&easant", false, 0x000000u32), itemb(0u32, 365.0, 95.0, 75.0, 23.0, "&Brawl", false, 0x000000u32), itemb(0u32, 284.0, 95.0, 75.0, 23.0, "Comm &1v1", false, 0x000000u32), itemb(0u32, 203.0, 95.0, 75.0, 23.0, "&Commander", false, 0x000000u32), itemb(0u32, 122.0, 95.0, 75.0, 23.0, "&2HG", false, 0x000000u32), itemb(0u32, 41.0, 95.0, 75.0, 23.0, "&Pauper", false, 0x000000u32), itemb(0u32, 122.0, 66.0, 75.0, 23.0, "&Modern", false, 0x000000u32), itemb(0u32, 446.0, 66.0, 75.0, 23.0, "&All", false, 0x000000u32), itemb(0u32, 365.0, 66.0, 75.0, 23.0, "&Vintage", false, 0x000000u32), itemb(0u32, 284.0, 66.0, 75.0, 23.0, "&Legacy", false, 0x000000u32), itemb(0u32, 203.0, 66.0, 75.0, 23.0, "&Pioneer", false, 0x000000u32), itemb(0u32, 41.0, 66.0, 75.0, 23.0, "&Standard", false, 0x000000u32), itemb(6u32, 26.0, 39.0, 513.0, 93.0, "Select Format ", false, 0x000000u32), none, none, none, none, none, none, none, none }
-        f.count = 16usize
+        f.items = [24]Item{ itemb(0u32, 22.0, 448.0, 75.0, 23.0, "Help", false, 0x000000u32), itemb(0u32, 460.0, 448.0, 75.0, 23.0, "Close", false, 0x000000u32), itemb(0u32, 446.0, 95.0, 75.0, 23.0, "P&easant", false, 0x000000u32), itemb(0u32, 365.0, 95.0, 75.0, 23.0, "&Brawl", false, 0x000000u32), itemb(0u32, 284.0, 95.0, 75.0, 23.0, "Comm &1v1", false, 0x000000u32), itemb(0u32, 203.0, 95.0, 75.0, 23.0, "&Commander", false, 0x000000u32), itemb(0u32, 122.0, 95.0, 75.0, 23.0, "&2HG", false, 0x000000u32), itemb(0u32, 41.0, 95.0, 75.0, 23.0, "&Pauper", false, 0x000000u32), itemb(0u32, 122.0, 66.0, 75.0, 23.0, "&Modern", false, 0x000000u32), itemb(0u32, 446.0, 66.0, 75.0, 23.0, "&All", false, 0x000000u32), itemb(0u32, 365.0, 66.0, 75.0, 23.0, "&Vintage", false, 0x000000u32), itemb(0u32, 284.0, 66.0, 75.0, 23.0, "&Legacy", false, 0x000000u32), itemb(0u32, 203.0, 66.0, 75.0, 23.0, "&Pioneer", false, 0x000000u32), itemb(0u32, 41.0, 66.0, 75.0, 23.0, "&Standard", false, 0x000000u32), itemb(6u32, 26.0, 39.0, 513.0, 93.0, "Select Format ", false, 0x000000u32), none, none, none, none, none, none, none, none, none }
+        f.count = 15usize
     }
     if i == 13usize {
         f.title = "Statistics"
@@ -271,7 +273,35 @@ fn form(i: usize) -> Form {
         f.items = [24]Item{ none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none }
         f.count = 0usize
     }
-    ret f
+    ret with_x88(f, i)
+}
+
+// round 88: the bodies baked from the 1:1 captures (e.ui.looks_x88, scripts/x88_specs.py); the skin goes first so that the live buttons lie over it.
+// `x88_body` is the skin id plus one of form `i`, 0 for none.
+fn x88_body(i: usize) -> usize {
+    if i == 14usize { ret 1usize }
+    if i == 10usize { ret 2usize }
+    if i == 11usize { ret 3usize }
+    if i == 13usize { ret 4usize }
+    if i == 12usize { ret 5usize }
+    if i == 4usize || i == 5usize { ret 6usize }
+    if i == 3usize { ret 7usize }
+    if i == 9usize { ret 8usize }
+    ret 0usize
+}
+
+fn with_x88(f: Form, i: usize) -> Form {
+    let id = x88_body(i)
+    if id == 0usize { ret f }
+    var g = f
+    var k = f.count
+    while k > 0usize {
+        g.items[k] = f.items[k - 1usize]
+        k -= 1usize
+    }
+    g.items[0usize] = part(20u32, 8.0, 0.0, 0.0, 0.0, "", false, 0u32, 0u32, u32(id - 1usize))
+    g.count = f.count + 1usize
+    ret g
 }
 
 fn at(a: *mem.Arena, x: f32, y: f32, node: widget.Node) -> widget.Node {
@@ -478,6 +508,10 @@ fn window(a: *mem.Arena, t: *const control.Theme, i: usize, action: *const widge
             let (art_part, art_error) = art_node(a, usize(it.n))
             if art_error != ok { ret (zero, art_error) }
             parts[n] = at(a, it.x - 8.0, it.y, art_part)
+        } else if it.kind == 20u32 {
+            let (baked, baked_error) = looks_x88.body(a, t, usize(it.n))
+            if baked_error != ok { ret (zero, baked_error) }
+            parts[n] = at(a, 0.0, 0.0, baked)
         } else if it.kind == 14u32 || it.kind == 15u32 || it.kind == 18u32 {
             let (comp, comp_error) = composite(a, it, t, action, key)
             if comp_error != ok { ret (zero, comp_error) }
