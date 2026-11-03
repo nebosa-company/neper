@@ -4,11 +4,18 @@
 use e.mem
 use e.ui.control
 use e.ui.looks
+use e.ui.looks_y85
 use e.ui.widget
 
 fn noop_submit(ctx: *void) -> err { ret ok }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Cupertino only: accent text and the keyboard ring take the increased-contrast blue (0x0040DD, 0x409CFF); other looks get their own tokens back.
+    let (tokens, tokens_error) = looks_y85.tinted_ring(a, base.tokens, 0x0040DDu32, 0x409CFFu32)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    var themed = *base
+    themed.tokens = tokens
+    let t = &themed
     let (notices, notices_error) = mem.alloc[control.Notice](a, 3usize)
     if notices_error != ok { ret (0usize, notices_error) }
     let go = widget.Submit { ctx: zero, invoke: noop_submit }

@@ -129,6 +129,81 @@
   },
   "name": "Document tabs"
  },
+ "bottom_sheet": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/bottom_sheet.png",
+    "notes": "Round 86 (y3): the Save fill is 0A60FF light and 0B57D0 dark for the Cupertino looks only (white 5.1:1 and 6.4:1; was 4.0:1). The sheet is the iOS modal idiom: rounded top, grabber, dimmed backdrop. Viewed at 1.5x light and dark. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/bottom_sheet.png",
+    "notes": "Round 86 (y3): the Save fill is 0A60FF light and 0B57D0 dark for the Cupertino looks only (white 5.1:1 and 6.4:1; was 4.0:1). The sheet is the iOS modal idiom: rounded top, grabber, dimmed backdrop. Viewed at 1.5x light and dark. | Round 62 (g): rendered by examples/looks/surf_overlay.e; Rendered from the platform palette; not compared with a real screen.",
+    "gaps": [
+     "Derived: drawn by the shared widget under each look's tokens; no profile-specific face and no real-screen capture exists for any look",
+     "Sheet states: rest, hover, pressed, focus on the content button",
+     "Pressed and focus are taken after the slide-in settles; the pressed and focus frames are driven on the content button or row, not on the sheet itself"
+    ]
+   }
+  },
+  "name": "Bottom sheet"
+ },
+ "rich_tooltip": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/rich_tooltip.png",
+    "notes": "Round 86 (y3): the plate is flat (white on the light ground, 2C2C2E dark) with no hard shadow line, links 7.6:1 light (0040DD) and 6.6:1 text dark. Viewed at 1x and 1.5x light and dark. | Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/rich_tooltip.png",
+    "notes": "Round 86 (y3): the plate is flat (white on the light ground, 2C2C2E dark) with no hard shadow line, links 7.6:1 light (0040DD) and 6.6:1 text dark. Viewed at 1x and 1.5x light and dark. | Round 63 (x): a wrapped body now measures its wrapped lines (a maximum width bounds the content), so no cell clips a line; the sheet adds two wrapped, no action cells, hangs the anchor at the cell right so every card is whole inside the image, and centres the pair in the cell. Round 62 lane c. Subhead with text and an action, text only, subhead with text, two actions. The anchors are left unpainted so each cell holds the tooltip alone. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "The tooltip hangs below the end of its hidden anchor, as the overlay places it; that is not a platform placement"
+    ]
+   }
+  },
+  "name": "Rich tooltip"
+ },
+ "ribbon": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/ribbon.png",
+    "notes": "Round 86 (y3): the macOS toolbar idiom: a segmented tab strip (chosen tab a raised pill), a toolbar items row with no group captions or dialog launchers, the contextual tab band a plain section label, Save and Undo in 0040DD / 409CFF (7.6:1 light, 6:1 dark; Redo is disabled). Viewed at 1x and 1.5x light and dark. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/ribbon.png",
+    "notes": "Round 86 (y3): the macOS toolbar idiom: a segmented tab strip (chosen tab a raised pill), a toolbar items row with no group captions or dialog launchers, the contextual tab band a plain section label, Save and Undo in 0040DD / 409CFF (7.6:1 light, 6:1 dark; Redo is disabled). Viewed at 1x and 1.5x light and dark. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "gaps": [
+     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
+     "Derived: no platform capture or reference crop exists for this control in this look",
+     "Office ribbon, no macOS or iOS control behind it"
+    ]
+   }
+  },
+  "name": "Ribbon"
+ },
  "toast": {
   "looks": {
    "cupertino": {
@@ -162,29 +237,60 @@
   },
   "name": "Toast"
  },
- "ribbon": {
+ "sheet": {
   "looks": {
    "cupertino": {
     "status": "review",
-    "screenshot": "cupertino/ribbon.png",
-    "notes": "Round 86 (y3): the tab strip is the macOS toolbar tab idiom (chosen tab a raised pill, clear strip); stays review: the panel below is still the Office ribbon (group captions, Table Tools peach band) and the Save and Undo accent text is 3.6:1 on the quick bar. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "screenshot": "cupertino/sheet.png",
+    "notes": "Round 86 (y3): the spreadsheet idiom with Cupertino tokens: the first column is wide enough for the longest name (cut before) and the header row is the system fill. Stays review: the disabled, hover and pressed cells draw like rest (no visible state), and a scrolled cell cuts the last column at the viewport edge. Viewed at 1x light and dark. | Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple HIG tokens (style.cupertino), derived. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. This row is the spreadsheet grid (A to F columns, row headers), not a modal sheet (that is the bottom_sheet row), so there is no 10 pt sheet to draw. Not raised: the Card column text 'Swords to Plowsha' and the last column are cut without an ellipsis in every cell, and the header band is a Windows style grey bar.",
     "gaps": [
-     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
-     "Derived: no platform capture or reference crop exists for this control in this look",
-     "Office ribbon, no macOS or iOS control behind it"
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "Cell text cut without an ellipsis (Swords to Plowsha)",
+     "Windows style header band"
     ]
    },
    "cupertino_dark": {
     "status": "review",
-    "screenshot": "cupertino-dark/ribbon.png",
-    "notes": "Round 86 (y3): the tab strip is the macOS toolbar tab idiom (chosen tab a raised pill, clear strip); stays review: the panel below is still the Office ribbon (group captions, Table Tools peach band) and the Save and Undo accent text is 3.6:1 on the quick bar. | Round 62 lane f. Office style ribbon: quick-access bar, tabs, groups; Home, Insert, contextual tabs, collapsed, command hovered and pressed. Drawn by the shared control from this look's tokens; nothing was measured against a real window, so this is a derived sheet for review. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. Not restyled: the ribbon is an Office idiom (quick access bar, contextual tab with a coloured band, groups with launcher buttons) that has no macOS control; the macOS equivalent is a toolbar with a segmented tab strip, a different control with other content, not a restyle.",
+    "screenshot": "cupertino-dark/sheet.png",
+    "notes": "Round 86 (y3): the spreadsheet idiom with Cupertino tokens: the first column is wide enough for the longest name (cut before) and the header row is the system fill. Stays review: the disabled, hover and pressed cells draw like rest (no visible state), and a scrolled cell cuts the last column at the viewport edge. Viewed at 1x light and dark. | Round 62 (d) sheet: lettered headers, frozen first row and column, a merged cell, range selection, the cell editor. Cells: rest, range selected, editing, hover, focus, pressed, scrolled, disabled. Derived: Apple dark tokens, derived. | ROUND 85 (lane y, docs/ui/looks/cupertino-complete-y.md): Viewed light and dark at 1x. This row is the spreadsheet grid (A to F columns, row headers), not a modal sheet (that is the bottom_sheet row), so there is no 10 pt sheet to draw. Not raised: the Card column text 'Swords to Plowsha' and the last column are cut without an ellipsis in every cell, and the header band is a Windows style grey bar.",
     "gaps": [
-     "no open menu, gallery or collapsed popup; hover and pressed aim at the Paste command by guess",
-     "Derived: no platform capture or reference crop exists for this control in this look",
-     "Office ribbon, no macOS or iOS control behind it"
+     "Hover and pressed do not change the drawing; the disabled cell looks the same as rest",
+     "No embedded content, fill handle or formula bar",
+     "No platform spreadsheet was compared",
+     "Not compared with a real screen: every colour and metric comes from the look's tokens",
+     "Cell text cut without an ellipsis (Swords to Plowsha)",
+     "Windows style header band"
     ]
    }
-  },
-  "name": "Ribbon"
+  }
+ },
+ "notification_list": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/notification_list.png",
+    "notes": "Round 86 (y3): links and ring take 0040DD / 409CFF. Stays review: the three-notice cell cuts the third row mid-text at the viewport edge, the close glyph is tiny and the info disc is a tonal Material circle. | Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the cupertino look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/notification_list.png",
+    "notes": "Round 86 (y3): links and ring take 0040DD / 409CFF. Stays review: the three-notice cell cuts the third row mid-text at the viewport edge, the close glyph is tiny and the info disc is a tonal Material circle. | Round 62 lane c. Three notices, one notice, empty, and the clear action hovered and pressed. Rendered from the cupertino dark look's tokens; derived, not compared with a real screen.",
+    "gaps": [
+     "No platform capture: every look is rendered from its own tokens (Windows 11 Fluent / v3 flat, libadwaita 1.5, Apple HIG, Material 3 baseline) and nothing was measured against a real screen or the native control",
+     "No profile-specific drawing was added: the control draws through the shared tokens, so where a platform's own widget has another shape (for example a Fluent InfoBar, an Adwaita banner, an iOS notification) this is the shared Material-derived shape in that look's colours, type and radii",
+     "Only the clear action is driven: a notice row's hover, its dismiss and its action are not captured",
+     "The list is 260 tall and scrolls: the third notice is partly below the fold in the three-notice cell"
+    ]
+   }
+  }
  }
 }

@@ -400,6 +400,11 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
     }
     // Android: the level-2 shade is drawn (e.ui.matshade), not the offset copy.
     if t.tokens.profile == .MaterialLike { raised.elevation = 0u8 }
+    // iOS popover: a flat system-grey plate, no hard shadow line under it
+    if t.tokens.profile == .CupertinoLike {
+        raised.elevation = 0u8
+        if t.tokens.palette != .Dark { raised.background = .SurfaceContainerLowest }
+    }
     var plate = control.surface_style(t, raised)
     if t.tokens.profile == .MaterialLike { plate.shade = 2u8 }
     if t.tokens.palette == .Dark && t.tokens.profile == .Neper { plate.border = style.Border { width: 1.0, color: style.frame_ink(t.tokens) } }
