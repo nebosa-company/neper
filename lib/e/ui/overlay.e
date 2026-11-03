@@ -7510,7 +7510,35 @@ fn color_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         if bar_error != ok { ret (zero, bar_error) }
         var sized = bar
         sized.style.width = style.Length { Px: width - t.tokens.metrics.hit_target - t.tokens.spacing.sm }
+        // Android (round 88): each slider is named by its channel letter and reads its 0 to 255 value, as a colour dialog does (the sliders alone were unlabelled); the slider keeps its width, the letter and the reading stand beside it, so the picker is 68 wider.
         bars[i] = sized
+        if t.tokens.profile == .MaterialLike {
+            let letters = [4]str{ "R", "G", "B", "A" }
+            var small = control.text_options()
+            small.role = .LabelLarge
+            let (letter, letter_error) = control.colored_text(a, 0u64, letters[i], t, small, style.color(t.tokens, .OnSurfaceVariant))
+            if letter_error != ok { ret (zero, letter_error) }
+            let (digits, digits_error) = mem.alloc[u8](a, 8usize)
+            if digits_error != ok { ret (zero, TooLarge) }
+            let shown = control.write_i64(digits, i64(levels[i] * 255.0 + 0.5))
+            let (reading, reading_error) = control.colored_text(a, 0u64, digits[0usize..shown], t, small, style.color(t.tokens, .OnSurfaceVariant))
+            if reading_error != ok { ret (zero, reading_error) }
+            var letter_box = control.sized_style(16.0, 24.0)
+            var reading_box = control.sized_style(28.0, 24.0)
+            let (hold_letter, hold_letter_error) = mem.alloc[widget.Node](a, 1usize)
+            let (hold_reading, hold_reading_error) = mem.alloc[widget.Node](a, 1usize)
+            if hold_letter_error != ok || hold_reading_error != ok { ret (zero, TooLarge) }
+            hold_letter[0usize] = letter
+            hold_reading[0usize] = reading
+            let (trio, trio_error) = mem.alloc[widget.Node](a, 3usize)
+            if trio_error != ok { ret (zero, TooLarge) }
+            trio[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, letter_box, hold_letter[0usize..1usize])
+            trio[1usize] = sized
+            trio[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, reading_box, hold_reading[0usize..1usize])
+            var whole = style.defaults()
+            whole.width = style.Length { Px: width - t.tokens.metrics.hit_target - t.tokens.spacing.sm + 16.0 + 28.0 + 24.0 }
+            bars[i] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, whole, trio[0usize..3usize])
+        }
         i += 1usize
     }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)

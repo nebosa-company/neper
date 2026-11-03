@@ -30,5 +30,10 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "color_picker", cells: 6usize, columns: 3usize, cell_w: 270.0, cell_h: 150.0, ctx: zero, build: build }
-    ret looks_b_run.run_ten(a, &sheet)
+    try looks.run_all(a, &sheet)
+    try looks.run_linux(a, &sheet)
+    try looks.run_cupertino(a, &sheet)
+    // Android: each slider has its channel letter and reading beside it, so the picker is 68 wider
+    let android = looks.Sheet { name: "color_picker", cells: 6usize, columns: 3usize, cell_w: 340.0, cell_h: 150.0, ctx: zero, build: build }
+    ret looks.run_material(a, &android)
 }

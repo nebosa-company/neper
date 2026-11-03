@@ -25,11 +25,11 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         if i == 3usize { drive = .Hover }
         if i == 4usize { drive = .Press }
         // Android: hover and press point at the Next arrow
-        if i == 3usize || i == 4usize { looks_z87.aim(t, i, 156.0, 6.0) }
+        if i == 3usize || i == 4usize { looks_z87.aim(t, i, 144.0, 0.0 - 10.0) }
         if i == 5usize { drive = .Focus }
-        // Android: the keyboard walk goes on to the Previous arrow (the page view takes the first stop)
+        // Android: four Tab presses land the keyboard on the Previous arrow (other counts leave it on the page view)
         if i == 5usize && t.tokens.profile == .MaterialLike {
-            looks_z84.stops(2usize)
+            looks_z84.stops(4usize)
             drive = .Tabs
         }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }

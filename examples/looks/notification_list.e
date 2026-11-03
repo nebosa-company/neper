@@ -30,6 +30,8 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
     // Cupertino (round 87): the three-notice list stands tall enough for its third row.
     var listh: f32 = 260.0
     if t.tokens.profile == .CupertinoLike { listh = 300.0 }
+    // Android (round 88): 56 dp header, two-line text and the action put the third row's action at about 310
+    if t.tokens.profile == .MaterialLike { listh = 330.0 }
     var i = 0usize
     while i < 5usize {
         let (node, node_error) = control.notification_list(a, u64((i + 1usize) * 64usize), t, "Notifications", notices[0usize..counts[i]], &clear[0usize], 340.0, listh)
@@ -37,7 +39,11 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
         var drive: looks.Drive = .None
         if i == 3usize { drive = .Hover }
         if i == 4usize { drive = .Press }
-        if i == 3usize || i == 4usize { looks.aim(i, 123.0, -100.0) }
+        if i == 3usize || i == 4usize {
+            var up: f32 = 0.0 - 100.0
+            if t.tokens.profile == .MaterialLike { up = 30.0 - listh * 0.5 }
+            looks.aim(i, 123.0, up)
+        }
         cells[i] = looks.Cell { caption: captions[i], node: node, drive: drive }
         i += 1usize
     }
@@ -47,7 +53,8 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
 fn main(a: *mem.Arena, args: []str) -> err {
     let sheet = looks.Sheet { name: "notification_list", cells: 5usize, columns: 3usize, cell_w: 370.0, cell_h: 300.0, ctx: zero, build: build }
     try looks.run_all(a, &sheet)
-    try looks.run_material(a, &sheet)
+    let android = looks.Sheet { name: "notification_list", cells: 5usize, columns: 3usize, cell_w: 370.0, cell_h: 370.0, ctx: zero, build: build }
+    try looks.run_material(a, &android)
     try looks.run_cupertino(a, &sheet)
     ret looks.run_linux(a, &sheet)
 }

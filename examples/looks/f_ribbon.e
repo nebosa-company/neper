@@ -50,14 +50,14 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
     let (tables, tables_error) = mem.alloc[navigation.RibbonCommand](a, 2usize)
     let (zoom, zoom_error) = mem.alloc[navigation.RibbonCommand](a, 1usize)
     if clip_error != ok || font_error != ok || tables_error != ok || zoom_error != ok { ret (0usize, clip_error) }
-    // Cupertino draws the real command glyphs; the other looks keep their stand-ins.
+    // Cupertino and Android draw the real command glyphs; the other looks keep their stand-ins.
     var paste_glyph: control.GlyphKind = .Add
     var cut_glyph: control.GlyphKind = .Cross
     var copy_glyph: control.GlyphKind = .Check
     var bold_glyph: control.GlyphKind = .Edit
     var italic_glyph: control.GlyphKind = .Edit
     var under_glyph: control.GlyphKind = .Edit
-    if base.tokens.profile == .CupertinoLike {
+    if base.tokens.profile == .CupertinoLike || base.tokens.profile == .MaterialLike {
         paste_glyph = .Clipboard
         cut_glyph = .Scissors
         copy_glyph = .Pages
@@ -73,7 +73,9 @@ fn build(ctx: *void, a: *mem.Arena, base: *const control.Theme, cells: []looks.C
     font[0usize].checked = true
     font[1usize] = command("Italic", italic_glyph, false, press)
     font[2usize] = command("Underline", under_glyph, false, press)
-    tables[0usize] = command("Table", .Calendar, true, press)
+    var table_glyph: control.GlyphKind = .Calendar
+    if base.tokens.profile == .MaterialLike { table_glyph = .Table }
+    tables[0usize] = command("Table", table_glyph, true, press)
     tables[1usize] = command("Picture", .Picture, true, press)
     zoom[0usize] = command("Zoom", .Visibility, true, press)
     let (g_home, g_home_error) = mem.alloc[navigation.RibbonGroup](a, 2usize)

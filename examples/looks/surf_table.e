@@ -9,6 +9,7 @@ use e.ui.collection
 use e.ui.control
 use e.ui.looks
 use e.ui.looks_y87
+use e.ui.looks_z88
 use e.ui.widget
 
 type Host = struct { t: *const control.Theme, base: u64, first: u64 }
@@ -17,6 +18,7 @@ fn noop_sort(ctx: *void, value: usize) -> err { ret ok }
 fn noop_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
 fn noop_resize(ctx: *void, value: collection.ColumnResize) -> err { ret ok }
 fn noop_key(ctx: *void, value: widget.Key) -> err { ret ok }
+fn noop_select(ctx: *void, value: collection.ListSelect) -> err { ret ok }
 fn noop_scroll(ctx: *void, value: f32) -> err { ret ok }
 
 fn host_of(ctx: *void) -> *Host { ret mem.cast[*Host](ctx) }
@@ -113,10 +115,11 @@ fn columns_of(a: *mem.Arena, t: *const control.Theme) -> ([]collection.Column, e
         columns[1usize].width = 56.0
         columns[2usize].width = 104.0
     }
-    // Android: M3's 16 dp cell padding leaves the sort arrow no room in 60 dp, so it ran over the Qty label.
+    // Android: M3's 16 dp cell padding leaves the sort arrow no room in 60 dp, so it ran over the Qty label.  Name is 200 so "Swords to Plowshares" stays on one line.
     if t.tokens.profile == .MaterialLike {
-        columns[0usize].width = 134.0
+        columns[0usize].width = 200.0
         columns[1usize].width = 76.0
+
     }
     ret (columns[0usize..3usize], ok)
 }
@@ -152,23 +155,42 @@ fn build_table_base(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: [
         let (chosen, chosen_error) = mem.alloc[widget.Key](a, 1usize)
         if chosen_error != ok { ret (0usize, chosen_error) }
         chosen[0usize] = 0u64
-        if i == 1usize { chosen[0usize] = hosts[0usize].base + hosts[0usize].first + 2u64 }
+        var how_many = 0usize
+        if i == 1usize {
+            chosen[0usize] = hosts[0usize].base + hosts[0usize].first + 2u64
+            how_many = 1usize
+        }
         var sort_column = 0usize
         var descending = false
         if i == 2usize {
             sort_column = 1usize
             descending = true
         }
-        let (node, node_error) = collection.table(a, hosts[0usize].base, t, "Cards", columns, source, chosen[0usize..1usize], sort_column, descending, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, 28.0, 0.0, widget.Change[f32] { ctx: zero, invoke: noop_scroll }, 190.0)
+        // Android: the Flutter DataTable's shape: a checkbox column, numbers at the end, a 56 dp header on the surface, 48 dp rows
+        var extent: f32 = 28.0
+        var shown: f32 = 190.0
+        var numeric = [3]bool{ false, true, false }
+        var options: collection.TableOptions = zero
+        looks_z88.head_flat(false)
+        if t.tokens.profile == .MaterialLike {
+            extent = 48.0
+            shown = 57.0 + 48.0 * 5.0
+
+            if i == 1usize { shown += 58.0 }
+            options.numeric = numeric[0usize..3usize]
+            options.select = widget.Change[collection.ListSelect] { ctx: zero, invoke: noop_select }
+            looks_z88.head_flat(true)
+        }
+        let (node, node_error) = collection.table_with(a, hosts[0usize].base, t, "Cards", columns, source, chosen[0usize..how_many], sort_column, descending, widget.Change[usize] { ctx: zero, invoke: noop_sort }, widget.Change[collection.Reorder] { ctx: zero, invoke: noop_reorder }, widget.Change[collection.ColumnResize] { ctx: zero, invoke: noop_resize }, widget.Change[widget.Key] { ctx: zero, invoke: noop_key }, extent, 0.0, widget.Change[f32] { ctx: zero, invoke: noop_scroll }, shown, options)
         if node_error != ok { ret (0usize, node_error) }
         var drive: looks.Drive = .None
         if i == 3usize {
             drive = .Hover
-            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 28.0 * 2.5)
+            looks.aim(i, 0.0, 0.0 - shown * 0.5 + header_of(t) + extent * 2.5)
         }
         if i == 4usize {
             drive = .Focus
-            looks.aim(i, 0.0, 0.0 - 95.0 + header_of(t) + 14.0)
+            looks.aim(i, 0.0, 0.0 - shown * 0.5 + header_of(t) + extent * 0.5)
         }
         cells[i] = looks.Cell { caption: names[i], node: node, drive: drive }
         i += 1usize
@@ -241,6 +263,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if strs.eq(which, "tree_table") { sheet = looks.Sheet { name: "tree_table", cells: 5usize, columns: 3usize, cell_w: 330.0, cell_h: 210.0, ctx: zero, build: build_tree } }
     try looks.run_all(a, &sheet)
     try looks.run_cupertino(a, &sheet)
-    try looks.run_material(a, &sheet)
+    // Android: the DataTable's 48 dp rows show five, in a wider cell for the checkbox column
+    var android = sheet
+    if !strs.eq(which, "tree_table") { android = looks.Sheet { name: "table", cells: 5usize, columns: 3usize, cell_w: 460.0, cell_h: 450.0, ctx: zero, build: build_table } }
+    try looks.run_material(a, &android)
     ret looks.run_linux(a, &sheet)
 }

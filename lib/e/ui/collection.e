@@ -24,6 +24,7 @@ use e.ui.looks_x87
 use e.ui.overlay
 use e.ui.looks_z84_edge
 use e.ui.looks_z85
+use e.ui.looks_z88
 use e.ui.style
 use e.ui.vgridlook as vg
 use e.ui.widget
@@ -1454,6 +1455,22 @@ fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         var row_style = style.defaults()
         row_style.width = style.Length { Px: width }
         row_style.height = style.Length { Px: extent }
+        // Android (round 88): a 24 dp drag handle leads the row, and the row takes the list item's state layers (on-surface 8 % hover, 10 % focus and pressed).
+        if t.tokens.profile == .MaterialLike {
+            let state = control.control_state(t, keys[i], true, false)
+            row_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state)) }
+            let (handle, handle_error) = control.icon_square(a, style.color(t.tokens, .OnSurfaceVariant), .DragHandle, 24.0)
+            if handle_error != ok { ret (zero, handle_error) }
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = handle
+            pair[1usize] = items[i]
+            var inset = style.defaults()
+            inset.width = style.Length { Px: width }
+            inset.height = style.Length { Px: extent }
+            inset.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+            body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, inset, pair[0usize..2usize])
+        }
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         control.focus_look(t)
@@ -2569,6 +2586,8 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     band.height = style.Length { Px: inner }
     band.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
     if look.on { band.background = paint.Brush { Solid: look.header } }
+    // Android (looks_z88): the header is the surface, as Flutter's DataTable header.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike && !look.on { band.background = paint.Brush { Solid: style.color(t.tokens, .Surface) } }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, band, cells[0usize..n])
@@ -3795,6 +3814,13 @@ fn selection_check(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = mark
+    // Android (looks_z88): the mark stands in the middle of the cell, as Flutter's DataTable checkbox, not at its top.
+    if looks_z88.head_is_flat() && t.tokens.profile == .MaterialLike {
+        let (middle, middle_error) = mem.alloc[widget.Node](a, 1usize)
+        if middle_error != ok { ret (zero, TooLarge) }
+        middle[0usize] = mark
+        held[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(side, tall), middle[0usize..1usize])
+    }
     held[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](press), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(side, tall), held[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 4u8
