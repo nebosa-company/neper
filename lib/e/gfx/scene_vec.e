@@ -1,6 +1,6 @@
 // The packed forms of three loops of `e.gfx.scene` (an opaque image's row blend, its bytes for the frame, and the copy of those
-// bytes to the frame), for the targets whose compiler lowers `e.simd`. `scene_vec.aarch64.e` answers the same functions a pixel
-// at a time.
+// bytes to the frame). Where the compiler lowers `e.simd` to vector instructions (x64, AArch64) they are a few instructions a pixel;
+// elsewhere the same code is the loops `e.simd` is defined by.
 
 use e.mem
 use e.simd
