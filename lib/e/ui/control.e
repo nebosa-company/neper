@@ -5175,10 +5175,16 @@ fn windows_check_row(a: *mem.Arena, key: widget.Key, t: *const Theme, dialog_t: 
         if current {
             var bar = sized_style(light_w, light_tall)
             bar.background = paint.Brush { Solid: check_highlight(t) }
+            // round 84: the dark chosen row is outlined like the Rules list's (#1A364D alone is 1.3 : 1 on the page)
+            if t.tokens.palette == .Dark && t.tokens.profile == .Windows {
+                var art_fill = looks_x84.chosen_fill(state.focused)
+                bar.background = paint.Brush { Solid: art_fill }
+                bar.border = style.Border { width: 1.0, color: looks_x84.chosen_line(state.focused) }
+            }
             parts[n] = widget.positioned(0u64, light_left, light_top, bar, zero)
             n += 1usize
         }
-        if below {
+        if below && !(t.tokens.palette == .Dark && t.tokens.profile == .Windows) {
             var tail = sized_style(light_w, light_top)
             tail.background = paint.Brush { Solid: check_highlight(t) }
             parts[n] = widget.positioned(0u64, light_left, 0.0, tail, zero)
@@ -7833,6 +7839,7 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
     look.background = win_rgb(232u32, 232u32, 232u32)
     look.border = win_rgb(210u32, 210u32, 210u32)
     look.border_width = 1.0
+    if t.tokens.palette == .Dark { look.border = looks_x84.frame_line() }
     if state.hovered { look.background = win_rgb(220u32, 235u32, 247u32) }
     look.radius = 3.0
     look.custom_padding = true
@@ -7848,6 +7855,8 @@ fn windows_token(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, re
     if label_error != ok { ret (zero, label_error) }
     var ink = win_rgb(109u32, 109u32, 109u32)
     if cross_state.hovered { ink = win_rgb(196u32, 43u32, 28u32) }
+    // round 84: the dark chip's remove cross was #5E5E5E (1.9 : 1 on its #2E2E2E face)
+    if t.tokens.palette == .Dark { ink = looks_x84.chip_cross(cross_state.hovered) }
     let (cross, cross_error) = stroked_glyph(a, ink, .Cross, 8.0, 1.2)
     if cross_error != ok { ret (zero, cross_error) }
     let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)

@@ -21,6 +21,23 @@ fn group_stub() -> f32 {
     ret 7.0 / scene.device_scale_now()
 }
 
+// The dark chip's remove cross: #C5C5C5 (8.1 : 1 on the #2E2E2E chip), #FF99A4 under the pointer (7.0 : 1).
+fn chip_cross(hovered: bool) -> paint.Color {
+    if hovered { ret style.hex_raw(0xFF99A4u32) }
+    ret style.hex_raw(0xC5C5C5u32)
+}
+
+// The dark list's chosen row: focused the native #1A364D in #0078D4, unfocused #3A3A3A in the dark frame #828790.
+fn chosen_fill(focused: bool) -> paint.Color {
+    if focused { ret style.hex_raw(0x1A364Du32) }
+    ret style.hex_raw(0x3A3A3Au32)
+}
+
+fn chosen_line(focused: bool) -> paint.Color {
+    if focused { ret style.hex_raw(0x0078D4u32) }
+    ret frame_line()
+}
+
 // A frame line one device pixel thick at the window's scale (1 at 100 %, 0.667 at 150 %).
 fn device_line() -> f32 {
     ret 1.0 / scene.device_scale_now()

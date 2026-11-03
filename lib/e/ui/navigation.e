@@ -9779,7 +9779,12 @@ fn windows_menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
             var wash = 0x3C3C3Cu32
             if sunk { wash = 0x454545u32 }
             parts[0usize] = windows_rect_raw(0.0, 0.0, bw, 21.0, wash)
-            p = 1usize
+            // round 84: the wash alone is 1.5 : 1 on the bar; a 1 px #828790 outline (4.5 : 1) makes the state visible
+            parts[1usize] = windows_rect_raw(0.0, 0.0, bw, 1.0, 0x828790u32)
+            parts[2usize] = windows_rect_raw(0.0, 20.0, bw, 1.0, 0x828790u32)
+            parts[3usize] = windows_rect_raw(0.0, 1.0, 1.0, 19.0, 0x828790u32)
+            parts[4usize] = windows_rect_raw(bw - 1.0, 1.0, 1.0, 19.0, 0x828790u32)
+            p = 5usize
         }
         held[0usize] = text_node
         parts[p] = widget.positioned(0u64, 6.0 + shift, 2.0 + shift, style.defaults(), held[0usize..1usize])
@@ -10472,9 +10477,16 @@ fn windows_status_panel(a: *mem.Arena, content: widget.Node, width: f32, last: b
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if style.windows_dark_on() {
-        // (round 7) a flat panel: the bar's face, a #3D3D3D line at its left (none on the first)
-        if !first {
-            parts[n] = windows_rect_raw(0.0, 2.0, 1.0, 13.0, 0x4A4A4Au32)
+        // round 84: the light panel's sunken bevel through the dark map (v3's #A0A0A0 line above and at the left, the #FFFFFF column inside the
+        // right edge): the dark control frame #828790 (3.8 : 1 on the #2B2B2B bar) above and at the left, #3A3A3A inside the right edge
+        var top_line = width - 2.0
+        if last { top_line = width - 1.0 }
+        parts[n] = windows_rect_raw(0.0, 0.0, top_line, 1.0, 0x828790u32)
+        n += 1usize
+        parts[n] = windows_rect_raw(0.0, 0.0, 1.0, 17.0, 0x828790u32)
+        n += 1usize
+        if !last {
+            parts[n] = windows_rect_raw(width - 2.0, 0.0, 1.0, 17.0, 0x3A3A3Au32)
             n += 1usize
         }
     } else {
