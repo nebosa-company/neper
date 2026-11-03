@@ -1,0 +1,47 @@
+name: freebsd-suite
+# Execution tests for the x64-freebsd target (docs/freebsd-cross-compilation.md). The compiler is built and the
+# fixtures are cross-emitted on ubuntu; each binary then runs inside a real FreeBSD VM (QEMU) and must exit 0.
+# Manual until `.Freebsd` exists in target.Os; until then the emit step fails, which is the expected state.
+on:
+  workflow_dispatch:
+    inputs:
+      names:
+        description: "link fixtures to emit and run (space separated)"
+        required: false
+        default: "wasm_basics wasm_ops wasm_flow fs_basics os_clock_random os_environment"
+      release:
+        description: "FreeBSD release for the VM"
+        required: false
+        default: "14.3"
+jobs:
+  freebsd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Emit the fixtures for x64 freebsd
+        run: |
+          mkdir -p out
+          for n in ${{ inputs.names }}; do
+            build/linux/neper-self emit-executable tests/selfhost/fixtures/link/$n/src/main.e . x64 freebsd out/$n --arena 1g
+          done
+          chmod +x out/*
+          # ELF OS ABI byte (EI_OSABI) must be 9 (FreeBSD); readable on any host.
+          for f in out/*; do [ "$(od -An -tu1 -j7 -N1 $f | tr -d ' ')" = 9 ] || { echo "$f: EI_OSABI is not FreeBSD"; exit 1; }; done
+      - name: Run in FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: ${{ inputs.release }}
+          sync: rsync
+          run: |
+            rc=0
+            for f in out/*; do
+              "$f"; s=$?
+              echo "$f exit $s"
+              [ $s -eq 0 ] || rc=1
+            done
+            exit $rc
