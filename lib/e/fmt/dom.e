@@ -531,7 +531,7 @@ fn inner_html(a: *mem.Arena, d: *const Dom, id: NodeId) -> (str, err) {
 
 // Replaces the children of element `id` with the parse of `markup` in its context.
 fn set_inner_html(d: *Dom, id: NodeId, markup: str, options: html.Options) -> err {
-    let (frag, frag_error) = html.parse_fragment(d.a, markup, d.nodes[usize(id)].name, d.nodes[usize(id)].namespace, sized(options, markup))
+    let (frag, frag_error) = html.parse_fragment_with(d.a, markup, d.nodes[usize(id)].name, d.nodes[usize(id)].namespace, sized(options, markup), true)
     if frag_error != ok { ret frag_error }
     remove_children(d, id)
     var kid = frag.nodes[usize(frag.root)].first_child
