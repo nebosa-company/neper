@@ -2055,6 +2055,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var hot_glyph = state.hovered
         if look.on && look.top_edge_on && t.tokens.profile == .Windows { hot_glyph = false }
         if fav_hot { hot_glyph = false }
+        if look.crisp && look.dialog_grid && t.tokens.profile == .Windows { hot_glyph = false }
         if sorted || hot_glyph {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
@@ -2147,6 +2148,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         var win_hot = state.hovered || state.pressed
         // round 15: the Shortcuts grid's hot header has no filter button
         if look.top_edge_on { win_hot = false }
+        if look.crisp && look.dialog_grid { win_hot = false }
         // round 43: a centred caption of the 1:1 grid is placed from the left (see the padding below), not centred by the flex
         let crisp_text = control.choices_hinted_width(columns[i].title)
         let crisp_centred = crisp_head && numeric_column(look.center_head, i) && !glyph_header && !(win_glyphs && (sorted || win_hot)) && crisp_text > 0.0
@@ -3150,7 +3152,7 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
         }
         let (invert, invert_error) = gl.focus_invert_local(a, dots_total - dots_left, extent - 1.0, paint.rgba(1.0 - dots_fill.red, 1.0 - dots_fill.green, 1.0 - dots_fill.blue, 1.0), dots_phase)
         if invert_error != ok { ret (zero, invert_error) }
-        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 3usize)
+        let (with_invert, with_invert_error) = mem.alloc[widget.Node](a, 5usize)
         if with_invert_error != ok { ret (zero, TooLarge) }
         with_invert[0usize] = lined[0usize]
         with_invert[1usize] = widget.positioned(0u64, dots_left, 0.0, style.defaults(), one_node(a, invert))
@@ -3164,8 +3166,33 @@ fn table_row_full(a: *mem.Arena, t: *const control.Theme, columns: []const Colum
             if before_error != ok { ret (zero, before_error) }
             with_invert[2usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), one_node(a, before_dots))
             invert_n = 3usize
+            if !style.windows_dark_on() {
+                // round 86: the capture's rectangle is one piece: its left edge at the selected cell is the column line and the fill
+                with_invert[3usize] = looks_x86.one_box(a, dots_left - 1.0, 1.0, 1.0, extent - 2.0, gl.rgb(0xDCDCDCu32))
+                with_invert[4usize] = looks_x86.one_box(a, dots_left, 1.0, 1.0, extent - 3.0, look.selected)
+                invert_n = 5usize
+            }
         }
         lined[0usize] = widget.stack(0u64, style.defaults(), with_invert[0usize..invert_n])
+        if look.dialog_grid && !style.windows_dark_on() && look.cell_select == 0usize {
+            // round 86: the column lines run over the rectangle's top and bottom dots (ref/windows-1to1 shortcuts and sort states)
+            let (joins, joins_error) = mem.alloc[widget.Node](a, columns.len * 2usize + 1usize)
+            if joins_error != ok { ret (zero, TooLarge) }
+            joins[0usize] = lined[0usize]
+            var join_n = 1usize
+            var join_x: f32 = 0.0
+            var join_at = 0usize
+            while join_at < columns.len {
+                join_x += columns[join_at].width
+                if join_x > dots_left && join_x <= dots_total {
+                    joins[join_n] = looks_x86.one_px(a, join_x - 1.0, 0.0, gl.rgb(0xDCDCDCu32))
+                    joins[join_n + 1usize] = looks_x86.one_px(a, join_x - 1.0, extent - 2.0, gl.rgb(0xDCDCDCu32))
+                    join_n += 2usize
+                }
+                join_at += 1usize
+            }
+            lined[0usize] = widget.stack(0u64, style.defaults(), joins[0usize..join_n])
+        }
     }
     if dotted_row && !crisp_sel {
         // looks4-e: a focused selected row carries v3's dotted focus rectangle, not a line
@@ -5316,6 +5343,16 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             crisp_style.margin.left = style.Length { Px: 6.0 }
             crisp_style.margin.top = style.Length { Px: 17.0 + thumb_y }
             thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, crisp_style, one_node(a, crisp_node))
+        }
+        if lk.crisp && lk.dialog_grid && !lk.dialog_lines && t.tokens.profile == .Windows && !style.windows_dark_on() && thumb_w < 3.0 && thumb_h >= 9.0 {
+            // round 86: the 1:1 dialog grids' resting thumb is the same two crisp columns with the end rows
+            let dialog_h = f32(i64(thumb_h + 0.5))
+            let (dialog_node, dialog_error) = looks_x85.crisp_thumb(a, dialog_h)
+            if dialog_error != ok { ret (zero, dialog_error) }
+            var dialog_style = control.sized_style(2.0, dialog_h)
+            dialog_style.margin = thumb_style.margin
+            dialog_style.margin.top = style.Length { Px: 17.0 + thumb_y }
+            thumb_holder[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, dialog_style, one_node(a, dialog_node))
         }
         // looks5-e: the lower end of the track pressed shows the down arrow (live capture, main window)
         if lk.soft_lines && control.control_state(t, track_key, true, false).pressed && mem.address_of(t.runtime) != 0usize {

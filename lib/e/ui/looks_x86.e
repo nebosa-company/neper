@@ -1,6 +1,8 @@
 // Round 86, lane x: Windows and Windows Dark completion. datagrid.e calls this file with plain values.
 
 use e.mem
+use e.str
+use e.gfx.paint
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -9,6 +11,8 @@ use e.ui.winedpic
 
 // v3's open in-cell editor of the current row, light 1:1 capture (data_grid_bottom): the spin editor's step buttons one pixel inside the
 // cell's left and right edges, the button editor's three-dots button two pixels inside the right edge, the value between them.
+error TooLarge
+
 fn one_of(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret zero }
@@ -84,4 +88,31 @@ fn list_glyph(a: *mem.Arena) -> (widget.Node, err) {
     }
     let (tile, tile_error) = wintile.tile_node(a, 7usize, 9usize, g[0usize..63usize])
     ret (tile, tile_error)
+}
+
+// A 1 x 1 pixel of `color` at (x, y) in its parent stack.
+fn one_px(a: *mem.Arena, x: f32, y: f32, color: paint.Color) -> widget.Node { ret one_box(a, x, y, 1.0, 1.0, color) }
+
+// A `w` x `h` box of `color` at (x, y) in its parent stack.
+fn one_box(a: *mem.Arena, x: f32, y: f32, w: f32, h: f32, color: paint.Color) -> widget.Node {
+    var s = style.defaults()
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: h }
+    s.background = paint.Brush { Solid: color }
+    var none: []const widget.Node = zero
+    ret widget.positioned(0u64, x, y, style.defaults(), one_of(a, widget.box(0u64, s, none)))
+}
+
+// A pixel string (RRGGBB a pixel, `w` pixels a row) one row lower: the bar's #F0F0F0 on top, the last row dropped.
+fn down_one(a: *mem.Arena, pix: str, w: usize) -> (str, err) {
+    let (b, b_error) = str.builder(a, pix.len + 6usize * w)
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    var k = 0usize
+    while k < w {
+        if str.push(&sb, "F0F0F0") != ok { ret ("", TooLarge) }
+        k += 1usize
+    }
+    if str.push(&sb, pix[0usize..pix.len - 6usize * w]) != ok { ret ("", TooLarge) }
+    ret (str.done(&sb), ok)
 }

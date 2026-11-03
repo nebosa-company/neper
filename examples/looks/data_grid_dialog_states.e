@@ -19,6 +19,7 @@ use e.ui.looks
 use e.ui.style
 use e.ui.widget
 use e.ui.winsetpic
+use e.ui.winedpic
 use e.ui.wintile
 
 const MAX: usize = 5usize
@@ -184,7 +185,23 @@ fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     // round 46: Segoe UI in the 1:1 capture's 19 px rows
     if t.tokens.profile == .Windows && app.light { caption_up = 4.0 }
     cell.padding = style.EdgeLengths { left: style.Length { Px: caption_x }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: caption_up } }
-    *out = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
+    let flowed = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, cell, held[0usize..1usize])
+    if row == 1usize && t.tokens.profile == .Windows && app.light {
+        // round 86: the capture's sort glyph (z to a) before the Descending caption, cut from ref/windows-1to1
+        var glyph_px = winedpic.sort_glyph()
+        let (glyph, glyph_error) = wintile.tile_node(a, winedpic.sort_glyph_w(), winedpic.sort_glyph_h(), glyph_px[0usize..winedpic.sort_glyph_w() * winedpic.sort_glyph_h()])
+        if glyph_error != ok { ret glyph_error }
+        let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+        if layers_error != ok { ret layers_error }
+        let (glyph_held, glyph_held_error) = mem.alloc[widget.Node](a, 1usize)
+        if glyph_held_error != ok { ret glyph_held_error }
+        glyph_held[0usize] = glyph
+        layers[0usize] = flowed
+        layers[1usize] = widget.positioned(0u64, 2.0, 1.0, style.defaults(), glyph_held[0usize..1usize])
+        *out = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
+        ret ok
+    }
+    *out = flowed
     ret ok
 }
 
@@ -311,6 +328,8 @@ fn arrange(app: *App, k: usize) {
         look.dialog_grid = true
         look.cell_down = 2.0
         if app.family == 0usize { look.cell_down = 0.0 }
+        // the Shortcuts capture's resting thumb is 33 rows
+        if app.family == 1usize { look.thumb_len = 33.0 }
         look.idle_edge = look.idle_fill
         look.dialog_lines = false
         look.frame_none = false

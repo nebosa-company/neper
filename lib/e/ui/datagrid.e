@@ -7603,7 +7603,25 @@ fn cell_text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role:
             ret ok
         }
     }
+    if win_look(grid) && grid.look.crisp && grid.look.dialog_grid && !style.windows_dark_on() && grid.has_selection && row == grid.selected_row && selected_row_focused(grid, row) {
+        // round 86: v3's dialog grids draw the focused selected row's text in clMaroon (#800000, ref/windows-1to1 shortcuts and sort states)
+        var maroon = control.text_options()
+        maroon.wrap = .None
+        maroon.size = grid.look.text_size
+        if bold { maroon.weight = 700u32 }
+        let (marked, marked_error) = control.colored_text(a, 0u64, text, cells_theme(grid), maroon, gl.rgb(0x800000u32))
+        if marked_error != ok { ret marked_error }
+        *out = marked
+        ret ok
+    }
     ret text_node(a, grid, text, bold, role, out)
+}
+
+fn selected_row_focused(grid: *const Grid, row: usize) -> bool {
+    if grid.force_focus || !grid.look.idle_on { ret true }
+    if mem.address_of(grid.theme.runtime) == 0usize { ret false }
+    let (held, has_held) = widget.focused_key(grid.theme.runtime)
+    ret has_held && held == row_key(grid, row)
 }
 
 fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, out: *widget.Node) -> err {
@@ -8940,6 +8958,12 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
             if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && winsetpic.nav_hot(slot).len != 0usize {
                 live_pix = winsetpic.nav_hot(slot)
                 live_crisp_hot = true
+                // round 86: the collection grid's navigator stands one row lower than the pool's in the 1:1 captures: the picture moves down a row
+                if !nav_rule_on(grid) {
+                    let (lowered, lowered_error) = looks_x86.down_one(a, live_pix, usize(live_w))
+                    if lowered_error != ok { ret (zero, lowered_error) }
+                    live_pix = lowered
+                }
             }
         }
                 // (the hover bitmaps were cut one column further left than the rest ones: their first column is left out, the node keeps its width)
@@ -9096,7 +9120,14 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if win_look(grid) && !nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_bot_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_bot_c(7usize, true) }
         if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered {
             funnel_pix = gl.gx_nav_hot(7usize)
-            if win_look(grid) && grid.look.crisp && !style.windows_dark_on() { funnel_pix = winsetpic.nav_hot(7usize) }
+            if win_look(grid) && grid.look.crisp && !style.windows_dark_on() {
+                funnel_pix = winsetpic.nav_hot(7usize)
+                if !nav_rule_on(grid) {
+                    let (lowered_funnel, lowered_funnel_error) = looks_x86.down_one(a, funnel_pix, usize(gl.gx_nav_win_w_if(true, 7usize)))
+                    if lowered_funnel_error != ok { ret (zero, lowered_funnel_error) }
+                    funnel_pix = lowered_funnel
+                }
+            }
         }
         let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }

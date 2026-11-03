@@ -42,4 +42,12 @@ for yy in range(33, 52):
         p = b[yy, xx]
         ph.append(0xFF000000 | (int(p[0]) << 16) | (int(p[1]) << 8) | int(p[2]))
 src += emit('pic_head', 19, 19, ph)
+# the Sort dialog's sort glyph in the Descending row (ref/windows-1to1/data_grid_sort_states.png, x 512 to 528, y 72 to 87), opaque on the white row
+t = np.array(Image.open('docs/ui/looks/ref/windows-1to1/data_grid_sort_states.png').convert('RGB')).astype(int)
+sg = []
+for yy in range(72, 88):
+    for xx in range(512, 529):
+        p = t[yy, xx]
+        sg.append(0xFF000000 | (int(p[0]) << 16) | (int(p[1]) << 8) | int(p[2]))
+src += emit('sort_glyph', 17, 16, sg)
 open('lib/e/ui/winedpic.e', 'w', encoding='utf-8').write(src)

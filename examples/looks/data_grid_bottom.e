@@ -19,6 +19,8 @@ use e.ui.widget
 use e.ui.winsetpic
 use e.ui.wintile
 
+fn noop_submit(ctx: *void) -> err { ret ok }
+
 const CC_NAME: usize = 0usize
 const CC_EDITION: usize = 1usize
 const CC_QTY: usize = 2usize
@@ -219,6 +221,8 @@ fn setup(m: *Bottom) -> err {
         dg.set_editor(&m.grids[k], 7usize, dg.EDITOR_BUTTON)
     }
     dg.show_navigator(&m.grids[k], true)
+    // v3's funnel is an enabled button (its hover frame shows in the captures)
+    if m.windows && m.light { dg.set_filter_action(&m.grids[k], widget.Submit { ctx: zero, invoke: noop_submit }) }
     dg.set_pane_hint(&m.grids[k], 573.0)
     dg.show_sort(&m.grids[k], 1usize, true)
     m.grids[k].aligns[3usize] = 2u8
@@ -241,23 +245,6 @@ fn setup(m: *Bottom) -> err {
 fn grid_height(t: *const control.Theme) -> f32 {
     if t.tokens.profile == .Windows { ret 268.0 }
     ret 267.0
-}
-
-// The pointer over the Name header: its colour runs through the frame's top row above it and the rule under it (live capture,
-// Windows light): #ACB8C3 over 35 to 183 between two paler end pixels, #E3EDF4 on the rule
-fn hot_header(a: *mem.Arena, m: *Bottom, k: usize, card: widget.Node) -> (widget.Node, err) {
-    if k != 2usize || !m.windows || !m.light { ret (card, ok) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 9usize)
-    if parts_error != ok { ret (zero, parts_error) }
-    parts[0usize] = card
-    parts[1usize] = dg.footer_px(a, 34.0, 1.0, 1.0, 1.0, 0xADB7C2u32)
-    parts[2usize] = dg.footer_px(a, 35.0, 1.0, 149.0, 1.0, 0xACB8C3u32)
-    parts[3usize] = dg.footer_px(a, 184.0, 1.0, 1.0, 1.0, 0xBBBFC6u32)
-    parts[4usize] = dg.footer_px(a, 34.0, 20.0, 1.0, 1.0, 0xE3EBF1u32)
-    parts[5usize] = dg.footer_px(a, 35.0, 20.0, 148.0, 1.0, 0xE3EDF4u32)
-    parts[6usize] = dg.footer_px(a, 183.0, 20.0, 1.0, 1.0, 0xDDE6EDu32)
-    parts[7usize] = dg.footer_px(a, 184.0, 20.0, 1.0, 1.0, 0xF1F3F5u32)
-    ret (widget.stack(0u64, style.defaults(), parts[0usize..8usize]), ok)
 }
 
 fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
@@ -301,9 +288,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
             looks.aim(k - m.first, px - 288.0, py - 121.0)
         }
         let card = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, face, held[0usize..1usize])
-        let (card_over, card_over_error) = hot_header(a, m, k, card)
-        if card_over_error != ok { ret (0usize, card_over_error) }
-        cells[k - m.first] = looks.Cell { caption: captions[k], node: card_over, drive: drive }
+        cells[k - m.first] = looks.Cell { caption: captions[k], node: card, drive: drive }
         k += 1usize
     }
     ret (m.count, ok)
