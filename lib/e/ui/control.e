@@ -37,6 +37,7 @@ use e.ui.looks_z63
 use e.ui.looks_o78
 use e.ui.looks_t81
 use e.ui.looks_x84
+use e.ui.looks_x85
 use e.ui.looks_y84
 use e.ui.looks_z84_edge
 use e.ui.winbutton
@@ -7210,6 +7211,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         if resting { hint_text = label }
         var hint_color = with_alpha(muted, value_color.alpha)
         if t.tokens.profile == .CupertinoLike { hint_color = muted }
+        // round 85: the Windows light placeholder is #6B6B6B (5.3 : 1 on white, 4.8 : 1 on the dialog face; v3's clGray #808080 is 3.95 : 1)
+        if t.tokens.profile == .Windows && !style.windows_dark_on() { hint_color = with_alpha(style.hex_raw(0x6B6B6Bu32), value_color.alpha) }
         // Android: the resting label has the label's colour (on-surface under the pointer, error when invalid, on-surface at 38 % when disabled).
         if resting && t.tokens.profile == .MaterialLike { hint_color = label_color }
         let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, hint_color)
@@ -7671,7 +7674,7 @@ fn windows_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, bu
         var hint = text_options()
         hint.role = .BodyMedium
         hint.wrap = .None
-        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, win_rgb(128u32, 128u32, 128u32))
+        let (hint_node, hint_error) = colored_text(a, 0u64, options.placeholder, t, hint, win_placeholder_ink())
         if hint_error != ok { ret (zero, hint_error) }
         layers[at] = hint_node
         at += 1usize
@@ -7931,7 +7934,7 @@ fn windows_token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: s
         var hint = text_options()
         hint.role = .BodyMedium
         hint.wrap = .None
-        let (hint_node, hint_error) = colored_text(a, 0u64, label, &ft, hint, win_rgb(128u32, 128u32, 128u32))
+        let (hint_node, hint_error) = colored_text(a, 0u64, label, &ft, hint, win_placeholder_ink())
         if hint_error != ok { ret (zero, hint_error) }
         let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
         if pair_error != ok { ret (zero, TooLarge) }
@@ -17420,9 +17423,15 @@ fn windows_glyph_toggle_art(a: *mem.Arena, key: widget.Key, t: *const Theme, kin
     if !enabled { ink = style.hex(13158600u32) }
     if !enabled && style.windows_dark_on() { ink = style.hex_raw(0x6B6B6Bu32) }
     var mark: widget.Node = zero
-    if art < 1000usize && !style.windows_dark_on() {
+    if art < 1000usize {
         let atlas = wintoolicon.atlas()
-        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, atlas[art * 272usize..art * 272usize + 272usize])
+        var tile_px = atlas[art * 272usize..art * 272usize + 272usize]
+        if style.windows_dark_on() {
+            let (mapped, mapped_error) = looks_x85.dark_tile(a, tile_px, !enabled)
+            if mapped_error != ok { ret (zero, mapped_error) }
+            tile_px = mapped
+        }
+        let (tile, tile_error) = wintile.tile_node(a, 16usize, 17usize, tile_px)
         if tile_error != ok { ret (zero, tile_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, held_error) }
@@ -22177,6 +22186,12 @@ fn cupertino_menu_row_icon(a: *mem.Arena, t: *const Theme, key: widget.Key, labe
 // ---- end the Cupertino look (block 5) ---------------------------------------------------------------
 
 // The selected tab's frame: v3's near-black #2B2B2B; in the Windows dark look a #9D9D9D line (black on the dark strip would be invisible, white too harsh).
+// round 85: v3's null prompt is clGray #808080 (3.95 : 1 on white); the light look draws #6B6B6B (5.3 : 1 on white, 4.8 : 1 on the dialog face), the dark map keeps #808080
+fn win_placeholder_ink() -> paint.Color {
+    if style.windows_dark_on() { ret win_rgb(128u32, 128u32, 128u32) }
+    ret win_rgb(107u32, 107u32, 107u32)
+}
+
 fn win_tab_edge() -> paint.Color {
     if style.windark_active() { ret style.hex_raw(0x9D9D9Du32) }
     ret style.hex(2829099u32)

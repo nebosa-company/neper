@@ -64,3 +64,69 @@ fn lift_on_selection(c: paint.Color) -> paint.Color {
     }
     ret out
 }
+
+// v3's toolbar picture (a 16 x 17 tile of 0xAARRGGBB, alpha 0 = the bar face) for the dark bar #2B2B2B: a neutral pixel keeps its coverage of ink over the light face
+// (black outline to white, face to the dark face; a pale disabled tile to a #6F grey), a coloured pixel keeps its colour, a very dark colour is lifted halfway to white.
+fn dark_tile(a: *mem.Arena, src: []const u32, disabled: bool) -> ([]u32, err) {
+    let (out, out_error) = mem.alloc[u32](a, src.len)
+    if out_error != ok { ret (zero, TooLarge) }
+    // a tile captured on a disabled button is pale for the whole picture (mean over its pixels above 170): drawn as disabled whatever the button says
+    var sum: i32 = 0
+    var count: i32 = 0
+    var i = 0usize
+    while i < src.len {
+        let px = src[i]
+        if (px >> 24u32) != 0u32 {
+            sum += (i32((px >> 16u32) & 255u32) + i32((px >> 8u32) & 255u32) + i32(px & 255u32)) / 3
+            count += 1
+        }
+        i += 1usize
+    }
+    var pale = disabled
+    if count > 0 && sum / count >= 170 { pale = true }
+    i = 0usize
+    while i < src.len {
+        let px = src[i]
+        if (px >> 24u32) == 0u32 {
+            out[i] = px
+            i += 1usize
+            continue
+        }
+        let r = i32((px >> 16u32) & 255u32)
+        let g = i32((px >> 8u32) & 255u32)
+        let b = i32(px & 255u32)
+        let hi = max_i(r, max_i(g, b))
+        let lo = min_i(r, min_i(g, b))
+        let mean = (r + g + b) / 3
+        var nr = r
+        var ng = g
+        var nb = b
+        if pale || hi - lo <= 28 {
+            var cover = (240 - mean) * 1000 / 240
+            if cover < 0 { cover = 0 }
+            if pale { cover = cover * 3 }
+            if cover > 1000 { cover = 1000 }
+            let v = 43 + (255 - 43) * cover / 1000
+            nr = v
+            ng = v
+            nb = v
+        } else if mean < 90 {
+            nr = r + (255 - r) * 55 / 100
+            ng = g + (255 - g) * 55 / 100
+            nb = b + (255 - b) * 55 / 100
+        }
+        out[i] = 0xFF000000u32 | (u32(nr) << 16u32) | (u32(ng) << 8u32) | u32(nb)
+        i += 1usize
+    }
+    ret (out, ok)
+}
+
+fn max_i(a: i32, b: i32) -> i32 {
+    if a > b { ret a }
+    ret b
+}
+
+fn min_i(a: i32, b: i32) -> i32 {
+    if a < b { ret a }
+    ret b
+}
