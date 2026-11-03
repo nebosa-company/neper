@@ -254,6 +254,74 @@ fn atomic_rmw_kind_rank(kind: AtomicRmwKind) -> usize {
     ret 5usize
 }
 
+// The opcode's name, for a diagnostic.
+fn opcode_name(op: Opcode) -> str {
+    if op == .Invalid { ret "Invalid" }
+    if op == .Parameter { ret "Parameter" }
+    if op == .ConstInteger { ret "ConstInteger" }
+    if op == .ConstBool { ret "ConstBool" }
+    if op == .ConstError { ret "ConstError" }
+    if op == .ConstString { ret "ConstString" }
+    if op == .Stack { ret "Stack" }
+    if op == .Load { ret "Load" }
+    if op == .Store { ret "Store" }
+    if op == .Copy { ret "Copy" }
+    if op == .Zero { ret "Zero" }
+    if op == .FieldAddress { ret "FieldAddress" }
+    if op == .IndexAddress { ret "IndexAddress" }
+    if op == .Slice { ret "Slice" }
+    if op == .Cast { ret "Cast" }
+    if op == .Add { ret "Add" }
+    if op == .Subtract { ret "Subtract" }
+    if op == .Multiply { ret "Multiply" }
+    if op == .Divide { ret "Divide" }
+    if op == .Remainder { ret "Remainder" }
+    if op == .AddWrap { ret "AddWrap" }
+    if op == .SubtractWrap { ret "SubtractWrap" }
+    if op == .MultiplyWrap { ret "MultiplyWrap" }
+    if op == .ShiftLeft { ret "ShiftLeft" }
+    if op == .ShiftRight { ret "ShiftRight" }
+    if op == .BitAnd { ret "BitAnd" }
+    if op == .BitXor { ret "BitXor" }
+    if op == .BitOr { ret "BitOr" }
+    if op == .Negate { ret "Negate" }
+    if op == .BitNot { ret "BitNot" }
+    if op == .Equal { ret "Equal" }
+    if op == .NotEqual { ret "NotEqual" }
+    if op == .Less { ret "Less" }
+    if op == .LessEqual { ret "LessEqual" }
+    if op == .Greater { ret "Greater" }
+    if op == .GreaterEqual { ret "GreaterEqual" }
+    if op == .Call { ret "Call" }
+    if op == .Extract { ret "Extract" }
+    if op == .Phi { ret "Phi" }
+    if op == .Trap { ret "Trap" }
+    if op == .Branch { ret "Branch" }
+    if op == .BranchIf { ret "BranchIf" }
+    if op == .Switch { ret "Switch" }
+    if op == .Return { ret "Return" }
+    if op == .Unreachable { ret "Unreachable" }
+    if op == .FunctionAddress { ret "FunctionAddress" }
+    if op == .IndirectCall { ret "IndirectCall" }
+    if op == .ConstFloat { ret "ConstFloat" }
+    if op == .Bitcast { ret "Bitcast" }
+    if op == .AtomicLoad { ret "AtomicLoad" }
+    if op == .AtomicStore { ret "AtomicStore" }
+    if op == .AtomicRmw { ret "AtomicRmw" }
+    if op == .AtomicCas { ret "AtomicCas" }
+    if op == .AtomicFence { ret "AtomicFence" }
+    if op == .GlobalAddress { ret "GlobalAddress" }
+    if op == .Sqrt { ret "Sqrt" }
+    if op == .VectorBinary { ret "VectorBinary" }
+    if op == .Data { ret "Data" }
+    if op == .TrapStub { ret "TrapStub" }
+    if op == .Barrier { ret "Barrier" }
+    if op == .MemoryBarrier { ret "MemoryBarrier" }
+    if op == .Subgroup { ret "Subgroup" }
+    if op == .FrameAddress { ret "FrameAddress" }
+    ret "?"
+}
+
 type Site = struct {
     start: usize,
     end: usize,
@@ -494,6 +562,8 @@ type Builder = struct {
     // Device-only helpers keep their locals in Stack slots so copying one into
     // a kernel can turn those slots into invocation-frame addresses.
     frame_locals: bool,
+    // The target has no vector register class (AArch64 holds a vector object in memory for now): regalloc keeps them there.
+    no_vector_registers: bool,
     // A device build (D1610): a kernel lowers as a plain function, with no frame, for the
     // SPIR-V emitter to read.
     spirv: bool,

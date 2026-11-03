@@ -1025,6 +1025,205 @@ fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, context: 
 
 // ---------------------------------------------------------------- vectors
 
+// ---------------------------------------------------------------- extended vector operations
+
+// A three-register Advanced SIMD word over lanes of `size`, and a two-register one.
+fn neon3(output: *emit_x64.Buffer, base: usize, size: usize, vd: usize, vn: usize, vm: usize) -> err {
+    ret emit_a64.instruction_word(output, base | (size << 22usize) | (vm << 16usize) | (vn << 5usize) | vd)
+}
+
+fn neon2(output: *emit_x64.Buffer, base: usize, size: usize, vd: usize, vn: usize) -> err {
+    ret emit_a64.instruction_word(output, base | (size << 22usize) | (vn << 5usize) | vd)
+}
+
+// The three-register word of the two-source operations that are one instruction: minimum and maximum, saturating add and subtract,
+// the rounding average and the absolute difference, over lanes of the `lane` code (0 bytes, 1 halfwords, 2 words). Zero for none.
+fn simple_ext_word(ext: usize) -> usize {
+    if ext == nir.EXT_MIN_U { ret 0x6E206C00usize }
+    if ext == nir.EXT_MIN_S { ret 0x4E206C00usize }
+    if ext == nir.EXT_MAX_U { ret 0x6E206400usize }
+    if ext == nir.EXT_MAX_S { ret 0x4E206400usize }
+    if ext == nir.EXT_ADDS_U { ret 0x6E200C00usize }
+    if ext == nir.EXT_ADDS_S { ret 0x4E200C00usize }
+    if ext == nir.EXT_SUBS_U { ret 0x6E202C00usize }
+    if ext == nir.EXT_SUBS_S { ret 0x4E202C00usize }
+    if ext == nir.EXT_AVG { ret 0x6E201400usize }
+    if ext == nir.EXT_ABSDIFF_U { ret 0x6E207400usize }
+    if ext == nir.EXT_ABSDIFF_S { ret 0x4E207400usize }
+    ret 0usize
+}
+
+// A vector operand's sixteen bytes into register `vt`.
+fn ext_in(allocations: []regalloc.Allocation, value: usize, vt: usize, output: *emit_x64.Buffer) -> err {
+    let (address, address_error) = read_value(allocations, value, A64_S0, output)
+    if address_error != ok { ret address_error }
+    ret emit_a64.vector_load(output, vt, address, 16usize)
+}
+
+// Register `vt`'s low `bytes` bytes to the destination's address.
+fn ext_out(allocations: []regalloc.Allocation, value: usize, vt: usize, bytes: usize, output: *emit_x64.Buffer) -> err {
+    let (address, address_error) = read_value(allocations, value, A64_S1, output)
+    if address_error != ok { ret address_error }
+    ret emit_a64.vector_store(output, vt, address, bytes)
+}
+
+// The lanes of v16 narrowed to the bytes of a mask (a lane that is all ones or zero becomes 1 or 0), one halving per step.
+fn narrow_mask(output: *emit_x64.Buffer, size: usize) -> err {
+    var step = size
+    while step > 0usize {
+        try neon2(output, 0x0E212800usize, step - 1usize, 16usize, 16usize)
+        step -= 1usize
+    }
+    ret emit_a64.vector_shift_immediate(output, 1usize, 0usize, 16usize, 16usize, 7usize)
+}
+
+// One extended packed operation (D5960) as Advanced SIMD: the operands come into v16 and v17, the instruction or few run, and the
+// result goes to the destination -- an address for the load and the store, a slot otherwise. v18 to v22 are scratch, and x2 to x4
+// hold constants. The results are `e.simd`'s own: the conversion of `round_i32` is made to answer the least integer for a NaN or an
+// out-of-range lane, as the x64 form does, where `fcvtns` would saturate.
+fn select_vector_ext(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, context: *codegen_x64.FunctionContext) -> err {
+    let output = context.output
+    let allocations = context.allocations
+    if instruction.has_result { ret codegen_x64.Unsupported }
+    let ext = nir.vector_ext(instruction.immediate)
+    let lane = nir.vector_binary_lane(instruction.immediate)
+    if !nir.vector_ext_supported(ext, lane, 2usize) { ret codegen_x64.Unsupported }
+    var size = lane
+    if lane == 4usize { size = 2usize }
+    if lane == 5usize { size = 3usize }
+    let lane_bytes = codegen_x64.packed_lane_size(lane)
+    if instruction.operand_count < 3usize { ret codegen_x64.Unsupported }
+    let destination_value = builder.operands[instruction.first_operand]
+    let left_value = builder.operands[instruction.first_operand + 1usize]
+    let right_value = builder.operands[instruction.first_operand + 2usize]
+    if ext == nir.EXT_LOAD || ext == nir.EXT_STORE {
+        try ext_in(allocations, left_value, 16usize, output)
+        ret ext_out(allocations, destination_value, 16usize, 16usize, output)
+    }
+    if ext == nir.EXT_SPLAT {
+        let (scalar, scalar_error) = read_value(allocations, left_value, A64_S0, output)
+        if scalar_error != ok { ret scalar_error }
+        try emit_a64.vector_duplicate(output, size, 16usize, scalar)
+        ret ext_out(allocations, destination_value, 16usize, 16usize, output)
+    }
+    if ext == nir.EXT_SELECT {
+        // The mask's bytes of 0 or 1 widened to lanes and negated to all ones or zero, then (yes & m) | (no & !m).
+        let mask_bytes = 16usize / lane_bytes
+        let (mask_address, mask_error) = read_value(allocations, left_value, A64_S0, output)
+        if mask_error != ok { ret mask_error }
+        try emit_a64.vector_load(output, 18usize, mask_address, mask_bytes)
+        var widen = 0usize
+        while widen < size {
+            try emit_a64.instruction_word(output, (0x2F08A400usize + (widen << 19usize)) | (18usize << 5usize) | 18usize)
+            widen += 1usize
+        }
+        try neon2(output, 0x6E20B800usize, size, 18usize, 18usize)
+        try ext_in(allocations, right_value, 16usize, output)
+        try ext_in(allocations, builder.operands[instruction.first_operand + 3usize], 17usize, output)
+        try neon3(output, 0x6E601C00usize, 0usize, 18usize, 16usize, 17usize)
+        ret ext_out(allocations, destination_value, 18usize, 16usize, output)
+    }
+    if ext == nir.EXT_CVT_RND {
+        try ext_in(allocations, left_value, 16usize, output)
+        try neon2(output, 0x4E21A800usize, 0usize, 17usize, 16usize)
+        try emit_a64.move_constant(output, 2usize, 0xCF000000usize)
+        try emit_a64.vector_duplicate(output, 2usize, 18usize, 2usize)
+        try emit_a64.move_constant(output, 3usize, 0x4F000000usize)
+        try emit_a64.vector_duplicate(output, 2usize, 19usize, 3usize)
+        try neon3(output, 0x6E20E400usize, 0usize, 20usize, 16usize, 18usize)
+        try neon3(output, 0x6EA0E400usize, 0usize, 21usize, 19usize, 16usize)
+        try neon3(output, 0x4E201C00usize, 0usize, 20usize, 20usize, 21usize)
+        try emit_a64.move_constant(output, 4usize, 0x80000000usize)
+        try emit_a64.vector_duplicate(output, 2usize, 22usize, 4usize)
+        try neon3(output, 0x6E601C00usize, 0usize, 20usize, 17usize, 22usize)
+        ret ext_out(allocations, destination_value, 20usize, 16usize, output)
+    }
+    try ext_in(allocations, left_value, 16usize, output)
+    if ext != nir.EXT_MOVEMASK { try ext_in(allocations, right_value, 17usize, output) }
+    var result = 16usize
+    var result_bytes = 16usize
+    let simple = simple_ext_word(ext)
+    if simple != 0usize {
+        try neon3(output, simple, size, 16usize, 16usize, 17usize)
+    } else {
+        if ext == nir.EXT_MULHI_S || ext == nir.EXT_MULHRS || ext == nir.EXT_MADD {
+            try neon3(output, 0x0E60C000usize, 0usize, 18usize, 16usize, 17usize)
+            try neon3(output, 0x4E60C000usize, 0usize, 19usize, 16usize, 17usize)
+            if ext == nir.EXT_MULHI_S {
+                try neon2(output, 0x0F108400usize, 0usize, 16usize, 18usize)
+                try neon2(output, 0x4F108400usize, 0usize, 16usize, 19usize)
+            }
+            if ext == nir.EXT_MULHRS {
+                try neon2(output, 0x0F118C00usize, 0usize, 16usize, 18usize)
+                try neon2(output, 0x4F118C00usize, 0usize, 16usize, 19usize)
+            }
+            if ext == nir.EXT_MADD { try neon3(output, 0x4EA0BC00usize, 0usize, 16usize, 18usize, 19usize) }
+        }
+        if ext == nir.EXT_SAD {
+            try neon3(output, 0x6E207400usize, 0usize, 18usize, 16usize, 17usize)
+            try neon2(output, 0x6E202800usize, 0usize, 18usize, 18usize)
+            try neon2(output, 0x6E202800usize, 1usize, 18usize, 18usize)
+            try neon2(output, 0x6E202800usize, 2usize, 18usize, 18usize)
+            result = 18usize
+        }
+        if ext == nir.EXT_UNPACK_LO { try neon3(output, 0x4E003800usize, size, 16usize, 16usize, 17usize) }
+        if ext == nir.EXT_UNPACK_HI { try neon3(output, 0x4E007800usize, size, 16usize, 16usize, 17usize) }
+        if ext == nir.EXT_PACK_US || ext == nir.EXT_PACK_SS || ext == nir.EXT_PACK_US32 {
+            var narrow = 0x0E214800usize
+            var narrow_high = 0x4E214800usize
+            if ext == nir.EXT_PACK_US || ext == nir.EXT_PACK_US32 {
+                narrow = 0x2E212800usize
+                narrow_high = 0x6E212800usize
+            }
+            try neon2(output, narrow, size - 1usize, 18usize, 16usize)
+            try neon2(output, narrow_high, size - 1usize, 18usize, 17usize)
+            result = 18usize
+        }
+        if ext == nir.EXT_SHUFFLE {
+            // an index with its top bit set, or past fifteen, answers zero; keep that bit and the low four
+            try emit_a64.vector_bytes(output, 18usize, 0x8Fusize)
+            try neon3(output, 0x4E201C00usize, 0usize, 17usize, 17usize, 18usize)
+            try neon3(output, 0x4E000000usize, 0usize, 16usize, 16usize, 17usize)
+        }
+        if ext == nir.EXT_MOVEMASK {
+            // the top bit of each byte: 0xff where set, ANDed with 1, 2, 4 .. 128 for each half, summed across each half
+            try neon2(output, 0x4E20A800usize, 0usize, 18usize, 16usize)
+            try emit_a64.move_constant(output, 2usize, 0x8040201008040201usize)
+            try emit_a64.vector_duplicate(output, 3usize, 19usize, 2usize)
+            try neon3(output, 0x4E201C00usize, 0usize, 18usize, 18usize, 19usize)
+            try neon3(output, 0x6E004000usize, 0usize, 20usize, 18usize, 18usize)
+            try neon2(output, 0x0E31B800usize, 0usize, 18usize, 18usize)
+            try neon2(output, 0x0E31B800usize, 0usize, 20usize, 20usize)
+            try emit_a64.instruction_word(output, 0x0E013C00usize | (18usize << 5usize) | 2usize)
+            try emit_a64.instruction_word(output, 0x0E013C00usize | (20usize << 5usize) | 3usize)
+            try emit_a64.instruction_word(output, 0x2A000000usize | (3usize << 16usize) | (8usize << 10usize) | (2usize << 5usize) | 2usize)
+            let (slot, slot_error) = read_value(allocations, destination_value, A64_S1, output)
+            if slot_error != ok { ret slot_error }
+            ret emit_a64.store_offset(output, 2usize, slot, 0usize, 8usize)
+        }
+        if nir.EXT_CMP_EQ <= ext && nir.EXT_FCMP_NE >= ext {
+            let invert = ext == nir.EXT_CMP_NE || ext == nir.EXT_FCMP_NE
+            if nir.EXT_FCMP_EQ <= ext {
+                var double = 0usize
+                if lane == 5usize { double = 1usize }
+                if ext == nir.EXT_FCMP_EQ || ext == nir.EXT_FCMP_NE { try neon3(output, 0x4E20E400usize, double, 16usize, 16usize, 17usize) }
+                if ext == nir.EXT_FCMP_LT { try neon3(output, 0x6EA0E400usize, double, 16usize, 17usize, 16usize) }
+                if ext == nir.EXT_FCMP_LE { try neon3(output, 0x6E20E400usize, double, 16usize, 17usize, 16usize) }
+            } else {
+                if ext == nir.EXT_CMP_EQ || ext == nir.EXT_CMP_NE { try neon3(output, 0x6E208C00usize, size, 16usize, 16usize, 17usize) }
+                if ext == nir.EXT_CMP_GT_S { try neon3(output, 0x4E203400usize, size, 16usize, 16usize, 17usize) }
+                if ext == nir.EXT_CMP_LE_S { try neon3(output, 0x4E203C00usize, size, 16usize, 17usize, 16usize) }
+                if ext == nir.EXT_CMP_GT_U { try neon3(output, 0x6E203400usize, size, 16usize, 16usize, 17usize) }
+                if ext == nir.EXT_CMP_LE_U { try neon3(output, 0x6E203C00usize, size, 16usize, 17usize, 16usize) }
+            }
+            if invert { try emit_a64.vector_not(output, 16usize, 16usize) }
+            try narrow_mask(output, size)
+            result_bytes = 16usize / lane_bytes
+        }
+    }
+    ret ext_out(allocations, destination_value, result, result_bytes, output)
+}
+
 // Section 4's lane-wise operator as Advanced SIMD over a vector's 16, 8, 4 or 2 bytes,
 // the shapes lowering hands the back end as `VectorBinary` (destination, left and right
 // addresses; the immediate packs the operation, the lane shape and the count). The
@@ -1039,6 +1238,7 @@ fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, context: 
 fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, context: *codegen_x64.FunctionContext) -> err {
     let output = context.output
     let allocations = context.allocations
+    if nir.vector_ext(instruction.immediate) != 0usize { ret select_vector_ext(builder, current, instruction, context) }
     if instruction.has_result || instruction.operand_count != 3usize { ret codegen_x64.Unsupported }
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)

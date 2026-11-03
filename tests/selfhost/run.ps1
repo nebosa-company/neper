@@ -319,6 +319,13 @@ $paramRegisterShareExecutableWritten = & $compiler emit-executable (Join-Path $P
 if ($LASTEXITCODE -ne 0 -or $paramRegisterShareExecutableWritten -ne 'executable written') { throw 'param register share program did not emit a PE executable' }
 & $paramRegisterShareExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'a dead parameter made after the prologue overwrote a register a later parameter was moved into' }
+$simdOpsExecutablePath = Join-Path $testBuild 'simd-ops-selfhost.exe'
+$simdOpsExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_ops_reference\src\main.e') $repo 'x64' 'windows' $simdOpsExecutablePath --release --cpu x64-v2
+if ($LASTEXITCODE -ne 0 -or $simdOpsExecutableWritten -ne 'executable written') { throw 'simd ops program did not emit a PE executable' }
+& $simdOpsExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'a packed e.simd operation answered other than its definition' }
+$simdOpsA64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_ops_reference\src\main.e') $repo 'aarch64' 'linux' (Join-Path $testBuild 'simd-ops-a64-selfhost') --release
+if ($LASTEXITCODE -ne 0 -or $simdOpsA64Written -ne 'executable written') { throw 'simd ops program did not emit an AArch64 executable' }
 $genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
 $genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }

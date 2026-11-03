@@ -858,7 +858,8 @@ fn lower_simd_select(c: *check.Checker, call: check.CallInfo, arguments: []usize
 // Returns whether it did; on `false` nothing was emitted.
 fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults, handled: *bool) -> err {
     *handled = false
-    if builder.spirv || builder.frame_mode || builder.frame_locals || !check.same(g.arch, "x64") { ret ok }
+    let on_a64 = check.same(g.arch, "aarch64")
+    if builder.spirv || builder.frame_mode || builder.frame_locals || !(check.same(g.arch, "x64") || on_a64) { ret ok }
     if call.function.module_index >= g.count || !check.same(g.modules[call.function.module_index].name, "e.simd") { ret ok }
     if call.function.parameter_count == 0usize || call.function.first_parameter + call.function.parameter_count > c.parameter_count { ret ok }
     if call.function.return_count > 1usize || call.function.first_return + call.function.return_count > c.return_type_count { ret ok }
@@ -905,7 +906,9 @@ fn lower_simd_call(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arg
     }
     if ext == 0usize { ret ok }
     let lane_code = simd_lane_code(lane_size)
-    if lane_code == 16usize || !nir.vector_ext_supported(ext, lane_code, builder.cpu_level) { ret ok }
+    var level = builder.cpu_level
+    if on_a64 { level = 2usize }
+    if lane_code == 16usize || !nir.vector_ext_supported(ext, lane_code, level) { ret ok }
     let (chunk_bytes, chunks) = simd_chunks(lane_count * lane_size, builder)
     if chunks == 0usize { ret ok }
     let (slot, slot_error) = vector_slot(c, result_type, builder, token)

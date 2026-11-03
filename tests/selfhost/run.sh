@@ -373,6 +373,18 @@ param_register_share_executable_written=$($test_build/neper-self emit-executable
 [ "$param_register_share_executable_written" = 'executable written' ]
 chmod +x "$param_register_share_executable_path"
 "$param_register_share_executable_path"
+simd_ops_executable_path="$test_build/simd-ops-selfhost"
+simd_ops_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_ops_reference/src/main.e" "$repo" x64 linux "$simd_ops_executable_path" --release --cpu x64-v2)
+[ "$simd_ops_executable_written" = 'executable written' ]
+chmod +x "$simd_ops_executable_path"
+"$simd_ops_executable_path"
+# The same program for AArch64, where e.simd lowers to Advanced SIMD, run under qemu-user when it is there.
+simd_ops_a64_path="$test_build/simd-ops-a64-selfhost"
+simd_ops_a64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_ops_reference/src/main.e" "$repo" aarch64 linux "$simd_ops_a64_path" --release)
+[ "$simd_ops_a64_written" = 'executable written' ]
+if command -v qemu-aarch64 >/dev/null 2>&1; then
+    qemu-aarch64 "$simd_ops_a64_path"
+fi
 generic_executable_path="$test_build/generic-selfhost"
 generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
 [ "$generic_executable_written" = 'executable written' ]

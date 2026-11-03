@@ -909,8 +909,17 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
     if scratch.len < flags_start + 2usize * function.value_count { ret (0usize, Capacity) }
     let vector_flags = scratch[flags_start..flags_start + function.value_count]
     let vector_first = scratch[flags_start + function.value_count..flags_start + 2usize * function.value_count]
-    mark_vector_objects(builder, function, ranges, vector_flags, vector_first)
-    assign_vector_registers(builder, function, ranges, weights, vector_flags, vector_first)
+    if builder.no_vector_registers {
+        var clear_vector = 0usize
+        while clear_vector < function.value_count {
+            vector_flags[clear_vector] = 0usize
+            vector_first[clear_vector] = 18446744073709551615usize
+            clear_vector += 1usize
+        }
+    } else {
+        mark_vector_objects(builder, function, ranges, vector_flags, vector_first)
+        assign_vector_registers(builder, function, ranges, weights, vector_flags, vector_first)
+    }
     var counts: [16]usize = zero
     var value_at = 0usize
     var stack_slots = 0usize

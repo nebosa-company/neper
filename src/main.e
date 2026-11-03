@@ -9913,7 +9913,14 @@ fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, builder: *nir.Builde
     }
     if module_index < g.count { path = g.modules[module_index].path }
     // Which table filled, when one did: the selector's own errors are capacities.
-    if codegen_error == codegen_x64.Unsupported { try write_all(&message, " (a fixup, relocation or line table is full)") }
+    if codegen_error == codegen_x64.Unsupported {
+        try write_all(&message, " (an instruction this target does not select, or a fixup, relocation or line table is full")
+        if context.failure_instruction < builder.instruction_count {
+            try write_all(&message, "; opcode ")
+            try write_all(&message, nir.opcode_name(builder.instructions[context.failure_instruction].opcode))
+        }
+        try write_all(&message, ")")
+    }
     if codegen_error == emit_x64.Capacity { try write_all(&message, " (the machine code buffer is full)") }
     if codegen_error == codegen_x64.FaultSelect { try write_all(&message, " (made to fail by --fault-select-inlined)") }
     if codegen_error == regalloc.Capacity { try write_all(&message, " (the register allocator's tables are full)") }
@@ -10737,6 +10744,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
         if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
         var pool = codegen_x64.register_pool_count()
         if context.abi == .Aapcs64 { pool = codegen_a64.register_pool_count() }
+        builder.no_vector_registers = context.abi == .Aapcs64
         let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, pool, context.ranges, context.allocations, a)
         if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
         if allocation_error != ok { ret allocation_error }
