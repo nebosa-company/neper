@@ -338,5 +338,255 @@
     ]
    }
   }
+ },
+ "popover": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/popover.png",
+    "notes": "ROUND 85: all three cells (below, flipped above, with actions) viewed light and dark at 1x and 1.5x, no clipping. Container surface-container f3edf7 / 211f26 with level-2 elevation (a soft shadow in light; M3 dark shows elevation by tone, so the dark plate has no shadow and its edge against the page is about 1.2:1, decorative), title-medium title and body-medium text in on-surface (17:1 / 14:1), close icon on-surface-variant, actions: Later text button primary 6750a4 on f3edf7 5.9:1 (d0bcff on 211f26 9:1) and Update tonal. M3 has no popover; it is the menu / rich tooltip surface.",
+    "gaps": [
+     "M3 has no popover; derived from the menu surface",
+     "Dark plate edge is tonal only"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/popover.png",
+    "notes": "ROUND 85: all three cells (below, flipped above, with actions) viewed light and dark at 1x and 1.5x, no clipping. Container surface-container f3edf7 / 211f26 with level-2 elevation (a soft shadow in light; M3 dark shows elevation by tone, so the dark plate has no shadow and its edge against the page is about 1.2:1, decorative), title-medium title and body-medium text in on-surface (17:1 / 14:1), close icon on-surface-variant, actions: Later text button primary 6750a4 on f3edf7 5.9:1 (d0bcff on 211f26 9:1) and Update tonal. M3 has no popover; it is the menu / rich tooltip surface.",
+    "gaps": [
+     "M3 has no popover; derived from the menu surface",
+     "Dark plate edge is tonal only"
+    ]
+   }
+  }
+ },
+ "side_sheet": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/side_sheet.png",
+    "notes": "ROUND 85: modal side sheet viewed light and dark at 1x and 1.5x: scrim 32 percent, container surface-container-low with 16 dp leading corners (shape large), headline-small title, body-medium text on-surface, close icon button, filled Apply button (on-primary 8:1). Text 16:1 light / 13:1 dark on the sheet. The sheet runs past the cell's right edge by the sheet's design (cell crop). M3 modal side sheet tokens, 256 to 400 dp width.",
+    "gaps": [
+     "Cell crops the sheet's right edge"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/side_sheet.png",
+    "notes": "ROUND 85: modal side sheet viewed light and dark at 1x and 1.5x: scrim 32 percent, container surface-container-low with 16 dp leading corners (shape large), headline-small title, body-medium text on-surface, close icon button, filled Apply button (on-primary 8:1). Text 16:1 light / 13:1 dark on the sheet. The sheet runs past the cell's right edge by the sheet's design (cell crop). M3 modal side sheet tokens, 256 to 400 dp width.",
+    "gaps": [
+     "Cell crops the sheet's right edge"
+    ]
+   }
+  }
+ },
+ "action_sheet": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/action_sheet.png",
+    "notes": "ROUND 85: bottom sheet viewed light and dark at 1x and 1.5x: container surface-container-low, 28 dp top corners (M3 bottom sheet shape), 32 x 4 drag handle in on-surface-variant 40 percent, label-large header in on-surface-variant (49454f on f5eff7 8:1), 48 dp action rows body-large in on-surface 16:1, Delete in error b3261e on f5eff7 about 5.7:1 (dark f2b8b5 on 1d1b20 9:1), 1 px outline-variant dividers, scrim 32 percent over the page. No hover or pressed cell on the sheet.",
+    "gaps": [
+     "Sheet has one cell (no hover or pressed state shown)"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/action_sheet.png",
+    "notes": "ROUND 85: bottom sheet viewed light and dark at 1x and 1.5x: container surface-container-low, 28 dp top corners (M3 bottom sheet shape), 32 x 4 drag handle in on-surface-variant 40 percent, label-large header in on-surface-variant (49454f on f5eff7 8:1), 48 dp action rows body-large in on-surface 16:1, Delete in error b3261e on f5eff7 about 5.7:1 (dark f2b8b5 on 1d1b20 9:1), 1 px outline-variant dividers, scrim 32 percent over the page. No hover or pressed cell on the sheet.",
+    "gaps": [
+     "Sheet has one cell (no hover or pressed state shown)"
+    ]
+   }
+  }
+ },
+ "toolbar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/toolbar.png",
+    "notes": "ROUND 85: six cells viewed light and dark at 1x and 1.5x: rest, hover (8 percent), pressed (10 percent), focus (10 percent layer, no ring), one disabled at 38 percent (exempt), five actions. Text buttons label-large primary 6750a4 on surface-container f3edf7 5.9:1 (d0bcff on 211f26 9:1), pill state layer. M3 toolbar tokens; hover, pressed and focus look alike because their layers are 8, 10 and 10 percent.",
+    "gaps": [
+     "Pressed and focus layers are both 10 percent and look alike"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/toolbar.png",
+    "notes": "ROUND 85: six cells viewed light and dark at 1x and 1.5x: rest, hover (8 percent), pressed (10 percent), focus (10 percent layer, no ring), one disabled at 38 percent (exempt), five actions. Text buttons label-large primary 6750a4 on surface-container f3edf7 5.9:1 (d0bcff on 211f26 9:1), pill state layer. M3 toolbar tokens; hover, pressed and focus look alike because their layers are 8, 10 and 10 percent.",
+    "gaps": [
+     "Pressed and focus layers are both 10 percent and look alike"
+    ]
+   }
+  }
+ },
+ "flyout": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/flyout.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The flyout plate has a hard 3 px offset shadow band along its foot (the Neper shadow) rather than the soft M3 level-2 shadow the popover draws; dark has none. Not raised.",
+    "gaps": [
+     "Hard offset shadow, not the M3 soft shadow"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/flyout.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The flyout plate has a hard 3 px offset shadow band along its foot (the Neper shadow) rather than the soft M3 level-2 shadow the popover draws; dark has none. Not raised.",
+    "gaps": [
+     "Hard offset shadow, not the M3 soft shadow"
+    ]
+   }
+  }
+ },
+ "sheet": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/sheet.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Rest, range, editing, hover, focus, pressed, scrolled draw; but the disabled cell is identical to rest (no 38 percent), cell text is cut without an ellipsis (Swords to Plowsha) and the last column is cut by the viewport. Not raised.",
+    "gaps": [
+     "Disabled cell equals rest",
+     "Cell text clipped without ellipsis"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/sheet.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Rest, range, editing, hover, focus, pressed, scrolled draw; but the disabled cell is identical to rest (no 38 percent), cell text is cut without an ellipsis (Swords to Plowsha) and the last column is cut by the viewport. Not raised.",
+    "gaps": [
+     "Disabled cell equals rest",
+     "Cell text clipped without ellipsis"
+    ]
+   }
+  }
+ },
+ "canvas": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/canvas.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Frame, padded, bare, disabled (38 percent), small and wide draw; bars primary 6.4:1, gridlines outline-variant decorative. Left at review: the sample bars run to the frame's bottom edge and are cut by its rounded corners, and the chart is sample artwork with no M3 spec. Not raised.",
+    "gaps": [
+     "Bars cut by the rounded frame",
+     "No M3 spec"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/canvas.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Frame, padded, bare, disabled (38 percent), small and wide draw; bars primary 6.4:1, gridlines outline-variant decorative. Left at review: the sample bars run to the frame's bottom edge and are cut by its rounded corners, and the chart is sample artwork with no M3 spec. Not raised.",
+    "gaps": [
+     "Bars cut by the rounded frame",
+     "No M3 spec"
+    ]
+   }
+  }
+ },
+ "bottom_app_bar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/bottom_app_bar.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Container surface-container, FAB with 16 dp shape (primary-container), disabled 38 percent read correctly, but the actions are text labels where the M3 bottom app bar carries 24 dp icons in 48 dp targets, and there is no hover or focus cell. Not raised.",
+    "gaps": [
+     "Actions are text, M3 uses icons",
+     "No hover or focus cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/bottom_app_bar.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Container surface-container, FAB with 16 dp shape (primary-container), disabled 38 percent read correctly, but the actions are text labels where the M3 bottom app bar carries 24 dp icons in 48 dp targets, and there is no hover or focus cell. Not raised.",
+    "gaps": [
+     "Actions are text, M3 uses icons",
+     "No hover or focus cell"
+    ]
+   }
+  }
+ },
+ "navigation_stack": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_stack.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Back arrow in a 48 dp target with the 10 percent focus layer, title-large title, all legible, but the depth 1 title stands 16 dp right of the page text where the M3 small top app bar puts it 16 dp from the edge. Not raised.",
+    "gaps": [
+     "Title inset differs from M3 (16 dp from edge)"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_stack.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Back arrow in a 48 dp target with the 10 percent focus layer, title-large title, all legible, but the depth 1 title stands 16 dp right of the page text where the M3 small top app bar puts it 16 dp from the edge. Not raised.",
+    "gaps": [
+     "Title inset differs from M3 (16 dp from edge)"
+    ]
+   }
+  }
+ },
+ "navigation_split": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/navigation_split.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The pane titles (Folders, Messages) touch the pane's top-left edge with no padding, the compact list cell is an empty panel with a title only. Not raised.",
+    "gaps": [
+     "Pane labels without padding",
+     "Compact list cell empty"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/navigation_split.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The pane titles (Folders, Messages) touch the pane's top-left edge with no padding, the compact list cell is an empty panel with a title only. Not raised.",
+    "gaps": [
+     "Pane labels without padding",
+     "Compact list cell empty"
+    ]
+   }
+  }
+ },
+ "sidebar": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/sidebar.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Item pills, hover (8), pressed (10) and the primary focus ring read correctly, but the four-item cell squeezes the 56 dp rows to 44 dp (fixed cell height) so the pitch differs from the other cells. Not raised.",
+    "gaps": [
+     "Rows shrink to 44 dp in the four-item cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/sidebar.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Item pills, hover (8), pressed (10) and the primary focus ring read correctly, but the four-item cell squeezes the 56 dp rows to 44 dp (fixed cell height) so the pitch differs from the other cells. Not raised.",
+    "gaps": [
+     "Rows shrink to 44 dp in the four-item cell"
+    ]
+   }
+  }
+ },
+ "breadcrumbs": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/breadcrumbs.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The separators and the last (bold) crumb sit 8 px lower than the other crumbs, so the trail is not on one baseline. Not raised.",
+    "gaps": [
+     "Separators and last crumb off the baseline by 8 px"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/breadcrumbs.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. The separators and the last (bold) crumb sit 8 px lower than the other crumbs, so the trail is not on one baseline. Not raised.",
+    "gaps": [
+     "Separators and last crumb off the baseline by 8 px"
+    ]
+   }
+  }
  }
 }
