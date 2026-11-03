@@ -2041,7 +2041,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             var star_node: widget.Node = zero
             var star_error: err = ok
             if style.windows_dark_on() && !look.dialog_lines {
-                // round 87: the Dark star is final colours (2.2 : 1 mapped, 4.3 : 1 here)
+                // round 87: the Dark star is final colours (2.2 : 1 mapped; round 88: 3.1 : 1 at the dimmest glyph pixel except the edge fringe)
                 let (dark_star, dark_star_error) = gl.pixels_raw(a, looks_x87.star_dark(), gl.gx_star_w(), gl.gx_star_h())
                 star_node = dark_star
                 star_error = dark_star_error
