@@ -78,6 +78,7 @@ use e.gfx.scene
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
+use e.ui.winsetpic
 use e.ui.looks_x85
 use e.ui.widget
 
@@ -8916,13 +8917,19 @@ fn nav_icon(a: *mem.Arena, grid: *Grid, key: widget.Key, kind: Nav, label: str, 
             }
         }
         var live_hot = false
+        var live_crisp_hot = false
         if enabled && (slot == 3usize || slot == 4usize) && mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, key, true, false).hovered {
             live_pix = gl.gx_nav_hot(slot)
             live_hot = true
+            // round 85: the 1:1 capture's hot buttons (crisp frame #0078D4 over #E0EEF9), whole, no first column left out
+            if win_look(grid) && grid.look.crisp && !style.windows_dark_on() && winsetpic.nav_hot(slot).len != 0usize {
+                live_pix = winsetpic.nav_hot(slot)
+                live_crisp_hot = true
+            }
         }
                 // (the hover bitmaps were cut one column further left than the rest ones: their first column is left out, the node keeps its width)
         var live_skip = 0usize
-        if live_hot && win_look(grid) { live_skip = 1usize }
+        if live_hot && win_look(grid) && !live_crisp_hot { live_skip = 1usize }
         let (live_mark, live_error) = gl.pixels_skip(a, live_pix, live_w, gl.gx_nav_h(), live_skip)
         if live_error != ok { ret (zero, live_error) }
         mark = live_mark
@@ -9072,7 +9079,10 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         if nav_rule_on(grid) && gl.gx_nav_top(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top(7usize, true) }
         if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_top_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_top_c(7usize, true) }
         if win_look(grid) && !nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && gl.gx_nav_bot_c(7usize, true).len != 0usize { funnel_pix = gl.gx_nav_bot_c(7usize, true) }
-        if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered { funnel_pix = gl.gx_nav_hot(7usize) }
+        if mem.address_of(grid.theme.runtime) != 0usize && control.control_state(grid.theme, funnel_key, true, false).hovered {
+            funnel_pix = gl.gx_nav_hot(7usize)
+            if win_look(grid) && grid.look.crisp && !style.windows_dark_on() { funnel_pix = winsetpic.nav_hot(7usize) }
+        }
         let (live_funnel, live_funnel_error) = gl.pixels(a, funnel_pix, gl.gx_nav_win_w_if(win_look(grid), 7usize), gl.gx_nav_h())
         if live_funnel_error != ok { ret (zero, live_funnel_error) }
         funnel_mark = live_funnel
@@ -9157,6 +9167,16 @@ fn navigator_row_look(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             thumb.background = paint.Brush { Solid: gl.rgb(0x858585u32) }
             thumb_kids = one(a, nav_thumb_crisp(a, crisp_w))
             thumb_start = thumb_start - 0.5
+            thumb_top = grid.look.hthumb_dy
+        }
+        if live_row && grid.look.crisp && !style.windows_dark_on() && win_look(grid) && hot_thumb_now(grid) {
+            // round 85: the 1:1 capture's thumb under the pointer: 13 rows, rounded ends, two rows above the resting thumb
+            let hot_w = f32(i64(hthumb_width(grid))) + 1.0
+            let (hot_node, hot_error) = looks_x85.crisp_hot_hthumb(a, hot_w)
+            if hot_error != ok { ret (zero, hot_error) }
+            thumb = control.sized_style(hot_w, 13.0)
+            thumb_kids = one(a, hot_node)
+            thumb_start = 17.5 - 0.5
             thumb_top = grid.look.hthumb_dy
         }
         thumb.margin = style.EdgeLengths { left: style.Length { Px: thumb_start + left }, top: style.Length { Px: thumb_top }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 - grid.look.hthumb_dy } }

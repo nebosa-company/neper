@@ -22,6 +22,8 @@ use e.ui.datagrid as dg
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winsetpic
+use e.ui.wintile
 
 const ROWS: usize = 40usize
 const C_NAME: usize = 0usize
@@ -300,6 +302,15 @@ fn coll_ink(ctx: *void, row: usize) -> (paint.Color, bool) {
 
 // The icon column: v3's orange card-back disc (the real picture is not in this repo).
 fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    if t.tokens.profile == .Windows {
+        // round 85: v3's set symbol, cut from the 1:1 capture (the Mirage symbol; row 0 is the Timeshifted disc)
+        var px = winsetpic.mar()
+        if row == 0usize { px = winsetpic.tmt() }
+        let (tile, tile_error) = wintile.tile_node(a, winsetpic.set_w(), winsetpic.set_h(), px[0usize..winsetpic.set_w() * winsetpic.set_h()])
+        if tile_error != ok { ret tile_error }
+        *out = tile
+        ret ok
+    }
     var disc = style.defaults()
     disc.width = style.Length { Px: 15.0 }
     disc.height = style.Length { Px: 15.0 }

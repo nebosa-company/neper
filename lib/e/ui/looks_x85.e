@@ -130,3 +130,36 @@ fn min_i(a: i32, b: i32) -> i32 {
     if a < b { ret a }
     ret b
 }
+
+fn put_box(a: *mem.Arena, parts: []widget.Node, n: usize, x: f32, y: f32, w: f32, h: f32, color: u32) -> usize {
+    parts[n] = widget.positioned(0u64, x, y, style.defaults(), one_of(a, px_box(color, w, h)))
+    ret n + 1usize
+}
+
+// The light grid's horizontal thumb under the pointer or pressed, as the 1:1 capture draws it (data_grid_top5, hover7): 13 rows of #858585, side columns #8C8C8C,
+// the rounded ends #B3B3B3, #BABABA, #B4B4B4, #BBBBBB and #8C8C8C.
+fn crisp_hot_hthumb(a: *mem.Arena, w: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 24usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    n = put_box(a, parts, n, 0.0, 0.0, w, 13.0, 0x858585u32)
+    n = put_box(a, parts, n, 0.0, 0.0, w, 1.0, 0xF0F0F0u32)
+    n = put_box(a, parts, n, 0.0, 12.0, w, 1.0, 0xF0F0F0u32)
+    n = put_box(a, parts, n, 1.0, 0.0, 1.0, 1.0, 0xBABABAu32)
+    n = put_box(a, parts, n, 2.0, 0.0, 1.0, 1.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, 3.0, 0.0, w - 6.0, 1.0, 0x858585u32)
+    n = put_box(a, parts, n, w - 3.0, 0.0, 1.0, 1.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, w - 2.0, 0.0, 1.0, 1.0, 0xB4B4B4u32)
+    n = put_box(a, parts, n, 1.0, 12.0, 1.0, 1.0, 0xB3B3B3u32)
+    n = put_box(a, parts, n, 2.0, 12.0, 1.0, 1.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, 3.0, 12.0, w - 6.0, 1.0, 0x858585u32)
+    n = put_box(a, parts, n, w - 3.0, 12.0, 1.0, 1.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, w - 2.0, 12.0, 1.0, 1.0, 0xBBBBBBu32)
+    n = put_box(a, parts, n, 0.0, 1.0, 1.0, 1.0, 0xB3B3B3u32)
+    n = put_box(a, parts, n, w - 1.0, 1.0, 1.0, 1.0, 0xBABABAu32)
+    n = put_box(a, parts, n, 0.0, 2.0, 1.0, 9.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, w - 1.0, 2.0, 1.0, 9.0, 0x8C8C8Cu32)
+    n = put_box(a, parts, n, 0.0, 11.0, 1.0, 1.0, 0xBABABAu32)
+    n = put_box(a, parts, n, w - 1.0, 11.0, 1.0, 1.0, 0xB4B4B4u32)
+    ret (widget.stack(0u64, style.defaults(), parts[0usize..n]), ok)
+}

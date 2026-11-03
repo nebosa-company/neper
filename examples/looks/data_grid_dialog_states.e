@@ -18,6 +18,8 @@ use e.ui.layout as ui_layout
 use e.ui.looks
 use e.ui.style
 use e.ui.widget
+use e.ui.winsetpic
+use e.ui.wintile
 
 const MAX: usize = 5usize
 
@@ -188,6 +190,14 @@ fn sort_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
 
 // the Shortcuts grid's icon column (the icons are artwork, not drawn)
 fn blank_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    if t.tokens.profile == .Windows && row < winsetpic.cmd_count() {
+        // round 85: the command's picture, cut from the 1:1 capture (data_grid_shortcuts_hover)
+        let px = winsetpic.cmd()
+        let (tile, tile_error) = wintile.tile_node(a, winsetpic.cmd_w(), winsetpic.cmd_h(), px[row * winsetpic.cmd_w() * winsetpic.cmd_h()..(row + 1usize) * winsetpic.cmd_w() * winsetpic.cmd_h()])
+        if tile_error != ok { ret tile_error }
+        *out = tile
+        ret ok
+    }
     *out = widget.spacer(0u64, 0.0)
     ret ok
 }
@@ -461,14 +471,19 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
                 hx = 250.0
                 if which == 1usize { hx = 413.0 }
                 if which == 2usize { hy = 100.0 }
+                // round 85: the captures of the Command and Shortcut headers under the pointer show no hover tint (white header), so the pointer rests on a row
+                if (which == 0usize || which == 1usize) && app.windows { hy = 100.0 }
                 if which == 3usize {
                     hx = 487.0
                     hy = 35.0
+                    // round 85: the capture shows the Shortcuts thumb under the pointer unchanged (2 px, no pill), so the pointer rests on the track below it
+                    if app.windows { hy = 200.0 }
                 }
                 // the capture's pointer for the upper arrow stands on the thumb, which sits at the top of the bar
                 if which == 4usize {
                     hx = 487.0
                     hy = 22.0
+                    if app.windows { hy = 200.0 }
                 }
                 if which == 5usize {
                     hx = 487.0
