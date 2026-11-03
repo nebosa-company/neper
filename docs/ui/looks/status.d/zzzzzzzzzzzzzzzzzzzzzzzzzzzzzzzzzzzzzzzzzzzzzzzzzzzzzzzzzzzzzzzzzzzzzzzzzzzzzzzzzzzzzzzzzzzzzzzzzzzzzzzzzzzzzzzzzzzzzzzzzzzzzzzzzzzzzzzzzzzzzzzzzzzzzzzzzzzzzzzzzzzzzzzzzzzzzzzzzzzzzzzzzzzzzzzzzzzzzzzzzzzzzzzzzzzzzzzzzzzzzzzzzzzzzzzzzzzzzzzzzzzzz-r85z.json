@@ -142,5 +142,201 @@
     ]
    }
   }
+ },
+ "font_picker": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/font_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Stays review: the sample ignores the family (the rig loads Roboto, Segoe UI and Tahoma only) and has no italic face; the hover row of the list is a neutral grey rather than the M3 8 percent on-surface layer; in the Focus cell the list's first row is cut by the viewport; the Hover cell's segmented control is wider than its 250 dp cell.",
+    "gaps": [
+     "Sample ignores the family and has no italic",
+     "List hover row is neutral grey, not the on-surface 8 percent layer",
+     "Focus cell first row cut by the viewport"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/font_picker.png",
+    "notes": "ROUND 85: viewed light and dark at 1x and 1.5x. Stays review: the sample ignores the family (the rig loads Roboto, Segoe UI and Tahoma only) and has no italic face; the hover row of the list is a neutral grey rather than the M3 8 percent on-surface layer; in the Focus cell the list's first row is cut by the viewport; the Hover cell's segmented control is wider than its 250 dp cell.",
+    "gaps": [
+     "Sample ignores the family and has no italic",
+     "List hover row is neutral grey, not the on-surface 8 percent layer",
+     "Focus cell first row cut by the viewport"
+    ]
+   }
+  }
+ },
+ "avatar": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/avatar.png",
+    "notes": "ROUND 85: all 13 cells viewed light and dark at 1x and 1.5x, no clipping. M3 has no avatar; built from M3 tokens: initials discs primary-container e8def8 / dark 4f378b-family with on-primary-container ink (21005d on e8def8 about 13:1), tertiary-container pink for the 56 and 72 sizes, secondary-container square, surface-variant person glyph on e6e0e9 (49454f, 6.6:1), status badges with a surface ring (online green, away amber ring, busy red minus) at 3:1 or better against the disc, hover and focus the state layers over the disc (8 and 10 percent), pressable cell identical to rest by design. Sizes 24 to 72 dp.",
+    "gaps": [
+     "M3 has no avatar; derived from container tokens",
+     "The 24 dp initials are about 9 sp (legible, small)"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/avatar.png",
+    "notes": "ROUND 85: all 13 cells viewed light and dark at 1x and 1.5x, no clipping. M3 has no avatar; built from M3 tokens: initials discs primary-container e8def8 / dark 4f378b-family with on-primary-container ink (21005d on e8def8 about 13:1), tertiary-container pink for the 56 and 72 sizes, secondary-container square, surface-variant person glyph on e6e0e9 (49454f, 6.6:1), status badges with a surface ring (online green, away amber ring, busy red minus) at 3:1 or better against the disc, hover and focus the state layers over the disc (8 and 10 percent), pressable cell identical to rest by design. Sizes 24 to 72 dp.",
+    "gaps": [
+     "M3 has no avatar; derived from container tokens",
+     "The 24 dp initials are about 9 sp (legible, small)"
+    ]
+   }
+  }
+ },
+ "code_editor": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/code_editor.png",
+    "notes": "ROUND 85: the sheet now carries a monospace face for the Android look (Cascadia Mono via looks_x63.mono_theme; the rig has no Roboto Mono), so the code columns, carets and match highlights align; the cells were proportional before. All six cells viewed light and dark at 1x and 1.5x: caret on the right column in rest, three carets, selection across lines, find matches, error line, disabled at 38 percent. Measured inks on the surface (nominal): code on-surface 17:1 light, comment and gutter on-surface-variant 9.3:1 / 11.3:1, keyword primary 6.4:1, string green 246b3a 6.5:1 (dark 8fd79e 11.4:1), type tertiary 7d5260 6.5:1. Selection primary-tinted, find match amber, error line error-container, current line 8 percent. M3 has no code editor; colours are the M3 roles.",
+    "gaps": [
+     "M3 has no code editor",
+     "Monospace face is a stand-in for Roboto Mono"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/code_editor.png",
+    "notes": "ROUND 85: the sheet now carries a monospace face for the Android look (Cascadia Mono via looks_x63.mono_theme; the rig has no Roboto Mono), so the code columns, carets and match highlights align; the cells were proportional before. All six cells viewed light and dark at 1x and 1.5x: caret on the right column in rest, three carets, selection across lines, find matches, error line, disabled at 38 percent. Measured inks on the surface (nominal): code on-surface 17:1 light, comment and gutter on-surface-variant 9.3:1 / 11.3:1, keyword primary 6.4:1, string green 246b3a 6.5:1 (dark 8fd79e 11.4:1), type tertiary 7d5260 6.5:1. Selection primary-tinted, find match amber, error line error-container, current line 8 percent. M3 has no code editor; colours are the M3 roles.",
+    "gaps": [
+     "M3 has no code editor",
+     "Monospace face is a stand-in for Roboto Mono"
+    ]
+   }
+  }
+ },
+ "markdown_view": {
+  "looks": {
+   "material": {
+    "status": "ready",
+    "screenshot": "material/markdown_view.png",
+    "notes": "ROUND 85: the sheet now carries a monospace face for the Android look so the code block and inline code are fixed-pitch (they were proportional). Both cells viewed light and dark at 1x and 1.5x: headings, bold, inline code chip, links (primary 6.4:1 light, d0bcff dark), bullet and numbered lists, block quote bar, code block on surface-container-high, bordered table with tinted header, rule, narrow wrapping. Text on-surface 17:1 light / 14.9:1 dark. M3 has no markdown view; tokens only.",
+    "gaps": [
+     "M3 has no markdown view",
+     "Monospace face is a stand-in for Roboto Mono"
+    ]
+   },
+   "material_dark": {
+    "status": "ready",
+    "screenshot": "material-dark/markdown_view.png",
+    "notes": "ROUND 85: the sheet now carries a monospace face for the Android look so the code block and inline code are fixed-pitch (they were proportional). Both cells viewed light and dark at 1x and 1.5x: headings, bold, inline code chip, links (primary 6.4:1 light, d0bcff dark), bullet and numbered lists, block quote bar, code block on surface-container-high, bordered table with tinted header, rule, narrow wrapping. Text on-surface 17:1 light / 14.9:1 dark. M3 has no markdown view; tokens only.",
+    "gaps": [
+     "M3 has no markdown view",
+     "Monospace face is a stand-in for Roboto Mono"
+    ]
+   }
+  }
+ },
+ "notification_list": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/notification_list.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Defects: the third notice is cut by the 260 dp list viewport (legitimate scrolling, scrollbar shown) but its text wraps and sits 3 dp left of the other rows; the View action text is indented 17 dp from the supporting text (text-button padding) instead of aligning with it; hovered and pressed Mark all read differ only slightly (8 and 10 percent). Not raised.",
+    "gaps": [
+     "Third row misaligned by 3 dp when it wraps",
+     "Action label does not align with the supporting text"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/notification_list.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Defects: the third notice is cut by the 260 dp list viewport (legitimate scrolling, scrollbar shown) but its text wraps and sits 3 dp left of the other rows; the View action text is indented 17 dp from the supporting text (text-button padding) instead of aligning with it; hovered and pressed Mark all read differ only slightly (8 and 10 percent). Not raised.",
+    "gaps": [
+     "Third row misaligned by 3 dp when it wraps",
+     "Action label does not align with the supporting text"
+    ]
+   }
+  }
+ },
+ "icon": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/icon.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Colours (on-surface, primary, error, on-surface-variant) and the 38 percent disabled state read correctly and the sizes 16 to 36 are legible, but the glyphs are the project's own strokes, not Material Symbols (check, calendar, gear, bell and person differ in drawing). Not raised.",
+    "gaps": [
+     "Glyph shapes are not Material Symbols"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/icon.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Colours (on-surface, primary, error, on-surface-variant) and the 38 percent disabled state read correctly and the sizes 16 to 36 are legible, but the glyphs are the project's own strokes, not Material Symbols (check, calendar, gear, bell and person differ in drawing). Not raised.",
+    "gaps": [
+     "Glyph shapes are not Material Symbols"
+    ]
+   }
+  }
+ },
+ "image": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/image.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Contain, cover, fill, none, rounded (12 dp, M3 medium shape) and small read correctly, but the Bordered cell shows no border (the 1 px outline sits under the picture, which fills the frame) and the no-texture placeholder glyph is about 2:1 on its tile. Not raised.",
+    "gaps": [
+     "Bordered cell draws no visible border",
+     "Placeholder glyph 2:1"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/image.png",
+    "notes": "ROUND 85: viewed light and dark at 1x. Contain, cover, fill, none, rounded (12 dp, M3 medium shape) and small read correctly, but the Bordered cell shows no border (the 1 px outline sits under the picture, which fills the frame) and the no-texture placeholder glyph is about 2:1 on its tile. Not raised.",
+    "gaps": [
+     "Bordered cell draws no visible border",
+     "Placeholder glyph 2:1"
+    ]
+   }
+  }
+ },
+ "schedule": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/schedule.png",
+    "notes": "ROUND 85: viewed light at 1x. Defects: event labels are clipped in narrow lanes (Desi, Lunc, Worksh), the month cells' event chips run over the grid line into the next week (Tue 13), 5 cells with +N more are fine. Not raised.",
+    "gaps": [
+     "Event labels clipped in narrow columns",
+     "Month chips overflow their cell"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/schedule.png",
+    "notes": "ROUND 85: viewed light at 1x. Defects: event labels are clipped in narrow lanes (Desi, Lunc, Worksh), the month cells' event chips run over the grid line into the next week (Tue 13), 5 cells with +N more are fine. Not raised.",
+    "gaps": [
+     "Event labels clipped in narrow columns",
+     "Month chips overflow their cell"
+    ]
+   }
+  }
+ },
+ "flow_editor": {
+  "looks": {
+   "material": {
+    "status": "review",
+    "screenshot": "material/flow_editor.png",
+    "notes": "ROUND 85: viewed light at 1x. The focus, hover and disabled cells are identical to rest (no ring, no layer, no 38 percent state); selection and link selection draw. Not raised.",
+    "gaps": [
+     "Focus, hover and disabled cells equal rest"
+    ]
+   },
+   "material_dark": {
+    "status": "review",
+    "screenshot": "material-dark/flow_editor.png",
+    "notes": "ROUND 85: viewed light at 1x. The focus, hover and disabled cells are identical to rest (no ring, no layer, no 38 percent state); selection and link selection draw. Not raised.",
+    "gaps": [
+     "Focus, hover and disabled cells equal rest"
+    ]
+   }
+  }
  }
 }

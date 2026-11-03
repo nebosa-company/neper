@@ -12,6 +12,7 @@ use e.ui.code_editor as ce
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_x63
 use e.ui.style
 use e.ui.widget
 
@@ -219,7 +220,14 @@ fn at(e: *ce.Editor, ln: usize, col: usize) -> usize {
     ret ce.line_start(e, ln) + col
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, theme: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Android: the rig has no Roboto Mono, so the sheet adds Cascadia Mono (the Cupertino sheets keep their face).
+    var t = theme
+    if theme.tokens.profile == .MaterialLike {
+        let (mono, mono_error) = looks_x63.mono_theme(a, theme)
+        if mono_error != ok { ret (0usize, mono_error) }
+        t = mono
+    }
     let names = [6]str{ "rest, caret on line 3", "selection across lines", "three carets", "find matches", "error line", "disabled" }
     let e = mem.cast[*ce.Editor](ctx)
     var i = 0usize

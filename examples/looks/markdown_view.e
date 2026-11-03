@@ -12,6 +12,7 @@ use e.mem
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.looks
+use e.ui.looks_x63
 use e.ui.markdown_view as mv
 use e.ui.style
 use e.ui.widget
@@ -265,7 +266,14 @@ fn full_source() -> str {
     ret "# Release notes\n\nThe **deck editor** now has *live prices*, a `bulk.prices` fallback and a [full changelog](https://example.org/changes).\n\n## Changes\n\n- Prices update **hourly**\n- Missing files no longer raise an error\n  1. Retry once\n  2. Then show the cached value\n\n> Prices are a guide, not an offer.\n\n```\nprice = cache.get(card)\n```\n\n| Control | State |\n|---|---|\n| Button | Done |\n| Slider | Review |\n\n---\n\nEnd of the notes."
 }
 
-fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+fn build(ctx: *void, a: *mem.Arena, theme: *const control.Theme, cells: []looks.Cell) -> (usize, err) {
+    // Android: the rig has no Roboto Mono, so the sheet adds Cascadia Mono for the code block and the inline code.
+    var t = theme
+    if theme.tokens.profile == .MaterialLike {
+        let (mono, mono_error) = looks_x63.mono_theme(a, theme)
+        if mono_error != ok { ret (0usize, mono_error) }
+        t = mono
+    }
     let names = [2]str{ "document", "narrow" }
     var i = 0usize
     while i < 2usize {
