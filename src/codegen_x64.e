@@ -114,6 +114,8 @@ type FunctionContext = struct {
     field_offset: usize,
     // Per value: an integer constant every use of which is an immediate operand, so it is not made.
     dead_consts: []bool,
+    // Per parameter: moved from its argument register to its value's register or slot in the prologue, so its Parameter makes nothing.
+    param_direct: [16]bool,
 }
 
 const TRAP_RECORDS: usize = 64usize
@@ -1889,6 +1891,126 @@ fn parameter_type(builder: *nir.Builder, current: nir.Function, index: usize) ->
 
 // Every parameter is spilled to its own slot on entry, so the rest of selection never
 // has to know which file it arrived in.
+// The prologue's moves of integer arguments straight to the registers and slots of the values that are their parameters, where
+// `store_incoming_parameters` parked every argument in a slot and the Parameter instructions read it back. Only when the
+// Parameter instructions are the first of the function (no value can hold a register an argument is still in), and there are no
+// debug locals (which read the parked slot). The register moves are one parallel move, with r10 to break a cycle.
+fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, stack_slots: usize, parameters: usize, context: *FunctionContext) -> err {
+    let output = context.output
+    let allocations = context.allocations
+    var move_src: [16]usize = zero
+    var move_dst: [16]usize = zero
+    var moves = 0usize
+    var prefix_ok = context.instruction_offsets.len == 0usize
+    var clear_at = 0usize
+    while clear_at < 16usize {
+        context.param_direct[clear_at] = false
+        clear_at += 1usize
+    }
+    var integer_used = 0usize
+    var float_used = 0usize
+    var stack_used = 0usize
+    var in_register = false
+    var register = 0usize
+    var stack_index = 0usize
+    var at = 0usize
+    while at < parameters {
+        let incoming = parameter_type(builder, current, at)
+        let width = float_width(incoming)
+        var stacked = false
+        if stacked_argument(incoming) {
+            stacked = true
+            in_register = false
+            stack_index = stack_used
+            stack_used += 1usize
+        } else {
+            try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        }
+        var direct = false
+        if prefix_ok {
+            let first = current.first_instruction + at
+            if at >= 16usize || first >= builder.instruction_count {
+                prefix_ok = false
+            } else {
+                let definer = builder.instructions[first]
+                if definer.opcode != .Parameter || definer.immediate != at || !definer.has_result { prefix_ok = false }
+            }
+        }
+        if prefix_ok && in_register && width == 0usize && !stacked {
+            let value = builder.instructions[current.first_instruction + at].result
+            if value < allocations.len && value < context.ranges.len {
+                if !context.ranges[value].used {
+                    direct = true
+                } else if allocations[value].kind == .Register {
+                    let (hardware, hardware_error) = hardware_register(allocations[value].index)
+                    if hardware_error != ok { ret hardware_error }
+                    move_src[moves] = register
+                    move_dst[moves] = hardware
+                    moves += 1usize
+                    direct = true
+                } else if allocations[value].kind == .Stack {
+                    try emit_x64.store_stack(output, allocations[value].index, register)
+                    direct = true
+                }
+            }
+        }
+        if direct {
+            context.param_direct[at] = true
+        } else if in_register {
+            if width == 0usize {
+                try emit_x64.store_stack(output, stack_slots + at, register)
+            } else {
+                try emit_x64.move_from_float(output, 10usize, register, width == 64usize)
+                try emit_x64.store_stack(output, stack_slots + at, 10usize)
+            }
+        } else {
+            try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
+            try emit_x64.store_stack(output, stack_slots + at, 10usize)
+        }
+        at += 1usize
+    }
+    var done: [16]bool = zero
+    var remaining = moves
+    at = 0usize
+    while at < moves {
+        if move_src[at] == move_dst[at] {
+            done[at] = true
+            remaining -= 1usize
+        }
+        at += 1usize
+    }
+    while remaining > 0usize {
+        var progressed = false
+        at = 0usize
+        while at < moves {
+            if !done[at] {
+                var blocked = false
+                var other = 0usize
+                while other < moves {
+                    if other != at && !done[other] && move_src[other] == move_dst[at] { blocked = true }
+                    other += 1usize
+                }
+                if !blocked {
+                    try emit_x64.mov_register(output, move_dst[at], move_src[at])
+                    done[at] = true
+                    remaining -= 1usize
+                    progressed = true
+                }
+            }
+            at += 1usize
+        }
+        if !progressed {
+            // a cycle: park one source in r10, which frees its register for the move waiting on it
+            at = 0usize
+            while at < moves && done[at] { at += 1usize }
+            if at >= moves { ret Unsupported }
+            try emit_x64.mov_register(output, 10usize, move_src[at])
+            move_src[at] = 10usize
+        }
+    }
+    ret ok
+}
+
 fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, stack_slots: usize, parameters: usize, output: *emit_x64.Buffer) -> err {
     var integer_used = 0usize
     var float_used = 0usize
@@ -3748,7 +3870,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     // it, and its caller would be skipped (D212).
     try emit_x64.function_prologue(output, frame_slots)
     try save_callee_registers(output, saved_base, saved_count)
-    try store_incoming_parameters(builder, current, abi, stack_slots, parameters, output)
+    try prologue_parameters(builder, current, abi, stack_slots, parameters, context)
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
     var at = current.first_instruction
@@ -3808,10 +3930,14 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         } else {
         if instruction.opcode == .Parameter {
             if instruction.immediate >= parameters { ret Unsupported }
+            if instruction.immediate < 16usize && context.param_direct[instruction.immediate] {
+                // already in place: the prologue moved it
+            } else {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
             try emit_x64.load_stack(output, destination, stack_slots + instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
+            }
         } else {
             if instruction.opcode == .Stack {
                 if !instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
@@ -4597,7 +4723,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize, dead_consts: zero }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero, instruction_offsets: no_masks, stack_value_slots: no_masks, debug_windows: no_masks, debug_window_count: 0usize, field_fused: false, field_result: 0usize, field_base: 0usize, field_offset: 0usize, dead_consts: zero, param_direct: zero }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
