@@ -433,7 +433,7 @@ fn build(ctx: *void, a: *mem.Arena, t: *const control.Theme, cells: []looks.Cell
         }
         if i == 9usize {
             drive = .Press
-            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 187.0 - 106.5)
+            looks.aim(i - app.first, 783.0 - 216.0 - 288.0, 188.0 - 106.5)
         }
         if i >= 10usize && i < 23usize {
             // the pointer over: the header cells, the navigator buttons, the bar's thumb and arrows (cell coordinates)

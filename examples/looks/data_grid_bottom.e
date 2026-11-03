@@ -114,7 +114,7 @@ fn coll_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spe
     ret ok
 }
 
-fn coll_specs(a: *mem.Arena, windows: bool) -> ([]dg.ColumnSpec, err) {
+fn coll_specs(a: *mem.Arena, windows: bool, light: bool) -> ([]dg.ColumnSpec, err) {
     let (specs, specs_error) = mem.alloc[dg.ColumnSpec](a, 10usize)
     if specs_error != ok { ret (zero, specs_error) }
     let sk = grp.SummaryKind.Rows
@@ -128,6 +128,13 @@ fn coll_specs(a: *mem.Arena, windows: bool) -> ([]dg.ColumnSpec, err) {
     specs[7usize] = dg.ColumnSpec { title: "Sell at", width: 65.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[8usize] = dg.ColumnSpec { title: "Sell At Value", width: 80.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: 2, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
     specs[9usize] = dg.ColumnSpec { title: "Price", width: 1595.0, column: CC_BUY, kind: dg.CellKind.Currency, decimals: 2u8, summary: -1, summary_kind: sk, filter: false, editable: false, choice: false }
+    if windows && light {
+        // v3's current row shows its editors: spin buttons on Qty and Used, a three-dots button on Buy at and Sell at
+        specs[4usize].editable = true
+        specs[5usize].editable = true
+        specs[6usize].editable = true
+        specs[7usize].editable = true
+    }
     // the live footer has a sum under the Price column too (its cell is scrolled off, only its left edge shows)
     if windows { specs[9usize].summary = 2
         specs[9usize].summary_kind = grp.SummaryKind.Sum }
@@ -160,7 +167,7 @@ fn setup(m: *Bottom) -> err {
     sums[1usize] = grp.SummarySpec { column: CC_USED }
     sums[2usize] = grp.SummarySpec { column: CC_BUY }
     try grp.apply_summaries(&m.groups[k], sums[0usize..3usize], &m.store)
-    let (cs, cs_error) = coll_specs(a, m.windows)
+    let (cs, cs_error) = coll_specs(a, m.windows, m.light)
     if cs_error != ok { ret cs_error }
     var events = dg.no_events()
     events.custom_cell = coll_cell
@@ -204,6 +211,13 @@ fn setup(m: *Bottom) -> err {
     dg.set_footer_label(&m.grids[k], "Rows")
     dg.set_grid_lines(&m.grids[k], dg.GridLines.Both)
     dg.set_immediate_edit(&m.grids[k], true)
+    if m.windows && m.light {
+        // v3's current row shows its editors: spin buttons on Qty and Used, a three-dots button on Buy at and Sell at
+        dg.set_editor(&m.grids[k], 4usize, dg.EDITOR_SPIN)
+        dg.set_editor(&m.grids[k], 5usize, dg.EDITOR_SPIN)
+        dg.set_editor(&m.grids[k], 6usize, dg.EDITOR_BUTTON)
+        dg.set_editor(&m.grids[k], 7usize, dg.EDITOR_BUTTON)
+    }
     dg.show_navigator(&m.grids[k], true)
     dg.set_pane_hint(&m.grids[k], 573.0)
     dg.show_sort(&m.grids[k], 1usize, true)

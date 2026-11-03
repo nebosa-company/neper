@@ -19,6 +19,7 @@ use e.ui.layout as ui_layout
 use e.ui.linux_card
 use e.ui.looks_x84
 use e.ui.looks_x85
+use e.ui.looks_x86
 use e.ui.overlay
 use e.ui.looks_z84_edge
 use e.ui.looks_z85
@@ -2013,6 +2014,7 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = title_node
         var glyph_header = false
+        var fav_hot = false
         // a picture column (2) has no side padding; a star column (1) shows the star as its title
         // round 15: a dialog grid's picture column (the Sort dialog's Sort Order) keeps its left aligned title
         if look.on && !look.dialog_lines && !look.dialog_grid && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 2u8 { glyph_header = true }
@@ -2025,6 +2027,13 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if star_error != ok { ret (zero, star_error) }
             // looks4-e: the live capture's faint star, 2 px below the top of the header row
             body[0usize] = widget.padded(0u64, 0.0, 3.0, 0.0, 0.0, style.defaults(), one_node(a, star))
+            if crisp_head && state.hovered && !state.pressed && t.tokens.profile == .Windows && !style.windows_dark_on() {
+                // round 86: the hot Favorite header of the 1:1 capture (star and filter button on the hot fill), as it is
+                let (hot_fav, hot_fav_error) = looks_x86.fav_hot(a)
+                if hot_fav_error != ok { ret (zero, hot_fav_error) }
+                body[0usize] = hot_fav
+                fav_hot = true
+            }
         }
         if look.on && mem.address_of(look.kind_ctx) != 0usize && look.glyph(look.kind_ctx, i) == 3u8 {
             glyph_header = true
@@ -2034,11 +2043,18 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (glyph_node, glyph_error) = gl.pixels(a, list_pix, gl.gx_list_w(), gl.gx_list_h())
             if glyph_error != ok { ret (zero, glyph_error) }
             body[0usize] = widget.padded(0u64, 0.0, 2.0, 0.0, 0.0, style.defaults(), one_node(a, glyph_node))
+            if crisp_head {
+                // round 86: the capture's glyph has five lines of dots and bars, the cell centres it
+                let (list_node, list_error) = looks_x86.list_glyph(a)
+                if list_error != ok { ret (zero, list_error) }
+                body[0usize] = list_node
+            }
         }
         var b = 1usize
         // round 15: the Options Shortcuts grid's hot header shows no filter button (live hover grabs)
         var hot_glyph = state.hovered
         if look.on && look.top_edge_on && t.tokens.profile == .Windows { hot_glyph = false }
+        if fav_hot { hot_glyph = false }
         if sorted || hot_glyph {
             if !sorted { ink = control.with_alpha(muted, 0.5) }
             let (arrow, arrow_error) = control.icon_square(a, ink, .ArrowUp, t.tokens.sizes.icon_sm)
@@ -2089,6 +2105,11 @@ fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             let (picture_node, picture_error) = gl.pixels(a, gl.gx_picture_header(), gl.gx_picture_header_w(), gl.gx_picture_header_h())
             if picture_error != ok { ret (zero, picture_error) }
             body[0usize] = picture_node
+            if crisp_head {
+                let (head_node, head_error) = looks_x86.pic_head(a)
+                if head_error != ok { ret (zero, head_error) }
+                body[0usize] = head_node
+            }
             b = 1usize
         }
         var line_style = style.defaults()

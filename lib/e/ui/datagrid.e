@@ -80,6 +80,7 @@ use e.ui.overlay
 use e.ui.style
 use e.ui.winsetpic
 use e.ui.looks_x85
+use e.ui.looks_x86
 use e.ui.widget
 
 const FILTER_TEXT: usize = 40usize
@@ -7827,6 +7828,20 @@ fn decorate_editors(a: *mem.Arena, grid: *Grid, column: usize, row: usize, plain
     var node = plain
     if grid.immediate_edit && grid.look.on && grid.has_selection && row == grid.selected_row && !grid.read_only && grid.origin[column] < grid.editors.len && grid.specs[column].editable {
         let editor_kind = grid.editors[grid.origin[column]]
+        if win_look(grid) && grid.look.crisp && (editor_kind == EDITOR_SPIN || editor_kind == EDITOR_BUTTON) {
+            var winned: widget.Node = zero
+            var winned_error: err = ok
+            if editor_kind == EDITOR_SPIN {
+                let (spun, spun_error) = looks_x86.spin(a, plain, grid.columns[column].width, grid.look.pad)
+                winned = spun
+                winned_error = spun_error
+            } else {
+                let (dotted, dotted_error) = looks_x86.dots(a, plain, grid.columns[column].width, grid.look.pad)
+                winned = dotted
+                winned_error = dotted_error
+            }
+            ret (winned, winned_error)
+        }
         if editor_kind == EDITOR_SPIN {
             let ink = gl.rgb(0x000000u32)
             let (left_mark, left_mark_error) = gl.mark(a, .Left, ink, ink, 5.0, 8.0)
@@ -9615,6 +9630,8 @@ fn footer_crisp_on(grid: *const Grid) -> bool {
 // looks11-g1: the top grid's navigator has a two-pixel #F7F7F7 rule whose second row the buttons overlap: one pixel box, then the navigator's own first row
 fn nav_rule_on(grid: *const Grid) -> bool { ret grid.look.nav_rule && win_look(grid) }
 
+fn crisp_rule_row(grid: *const Grid) -> bool { ret nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() && !grid.footer_visible && grid.navigator_visible }
+
 fn nav_left(grid: *const Grid) -> f32 {
     // round 43: the 1:1 capture's navigator starts one pixel in (its frame is one pixel, not the fitted two)
     if win_look(grid) && grid.look.crisp && !style.windows_dark_on() { ret 1.0 }
@@ -10717,6 +10734,9 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
     if grid.look.on && grid.look.group_flat && !grid.footer_visible && grid.navigator_visible { body_height = body_height - 2.0 }
     if grid.group_box_visible { body_height = body_height - 35.0 }
     if grid.tail_gap > 0.0 { body_height = body_height - grid.tail_gap }
+    // round 86: the 1:1 pool grid's last row runs to the pixel row above the navigator (the 1 px rule is the row's)
+    let rule_in_body = crisp_rule_row(grid) && grid.tail_gap == 0.0
+    if rule_in_body { body_height = body_height + 1.0 }
     grid.page_rows = usize(body_height / grid.row_height)
     follow_row_after_reorder(grid)
     if grid.fit_all_pending {
@@ -10919,6 +10939,7 @@ fn build_parts(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: 
             rule.width = style.Length { Percent: 100.0 }
             rule.height = style.Length { Px: 2.0 }
             if nav_rule_on(grid) { rule.height = style.Length { Px: 1.0 } }
+            if crisp_rule_row(grid) && grid.tail_gap == 0.0 { rule.height = style.Length { Px: 0.0 } }
             rule.background = paint.Brush { Solid: gl.rgb(0xF7F7F7u32) }
             // round 44: in the 1:1 capture this row is the pool's own #EFEFEF under the card art strip
             if nav_rule_on(grid) && grid.look.crisp && !style.windows_dark_on() { rule.background = paint.Brush { Solid: gl.rgb(0xEFEFEFu32) } }
