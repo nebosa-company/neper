@@ -1481,7 +1481,7 @@ fn part5(b: *str.Builder) -> err {
     try str.push(b, "  let copy;\n")
     try str.push(b, "  switch (s.nodeType) {\n")
     try str.push(b, "    case ELEMENT_NODE: {\n")
-    try str.push(b, "      ceCreateRegistry = s.registry;\n")
+    try str.push(b, "      ceCreateRegistry = s.registry !== undefined && s.registryGlobal === true ? undefined : s.registry;\n")
     try str.push(b, "      copy = createElementWithDefinition(document, s.localName, s.namespaceURI, s.prefix, s.isValue || (s.customDefinition && s.customDefinition.name !== s.customDefinition.localName ? s.customDefinition.name : null), false);\n")
     try str.push(b, "      for (const a of attrsOf(node)) {\n")
     try str.push(b, "        const as = slotOf(a);\n")
