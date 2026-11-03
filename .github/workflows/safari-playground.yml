@@ -1,0 +1,23 @@
+name: safari-playground
+# The playground (docs/play.html) in Safari on a Mac: every sample compiled and run twice over. The page is served
+# from the checkout, or from `url` when given (for example https://neper.dev). Desktop WebKit, not an iPad's memory limits.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL to test instead of the checkout
+        required: false
+        default: ''
+jobs:
+  safari:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable safaridriver
+        run: sudo safaridriver --enable
+      - run: python3 -m pip install selenium
+      - name: Serve docs
+        run: python3 -m http.server 8000 --directory docs & sleep 2
+      - name: Samples in Safari
+        run: python3 tests/play/safari.py "${{ inputs.url || 'http://localhost:8000' }}"
