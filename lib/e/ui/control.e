@@ -17088,7 +17088,10 @@ fn scroll_area(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.
     let vertical = axis == .Vertical
     var thumb = with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5)
     // The Cupertino indicator: the label colour at 35 %, a thin pill that needs no track (iOS; macOS overlay scrollers).
-    if t.tokens.profile == .CupertinoLike { thumb = with_alpha(style.color(t.tokens, .Text), 0.35) }
+    if t.tokens.profile == .CupertinoLike {
+        thumb = with_alpha(style.color(t.tokens, .Text), 0.48)
+        if t.tokens.palette == .Dark { thumb = with_alpha(style.color(t.tokens, .Text), 0.44) }
+    }
     var view = sized_style(width, height)
     view.overflow = .Clip
     var along = height
@@ -21294,8 +21297,8 @@ fn cup_field_edge(t: *const Theme) -> paint.Color {
 }
 
 fn cup_placeholder(t: *const Theme) -> paint.Color {
-    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.3) }
-    ret style.hexa(0x3C3C43u32, 0.3)
+    if t.tokens.palette == .Dark { ret style.hexa(0xEBEBF5u32, 0.7) }
+    ret style.hexa(0x3C3C43u32, 0.72)
 }
 
 // The clear control of a field: a 17 grey disc with a white cross (iOS clearButtonMode), pressing it tells `owner`
@@ -21573,8 +21576,19 @@ fn cup_step_pill(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = widget.box(0u64, track, zero)
     layers[1usize] = widget.positioned(0u64, 46.5, 8.0, style.defaults(), widget_one_of(a, widget.box(0u64, rule, zero)))
-    layers[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, sized_style(94.0, 32.0), halves[0usize..2usize])
-    ret (widget.stack(0u64, sized_style(94.0, 32.0), layers[0usize..3usize]), ok)
+    // The half holding the keyboard focus is painted last so its ring is not cut by the other half.
+    let (placed, placed_error) = mem.alloc[widget.Node](a, 2usize)
+    if placed_error != ok { ret (zero, TooLarge) }
+    placed[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), widget_one_of(a, left))
+    placed[1usize] = widget.positioned(0u64, 47.0, 0.0, style.defaults(), widget_one_of(a, right))
+    layers[2usize] = placed[0usize]
+    let (rest, rest_error) = mem.alloc[widget.Node](a, 4usize)
+    if rest_error != ok { ret (zero, TooLarge) }
+    rest[0usize] = layers[0usize]
+    rest[1usize] = layers[1usize]
+    rest[2usize] = placed[0usize]
+    rest[3usize] = placed[1usize]
+    ret (widget.stack(0u64, sized_style(94.0, 32.0), rest[0usize..4usize]), ok)
 }
 
 // The iOS stepper (UIStepper, HIG 94 x 32): minus and plus in one pill, with the value in the body face to its left.
@@ -21640,7 +21654,7 @@ fn cupertino_tab_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []
     var each: f32 = 80.0
     if options.width > 0.0 { each = options.width / f32(labels.len) }
     var face = style.hex(0xF9F9F9u32)
-    var quiet = style.hex(0x8E8E93u32)
+    var quiet = style.hex(0x6C6C70u32)
     var hair = style.hexa(0x000000u32, 0.30)
     if dark {
         face = style.hex(0x1D1D1Du32)

@@ -1,0 +1,295 @@
+{
+ "combo_box": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/combo_box.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (macOS pop-up button: no Flutter widget, no citable number). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all six cells. Measured: control 22 high (rows 43 to 64) with the 14 wide accent chevron badge; value text 15.1:1 light, 6.75:1 dark; the 'Size' placeholder 5.97:1 light and 4.5:1 dark (was about 2:1). From memory: 22 pt regular pop-up height, radius 5, badge; consistent with the other macOS sheets.",
+    "gaps": [
+     "The popup is the macOS pop-up button; iOS draws a pull-down menu button instead",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/combo_box.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (macOS pop-up button: no Flutter widget, no citable number). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all six cells. Measured: control 22 high (rows 43 to 64) with the 14 wide accent chevron badge; value text 15.1:1 light, 6.75:1 dark; the 'Size' placeholder 5.97:1 light and 4.5:1 dark (was about 2:1). From memory: 22 pt regular pop-up height, radius 5, badge; consistent with the other macOS sheets.",
+    "gaps": [
+     "The popup is the macOS pop-up button; iOS draws a pull-down menu button instead",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "spin_edit": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/spin_edit.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8.",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/spin_edit.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIStepper 94 x 32, measured 94 x 32 with the 1 px divider; no Flutter widget). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all twelve cells: values 18.8:1 and 17:1, accent glyphs 3.14:1 light and 3.5:1 dark on the pill (controls, 3:1). The keyboard ring wraps the focused half (rounded outside, straight at the divider), as a ring on a segment does; UIKit has no ring, macOS NSStepper rings the whole control, so this is a deliberate segment ring. From memory: 94 x 32, radius 8.",
+    "gaps": [
+     "The keyboard ring wraps the focused half, not the whole pill",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "status_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/status_bar.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (no AppKit status bar control; the Finder-style bottom bar, from memory). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all five cells. Measured text 5.1 to 5.6:1 light and 5.8 to 6.6:1 dark (was about 3:1 light), error mark FF3B30 3.18:1 on the ground. All metrics from memory and consistent with the other panels of the look.",
+    "gaps": [
+     "There is no AppKit status bar; this is the application's own bottom bar in the macOS idiom",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/status_bar.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (no AppKit status bar control; the Finder-style bottom bar, from memory). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all five cells. Measured text 5.1 to 5.6:1 light and 5.8 to 6.6:1 dark (was about 3:1 light), error mark FF3B30 3.18:1 on the ground. All metrics from memory and consistent with the other panels of the look.",
+    "gaps": [
+     "There is no AppKit status bar; this is the application's own bottom bar in the macOS idiom",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "tree_list": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/tree_list.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (NSOutlineView source list: no Flutter widget, no citable number). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all five cells (rest, keyboard focus, hover, pressed, shut branches). Measured: rows 24 apart, disclosure chevrons at the start, group rows semibold, label 18.8:1 and 17.0:1, chosen row fill d4d4d9 / 48484a with text on it. From memory: 24 pt medium source-list row height and the chevron disclosure.",
+    "gaps": [
+     "Selection fills are the system selection grey (1.3:1 against the ground); the label on them carries the state",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/tree_list.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (NSOutlineView source list: no Flutter widget, no citable number). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all five cells (rest, keyboard focus, hover, pressed, shut branches). Measured: rows 24 apart, disclosure chevrons at the start, group rows semibold, label 18.8:1 and 17.0:1, chosen row fill d4d4d9 / 48484a with text on it. From memory: 24 pt medium source-list row height and the chevron disclosure.",
+    "gaps": [
+     "Selection fills are the system selection grey (1.3:1 against the ground); the label on them carries the state",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "vertical_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "ready",
+    "screenshot": "cupertino/vertical_grid.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIKit inset grouped list: row 44 and the 44 x 44 hit region of HIG Buttons are cited; 10 pt section corner and 16 pt inset are from memory). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all three cells. Measured: rows 44 apart in a section of six (264), 1 px inner separators e3e3e4, values 5.97:1 light and 6.6:1 dark, names 5.6:1 and 7.6:1; the white card on the F2F2F7 ground (1.1:1) is Apple's inset grouped look and carries no state.",
+    "gaps": [
+     "Editors are plain text at rest; the focused row's editor is not styled in this sheet",
+     "No trailing disclosure chevron on rows",
+     "The white section card on the grouped ground is 1.1:1 by design",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "ready",
+    "screenshot": "cupertino-dark/vertical_grid.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): raised to ready by the maintainer's rule (UIKit inset grouped list: row 44 and the 44 x 44 hit region of HIG Buttons are cited; 10 pt section corner and 16 pt inset are from memory). Cupertino secondary label raised from 60 % to 80 % (light, 3C3C43) and 70 % (dark, EBEBF5) so secondary text holds 4.5:1; placeholder and tab-bar grey follow. Viewed light and dark, 1x and 1.5x, all three cells. Measured: rows 44 apart in a section of six (264), 1 px inner separators e3e3e4, values 5.97:1 light and 6.6:1 dark, names 5.6:1 and 7.6:1; the white card on the F2F2F7 ground (1.1:1) is Apple's inset grouped look and carries no state.",
+    "gaps": [
+     "Editors are plain text at rest; the focused row's editor is not styled in this sheet",
+     "No trailing disclosure chevron on rows",
+     "The white section card on the grouped ground is 1.1:1 by design",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "scroll_bar": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/scroll_bar.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. The thumb is now 3.6:1 against the ground light and 4.3:1 dark (label colour at 48 % and 44 %, was 35 %: 2.4:1 light). Not raised: the Hover and Pressed cells draw the 4 px thumb of Rest (macOS overlay scrollers widen under the pointer; the harness hover does not widen it here), so those cells do not show their state. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: thin 35 % label thumb, widening, scrolled, fits, horizontal. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 1 cell under the floor (text 4.5:1, other UI 3:1; lowest 2.4:1).",
+    "gaps": [
+     "Hover and Pressed draw the same 4 px thumb as Rest; the widened thumb is not drawn",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Thumb width 4 (8 hovered) vs iOS 3 and macOS 7",
+     "No fade-out timing shown, no legacy always-on scroller",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/scroll_bar.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. The thumb is now 3.6:1 against the ground light and 4.3:1 dark (label colour at 48 % and 44 %, was 35 %: 2.4:1 light). Not raised: the Hover and Pressed cells draw the 4 px thumb of Rest (macOS overlay scrollers widen under the pointer; the harness hover does not widen it here), so those cells do not show their state. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Fixed the picture: the content boxes were white on the dark page (horizontal thumbs invisible); now the elevated surface 3a3a3c (cup_scroll.e), 1x and 1.5x, thumbs show in all seven cells. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: light chrome on the dark page (7 white faces).",
+    "gaps": [
+     "Hover and Pressed draw the same 4 px thumb as Rest; the widened thumb is not drawn",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Thumb width 4 (8 hovered) vs iOS 3 and macOS 7",
+     "No fade-out timing shown, no legacy always-on scroller",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "page_control": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/page_control.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Tab-bar labels raised from 8E8E93 (3.1:1) to 6C6C70 (5.2:1 light); dark 98989D already 6.5:1. Not raised: the 'strip focus' cell draws a square-cornered ring on a rounded segment. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Light, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: not verified: 5 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.8:1).",
+    "gaps": [
+     "The segmented strip's keyboard ring is a plain rectangle round the segment",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/page_control.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Tab-bar labels raised from 8E8E93 (3.1:1) to 6C6C70 (5.2:1 light); dark 98989D already 6.5:1. Not raised: the 'strip focus' cell draws a square-cornered ring on a rounded segment. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | HIG Tab bars and Page controls pages were read: neither gives a point size for iOS (only tvOS 68 pt), so the 49 pt tab bar, the segmented strip height and the dot sizes rest on memory and are unverified. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Checked by scripts/cupertino_spec_check.py (Dark, 1x and 1.5x): strip and tab bar states differ from rest, 49 pt tab bar. Audit 3: 19 cells measured on page_control.png: text at least 4.5:1 and other parts at least 3:1; page luminance 0.012, 206 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "The segmented strip's keyboard ring is a plain rectangle round the segment",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Spec check: scripts/cupertino_spec_check.py asserts the numbers above; apart from them nothing about this control is verified",
+     "Icons are Neper glyphs, not SF Symbols",
+     "Bar face is flat #F9F9F9 / #1D1D1D (no blur)",
+     "Badges and scrolling strips not styled",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "The keyboard focus of the segmented strip is the runtime's square rectangle inside the segment (no rounding)",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "toolbar_button": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/toolbar_button.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Accent text (Edit, Cancel, Settings) is systemBlue 007AFF on the F2F2F7 ground, 3.6:1 light (dark 4.66:1): under 4.5:1. The lane did not darken the accent: every matched Cupertino row was compared with the 007AFF fills. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | ROUND 78 (n): Viewed: glyph buttons rest, hover, pressed, focus, on and the three navigation bars render; the only pairs under 3:1 are the 007aff glyph on its hover and pressed layers (2.9 to 3.6, a tinted layer by design). Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 cells under the floor (text 4.5:1, other UI 3:1; lowest 3.6:1).",
+    "gaps": [
+     "Accent text is 3.6:1 against the light ground",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/toolbar_button.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Accent text (Edit, Cancel, Settings) is systemBlue 007AFF on the F2F2F7 ground, 3.6:1 light (dark 4.66:1): under 4.5:1. The lane did not darken the accent: every matched Cupertino row was compared with the 007AFF fills. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | ROUND 82 (v, flutter-compare-v.md; shapes only): Segoe UI Semibold now loads for every Cupertino sheet, so weight 600 draws semibold everywhere (it was Bold outside the label sheet). Own comparer, flat-fill components of this sheet's PNG before and after (same code minus the font): heights, radii, fills and y positions identical; only label-sized widths moved (at most 2 px at 1x, 5 px at 1.5x, ink of the labels narrower). Recorded: the Flutter ref widths are Roboto-driven and were never comparable; status unchanged. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | HIG Buttons (cited, read): hit region at least 44 x 44 pt. The visible hover chip is 32 px and the 44 pt hit area is not visible in a picture, so it cannot be measured here; no other cited number. Review is the cap. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: 15 cells measured on toolbar_button.png: text at least 4.5:1 and other parts at least 3:1, except 3 cells at 2.9:1 or better that are equally low in the light twin (disabled or secondary); page luminance 0.012, 214 levels mean difference from the light twin, no light-only chrome.",
+    "gaps": [
+     "Accent text is 3.6:1 against the light ground",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Glyphs are Neper icons",
+     "The Neper More menu is not used past three actions",
+     "macOS toolbar (gray glyphs) not drawn",
+     "Corners are circular arcs, not the continuous (squircle) curve",
+     "No blur: shadows are stacked low-alpha shapes or one hard 1 px step; vibrancy and translucency are flat near-opaque faces",
+     "Hover is drawn only so the state is visible (touch iOS and macOS push buttons have none)",
+     "Focus ring is the runtime ring, 3 px accent at 55 % outside the control (macOS keyboard focus; iOS has none); for check, radio and switch it wraps the whole row",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ },
+ "data_grid": {
+  "looks": {
+   "cupertino": {
+    "status": "review",
+    "screenshot": "cupertino/data_grid.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Secondary text now 4.5:1 or better. Not raised: in the Grouped cell the group total ($579.95) touches the scroll thumb. | AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: list and grouped forms with the filter row, stripes, accent row, sort chevron, footer; the pairs under the floor are the secondary header and filter hint. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 16 cells under the floor (text 4.5:1, other UI 3:1; lowest 1.4:1).",
+    "gaps": [
+     "The group total touches the scroll thumb in the Grouped cell",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   },
+   "cupertino_dark": {
+    "status": "review",
+    "screenshot": "cupertino-dark/data_grid.png",
+    "notes": "ROUND 84 (lane y, batch 2, docs/ui/looks/cupertino-complete-y.md): review kept. Secondary text now 4.5:1 or better. Not raised: in the Grouped cell the group total ($579.95) touches the scroll thumb. | AUDIT 42 (4): the gap line \"semibold weight (mapped to Segoe UI Bold)\" was stale after round 82 v (the overlay that claims to have rewritten it touches none of these rows) and now says Segoe UI Semibold. Status unchanged. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | Round 80 (s): no published Apple number could be cited for this row (the HIG pages read give none for it, UIKit and AppKit documentation pages give no point values), so what remains is memory of UIKit / AppKit metrics, which is not a basis for matched. Review is the cap; nothing was changed. | ROUND 78 (n): Viewed: list and grouped forms, accent row, stripes, footer; secondary header and filter hint are the only low pairs. Raised from started: renders in every cell, no reference exists for this control in Flutter (or the field form is unmeasured), so review is the ceiling; the old downgrade counted fills and secondary text as contrast failures. flutter-compare-n.md. | Spec-derived, not captured: no Apple device or Apple-rendered image exists in this repository, so review is the ceiling. Not covered by scripts/cupertino_spec_check.py beyond the shared colour tokens and the sheet existing. Audit 3: not verified: 2 illegible words.",
+    "gaps": [
+     "The group total touches the scroll thumb in the Grouped cell",
+     "No Apple-rendered image to measure against: every status here is derived from published iOS 17 / macOS 14 numbers, never matched to a real control",
+     "Group rows keep the '[-] Common (14)' text of the shared grid, not an AppKit disclosure triangle",
+     "Footer summaries are bold text on the window colour (no footer material)",
+     "Row separators are the shared hairlines (an AppKit table has none unless grid lines are on)",
+     "iOS list form of a grid is not drawn (see list_box)",
+     "Only the sheet's two grids are covered: the main-window and dialog grids of the v3 sheet are not rendered",
+     "Segoe UI stands in for SF Pro (no SF-like font is installed on this Windows host: C:/Windows/Fonts holds Segoe UI, Arial, Tahoma and Roboto only); sizes are SF sizes, glyph shapes, widths and the semibold weight is Segoe UI Semibold (seguisb.ttf, all Cupertino sheets since round 82 v; only weight 700 draws Bold) are not",
+     "Corners are circular arcs, not the continuous (squircle) curve; no blur or vibrancy: shadows are stacked low-alpha shapes, translucent materials are flat near-opaque faces",
+     "Audit 3: only rendering and contrast were measured; pixel fidelity to a platform reference is unverified (no live reference exists)"
+    ]
+   }
+  }
+ }
+}

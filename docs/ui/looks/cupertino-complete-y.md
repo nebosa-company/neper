@@ -31,3 +31,13 @@ Known and not done in this lane: popup_menu draws the macOS menu only (Flutter's
 ## Regression
 
 Re-rendered one at a time with the change, then `git status`: menu_bar, splitter, hint, linux_hint, linux_menu_bar, linux_popup_menu, linux_splitter, material_menu, material_menu_bar, material_splitter, material_tooltip, popup_menu, rich_tooltip, split_button, title_bar, nav_toolbar, nav_sidebar, f_dock_panel, f_workspace, surf_overlay, nav_navigation_split, h_swipe_actions, activity_indicator (23 apps): every PNG of every other look byte for byte as committed. Exception, not mine: Material `tooltip` (all four files) differs from the committed bytes with or without this change (checked with the lane's two shared-code edits stashed), stale on master like Material date_input; restored to the committed bytes.
+
+## Batch 2: contrast and ring fixes (Cupertino look only)
+
+Changes: secondary label 60 % to 80 % (light) and 70 % (dark) in `style.cupertino`, so secondary text, the Cupertino placeholder and muted marks hold 4.5:1; tab-bar grey 8E8E93 to 6C6C70; the overlay scroll thumb from 35 % to 48 % (light) and 44 % (dark) of the label colour (2.4:1 became 3.6:1 light, 4.3:1 dark); the stepper halves are positioned layers (the focused half's ring is no longer cut). All 45 Cupertino sheet apps that call `run_cupertino` plus the nine row apps were re-rendered afterwards; `git status` after the run shows no file outside the Cupertino folders and these sources.
+
+Raised to `ready` (both looks): combo_box, spin_edit, status_bar, tree_list, vertical_grid. Per-row measurements are in their overlay notes (`status.d/...-r84y2.json`): combo_box 22 high, placeholder 5.97:1 and 4.5:1; spin_edit 94 x 32, glyphs 3.14:1 and 3.5:1; status_bar text 5.1 to 6.6:1; tree_list rows 24 apart; vertical_grid rows 44 apart (HIG 44 hit region cited).
+
+Not raised, with the measured reason: scroll_bar (Hover and Pressed draw the Rest thumb), page_control (the strip focus ring is a square rectangle), toolbar_button (accent text 3.6:1 on the light ground; the accent was not darkened because every matched row was compared at 007AFF), data_grid (group total touches the scroll thumb), splitter (Hover, Dragged and three of four Focus cells show Rest; the harness pointer does not reach the sash and focuses the last focusable), swipe_actions (white 12 px tile labels 3.4 to 4.0:1).
+
+Not started in this lane: the iOS context-menu cell for popup_menu, and the item-by-item pass over the generic extra rows; both need Cupertino-specific drawing code that was not written, so no extra row is raised.
