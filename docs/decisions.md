@@ -43754,3 +43754,47 @@ After a roll back the shell's `home_floor` is marked above the restored version'
 **Measured** (release, 12th-gen i5-12500H, `benchmarks/cpu/simd_fir`): an 8-tap horizontal FIR over rows of 2048 10-bit samples, 20,000 rows: scalar 720 ms, `Vec` 135 ms, 5.3x, identical output; a row sum: about 40 ms scalar, about 12 ms `Vec`, 3-4x (the timer's unit is 5 ms). `--cpu x64-v2` and `x64-v3` measure the same here because the vectors are 16 bytes. This is not dav1d-class: every operation still loads from and stores to a stack slot, and bounds checks remain; a vector register class (D1524) is what is left between this and that.
 
 **Tests.** `tests/selfhost/fixtures/link/simd_codec` compares every lowered operation with a reference loop written in the fixture, on pseudo-random lanes biased to 0, all ones, the sign bit and the largest signed value, at 16, 32 and 64 bytes, and `run.sh`/`run.ps1` run it at x64-v1, v2 and v3, debug and release, so both the packed instructions and the lane-loop fallbacks meet the same references (changing one opcode in the table fails it with that operation's exit code). `tests/conformance/tools/dis_simd.e` pins the instructions one function of calls becomes, under `--cpu x64-v2`, on both hosts.
+
+## D5961 — The 2026-11-04 language design review is queued as C258-C264, and the token cost is the gate on each
+
+**What was reviewed.** The specification (§1-§11, §14), the editing card, D66 with
+D1678's repair fix, §11's region subset with `m25-h02-regions.md`, and the decision
+log were read against one question: which rules cost a model-authored edit more than
+they buy a reviewer. Three findings reopen locked decisions — D66's reserved-name set
+(C258), D354's body-reading retention check with D1565's `callee_keeps` (C259), and
+D52's derived protocol names (C261). Three are deletions — a total zero value (C260),
+one normative home per fact (C262), and the card without the C bootstrap's rules
+(C263) — and one is an addition to measure before it exists (C264, labelled break and
+continue).
+
+**Why tokens decide it.** Neper's author is a model and its reviewer is a person, so a
+rule that produces a repair turn costs far more than the characters it saves. Every
+queued row therefore carries a *Token and cost* clause and a *Guard* clause, and none
+lands on its rationale alone: C261 must show `@proto` adds nothing at a call site,
+C264 must beat the flag spelling per nesting level in `benchmarks/tokens/profile.py`
+before the grammar revision, and a row whose change cannot demonstrate its token
+effect is rejected at its own review.
+
+**The measured evidence.** `E-NAME-0003` ended 35 of the 134 builds that failed on a
+compile code in 2026-09-20..27, more than any other code, and D1678 kept D66's rule
+while adding a rename fix (C258). D1677 records a warm build that writes an image the
+clean build refuses with `E-SAFETY-0013`, because `callee_keeps` reads a foreign body
+with no edge to it (C259). The spec is 5149 lines: 892 the GPU profile, 603 restating
+`docs/tooling.md`, 25 of its 66 diagnostic codes `E-SAFETY`, 38 alphabetic keywords
+(C260-C263).
+
+**What is not reopened.** The five implicit operations (D72), no overloading (§14),
+explicit casts (D18), statement-level `try` (D55), arena memory with mark and reset
+under D3's no-allocator rule, the FNV-1a error value, no garbage collection, and
+§14's twelve invariants. A queued row that needs any of these to move is out of scope
+for its own session.
+
+**Procedure.** This row settles the queue and the gate, not a language change. The
+rows that land supersede narrower clauses as they name them: C258 supersedes D66's
+reserved-name clause, C259 supersedes D354's body walk and closes D1677's defect, C261
+supersedes D52's derived name, and C260, C262, C263 and C264 amend §7, the documents,
+the card and the grammar respectively.
+
+**Not done.** No checker, grammar, card or specification text changes here; all seven
+rows are score 0 in `docs/work-queue.json`, and C104 remains the first item, so none of
+them is eligible for the next session until the NeperOS priority releases it.
