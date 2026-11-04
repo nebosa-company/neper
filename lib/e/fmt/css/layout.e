@@ -2603,21 +2603,28 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     var n_own = x.own.len
     var end_y = x.y
     var clamp_n = line_clamp_count(cs)
+    // `line-clamp: auto` with no room at all keeps no line.
+    var clamp_zero = false
     if clamp_n == 0usize && n_own > 1usize && line_clamp_is_auto(cs) {
-        // `line-clamp: auto` keeps the lines that fit the container's `max-height`, and at least one.
+        // `line-clamp: auto` keeps the lines that fit the container's `max-height`, and at least one when there is room.
         let (room, has_room) = line_clamp_room(l, cont, cbh)
         if has_room {
             let top = l.lines.items[usize(x.own.items[0usize])].y
-            var fit = 1usize
+            var fit = 0usize
             while fit < n_own {
                 let nl = &l.lines.items[usize(x.own.items[fit])]
                 if nl.y + nl.h - top > room + 0.001f64 { break }
                 fit += 1usize
             }
+            if fit == 0usize {
+                if room > 0.0f64 { fit = 1usize } else { clamp_zero = true }
+            }
             if fit < n_own { clamp_n = fit }
         }
     }
-    if clamp_n > 0usize && n_own > clamp_n {
+    if clamp_zero {
+        n_own = 0usize
+    } else if clamp_n > 0usize && n_own > clamp_n {
         n_own = clamp_n
         let kept = &l.lines.items[usize(x.own.items[clamp_n - 1usize])]
         let ell_kind = clamp_ellipsis_kind(cs)
@@ -4510,21 +4517,26 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     position_markers(l, b)
     // `line-clamp` over the lines of the block children (the container's own inline content is clamped with its lines).
     var clamp_n = line_clamp_count(bstyle(l, b))
+    // `line-clamp: auto` with no room at all keeps no line.
+    var clamp_zero = false
     if clamp_n == 0usize && line_clamp_is_auto(bstyle(l, b)) {
-        // `line-clamp: auto`: the lines that end within the block size the box is limited to, and at least one.
+        // `line-clamp: auto`: the lines that end within the block size the box is limited to, and at least one when there
+        // is any room at all.
         let (room, has_room) = line_clamp_room(l, b, ch)
         if has_room {
             var done = false
             let fit = auto_fit_lines(l, b, 0.0f64 - bb.border[0usize] - bb.padding[0usize], room, 0.0f64, 0.0f64, &done)
             if done {
                 clamp_n = fit
-                if clamp_n == 0usize { clamp_n = 1usize }
+                if clamp_n == 0usize {
+                    if room > 0.0f64 { clamp_n = 1usize } else { clamp_zero = true }
+                }
             }
         }
     }
     var scan_c = ClampScan { seen: 0usize, n: clamp_n, tail: false }
     if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
-    if clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail) {
+    if clamp_zero || (clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail)) {
         var ctr = Counter { n: clamp_n, mb: 0.0f64 }
         let cut = clamp_children(l, b, b, &ctr)
         if cut >= 0.0f64 {
@@ -4566,6 +4578,11 @@ fn clamp_hide(l: *Layout, b: u32) {
 // ends, relative to the top of `b`'s border box, or -1 when everything fit. `container` is the clamp container, whose
 // `block-ellipsis` names the ellipsis the kept line ends with.
 fn clamp_walk(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64 {
+    // `line-clamp: auto` with no room keeps no line: everything under `b` goes.
+    if ctr.n == 0usize {
+        clamp_hide(l, b)
+        ret 0.0f64
+    }
     let bb = bx(l, b)
     if bb.line_count > 0u32 {
         let cnt = usize(bb.line_count)
