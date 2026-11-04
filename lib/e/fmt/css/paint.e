@@ -1357,21 +1357,38 @@ fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool {
         var cw = bb.w - bb.border[1usize] - bb.border[3usize]
         var cy = ay + bb.border[0usize]
         var ch = bb.h - bb.border[0usize] - bb.border[2usize]
-        // `overflow: clip` boxes may extend the clip by `overflow-clip-margin` from a chosen visual box.
-        if s.overflow_x == .Clip || s.overflow_y == .Clip {
+        // `overflow: clip` and `overflow: hidden` boxes may move the clip edge by `overflow-clip-margin` from a chosen
+        // visual box; a box that scrolls has a fixed clip edge (008) and on a hidden one the box cannot reach past the
+        // padding box, so `border-box` makes the declaration invalid there.
+        let mx = s.overflow_x != .Visible
+        let my = s.overflow_y != .Visible
+        let scrollable = s.overflow_x == .Scroll || s.overflow_x == .Auto || s.overflow_y == .Scroll || s.overflow_y == .Auto
+        let scroller = s.overflow_x != .Clip || s.overflow_y != .Clip
+        if (mx || my) && !scrollable {
             let (ocm, has_ocm) = geom.extra_of(s, "overflow-clip-margin")
             if has_ocm {
                 var m = 0.0f64
                 var inset_kind = 1u8
+                var valid = true
                 let toks = cv.split_top_level_spaces(p.a, cv.lower(p.a, cv.trim_ws(ocm)))
                 let ctx = style.new_context(p.a, p.l.viewport_width, p.l.viewport_height)
                 var ti = 0usize
                 while ti < toks.len {
-                    if str.eq(toks[ti], "content-box") { inset_kind = 2u8 } else if str.eq(toks[ti], "border-box") { inset_kind = 0u8 } else if str.eq(toks[ti], "padding-box") { inset_kind = 1u8 } else {
-                        let (len, good) = style.parse_len(&ctx, toks[ti], s.font_size, 0u32)
+                    if str.eq(toks[ti], "content-box") {
+                        inset_kind = 2u8
+                        valid = true
+                    } else if str.eq(toks[ti], "border-box") {
+                        if scroller { valid = false }
+                        inset_kind = 0u8
+                    } else if str.eq(toks[ti], "padding-box") { inset_kind = 1u8 } else {
+                        let (len, good) = style.parse_len(&ctx, toks[ti], s.font_size, style.A_NEGATIVE)
                         if good && len.kind == .Px { m = len.px }
                     }
                     ti += 1usize
+                }
+                if !valid {
+                    m = 0.0f64
+                    inset_kind = 1u8
                 }
                 var il = 0.0f64
                 var it = 0.0f64
@@ -1389,11 +1406,11 @@ fn push_overflow_clip(p: *Painter, b: u32, ax: f64, ay: f64) -> bool {
                     ir += bb.padding[1usize]
                     ib += bb.padding[2usize]
                 }
-                if s.overflow_x == .Clip {
+                if mx {
                     cx = ax + il - m
                     cw = bb.w - il - ir + 2.0f64 * m
                 }
-                if s.overflow_y == .Clip {
+                if my {
                     cy = ay + it - m
                     ch = bb.h - it - ib + 2.0f64 * m
                 }
