@@ -2458,6 +2458,22 @@
    "blocked_by": []
   },
   {
+   "name": "e.ui.browser",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.html_view",
+    "e.ui.widget",
+    "e.web.page",
+    "e.web.shell"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.url",
    "layer": 6,
    "surface": "source",

@@ -2440,6 +2440,10 @@ chmod +x "$test_build/css-paint-selfhost"
 ui_html_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_html_view/src/main.e" "$repo" x64 linux "$test_build/ui-html-view-selfhost")
 [ "$ui_html_view_written" = 'executable written' ]
 chmod +x "$test_build/ui-html-view-selfhost"
+# `e.ui.browser`: one browsing context as a control over the shell and the engine -- navigation and session history through the control, the state a caller's chrome reads, a reload's new page getting the renderer, the error page, and the canvas and region of a page tab (tracker 7.1, 7.2).
+ui_browser_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_browser/src/main.e" "$repo" x64 linux "$test_build/ui-browser-selfhost")
+[ "$ui_browser_written" = 'executable written' ]
+chmod +x "$test_build/ui-browser-selfhost"
 # `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters. Run the whole compiler-only WPT corpus (896 + 278 cases) with the self-hosted compiler too (tracker 1.5).
 fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
 [ "$fmt_url_written" = 'executable written' ]
@@ -2452,6 +2456,7 @@ chmod +x "$test_build/text-encoding-std-selfhost"
 "$test_build/text-encoding-std-selfhost"
 "$test_build/fmt-url-selfhost"
 "$test_build/ui-html-view-selfhost"
+"$test_build/ui-browser-selfhost"
 "$test_build/css-paint-selfhost"
 "$test_build/css-geom-selfhost"
 "$test_build/css-layout-selfhost"

@@ -2750,6 +2750,12 @@ $uiHtmlViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiHtmlViewWritten -ne 'executable written') { throw 'ui_html_view emission failed' }
 & $uiHtmlViewPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_html_view check failed: exit $LASTEXITCODE" }
+# `e.ui.browser`: one browsing context as a control -- navigation and the session history through the control, the state a caller's chrome reads, a reload's new page getting the renderer, the pump quiet on a static page, the error page, and the canvas and region a page tab hands out (tracker 7.1, 7.2).
+$uiBrowserPath = Join-Path $testBuild 'ui-browser-selfhost.exe'
+$uiBrowserWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_browser\src\main.e') $repo 'x64' 'windows' $uiBrowserPath
+if ($LASTEXITCODE -ne 0 -or $uiBrowserWritten -ne 'executable written') { throw 'ui_browser emission failed' }
+& $uiBrowserPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_browser check failed: exit $LASTEXITCODE" }
 # `e.fmt.url`: the WHATWG URL parser on the Standard's cases -- relative resolution, default ports, IPv4 and IPv6 hosts, UTS #46 domains, opaque paths, origin and the setters; the whole WPT corpus (896 + 278 cases) runs in tests/browser/url/run.sh (tracker 1.5).
 $fmtUrlPath = Join-Path $testBuild 'fmt-url-selfhost.exe'
 $fmtUrlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_url\src\main.e') $repo 'x64' 'windows' $fmtUrlPath

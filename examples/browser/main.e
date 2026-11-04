@@ -1,5 +1,6 @@
-// The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page, over
-// `e.web.shell` (tabs, session history, omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
+// The Neper browser: a window with a tab strip, back / forward / reload buttons, an omnibox, a bookmark toggle and the page. The
+// chrome is this file; the page is `e.ui.browser` (one browsing context as a control) over `e.web.shell` (tabs, session history,
+// omnibox rules, about: pages, bookmarks) and `e.web.page` (the engine). `browser [URL]`
 // opens URL (default about:blank). The profile (bookmarks and visit log) is `neper-browser.profile` in the working directory,
 // read at start and written on exit. Build with `--arena 4g`: each tab reserves 256 MB and the TLS chain check allocates from
 // the same arena, so the default one fails every https page as "not private" or "could not be loaded".
@@ -19,13 +20,12 @@ use e.text.fontset as fontset
 use e.text.shape
 use e.time
 use e.ui.app
+use e.ui.browser as browser
 use e.ui.control
-use e.ui.html_view as view
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 use e.ui.window
-use e.web.page as page
 use e.web.shell as shell
 
 const MAX_SLOTS: usize = 16usize
@@ -39,7 +39,7 @@ type Slot = struct { model: *Model, index: usize }
 type Model = struct {
     a: *mem.Arena, frame: mem.Arena, frame_mark: usize, sh: *shell.Shell, shapes: []shape.Font, tokens: style.ThemeTokens,
     omni: []u8, omni_len: usize, shown_url: str, omni_real: str, omni_clipped: bool, slots: [16]Slot, labels: [16]str, picks: [16]widget.Submit,
-    start_ms: f64, profile_path: str, attached: [16]u32
+    start_ms: f64, profile_path: str
 }
 
 fn url_text(m: *Model) -> str { ret m.omni[0usize..m.omni_len] }
@@ -83,31 +83,34 @@ fn on_omni_change(ctx: *void, text: str) -> err {
 
 fn on_omni_submit(ctx: *void) -> err {
     let m = mem.cast[*Model](ctx)
-    let t = shell.active_tab(m.sh)
     var go_to = url_text(m)
     if m.omni_clipped { go_to = m.omni_real }
-    let e = shell.navigate(m.sh, t, go_to)
+    var b = browser.attach(m.sh, shell.active_tab(m.sh))
+    let e = browser.navigate(&b, go_to)
     m.shown_url = ""
     ret ok
 }
 
 fn on_back(ctx: *void) -> err {
     let m = mem.cast[*Model](ctx)
-    let moved = shell.go_back(m.sh, shell.active_tab(m.sh))
+    var b = browser.attach(m.sh, shell.active_tab(m.sh))
+    let moved = browser.back(&b)
     m.shown_url = ""
     ret ok
 }
 
 fn on_forward(ctx: *void) -> err {
     let m = mem.cast[*Model](ctx)
-    let moved = shell.go_forward(m.sh, shell.active_tab(m.sh))
+    var b = browser.attach(m.sh, shell.active_tab(m.sh))
+    let moved = browser.forward(&b)
     m.shown_url = ""
     ret ok
 }
 
 fn on_reload(ctx: *void) -> err {
     let m = mem.cast[*Model](ctx)
-    shell.reload(m.sh, shell.active_tab(m.sh))
+    var b = browser.attach(m.sh, shell.active_tab(m.sh))
+    browser.reload(&b)
     ret ok
 }
 
@@ -147,34 +150,11 @@ fn now_ms() -> f64 {
     ret f64(t.nanos) / 1000000.0f64
 }
 
-// One frame of page work: timers and scripts, a navigation the page asked for, and a link the view reports as followed.
-fn pump_page(m: *Model) {
-    let t = shell.active_tab(m.sh)
-    if !t.loaded { ret }
-    let more = page.tick(t.pg, now_ms() - m.start_ms)
-    let moved = shell.follow_pending(m.sh, t)
-    // A tap reaches the page's click handlers first; one that cancels the click also cancels the link.
-    let (tx, ty, has_tap) = view.take_tap(t.pg.view)
-    var allowed = true
-    if has_tap { allowed = page.click(t.pg, tx, ty) }
-    let (link, tapped0) = view.take_activated(t.pg.view)
-    let tapped = tapped0 && allowed
-    if tapped {
-        let (abs, good) = page.resolve_against(m.a, &t.pg.base, link)
-        if good {
-            let e = shell.navigate(m.sh, t, abs)
-            m.shown_url = ""
-        }
-    }
-}
-
 // Whether the active page has a timer that is due: an idle window builds no frame, so the loop asks for one then (and only then,
 // so a timer minutes away costs nothing).
 fn timer_due(m: *Model) -> bool {
-    let t = shell.active_tab(m.sh)
-    if !t.loaded { ret false }
-    let due = page.next_wakeup(t.pg)
-    ret due >= 0.0f64 && due <= now_ms() - m.start_ms
+    var b = browser.attach(m.sh, shell.active_tab(m.sh))
+    ret browser.timer_due(&b, now_ms() - m.start_ms)
 }
 
 // A tab's label cut to `most` bytes (on a character boundary) with "..." after it. A page without a title is labelled by its
@@ -219,14 +199,12 @@ fn report_stop(e: err) {
 fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     mem.reset(&m.frame, m.frame_mark)
     let f = &m.frame
-    pump_page(m)
-    sync_omni(m)
     let sh = m.sh
-    let t = shell.active_tab(sh)
-    if t.loaded && m.attached[sh.active] != t.id {
-        page.attach_renderer(t.pg, widget.renderer_of(ctx.runtime))
-        m.attached[sh.active] = t.id
-    }
+    // The tab's frame of work runs before the chrome is laid out, so a navigation it starts is what this frame shows.
+    var b = browser.attach(sh, shell.active_tab(sh))
+    let pumped = browser.pump(&b, now_ms() - m.start_ms)
+    browser.ensure_renderer(&b, widget.renderer_of(ctx.runtime))
+    sync_omni(m)
     let theme = control.Theme { tokens: &m.tokens, fonts: m.shapes, language: "", runtime: ctx.runtime }
     // Tab strip.
     var n = shell.tab_count(sh)
@@ -298,8 +276,8 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     if tab.loaded {
         let (inner, ie) = mem.alloc[widget.Node](f, 1usize)
         if ie != ok { ret (zero, ie) }
-        inner[0usize] = widget.Node { key: 21u64, kind: widget.Kind { Custom: view.custom(tab.pg.view) }, style: content_style, children: zero }
-        content = widget.region(20u64, view.region(tab.pg.view), content_style, inner[0usize..1usize])
+        inner[0usize] = widget.Node { key: 21u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: content_style, children: zero }
+        content = widget.region(20u64, browser.region(&b), content_style, inner[0usize..1usize])
     } else {
         content = widget.box(20u64, content_style, zero)
     }
@@ -389,11 +367,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     model.omni_clipped = false
     model.start_ms = now_ms()
     model.profile_path = profile_path
-    var ai = 0usize
-    while ai < MAX_SLOTS {
-        model.attached[ai] = 0u32
-        ai += 1usize
-    }
     let options = app.Options {
         window: window.Options { title: "Neper", width: 1100u32, height: 700u32, min_width: 400u32, min_height: 300u32, resizable: true, transparent: false, mode: .Windowed },
         widget_limits: widget.Limits { max_elements: 4096usize, max_states: 256usize, state_bytes: 1024usize, state_classes: 16u16, max_depth: 48u16, max_commands: 65536usize },
