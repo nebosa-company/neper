@@ -177,6 +177,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 | `html/browsers/history` | Scroll position and cross-origin location tests need layout and real iframes. |
 | innerText getter | Needs computed styles the headless runner does not have. |
 | Encoding tests needing server headers | Charset set by `Content-Type`; the runner only has meta charset and the `encoding.py` shim. |
+| `processing-instruction-attributes` (30 subtests) | The prelude has the ProcessingInstruction attribute API, but the test wants `<?...?>` in HTML to become a PI node; the HTML parser makes it a bogus comment (current spec) and `html5lib` (1791/1791) pins that. It is a WICG proposal. |
 
 ### Known deliberate trade-offs
 
