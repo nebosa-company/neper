@@ -226,6 +226,39 @@ fn tally(it: *js.Interp, show: bool, test_path: str) -> Counts {
     ret c
 }
 
+// The `?query` strings a page declares with `<meta name=variant content="?...">` (at most 32), in document order.
+fn variants_of(a: *mem.Arena, page: str) -> ([]str, usize) {
+    let (buf, be) = mem.alloc[str](a, 32usize)
+    if be != ok { ret (buf, 0usize) }
+    var count = 0usize
+    var pos = 0usize
+    while count < 32usize {
+        let (hit, found) = str.find_from(page, "name=\"variant\"", pos)
+        if !found { break }
+        pos = hit + 1usize
+        var start = hit
+        while start > 0usize && page[start] != 60u8 { start -= 1usize }
+        let (gt, gfound) = str.find_from(page, ">", hit)
+        if !gfound { break }
+        let tag = page[start..gt]
+        var vstart = 0usize
+        var quote = 34u8
+        let (dp, dfound) = str.find(tag, "content=\"")
+        if dfound { vstart = dp + 9usize } else {
+            let (sp, sfound) = str.find(tag, "content='")
+            if !sfound { continue }
+            vstart = sp + 9usize
+            quote = 39u8
+        }
+        var vend = vstart
+        while vend < tag.len && tag[vend] != quote { vend += 1usize }
+        if vend >= tag.len { continue }
+        buf[count] = tag[vstart..vend]
+        count += 1usize
+    }
+    ret (buf, count)
+}
+
 fn run_page(a: *mem.Arena, root: str, test_path: str, page_src: str, show: bool) -> (Counts, bool) {
     let none = Counts { subtests: 0usize, passed: 0usize, harness_ok: false, done: false }
     let (d, de) = dom.parse_with(a, page_src, parse_options(), 400000usize, true)
@@ -304,14 +337,27 @@ fn run_all(ctx: *Ctx) {
         var test_path = cat3(a, "/", path, "")
         if str.ends_with(path, ".any.js") || str.ends_with(path, ".window.js") { page = wrapper_page(a, test_path, src) }
         if str.ends_with(path, ".any.js") || str.ends_with(path, ".window.js") || str.ends_with(path, ".html") || str.ends_with(path, ".htm") || str.ends_with(path, ".xhtml") {
-            let (counts, ran) = run_page(a, root, test_path, page, show)
-            files += 1usize
-            subtests += counts.subtests
-            passed += counts.passed
-            var note = ""
-            if !counts.done { note = " (no result)" }
-            let used = (mem.mark(a) - work) / 1048576usize
-            let p = io.printf["FILE {} {}/{}{} {}MB\n"](path, counts.passed, counts.subtests, note, used)
+            let (variants, vcount) = variants_of(a, page)
+            var runs = 1usize
+            if vcount > 0usize { runs = vcount }
+            var run = 0usize
+            while run < runs {
+                var qs = ""
+                if vcount > 0usize { qs = variants[run] }
+                let url = cat3(a, test_path, qs, "")
+                let label = cat3(a, path, qs, "")
+                let vwork = mem.mark(a)
+                let (counts, ran) = run_page(a, root, url, page, show)
+                files += 1usize
+                subtests += counts.subtests
+                passed += counts.passed
+                var note = ""
+                if !counts.done { note = " (no result)" }
+                let used = (mem.mark(a) - work) / 1048576usize
+                let p = io.printf["FILE {} {}/{}{} {}MB\n"](label, counts.passed, counts.subtests, note, used)
+                mem.reset(a, vwork)
+                run += 1usize
+            }
         }
         mem.reset(a, work)
     }
