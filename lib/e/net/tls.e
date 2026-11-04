@@ -696,7 +696,11 @@ fn verify_certificate_set(a: *mem.Arena, set: CertificateSet, config: ClientConf
     if verify_error == x509.NameMismatch { ret CertificateName }
     if verify_error == x509.SelfSigned { ret CertificateSelfSigned }
     if verify_error == x509.UnknownAuthority { ret CertificateUntrusted }
-    if verify_error != ok { ret InvalidCertificate }
+    if verify_error != ok {
+        // A check that could not run for want of memory is not a certificate problem: say what happened.
+        if verify_error == mem.Exhausted { ret mem.Exhausted }
+        ret InvalidCertificate
+    }
     ret ok
 }
 

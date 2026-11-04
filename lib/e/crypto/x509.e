@@ -651,9 +651,11 @@ fn verify_signature(a: *mem.Arena, certificate: Certificate, issuer: Certificate
         switch issuer.public_key {
         case .Rsa as key:
             let mark = mem.mark(a)
-            let valid = sign.rsa_pkcs1v15_verify_hash(a, key.modulus, key.exponent, tbs, signature_bytes, hash_id)
+            let vr = sign.rsa_pkcs1v15_verify_hash_e(a, key.modulus, key.exponent, tbs, signature_bytes, hash_id)
             mem.reset(a, mark)
-            if valid { ret ok }
+            if vr == ok { ret ok }
+            // A check that could not run (no memory for the scratch) is not a bad certificate.
+            if vr != sign.InvalidSignature { ret vr }
         default:
             ret InvalidCertificate
         }
@@ -858,7 +860,11 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
         let (root, has_root) = find_issuer(options.roots, current.issuer)
         if has_root {
             if !in_window(root, options.now) { ret (zero, Expired) }
-            if verify_signature(a, current, root) != ok { ret (zero, UnknownAuthority) }
+            let root_check = verify_signature(a, current, root)
+            if root_check != ok {
+                if root_check != InvalidCertificate { ret (zero, root_check) }
+                ret (zero, UnknownAuthority)
+            }
             if !constraints_allow(root, links[..count]) { ret (zero, NameMismatch) }
             if !same_der(root.der, current.der) {
                 if count > limit { ret (zero, TooDeep) }
@@ -879,7 +885,11 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
         if intermediate.has_path_len && count - 1usize > usize(intermediate.path_len) { ret (zero, UnknownAuthority) }
         if !constraints_allow(intermediate, links[..count]) { ret (zero, NameMismatch) }
         if !in_window(intermediate, options.now) { ret (zero, Expired) }
-        if verify_signature(a, current, intermediate) != ok { ret (zero, UnknownAuthority) }
+        let link_check = verify_signature(a, current, intermediate)
+        if link_check != ok {
+            if link_check != InvalidCertificate { ret (zero, link_check) }
+            ret (zero, UnknownAuthority)
+        }
         if count >= limit { ret (zero, TooDeep) }
         links[count] = intermediate
         count += 1usize

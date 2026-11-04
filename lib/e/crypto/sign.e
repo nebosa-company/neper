@@ -1709,15 +1709,22 @@ fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []c
 
 // The same with SHA-384 or SHA-512: the DigestInfo prefix differs only in three bytes (RFC 8017 9.2 note 1).
 fn rsa_pkcs1v15_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> bool {
+    ret rsa_pkcs1v15_verify_hash_e(a, n, e, message, signature, hash_id) == ok
+}
+
+// The same check as an error: a signature that does not verify is `InvalidSignature`, and a check that could not be
+// computed (no memory for the big-number scratch, an unknown hash) keeps its own error, so a caller reporting "the
+// certificate is untrusted" never reports a memory shortage that way (D5941's arena trap).
+fn rsa_pkcs1v15_verify_hash_e(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> err {
     let (digest, digest_len) = digest_of(message, hash_id)
-    if digest_len == 0usize { ret false }
+    if digest_len == 0usize { ret InvalidSignature }
     let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
-    if n_error != ok { ret false }
+    if n_error != ok { ret n_error }
     let k = (bignum.int_bits(modulus) + 7usize) / 8usize
     let info_len = 19usize + digest_len
-    if k < info_len + 11usize || k > rsa_max_bytes() || signature.len != k { ret false }
+    if k < info_len + 11usize || k > rsa_max_bytes() || signature.len != k { ret InvalidSignature }
     var em: [512]u8 = zero
-    if !rsa_public_op(a, n, e, signature, em[..k]) { ret false }
+    if !rsa_public_op(a, n, e, signature, em[..k]) { ret InvalidSignature }
     var expected: [512]u8 = zero
     expected[1] = 1u8
     var i = 2usize
@@ -1739,7 +1746,8 @@ fn rsa_pkcs1v15_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message
         expected[k - digest_len + i] = digest[i]
         i += 1usize
     }
-    ret hash.equal_constant_time(expected[..k], em[..k])
+    if !hash.equal_constant_time(expected[..k], em[..k]) { ret InvalidSignature }
+    ret ok
 }
 
 // ML-DSA-44 by FIPS 204 (k = l = 4, eta = 2, tau = 39, gamma1 = 2^17, gamma2 = (q-1)/88,

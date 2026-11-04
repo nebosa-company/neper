@@ -213,6 +213,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if chain2_error != ok || chain2.certificates.len != 2usize { os.exit(71) }
     let (chain3, chain3_error) = x509.verify(a, c2_leaf_cert, options(c1_roots[0..], zero, "c2.example", .ServerAuth, 4u16))
     if chain3_error == ok { os.exit(72) }
+    // A check that cannot allocate its big-number scratch says so: `mem.Exhausted`, never `InvalidSignature` or a
+    // certificate verdict, from both the sign and the x509 layer.
+    let (tiny_cell, tiny_alloc_error) = mem.alloc[u8](a, 64usize)
+    if tiny_alloc_error != ok { os.exit(73) }
+    var tiny_store = mem.arena_from(tiny_cell)
+    let tiny = &tiny_store
+    if sign.rsa_pkcs1v15_verify_hash_e(tiny, rsa_n[0..], rsa_e[0..], message, pkcs1_256[0..], 256u16) != mem.Exhausted { os.exit(74) }
+    if sign.rsa_pkcs1v15_verify_hash_e(a, rsa_n[0..], rsa_e[0..], other, pkcs1_256[0..], 256u16) != sign.InvalidSignature { os.exit(75) }
+    let (oom_chain, oom_error) = x509.verify(tiny, c1_leaf_cert, options(c1_roots[0..], c1_mids[0..], "c1.example", .ServerAuth, 4u16))
+    if oom_error != mem.Exhausted { os.exit(76) }
     os.exit(0)
     ret ok
 }
