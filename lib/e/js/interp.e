@@ -7101,8 +7101,10 @@ fn exec_for_in_of(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
                     }
                 }
             }
-            if !cur.has_proto { break }
-            cur = cur.proto
+            let (pv, pve) = proto_get(it, cur)
+            if pve != ok { ret (normal(), pve) }
+            if !is_object(pv) { break }
+            cur = as_object(pv)
         }
         var res = normal()
         res.value = last
