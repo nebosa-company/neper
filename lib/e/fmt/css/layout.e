@@ -2668,14 +2668,16 @@ fn line_clamp_room(l: *Layout, b: u32, cbh: f64) -> (f64, bool) {
 }
 
 // How many lines under `b` (in document order, not entering formatting contexts of their own) end within `room` of the container's content top.
-// `oy` is `b`'s border-box top relative to that. Stops counting at the first line that does not fit: `done` is then set.
-fn auto_fit_lines(l: *Layout, b: u32, oy: f64, room: f64, tail: f64, done: *bool) -> usize {
+// `oy` is `b`'s border-box top relative to that, `tail` the borders and padding still to come below the line and `mb`
+// the nested bottom margins, which collapse with each other rather than add up. Stops counting at the first line that
+// does not fit: `done` is then set.
+fn auto_fit_lines(l: *Layout, b: u32, oy: f64, room: f64, tail: f64, mb: f64, done: *bool) -> usize {
     var n = 0usize
     let bb = &l.boxes.items[usize(b)]
     var li = 0usize
     while li < usize(bb.line_count) && !*done {
         let ln = l.lines.items[usize(bb.line_first) + li]
-        if oy + bb.border[0usize] + bb.padding[0usize] + ln.y + ln.h + tail > room + 0.001f64 {
+        if oy + bb.border[0usize] + bb.padding[0usize] + ln.y + ln.h + tail + mb > room + 0.001f64 {
             *done = true
         } else {
             n += 1usize
@@ -2687,7 +2689,7 @@ fn auto_fit_lines(l: *Layout, b: u32, oy: f64, room: f64, tail: f64, done: *bool
         let kb = &l.boxes.items[usize(kid)]
         let nxt = kb.next
         if !(kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) || is_bfc_root(l, kid)) {
-            n += auto_fit_lines(l, kid, oy + kb.y, room, tail + kb.border[2usize] + kb.padding[2usize] + kb.margin[2usize], done)
+            n += auto_fit_lines(l, kid, oy + kb.y, room, tail + kb.border[2usize] + kb.padding[2usize], maxf(mb, kb.margin[2usize]), done)
         }
         kid = nxt
     }
@@ -4513,7 +4515,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
         let (room, has_room) = line_clamp_room(l, b, ch)
         if has_room {
             var done = false
-            let fit = auto_fit_lines(l, b, 0.0f64 - bb.border[0usize] - bb.padding[0usize], room, 0.0f64, &done)
+            let fit = auto_fit_lines(l, b, 0.0f64 - bb.border[0usize] - bb.padding[0usize], room, 0.0f64, 0.0f64, &done)
             if done {
                 clamp_n = fit
                 if clamp_n == 0usize { clamp_n = 1usize }

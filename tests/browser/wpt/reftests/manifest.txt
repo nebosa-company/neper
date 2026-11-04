@@ -191,3 +191,4 @@ line-clamp-string-001.html | line-clamp-string-001-ref.html | match
 text-overflow-string-wide-001.html | text-overflow-string-wide-001-ref.html | match
 text-overflow-string-escape-001.html | text-overflow-string-escape-001-ref.html | match
 overflow-clip-margin-hidden-001.html | overflow-clip-margin-hidden-001-ref.html | match
+line-clamp-auto-nested-margin-001.html | line-clamp-auto-nested-margin-001-ref.html | match
