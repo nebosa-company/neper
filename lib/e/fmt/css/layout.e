@@ -4620,6 +4620,10 @@ fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan) {
         let kb = &l.boxes.items[usize(kid)]
         let nxt = kb.next
         if kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) {
+            // A float after the clamp point is content of the clamp too; an absolutely positioned box is the
+            // positioned pass's decision.
+            let ks = st(l, kb.style)
+            if sc.seen >= sc.n && kb.h > 0.0f64 && ks.floating != .None { sc.tail = true }
             kid = nxt
             continue
         }
@@ -4640,6 +4644,10 @@ fn clamp_children(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64 {
         let kb = &l.boxes.items[usize(kid)]
         let nxt = kb.next
         if kb.inner == .Marker || kb.inner == .Text || kb.inline_level || is_out_of_flow(st(l, kb.style)) {
+            // A float written after the clamp point goes with it; an absolutely positioned box is the positioned
+            // pass's decision (its containing block may survive).
+            let ks = st(l, kb.style)
+            if cut >= 0.0f64 && ks.floating != .None { clamp_hide(l, kid) }
             kid = nxt
             continue
         }
