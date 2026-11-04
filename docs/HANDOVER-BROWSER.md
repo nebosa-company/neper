@@ -164,6 +164,10 @@ Batch cadence (adopted 2026-11-04, the work is faster and no less safe this way)
 - Test in three tiers: the one to three test files being edited after every edit (seconds), the area's slice list (100-160 files, 5-15 min) at the end of the batch, and the full suite of the touched area only at a batch boundary or once a day.
 - `scripts/wpt-gate.ps1 -Exe <runner> -Root <corpus> -List <list> [-Baseline <tsv>] [-Update]` writes the per-file `path<TAB>passed<TAB>total` results, prints every DROP / GAIN / NEW / MISSING against a baseline, and exits 1 on a drop. First use of a list writes the baseline with `-Update`; after that the gate is one line and the "no drops" rule is machine checked.
 - Keep the A/B for a suite that shares the changed code path even inside a batch: the three worst outcomes of the 2026-11-04 session (ranges 113 to 1, enumerated ARIA 1731 to 953, insert-path coercion) were all in a code path the obvious test file did not exercise.
+
+Where the next CSS text batch should look (measured 2026-11-04, `css/css-text` 756/1154):
+
+- `letter-spacing` (26 of 29 fail). Rendering `letter-spacing-200.html` against its reference shows the two glyphs of `1 2` on one line in a 100px float where the reference wraps after the first: our fitting scan accepts a line whose width, with letter-spacing, exceeds the available width. The line's *used* width already excludes a trailing `p.trail` correctly (`used_w` at the end of the line), so the bug is in the fitting scan that decides what fits, not in the trail bookkeeping — instrument `avail` against `used_w` for that file first. Making a trailing ideographic space hang or subtracting the last character's letter-spacing were both tried and moved the suite by zero, so do not start from those.
 - Windows, bash and Node see different paths for temp files; keep working files under `D:/Temp/t5` and pass `D:/` style paths.
 
 ### State at the end of this stretch
