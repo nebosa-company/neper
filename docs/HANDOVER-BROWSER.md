@@ -157,6 +157,13 @@ Traps, all hit this session:
 - A file that ends `(no result)` at about 4855MB hit the interpreter memory limit (`it.mem_limit` in `run.e`, 5 GB). Its count is partial; the large reflection, Range and iframe-heavy files do this.
 - Background runs die with the session. Restart them.
 - Compare per file against the last full run, never against a partial one; do not overwrite the baseline from an interrupted run.
+
+Batch cadence (adopted 2026-11-04, the work is faster and no less safe this way):
+
+- Three to five related fixes per commit, not one commit per fix.
+- Test in three tiers: the one to three test files being edited after every edit (seconds), the area's slice list (100-160 files, 5-15 min) at the end of the batch, and the full suite of the touched area only at a batch boundary or once a day.
+- `scripts/wpt-gate.ps1 -Exe <runner> -Root <corpus> -List <list> [-Baseline <tsv>] [-Update]` writes the per-file `path<TAB>passed<TAB>total` results, prints every DROP / GAIN / NEW / MISSING against a baseline, and exits 1 on a drop. First use of a list writes the baseline with `-Update`; after that the gate is one line and the "no drops" rule is machine checked.
+- Keep the A/B for a suite that shares the changed code path even inside a batch: the three worst outcomes of the 2026-11-04 session (ranges 113 to 1, enumerated ARIA 1731 to 953, insert-path coercion) were all in a code path the obvious test file did not exercise.
 - Windows, bash and Node see different paths for temp files; keep working files under `D:/Temp/t5` and pass `D:/` style paths.
 
 ### State at the end of this stretch
