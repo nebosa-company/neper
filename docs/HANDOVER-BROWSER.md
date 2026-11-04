@@ -150,6 +150,7 @@ Prints `FILE path pass/total` per file. The per-chunk raw output stays in `--out
 
 Traps, all hit this session:
 
+- A script-side DOM fix needs a regression fixture, and the home for one is `tests/selfhost/fixtures/link/web_shell/src/main.e`: `frame_registry_is_live` (exit 86) and `dom_mixins` (exit 87) each build a context, run one script and throw on failure. Extend `dom_mixins` rather than adding a fixture directory (the link fixtures are enumerated by the generated `tests/selfhost/run.ps1`).
 - `WEB_RUN_EXE` must be exported in the same shell call as `run.sh`. A fresh shell falls back to the stale default `web-run.exe`, and the result looks like a regression or a missing feature.
 - Rebuild into `web-run-js.exe`; for a long comparison copy it to `web-run-cmp.exe` and run that, so rebuilding does not hit `os.Denied`. Kill stray `web-run-*.exe` and `xargs.exe` first.
 - `--jobs 2`. More processes exhaust memory and fork.
