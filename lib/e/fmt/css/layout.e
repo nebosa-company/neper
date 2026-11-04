@@ -1383,8 +1383,9 @@ fn is_bfc_root(l: *const Layout, b: u32) -> bool {
     let s = st(l, bb.style)
     if bb.inner == .FlowRoot || bb.inner == .Flex || bb.inner == .Grid || bb.inner == .Table || bb.inner == .Cell || bb.inner == .Replaced { ret true }
     if s.floating != .None || s.position == .Absolute || s.position == .Fixed { ret true }
-    if (s.overflow_x != .Visible || s.overflow_y != .Visible) && !overflow_propagated(l, b) { ret true }
-    if has_columns(s) || line_clamp_is_auto(s) { ret true }
+    // A scroll container is a formatting context of its own; `overflow: clip` clips paint but creates none.
+    if (s.overflow_x == .Hidden || s.overflow_y == .Hidden || s.overflow_x == .Auto || s.overflow_y == .Auto || s.overflow_x == .Scroll || s.overflow_y == .Scroll) && !overflow_propagated(l, b) { ret true }
+    if has_columns(s) || line_clamp_count(s) > 0usize || line_clamp_is_auto(s) { ret true }
     if s.display == .FlowRoot || s.display == .InlineBlock { ret true }
     ret false
 }
@@ -1609,6 +1610,8 @@ fn float_bottom(l: *const Layout, base: usize, side: u32, floor: f64) -> f64 {
         i += 1usize
         if side == 0u32 && !f.left { continue }
         if side == 1u32 && f.left { continue }
+        // A float the clamp discarded takes no room in the container's height either.
+        if l.boxes.items[usize(f.box)].clamped { continue }
         y = maxf(y, f.y + f.h)
     }
     ret y

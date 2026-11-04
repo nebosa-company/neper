@@ -195,3 +195,4 @@ line-clamp-auto-nested-margin-001.html | line-clamp-auto-nested-margin-001-ref.h
 line-clamp-auto-zero-room-001.html | line-clamp-auto-zero-room-001-ref.html | match
 line-clamp-discard-abspos-001.html | line-clamp-discard-abspos-001-ref.html | match
 line-clamp-discard-float-001.html | line-clamp-discard-float-001-ref.html | match
+line-clamp-bfc-001.html | line-clamp-bfc-001-ref.html | match
