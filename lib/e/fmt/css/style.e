@@ -731,13 +731,16 @@ fn apply_text(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "text-overflow") {
         let parts = cv.split_top_level_spaces(ap.a, low)
-        let raw_parts = cv.split_top_level_spaces(ap.a, cv.trim_ws(v))
+        let raw = cv.trim_ws(v)
         drop_extra(ap, "x-text-overflow-string")
-        if raw_parts.len > 0usize && raw_parts[0usize].len >= 2usize && (raw_parts[0usize][0usize] == 34u8 || raw_parts[0usize][0usize] == 39u8) {
-            // A string replaces the ellipsis character.
-            let q = raw_parts[0usize]
+        if raw.len >= 2usize && (raw[0usize] == 34u8 || raw[0usize] == 39u8) {
+            // A string replaces the ellipsis character. It may hold spaces (a decoded `\A` newline among them), so it is
+            // taken whole rather than split.
+            var e = raw.len
+            if raw[e - 1usize] == raw[0usize] { e -= 1usize }
             s.text_overflow = .Ellipsis
-            put_extra(ap, "x-text-overflow-string", q[1usize..q.len - 1usize])
+            let text = unescape_string(ap.a, raw[1usize..e])
+            put_extra(ap, "x-text-overflow-string", text)
         } else if parts.len > 0usize {
             s.text_overflow = kw[TextOverflow](parts[0usize], ",clip,ellipsis,", s.text_overflow)
         }
@@ -1424,7 +1427,8 @@ fn hex_digit_value(c: u8) -> i32 {
     ret -1i32
 }
 
-// A number-led value with its ASCII escapes resolved (a backslash, "30", a space and "px" give "0px"); other values are returned as they are.
+// A number-led value with its ASCII escapes resolved (a backslash, "30", a space and "px" give "0px"); other values are
+// returned as they are.
 fn unescape_numeric(a: *mem.Arena, v: str) -> str {
     let t = cv.trim_ws(v)
     if t.len == 0usize { ret v }
@@ -1472,6 +1476,72 @@ fn unescape_numeric(a: *mem.Arena, v: str) -> str {
         } else {
             ret v
         }
+    }
+    let res: str = buf[0usize..out]
+    ret res
+}
+
+// The escapes in the interior of a CSS string, resolved to UTF-8. A control character (a decoded `\A`) paints as a space:
+// the strings this decodes are drawn on one line. A backslash-newline is the string's line continuation and gives nothing.
+fn unescape_string(a: *mem.Arena, v: str) -> str {
+    var has = false
+    var i = 0usize
+    while i < v.len {
+        if v[i] == 92u8 || v[i] < 32u8 { has = true }
+        i += 1usize
+    }
+    if !has { ret v }
+    let (buf, be) = mem.alloc[u8](a, v.len)
+    if be != ok { ret v }
+    var out = 0usize
+    i = 0usize
+    while i < v.len {
+        let c = v[i]
+        if c == 92u8 {
+            i += 1usize
+            if i >= v.len { break }
+            // A backslash before a newline is the string's line continuation.
+            if v[i] == 10u8 || v[i] == 13u8 {
+                if v[i] == 13u8 && i + 1usize < v.len && v[i + 1usize] == 10u8 { i += 1usize }
+                i += 1usize
+                continue
+            }
+            var hv = 0i32
+            var nd = 0usize
+            while i < v.len && nd < 6usize && hex_digit_value(v[i]) >= 0i32 {
+                hv = hv * 16i32 + hex_digit_value(v[i])
+                nd += 1usize
+                i += 1usize
+            }
+            if nd == 0usize {
+                buf[out] = v[i]
+                out += 1usize
+                i += 1usize
+                continue
+            }
+            if i < v.len && (v[i] == 32u8 || v[i] == 9u8 || v[i] == 10u8 || v[i] == 12u8 || v[i] == 13u8) { i += 1usize }
+            if hv < 128i32 {
+                if hv > 0i32 {
+                    buf[out] = u8(hv)
+                    if buf[out] < 32u8 { buf[out] = 32u8 }
+                    out += 1usize
+                }
+            } else if hv < 2048i32 {
+                buf[out] = u8(192i32 + hv / 64i32)
+                buf[out + 1usize] = u8(128i32 + hv % 64i32)
+                out += 2usize
+            } else if hv < 65536i32 {
+                buf[out] = u8(224i32 + hv / 4096i32)
+                buf[out + 1usize] = u8(128i32 + (hv / 64i32) % 64i32)
+                buf[out + 2usize] = u8(128i32 + hv % 64i32)
+                out += 3usize
+            }
+            continue
+        }
+        buf[out] = c
+        if c < 32u8 { buf[out] = 32u8 }
+        out += 1usize
+        i += 1usize
     }
     let res: str = buf[0usize..out]
     ret res
@@ -1722,7 +1792,7 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
             if str.eq(prop, "line-height") || str.eq(prop, "font") { wanted = 3usize }
             if wanted != pass { continue }
             if pass == 4usize {
-                if s.line_height.kind == .Px { cc.lh = s.line_height.px } else if s.line_height.kind == .Number { cc.lh = s.line_height.px * s.font_size } else { cc.lh = 0.0f64 }
+                if s.line_height.kind == .Px { cc.lh = s.line_height.px } else if s.line_height.kind == .Number { cc.lh = s.line_height.px * s.font_size } else { cc.lh = c.lh * s.font_size / 16.0f64 }
             }
             let (value, good) = substitute(a, winners[j - 1usize].declaration.value, custom_all, 0usize)
             if good { apply(&ap, prop, value) } else { apply_wide(&ap, prop, "unset") }

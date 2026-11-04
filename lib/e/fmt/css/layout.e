@@ -69,7 +69,7 @@ type FragKind = enum u8 { Text, Segment, Atomic, Marker }
 // the border box of the box that owns the formatting context.
 type Frag = struct { kind: FragKind, box: u32, x: f64, y: f64, w: f64, h: f64, text: str, first: bool, last: bool }
 
-type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool }
+type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool, clamp: bool, ell_box: u32 }
 
 type Layout = struct {
     a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure,
@@ -2620,7 +2620,10 @@ fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -
     if clamp_n > 0usize && n_own > clamp_n {
         n_own = clamp_n
         let kept = &l.lines.items[usize(x.own.items[clamp_n - 1usize])]
-        kept.overflow_ellipsis = true
+        let ell_kind = clamp_ellipsis_kind(cs)
+        kept.overflow_ellipsis = ell_kind != 2u8
+        kept.clamp = ell_kind != 2u8
+        kept.ell_box = cont
         end_y = kept.y + kept.h
         // Floats that sit after the clamp point are hidden.
         let ctop = l.boxes.items[usize(cont)].border[0usize] + l.boxes.items[usize(cont)].padding[0usize]
@@ -2730,6 +2733,69 @@ fn line_clamp_count(s: *const style.Style) -> usize {
     let (n2, ne2) = str.parse_i64(t[0usize..sp])
     if ne2 == ok && n2 > 0i64 { ret usize(n2) }
     ret 0usize
+}
+
+// The block ellipsis a clamp container asks for: 0 the default "…", 1 the string of `block-ellipsis` (or of
+// `line-clamp: <n> <string>`), 2 `no-ellipsis`.
+fn clamp_ellipsis_kind(s: *const style.Style) -> u8 {
+    var kind = 0u8
+    var i = 0usize
+    while i < s.extras.len {
+        let nm = s.extras[i].name
+        if str.eq(nm, "block-ellipsis") { kind = clamp_ellipsis_word(s.extras[i].value, kind) }
+        if str.eq(nm, "line-clamp") || str.eq(nm, "-webkit-line-clamp") {
+            let (tail, has_tail) = clamp_ellipsis_tail(s.extras[i].value)
+            if has_tail { kind = clamp_ellipsis_word(tail, kind) }
+        }
+        i += 1usize
+    }
+    ret kind
+}
+
+// The text of the block ellipsis: "" for the default "…" and for `no-ellipsis`.
+fn clamp_ellipsis_text(s: *const style.Style) -> str {
+    var text: str = ""
+    var i = 0usize
+    while i < s.extras.len {
+        let nm = s.extras[i].name
+        if str.eq(nm, "block-ellipsis") { text = unquote_ellipsis(s.extras[i].value) }
+        if str.eq(nm, "line-clamp") || str.eq(nm, "-webkit-line-clamp") {
+            let (tail, has_tail) = clamp_ellipsis_tail(s.extras[i].value)
+            if has_tail {
+                let u = unquote_ellipsis(tail)
+                if u.len > 0usize { text = u } else if str.eq(tail, "auto") { text = "" }
+            }
+        }
+        i += 1usize
+    }
+    ret text
+}
+
+// What follows the count of a `line-clamp: <n> <block-ellipsis>` value; false when the value is a bare count.
+fn clamp_ellipsis_tail(v: str) -> (str, bool) {
+    let t = str.trim(v)
+    var sp = 0usize
+    while sp < t.len && t[sp] != 32u8 && t[sp] != 9u8 { sp += 1usize }
+    if sp >= t.len { ret ("", false) }
+    let tail = str.trim(t[sp..t.len])
+    ret (tail, tail.len > 0usize)
+}
+
+fn clamp_ellipsis_word(v: str, kind0: u8) -> u8 {
+    let t = str.trim(v)
+    if t.len == 0usize { ret kind0 }
+    if str.eq(t, "no-ellipsis") || str.eq(t, "none") { ret 2u8 }
+    if t[0usize] == 34u8 || t[0usize] == 39u8 { ret 1u8 }
+    if str.eq(t, "auto") { ret 0u8 }
+    ret kind0
+}
+
+// A quoted CSS string without its quotes; "" for anything else.
+fn unquote_ellipsis(v: str) -> str {
+    let t = str.trim(v)
+    if t.len < 2usize { ret "" }
+    if (t[0usize] == 34u8 && t[t.len - 1usize] == 34u8) || (t[0usize] == 39u8 && t[t.len - 1usize] == 39u8) { ret t[1usize..t.len - 1usize] }
+    ret ""
 }
 
 // Vertical metrics and fragments of the line made of pieces[scan.lead..end). Returns the line height, or -1 for a line
@@ -3569,7 +3635,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
     let overflow = used_w > scan.avail + 0.5f64 && cs.text_overflow == .Ellipsis && cs.overflow_x != .Visible
     let own_index = u32(l.lines.len)
     let own_pushed = list.push[u32](&x.own, own_index)
-    let pushed = list.push[Line](&l.lines, Line { x: ax, y: x.y, w: used_w, h: line_h, baseline: x.y + baseline, frag_first: first_frag, frag_count: u32(l.frags.len) - first_frag, overflow_ellipsis: overflow })
+    let pushed = list.push[Line](&l.lines, Line { x: ax, y: x.y, w: used_w, h: line_h, baseline: x.y + baseline, frag_first: first_frag, frag_count: u32(l.frags.len) - first_frag, overflow_ellipsis: overflow, clamp: false, ell_box: NONE })
     ret line_h
 }
 
@@ -4458,7 +4524,7 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
     if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
     if clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail) {
         var ctr = Counter { n: clamp_n, mb: 0.0f64 }
-        let cut = clamp_children(l, b, &ctr)
+        let cut = clamp_children(l, b, b, &ctr)
         if cut >= 0.0f64 {
             y = cut - oy0
             if is_bfc_root(l, b) { y += ctr.mb }
@@ -4495,8 +4561,9 @@ fn clamp_hide(l: *Layout, b: u32) {
 }
 
 // Keeps the first `ctr.n` more lines under box `b`, in document order, and hides the rest. Returns where the kept content
-// ends, relative to the top of `b`'s border box, or -1 when everything fit.
-fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64 {
+// ends, relative to the top of `b`'s border box, or -1 when everything fit. `container` is the clamp container, whose
+// `block-ellipsis` names the ellipsis the kept line ends with.
+fn clamp_walk(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64 {
     let bb = bx(l, b)
     if bb.line_count > 0u32 {
         let cnt = usize(bb.line_count)
@@ -4506,14 +4573,17 @@ fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64 {
         }
         let keep = ctr.n
         let last = &l.lines.items[usize(bb.line_first) + keep - 1usize]
-        last.overflow_ellipsis = true
+        let ell_kind = clamp_ellipsis_kind(bstyle(l, container))
+        last.overflow_ellipsis = ell_kind != 2u8
+        last.clamp = ell_kind != 2u8
+        last.ell_box = container
         let end_y = bb.border[0usize] + bb.padding[0usize] + last.y + last.h
         bb.line_count = u32(keep)
         bb.h = end_y + bb.padding[2usize] + bb.border[2usize]
         ctr.n = 0usize
         ret end_y
     }
-    ret clamp_children(l, b, ctr)
+    ret clamp_children(l, b, container, ctr)
 }
 
 type ClampScan = struct { seen: usize, n: usize, tail: bool }
@@ -4538,7 +4608,7 @@ fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan) {
     }
 }
 
-fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
+fn clamp_children(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64 {
     var cut = -1.0f64
     var cut_margin = 0.0f64
     var kid = bx(l, b).first
@@ -4554,7 +4624,7 @@ fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64 {
         } else if is_bfc_root(l, kid) {
             // Its lines belong to a formatting context of its own and are not counted.
         } else {
-            let r = clamp_walk(l, kid, ctr)
+            let r = clamp_walk(l, kid, container, ctr)
             if r >= 0.0f64 {
                 cut = l.boxes.items[usize(kid)].y + l.boxes.items[usize(kid)].h
                 cut_margin = margin_value(margin_of(l.boxes.items[usize(kid)].margin[2usize]))

@@ -71,6 +71,9 @@ fn do_layout(v: *View, width: f32, height: f32) -> err {
     if zero_w > 0.0f64 { ctx.ch = zero_w / 16.0f64 }
     let probe_fm = m0.metrics(m0.ctx, &probe)
     if probe_fm.x_height > 0.0f64 { ctx.ex = probe_fm.x_height / 16.0f64 }
+    // `lh` is the used line height, so a document whose line height is `normal` needs the font's own line height.
+    let probe_line = probe_fm.ascent + probe_fm.descent + probe_fm.line_gap
+    if probe_line > 0.0f64 { ctx.lh = probe_line }
     let (styles, se) = mem.alloc[style.Style](v.arena, v.tree.used)
     if se != ok { ret se }
     v.styles = styles

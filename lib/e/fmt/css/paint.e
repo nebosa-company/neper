@@ -1028,13 +1028,21 @@ fn paint_inline_decor(p: *Painter, ob: u32, fr: layout.Frag, cx: f64, cy: f64) {
 // A text fragment of a line that ends with an ellipsis (text-overflow or a clamped line): the text is cut at a character where
 // the ellipsis still fits in the box's content width, the ellipsis follows it, later fragments are dropped.
 fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64, last_content: bool) {
-    // The ellipsis is set in the font of the block container, not of the text it replaces.
+    // The character, its font and its colour come from the content the line ends with; a clamp container only names a
+    // `block-ellipsis` string of its own.
     let ts = layout.st(p.l, bb.style)
+    let dot_owner = owner
     let env = p.env
     let content_w = bb.w - bb.border[1usize] - bb.border[3usize] - bb.padding[1usize] - bb.padding[3usize]
     var dots: str = "\xe2\x80\xa6"
-    let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
-    if has_custom { dots = custom_dots }
+    if ln.clamp {
+        let cs = layout.bstyle(p.l, ln.ell_box)
+        // A string replaces the "…"; the empty string is a block ellipsis that draws nothing.
+        if layout.clamp_ellipsis_kind(cs) == 1u8 { dots = layout.clamp_ellipsis_text(cs) }
+    } else {
+        let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
+        if has_custom { dots = custom_dots }
+    }
     // Its baseline is the line's, whatever the font of the text it replaces.
     let dots_y = cy + ln.baseline - font_metrics_of(p, ts).ascent
     let dl = env.text(env.ctx, ts, dots)
@@ -1058,12 +1066,40 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
     if !is_last { ret }
     if tail_end + ew <= content_w + 0.01f64 {
         paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
-        paint_text_run(p, owner, dots, cx + tail_end, dots_y, ew)
+        paint_text_run(p, dot_owner, dots, cx + tail_end, dots_y, ew)
         ret
+    }
+    // A block ellipsis can itself overflow the line: the line's `text-overflow` then applies to it too, so it is cut
+    // and ended with "…". A `text-overflow: <string>` that overflows is clipped after the text instead.
+    if ew > content_w - fr.x + 0.01f64 && ts.text_overflow == .Ellipsis && ln.clamp {
+        let mark: str = "\xe2\x80\xa6"
+        let mw = p.l.measure.width(p.l.measure.ctx, ts, mark)
+        var dc = dots.len
+        var fit = false
+        var dw = 0.0f64
+        while dc > 0usize {
+            dc -= 1usize
+            while dc > 0usize && (dots[dc] & 192u8) == 128u8 { dc -= 1usize }
+            let w = p.l.measure.width(p.l.measure.ctx, ts, dots[0usize..dc])
+            if w + mw <= content_w - fr.x + 0.01f64 {
+                let (joined, je) = str.concat(p.a, dots[0usize..dc], mark)
+                if je == ok {
+                    dots = joined
+                    ew = w + mw
+                    fit = true
+                }
+                break
+            }
+        }
+        if !fit && dots.len > 1usize {
+            dots = mark
+            ew = mw
+        }
     }
     // Cut at the longest prefix that leaves room.
     var cut = fr.text.len
     var width_left = content_w - ew - fr.x
+    if width_left < -0.01f64 { width_left = content_w - fr.x }
     while cut > 0usize {
         // Back up to a character boundary.
         cut -= 1usize
@@ -1074,7 +1110,14 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
             var shown = pre
             var shown_w = f64(pl.bounds.width)
             // The ellipsis goes after the last break opportunity that fits: a word cut in the middle is dropped whole.
-            if cut < fr.text.len && fr.text[cut] != 32u8 && cut > 0usize && fr.text[cut - 1usize] != 32u8 {
+            // A clamped line can only end where a soft wrap opportunity allows, and one that offers none at all
+            // (`white-space: pre`, `nowrap`) keeps nothing before the ellipsis.
+            var mode = 2u8
+            if ln.clamp { mode = clamp_break_mode(layout.st(p.l, p.l.boxes.items[usize(fr.box)].style)) }
+            if ln.clamp && mode == 0u8 {
+                shown = ""
+                shown_w = 0.0f64
+            } else if cut < fr.text.len && fr.text[cut] != 32u8 && cut > 0usize && fr.text[cut - 1usize] != 32u8 && !(ln.clamp && mode == 1u8) {
                 var sp = cut
                 while sp > 0usize && fr.text[sp - 1usize] != 32u8 { sp -= 1usize }
                 var e = sp
@@ -1085,14 +1128,25 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
                         shown = fr.text[0usize..e]
                         shown_w = f64(w2.bounds.width)
                     }
+                } else if ln.clamp {
+                    shown = ""
+                    shown_w = 0.0f64
                 }
             }
             paint_text_run(p, fr.box, shown, cx + fr.x, cy + fr.y, shown_w)
-            paint_text_run(p, owner, dots, cx + fr.x + shown_w, dots_y, ew)
+            paint_text_run(p, dot_owner, dots, cx + fr.x + shown_w, dots_y, ew)
             ret
         }
     }
-    paint_text_run(p, owner, dots, cx + fr.x, dots_y, ew)
+    paint_text_run(p, dot_owner, dots, cx + fr.x, dots_y, ew)
+}
+
+// How a clamped line may end: 0 nowhere (no soft wrap opportunity in an unbreakable run), 1 at any character
+// (`break-all`, `overflow-wrap: anywhere`), 2 at a space.
+fn clamp_break_mode(s: *const style.Style) -> u8 {
+    if s.word_break == .BreakAll || s.overflow_wrap == .Anywhere { ret 1u8 }
+    if s.white_space == .Pre || s.white_space == .Nowrap { ret 0u8 }
+    ret 2u8
 }
 
 // An atomic inline cannot be cut like text. When it is the final content on a
@@ -1101,8 +1155,14 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
 fn paint_atomic_ellipsis(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64) {
     let ts = layout.st(p.l, bb.style)
     var dots: str = "\xe2\x80\xa6"
-    let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
-    if has_custom { dots = custom_dots }
+    if ln.clamp {
+        let cs = layout.bstyle(p.l, ln.ell_box)
+        // A string replaces the "…"; the empty string is a block ellipsis that draws nothing.
+        if layout.clamp_ellipsis_kind(cs) == 1u8 { dots = layout.clamp_ellipsis_text(cs) }
+    } else {
+        let (custom_dots, has_custom) = geom.extra_of(ts, "x-text-overflow-string")
+        if has_custom { dots = custom_dots }
+    }
     let dl = p.env.text(p.env.ctx, ts, dots)
     var ew = 0.0f64
     if mem.address_of(dl) != 0usize { ew = p.l.measure.width(p.l.measure.ctx, ts, dots) }
