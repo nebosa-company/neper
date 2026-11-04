@@ -462,7 +462,7 @@ fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simpl
         idx += 2usize
     }
     if idx >= inner.len || inner[idx].kind != .Ident { ret (none, false) }
-    let name = lower(p, inner[idx].value)
+    let name = inner[idx].value
     idx += 1usize
     idx = skip_ws(inner, idx)
     if idx >= inner.len { ret (new_simple(.AttrPresent, name), true) }

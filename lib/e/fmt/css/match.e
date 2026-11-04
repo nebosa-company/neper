@@ -80,8 +80,32 @@ fn prev_sibling_element(m: *const Matcher, id: html.NodeId) -> html.NodeId {
 }
 
 fn attr(m: *const Matcher, id: html.NodeId, name: str) -> (str, bool) {
-    let (v, found) = html.attribute(&m.doc.nodes[usize(id)], name)
-    ret (v, found)
+    let n = &m.doc.nodes[usize(id)]
+    let (v, found) = html.attribute(n, name)
+    if found { ret (v, true) }
+    // Attribute names on an HTML element match ASCII case-insensitively; SVG and MathML ones do not (selectors-4 6.1).
+    if n.namespace == html.Namespace.Html {
+        var i = 0usize
+        while i < n.attributes.len {
+            if ascii_ci_eq(n.attributes[i].name, name) { ret (n.attributes[i].value, true) }
+            i += 1usize
+        }
+    }
+    ret ("", false)
+}
+
+fn ascii_ci_eq(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        var x = a[i]
+        var y = b[i]
+        if x >= 65u8 && x <= 90u8 { x = x + 32u8 }
+        if y >= 65u8 && y <= 90u8 { y = y + 32u8 }
+        if x != y { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn has_attr(m: *const Matcher, id: html.NodeId, name: str) -> bool {
