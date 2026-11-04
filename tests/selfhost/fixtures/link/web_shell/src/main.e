@@ -31,9 +31,21 @@ fn frame_registry_is_live(a: *mem.Arena) -> bool {
     ret script.run_script(it, check, "frame-registry-check.js")
 }
 
+fn dom_mixins(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+    let (parsed, pe) = dom.parse(a, "<!doctype html><html><body><div id=d></div></body></html>", options, 32usize)
+    if pe != ok { ret false }
+    var tree = parsed
+    let (it, ie) = script.new_context(a, &tree, "https://dom-mixins.test/")
+    if ie != ok { ret false }
+    let code = "{ const el = document.getElementById('d'); if (!('event' in window) || window.event !== undefined) throw new Error('window.event should start undefined'); let seen = null; el.addEventListener('click', () => { seen = window.event; }); const ev = new Event('click'); el.dispatchEvent(ev); if (seen !== ev) throw new Error('window.event should be the event during dispatch'); if (window.event !== undefined) throw new Error('window.event should be undefined again'); window.event = 7; el.dispatchEvent(new Event('click')); if (window.event !== 7) throw new Error('window.event should be replaceable'); if (!Element.prototype[Symbol.unscopables] || !Element.prototype[Symbol.unscopables].remove) throw new Error('Element.prototype unscopables'); if (!Document.prototype[Symbol.unscopables] || !Document.prototype[Symbol.unscopables].append) throw new Error('Document.prototype unscopables'); window.remove = 'global-remove'; el.setAttribute('onclick', 'window.__inlineRemove = typeof remove'); el.dispatchEvent(new Event('click')); if (window.__inlineRemove !== 'string') throw new Error('inline handler saw ' + window.__inlineRemove); el.removeAttribute('onclick'); delete window.remove; }"
+    ret script.run_script(it, code, "dom-mixins.js")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
     if !frame_registry_is_live(a) { os.exit(86i32) }
+    if !dom_mixins(a) { os.exit(87i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }
