@@ -196,3 +196,4 @@ line-clamp-auto-zero-room-001.html | line-clamp-auto-zero-room-001-ref.html | ma
 line-clamp-discard-abspos-001.html | line-clamp-discard-abspos-001-ref.html | match
 line-clamp-discard-float-001.html | line-clamp-discard-float-001-ref.html | match
 line-clamp-bfc-001.html | line-clamp-bfc-001-ref.html | match
+overflow-clip-margin-rounded-001.html | overflow-clip-margin-rounded-001-ref.html | match
