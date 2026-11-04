@@ -56,7 +56,7 @@ type Box = struct {
     overflow_w: f64, overflow_h: f64,
     aux: u32, aux2: u32,
     min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str,
-    coll: bool, cbd: [4]f64, cf_first: u32, cf_count: u32
+    coll: bool, cbd: [4]f64, cf_first: u32, cf_count: u32, clamped: bool
 }
 
 // One column's slice of a box that a multicol container breaks: offset from the box's border-box origin, and height.
@@ -4534,10 +4534,13 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
             }
         }
     }
-    var scan_c = ClampScan { seen: 0usize, n: clamp_n, tail: false }
+    var own_lines = usize(bb.line_count)
+    if own_lines > clamp_n { own_lines = clamp_n }
+    var scan_c = ClampScan { seen: own_lines, n: clamp_n, tail: false }
     if clamp_n > 0usize { clamp_scan(l, b, &scan_c) }
     if clamp_zero || (clamp_n > 0usize && (scan_c.seen > clamp_n || scan_c.tail)) {
-        var ctr = Counter { n: clamp_n, mb: 0.0f64 }
+        // The container's own lines are already kept: only the rest of the budget reaches the children.
+        var ctr = Counter { n: clamp_n - own_lines, mb: 0.0f64 }
         let cut = clamp_children(l, b, b, &ctr)
         if cut >= 0.0f64 {
             y = cut - oy0
@@ -4558,9 +4561,11 @@ fn layout_children(l: *Layout, b: u32, cw: f64, ch: f64, fc: *Flow, through_top:
 
 type Counter = struct { n: usize, mb: f64 }
 
-// Empties a box and everything in it: it takes no room and paints nothing.
+// Empties a box and everything in it: it takes no room and paints nothing. `clamped` keeps the positioned pass from
+// laying out an absolutely positioned descendant again.
 fn clamp_hide(l: *Layout, b: u32) {
     let bb = bx(l, b)
+    bb.clamped = true
     bb.h = 0.0f64
     bb.line_count = 0u32
     var zero_edges: [4]f64 = zero
@@ -9951,7 +9956,14 @@ fn positioned_pass(l: *Layout, b: u32) {
         let nxt = l.boxes.items[usize(kid)].next
         let ks = st(l, l.boxes.items[usize(kid)].style)
         if (ks.position == .Absolute || ks.position == .Fixed) && l.boxes.items[usize(kid)].inner != .Text {
-            layout_abs(l, kid)
+            // A box that a clamp discarded takes its out-of-flow descendants with it; one whose containing block
+            // survives stays, wherever in the discarded subtree it was written.
+            let cb = containing_block_of(l, kid, ks.position == .Fixed)
+            if cb != NONE && l.boxes.items[usize(cb)].clamped {
+                clamp_hide(l, kid)
+            } else {
+                layout_abs(l, kid)
+            }
         }
         positioned_pass(l, kid)
         kid = nxt

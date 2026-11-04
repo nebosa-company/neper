@@ -193,3 +193,4 @@ text-overflow-string-escape-001.html | text-overflow-string-escape-001-ref.html 
 overflow-clip-margin-hidden-001.html | overflow-clip-margin-hidden-001-ref.html | match
 line-clamp-auto-nested-margin-001.html | line-clamp-auto-nested-margin-001-ref.html | match
 line-clamp-auto-zero-room-001.html | line-clamp-auto-zero-room-001-ref.html | match
+line-clamp-discard-abspos-001.html | line-clamp-discard-abspos-001-ref.html | match
