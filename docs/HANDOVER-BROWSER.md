@@ -189,6 +189,8 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 | Encoding tests needing server headers | Charset set by `Content-Type`; the runner only has meta charset and the `encoding.py` shim. |
 | `processing-instruction-attributes` (30 subtests) | The prelude has the ProcessingInstruction attribute API, but the test wants `<?...?>` in HTML to become a PI node; the HTML parser makes it a bogus comment (current spec) and `html5lib` (1791/1791) pins that. It is a WICG proposal. |
 | Cross-realm DOM objects (`Range-deleteContents`/`-cloneContents`/`-extractContents`, `TreeWalker-*-cross-realm`, `create-element-realm-after-adoption`, `EventListener-handleEvent-cross-realm`: ~39 subtests) | A Node method called on a wrapper from another iframe realm brand-checks with the *caller's* slot map, and `N.realmOf` compares against the active interpreter rather than the function's realm, so the foreign wrapper is not recognised (`parameter 1 is not of type 'Node'`). Iframes do get their own interpreter (`N.frameCreate`), so the fix is a realm-aware slot lookup plus returning wrappers in the node document's realm — not per-test patches. |
+| `html/dom/partial-updates/tentative/*` (~14 subtests) | The declarative partial updates proposal (`stream-append`, `template for`, `fragment/buffer-*`) is not implemented at all; it is a WICG draft, not a browser feature. |
+| innerText `::first-line` / `::first-letter` (7 of `getter.html`) | The rendered-text steps need the computed style of a pseudo-element and the script runner has no stylesheet resolution (`getComputedStyle` answers only from the element's own style); this needs computed styles in the runner before it is worth doing. |
 
 ### Known deliberate trade-offs
 
