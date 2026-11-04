@@ -4,7 +4,7 @@
 |---|---|
 | category | library / UI |
 | score | 0.00 of 1 |
-| queue position | 136 of 212 (only position 1 is eligible for the next session; see README) |
+| queue position | 136 of 219 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done

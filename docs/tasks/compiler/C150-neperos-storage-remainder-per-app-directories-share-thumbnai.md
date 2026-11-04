@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / NeperOS |
 | score | 0.85 of 1 |
-| queue position | 33 of 212 (only position 1 is eligible for the next session; see README) |
+| queue position | 33 of 219 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done

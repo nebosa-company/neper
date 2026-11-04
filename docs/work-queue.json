@@ -2334,6 +2334,83 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Opened from the weakness review: peers' uncommitted decision rows and queue edits live in the same files, a peer commit swept hunks and a D-number, and landing needs foreign-commit checks before push. Acceptance: one command takes explicit paths and a message, refuses git add -A, takes only this session's hunks from docs/decisions.md and docs/work-queue.json, allocates the next D-number from a lock file so two sessions never share one, refuses to push when git log origin/master..HEAD holds commits not made by this session, and regenerates progress.html and the digests; a two-session fixture on a scratch repo shows no lost row and no duplicate number."
+    },
+    {
+      "id": "C258",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 258,
+      "title": "language: a local may shadow a module-scope function and a builtin type name (reopen D66's reserved set)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: E-NAME-0003 ended 35 of the 134 builds that failed on a compile code in 2026-09-20..27, more than any other code (D1678), and its largest slice is the rule that a local or parameter may not reuse a module-scope function (`text`, `row`, `cell`, `level`, `width`, `at`) or a builtin type name (`target`, `Vec`, `i8`). That makes the legality of `let width = 3` depend on declarations elsewhere in the module, which is exactly what a generated line may not depend on (spec section 1, goal 1); D1678's rename fix mitigates it but does not change the design. Proposal: reserve only `use` qualifiers and the `target` namespace. A local or parameter may shadow a module-scope fn, const, var or type name and the builtin type names, because spec section 2 already resolves types and values by position. Module scope keeps one definition per name, so `grep -n ^fn dot` still returns one line, and a call through a shadowed name is a local type error (E-NAME-0004), never an ambiguity. D1678's machine-applicable rename stays for qualifier collisions and duplicate locals. Token and cost: this deletes a repair class. No new syntax, no extra token on any line, a shorter trap section on the card, and it removes one failed build plus one repair turn per occurrence, which is the most expensive failure mode measured. Guard: the five implicit operations, the no-overloading rule and the explicit-cast rule are untouched, and the index, tokens and parse streams keep their shape. Not done: fixtures that shadow a module fn, a const, `i8`, `Vec` and `str` as a value name accept and format; a call through the shadowed name rejects E-NAME-0004; the card re-renders without those two traps; lang-stats repeat rate is re-measured on transcripts written after the change."
+    },
+    {
+      "id": "C259",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 259,
+      "title": "language: cross-module pointer facts come from the declaration, never from the callee's body",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: the lexical region subset in section 11 plus `callee_keeps` reads another module's body through any number of modules to decide whether a container retains a borrowed pointer. D1677 records the consequence as found and not fixed: a warm build writes an image the clean build refuses with E-SAFETY-0013, and the documented fix adds a body edge per foreign function, so every body edit invalidates its callers and both section 12 and section 15 pay for it. Proposal: a call that hands a region value or a view across a module boundary is legal only against a declared contract on the parameter (`@noescape`, `own`, or `@borrows` for the result direction), which is the fact the interface already serializes in artifact format 14. Nothing outside the function's own lexical scope is read; an unannotated callee gives no answer, so it cannot be inferred from. Token and cost: one attribute line per boundary function that hands region values, in exchange for a warm build that equals a clean one. A silently wrong image costs a rebuild, a bisect and a debugging turn, the most expensive repair class measured, and the checker loses the alias-chain cases that only the body walk accepted, so its own context shrinks. Guard: the single-function rules (move at most once, cleanup on every exit, a view of a mutated container) stay as they are. Not done: D1677's warm and clean builds agree by a fixture; the alias-chain fixtures the walk alone accepted are annotated or moved to @unsafe; both suites pass."
+    },
+    {
+      "id": "C260",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 260,
+      "title": "language: make the zero value total - every enum and union enum declares a member at 0",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: section 7 carries a carve-out. A type that holds, at any depth, an enum with no member at 0 has no zero value, so `= zero`, a module-scope `var` without an initialiser and `try` in a function returning it are compile errors naming the outermost type and the offending field. A generator must therefore read the whole type graph before it knows whether a line is legal, the same unseen-context dependency as C258. Proposal: an `enum` or `union enum` declaration must name a member whose backing value is 0, the mirror of the existing rule that renames an error whose FNV-1a hash is 0. Then every type has a zero value, and the carve-out, its three error sites and the exceptions in the zero table go. `err` = ok, a slice = nil and the null resource already fit. Token and cost: one member on an enum that starts at 1 (`None = 0`), against a rule and three diagnostics that leave every future context, and generated code writes `= zero` and `try` without first resolving the type. Guard: `= undef` and E-SAFETY-0017, the refusal of a value that can only be invalid, are unchanged. Not done: the section 7 table and rule rewrite, the declaration-time diagnostic naming the enum and the member it needs, accept fixtures for `= zero` and `try` over such an enum, a reject fixture for the declaration without a 0 member, and the card's zero section re-rendered."
+    },
+    {
+      "id": "C261",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 261,
+      "title": "language: protocols are found by an explicit marker, not by a derived snake_case name",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: `K.hash(v)` resolves to `fn sensor_hash` by deriving the name from the type's name through a Unicode snake_case algorithm (`HTTP2Client` becomes `http2_client`), plus a separate rule for a generic type's stem, a rule for which alias spelling keeps the nominal declaration, and a recorded lookup edge when a supplied fallback is used (section 9, D48). Every implementation must reproduce the algorithm byte for byte, and a reader cannot tell from `fn sensor_hash` that it is the protocol for `Sensor` without running the algorithm in their head. Proposal: `@proto(Sensor)` on the function, and the same fact in `neper index`. Lookup matches a marker rather than a spelling. The five resolution rules, the supplied fallbacks and the call-site syntax stay. Token and cost: one attribute line per protocol function, nothing at any call site, and the spec loses the case algorithm with two name-resolution rules that an agent otherwise has to load to predict a resolution. A typo becomes a missing marker refused with one code, instead of a silent fall back to the supplied hash. Not done: the attribute in the grammar and the checker, the index edge, diagnostics for a duplicated or mismatched marker, and conformance fixtures for a generic type's protocol and the str fallback."
+    },
+    {
+      "id": "C262",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 262,
+      "title": "docs: one normative home per fact (section 13 versus tooling.md, section 11 versus the H-track files)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: the same fact is written twice, so a tooling change is read and edited in two places. Section 13 Toolchain is 603 of the spec's 5149 lines and restates docs/tooling.md; section 11's region and concurrency rules restate docs/m25-h02-regions.md and docs/m25-h04-concurrency.md. Three smaller self-contradictions sit on top: `unreachable` is a keyword although section 14 calls it the one builtin that is a keyword rather than a core function; `usize` and `isize` are keywords although they are only type names; section 8 allows copying an `Arena` to transfer it while section 11 makes it affine. Proposal: each fact lives in exactly one document and every other mention links to it. The spec keeps semantics, tooling.md keeps the command and stream contracts, and the H-track files keep their measurements as evidence rather than as normative text. Token and cost: this is the largest context win in the list. An agent landing a tooling change pays for both copies today, and the card, the digest and the tasks page inherit the duplication. Guard: no semantic change; a moved fact gains a link where it was; the card stays generated, never hand-edited. Not done: the split, the three contradictions resolved, and a link check so a moved fact cannot be silently unlinked."
+    },
+    {
+      "id": "C263",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 263,
+      "title": "bootstrap: the card carries the language, not the C bootstrap's defects",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-04 language design review. Problem: docs/llm-neper-card.md tells an author that code under `src/` must also build with the C bootstrap, which refuses `-=` and `x > CONST {` and truncates a function past 256 locals silently. Those are bootstrap defects printed as language rules. A generator avoids legal syntax and still cannot know when the truncation bites, and a clean bootstrap build is not proof of anything. Proposal: the card carries the language and nothing else. The bootstrap either accepts the surface the grammar defines or it is gone, which is C088, the first queue row. Until then the card carries one sentence pointing at C088 instead of a list of shapes to avoid. Token and cost: the card is loaded on nearly every edit turn, so a `src/`-only exception list is tokens spent on a defect the self-host build would catch anyway, and a silently truncated function costs a debugging session. Not done: the card source edit and re-render, and either the three bootstrap fixes with a fixture per shape or C088's closure."
+    },
+    {
+      "id": "C264",
+      "category": "compiler",
+      "group": "Language design",
+      "order": 264,
+      "title": "language: labelled break and continue",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-04 language design review; this is the one addition the review recommends. Problem: v1 has no labels, so a generated loop that must leave two levels writes a flag local, an `if` guard at every level and a check after the inner loop. That is three lines and a mutable binding per nesting level, all of which a reviewer follows to see where control goes. Proposal: an optional label on `for` and `while` with `break outer` and `continue outer` resolved at parse time, no dynamic behaviour, no new keyword. Token and cost: measured rather than assumed. Add the shapes to benchmarks/tokens/profile.py and to the card's token table before the grammar revision; the labelled form must be no worse than the flag form per nesting level, which it should beat by roughly ten tokens at depth two, and the tokens and parse streams gain a label field. Guard: `break` and `continue` without a label mean what they mean today, and a label that names no enclosing loop is a compile error. Not done: the grammar revision, the parser, the checker, the formatter and the card re-render; two fixture programs at depth two and three, checked against the flag spelling; the token profile updated."
     }
   ]
 }

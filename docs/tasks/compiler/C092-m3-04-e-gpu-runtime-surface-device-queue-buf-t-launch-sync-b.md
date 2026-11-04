@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Back end |
 | score | 0.95 of 1 |
-| queue position | 14 of 212 (only position 1 is eligible for the next session; see README) |
+| queue position | 14 of 219 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -43,7 +43,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `FaultRecord`: `lib/e/gpu.e`×6‡
 - `Fault`: `scripts/soap_reference.py`×27, `lib/e/fmt/soap.e`×24, `lib/e/test/support.e`×18, `lib/e/gpu.e`×16‡, `lib/e/os.windows.e`×7‡, `lib/e/os.linux.e`×5‡, `lib/e/os.macos.e`×4‡, `src/main.e`×4‡
 - `last_fault`: `lib/e/gpu.e`×3‡
-- `Image`: `scripts/khronos/glcorearb.h`×102‡, `lib/x/khronos/gl.e`×45‡, `lib/e/os/shell.macos.e`×28‡, `scripts/image_vectors.py`×25, `lib/e/ui/control.e`×24‡, `lib/e/gfx/image.e`×21, `lib/e/gfx/scene.e`×21‡, `lib/e/web/page.e`×21†
+- `Image`: `scripts/khronos/glcorearb.h`×102‡, `lib/x/khronos/gl.e`×45‡, `lib/e/os/shell.macos.e`×28‡, `lib/e/gfx/scene.e`×25‡, `scripts/image_vectors.py`×25, `lib/e/ui/control.e`×24‡, `lib/e/gfx/image.e`×21, `lib/e/web/page.e`×21†
 - `open_target`: `lib/e/ui/window.e`×3, `benchmarks/gfx_gpu_raster.e`×2, `scripts/gen_svg_text_test.py`×2, `benchmarks/charts/chart_bench.e`×1, `benchmarks/window_present.e`×1, `lib/e/gfx/svg_filter.e`×1, `lib/e/gpu.e`×1‡, `lib/e/ui/testing.e`×1
 
 ## Existing fixtures
