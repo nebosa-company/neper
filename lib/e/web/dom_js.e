@@ -3049,6 +3049,7 @@ fn part11(b: *str.Builder) -> err {
     try str.push(b, "    case COMMENT_NODE: return Comment.prototype;\n")
     try str.push(b, "    case PROCESSING_INSTRUCTION_NODE: return ProcessingInstruction.prototype;\n")
     try str.push(b, "    case DOCUMENT_TYPE_NODE: return DocumentType.prototype;\n")
+    try str.push(b, "    case DOCUMENT_NODE: return Document.prototype;\n")
     try str.push(b, "    default: return s.isShadowRoot ? ShadowRoot.prototype : DocumentFragment.prototype;\n")
     try str.push(b, "  }\n")
     try str.push(b, "}\n")
