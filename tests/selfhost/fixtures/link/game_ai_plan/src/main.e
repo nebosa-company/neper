@@ -388,6 +388,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if calls[0usize] != 6usize || calls[1usize] != 7usize || calls[2usize] != 3usize || calls[3usize] != 2usize || calls[4usize] != 3usize { os.exit(32i32) }
     if bt_state[1usize] != 1u16 || bt_state[10usize] != 0u16 || bt_state[0usize] != 0u16 { os.exit(33i32) }
     if ai.behavior_tick[BtCtx](tree[..], bt_state[..], 99u16, &bc, bt_leaf) != .Failure { os.exit(34i32) }
+    // #14: a childless decorator fails instead of ticking its default child (the root)
+    // and recursing without bound; a forever Repeat never counts (state[10] stayed 0).
+    var bare: [1]ai.BtNode = zero
+    bare[0usize] = ai.BtNode { kind: .Inverter, first_child: 0u16, child_count: 0u16, id: 0u16, limit: 0u16 }
+    var bare_state: [1]u16 = zero
+    if ai.behavior_tick[BtCtx](bare[..], bare_state[..], 0u16, &bc, bt_leaf) != .Failure { os.exit(48i32) }
 
     // --- GOAP: the wood chopper ------------------------------------------------------------------
     // bits: axe 1, wood 2, money 4, fire 8; actions: get_axe, chop, branches, sell, light.
@@ -446,6 +452,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if flocked.x != -90492i32 || flocked.y != -153318i32 { os.exit(45i32) }
     let alone = ai.boids(flock[..], 3usize, 327680i32, 65536i32, 32768i32, 16384i32)
     if alone.x != 0i32 || alone.y != 0i32 { os.exit(46i32) }
+    // #14: 40 co-located agents at x = 1000 world units sum past i32 in Q16; the 64-bit
+    // sum keeps the cohesion target at their position, so every steer is zero.
+    var crowd: [40]ai.Agent = zero
+    var member = 0usize
+    while member < 40usize {
+        crowd[member] = ai.Agent { x: 65536000i32, y: 0i32, vx: 0i32, vy: 0i32, max_speed: 131072i32 }
+        member += 1usize
+    }
+    let crowded = ai.boids(crowd[..], 0usize, 655360i32, 65536i32, 32768i32, 16384i32)
+    if crowded.x != 0i32 || crowded.y != 0i32 { os.exit(47i32) }
 
     try io.print("game ai plan ok\n")
     ret ok

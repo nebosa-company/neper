@@ -168,5 +168,20 @@ fn main() -> i64 {
         round += 1usize
     }
 
+    // #14: a malformed choice validates its target before applying flags or values, so a
+    // refused choice leaves the state untouched for a retry.
+    var bad_nodes: [1]dialog.Node = zero
+    var bad_choices: [1]dialog.Choice = zero
+    bad_choices[0usize] = dialog.Choice { text: "bad", target: 5u16, show_if: dialog.always(),
+        set_flag: GREETED, add_key: GOLD, delta: 5i32 }
+    bad_nodes[0usize] = dialog.Node { text: "bad", speaker: 0u16, first_choice: 0u16, choice_count: 1u16, then: dialog.END }
+    let bad_tree = dialog.Tree { nodes: bad_nodes[..], choices: bad_choices[..] }
+    var bad_story: dialog.State = zero
+    var bad_flags: [1]u64 = zero
+    var bad_vars: [1]i32 = zero
+    if dialog.start(&bad_story, bad_tree, bad_flags[..], bad_vars[..]) != ok { ret 65i64 }
+    if dialog.choose(&bad_story, bad_tree, 0u16) != dialog.Bounds { ret 65i64 }
+    if dialog.flag(bad_story, GREETED) || dialog.value(bad_story, GOLD) != 0i32 || bad_story.at != 0u16 { ret 66i64 }
+
     ret 0i64
 }

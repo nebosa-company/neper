@@ -243,5 +243,41 @@ fn main() -> i64 {
     if input.apply(&pad, JUMP, true) != ok { ret 73i64 }
     if !input.pressed(pad, attack) { ret 74i64 }
 
+    // #14: a valid recent run is found even when an older press of its first code is
+    // still in the ring (the combo resolves the last step first, then walks back).
+    var combo_buf: [4]u16 = zero
+    var combo_ages: [4]u16 = zero
+    combo_buf[0usize] = 10u16
+    combo_ages[0usize] = 100u16
+    combo_buf[1usize] = 10u16
+    combo_ages[1usize] = 5u16
+    combo_buf[2usize] = 11u16
+    combo_ages[2usize] = 3u16
+    combo_buf[3usize] = input.NONE
+    let combo_state = input.State { held: held_bits[..], pressed: pressed_bits[..], released: released_bits[..], buffer: combo_buf[..], ages: combo_ages[..], head: 3usize }
+    let combo_steps: [2]u16 = [2]u16{ 10u16, 11u16 }
+    let want_combo = input.Combo { id: 0u16, first: 0u16, count: 2u16, window: 4u16 }
+    if !input.combo(combo_state, want_combo, combo_steps[0..]) { ret 75i64 }
+
+    // #14: a code past the bitset is refused, not treated as an always-fresh press.
+    if input.apply(&pad, 64u16, true) != input.Unknown { ret 76i64 }
+
+    // #14: a heap that cannot take the frontier answers Size instead of dropping nodes.
+    var tiny_heap: [1]u32 = zero
+    var tiny_heap_f: [1]u32 = zero
+    var tiny_scratch: ai.Scratch = zero
+    tiny_scratch.heap = tiny_heap[..]
+    tiny_scratch.heap_f = tiny_heap_f[..]
+    tiny_scratch.heap_count = 1usize
+    if ai.try_push(&tiny_scratch, 1u32, 0u32) != ai.Size { ret 77i64 }
+    // And a scratch whose heap is smaller than the map is refused before any write.
+    var short_heap: [8]u32 = zero
+    var short_heap_f: [8]u32 = zero
+    var short_scratch = scratch
+    short_scratch.heap = short_heap[..]
+    short_scratch.heap_f = short_heap_f[..]
+    let (short_path_len, short_path_error) = ai.path_grid(map, 1i32, 1i32, 3i32, 1i32, &short_scratch, route[..])
+    if short_path_error != ai.Size || short_path_len != 0usize { ret 78i64 }
+
     ret 0i64
 }
