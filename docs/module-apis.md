@@ -23927,9 +23927,11 @@ fn element_text(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> (str, 
 fn is_blank(text: str) -> bool
 
 type Named = struct { kind: u8, name: str, node: xml.NodeId, index: u32 }
-type Compiler = struct { a: *mem.Arena, d: *const xml.Document, s: Schema, tns: str, wildcard_rule: str, element_qualified: bool, attribute_qualified: bool, named: []Named, named_count: usize, depth: u32 }
+type Compiler = struct { a: *mem.Arena, d: *const xml.Document, s: Schema, tns: str, wildcard_rule: str, element_qualified: bool, attribute_qualified: bool, named: []Named, named_count: usize, depth: u32, state: []u8 }
 
 fn new_type(c: *Compiler) -> (u32, err)
+fn ensure_type(c: *Compiler, index: u32) -> err
+fn unsupported_pattern(p: str) -> bool
 fn empty_facets() -> Facets
 fn simple_def(name: str, ns: str) -> TypeDef
 fn builtin_names() -> [39]str
@@ -24201,7 +24203,7 @@ fn char_count(text: str) -> usize
 fn char_offset(text: str, k: usize) -> usize
 fn number_text(a: *mem.Arena, x: f64) -> (str, err)
 fn strip_integer_fraction(text: str) -> str
-fn text_number(text: str) -> f64
+fn text_number(a: *mem.Arena, text: str) -> f64
 fn to_string(a: *mem.Arena, d: *const xml.Document, v: Value) -> (str, err)
 fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value) -> (f64, err)
 fn to_boolean(v: Value) -> bool
@@ -24292,6 +24294,10 @@ fn attr_value(d: *const xml.Document, id: xml.NodeId, name: str) -> (str, bool)
 fn first_child(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
 fn next_sibling(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
 fn is_blank_text(text: str) -> bool
+fn is_name_start(c: u8) -> bool
+fn is_name_char(c: u8) -> bool
+fn is_ncname(s: str) -> bool
+fn is_qname(s: str) -> bool
 fn scope_bindings(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> ([]xp.Binding, err)
 
 type Compiler = struct { a: *mem.Arena, d: *const xml.Document, s: Stylesheet, excluded: []str, order: u32 }
@@ -24341,6 +24347,8 @@ type Sink = struct { buffer: []u8, used: usize, a: *mem.Arena }
 
 fn put(sink: *Sink, text: str) -> err
 fn put_escaped(sink: *Sink, text: str, attribute: bool) -> err
+fn put_comment_text(sink: *Sink, text: str) -> err
+fn put_pi_text(sink: *Sink, text: str) -> err
 fn prefix_of(name: str) -> str
 fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope) -> err
 fn serialize(a: *mem.Arena, t: *const Tree, is_text: bool, omit_declaration: bool) -> (str, err)
