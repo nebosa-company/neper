@@ -173,7 +173,25 @@ fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err) {
 // left to cancel: above a root there is nothing, so it is dropped, and on a relative
 // path it has to be kept because the caller's own directory decides what it means.
 fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
-    let root = root_length(path, style)
+    var root = root_length(path, style)
+    // A UNC path's root is its server and share, not just the leading pair: keeping them
+    // out of the walk is what stops `..` from leaving the share.
+    var unc_share = false
+    if style == .Windows && root == 2usize && is_separator(path[0usize], style) && is_separator(path[1usize], style) {
+        var scan = 2usize
+        while scan < path.len && !is_separator(path[scan], style) { scan += 1usize }
+        if scan > 2usize && scan < path.len {
+            let server = path[2usize..scan]
+            scan += 1usize
+            let share_start = scan
+            while scan < path.len && !is_separator(path[scan], style) { scan += 1usize }
+            let share = path[share_start..scan]
+            if share.len != 0usize && !same_text(server, ".") && !same_text(server, "..") && !same_text(share, ".") && !same_text(share, "..") {
+                root = scan
+                unc_share = true
+            }
+        }
+    }
     let absolute = is_absolute(path, style)
     let (buffer, allocation_error) = mem.alloc[u8](a, path.len + 1usize)
     if allocation_error != ok { ret ("", allocation_error) }
@@ -207,7 +225,7 @@ fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
                     continue
                 }
             }
-            if written > body_start {
+            if written > body_start || unc_share {
                 buffer[written] = separator(style)
                 written += 1usize
             }

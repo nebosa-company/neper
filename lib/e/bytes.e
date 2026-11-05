@@ -303,15 +303,20 @@ fn alphabet_index(table: str, byte: u8) -> (u32, bool) {
     ret (0u32, false)
 }
 
-// Padded or not, the same decoder: padding is stripped first, and then a length that no
-// encoding produces -- one character over a whole group -- is refused.
+// Padded or not, the same decoder: padding is only at the end and must be exactly the
+// count the unpadded length needs, and the bits a partial group does not use are zero.
 fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err) {
     let table = base64_alphabet(alphabet)
     var end = src.len
     while end > 0usize && src[end - 1usize] == PAD { end -= 1usize }
-    if end % 4usize == 1usize { ret (zero, Invalid) }
-    let whole = end / 4usize
+    let pad = src.len - end
+    if pad > 2usize { ret (zero, Invalid) }
     let rest = end % 4usize
+    // A length one over a whole group is no encoding; padding is exactly four less the
+    // unpadded remainder.
+    if rest == 1usize { ret (zero, Invalid) }
+    if pad != 0usize && pad != 4usize - rest { ret (zero, Invalid) }
+    let whole = end / 4usize
     var needed = whole * 3usize
     if rest != 0usize { needed += rest - 1usize }
     if needed > dst.len { ret (zero, TooLarge) }
@@ -319,6 +324,7 @@ fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err) {
     var out = 0usize
     while at < end {
         var group = 0u32
+        var last = 0u32
         var count = 0usize
         while count < 4usize {
             group = group << 6u32
@@ -326,10 +332,15 @@ fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err) {
                 let (value, valid) = alphabet_index(table, src[at + count])
                 if !valid { ret (zero, Invalid) }
                 group = group | value
+                last = value
             }
             count += 1usize
         }
         let have = end - at
+        // Two symbols carry one byte, so the last symbol's low four bits are unused;
+        // three carry two bytes and its low two bits are.
+        if have == 2usize && (last & 15u32) != 0u32 { ret (zero, Invalid) }
+        if have == 3usize && (last & 3u32) != 0u32 { ret (zero, Invalid) }
         if have >= 2usize {
             dst[out] = u8(group >> 16u32)
             out += 1usize
@@ -412,9 +423,12 @@ fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err) {
     let table = base32_alphabet(alphabet)
     var end = src.len
     while end > 0usize && src[end - 1usize] == PAD { end -= 1usize }
+    let pad = src.len - end
     let rest = end % 8usize
-    // The lengths an encoding produces for a partial group are 2, 4, 5 and 7.
+    // The lengths an encoding produces for a partial group are 2, 4, 5 and 7, and a
+    // padded string carries exactly the padding those lengths need.
     if rest == 1usize || rest == 3usize || rest == 6usize { ret (zero, Invalid) }
+    if pad != 0usize && (rest == 0usize || pad != 8usize - rest) { ret (zero, Invalid) }
     let whole = end / 8usize
     var needed = whole * 5usize
     if rest != 0usize { needed += rest * 5usize / 8usize }
@@ -423,6 +437,7 @@ fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err) {
     var out = 0usize
     while at < end {
         var group = 0u64
+        var last = 0u32
         var count = 0usize
         while count < 8usize {
             group = group << 5u32
@@ -430,11 +445,17 @@ fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err) {
                 let (value, valid) = alphabet_index(table, src[at + count])
                 if !valid { ret (zero, Invalid) }
                 group = group | u64(value)
+                last = value
             }
             count += 1usize
         }
         var have = end - at
         if have > 8usize { have = 8usize }
+        // The low bits the last symbol carries but no output byte uses must be zero.
+        if have == 2usize && (last & 3u32) != 0u32 { ret (zero, Invalid) }
+        if have == 4usize && (last & 15u32) != 0u32 { ret (zero, Invalid) }
+        if have == 5usize && (last & 1u32) != 0u32 { ret (zero, Invalid) }
+        if have == 7usize && (last & 7u32) != 0u32 { ret (zero, Invalid) }
         let bytes = have * 5usize / 8usize
         var index = 0usize
         while index < bytes {

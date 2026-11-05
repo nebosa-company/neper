@@ -133,6 +133,21 @@ fn main(a: *mem.Arena) -> err {
     if too_small != bytes.TooLarge { os.exit(85i32) }
     let (_, no_room) = bytes.base64_encode(tiny[..], "foobar", .Standard, true)
     if no_room != bytes.TooLarge { os.exit(86i32) }
+    // Padding is exactly what the unpadded length needs, whatever the alphabet, and the
+    // low bits a partial group does not use have to be zero (#365).
+    let (_, b64_over_padded) = bytes.base64_decode(back[..], "TQ===", .Standard)
+    if b64_over_padded != bytes.Invalid { os.exit(150i32) }
+    let (_, b64_wrong_pad) = bytes.base64_decode(back[..], "TQ=", .Standard)
+    if b64_wrong_pad != bytes.Invalid { os.exit(151i32) }
+    let (_, b64_pad_bits) = bytes.base64_decode(back[..], "TR==", .Standard)
+    if b64_pad_bits != bytes.Invalid { os.exit(152i32) }
+    let (_, b64_url_over_padded) = bytes.base64_decode(back[..], "TQ===", .Url)
+    if b64_url_over_padded != bytes.Invalid { os.exit(153i32) }
+    let (_, b64_url_pad_bits) = bytes.base64_decode(back[..], "TR==", .Url)
+    if b64_url_pad_bits != bytes.Invalid { os.exit(154i32) }
+    // An unpadded canonical group is still accepted.
+    let (b64_bare_one, b64_bare_one_error) = bytes.base64_decode(back[..], "TQ", .Standard)
+    if b64_bare_one_error != ok || b64_bare_one.len != 1usize || b64_bare_one[0usize] != 77u8 { os.exit(155i32) }
     // Failed streaming updates must leave their held group untouched so a retry
     // with the same source neither duplicates nor loses bytes.
     var chunk_encoder = bytes.base64_encoder(.Standard, true)
@@ -179,6 +194,19 @@ fn main(a: *mem.Arena) -> err {
     if bad32_len != bytes.Invalid { os.exit(99i32) }
     let (_, bad32_char) = bytes.base32_decode(back[..], "MZXW1===", .Standard)
     if bad32_char != bytes.Invalid { os.exit(100i32) }
+    // The same padding-count and pad-bit rules, in the Standard and Hex alphabets.
+    let (_, b32_short_pad) = bytes.base32_decode(back[..], "MZXW6==", .Standard)
+    if b32_short_pad != bytes.Invalid { os.exit(156i32) }
+    let (_, b32_over_padded) = bytes.base32_decode(back[..], "MZXQ===", .Standard)
+    if b32_over_padded != bytes.Invalid { os.exit(157i32) }
+    let (_, b32_pad_bits) = bytes.base32_decode(back[..], "MZXR====", .Standard)
+    if b32_pad_bits != bytes.Invalid { os.exit(158i32) }
+    let (_, b32_rest5_bits) = bytes.base32_decode(back[..], "MZXW7===", .Standard)
+    if b32_rest5_bits != bytes.Invalid { os.exit(159i32) }
+    let (_, b32_hex_pad) = bytes.base32_decode(back[..], "CPNMUOJ1E8=====", .Hex)
+    if b32_hex_pad != bytes.Invalid { os.exit(160i32) }
+    let (_, b32_hex_bits) = bytes.base32_decode(back[..], "CPNMUOJ1E9======", .Hex)
+    if b32_hex_bits != bytes.Invalid { os.exit(161i32) }
 
     // --- Base85. ASCII85 on Wikipedia's vector, partial groups, the `z` shorthand on the way
     // in; Z85 on its specification's vector and its refusal of a partial group.

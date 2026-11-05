@@ -172,6 +172,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (data, data_error) = dirs.dir(a, .Linux, dirs.Env { home: "/home/u", user_profile: "", app_data: "", local_app_data: "", all_users_profile: "", xdg_data_home: "", xdg_config_home: "", xdg_cache_home: "", xdg_state_home: "", xdg_runtime_dir: "", xdg_data_dirs: "", xdg_config_dirs: "", xdg_documents_dir: "", xdg_download_dir: "", xdg_desktop_dir: "", xdg_pictures_dir: "", xdg_videos_dir: "", xdg_music_dir: "" }, .Data, dirs.app_named("tool"))
     if data_error != ok || !str.eq(data, "/home/u/.local/share/tool") { os.exit(91i32) }
     if dirs.platform_of(.Windows) != .Windows || dirs.platform_of(.Posix) != .Linux { os.exit(92i32) }
+    // A UNC path's root is the server and share, so `..` at or below the share
+    // root cannot walk out of the share (#366).
+    let (unc_file, unc_file_error) = path.normalize(a, "\\\\server\\share\\..\\file", .Windows)
+    if unc_file_error != ok || !str.eq(unc_file, "\\\\server\\share\\file") { os.exit(93i32) }
+    let (unc_below, unc_below_error) = path.normalize(a, "\\\\server\\share\\a\\b\\..\\c", .Windows)
+    if unc_below_error != ok || !str.eq(unc_below, "\\\\server\\share\\a\\c") { os.exit(94i32) }
+    let (unc_repeat, unc_repeat_error) = path.normalize(a, "\\\\server\\share\\a\\..\\..\\..\\b", .Windows)
+    if unc_repeat_error != ok || !str.eq(unc_repeat, "\\\\server\\share\\b") { os.exit(95i32) }
+    let (unc_root, unc_root_error) = path.normalize(a, "\\\\server\\share\\..", .Windows)
+    if unc_root_error != ok || !str.eq(unc_root, "\\\\server\\share") { os.exit(96i32) }
+    // The share root itself, with and without its trailing separator, is preserved.
+    let (unc_bare, unc_bare_error) = path.normalize(a, "\\\\server\\share", .Windows)
+    if unc_bare_error != ok || !str.eq(unc_bare, "\\\\server\\share") { os.exit(97i32) }
+    let (unc_slash, unc_slash_error) = path.normalize(a, "\\\\server\\share\\", .Windows)
+    if unc_slash_error != ok || !str.eq(unc_slash, "\\\\server\\share") { os.exit(98i32) }
+    // A shareless spelling is an edge, not a share: its current answer stands.
+    let (unc_server, unc_server_error) = path.normalize(a, "\\\\server\\..\\share", .Windows)
+    if unc_server_error != ok || !str.eq(unc_server, "\\\\share") { os.exit(99i32) }
     try io.print("path dirs ok")
     ret ok
 }
