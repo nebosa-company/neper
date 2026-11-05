@@ -42,10 +42,23 @@ fn dom_mixins(a: *mem.Arena) -> bool {
     ret script.run_script(it, code, "dom-mixins.js")
 }
 
+fn event_aliases(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+    let (parsed, pe) = dom.parse(a, "<!doctype html><html><body></body></html>", options, 32usize)
+    if pe != ok { ret false }
+    var tree = parsed
+    let (it, ie) = script.new_context(a, &tree, "https://event-aliases.test/")
+    if ie != ok { ret false }
+    // The interfaces `document.createEvent` aliases must exist as globals and be the type their name says.
+    let code = "{ const names = ['DragEvent','TouchEvent','TextEvent','DeviceMotionEvent','DeviceOrientationEvent']; for (const n of names) { if (typeof window[n] !== 'function') throw new Error(n + ' is missing'); if (!(document.createEvent(n) instanceof window[n])) throw new Error(n + ' createEvent'); if (!(document.createEvent(n.toLowerCase()) instanceof window[n])) throw new Error(n + ' lowercase createEvent'); } if (!(document.createEvent('DragEvent') instanceof MouseEvent)) throw new Error('DragEvent is not a MouseEvent'); if (!(document.createEvent('TouchEvent') instanceof MouseEvent)) throw new Error('TouchEvent is not a MouseEvent'); if (!(document.createEvent('TextEvent') instanceof Event)) throw new Error('TextEvent is not an Event'); }"
+    ret script.run_script(it, code, "event-aliases.js")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
     if !frame_registry_is_live(a) { os.exit(86i32) }
     if !dom_mixins(a) { os.exit(87i32) }
+    if !event_aliases(a) { os.exit(88i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }
