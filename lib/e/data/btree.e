@@ -15,7 +15,9 @@ const NONE: u32 = 4294967295u32
 fn btree(keys: []u64, values: []u32, count: []u32, leaf: []bool, next: []u32, order: usize) -> (Btree, err) {
     if order < 3usize { ret (zero, Invalid) }
     let nodes = count.len
-    if nodes < 2usize || keys.len < nodes * order || values.len < nodes * order || leaf.len < nodes || next.len < nodes { ret (zero, TooSmall) }
+    // Divide rather than form `nodes * order`, whose overflow would let a huge
+    // order pass this check (or trap) instead of being refused.
+    if nodes < 2usize || keys.len / order < nodes || values.len / order < nodes || leaf.len < nodes || next.len < nodes { ret (zero, TooSmall) }
     count[1usize] = 0u32
     leaf[1usize] = true
     next[1usize] = NONE

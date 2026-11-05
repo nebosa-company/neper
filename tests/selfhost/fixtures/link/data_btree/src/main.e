@@ -126,6 +126,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (retry_value, has_retry) = btree.get(&tiny, 3u64)
     if !has_retry || retry_value != 13u32 { os.exit(3i32) }
 
+    // 4: an order whose `nodes * order` pool requirement overflows is refused,
+    // not satisfied by the empty key/value buffers it would wrap to.
+    let (_, wrapped_pool) = btree.btree(keys[..0usize], values[..0usize], count[..2usize], leaf[..2usize], next[..2usize], 9223372036854775808usize)
+    if wrapped_pool != btree.TooSmall { os.exit(4i32) }
+
     try io.print("data btree ok\n")
     ret ok
 }
