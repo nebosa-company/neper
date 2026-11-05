@@ -213,10 +213,16 @@ fn server_receive(s: *Server, input: []const u8, dst: []u8, events: []Event, hdr
             let inc = i64(h2.be32(f.payload, 0usize) & 2147483647u32)
             if inc == 0i64 { ret (at, out, count, grpc.Protocol) }
             if f.stream == 0u32 {
+                // HTTP/2 requires FLOW_CONTROL_ERROR when an increment would
+                // push a window past 2^31-1; `grpc.Protocol` carries that here.
+                if s.send_window + inc > 2147483647i64 { ret (at, out, count, grpc.Protocol) }
                 s.send_window += inc
             } else {
                 let j = find_call(s, f.stream)
-                if j < s.calls.len { s.calls[j].send_window += inc }
+                if j < s.calls.len {
+                    if s.calls[j].send_window + inc > 2147483647i64 { ret (at, out, count, grpc.Protocol) }
+                    s.calls[j].send_window += inc
+                }
             }
         } else if f.kind == h2.RST_STREAM {
             if f.payload.len != 4usize { ret (at, out, count, grpc.Protocol) }
@@ -360,6 +366,8 @@ fn response_headers(s: *Server, dst: []u8, id: u32, metadata: []const h2.Header)
     if j == s.calls.len { ret (0usize, grpc.NoStream) }
     if s.calls[j].local_headers || s.calls[j].local_closed { ret (0usize, grpc.Protocol) }
     var headers: [24]h2.Header = zero
+    // Two fixed headers are always written; the caller's list must fit whole.
+    if 2usize + metadata.len > headers.len { ret (0usize, grpc.TooSmall) }
     var n = 0usize
     headers[n] = h2.Header { name: ":status", value: "200", staged: 0u8 }
     n += 1usize
@@ -467,6 +475,12 @@ fn response_finish(s: *Server, dst: []u8, id: u32, status: u32, message: str, me
     if j == s.calls.len { ret (0usize, grpc.NoStream) }
     if s.calls[j].local_closed { ret (0usize, grpc.Protocol) }
     var headers: [28]h2.Header = zero
+    // The status, the optional message and every caller header must fit: no
+    // silent truncation of the metadata the application supplied.
+    var needed = 1usize
+    if !s.calls[j].local_headers { needed += 2usize }
+    if message.len > 0usize { needed += 1usize }
+    if needed + metadata.len > headers.len { ret (0usize, grpc.TooSmall) }
     var n = 0usize
     if !s.calls[j].local_headers {
         headers[n] = h2.Header { name: ":status", value: "200", staged: 0u8 }

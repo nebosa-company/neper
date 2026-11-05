@@ -693,7 +693,60 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// Direct checks for #872/#873 (metadata overflow and WINDOW_UPDATE overflow).
+fn direct_checks(a: *mem.Arena) -> err {
+    var z_calls: [1]gs.Call = zero
+    var z_call_buf: [1]u8 = zero
+    var z_enc: h2.Table = zero
+    var z_dec: h2.Table = zero
+    var z_block: [65536]u8 = zero
+    var z_server = gs.server_new(z_calls[..], z_enc, z_dec, z_block[..], 65535u32, 16384u32)
+    z_server.got_preface = true
+    z_server.got_settings = true
+    z_calls[0usize] = gs.Call { id: 1u32, used: true, remote_closed: false, half_close_sent: false, local_headers: false, local_closed: false, send_window: 65535i64, recv_window: 65535i64, buf: z_call_buf[..], buf_len: 0usize, consumed: 0usize }
+    var z_out: [8192]u8 = zero
+    // 24 caller headers plus the two fixed ones cannot fit the 24-slot array.
+    var z_meta: [24]h2.Header = zero
+    var z_i = 0usize
+    while z_i < 24usize {
+        z_meta[z_i] = h2.Header { name: "x-probe", value: "v", staged: 0u8 }
+        z_i += 1usize
+    }
+    let (z_hn, z_he) = gs.response_headers(&z_server, z_out[..], 1u32, z_meta[..])
+    if z_he != grpc.TooSmall { os.exit(30i32) }
+    // 28 trailer headers plus grpc-status do not fit the 28-slot array.
+    var z_meta28: [28]h2.Header = zero
+    z_i = 0usize
+    while z_i < 28usize {
+        z_meta28[z_i] = h2.Header { name: "x-probe", value: "v", staged: 0u8 }
+        z_i += 1usize
+    }
+    let (z_tn, z_te) = gs.response_finish(&z_server, z_out[..], 1u32, 0u32, "", z_meta28[..])
+    if z_te != grpc.TooSmall { os.exit(31i32) }
+    // A connection WINDOW_UPDATE that would pass 2^31-1 is a protocol error.
+    var z_events: [16]gs.Event = zero
+    var z_hdr: [32]h2.Header = zero
+    var z_scratch: [4096]u8 = zero
+    var z_frame: [13]u8 = zero
+    z_frame[2usize] = 4u8
+    z_frame[3usize] = 8u8
+    z_frame[9usize] = 127u8
+    z_frame[10usize] = 255u8
+    z_frame[11usize] = 255u8
+    z_frame[12usize] = 255u8
+    let (z_at1, z_n1, z_c1, z_e1) = gs.server_receive(&z_server, z_frame[..], z_out[..], z_events[..], z_hdr[..], z_scratch[..])
+    if z_e1 != grpc.Protocol { os.exit(32i32) }
+    // The same for a stream window.
+    z_server.send_window = 0i64
+    z_calls[0usize].send_window = 65535i64
+    z_frame[8usize] = 1u8
+    let (z_at2, z_n2, z_c2, z_e2) = gs.server_receive(&z_server, z_frame[..], z_out[..], z_events[..], z_hdr[..], z_scratch[..])
+    if z_e2 != grpc.Protocol { os.exit(33i32) }
+    ret ok
+}
 fn main(a: *mem.Arena, args: []str) -> err {
+    let direct_error = direct_checks(a)
+    if direct_error != ok { ret direct_error }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
