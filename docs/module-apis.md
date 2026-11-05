@@ -5688,6 +5688,7 @@ type Rmst = struct { mean: f64, se: f64 }
 error TooSmall
 error Invalid
 
+fn finite(x: f64) -> bool
 fn nelson_aalen(times: []const f64, events: []const u8, n: usize, out_times: []f64, out_hazard: []f64, out_variance: []f64, out_risk: []usize, order: []usize) -> (usize, err)
 fn cumulative_incidence(times: []const f64, causes: []const u8, n: usize, cause: u8, out_times: []f64, out_cif: []f64, order: []usize) -> (usize, err)
 fn rmst(times: []const f64, events: []const u8, n: usize, tau: f64, order: []usize) -> (Rmst, err)
@@ -8195,7 +8196,8 @@ fn bwt_sift(src: []const u8, scratch: []usize, at: usize, end: usize)
 fn bwt_compare(src: []const u8, a: usize, b: usize) -> i32
 fn bwt_decode(src: []const u8, row: usize, dst: []u8, scratch: []usize) -> err
 fn huffman_build(frequencies: []const u64, limit: u32) -> (Huffman, err)
-fn huffman_canonical(h: *Huffman)
+fn huffman_lengths_valid(h: *const Huffman) -> bool
+fn huffman_canonical(h: *Huffman) -> err
 fn huffman_encode(h: *const Huffman, src: []const u8, w: *BitWriter) -> err
 fn huffman_decode(h: *const Huffman, r: *BitReader, dst: []u8) -> err
 fn elias_gamma(values: []const u32, dst: []u8) -> (usize, err)
