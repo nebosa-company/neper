@@ -84,8 +84,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let psk = key(15u64)
     let r_s_pub = noise.public_key(r_s)
     if fold(r_s_pub[0..]) != fold_expected_rs_pub() { os.exit(9i32) }
-    var ini = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, none[0..])
-    var res = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), none[0..])
+    var (ini, ini_error) = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, none[0..])
+    if ini_error != ok { os.exit(90i32) }
+    var (res, res_error) = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), none[0..])
+    if res_error != ok { os.exit(90i32) }
     var m1: [128]u8 = zero
     var m2: [128]u8 = zero
     var payload: [64]u8 = zero
@@ -136,8 +138,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fold(pi.send.k[0..]) != 563577588721011465u64 || fold(pi.recv.k[0..]) != 18439048492694358259u64 { os.exit(30i32) }
     if !noise.equal(pi.send.k[0..], pr.recv.k[0..]) || noise.equal(pi.send.k[0..], ti.send.k[0..]) { os.exit(31i32) }
     let wrong = key(16u64)
-    var ini2 = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, psk[0..])
-    var res2 = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), wrong[0..])
+    var (ini2, ini2_error) = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, psk[0..])
+    if ini2_error != ok { os.exit(91i32) }
+    var (res2, res2_error) = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), wrong[0..])
+    if res2_error != ok { os.exit(91i32) }
     let (q1, x1) = noise.write_message(&ini2, none[0..], m1[0..], i_e)
     if x1 != ok || q1 != 96usize || fold(m1[..q1]) == 17650509138564174799u64 { os.exit(32i32) }
     let (_, x2) = noise.read_message(&res2, m1[..q1], payload[0..])
@@ -150,14 +154,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if x5 != noise.Invalid { os.exit(36i32) }
 
     // 5: TooSmall on every buffer.
-    var ini3 = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, none[0..])
-    var res3 = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), none[0..])
+    var (ini3, ini3_error) = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, none[0..])
+    if ini3_error != ok { os.exit(92i32) }
+    var (res3, res3_error) = noise.initialize("Noise_IK_25519_ChaChaPoly_BLAKE2s", false, "neper", r_s, noise.zero_key(), none[0..])
+    if res3_error != ok { os.exit(92i32) }
     let (_, y1) = noise.write_message(&ini3, "hello responder", m1[..110usize], i_e)
     if y1 != noise.TooSmall { os.exit(37i32) }
     let (_, y2) = noise.read_message(&res3, m1[..95usize], payload[0..])
     if y2 != noise.TooSmall { os.exit(38i32) }
     let (_, y3) = noise.encrypt_with_ad(&pi.send, none[0..], "transport payload", sealed[..32usize])
     if y3 != noise.TooSmall { os.exit(39i32) }
+    // #418: a non-empty PSK of any other length is Invalid, not silently plain IK.
+    var malformed: [33]u8 = zero
+    var bad_len = 1usize
+    while bad_len <= 33usize {
+        if bad_len != 32usize {
+            let (_, bad_error) = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, malformed[0..bad_len])
+            if bad_error != noise.Invalid { os.exit(93i32) }
+        }
+        bad_len += 1usize
+    }
+    let (good32, good_error) = noise.initialize("Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", true, "neper", i_s, r_s_pub, malformed[0..32])
+    if good_error != ok { os.exit(94i32) }
     try io.print("crypto noise ok\n")
     ret ok
 }

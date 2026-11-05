@@ -205,12 +205,24 @@ fn rail_walk(text: []const u8, rails: usize, out: []u8, decrypt: bool) -> (usize
         }
         ret (text.len, ok)
     }
+    // Rails past the input cannot hold anything: cap them so a short text with a
+    // huge rail count stays linear (and the period cannot overflow).
+    var effective = rails
+    if effective > text.len { effective = text.len }
+    if effective <= 1usize {
+        var first = 0usize
+        while first < text.len {
+            out[first] = text[first]
+            first += 1usize
+        }
+        ret (text.len, ok)
+    }
     // Rail r holds positions r, period - r, period + r, ... with the two step
     // sizes alternating (a zero step collapses to the full period on the edges).
-    let period = 2usize * (rails - 1usize)
+    let period = 2usize * (effective - 1usize)
     var k = 0usize
     var r = 0usize
-    while r < rails {
+    while r < effective {
         var i = r
         var down = true
         while i < text.len {

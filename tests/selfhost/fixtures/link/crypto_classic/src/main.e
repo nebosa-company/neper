@@ -116,6 +116,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if r1 != classic.TooSmall || r2 != classic.TooSmall || r3 != classic.TooSmall || r4 != classic.TooSmall { os.exit(9i32) }
     if r5 != classic.TooSmall || r6 != classic.TooSmall || r7 != classic.TooSmall || r8 != classic.TooSmall { os.exit(9i32) }
 
+    // #420: rails past the input are capped, so a huge count stays linear and
+    // empty input still answers no bytes.
+    var short: [5]u8 = zero
+    var short_out: [5]u8 = zero
+    var short_back: [5]u8 = zero
+    var si = 0usize
+    while si < 5usize {
+        short[si] = 97u8 + u8(si)
+        si += 1usize
+    }
+    let (huge_n, huge_e) = classic.rail_fence(short[0..], 18446744073709551615usize, short_out[0..])
+    if huge_e != ok || huge_n != 5usize { os.exit(10i32) }
+    let (huge_back, huge_de) = classic.rail_fence_decrypt(short_out[0..huge_n], 18446744073709551615usize, short_back[0..])
+    if huge_de != ok || huge_back != 5usize || !same(short_back[..huge_back], short[0..]) { os.exit(10i32) }
+    var empty: [0]u8 = zero
+    let (empty_n, empty_e) = classic.rail_fence(empty[0..], 7usize, empty[0..])
+    if empty_e != ok || empty_n != 0usize { os.exit(11i32) }
     try io.print("crypto classic ok\n")
     ret ok
 }

@@ -375,8 +375,11 @@ type Transport = struct { send: CipherState, recv: CipherState, h: [32]u8 }
 // IK: the initiator knows the responder's static `rs` in advance; the responder passes
 // any `rs` (it learns the initiator's from message 1). A 32-byte `psk` selects IKpsk2;
 // an empty one is plain IK. `protocol_name` is hashed in as written.
-fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secret: [32]u8, rs: [32]u8, psk: []const u8) -> HandshakeState {
+fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secret: [32]u8, rs: [32]u8, psk: []const u8) -> (HandshakeState, err) {
     var hs: HandshakeState = zero
+    // A non-empty PSK that is not 32 bytes is a configuration error, not plain IK:
+    // silently dropping it would authenticate a session the caller believes is PSK-bound.
+    if psk.len != 0usize && psk.len != 32usize { ret (hs, Invalid) }
     hs.sym = symmetric_state(protocol_name)
     mix_hash(&hs.sym, prologue)
     hs.initiator = initiator
@@ -392,7 +395,7 @@ fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secre
     } else {
         mix_hash(&hs.sym, hs.s_public[0..])
     }
-    ret hs
+    ret (hs, ok)
 }
 
 fn public_key(secret: [32]u8) -> [32]u8 {
@@ -503,8 +506,10 @@ fn split(hs: *HandshakeState) -> (Transport, err) {
 // keys and ephemerals are all in hand, empty payloads; `message1` needs 96 bytes and
 // `message2` 48. Answers the initiator's and the responder's transports.
 fn handshake_ik(protocol_name: str, prologue: []const u8, i_static: [32]u8, r_static: [32]u8, i_ephemeral: [32]u8, r_ephemeral: [32]u8, psk: []const u8, message1: []u8, message2: []u8) -> (Transport, Transport, err) {
-    var i = initialize(protocol_name, true, prologue, i_static, public_key(r_static), psk)
-    var r = initialize(protocol_name, false, prologue, r_static, zero_key(), psk)
+    var (i, i_error) = initialize(protocol_name, true, prologue, i_static, public_key(r_static), psk)
+    if i_error != ok { ret (zero, zero, i_error) }
+    var (r, r_error) = initialize(protocol_name, false, prologue, r_static, zero_key(), psk)
+    if r_error != ok { ret (zero, zero, r_error) }
     var none: [0]u8 = zero
     let (n1, w1) = write_message(&i, none[0..], message1, i_ephemeral)
     if w1 != ok { ret (zero, zero, w1) }
