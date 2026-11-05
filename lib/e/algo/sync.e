@@ -317,7 +317,9 @@ fn pull_changes(a: *mem.Arena, remote: *const Remote, cursor: json.Value, limit:
             put(&out, "records", json.Value{ Array: list.slice_const[json.Value](&records) })
             put(&out, "deletions", json.Value{ Array: list.slice_const[json.Value](&deletions) })
             put(&out, "cursor", current)
-            put(&out, "complete", flag(pages < max_pages))
+            // A short page means the source is exhausted, even when it is the last
+            // page this call was allowed to fetch.
+            put(&out, "complete", flag(true))
             put(&out, "stalled", flag(false))
             put(&out, "pages", number(a, pages))
             ret ir.obj_value(&out)
@@ -1127,18 +1129,28 @@ fn describe_outbox(a: *mem.Arena, o: *const Outbox) -> json.Value {
     ret ir.obj_value(&out)
 }
 
-// One full sync: pull, apply around pending writes, flush, and pull again what the flushed writes changed.
-fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, local: []const json.Value, cursor: json.Value, strategy: str) -> json.Value {
-    let started = remote.now(remote.ctx)
+// The record ids a sync of `table` must shadow: only queued mutations for that
+// table, so `customers/5` does not hide `orders/5`. An absent table means all.
+fn queue_ids(a: *mem.Arena, o: *const Outbox, table: json.Value) -> []const str {
+    let scope = as_text(table)
     var ids = empty_list(a)
-    if has_outbox {
-        var q = 0usize
-        while q < o.queue.len {
-            push_value(&ids, text(as_text(ir.value_of(o.queue.items[q], "recordId"))))
-            q += 1usize
+    var q = 0usize
+    while q < o.queue.len {
+        let w = o.queue.items[q]
+        let w_table = as_text(ir.value_of(w, "table"))
+        if scope.len == 0usize || str.eq(scope, w_table) {
+            push_value(&ids, text(as_text(ir.value_of(w, "recordId"))))
         }
+        q += 1usize
     }
-    let pending_ids = to_ids(a, list.slice_const[json.Value](&ids))
+    ret to_ids(a, list.slice_const[json.Value](&ids))
+}
+
+// One full sync: pull, apply around pending writes, flush, and pull again what the flushed writes changed.
+fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, local: []const json.Value, cursor: json.Value, strategy: str, table: json.Value) -> json.Value {
+    let started = remote.now(remote.ctx)
+    var pending_ids: []const str = zero
+    if has_outbox { pending_ids = queue_ids(a, o, table) }
     let pulled = pull_changes(a, remote, cursor, 200i64, 50i64)
     let applied = apply_changes(a, local, pulled, pending_ids)
     var flushed_synced: []const json.Value = zero
@@ -1157,16 +1169,21 @@ fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, 
     var records = items(ir.value_of(applied, "records"))
     var inserted = i64(items(ir.value_of(applied, "inserted")).len)
     var updated = i64(items(ir.value_of(applied, "updated")).len)
-    let removed = i64(items(ir.value_of(applied, "removed")).len)
-    let shadowed = i64(items(ir.value_of(applied, "shadowed")).len)
+    var removed = i64(items(ir.value_of(applied, "removed")).len)
+    var shadowed = i64(items(ir.value_of(applied, "shadowed")).len)
     var final_cursor = ir.value_of(pulled, "cursor")
     var pulled_count = i64(items(ir.value_of(pulled, "records")).len)
     if flushed_synced.len > 0usize {
         let second = pull_changes(a, remote, ir.value_of(pulled, "cursor"), 200i64, 50i64)
-        let again = apply_changes(a, records, second, zero)
+        // Writes still queued after the flush (backoff, conflict, deferred) must
+        // keep shadowing their server rows in the second pass too.
+        let second_pending = queue_ids(a, o, table)
+        let again = apply_changes(a, records, second, second_pending)
         records = items(ir.value_of(again, "records"))
         updated += i64(items(ir.value_of(again, "updated")).len)
         inserted += i64(items(ir.value_of(again, "inserted")).len)
+        removed += i64(items(ir.value_of(again, "removed")).len)
+        shadowed += i64(items(ir.value_of(again, "shadowed")).len)
         final_cursor = ir.value_of(second, "cursor")
         pulled_count += i64(items(ir.value_of(second, "records")).len)
     }

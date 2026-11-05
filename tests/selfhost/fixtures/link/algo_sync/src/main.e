@@ -286,7 +286,7 @@ fn run_case(a: *mem.Arena, root: json.Value) -> str {
         } else if str.eq(name, "describe") {
             result = sync.describe_outbox(a, &outbox)
         } else if str.eq(name, "runSync") {
-            result = sync.run_sync(a, &outbox, true, &remote, items(ir.value_of(op, "local")), ir.value_of(op, "cursor"), text_field(op, "strategy"))
+            result = sync.run_sync(a, &outbox, true, &remote, items(ir.value_of(op, "local")), ir.value_of(op, "cursor"), text_field(op, "strategy"), ir.value_of(op, "table"))
         } else if str.eq(name, "pull") {
             result = sync.pull_changes(a, &remote, ir.value_of(op, "cursor"), count_of(op, "limit", 200i64), count_of(op, "maxPages", 50i64))
         } else if str.eq(name, "syncQueue") {
@@ -359,8 +359,118 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+type CheckState = struct { a: *mem.Arena, fetch_calls: i64, push_calls: i64, fetch_mode: i64, push_limit: i64 }
+
+fn check_now(ctx: *void) -> i64 { ret 0i64 }
+fn check_load(ctx: *void) -> []const json.Value { ret zero }
+fn check_save(ctx: *void, next: []const json.Value) -> sync.SaveResult { ret sync.SaveResult { saved: true, quota: false, message: "" } }
+fn check_clear(ctx: *void) -> sync.SaveResult { ret sync.SaveResult { saved: true, quota: false, message: "" } }
+
+fn check_push(ctx: *void, mutation: json.Value) -> sync.PushResult {
+    var st = mem.cast[*CheckState](ctx)
+    st.push_calls += 1i64
+    if st.push_limit >= 0i64 && st.push_calls > st.push_limit {
+        ret sync.PushResult { accepted: false, conflict: false, server: .Null, has_server: false, failure: "offline", has_failure: true }
+    }
+    ret sync.PushResult { accepted: true, conflict: false, server: .Null, has_server: false, failure: "", has_failure: false }
+}
+
+// mode 0: always orders/5; mode 1: empty then orders/6; mode 2: always one record.
+fn check_fetch(ctx: *void, cursor: json.Value, limit: i64) -> json.Value {
+    var st = mem.cast[*CheckState](ctx)
+    st.fetch_calls += 1i64
+    var records = sync.empty_list(st.a)
+    var page_id = ""
+    var has_row = false
+    if st.fetch_mode == 0i64 {
+        page_id = "5"
+        has_row = true
+    } else if st.fetch_mode == 1i64 && st.fetch_calls >= 2i64 {
+        page_id = "6"
+        has_row = true
+    } else if st.fetch_mode == 2i64 {
+        page_id = "a"
+        has_row = true
+    }
+    if has_row {
+        var row = sync.obj(st.a)
+        sync.put(&row, "id", sync.text(page_id))
+        sync.put(&row, "v", sync.number(st.a, 99i64))
+        sync.push_value(&records, ir.obj_value(&row))
+    }
+    var out = sync.obj(st.a)
+    sync.put(&out, "records", json.Value{ Array: list.slice_const[json.Value](&records) })
+    sync.put(&out, "deletions", json.Value{ Array: zero })
+    ret ir.obj_value(&out)
+}
+
+fn check_mutation(a: *mem.Arena, table: str, rid: str, op: str) -> json.Value {
+    var m = sync.obj(a)
+    sync.put(&m, "table", sync.text(table))
+    sync.put(&m, "recordId", sync.text(rid))
+    sync.put(&m, "op", sync.text(op))
+    sync.put(&m, "payload", ir.empty_object())
+    ret ir.obj_value(&m)
+}
+
+fn check_count(v: json.Value, key: str) -> i64 {
+    let (x, found) = sync.get(v, key)
+    if !found { ret -999i64 }
+    switch x {
+    case .Number as n:
+        let (z, e) = json.number_i64(n)
+        if e == ok { ret z }
+        ret -999i64
+    default:
+        ret -999i64
+    }
+}
+
+fn check_flag(v: json.Value, key: str) -> bool {
+    let (x, found) = sync.get(v, key)
+    if !found { ret false }
+    switch x {
+    case .Bool as b:
+        ret b
+    default:
+        ret false
+    }
+}
+
+fn check_local(a: *mem.Arena, source: str) -> []const json.Value {
+    let (root, e) = json.parse(a, source, json.Options { allow_duplicate_keys: false, max_depth: 60u16 })
+    if e != ok { os.exit(91i32) }
+    ret sync.items(root)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
+    // #217: a short last page is complete; pending ids are scoped to the synced
+    // table; and the second pull still shadows writes left in the queue.
+    var st_complete = CheckState { a: a, fetch_calls: 0i64, push_calls: 0i64, fetch_mode: 2i64, push_limit: -1i64 }
+    let remote_complete = sync.Remote { ctx: mem.cast[*void](&st_complete), now: check_now, fetch_page: check_fetch, push: check_push }
+    let complete = sync.pull_changes(a, &remote_complete, .Null, 200i64, 1i64)
+    if !check_flag(complete, "complete") { os.exit(60i32) }
+    var st_scope = CheckState { a: a, fetch_calls: 0i64, push_calls: 0i64, fetch_mode: 0i64, push_limit: 0i64 }
+    let remote_scope = sync.Remote { ctx: mem.cast[*void](&st_scope), now: check_now, fetch_page: check_fetch, push: check_push }
+    let store_scope = sync.StoreHooks { ctx: mem.cast[*void](&st_scope), durable: true, load: check_load, save: check_save, clear: check_clear }
+    var ob_scope = sync.new_outbox(a, &store_scope, check_now, mem.cast[*void](&st_scope), 3i64, 1000i64)
+    sync.push_value(&ob_scope.queue, check_mutation(a, "customers", "5", "update"))
+    let scoped = sync.run_sync(a, &ob_scope, true, &remote_scope, check_local(a, "[{\"id\":\"5\",\"v\":1}]"), .Null, "server-wins", sync.text("orders"))
+    if check_count(scoped, "updated") != 1i64 || check_count(scoped, "shadowed") != 0i64 { os.exit(61i32) }
+    var st_second = CheckState { a: a, fetch_calls: 0i64, push_calls: 0i64, fetch_mode: 1i64, push_limit: 1i64 }
+    let remote_second = sync.Remote { ctx: mem.cast[*void](&st_second), now: check_now, fetch_page: check_fetch, push: check_push }
+    let store_second = sync.StoreHooks { ctx: mem.cast[*void](&st_second), durable: true, load: check_load, save: check_save, clear: check_clear }
+    var ob_second = sync.new_outbox(a, &store_second, check_now, mem.cast[*void](&st_second), 3i64, 1000i64)
+    sync.push_value(&ob_second.queue, check_mutation(a, "orders", "7", "update"))
+    sync.push_value(&ob_second.queue, check_mutation(a, "orders", "6", "update"))
+    let twice = sync.run_sync(a, &ob_second, true, &remote_second, check_local(a, "[{\"id\":\"6\",\"v\":\"mine\"}]"), .Null, "server-wins", sync.text("orders"))
+    if check_count(twice, "shadowed") != 1i64 || check_count(twice, "updated") != 0i64 { os.exit(62i32) }
+    let (twice_rows, twice_found) = sync.get(twice, "records")
+    let twice_list = sync.items(twice_rows)
+    if !twice_found || twice_list.len != 1usize { os.exit(62i32) }
+    let (mine, mine_found) = sync.get(twice_list[0usize], "v")
+    if !mine_found || !str.eq(sync.as_text(mine), "mine") { os.exit(62i32) }
     try io.print("algo sync ok")
     ret ok
 }
