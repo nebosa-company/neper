@@ -10,9 +10,26 @@ use e.mem
 use e.io
 use e.str
 use e.text.template as template
+use e.fmt.html as html
 use e.fmt.html.template as html_template
 
 type Page = struct { title: str, count: i32, on: bool }
+
+// The `<body>` element: the html element's child named body.
+fn find_body(doc: *const html.Document) -> html.NodeId {
+    var top = doc.nodes[usize(doc.root)].first_child
+    while top != html.NONE {
+        if doc.nodes[usize(top)].kind == .Element {
+            var c = doc.nodes[usize(top)].first_child
+            while c != html.NONE {
+                if doc.nodes[usize(c)].kind == .Element && str.eq(doc.nodes[usize(c)].name, "body") { ret c }
+                c = doc.nodes[usize(c)].next_sibling
+            }
+        }
+        top = doc.nodes[usize(top)].next_sibling
+    }
+    ret html.NONE
+}
 
 fn render(a: *mem.Arena, source: str, bindings: []const template.Binding, out: []u8) -> (str, err) {
     let options = html_template.Options { max_bytes: 8192usize, max_nodes: 256usize, max_depth: 8u16 }
@@ -98,5 +115,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // in the JavaScript-string context rather than becoming executable script.
     let (false_raw_close, false_raw_close_error) = render(a, "<script>// </scriptx>\n{{js}}</script>", bindings[0..], out[0..])
     if false_raw_close_error != ok || !str.eq(false_raw_close, "<script>// </scriptx>\n\"javascript:alert(1)\"</script>") { os.exit(30) }
+    // #154: a truncated `<!` tail is a bogus comment, not a slice trap.
+    let html_options = html.Options { max_bytes: 1048576usize, max_nodes: 64usize, max_attributes: 8usize, max_depth: 8u16, preserve_comments: false }
+    let (truncated, truncated_error) = html.parse(a, "text<!", html_options)
+    if truncated_error != ok { os.exit(31) }
+    let truncated_body = find_body(&truncated)
+    let (truncated_text, truncated_text_error) = html.text_content(a, &truncated, truncated_body)
+    if truncated_text_error != ok || !str.eq(truncated_text, "text") { os.exit(31) }
+    // #154: text pieces split by ignored end tags merge into one node instead of copying
+    // the whole prefix each time (the quadratic merge took tens of seconds here).
+    let (huge_builder, huge_builder_error) = str.builder(a, 524288usize)
+    if huge_builder_error != ok { os.exit(32) }
+    var huge = huge_builder
+    var piece = 0usize
+    while piece < 100000usize {
+        if str.push(&huge, "a</x>") != ok { os.exit(32) }
+        piece += 1usize
+    }
+    let (merged_began, merged_began_error) = os.clock(.Monotonic)
+    if merged_began_error != ok { os.exit(32) }
+    let (merged, merged_error) = html.parse(a, str.done(&huge), html_options)
+    let (merged_now, merged_now_error) = os.clock(.Monotonic)
+    if merged_now_error != ok || merged_error != ok { os.exit(32) }
+    // Re-copying the merged text each time took tens of seconds; a linear merge is far
+    // under this bound.
+    if merged_now - merged_began > 5000000000i64 { os.exit(32) }
+    let merged_body = find_body(&merged)
+    let (merged_text, merged_text_error) = html.text_content(a, &merged, merged_body)
+    if merged_text_error != ok || merged_text.len != 100000usize { os.exit(32) }
+    // #154: a long run of `&` with no reference leaves the text unchanged and does not
+    // walk the whole entity table per ampersand.
+    let (amp_builder, amp_builder_error) = str.builder(a, 1048576usize)
+    if amp_builder_error != ok { os.exit(33) }
+    var amp_text = amp_builder
+    piece = 0usize
+    while piece < 500000usize {
+        if str.push(&amp_text, "& ") != ok { os.exit(33) }
+        piece += 1usize
+    }
+    let (amp_began, amp_began_error) = os.clock(.Monotonic)
+    if amp_began_error != ok { os.exit(33) }
+    let (amp_document, amp_error) = html.parse(a, str.done(&amp_text), html_options)
+    let (amp_now, amp_now_error) = os.clock(.Monotonic)
+    if amp_now_error != ok || amp_error != ok { os.exit(33) }
+    // The per-ampersand table walk took seconds here; the sorted-table stop is linear.
+    if amp_now - amp_began > 3000000000i64 { os.exit(33) }
+    let amp_body = find_body(&amp_document)
+    let (amp_content, amp_content_error) = html.text_content(a, &amp_document, amp_body)
+    if amp_content_error != ok || amp_content.len != 1000000usize { os.exit(33) }
     ret ok
 }

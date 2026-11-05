@@ -12,6 +12,7 @@
 // Memory: the arena is retained; every node and string lives in it.
 
 use e.data.list as list
+use e.data.map as map
 use e.fmt.html as html
 use e.mem
 use e.str
@@ -21,7 +22,7 @@ type Role = enum u8 { Generic, Text, Heading, Link, Button, Image, TextField, Ch
 // `node_id` is -1 for a node that stands for no one DOM node (a link leaf). A flag named `has_*` says its value is present.
 type Node = struct { role: Role, name: str, has_value: bool, value: str, node_id: i64, has_level: bool, level: i64, has_checked: bool, checked: bool, checked_mixed: bool, disabled: bool, has_expanded: bool, expanded: bool, has_selected: bool, selected: bool, required: bool, invalid: bool, has_now: bool, now: f64, has_min: bool, min: f64, has_max: bool, max: f64, has_url: bool, url: str, focusable: bool, children: []const Node }
 
-type Builder = struct { a: *mem.Arena, doc: *const html.Document, next_id: i64 }
+type Builder = struct { a: *mem.Arena, doc: *const html.Document, next_id: i64, ids: map.Map[str, html.NodeId], labels: map.Map[str, html.NodeId], indexed: bool }
 
 fn role_name(r: Role) -> str {
     switch r {
@@ -173,9 +174,13 @@ fn int_of(s: str) -> (i64, bool) {
     }
     if at >= s.len { ret (0i64, false) }
     var v = 0i64
+    var digits = 0usize
     while at < s.len {
         if s[at] < 48u8 || s[at] > 57u8 { ret (0i64, false) }
+        // Eighteen digits always fit; a longer run is not an aria number.
+        if digits >= 18usize { ret (0i64, false) }
         v = v * 10i64 + i64(s[at] - 48u8)
+        digits += 1usize
         at += 1usize
     }
     if negative { ret (-v, true) }
@@ -403,6 +408,11 @@ fn names_from_content(r: Role) -> bool {
 
 // The first element with this `id` in document order; none when there is no such element.
 fn find_by_id(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId {
+    if b.indexed && from == b.doc.root {
+        let (indexed, found) = map.get[str, html.NodeId](&b.ids, id)
+        if found { ret indexed }
+        ret html.NONE
+    }
     let node = &b.doc.nodes[usize(from)]
     if node.kind == .Element {
         let (v, found) = html.attribute(node, "id")
@@ -419,6 +429,11 @@ fn find_by_id(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId {
 
 // The first `<label for=id>` in document order whose `for` is non-empty.
 fn find_label_for(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId {
+    if b.indexed && from == b.doc.root {
+        let (indexed, found) = map.get[str, html.NodeId](&b.labels, id)
+        if found { ret indexed }
+        ret html.NONE
+    }
     let node = &b.doc.nodes[usize(from)]
     if node.kind == .Element && str.eq(node.name, "label") {
         let (v, found) = html.attribute(node, "for")
@@ -434,6 +449,34 @@ fn find_label_for(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId 
         child = b.doc.nodes[usize(child)].next_sibling
     }
     ret html.NONE
+}
+
+// Puts `value` under `key` unless the key is already indexed: the first in document order wins.
+fn index_put(m: *map.Map[str, html.NodeId], key: str, value: html.NodeId) -> err {
+    if key.len == 0usize { ret ok }
+    let (_, found) = map.get[str, html.NodeId](m, key)
+    if found { ret ok }
+    let (_, put_error) = map.put[str, html.NodeId](m, key, value)
+    ret put_error
+}
+
+// One document scan fills the id and `<label for>` indexes the name computation reads.
+fn index_tree(b: *Builder, id: html.NodeId) -> err {
+    let node = &b.doc.nodes[usize(id)]
+    if node.kind == .Element {
+        let (v, has_id) = html.attribute(node, "id")
+        if has_id { try index_put(&b.ids, v, id) }
+        if str.eq(node.name, "label") {
+            let (f, has_for) = html.attribute(node, "for")
+            if has_for { try index_put(&b.labels, trim(f), id) }
+        }
+    }
+    var child = node.first_child
+    while child != html.NONE {
+        try index_tree(b, child)
+        child = b.doc.nodes[usize(child)].next_sibling
+    }
+    ret ok
 }
 
 fn label_text(b: *const Builder, control: html.NodeId) -> (str, bool) {
@@ -526,26 +569,34 @@ fn native_name(b: *const Builder, el: html.NodeId) -> (str, bool) {
 fn name_of(b: *const Builder, el: html.NodeId, role: Role) -> str {
     let (labelled_by, have_lb) = trimmed_attr(b, el, "aria-labelledby")
     if have_lb && labelled_by.len > 0usize {
-        var joined = ""
-        var first = true
-        var start = 0usize
-        var i = 0usize
-        while i <= labelled_by.len {
-            if i == labelled_by.len || is_space(labelled_by[i]) {
-                if i > start {
-                    let referenced = find_by_id(b, b.doc.root, labelled_by[start..i])
-                    if referenced != html.NONE {
-                        if !first { joined = cat(b.a, joined, " ") }
-                        joined = cat(b.a, joined, flat_text(b, referenced))
-                        first = false
+        // The referenced texts are collected and joined once; rebuilding `joined` per id
+        // was quadratic in the id list.
+        var (parts, parts_error) = list.init[str](b.a, 8usize)
+        if parts_error == ok {
+            var count = 0usize
+            var start = 0usize
+            var i = 0usize
+            while i <= labelled_by.len {
+                if i == labelled_by.len || is_space(labelled_by[i]) {
+                    if i > start {
+                        let referenced = find_by_id(b, b.doc.root, labelled_by[start..i])
+                        if referenced != html.NONE {
+                            let text = flat_text(b, referenced)
+                            if text.len > 0usize && list.push[str](&parts, text) == ok { count += 1usize }
+                        }
                     }
+                    start = i + 1usize
                 }
-                start = i + 1usize
+                i += 1usize
             }
-            i += 1usize
+            if count > 0usize {
+                let (joined, joined_error) = str.join(b.a, list.slice_const[str](&parts), " ")
+                if joined_error == ok {
+                    let collapsed = collapse(b.a, joined)
+                    if collapsed.len > 0usize { ret collapsed }
+                }
+            }
         }
-        let collapsed = collapse(b.a, joined)
-        if collapsed.len > 0usize { ret collapsed }
     }
     let (label, have_label) = trimmed_attr(b, el, "aria-label")
     if have_label && label.len > 0usize { ret label }
@@ -848,7 +899,18 @@ fn build_element(b: *Builder, el: html.NodeId, id: i64) -> []const Node {
 // The accessibility tree under `root` (an element, typically `<body>`): a generic root node numbered 0 holding the
 // tree of its children, or a bare generic node when the root is `aria-hidden`.
 fn build_tree(a: *mem.Arena, doc: *const html.Document, root: html.NodeId) -> Node {
-    var b = Builder { a: a, doc: doc, next_id: 1i64 }
+    var b: Builder = zero
+    b.a = a
+    b.doc = doc
+    b.next_id = 1i64
+    // The id and label indexes: one scan, so a name lookup need not walk the document.
+    let (ids, ids_error) = map.init[str, html.NodeId](a, doc.nodes.len / 8usize + 8usize)
+    let (labels, labels_error) = map.init[str, html.NodeId](a, doc.nodes.len / 8usize + 8usize)
+    if ids_error == ok && labels_error == ok {
+        b.ids = ids
+        b.labels = labels
+        b.indexed = index_tree(&b, doc.root) == ok
+    }
     var out = blank_node(.Generic)
     out.node_id = 0i64
     if is_aria_hidden(&b, root) { ret out }

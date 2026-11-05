@@ -224,6 +224,18 @@ fn vectors_27() -> str {
     ret "{\"html\":\"<!doctype html><html><head><title>t</title></head><body><p title=\\\"Name\\\"><em aria-labelledby=\\\"a1 d4\\\" aria-invalid=\\\"true\\\"></em><em> spaced  out </em><a href=\\\" http://e.test/y \\\" id=\\\"a1\\\" title=\\\"Close\\\"></a></p><span aria-labelledby=\\\"c3\\\" id=\\\"c3\\\"><span><span aria-label=\\\"Title\\\" aria-hidden=\\\"true\\\"></span></span><a href=\\\"\\\"></a><span aria-hidden=\\\"true\\\" aria-checked=\\\"false\\\" aria-level=\\\"9\\\"></span></span></body></html>\",\"e\":\"{\\\"i\\\":0,\\\"k\\\":[{\\\"i\\\":1,\\\"k\\\":[{\\\"i\\\":2,\\\"iv\\\":true,\\\"k\\\":[],\\\"r\\\":\\\"generic\\\"},{\\\"i\\\":4,\\\"k\\\":[],\\\"n\\\":\\\"spaced out\\\",\\\"r\\\":\\\"text\\\"},{\\\"i\\\":5,\\\"k\\\":[],\\\"n\\\":\\\"Close\\\",\\\"r\\\":\\\"link\\\",\\\"u\\\":\\\"http://e.test/y\\\"}],\\\"n\\\":\\\"Name\\\",\\\"r\\\":\\\"generic\\\"},{\\\"i\\\":9,\\\"k\\\":[],\\\"r\\\":\\\"link\\\"}],\\\"r\\\":\\\"generic\\\"}\"}\n{\"html\":\"<!doctype html><html><head><title>t</title></head><body><fieldset><legend>Close</legend>Search</fieldset></body></html>\",\"e\":\"{\\\"i\\\":0,\\\"k\\\":[{\\\"i\\\":1,\\\"k\\\":[{\\\"i\\\":3,\\\"k\\\":[],\\\"n\\\":\\\"Close\\\",\\\"r\\\":\\\"text\\\"},{\\\"i\\\":4,\\\"k\\\":[],\\\"n\\\":\\\"Search\\\",\\\"r\\\":\\\"text\\\"}],\\\"n\\\":\\\"Close\\\",\\\"r\\\":\\\"group\\\"}],\\\"r\\\":\\\"generic\\\"}\"}\n{\"html\":\"<!doctype html><html><head><title>t</title></head><body><span role=\\\"switch\\\"><a href=\\\"/x\\\" role=\\\"complementary\\\"><span aria-valuenow=\\\"5\\\" aria-valuemin=\\\"0\\\" aria-valuemax=\\\"10\\\">NameTitle</span></a><a href=\\\" http://e.test/y \\\" aria-expanded=\\\"true\\\" aria-required=\\\"true\\\"><em> spaced  out Cancel</em>Cancel</a>Close</span></body></html>\",\"e\":\"{\\\"i\\\":0,\\\"k\\\":[{\\\"c\\\":false,\\\"i\\\":1,\\\"k\\\":[{\\\"i\\\":2,\\\"k\\\":[{\\\"i\\\":3,\\\"k\\\":[{\\\"f\\\":true,\\\"i\\\":-1,\\\"k\\\":[],\\\"n\\\":\\\"NameTitle\\\",\\\"r\\\":\\\"link\\\",\\\"u\\\":\\\"/x\\\"}],\\\"r\\\":\\\"generic\\\",\\\"vmax\\\":10,\\\"vmin\\\":0,\\\"vn\\\":5}],\\\"r\\\":\\\"complementary\\\"},{\\\"i\\\":5,\\\"k\\\":[{\\\"f\\\":true,\\\"i\\\":-1,\\\"k\\\":[],\\\"n\\\":\\\"spaced out Cancel\\\",\\\"r\\\":\\\"link\\\",\\\"u\\\":\\\" http://e.test/y \\\"},{\\\"f\\\":true,\\\"i\\\":-1,\\\"k\\\":[],\\\"n\\\":\\\"Cancel\\\",\\\"r\\\":\\\"link\\\",\\\"u\\\":\\\" http://e.test/y \\\"}],\\\"n\\\":\\\"spaced out CancelCancel\\\",\\\"q\\\":true,\\\"r\\\":\\\"link\\\",\\\"u\\\":\\\"http://e.test/y\\\",\\\"x\\\":true}],\\\"n\\\":\\\"NameTitle spaced out CancelCancelClose\\\",\\\"r\\\":\\\"checkbox\\\"}],\\\"r\\\":\\\"generic\\\"}\"}\n{\"html\":\"<!doctype html><html><head><title>t</title></head><body aria-hidden=\\\"true\\\"><img src=\\\"a.png\\\" alt=\\\"Cancel\\\" aria-checked=\\\"true\\\" aria-valuenow=\\\"5\\\" aria-valuemin=\\\"0\\\" aria-valuemax=\\\"10\\\"><nav aria-valuenow=\\\"5\\\" aria-valuemin=\\\"0\\\" aria-valuemax=\\\"10\\\"><figure><em><label></label></em><figcaption>Title</figcaption></figure><em aria-hidden=\\\"true\\\" aria-disabled=\\\"true\\\"></em>Search</nav><section><meter value=\\\"0.4\\\" min=\\\"1\\\"></meter><table aria-label=\\\"Cancel\\\" aria-hidden=\\\"true\\\" aria-valuenow=\\\"5\\\" aria-valuemin=\\\"0\\\" aria-valuemax=\\\"10\\\"><tbody><tr><th>H</th><td>Close</td></tr></tbody></table><label aria-hidden=\\\"false\\\" title=\\\"x\\\"><a aria-labelledby=\\\"a1\\\" id=\\\"c3\\\"></a></label></section></body></html>\",\"e\":\"{\\\"i\\\":0,\\\"k\\\":[],\\\"r\\\":\\\"generic\\\"}\"}\n"
 }
 
+// The first node of `role` in the tree, depth first.
+fn find_role(n: acc.Node, role: acc.Role) -> (acc.Node, bool) {
+    if n.role == role { ret (n, true) }
+    var i = 0usize
+    while i < n.children.len {
+        let (hit, found) = find_role(n.children[i], role)
+        if found { ret (hit, true) }
+        i += 1usize
+    }
+    ret (n, false)
+}
+
 fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     var start = 0usize
     var i = 0usize
@@ -273,6 +285,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_25()) != 0u8 { os.exit(26i32) }
     if run_chunk(a, vectors_26()) != 0u8 { os.exit(27i32) }
     if run_chunk(a, vectors_27()) != 0u8 { os.exit(28i32) }
+    // #156: a 20-digit aria-level must not overflow i64; the h1 tag level is the fallback.
+    let level_options = html.Options { max_bytes: 4096usize, max_nodes: 64usize, max_attributes: 8usize, max_depth: 16u16, preserve_comments: false }
+    let (level_doc, level_error) = html.parse(a, "<h1 aria-level=\"99999999999999999999\">x</h1>", level_options)
+    if level_error != ok { os.exit(89i32) }
+    let level_body = find_body(&level_doc)
+    if level_body == html.NONE { os.exit(89i32) }
+    let level_tree = acc.build_tree(a, &level_doc, level_body)
+    let (heading, have_heading) = find_role(level_tree, acc.Role.Heading)
+    if !have_heading || !heading.has_level || heading.level != 1i64 { os.exit(89i32) }
     try io.print("html accessible ok")
     ret ok
 }

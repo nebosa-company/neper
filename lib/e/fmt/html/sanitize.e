@@ -120,6 +120,33 @@ fn lower(c: u8) -> u8 {
     ret c
 }
 
+// Whether `s` at `at` starts with `lit`, ASCII case folded.
+fn fold_at(s: str, at: usize, lit: str) -> bool {
+    if at + lit.len > s.len { ret false }
+    ret str.compare_ascii_fold(s[at..at + lit.len], lit) == 0i32
+}
+
+// Whether `token`, ASCII case folded, is one of the space-separated tokens of `list`.
+fn has_token_fold(list: str, token: str) -> bool {
+    if token.len == 0usize { ret false }
+    var i = 0usize
+    while i < list.len {
+        var j = i
+        while j < list.len && list[j] != 32u8 { j += 1usize }
+        if j - i == token.len {
+            var same = true
+            var k = 0usize
+            while k < token.len {
+                if list[i + k] != lower(token[k]) { same = false }
+                k += 1usize
+            }
+            if same { ret true }
+        }
+        i = j + 1usize
+    }
+    ret false
+}
+
 // Whether a URL value may be kept: its scheme, read as a browser reads it, is on the list, or
 // it is relative and the policy allows those.
 fn url_allowed(value: str, policy: Policy) -> bool {
@@ -216,25 +243,29 @@ fn style_walk(b: *str.Builder, value: str, policy: Policy, emit: bool) -> (bool,
             var k = 0usize
             while k < prop.len {
                 let c = prop[k]
-                if !((c >= 97u8 && c <= 122u8) || c == 45u8) { prop_ok = false }
+                if !((c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || c == 45u8) { prop_ok = false }
                 k += 1usize
             }
-            var bad = !prop_ok || val.len == 0usize || !has_token(policy.css_properties, prop)
+            var bad = !prop_ok || val.len == 0usize || !has_token_fold(policy.css_properties, prop)
             var j = 0usize
             while j < val.len && !bad {
                 let c = val[j]
                 if c == 92u8 || c == 64u8 || c == 60u8 || c == 62u8 || c == 123u8 || c == 125u8 || c < 32u8 { bad = true }
                 if j + 1usize < val.len && c == 47u8 && val[j + 1usize] == 42u8 { bad = true }
-                if lower(c) == 117u8 && j + 3usize < val.len && lower(val[j + 1usize]) == 114u8 && lower(val[j + 2usize]) == 108u8 && val[j + 3usize] == 40u8 { bad = true }
-                if lower(c) == 101u8 && j + 3usize < val.len && lower(val[j + 1usize]) == 120u8 && lower(val[j + 2usize]) == 112u8 && lower(val[j + 3usize]) == 114u8 { bad = true }
-                if lower(c) == 106u8 && j + 4usize < val.len && lower(val[j + 1usize]) == 97u8 && lower(val[j + 2usize]) == 118u8 && lower(val[j + 3usize]) == 97u8 && lower(val[j + 4usize]) == 115u8 { bad = true }
-                if lower(c) == 98u8 && j + 3usize < val.len && lower(val[j + 1usize]) == 101u8 && lower(val[j + 2usize]) == 104u8 && lower(val[j + 3usize]) == 97u8 { bad = true }
+                // `url(` and the CSS functions that take a string URL, plus any absolute URL
+                // spelled in the value: a policy-allowed declaration must not fetch anything.
+                if fold_at(val, j, "url(") || fold_at(val, j, "image-set(") || fold_at(val, j, "image(") || fold_at(val, j, "src(") || fold_at(val, j, "cross-fade(") || fold_at(val, j, "element(") || fold_at(val, j, "http:") || fold_at(val, j, "https:") { bad = true }
+                if fold_at(val, j, "expr") || fold_at(val, j, "javas") || fold_at(val, j, "beha") { bad = true }
                 j += 1usize
             }
             if !bad {
                 if emit {
                     if any { try str.push(b, "; ") }
-                    try str.push(b, prop)
+                    k = 0usize
+                    while k < prop.len {
+                        try str.push_byte(b, lower(prop[k]))
+                        k += 1usize
+                    }
                     try str.push(b, ": ")
                     try push_text(b, val, true)
                 }

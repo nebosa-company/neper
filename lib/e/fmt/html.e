@@ -111,6 +111,11 @@ fn c1_replacement(scalar: u32) -> u32 {
 // replacement: (replacement, name length, found). Names without a semicolon are
 // legacy and, in an attribute, are left alone when followed by `=` or a letter.
 fn lookup_entity(text: str, at: usize, in_attribute: bool) -> ([]const u8, usize, bool) {
+    // Every entity name starts with an ASCII letter, and the records are sorted by
+    // name, so a text that cannot start a name stops before the scan and a record
+    // sorting after the text ends it.
+    let first = text[at]
+    if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8)) { ret (zero, 0usize, false) }
     let table = entity_table()
     var i = 0usize
     var best_len = 0usize
@@ -121,6 +126,7 @@ fn lookup_entity(text: str, at: usize, in_attribute: bool) -> ([]const u8, usize
         let value_len = usize(table[i + 1usize + name_len])
         let value = table[i + 2usize + name_len..i + 2usize + name_len + value_len]
         i += 2usize + name_len + value_len
+        if str.compare(name, text[at..]) > 0 { break }
         if name_len <= best_len || at + name_len > text.len { continue }
         if !str.eq(text[at..at + name_len], name) { continue }
         if name[name_len - 1usize] != 59u8 && in_attribute && at + name_len < text.len {
@@ -743,7 +749,8 @@ type Ps = struct {
     mode: u8, orig_mode: u8,
     head: NodeId, form: NodeId, ctx: NodeId, fragment: bool,
     frameset_ok: bool, foster: bool, quirks: u8, ignore_lf: bool, stopped: bool, scripting: bool,
-    pend: []u8, npend: usize, xml: bool
+    pend: []u8, npend: usize, xml: bool,
+    text_id: NodeId, text_buf: []u8
 }
 
 fn nm_in(set: str, name: str) -> bool {
@@ -797,21 +804,33 @@ fn pn_insert(p: *Ps, parent: NodeId, id: NodeId, before: NodeId) {
     if prev == NONE { p.nodes[usize(parent)].first_child = id } else { p.nodes[usize(prev)].next_sibling = id }
 }
 
-// Text at (parent, before): merges into an adjacent text node.
+// Text at (parent, before): merges into an adjacent text node. The last text node's
+// buffer is kept and doubled, so a text split by an ignored tag is not re-copied whole.
 fn pn_text(p: *Ps, parent: NodeId, before: NodeId, data: str) -> err {
     if data.len == 0usize { ret ok }
     var prev = p.nodes[usize(parent)].last_child
     if before != NONE { prev = p.nodes[usize(before)].previous_sibling }
     if prev != NONE && p.nodes[usize(prev)].kind == .Text {
         let old = p.nodes[usize(prev)].value
-        let merged = try mem.alloc[u8](p.a, old.len + data.len)
-        mem.copy[u8](merged[..old.len], old)
-        mem.copy[u8](merged[old.len..], data)
-        p.nodes[usize(prev)].value = merged
+        let total = old.len + data.len
+        if p.text_id == prev && p.text_buf.len >= total {
+            mem.copy[u8](p.text_buf[old.len..total], data)
+            p.nodes[usize(prev)].value = p.text_buf[0usize..total]
+            ret ok
+        }
+        var capacity = total
+        if total <= 9223372036854775807usize { capacity = total * 2usize }
+        let merged = try mem.alloc[u8](p.a, capacity)
+        mem.copy[u8](merged[0usize..old.len], old)
+        mem.copy[u8](merged[old.len..total], data)
+        p.nodes[usize(prev)].value = merged[0usize..total]
+        p.text_id = prev
+        p.text_buf = merged
         ret ok
     }
     let id = try pn_new(p, .Text, .Html, "", data)
     pn_insert(p, parent, id, before)
+    p.text_id = NONE
     ret ok
 }
 
@@ -3554,7 +3573,7 @@ fn ps_new(a: *mem.Arena, source: str, options: Options) -> (Ps, err) {
     let nodes = try mem.alloc[Node](a, options.max_nodes)
     let open = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
     let fmt_list = try mem.alloc[NodeId](a, usize(options.max_depth) + 1usize)
-    var p = Ps { a: a, src: src, pos: 0usize, nodes: nodes, used: 0usize, options: options, ts: TS_DATA, last_start: "", open: open, nopen: 0usize, fmt: fmt_list, nfmt: 0usize, tmodes: zero, ntmodes: 0usize, mode: M_INITIAL, orig_mode: M_INITIAL, head: NONE, form: NONE, ctx: NONE, fragment: false, frameset_ok: true, foster: false, quirks: Q_NO, ignore_lf: false, stopped: false, scripting: false, pend: zero, npend: 0usize, xml: xml_syntax }
+    var p = Ps { a: a, src: src, pos: 0usize, nodes: nodes, used: 0usize, options: options, ts: TS_DATA, last_start: "", open: open, nopen: 0usize, fmt: fmt_list, nfmt: 0usize, tmodes: zero, ntmodes: 0usize, mode: M_INITIAL, orig_mode: M_INITIAL, head: NONE, form: NONE, ctx: NONE, fragment: false, frameset_ok: true, foster: false, quirks: Q_NO, ignore_lf: false, stopped: false, scripting: false, pend: zero, npend: 0usize, xml: xml_syntax, text_id: NONE, text_buf: zero }
     ret (p, ok)
 }
 

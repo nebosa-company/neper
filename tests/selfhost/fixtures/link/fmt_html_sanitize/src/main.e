@@ -433,5 +433,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if san.url_allowed("java\tscript:x", san.default_policy()) != false { os.exit(236) }
     if san.url_allowed("/a:b", san.default_policy()) != true { os.exit(237) }
     if san.url_allowed("#frag", san.default_policy()) != true { os.exit(238) }
+    // #268: CSS functions that fetch a string URL are dropped, and property names fold case.
+    var url_style = san.default_policy()
+    url_style.generic_attributes = "style"
+    url_style.css_properties = "color background-image cursor content"
+    let (u0_o, u0_e) = san.sanitize(a, "<p style=\"COLOR: red\">a</p>", url_style)
+    if u0_e != ok { os.exit(239) }
+    if !str.eq(u0_o, "<p style=\"color: red\">a</p>") { os.exit(240) }
+    let (u1_o, u1_e) = san.sanitize(a, "<p style=\"background-image: image-set('https://t.example/p.png' 1x)\">a</p>", url_style)
+    if u1_e != ok { os.exit(241) }
+    if !str.eq(u1_o, "<p>a</p>") { os.exit(242) }
+    let (u2_o, u2_e) = san.sanitize(a, "<p style=\"cursor: src('//evil.example/x')\">a</p>", url_style)
+    if u2_e != ok { os.exit(243) }
+    if !str.eq(u2_o, "<p>a</p>") { os.exit(244) }
+    let (u3_o, u3_e) = san.sanitize(a, "<p style=\"content: 'HTTPS://t.example/'\">a</p>", url_style)
+    if u3_e != ok { os.exit(245) }
+    if !str.eq(u3_o, "<p>a</p>") { os.exit(246) }
     ret ok
 }
