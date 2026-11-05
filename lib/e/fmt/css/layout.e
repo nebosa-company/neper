@@ -2465,9 +2465,13 @@ fn shy_hyphen_w(l: *Layout, p: Piece) -> f64 {
 }
 
 // The advance of an opening punctuation that hangs at the start of a line (`hanging-punctuation: first`), 0 when the
-// piece does not start with one. The set is css-text's: the ASCII openers plus the typographic quotes.
+// piece does not start with one or when the box that holds it brings its own border or padding on that side (the
+// punctuation is then inside the box, not at the line's content edge). The set is css-text's: the ASCII openers, the
+// typographic quotes and U+3000 IDEOGRAPHIC SPACE.
 fn hanging_punct_w(l: *Layout, p: Piece) -> f64 {
     if p.kind != .Text || p.clen == 0usize { ret 0.0f64 }
+    let pb = &l.boxes.items[usize(p.box)]
+    if pb.border[3usize] > 0.0f64 || pb.padding[3usize] > 0.0f64 { ret 0.0f64 }
     let proc = l.boxes.items[usize(p.box)].proc
     if p.start >= proc.len { ret 0.0f64 }
     let c = proc[p.start]
@@ -2478,6 +2482,8 @@ fn hanging_punct_w(l: *Layout, p: Piece) -> f64 {
         let c2 = proc[p.start + 1usize]
         let c3 = proc[p.start + 2usize]
         if c2 == 128u8 && (c3 == 152u8 || c3 == 156u8) { n = 3usize }
+    } else if c == 227u8 && p.start + 2usize < proc.len {
+        if proc[p.start + 1usize] == 128u8 && proc[p.start + 2usize] == 128u8 { n = 3usize }
     }
     if n == 0usize { ret 0.0f64 }
     ret text_advance(l, bstyle(l, p.box), proc[p.start..p.start + n])
