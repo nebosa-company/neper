@@ -23,6 +23,9 @@ fn payoff(o: *Option, z: f64) -> f64 {
 fn square(o: *Option, z: f64) -> f64 { ret z * z }
 fn identity(o: *Option, z: f64) -> f64 { ret z }
 
+// A shifted standard normal: huge mean, unit variance.
+fn shifted(o: *Option, z: f64) -> f64 { ret 1.0e10f64 + z }
+
 fn near(x: f64, want: f64, eps: f64) -> bool {
     var d = x - want
     if d < 0.0f64 { d = 0.0f64 - d }
@@ -62,6 +65,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var no_samples: [0]f64 = zero
     let (_, control_wrap) = mc.control_variate[Option](&option, payoff, terminal, 100.0f64, &r, ~0usize, no_samples[..])
     if control_wrap != mc.Invalid { os.exit(3i32) }
+
+    // 4: a shifted payoff keeps its variance (Welford, not sum2 - n mean^2).
+    let (shifted_estimate, shifted_error) = mc.estimate[Option](&option, shifted, &r, count)
+    if shifted_error != ok { os.exit(4i32) }
+    if shifted_estimate.standard_error < 0.005f64 || shifted_estimate.standard_error > 0.01f64 { os.exit(4i32) }
 
     try io.print("math mc ok\n")
     ret ok

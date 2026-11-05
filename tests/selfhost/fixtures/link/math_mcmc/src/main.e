@@ -139,6 +139,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !plausible(m[..], 0.08f64) { os.exit(3i32) }
     let (_, hm_invalid) = mcmc.hmc[Target](&goal, log_density, grad, &r, x[..], 0.2f64, 0usize, samples, count, scratch[..])
     if hm_invalid != mcmc.Invalid { os.exit(3i32) }
+    // #1611: NaN and infinite steps are rejected before sampling.
+    let (_, hm_nan) = mcmc.hmc[Target](&goal, log_density, grad, &r, x[..], math.nan64(), 10usize, samples, count, scratch[..])
+    if hm_nan != mcmc.Invalid { os.exit(3i32) }
+    let (_, hm_inf) = mcmc.hmc[Target](&goal, log_density, grad, &r, x[..], math.inf64(), 10usize, samples, count, scratch[..])
+    if hm_inf != mcmc.Invalid { os.exit(3i32) }
 
     // 4: NUTS moves nearly every step and matches the moments too.
     x[0usize] = 4.0f64
@@ -151,6 +156,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if nt_room != mcmc.TooSmall { os.exit(4i32) }
     let (_, nt_invalid) = mcmc.nuts[Target](&goal, log_density, grad, &r, x[..], 0.3f64, 0usize, samples, count, scratch[..])
     if nt_invalid != mcmc.Invalid { os.exit(4i32) }
+    let (_, nt_nan) = mcmc.nuts[Target](&goal, log_density, grad, &r, x[..], math.nan64(), 6usize, samples, count, scratch[..])
+    if nt_nan != mcmc.Invalid { os.exit(4i32) }
+    let (_, nt_inf) = mcmc.nuts[Target](&goal, log_density, grad, &r, x[..], math.inf64(), 6usize, samples, count, scratch[..])
+    if nt_inf != mcmc.Invalid { os.exit(4i32) }
 
     // 5: variational inference (L060). Mean-field ADVI on the correlation-0.8 normal
     // finds mean 0 and sd sqrt(1 - rho^2) = 0.6 (the mean-field theorem), ELBO
@@ -216,6 +225,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if vi_steps != mcmc.Invalid { os.exit(8i32) }
     let (_, vi_shape) = mcmc.advi[Target](&gamma_target, log_gamma, grad_gamma, &r, vmean[..], one_log[..], 10usize, 2usize, 0.05f64, vscratch[..])
     if vi_shape != mcmc.Invalid { os.exit(8i32) }
+    // #1611: a NaN or infinite rate is rejected before optimizing.
+    let (_, vi_nan) = mcmc.advi[Target](&gamma_target, log_gamma, grad_gamma, &r, one_mean[..], one_log[..], 10usize, 2usize, math.nan64(), vscratch[..])
+    if vi_nan != mcmc.Invalid { os.exit(8i32) }
+    let (_, vi_inf) = mcmc.advi[Target](&gamma_target, log_gamma, grad_gamma, &r, one_mean[..], one_log[..], 10usize, 2usize, math.inf64(), vscratch[..])
+    if vi_inf != mcmc.Invalid { os.exit(8i32) }
     if mcmc.variational_samples(&r, one_mean[..], one_log[..], samples[..3usize], 4usize) != mcmc.TooSmall { os.exit(8i32) }
 
     try io.print("math mcmc ok\n")

@@ -16,32 +16,34 @@ error Invalid
 // The plain estimator.
 fn estimate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err) {
     if count < 2usize { ret (zero, Invalid) }
-    var sum = 0.0f64
-    var sum2 = 0.0f64
+    var mean = 0.0f64
+    var m2 = 0.0f64
     var i = 0usize
     while i < count {
         let v = f(ctx, dist.normal(r))
-        sum += v
-        sum2 += v * v
         i += 1usize
+        let delta = v - mean
+        mean += delta / f64(i)
+        m2 += delta * (v - mean)
     }
-    ret (finish(sum, sum2, count), ok)
+    ret (finish(mean, m2, count), ok)
 }
 
 // Antithetic variates: `count` pairs, each the average of `f(z)` and `f(-z)`.
 fn antithetic[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err) {
     if count < 2usize { ret (zero, Invalid) }
-    var sum = 0.0f64
-    var sum2 = 0.0f64
+    var mean = 0.0f64
+    var m2 = 0.0f64
     var i = 0usize
     while i < count {
         let z = dist.normal(r)
         let v = 0.5f64 * (f(ctx, z) + f(ctx, 0.0f64 - z))
-        sum += v
-        sum2 += v * v
         i += 1usize
+        let delta = v - mean
+        mean += delta / f64(i)
+        m2 += delta * (v - mean)
     }
-    ret (finish(sum, sum2, count), ok)
+    ret (finish(mean, m2, count), ok)
 }
 
 // A control variate `g` with known mean `g_mean`: the estimate is the mean of
@@ -75,22 +77,23 @@ fn control_variate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, g: fn(*Ctx, f6
     }
     var beta = 0.0f64
     if g_var > 0.0f64 { beta = cov / g_var }
-    var sum = 0.0f64
-    var sum2 = 0.0f64
+    var mean = 0.0f64
+    var m2 = 0.0f64
     i = 0usize
     while i < count {
         let v = samples[2usize * i] - beta * (samples[2usize * i + 1usize] - g_mean)
-        sum += v
-        sum2 += v * v
         i += 1usize
+        let delta = v - mean
+        mean += delta / f64(i)
+        m2 += delta * (v - mean)
     }
-    ret (finish(sum, sum2, count), ok)
+    ret (finish(mean, m2, count), ok)
 }
 
-fn finish(sum: f64, sum2: f64, count: usize) -> Estimate {
+fn finish(mean: f64, m2: f64, count: usize) -> Estimate {
     let n = f64(count)
-    let mean = sum / n
-    var variance = (sum2 - n * mean * mean) / (n - 1.0f64)
+    var variance = 0.0f64
+    if count > 1usize { variance = m2 / (n - 1.0f64) }
     if variance < 0.0f64 { variance = 0.0f64 }
     ret Estimate { mean: mean, standard_error: math.sqrt[f64](variance / n), count: count }
 }

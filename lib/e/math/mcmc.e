@@ -18,6 +18,9 @@ type Chain = struct { accepted: usize, proposed: usize }
 error TooSmall
 error Invalid
 
+// A finite f64: neither NaN nor an infinity (`v - v` is NaN for both).
+fn finite(v: f64) -> bool { ret v - v == 0.0f64 }
+
 // Whether `len` holds `rows` rows of `width` entries without forming a
 // potentially overflowing product. Every sampler validates row storage before
 // using a row slice.
@@ -122,7 +125,7 @@ fn leapfrog[Ctx: type](ctx: *Ctx, g: fn(*Ctx, []const f64, []f64), x: []f64, p: 
 fn hmc[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, leaps: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err) {
     let n = x.len
     if !has_rows(samples.len, count, n) || !has_rows(scratch.len, n, 3usize) { ret (zero, TooSmall) }
-    if leaps == 0usize || step <= 0.0f64 { ret (zero, Invalid) }
+    if leaps == 0usize || !finite(step) || step <= 0.0f64 { ret (zero, Invalid) }
     var candidate = scratch[..n]
     var p = scratch[n..2usize * n]
     var gradient = scratch[2usize * n..3usize * n]
@@ -229,7 +232,7 @@ fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g
 fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, max_depth: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err) {
     let n = x.len
     if !has_rows(samples.len, count, n) || !has_nuts_scratch(scratch.len, n, max_depth) { ret (zero, TooSmall) }
-    if step <= 0.0f64 || max_depth == 0usize { ret (zero, Invalid) }
+    if !finite(step) || step <= 0.0f64 || max_depth == 0usize { ret (zero, Invalid) }
     var regions = scratch[..max_depth * n * 5usize]
     var at = max_depth * n * 5usize
     var top = scratch[at..at + 5usize * n]
@@ -344,7 +347,7 @@ fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *ran
 // `scratch.len >= 11 * n`.
 fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err) {
     let n = mean.len
-    if log_sd.len != n || steps == 0usize || draws == 0usize || rate <= 0.0f64 || n == 0usize { ret (zero, Invalid) }
+    if log_sd.len != n || steps == 0usize || draws == 0usize || !finite(rate) || rate <= 0.0f64 || n == 0usize { ret (zero, Invalid) }
     if !has_rows(scratch.len, n, 11usize) { ret (zero, TooSmall) }
     var eps = scratch[..n]
     var z = scratch[n..2usize * n]
