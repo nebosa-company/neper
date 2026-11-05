@@ -27,8 +27,10 @@ fn to_fixed(a: *mem.Arena, x: f64, digits: usize) -> str {
         if negative { ret "-Infinity" }
         ret "Infinity"
     }
-    // the exact digits to `digits + 25` places, then rounded by looking at the next digit
-    let extra = digits + 25usize
+    // the exact digits to `digits + 25` places (capped at the 99 digits
+    // push_f64_fixed supports; only the digit after `digits` is looked at)
+    var extra = digits + 25usize
+    if extra > 99usize { extra = 99usize }
     let (b, be) = str.builder(a, 400usize)
     if be != ok { ret "0" }
     var builder = b
@@ -113,7 +115,10 @@ fn h_totext(c: *f.Call) -> f.Value {
         let fmt_value = f.to_text(c.a, c.args[1usize])
         var fmt = ""
         if f.is_error(fmt_value) { fmt = f.code_text(fmt_value.code) } else { fmt = fmt_value.s }
-        if v.kind == .Date { ret f.text(dt.format_date(c.a, v.n, fmt)) }
+        if v.kind == .Date {
+            if v.n != v.n { ret f.generic_error("Invalid time value") }
+            ret f.text(dt.format_date(c.a, v.n, fmt))
+        }
         // /0\.(0+)/
         var i = 0usize
         var zeros = 0usize
@@ -131,7 +136,9 @@ fn h_totext(c: *f.Call) -> f.Value {
             let n = f.to_number(c.a, v)
             if f.is_error(n) { ret n }
             if n.kind == .Blank { ret f.text("") }
-            if zeros > 100usize { ret f.generic_error("toFixed() digits argument must be between 0 and 100") }
+            // 99 and 100 places need a precision push_f64_fixed cannot produce,
+            // so they refuse like 101 rather than silently answering "0".
+            if zeros > 98usize { ret f.generic_error("toFixed() digits argument must be between 0 and 100") }
             ret f.text(to_fixed(c.a, n.n, zeros))
         }
     }

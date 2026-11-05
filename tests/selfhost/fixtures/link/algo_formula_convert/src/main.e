@@ -4,6 +4,7 @@
 // and records each outcome as `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]` or `E|code|hex`. The fixture
 // evaluates the same source with the Neper registry. A line is `{"src": ..., "expect": ...}`.
 use e.algo.formula as f
+use e.algo.formula.convert as fcv
 //__USES__
 use e.fmt.json as json
 use e.io
@@ -134,7 +135,7 @@ fn build_registry(a: *mem.Arena) -> f.Registry {
     let (r, e) = f.registry(a, 600usize)
     var reg = r
     if f.register_core(&reg, a) != ok { os.exit(90i32) }
-    //__REGISTERS__
+    if fcv.register(&reg, a) != ok { os.exit(90i32) }
     ret reg
 }
 
@@ -214,10 +215,35 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry) -> u8 {
     ret 0u8
 }
 
+// `TEXT(1.5, "0.<count zeros>")`.
+fn fixed_expr(a: *mem.Arena, zeros: usize) -> str {
+    var fmt = "0."
+    var i = 0usize
+    while i < zeros {
+        fmt = f.join(a, fmt, "0")
+        i += 1usize
+    }
+    var src = "TEXT(1.5, \""
+    src = f.join(a, src, fmt)
+    ret f.join(a, src, "\")")
+}
+
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     var registry = build_registry(a)
     //__VECTOR_CALLS__
+    var ctx = make_context(a)
+    // #273: 75 fraction digits still format (99/100 refuse like 101), and an
+    // invalid date answers an error instead of trapping.
+    let at74 = f.evaluate(a, fixed_expr(a, 74usize), &ctx, &registry)
+    let at75 = f.evaluate(a, fixed_expr(a, 75usize), &ctx, &registry)
+    if at74.kind != .Text || at74.s.len != 76usize || !str.starts_with(at74.s, "1.5") { os.exit(101i32) }
+    if at75.kind != .Text || at75.s.len != 77usize || !str.starts_with(at75.s, "1.5") { os.exit(101i32) }
+    let at100 = f.evaluate(a, fixed_expr(a, 100usize), &ctx, &registry)
+    if !f.is_error(at100) { os.exit(101i32) }
+    let bad_date = f.evaluate(a, "TEXT(DATE(300000,1,1), \"YYYY\")", &ctx, &registry)
+    if !f.is_error(bad_date) { os.exit(102i32) }
     try io.print("algo formula convert ok")
     ret ok
 }
+

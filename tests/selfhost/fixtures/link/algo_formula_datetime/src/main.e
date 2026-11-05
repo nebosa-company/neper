@@ -4,6 +4,7 @@
 // and records each outcome as `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]` or `E|code|hex`. The fixture
 // evaluates the same source with the Neper registry. A line is `{"src": ..., "expect": ...}`.
 use e.algo.formula as f
+use e.algo.formula.datetime as fdt
 //__USES__
 use e.fmt.json as json
 use e.io
@@ -134,7 +135,7 @@ fn build_registry(a: *mem.Arena) -> f.Registry {
     let (r, e) = f.registry(a, 600usize)
     var reg = r
     if f.register_core(&reg, a) != ok { os.exit(90i32) }
-    //__REGISTERS__
+    if fdt.register(&reg, a) != ok { os.exit(90i32) }
     ret reg
 }
 
@@ -214,10 +215,39 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry) -> u8 {
     ret 0u8
 }
 
+// A holiday array expression of `count` distinct dates from 2024-01-01.
+fn holiday_expr(a: *mem.Arena, count: usize) -> str {
+    var src = "NETWORKDAYS(DATE(2024,1,1),DATE(2024,12,31),[ADD_DAYS(DATE(2024,1,1),0)"
+    var i = 1usize
+    while i < count {
+        src = f.join(a, src, ",ADD_DAYS(DATE(2024,1,1),")
+        src = f.join(a, src, f.number_text(a, f64(i)))
+        src = f.join(a, src, ")")
+        i += 1usize
+    }
+    ret f.join(a, src, "])")
+}
+
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     var registry = build_registry(a)
     //__VECTOR_CALLS__
+    var ctx = make_context(a)
+    // #272: dates outside the i64 Timestamp range keep their offset-free value,
+    // WORKDAY clips to the valid range, and more than 64 holidays are all read.
+    let plain = f.evaluate(a, "DATE(2300,1,1)", &ctx, &registry)
+    let shifted = f.evaluate(a, "SET_TIMEZONE(DATE(2300,1,1),\"America/New_York\")", &ctx, &registry)
+    if plain.kind != .Date || shifted.kind != .Date || shifted.n != plain.n { os.exit(101i32) }
+    // An unclipped WORKDAY was a finite date 11 days past the valid range.
+    let clipped = f.evaluate(a, "WORKDAY(DATE(275760,9,10),10)", &ctx, &registry)
+    if clipped.kind != .Date || clipped.n == clipped.n { os.exit(101i32) }
+    let many = f.evaluate(a, holiday_expr(a, 70usize), &ctx, &registry)
+    let capped = f.evaluate(a, holiday_expr(a, 64usize), &ctx, &registry)
+    if many.kind != .Number || capped.kind != .Number || many.n != capped.n - 4.0f64 { os.exit(102i32) }
+    let quick = f.evaluate(a, "NETWORKDAYS(DATE(2000,1,1),DATE(2000,12,31))", &ctx, &registry)
+    if quick.kind != .Number || quick.n != 260.0f64 { os.exit(102i32) }
     try io.print("algo formula datetime ok")
     ret ok
 }
+
+

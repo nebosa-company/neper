@@ -922,23 +922,50 @@ fn h_networkdays(c: *f.Call) -> f.Value {
     if f.is_error(s_early) { ret s_early }
     if f.is_error(e_early) { ret e_early }
     if !s_valid || !e_valid { ret f.blank() }
-    var holidays: [64]f64 = zero
-    let hn = holiday_list(c, 2usize, holidays[0..])
-    var count = 0.0f64
-    var forward = e_ms >= s_ms
-    var cur = 0.0f64
-    var last = 0.0f64
-    if forward {
-        cur = utc_midnight(s_ms)
-        last = utc_midnight(e_ms)
-    } else {
-        cur = utc_midnight(e_ms)
-        last = utc_midnight(s_ms)
+    var holiday_cap = 1usize
+    if c.args.len > 2usize && c.args[2usize].kind == .Array { holiday_cap = c.args[2usize].items.len }
+    if holiday_cap == 0usize { holiday_cap = 1usize }
+    let (holidays, holiday_error) = mem.alloc[f64](c.a, holiday_cap)
+    if holiday_error != ok { ret f.generic_error("holiday list is too large") }
+    let hn = holiday_list(c, 2usize, holidays)
+    // Whole weeks arithmetically, then at most six leftover days: no unbounded
+    // day-by-day walk over the whole span.
+    var start = utc_midnight(s_ms)
+    var stop = utc_midnight(e_ms)
+    var forward = true
+    if e_ms < s_ms {
+        forward = false
+        start = utc_midnight(e_ms)
+        stop = utc_midnight(s_ms)
     }
-    while cur <= last {
-        let dow = parts_of(cur).weekday
-        if dow != 0.0f64 && dow != 6.0f64 && !is_holiday(holidays[0..], hn, cur) { count += 1.0f64 }
-        cur += day_ms()
+    let span = i64(math.trunc[f64]((stop - start) / day_ms()))
+    var count = f64((span / 7i64) * 5i64)
+    let remainder = usize(span % 7i64)
+    let first_weekday = parts_of(start).weekday
+    var k = 0usize
+    while k < remainder {
+        var dow = first_weekday + f64(k)
+        if dow >= 7.0f64 { dow -= 7.0f64 }
+        if dow != 0.0f64 && dow != 6.0f64 { count += 1.0f64 }
+        k += 1usize
+    }
+    // A holiday in the span removes a counted weekday; a repeated date counts once.
+    k = 0usize
+    while k < hn {
+        let h = holidays[k]
+        if h >= start && h <= stop {
+            let hdow = parts_of(h).weekday
+            if hdow != 0.0f64 && hdow != 6.0f64 {
+                var duplicate = false
+                var q = 0usize
+                while q < k {
+                    if holidays[q] == h { duplicate = true }
+                    q += 1usize
+                }
+                if !duplicate { count -= 1.0f64 }
+            }
+        }
+        k += 1usize
     }
     if forward { ret f.number(count) }
     ret f.number(0.0f64 - count)
@@ -950,8 +977,12 @@ fn h_workday(c: *f.Call) -> f.Value {
     if !s_valid { ret f.blank() }
     let days = f.to_number(c.a, c.args[1usize])
     if f.is_error(days) { ret days }
-    var holidays: [64]f64 = zero
-    let hn = holiday_list(c, 2usize, holidays[0..])
+    var holiday_cap = 1usize
+    if c.args.len > 2usize && c.args[2usize].kind == .Array { holiday_cap = c.args[2usize].items.len }
+    if holiday_cap == 0usize { holiday_cap = 1usize }
+    let (holidays, holiday_error) = mem.alloc[f64](c.a, holiday_cap)
+    if holiday_error != ok { ret f.generic_error("holiday list is too large") }
+    let hn = holiday_list(c, 2usize, holidays)
     var remaining = 0.0f64
     if days.kind != .Blank { remaining = math.trunc[f64](days.n) }
     var step = day_ms()
@@ -964,7 +995,7 @@ fn h_workday(c: *f.Call) -> f.Value {
         let dow = parts_of(cur).weekday
         if dow != 0.0f64 && dow != 6.0f64 && !is_holiday(holidays[0..], hn, cur) { remaining -= 1.0f64 }
     }
-    ret f.date(cur)
+    ret f.date(time_clip(cur))
 }
 
 fn h_yearfrac(c: *f.Call) -> f.Value {
@@ -1307,6 +1338,10 @@ fn h_set_timezone(c: *f.Call) -> f.Value {
     if db_error == ok {
         let (zone, zone_error) = tz.zone(&db, name)
         if zone_error == ok {
+            // The Timestamp nanoseconds are i64: dates outside about 1677..2262
+            // cannot be shifted, so answer the unchanged (offset-free) value
+            // instead of trapping or wrapping.
+            if ms > 9223372036854.0f64 || ms < -9223372036854.0f64 { ret f.date(ms) }
             let instant = time.Timestamp { nanos: i64(ms) * 1000000i64 }
             let local = tz.to_local(zone, instant)
             ret f.date(date_utc(f64(local.date.year), f64(local.date.month) - 1.0f64, f64(local.date.day), f64(local.time.hour), f64(local.time.minute), f64(local.time.second), f64(local.time.nanos / 1000000u32)))
