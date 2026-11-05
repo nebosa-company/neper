@@ -97,6 +97,7 @@ type Style = struct {
     color: u32, font_size: f64, font_weight: f64, font_style: FontStyle, font_family: str, line_height: Len,
     letter_spacing: f64, word_spacing: f64, text_indent: Len,
     text_align: TextAlign, text_transform: TextTransform, white_space: WhiteSpace, word_break: WordBreak,
+    hanging_punctuation: u8,
     overflow_wrap: OverflowWrap, text_overflow: TextOverflow, direction: Direction, writing_mode: WritingMode,
     vertical_align: VAlign, vertical_align_length: Len,
     decoration_line: u8, decoration_color: u32, decoration_current: bool, decoration_style: DecorationStyle,
@@ -371,6 +372,7 @@ fn initial_style() -> Style {
     s.white_space = .Normal
     s.word_break = .Normal
     s.overflow_wrap = .Normal
+    s.hanging_punctuation = 0u8
     s.text_overflow = .Clip
     s.direction = .Ltr
     s.writing_mode = .HorizontalTb
@@ -412,6 +414,7 @@ fn inherit_from(parent: *const Style) -> Style {
     s.white_space = parent.white_space
     s.word_break = parent.word_break
     s.overflow_wrap = parent.overflow_wrap
+    s.hanging_punctuation = parent.hanging_punctuation
     s.text_overflow = s.text_overflow
     s.direction = parent.direction
     s.writing_mode = parent.writing_mode
@@ -729,6 +732,15 @@ fn apply_text(ap: *Ap, prop: str, v: str) -> bool {
     }
     if str.eq(prop, "overflow-wrap") || str.eq(prop, "word-wrap") {
         s.overflow_wrap = kw[OverflowWrap](low, ",normal,break-word,anywhere,", s.overflow_wrap)
+        ret true
+    }
+    if str.eq(prop, "hanging-punctuation") {
+        var f: u8 = 0u8
+        if str.contains(low, "first") { f = f | 1u8 }
+        if str.contains(low, "last") { f = f | 2u8 }
+        if str.contains(low, "force-end") { f = f | 4u8 }
+        if str.contains(low, "allow-end") { f = f | 8u8 }
+        s.hanging_punctuation = f
         ret true
     }
     if str.eq(prop, "text-overflow") {

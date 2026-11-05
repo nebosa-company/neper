@@ -199,3 +199,4 @@ line-clamp-bfc-001.html | line-clamp-bfc-001-ref.html | match
 overflow-clip-margin-rounded-001.html | overflow-clip-margin-rounded-001-ref.html | match
 dir-auto-first-strong-rtl.html | dir-auto-first-strong-rtl-ref.html | match
 overflow-wrap-inline-anywhere-001.html | overflow-wrap-inline-anywhere-001-ref.html | match
+hanging-punct-first-001.html | hanging-punct-first-001-ref.html | match

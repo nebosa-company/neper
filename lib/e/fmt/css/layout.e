@@ -2464,6 +2464,25 @@ fn shy_hyphen_w(l: *Layout, p: Piece) -> f64 {
     ret 0.0f64
 }
 
+// The advance of an opening punctuation that hangs at the start of a line (`hanging-punctuation: first`), 0 when the
+// piece does not start with one. The set is css-text's: the ASCII openers plus the typographic quotes.
+fn hanging_punct_w(l: *Layout, p: Piece) -> f64 {
+    if p.kind != .Text || p.clen == 0usize { ret 0.0f64 }
+    let proc = l.boxes.items[usize(p.box)].proc
+    if p.start >= proc.len { ret 0.0f64 }
+    let c = proc[p.start]
+    var n = 0usize
+    if c == 40u8 || c == 91u8 || c == 123u8 {
+        n = 1usize
+    } else if c == 226u8 && p.start + 2usize < proc.len {
+        let c2 = proc[p.start + 1usize]
+        let c3 = proc[p.start + 2usize]
+        if c2 == 128u8 && (c3 == 152u8 || c3 == 156u8) { n = 3usize }
+    }
+    if n == 0usize { ret 0.0f64 }
+    ret text_advance(l, bstyle(l, p.box), proc[p.start..p.start + n])
+}
+
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64) {
     if bxid == NONE || text.len == 0usize { ret }
     let fm = l.measure.metrics(l.measure.ctx, bstyle(l, bxid))
@@ -3491,6 +3510,7 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
         si += 1usize
     }
     var cx = ax
+    var line_hung = false
     var tf_box = NONE
     var tf_start = 0.0f64
     var tf_from = 0usize
@@ -3532,6 +3552,16 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 tf_to = this_to
                 tf_w += this_w
             } else {
+                // `hanging-punctuation: first` lets the line's opening punctuation hang left of the content edge and
+                // take no room in the line, so the rest of the text still starts at the edge.
+                if x.first_line && k == usize(lead) && !line_hung && (bstyle(l, p.box).hanging_punctuation & 1u8) != 0u8 {
+                    let hw = hanging_punct_w(l, p)
+                    if hw > 0.0f64 {
+                        cx -= hw
+                        this_w -= hw
+                        line_hung = true
+                    }
+                }
                 if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
                 tf_box = p.box
                 tf_start = cx
