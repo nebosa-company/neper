@@ -12,6 +12,7 @@ use e.mem
 use e.os
 use e.fs
 use e.fs.vfs as vfs
+use e.str
 
 fn same(x: []const u8, y: []const u8) -> bool {
     if x.len != y.len { ret false }
@@ -2658,7 +2659,114 @@ fn host_scenarios(a: *mem.Arena) -> i32 {
     ret code
 }
 
+// #724/#729 over e.fs: a relative symlink target resolves from the link's directory, not
+// from the link, and a no-overwrite replace whose destination probe fails must not fall
+// through to a rename that replaces it. `canonical`/`rename` select one half.
+fn os_regressions(a: *mem.Arena, mode: str) -> i32 {
+    let root = "np-os-regressions"
+    let made = fs.make_dirs(a, root)
+    if made != ok && made != fs.Exists { ret 1i32 }
+    let (sub, sub_error) = vfs.join_path(a, root, "d")
+    if sub_error != ok { ret 2i32 }
+    let (cdir, cdir_error) = vfs.join_path(a, sub, "cdir")
+    if cdir_error != ok { ret 3i32 }
+    let cdir_made = fs.make_dirs(a, cdir)
+    if cdir_made != ok && cdir_made != fs.Exists { ret 4i32 }
+    let (real, real_error) = vfs.join_path(a, cdir, "target.txt")
+    let (link, link_error) = vfs.join_path(a, cdir, "link")
+    if real_error != ok || link_error != ok { ret 5i32 }
+    if fs.write_file(a, real, "t") != ok { ret 6i32 }
+    let _ = fs.remove_file(a, link)
+    let linked = fs.symlink(a, "target.txt", link)
+    var code = 0i32
+    if linked == ok {
+        // Only hosts that can follow a relative link at all can resolve one.
+        let (followed, followed_error) = fs.metadata(a, link, true)
+        if followed_error == ok {
+            // A host that cannot canonicalize a plain file has no canonical to test.
+            let (direct, direct_error) = fs.canonical(a, real)
+            if direct_error == ok {
+                let (through, through_error) = fs.canonical(a, link)
+                if through_error != ok { code = 11i32 }
+                if code == 0i32 && !same(through, direct) { code = 12i32 }
+            }
+        }
+        // A self-link whose follow is a hard error (neither success nor NotFound) is the
+        // probe failure the guard covers: the replace must fail and leave the link alone.
+        if code == 0i32 && (mode.len == 0usize || str.eq(mode, "rename")) {
+            let (cycle, cycle_error) = vfs.join_path(a, cdir, "loop")
+            let (origin, origin_error) = vfs.join_path(a, cdir, "src.txt")
+            if cycle_error != ok || origin_error != ok { code = 20i32 } else {
+                let _ = fs.remove_file(a, cycle)
+                let _ = fs.remove_file(a, origin)
+                if fs.write_file(a, origin, "s") != ok { code = 21i32 }
+                if code == 0i32 && fs.symlink(a, "loop", cycle) != ok { code = 22i32 }
+                if code == 0i32 {
+                    let (cycle_info, cycle_info_error) = fs.metadata(a, cycle, true)
+                    if cycle_info_error != ok && cycle_info_error != fs.NotFound {
+                        var (held, held_error) = fs.root(a, cdir)
+                        if held_error != ok { code = 23i32 } else {
+                            let replaced = fs.replace_at(a, &held, "src.txt", &held, "loop", fs.ReplaceOptions { overwrite: false, durable: false })
+                            if replaced == ok { code = 24i32 } else {
+                                let (still, still_error) = fs.read_link(a, cycle)
+                                if still_error != ok || !same(still, "loop") { code = 25i32 }
+                            }
+                            let _ = fs.root_close(&held)
+                        }
+                    }
+                }
+                let _ = fs.remove_file(a, cycle)
+                let _ = fs.remove_file(a, origin)
+            }
+        }
+    } else if linked != fs.Denied {
+        code = 30i32
+    }
+    // Reachable on every host: an existing destination answers Exists and neither side
+    // changes, which is the no-overwrite contract the failed probe must not bypass.
+    if code == 0i32 && (mode.len == 0usize || str.eq(mode, "rename")) {
+        let (mv, mv_error) = vfs.join_path(a, root, "mv")
+        if mv_error != ok { code = 40i32 } else {
+            let mv_made = fs.make_dirs(a, mv)
+            if mv_made != ok && mv_made != fs.Exists { code = 41i32 } else {
+                let (from_path, from_error) = vfs.join_path(a, mv, "from.txt")
+                let (to_path, to_error) = vfs.join_path(a, mv, "to.txt")
+                if from_error != ok || to_error != ok { code = 42i32 } else {
+                    if fs.write_file(a, from_path, "from") != ok { code = 43i32 }
+                    if code == 0i32 && fs.write_file(a, to_path, "to") != ok { code = 44i32 }
+                    if code == 0i32 {
+                        var (held, held_error) = fs.root(a, mv)
+                        if held_error != ok { code = 45i32 } else {
+                            if fs.replace_at(a, &held, "from.txt", &held, "to.txt", fs.ReplaceOptions { overwrite: false, durable: false }) != fs.Exists { code = 46i32 }
+                            if code == 0i32 {
+                                let (kept, kept_error) = fs.read_file(a, to_path, 100usize)
+                                if kept_error != ok || !same(kept, "to") { code = 47i32 }
+                            }
+                            if code == 0i32 {
+                                let (kept_from, kept_from_error) = fs.read_file(a, from_path, 100usize)
+                                if kept_from_error != ok || !same(kept_from, "from") { code = 48i32 }
+                            }
+                            let _ = fs.root_close(&held)
+                        }
+                    }
+                    let _ = fs.remove_file(a, from_path)
+                    let _ = fs.remove_file(a, to_path)
+                    let _ = fs.remove_dir(a, mv)
+                }
+            }
+        }
+    }
+    let _ = fs.remove_file(a, link)
+    let _ = fs.remove_file(a, real)
+    let _ = fs.remove_dir(a, cdir)
+    let _ = fs.remove_dir(a, sub)
+    let _ = fs.remove_dir(a, root)
+    ret code
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
     var code = clean_cases(a)
     if code != 0i32 {
         report("clean", code)
@@ -2774,6 +2882,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if code != 0i32 {
         report("host drive root", code)
         os.exit(14i32)
+    }
+    code = os_regressions(a, mode)
+    if code != 0i32 {
+        report("os regression", code)
+        os.exit(15i32)
     }
     try io.print("fs vfs ok\n")
     ret ok

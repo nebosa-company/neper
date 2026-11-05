@@ -1801,6 +1801,12 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
         if probe == 0u32 {
             record_error_detail(20i32)
             answer = Exists
+        } else {
+            // Only NotFound proves the destination is absent. Any other probe failure
+            // (permission, I/O) cannot, and a rename would then overwrite against the
+            // no-overwrite contract: fail closed with the probe's own error.
+            let probed = wasi_error(probe)
+            if probed != NotFound { answer = probed }
         }
     }
     if answer == ok {
@@ -2836,6 +2842,9 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
         }
         mem.reset(a, checkpoint)
         let slept = neper_os_wait_u32(mem.cast[*u8](&watch_idle[0usize]), 0u32, WATCH_POLL_NS)
+        // A timeout or a spurious wake just polls again; a real polling error is
+        // the caller's to see, not something to spin on forever.
+        if slept != ok && slept != Timeout { ret (0usize, slept) }
     }
     ret (0usize, ok)
 }

@@ -70,6 +70,17 @@ fn main(a: *mem.Arena) -> err {
     if !saw_all(a, both, .Removed, "file.txt", .Added, "other.txt") { os.exit(33i32) }
     if os.watch_close(both) != ok { os.exit(34i32) }
 
+    // #725: one change into a one-element buffer reports that change, not zero.
+    let (single_watch, single_open) = os.watch_open(a, "np-watch-mod", false)
+    if single_open != ok { os.exit(50i32) }
+    if write_file_of(a, "np-watch-mod/one.txt", "x") != ok { os.exit(51i32) }
+    var single: [1]os.WatchEvent = zero
+    let (single_count, single_error) = os.watch_read(a, single_watch, single[..])
+    if single_error != ok || single_count != 1usize { os.exit(52i32) }
+    if single[0usize].action != .Added || !ends_with(single[0usize].path, "one.txt") { os.exit(52i32) }
+    if os.watch_close(single_watch) != ok { os.exit(53i32) }
+    if os.remove_file(a, "np-watch-mod/one.txt") != ok { os.exit(54i32) }
+
     if os.remove_file(a, "np-watch-mod/other.txt") != ok { os.exit(40i32) }
     if os.remove_dir(a, "np-watch-mod") != ok { os.exit(41i32) }
     ret ok
