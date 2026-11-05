@@ -123,10 +123,15 @@ fn code_in(mask: u32, code: u32) -> bool {
 fn call_opened(c: *Call, attempt: u32, stream: u32, now_ns: u64) {
     var i = 0usize
     while i < 5usize {
-        if c.slots[i].state == SLOT_OPENING && c.slots[i].attempt == attempt {
+        // A slot cancelled while the open was in flight is still waiting for its stream id:
+        // record it so the next poll can reset the real stream (it stays SLOT_CANCEL; the
+        // attempt was given up, it just never opened yet).
+        if (c.slots[i].state == SLOT_OPENING || c.slots[i].state == SLOT_CANCEL) && c.slots[i].attempt == attempt {
             c.slots[i].stream = stream
-            c.slots[i].state = SLOT_LIVE
-            c.slots[i].started_ns = now_ns
+            if c.slots[i].state == SLOT_OPENING {
+                c.slots[i].state = SLOT_LIVE
+                c.slots[i].started_ns = now_ns
+            }
         }
         i += 1usize
     }
@@ -274,6 +279,13 @@ fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action {
     var i = 0usize
     while i < 5usize {
         if c.slots[i].state == SLOT_CANCEL {
+            // The attempt was cancelled before the transport reported its stream id: there is
+            // nothing to reset yet. Keep the cancel pending; `call_opened` fills in the stream
+            // and the next poll emits it (HTTP/2 stream ids start at 1, so 0 means not open).
+            if c.slots[i].stream == 0u32 {
+                i += 1usize
+                continue
+            }
             c.slots[i].state = SLOT_ENDED
             ret Action { kind: ACTION_CANCEL, attempt: c.slots[i].attempt, stream: c.slots[i].stream, at_ns: 0u64, code: 0u32 }
         }

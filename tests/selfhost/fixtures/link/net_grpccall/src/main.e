@@ -600,6 +600,32 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// #870: an attempt cancelled while its stream is still opening keeps the cancel pending;
+// once `call_opened` reports the real stream id the CANCEL names it, instead of emitting
+// stream 0 and losing the stream. `late` selects this check.
+fn regressions(mode: str) -> i32 {
+    if mode.len != 0usize && !str.eq(mode, "late") { ret 0i32 }
+    var bucket = retry.Throttle { max_tokens: 10.0f64, ratio: 1.0f64, tokens: 10.0f64 }
+    let hedge = gc.Hedging { max_attempts: 2u32, delay_ns: 100u64, nonfatal: 0u32 }
+    var call = gc.call_hedge(hedge, &bucket, 0u64, 0u64, 0u64)
+    let first = gc.call_poll(&call, 0u64, 0.5f64)
+    if first.kind != gc.ACTION_START || first.attempt != 1u32 { ret 1i32 }
+    gc.call_opened(&call, 1u32, 1u32, 0u64)
+    let second = gc.call_poll(&call, 100u64, 0.5f64)
+    if second.kind != gc.ACTION_START || second.attempt != 2u32 { ret 2i32 }
+    // Attempt 1 wins on headers while attempt 2's open is still in flight.
+    gc.call_headers(&call, 1u32)
+    let before = gc.call_poll(&call, 100u64, 0.5f64)
+    if before.kind != gc.ACTION_WAIT { ret 3i32 }
+    gc.call_status(&call, 1u32, 0u32, "", false, 100u64, 0.5f64)
+    gc.call_opened(&call, 2u32, 3u32, 100u64)
+    let cancel = gc.call_poll(&call, 100u64, 0.5f64)
+    if cancel.kind != gc.ACTION_CANCEL || cancel.stream != 3u32 || cancel.attempt != 2u32 { ret 4i32 }
+    let done = gc.call_poll(&call, 100u64, 0.5f64)
+    if done.kind != gc.ACTION_DONE { ret 5i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -642,6 +668,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_38()) != 0u8 { os.exit(39i32) }
     if run_chunk(a, vectors_39()) != 0u8 { os.exit(40i32) }
     if run_chunk(a, vectors_40()) != 0u8 { os.exit(41i32) }
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    let regression = regressions(mode)
+    if regression != 0i32 { os.exit(200i32 + regression) }
     try io.print("net grpccall ok")
     ret ok
 }
