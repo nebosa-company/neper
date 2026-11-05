@@ -16174,6 +16174,14 @@ type FilterRules = struct { domains: []const str, selectors: []const str }
 
 fn add_unique(out: []str, n: *usize, v: str)
 fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules
+fn is_type_option(t: str) -> bool
+fn type_options_named(options: str) -> bool
+fn type_allows(options: str, dest: str) -> bool
+fn domain_allows(options: str, page_host: str) -> bool
+fn domain_list_allows(list: str, page_host: str) -> bool
+fn options_allow(options: str, dest: str, page_host: str, request_path: str) -> bool
+fn path_allows(options: str, request_path: str) -> bool
+fn host_index(domains: []const str, host: str) -> i64
 
 type SourceSet = struct { present: bool, items: []const str }
 type Csp = struct { blocks_scripts: bool, connect: SourceSet, image: SourceSet, style: SourceSet, font: SourceSet }
@@ -16243,6 +16251,9 @@ fn jar_process_response(a: *mem.Arena, j: *CookieJar, url: str, set_cookie: str,
 type CookieHeader = struct { present: bool, value: str }
 
 fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool, partition_key: str, has_partition_key: bool, now_ms: i64) -> CookieHeader
+fn host_is(d: str, host: str) -> bool
+fn host_blocked(domains: []const str, host: str) -> bool
+fn same_party(x: str, y: str) -> bool
 fn jar_clear(j: *CookieJar)
 fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str)
 fn cookie_domain_matches(a: *mem.Arena, host: str, c: Cookie) -> bool
@@ -20487,6 +20498,7 @@ fn round_half_away(x: f64) -> f64
 fn round_nearest(x: f64) -> f64
 fn clamp255(x: f64) -> i64
 fn clamp_f(x: f64, lo: f64, hi: f64) -> f64
+fn strip_outer_parens(expr: str) -> str
 fn try_parse(a: *mem.Arena, input: str) -> (f64, bool)
 fn parse_or(a: *mem.Arena, s: str, fallback: f64) -> f64
 fn dart_text(a: *mem.Arena, x: f64) -> str
@@ -20549,6 +20561,7 @@ fn rgb_to_hsl(r: f64, g: f64, b: f64) -> (f64, f64, f64)
 fn hue_to_rgb(hue: f64) -> (f64, f64, f64)
 fn hsl_to_argb(hue: f64, s: f64, l: f64, al: f64) -> u32
 fn strip_percent(a: *mem.Arena, s: str) -> str
+fn system_color(name: str) -> (u32, bool)
 fn parse_hsl(a: *mem.Arena, s: str) -> (u32, bool)
 fn hwb_to_argb(h: f64, w: f64, bl: f64, ai: i64) -> u32
 fn parse_hwb(a: *mem.Arena, s: str) -> (u32, bool)
