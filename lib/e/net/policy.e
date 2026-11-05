@@ -1782,8 +1782,9 @@ fn split_set_cookie(a: *mem.Arena, raw: str) -> []const str {
     ret out[0usize..n]
 }
 
-fn same_site_allowed(ss: u8, is_top_level: bool) -> bool {
+fn same_site_allowed(ss: u8, is_top_level: bool, is_same_site: bool) -> bool {
     if ss == 2u8 { ret true }
+    if ss == 0u8 { ret is_same_site }
     ret is_top_level
 }
 
@@ -1983,6 +1984,8 @@ fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool,
     let u = parse_url(a, url)
     if !u.valid { ret CookieHeader { present: false, value: "" } }
     let third_party = is_third_party(a, u, partition_key, has_partition_key)
+    // Same-site status is known only from the top-frame site; without it, Strict is suppressed.
+    let same_site_context = has_partition_key && !third_party
     var i = 0usize
     while i < j.count {
         let c = j.cookies[i]
@@ -2006,7 +2009,7 @@ fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool,
         if !cookie_domain_matches(a, u.host, c) { continue }
         if !cookie_path_matches(u.path, c.path) { continue }
         if c.secure && !str.eq(u.scheme, "https") { continue }
-        if !same_site_allowed(c.same_site, is_top_level) { continue }
+        if !same_site_allowed(c.same_site, is_top_level, same_site_context) { continue }
         if n > 0usize { out = join(a, out, "; ") }
         out = join(a, out, join(a, c.name, join(a, "=", c.value)))
         n += 1usize

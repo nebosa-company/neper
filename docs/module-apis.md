@@ -16234,7 +16234,7 @@ fn digit_run(s: str, at: usize, min: usize, max: usize) -> usize
 fn parse_cookie_date(a: *mem.Arena, raw: str) -> (i64, bool)
 fn num_of(s: str) -> i64
 fn split_set_cookie(a: *mem.Arena, raw: str) -> []const str
-fn same_site_allowed(ss: u8, is_top_level: bool) -> bool
+fn same_site_allowed(ss: u8, is_top_level: bool, is_same_site: bool) -> bool
 fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64)
 fn jar_process_response(a: *mem.Arena, j: *CookieJar, url: str, set_cookie: str, partition_key: str, has_partition_key: bool, now_ms: i64)
 
