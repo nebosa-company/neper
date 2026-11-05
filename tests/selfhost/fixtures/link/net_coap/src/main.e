@@ -154,6 +154,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     coap.exchange_send(&xs[0usize], 0u64, 0x1111u16, tok_a[..], true, 1.0f64)
     coap.exchange_send(&xs[1usize], 0u64, 0x2222u16, tok_b[..], true, 1.0f64)
     var ids: [4]u16 = zero
+    // #861: a short output is TooSmall with the required count, and no exchange
+    // may be advanced before the caller can hold every retransmission ID.
+    let (short_n, short_error) = coap.exchange_timeouts(xs[..], 3000u64, ids[..1usize])
+    if short_error != coap.TooSmall || short_n != 2usize || xs[0usize].retries != 0u32 || xs[1usize].retries != 0u32 { os.exit(5i32) }
     let (t0, te0) = coap.exchange_timeouts(xs[..], 2999u64, ids[..])
     if te0 != ok || t0 != 0usize { os.exit(5i32) }
     let (t1, te1) = coap.exchange_timeouts(xs[..], 3000u64, ids[..])

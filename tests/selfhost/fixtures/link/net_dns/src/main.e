@@ -10,6 +10,7 @@ use e.io
 use e.mem
 use e.net.dns
 use e.os
+use e.crypto.sign as sign
 
 fn same(left: []const u8, right: []const u8) -> bool {
     if left.len != right.len { ret false }
@@ -166,6 +167,72 @@ fn main(a: *mem.Arena, args: []str) -> err {
     rsa[16] = u8(dns.key_tag(rsa_key[0..]) >> 8u32)
     rsa[17] = u8(dns.key_tag(rsa_key[0..]) & 255u16)
     if dns.dnssec_validate(mx_rr[0..], rsa[0..], rsa_key[0..], 1439000000u32, scratch[0..]) != dns.Unsupported { os.exit(7i32) }
+
+    // 8: RFC 4035 §5.3.2 wildcard canonicalisation. The expanded owner
+    // `a.example.com` with RRSIG labels 2 signs as `*.example.com`, and a
+    // labels count above the owner's own labels is malformed.
+    var wild_sk: sign.Ed25519SecretKey = zero
+    wild_sk.bytes = [32]u8{ 157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197, 105, 123, 50, 105, 25, 112, 59, 172, 3, 28, 174, 127, 96 }
+    let (wild_pk, wild_key_error) = sign.ed25519_public_from_secret(wild_sk)
+    if wild_key_error != ok { os.exit(8i32) }
+    var wild_dnskey: [36]u8 = zero
+    wild_dnskey[0usize] = 1u8
+    wild_dnskey[1usize] = 1u8
+    wild_dnskey[2usize] = 3u8
+    wild_dnskey[3usize] = 15u8
+    mem.copy[u8](wild_dnskey[4usize..36usize], wild_pk.bytes[0..])
+    let wild_tag = dns.key_tag(wild_dnskey[0..])
+    let wild_expanded_owner: [15]u8 = [15]u8{ 1, 97, 7, 101, 120, 97, 109, 112, 108, 101, 3, 99, 111, 109, 0 }
+    var wild_rr: [45]u8 = zero
+    mem.copy[u8](wild_rr[0usize..15usize], wild_expanded_owner[0..])
+    wild_rr[15usize] = 0u8
+    wild_rr[16usize] = 15u8
+    wild_rr[17usize] = 0u8
+    wild_rr[18usize] = 1u8
+    wild_rr[19usize] = 0u8
+    wild_rr[20usize] = 0u8
+    wild_rr[21usize] = 7u8
+    wild_rr[22usize] = 8u8
+    wild_rr[23usize] = 0u8
+    wild_rr[24usize] = 20u8
+    mem.copy[u8](wild_rr[25usize..45usize], mx_rr[23usize..43usize])
+    wild_rr[28usize] = 109u8
+    wild_rr[29usize] = 97u8
+    wild_rr[30usize] = 105u8
+    wild_rr[31usize] = 108u8
+    var wild_rrsig: [95]u8 = zero
+    wild_rrsig[0usize] = 0u8
+    wild_rrsig[1usize] = 15u8
+    wild_rrsig[2usize] = 15u8
+    wild_rrsig[3usize] = 2u8
+    wild_rrsig[4usize] = 0u8
+    wild_rrsig[5usize] = 0u8
+    wild_rrsig[6usize] = 7u8
+    wild_rrsig[7usize] = 8u8
+    wild_rrsig[8usize] = 85u8
+    wild_rrsig[9usize] = 212u8
+    wild_rrsig[10usize] = 252u8
+    wild_rrsig[11usize] = 96u8
+    wild_rrsig[12usize] = 85u8
+    wild_rrsig[13usize] = 185u8
+    wild_rrsig[14usize] = 76u8
+    wild_rrsig[15usize] = 224u8
+    wild_rrsig[16usize] = u8(wild_tag >> 8u32)
+    wild_rrsig[17usize] = u8(wild_tag & 255u16)
+    mem.copy[u8](wild_rrsig[18usize..31usize], example_com[0..13])
+    var wild_message: [76]u8 = zero
+    mem.copy[u8](wild_message[0usize..31usize], wild_rrsig[0usize..31usize])
+    let wild_canonical_owner: [15]u8 = [15]u8{ 1, 42, 7, 101, 120, 97, 109, 112, 108, 101, 3, 99, 111, 109, 0 }
+    mem.copy[u8](wild_message[31usize..46usize], wild_canonical_owner[0..])
+    mem.copy[u8](wild_message[46usize..56usize], wild_rr[15usize..25usize])
+    mem.copy[u8](wild_message[56usize..76usize], wild_rr[25usize..45usize])
+    let (wild_sig, wild_sign_error) = sign.ed25519_sign(wild_sk, wild_message[0..])
+    if wild_sign_error != ok { os.exit(8i32) }
+    mem.copy[u8](wild_rrsig[31usize..95usize], wild_sig.bytes[0..])
+    if dns.dnssec_validate(wild_rr[0..], wild_rrsig[0..], wild_dnskey[0..], 1439000000u32, scratch[0..]) != ok { os.exit(8i32) }
+    var bad_labels: [95]u8 = wild_rrsig
+    bad_labels[3usize] = 5u8
+    if dns.dnssec_validate(wild_rr[0..], bad_labels[0..], wild_dnskey[0..], 1439000000u32, scratch[0..]) != dns.Malformed { os.exit(9i32) }
 
     try io.print("net dns ok\n")
     ret ok

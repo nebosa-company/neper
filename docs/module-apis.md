@@ -15847,6 +15847,8 @@ fn rdata_mx(src: []const u8, r: Rr, out_name: []u8) -> (u16, usize, err)
 fn rdata_name(src: []const u8, r: Rr, out_name: []u8) -> (usize, err)
 fn wire_name_len(name: []const u8) -> (usize, err)
 fn canonical_name(name: []const u8, out: []u8) -> (usize, err)
+fn name_label_count(name: []const u8) -> (usize, err)
+fn wildcard_owner(owner: []const u8, labels: u8, out: []u8) -> (usize, err)
 fn name_text(name: []const u8, out: []u8) -> (usize, err)
 fn name_equal_fold(a: []const u8, b: []const u8) -> bool
 fn name_is_within(name: []const u8, ancestor: []const u8) -> bool

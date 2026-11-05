@@ -318,8 +318,17 @@ fn exchange_receive(x: *Exchange, m: *const Message) -> (bool, Reply, err) {
 // Poll the table at `now`: every confirmable exchange still waiting past its
 // deadline is listed in `out` for retransmission (its timeout doubles); one
 // that has already been retransmitted MAX_RETRANSMIT times fails instead and
-// `Timeout` is answered alongside the count written.
+// `Timeout` is answered alongside the count written. When `out` cannot hold
+// every retransmission ID, `TooSmall` answers the required count and no
+// exchange is advanced, so a caller that resizes cannot miss one.
 fn exchange_timeouts(xs: []Exchange, now: u64, out: []u16) -> (usize, err) {
+    var needed = 0usize
+    var probe = 0usize
+    while probe < xs.len {
+        if xs[probe].state == .Waiting && xs[probe].confirmable && now >= xs[probe].deadline && xs[probe].retries < max_retransmit() { needed += 1usize }
+        probe += 1usize
+    }
+    if needed > out.len { ret (needed, TooSmall) }
     var n = 0usize
     var e = ok
     var i = 0usize

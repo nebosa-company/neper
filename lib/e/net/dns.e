@@ -338,6 +338,47 @@ fn canonical_name(name: []const u8, out: []u8) -> (usize, err) {
     ret (length, ok)
 }
 
+// The number of labels in an uncompressed wire name (the root counts none).
+fn name_label_count(name: []const u8) -> (usize, err) {
+    var at = 0usize
+    var count = 0usize
+    while at < name.len {
+        let length = usize(name[at])
+        if length >= 64usize { ret (0usize, Malformed) }
+        if length == 0usize { ret (count, ok) }
+        count += 1usize
+        at += 1usize + length
+    }
+    ret (0usize, Malformed)
+}
+
+// RFC 4035 §5.3.2: a wildcard-expanded owner canonicalises to `*.` plus the
+// rightmost `labels` labels of the owner. A labels count above the owner's own
+// count cannot arise from any wildcard and is malformed.
+fn wildcard_owner(owner: []const u8, labels: u8, out: []u8) -> (usize, err) {
+    let (count, count_error) = name_label_count(owner)
+    if count_error != ok { ret (0usize, count_error) }
+    if usize(labels) > count { ret (0usize, Malformed) }
+    if usize(labels) == count {
+        if owner.len > out.len { ret (0usize, TooSmall) }
+        mem.copy[u8](out[..owner.len], owner[..owner.len])
+        ret (owner.len, ok)
+    }
+    var at = 0usize
+    var skip = count - usize(labels)
+    while skip > 0usize {
+        at += 1usize + usize(owner[at])
+        skip -= 1usize
+    }
+    let suffix = owner[at..]
+    let needed = 2usize + suffix.len
+    if needed > out.len { ret (0usize, TooSmall) }
+    out[0usize] = 1u8
+    out[1usize] = 42u8
+    mem.copy[u8](out[2usize..needed], suffix)
+    ret (needed, ok)
+}
+
 // An uncompressed wire name rendered as `example.com.` (root as `.`).
 fn name_text(name: []const u8, out: []u8) -> (usize, err) {
     let (length, length_error) = wire_name_len(name)
@@ -585,6 +626,9 @@ fn dnssec_validate(rrset: []const u8, rrsig_rdata: []const u8, dnskey_rdata: []c
     var ends: [MAX_RRS]usize = zero
     var rdata_starts: [MAX_RRS]usize = zero
     var count = 0usize
+    var owner_len = 0usize
+    var wildcard: [MAX_NAME]u8 = zero
+    var wildcard_len = 0usize
     var at = staging
     let end = staging + rrset.len
     while at < end {
@@ -593,6 +637,12 @@ fn dnssec_validate(rrset: []const u8, rrsig_rdata: []const u8, dnskey_rdata: []c
         if name_error != ok { ret name_error }
         if !name_is_within(scratch[at..after_name], rrsig.signer) { ret Invalid }
         if count > 0usize && !equal_bytes(scratch[at..after_name], scratch[starts[0]..rdata_starts[0] - 10usize]) { ret Invalid }
+        if count == 0usize {
+            owner_len = after_name - at
+            let (built, built_error) = wildcard_owner(scratch[at..after_name], rrsig.labels, wildcard[0..])
+            if built_error != ok { ret built_error }
+            wildcard_len = built
+        }
         if after_name + 10usize > end { ret Malformed }
         let kind = load16(scratch, after_name)
         if kind != rrsig.type_covered { ret Invalid }
@@ -635,9 +685,11 @@ fn dnssec_validate(rrset: []const u8, rrsig_rdata: []const u8, dnskey_rdata: []c
             i += 1usize
             continue
         }
-        let length = ends[i] - starts[i]
-        mem.copy[u8](scratch[out..out + length], scratch[starts[i]..ends[i]])
-        out += length
+        let fixed_len = ends[i] - (starts[i] + owner_len)
+        mem.copy[u8](scratch[out..out + wildcard_len], wildcard[0..wildcard_len])
+        out += wildcard_len
+        mem.copy[u8](scratch[out..out + fixed_len], scratch[starts[i] + owner_len..ends[i]])
+        out += fixed_len
         i += 1usize
     }
     ret verify_with(rrsig.algorithm, dnskey.public_key, scratch[..out], rrsig.signature)
