@@ -5408,6 +5408,12 @@ $auditJsArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $auditJsArrayWritten -ne 'executable written') { throw 'audit_js_array emission failed' }
 & $auditJsArrayPath
 if ($LASTEXITCODE -ne 0) { throw "audit_js_array answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.pdf (L168): indirect /Length streams, object-like bytes inside payloads, page-tree inheritance.
+$auditPdfPath = Join-Path $testBuild 'audit-pdf-selfhost.exe'
+$auditPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_pdf\src\main.e') $repo 'x64' 'windows' $auditPdfPath
+if ($LASTEXITCODE -ne 0 -or $auditPdfWritten -ne 'executable written') { throw 'audit_pdf emission failed' }
+$auditPdfOutput = & $auditPdfPath
+if ($LASTEXITCODE -ne 0 -or $auditPdfOutput -ne 'audit pdf ok') { throw "audit_pdf answered wrongly: exit $LASTEXITCODE" }
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 $algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
 $algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath

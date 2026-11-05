@@ -4908,6 +4908,12 @@ audit_js_array_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$audit_js_array_written" = 'executable written' ]
 chmod +x "$test_build/audit-js-array-selfhost"
 "$test_build/audit-js-array-selfhost"
+# e.fmt.pdf (L168): indirect /Length streams, object-like bytes inside payloads, page-tree inheritance.
+audit_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_pdf/src/main.e" "$repo" x64 linux "$test_build/audit-pdf-selfhost")
+[ "$audit_pdf_written" = 'executable written' ]
+chmod +x "$test_build/audit-pdf-selfhost"
+audit_pdf_output=$("$test_build/audit-pdf-selfhost")
+[ "$audit_pdf_output" = 'audit pdf ok' ]
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
 [ "$algo_page_batch_written" = 'executable written' ]

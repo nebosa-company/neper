@@ -156,9 +156,10 @@ fn length_number_at(data: []const u8, from: usize, until: usize) -> (usize, usiz
     ret (value, at, true)
 }
 
-// A direct, top-level `/Length N` in the dictionary before `stream`; indirect lengths
-// deliberately return false because their value is in another object.
-fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool) {
+// A direct, top-level `/Length N` in the dictionary before `stream` (answers N), or the
+// object number of an indirect `/Length N G R`. Exactly one of the two flags is set when
+// the key is present; `(0, 0, false, false)` when there is none.
+fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, usize, bool, bool) {
     var at = from
     var depth = 0usize
     while at < until {
@@ -192,10 +193,56 @@ fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool) {
                 let (_, after_generation, has_generation) = length_number_at(data, after_length, until)
                 var marker = after_generation
                 while marker < until && is_space(data[marker]) { marker += 1usize }
-                if !(has_generation && at_token(data, marker, "R", from, until)) { ret (length, true) }
+                if !(has_generation && at_token(data, marker, "R", from, until)) { ret (length, 0usize, true, false) }
+                // `N G R`: the length lives in object N.
+                ret (0usize, length, false, true)
             }
         }
         at += 1usize
+    }
+    ret (0usize, 0usize, false, false)
+}
+
+// The integer value of the indirect object `number`, scanned as a `N G obj <integer>` body.
+// Used only for an indirect `/Length`, whose target is a small standalone number object.
+fn indirect_length(data: []const u8, number: usize) -> (usize, bool) {
+    var at = 0usize
+    while at + 3usize <= data.len {
+        if at_token(data, at, "obj", 0usize, data.len) && at > 0usize && (is_space(data[at - 1usize]) || is_digit(data[at - 1usize])) {
+            var back = at
+            while back > 0usize && is_space(data[back - 1usize]) { back -= 1usize }
+            var gen_start = back
+            while gen_start > 0usize && is_digit(data[gen_start - 1usize]) { gen_start -= 1usize }
+            if gen_start < back && gen_start > 0usize && is_space(data[gen_start - 1usize]) {
+                var num_end = gen_start
+                while num_end > 0usize && is_space(data[num_end - 1usize]) { num_end -= 1usize }
+                var num_start = num_end
+                while num_start > 0usize && is_digit(data[num_start - 1usize]) { num_start -= 1usize }
+                if num_start < num_end && (num_start == 0usize || is_space(data[num_start - 1usize])) {
+                    let (found_number, _, got) = number_at(data, num_start, num_end)
+                    if got && found_number == number {
+                        // The body must be a plain integer, not a dictionary or an array.
+                        var body = at + 3usize
+                        while body < data.len && is_space(data[body]) { body += 1usize }
+                        if body < data.len && (data[body] == 60u8 || data[body] == 91u8 || data[body] == 47u8) { ret (0usize, false) }
+                        let (value, _, has_value) = number_at(data, at + 3usize, data.len)
+                        if has_value { ret (value, true) }
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The stream byte count: a direct `/Length`, else its indirect target's value.
+fn length_value(data: []const u8, from: usize, until: usize) -> (usize, bool) {
+    let (direct, number, has_direct, has_indirect) = stream_length(data, from, until)
+    if has_direct { ret (direct, true) }
+    if has_indirect {
+        let (value, has_value) = indirect_length(data, number)
+        ret (value, has_value)
     }
     ret (0usize, false)
 }
@@ -262,7 +309,7 @@ fn object_end(data: []const u8, from: usize) -> usize {
         if at_keyword(data, at, "endobj", from, data.len) { ret at }
         if at_stream_keyword(data, at, from, data.len) {
             let start = stream_start(data, at, data.len)
-            let (length, has_length) = stream_length(data, from, at)
+            let (length, has_length) = length_value(data, from, at)
             var after = start
             if has_length && length <= data.len - start { after = start + length }
             if at_keyword(data, after, "endstream", from, data.len) {
@@ -631,7 +678,7 @@ fn stream_capped(a: *mem.Arena, data: []const u8, s: usize, e: usize, cap: usize
     if keyword >= e { ret (data[s..s], ok) }
     let from = stream_start(data, keyword, e)
     var until = e
-    let (length, has_length) = stream_length(data, s, keyword)
+    let (length, has_length) = length_value(data, s, keyword)
     if has_length && length <= e - from {
         until = from + length
     } else {
