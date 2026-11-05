@@ -12,7 +12,10 @@
   <meta property="og:description" content="A polished native dashboard built with Neper's cross-platform UI library and 112 controls.">
   <meta property="og:url" content="https://neper.dev/ux/showcase.html">
   <meta property="og:image" content="https://neper.dev/gtm/ui-library-showcase.png">
+  <meta property="og:site_name" content="Neper">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Neper Forge — Native UI Library Showcase">
+  <meta name="twitter:image" content="https://neper.dev/gtm/ui-library-showcase.png">
   <link rel="stylesheet" href="components/bundle.css">
   <style>
     :root {
@@ -50,7 +53,7 @@
     .avatar { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:var(--tertiary-container); color:var(--on-tertiary-container); font:600 12px/16px var(--font-sans); }
     .content { overflow:hidden; padding:24px 28px 28px; }
     .heading { display:flex; align-items:end; justify-content:space-between; margin-bottom:18px; }
-    .heading h1 { margin:0 0 3px; font:400 28px/36px var(--font-display); letter-spacing:-.2px; }
+    .heading h1, .heading h2 { margin:0 0 3px; font:400 28px/36px var(--font-display); letter-spacing:-.2px; }
     .heading p { margin:0; color:var(--on-surface-variant); font-size:13px; }
     .action svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; }
     .dashboard { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:18px; }
@@ -106,6 +109,12 @@
     .status { padding:3px 8px; border-radius:var(--radius-full); background:var(--success-container); color:var(--on-success-container); font:600 10px/14px var(--font-sans); }
     .footer-note { display:flex; align-items:center; gap:8px; color:var(--on-surface-variant); font-size:11px; }
     .footer-note b { color:var(--on-surface); }
+    .showcase-intro { max-width:1180px; margin:0 auto; padding:40px 24px 0; text-align:center; }
+    .showcase-intro h1 { margin:18px 0 14px; font:700 34px/42px var(--font-display); color:var(--on-surface); }
+    .showcase-intro p { max-width:820px; margin:0 auto 10px; font:400 16px/26px var(--font-sans); color:var(--on-surface-variant); }
+    .showcase-intro a { color:var(--primary); }
+    .showcase-intro code { font:500 14px/22px var(--font-mono); }
+    .showcase-intro .showcase-site-links { margin:0 0 6px; font:600 14px/20px var(--font-sans); }
   </style>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
@@ -113,7 +122,15 @@
 <link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
-  <div class="stage">
+  <header class="showcase-intro">
+    <nav class="showcase-site-links" aria-label="Neper site">
+      <a href="../">Neper home</a> · <a href="../get-started.html">Get started</a> · <a href="../blog/">Blog</a> · <a href="../llms.txt">llms.txt</a> · <a href="https://github.com/nebosa-company/neper">GitHub</a>
+    </nav>
+    <h1>Neper Forge: a native UI built with Neper's 112 controls</h1>
+    <p>Neper Forge is a reference dashboard rendered entirely by Neper's cross-platform UI library: dashboards, data tables, navigation, status and verification workflows, each built from the same 112 controls that ship in <code>e.ui</code>.</p>
+    <p>The demo below is the real thing, not a mockup. Browse the <a href="control-preview.html">component catalog</a> or read the <a href="https://github.com/nebosa-company/neper/tree/master/lib/e/ui">UI library source</a>.</p>
+  </header>
+  <div class="stage" aria-label="Neper Forge interactive demo">
     <div class="app" role="application" aria-label="Neper Forge build dashboard">
       <nav class="rail" aria-label="Workspace">
         <img class="logo" src="../gtm/logo/neper-icon.svg" alt="Neper" width="512" height="512">
@@ -135,7 +152,7 @@
 
         <main class="content">
           <div class="heading">
-            <div><h1>Good morning, Ada</h1><p>Your workspace is healthy. Every artifact is verified.</p></div>
+            <div><h2>Good morning, Ada</h2><p>Your workspace is healthy. Every artifact is verified.</p></div>
             <button class="nu-btn action"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Run verification</button>
           </div>
 
@@ -195,7 +212,7 @@
     </div>
   </div>
   <nav class="showcase-site-links" aria-label="Neper site" style="text-align:center;padding:24px 16px;font:600 14px/20px system-ui,sans-serif;">
-    <a href="../">Neper home</a> · <a href="../blog/">Blog</a> · <a href="../get-started.html">Get started</a> · <a href="../llms.txt">llms.txt</a> · <a href="https://github.com/nebosa-company/neper">GitHub</a>
+    <a href="../">Neper home</a> · <a href="../blog/">Blog</a> · <a href="../get-started.html">Get started</a> · <a href="../install.html">Install</a> · <a href="../language.html">Language</a> · <a href="../llms.txt">llms.txt</a> · <a href="https://github.com/nebosa-company/neper">GitHub</a>
   </nav>
 </body>
 </html>

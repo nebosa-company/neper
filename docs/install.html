@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install Neper</title>
+<meta name="description" content="Build the self-hosted Neper compiler once on Windows, Linux or macOS, then cross-compile tiny native binaries for every target from one machine.">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<link rel="canonical" href="https://neper.dev/install.html">
+<meta name="theme-color" content="#145db2">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Neper">
+<meta property="og:title" content="Install Neper">
+<meta property="og:description" content="Clone the repository, build the compiler once, then cross-compile Windows, Linux, macOS and wasm binaries with no SDK, no LLVM and no system linker.">
+<meta property="og:url" content="https://neper.dev/install.html">
+<meta property="og:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Install Neper">
+<meta name="twitter:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "Install Neper",
+  "description": "Build the self-hosted Neper compiler from source and compile a first program.",
+  "image": "https://neper.dev/gtm/neper-capabilities-poster.png",
+  "step": [
+    {"@type": "HowToStep", "name": "Clone", "text": "git clone https://github.com/nebosa-company/neper"},
+    {"@type": "HowToStep", "name": "Build the compiler", "text": "Run scripts/build-selfhost.ps1 on Windows or scripts/build-selfhost.sh on Linux and macOS."},
+    {"@type": "HowToStep", "name": "Compile a program", "text": "Use neper emit-executable hello.e . x64 windows hello.exe (or x64 linux, aarch64 macos, wasm32 wasi)."}
+  ]
+}
+</script>
+<style>
+  :root { color-scheme: light dark; font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: #f4f6f9; color: #172033; }
+  main { max-width: 46rem; margin: auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 1rem; }
+  h2 { margin-top: 2.2rem; font-size: 1.35rem; }
+  p, li { color: #2a3550; }
+  code, pre { font-family: "Cascadia Code", Consolas, monospace; }
+  pre { overflow-x: auto; padding: 1rem 1.2rem; border-radius: 12px; background: #11182a; color: #e7ecf7; }
+  a { color: #245aa8; }
+  nav.site { font-weight: 600; margin-bottom: 1rem; }
+  .note { color: #5b6480; font-size: .95rem; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0f1319; color: #e8edf4; }
+    p, li, .note { color: #c3cad9; }
+    pre { background: #171d26; }
+    a { color: #9dc0ff; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site" aria-label="Neper site"><a href="/">Neper</a> · <a href="/get-started.html">Get started</a> · <a href="/language.html">Language</a></nav>
+  <h1>Install Neper</h1>
+  <p>Neper is MIT open source and self-hosted: you build the compiler once, then that single compiler produces Windows, Linux, macOS and WebAssembly binaries from the same machine. There is no LLVM, no MSVC/MinGW, no Xcode SDK, no system linker, no Docker and no sysroot to install per target.</p>
+
+  <h2>1. Clone the repository</h2>
+  <pre><code>$ git clone https://github.com/nebosa-company/neper
+$ cd neper</code></pre>
+
+  <h2>2. Build the compiler</h2>
+  <p>Build the current self-hosted compiler with the repository script for your host:</p>
+  <pre><code>$ scripts/build-selfhost.ps1   # Windows
+$ scripts/build-selfhost.sh    # Linux and macOS</code></pre>
+  <p class="note">This is the one place a third-party tool appears: the first compiler is produced by a small C99 bootstrap, so that initial step needs a C compiler on the host. After it, the toolchain rebuilds itself and every later build is Neper-only.</p>
+
+  <h2>3. Compile and run a program</h2>
+  <pre><code>use e.io
+
+fn main(args: []str) -&gt; err {
+    try io.print("Hello, Neper")
+    ret ok
+}</code></pre>
+  <pre><code>$ neper emit-executable hello.e . x64 windows   hello.exe
+$ neper emit-executable hello.e . x64 linux     hello
+$ neper emit-executable hello.e . aarch64 macos hello-mac
+$ neper emit-executable hello.e . wasm32 wasi    hello.wasm</code></pre>
+  <p>Add <code>--release</code> for an optimized build. The full walkthrough, including handing the repository to a coding agent, is on <a href="/get-started.html">the get-started page</a>; build-from-source notes and the language overview are in the <a href="https://github.com/nebosa-company/neper#readme">README</a>.</p>
+  <p class="note">A macOS binary is ad-hoc signed and not notarized, and you still need a Mac (or a runner) to run it.</p>
+
+  <h2>Next</h2>
+  <p>Read <a href="/language.html">the Neper language in brief</a> for the syntax, or the <a href="/llms.txt">machine-readable summary</a> for agents.</p>
+
+  <footer class="site-footer" style="text-align:center;padding:32px 16px;font:600 14px/22px system-ui,sans-serif;">
+    <p><a href="/">Home</a> · <a href="/blog/">Blog</a> · <a href="/ux/showcase.html">Showcase</a> · <a href="/get-started.html">Get started</a> · <a href="/language.html">Language</a> · <a href="https://github.com/nebosa-company/neper">GitHub</a></p>
+  </footer>
+</main>
+</body>
+</html>

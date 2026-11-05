@@ -12,6 +12,7 @@
 use e.cancel
 use e.mem
 use e.os
+use e.sync as sync
 use e.time
 
 type Command = struct {
@@ -241,6 +242,13 @@ fn drain(d: *Drain) {
             let (count, read_error) = os.read(d.file, probe[..])
             if read_error != ok {
                 d.failure = read_error
+                // A failed read must end the child like an overflow does: otherwise the other
+                // reader can wait for an EOF that never comes.
+                if d.contain_tree {
+                    let ended = os.proc_group_terminate(*d.group, true)
+                } else {
+                    let ended = os.kill(d.process)
+                }
                 ret
             }
             if count == 0usize { ret }
@@ -255,6 +263,11 @@ fn drain(d: *Drain) {
         let (count, read_error) = os.read(d.file, d.buffer[d.filled..])
         if read_error != ok {
             d.failure = read_error
+            if d.contain_tree {
+                let ended = os.proc_group_terminate(*d.group, true)
+            } else {
+                let ended = os.kill(d.process)
+            }
             ret
         }
         if count == 0usize { ret }
@@ -380,11 +393,19 @@ type RunWait = struct {
     done: *cancel.Token,
     status: i32,
     failure: err,
+    // Guards the reap flag against a kill: `kill` on a handle the wait has already
+    // consumed is undefined, and Windows reuses handle values.
+    lock: sync.Mutex,
+    reaped: bool,
 }
 
-fn terminate_run(process: os.Proc, group: *const os.ProcGroup, contain_tree: bool, force: bool) -> err {
+fn terminate_run(process: os.Proc, group: *const os.ProcGroup, contain_tree: bool, force: bool, waiter: *RunWait) -> err {
     if contain_tree { ret os.proc_group_terminate(*group, force) }
-    ret os.kill(process)
+    sync.mutex_lock(&waiter.lock)
+    var ended = ok
+    if !waiter.reaped { ended = os.kill(process) }
+    sync.mutex_unlock(&waiter.lock)
+    ret ended
 }
 
 // Read every byte currently available without ever beginning a blocking read. Reaching the
@@ -436,8 +457,11 @@ fn wait_shared(process: os.Proc) -> (i32, err) {
 
 fn wait_run(w: *RunWait) {
     let (status, wait_error) = wait_shared(w.process)
+    sync.mutex_lock(&w.lock)
     w.status = status
     w.failure = wait_error
+    w.reaped = wait_error == ok
+    sync.mutex_unlock(&w.lock)
     cancel.request(w.done)
     os.wake_one_u32(&w.done.state)
 }
@@ -534,7 +558,7 @@ fn run_started(
     waiting.done = &done
     let (wait_worker, wait_thread_error) = os.thread_create[RunWait](wait_run, &waiting, DRAIN_STACK)
     if wait_thread_error != ok {
-        let ended = terminate_run(child.process, &group, contain_tree, true)
+        let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
         let closed_stdout = os.close(child.streams.stdout)
         let closed_stderr = os.close(child.streams.stderr)
         let (status, waited) = wait_shared(child.process)
@@ -557,6 +581,15 @@ fn run_started(
 
         if failure == ok && stdout_drain.failure != ok { failure = stdout_drain.failure }
         if failure == ok && stderr_drain.failure != ok { failure = stderr_drain.failure }
+        // A failed pipe read leaves the child blocked writing to a pipe nobody drains; end it
+        // exactly as an overflow does, or an undeadlined run polls forever.
+        if failure != ok && !termination_started {
+            termination_started = true
+            if !forced {
+                let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
+                forced = true
+            }
+        }
 
         let overflowed = stdout_drain.overflowed || stderr_drain.overflowed
         if overflowed {
@@ -565,7 +598,7 @@ fn run_started(
                 outcome_set = true
             }
             if !forced && (!finished || contain_tree) {
-                let ended = terminate_run(child.process, &group, contain_tree, true)
+                let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
                 if failure == ok && ended != ok { failure = ended }
             }
             termination_started = true
@@ -576,7 +609,7 @@ fn run_started(
         if clock_error != ok {
             if failure == ok { failure = clock_error }
             if !forced && (!finished || contain_tree) {
-                let ended = terminate_run(child.process, &group, contain_tree, true)
+                let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
                 if failure == ok && ended != ok { failure = ended }
             }
             stdout_drain.cut_short = stdout_drain.active
@@ -597,11 +630,11 @@ fn run_started(
                 outcome_set = true
                 termination_started = true
                 if contain_tree && options.terminate_grace.nanos > 0i64 {
-                    let gentle = terminate_run(child.process, &group, true, false)
+                    let gentle = terminate_run(child.process, &group, true, false, &waiting)
                     if failure == ok && gentle != ok { failure = gentle }
                     force_at = time.instant_add(now, options.terminate_grace)
                 } else {
-                    let ended = terminate_run(child.process, &group, contain_tree, true)
+                    let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
                     if failure == ok && ended != ok { failure = ended }
                     forced = true
                 }
@@ -613,18 +646,18 @@ fn run_started(
         if finished && contain_tree && !termination_started {
             termination_started = true
             if options.terminate_grace.nanos > 0i64 {
-                let gentle = terminate_run(child.process, &group, true, false)
+                let gentle = terminate_run(child.process, &group, true, false, &waiting)
                 if failure == ok && gentle != ok { failure = gentle }
                 force_at = time.instant_add(now, options.terminate_grace)
             } else {
-                let ended = terminate_run(child.process, &group, true, true)
+                let ended = terminate_run(child.process, &group, true, true, &waiting)
                 if failure == ok && ended != ok { failure = ended }
                 forced = true
             }
         }
 
         if termination_started && !forced && time.instant_cmp(now, force_at) >= 0i32 {
-            let ended = terminate_run(child.process, &group, contain_tree, true)
+            let ended = terminate_run(child.process, &group, contain_tree, true, &waiting)
             if failure == ok && ended != ok { failure = ended }
             forced = true
         }

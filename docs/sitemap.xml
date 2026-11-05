@@ -36,6 +36,36 @@
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://neper.dev/reference/modules.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://neper.dev/reference/algorithms.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://neper.dev/about.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://neper.dev/contact.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://neper.dev/install.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://neper.dev/language.html</loc>
+    <lastmod>2026-11-05</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://neper.dev/blog/charts-field-guide.html</loc>
     <lastmod>2026-11-05</lastmod>
     <priority>0.7</priority>

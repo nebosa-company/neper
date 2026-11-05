@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Neper language in brief</title>
+<meta name="description" content="A condensed tour of Neper's syntax: typed bindings, explicit casts, functions and errors, structs and enums, resources, comptime and the standard library.">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<link rel="canonical" href="https://neper.dev/language.html">
+<meta name="theme-color" content="#145db2">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Neper">
+<meta property="og:title" content="The Neper language in brief">
+<meta property="og:description" content="Syntax essentials for Neper, condensed from the LLM editing card: bindings, casts, errors, structs, enums, resources, comptime and the standard library.">
+<meta property="og:url" content="https://neper.dev/language.html">
+<meta property="og:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Neper language in brief">
+<meta name="twitter:image" content="https://neper.dev/gtm/neper-capabilities-poster.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "The Neper language in brief",
+  "description": "A condensed tour of Neper syntax and semantics, citing the normative grammar and LLM editing card.",
+  "image": "https://neper.dev/gtm/neper-capabilities-poster.png",
+  "author": {"@type": "Organization", "name": "Neper"},
+  "publisher": {"@type": "Organization", "name": "Neper"}
+}
+</script>
+<style>
+  :root { color-scheme: light dark; font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: #f4f6f9; color: #172033; }
+  main { max-width: 48rem; margin: auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 1rem; }
+  h2 { margin-top: 2.2rem; font-size: 1.35rem; }
+  p, li { color: #2a3550; }
+  code, pre { font-family: "Cascadia Code", Consolas, monospace; }
+  pre { overflow-x: auto; padding: 1rem 1.2rem; border-radius: 12px; background: #11182a; color: #e7ecf7; }
+  a { color: #245aa8; }
+  nav.site { font-weight: 600; margin-bottom: 1rem; }
+  .note { color: #5b6480; font-size: .95rem; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0f1319; color: #e8edf4; }
+    p, li, .note { color: #c3cad9; }
+    pre { background: #171d26; }
+    a { color: #9dc0ff; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site" aria-label="Neper site"><a href="/">Neper</a> · <a href="/get-started.html">Get started</a> · <a href="/install.html">Install</a></nav>
+  <h1>The Neper language in brief</h1>
+  <p>This page condenses the essentials. The normative references are <a href="https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf">docs/grammar.ebnf</a> (revision 3), <a href="https://github.com/nebosa-company/neper/blob/main/docs/llm-neper-card.md">docs/llm-neper-card.md</a> (the editing card this page is derived from), <a href="https://github.com/nebosa-company/neper/blob/main/docs/spec.md">docs/spec.md</a> and <a href="https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md">docs/module-apis.md</a> (the standard library index).</p>
+
+  <h2>Program shape</h2>
+  <pre><code>use e.io
+
+fn main(a: *mem.Arena, args: []str) -&gt; err {
+    try io.print("Hello, Neper")
+    ret ok
+}</code></pre>
+  <p>A program is a run of declarations: <code>use</code>, <code>const</code>, <code>var</code>, <code>error</code>, <code>type</code>, <code>fn</code> and <code>extern</code>. Modules are named by dotted paths (<code>e.io</code>, <code>e.algo.graph</code>) and imported with <code>use</code>.</p>
+
+  <h2>Bindings and types</h2>
+  <ul>
+    <li><code>let</code> binds once, <code>var</code> mutates. A binding is typed explicitly (<code>var n: u32 = 0u32</code>) or inferred from its literal.</li>
+    <li>Literals carry their type: <code>1u64</code>, <code>1.5f64</code>, <code>u8(200)</code>, <code>true</code>, <code>nil</code>, <code>zero</code>.</li>
+    <li>Casts are explicit and checked: <code>i64(x)</code>, <code>u32(n)</code>, <code>f64(i)</code>; a narrowing cast traps out of range in debug builds.</li>
+    <li>Strings are byte slices (<code>str</code>) with escapes limited to <code>\n \t \r \\ \" \' \0 \xHH</code>; use the modules for Unicode work.</li>
+  </ul>
+
+  <h2>Errors, <code>try</code> and <code>defer</code></h2>
+  <ul>
+    <li><code>error</code> declares an error set; functions answer <code>err</code> and return <code>ret ok</code> or <code>ret Name</code>.</li>
+    <li><code>try f()</code> propagates an error, <code>try f()</code> as a statement or <code>let (v, e) = f()</code> when the answer is a tuple.</li>
+    <li><code>defer</code> runs at scope exit; resources such as files and windows are <code>resource</code> types closed by the runtime or an explicit close.</li>
+  </ul>
+
+  <h2>Structs, enums and unions</h2>
+  <ul>
+    <li><code>struct</code> fields are named and typed; literals are <code>Type { field: value }</code>.</li>
+    <li><code>enum</code> is an integer with named members; <code>switch</code> is exhaustive over them.</li>
+    <li><code>union</code> is the C-layout escape hatch for <code>extern</code> ABIs; the safe tagged form is <code>enum</code> with payload arms.</li>
+  </ul>
+
+  <h2>Comptime and generics</h2>
+  <pre><code>fn largest[T: type](xs: []const T) -&gt; T { ... }</code></pre>
+  <p>Type parameters are written <code>[T: type]</code>; functions and types with compile-time arguments are monomorphised. Modules expose generic helpers (e.g. <code>channel.send[i64]</code>), and <code>comptime</code> parameters carry array lengths and flags.</p>
+
+  <h2>No-shadowing, and reserved words</h2>
+  <p>A local may not reuse a module-scope function, type or module name (the <code>E-NAME-0003</code> diagnostic). The full keyword list is in the editing card: <code>as break case const continue default defer else enum error extern false fn for if in isize let nil nocheck ok own resource ret shared struct switch true try type undef union unreachable use usize var when while zero</code>.</p>
+
+  <h2>Standard library</h2>
+  <p>Everything is in modules under <code>e.</code>: <code>e.io</code>, <code>e.mem</code>, <code>e.str</code>, <code>e.net.http</code>, <code>e.game</code>, <code>e.ui</code>, <code>e.chart</code>, <code>e.algo.*</code>, <code>e.math.*</code> and more. The complete index is <a href="https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md">docs/module-apis.md</a>; the machine-readable summary is <a href="/llms.txt">llms.txt</a>.</p>
+
+  <h2>Next</h2>
+  <p><a href="/install.html">Install Neper</a>, then read <a href="/get-started.html">the get-started walkthrough</a> and the <a href="/blog/">measured blog posts</a>.</p>
+
+  <footer class="site-footer" style="text-align:center;padding:32px 16px;font:600 14px/22px system-ui,sans-serif;">
+    <p><a href="/">Home</a> · <a href="/blog/">Blog</a> · <a href="/ux/showcase.html">Showcase</a> · <a href="/get-started.html">Get started</a> · <a href="/install.html">Install</a> · <a href="https://github.com/nebosa-company/neper">GitHub</a></p>
+  </footer>
+</main>
+</body>
+</html>

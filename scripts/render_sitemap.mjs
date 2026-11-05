@@ -14,6 +14,12 @@ const PAGES = [
   ['charts.html', 'charts.html', 0.6],
   ['ux/showcase.html', 'ux/showcase.html', 0.6],
   ['progress.html', 'progress.html', 0.4],
+  ['reference/modules.html', 'reference/modules.html', 0.5],
+  ['reference/algorithms.html', 'reference/algorithms.html', 0.5],
+  ['about.html', 'about.html', 0.5],
+  ['contact.html', 'contact.html', 0.5],
+  ['install.html', 'install.html', 0.5],
+  ['language.html', 'language.html', 0.5],
 ]
 const SKIP = new Set(['index.html', 'e-db-three-drivers.html', 'e-db-four-drivers.html']) // blog index, redirect stubs
 for (const f of fs.readdirSync('docs/blog').sort()) {
@@ -31,8 +37,18 @@ const pageDate = (file) => {
   fs.closeSync(fd)
   return fs.readFileSync(out, 'utf8').trim()
 }
+// A page not yet committed has no per-file date; its first commit is the next one, so
+// the repository's HEAD date stands in until then (keeps every entry valid for lint).
+const headDate = (() => {
+  const out = path.join(dateDir, 'head')
+  const fd = fs.openSync(out, 'w')
+  execFileSync('git', ['log', '-1', '--format=%cs'], { stdio: ['ignore', fd, 'ignore'] })
+  fs.closeSync(fd)
+  return fs.readFileSync(out, 'utf8').trim()
+})()
+const dateOf = (file) => pageDate(file) || headDate
 const rows = PAGES.map(([file, url, priority]) => {
-  const date = pageDate(file)
+  const date = dateOf(file)
   return `  <url>\n    <loc>${SITE}${url}</loc>\n${date ? `    <lastmod>${date}</lastmod>\n` : ''}    <priority>${priority.toFixed(1)}</priority>\n  </url>`
 })
 fs.writeFileSync('docs/sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join('\n')}\n</urlset>\n`)
