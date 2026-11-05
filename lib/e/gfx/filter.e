@@ -321,8 +321,10 @@ fn box_mean(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scr
         while x < w {
             var lo = 0usize
             if x > radius { lo = x - radius }
-            var hi = x + radius
-            if hi >= w { hi = w - 1usize }
+            // Saturate against the room left, so a radius past the image (or `usize` max)
+            // clips instead of overflowing the addition.
+            var hi = w - 1usize
+            if radius <= w - 1usize - x { hi = x + radius }
             var acc = 0.0f64
             var i = lo
             while i <= hi {
@@ -338,8 +340,8 @@ fn box_mean(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scr
     while y < h {
         var lo = 0usize
         if y > radius { lo = y - radius }
-        var hi = y + radius
-        if hi >= h { hi = h - 1usize }
+        var hi = h - 1usize
+        if radius <= h - 1usize - y { hi = y + radius }
         var x = 0usize
         while x < w {
             var acc = 0.0f64
@@ -503,14 +505,16 @@ fn morph_extreme(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64
     while y < h {
         var y0 = 0usize
         if y > radius { y0 = y - radius }
-        var y1 = y + radius
-        if y1 >= h { y1 = h - 1usize }
+        // Saturate against the room left, like `box_mean`: a radius past the image (or
+        // `usize` max) clips instead of overflowing the addition.
+        var y1 = h - 1usize
+        if radius <= h - 1usize - y { y1 = y + radius }
         var x = 0usize
         while x < w {
             var x0 = 0usize
             if x > radius { x0 = x - radius }
-            var x1 = x + radius
-            if x1 >= w { x1 = w - 1usize }
+            var x1 = w - 1usize
+            if radius <= w - 1usize - x { x1 = x + radius }
             var best = src[y * w + x]
             var j = y0
             while j <= y1 {

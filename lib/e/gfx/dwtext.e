@@ -14,6 +14,7 @@
 // The mask is composed by the caller as an A8 mask under the text colour, glyph by glyph.
 
 use e.math
+use e.sync
 
 const SAMPLES_X: usize = 6usize
 const SAMPLES_Y: usize = 5usize
@@ -30,6 +31,10 @@ var seg_count: usize = zero
 var seg_full: bool = zero
 // FreeType scales font units to 26.6 and rounds there; `rasterize_ft` sets this so the points are rounded to 1/64 pixel after the ratio.
 var seg_quant: bool = zero
+// The segments and the FreeType accumulators are module storage, one set per process; a
+// rasterisation holds this lock from `flatten` to its last read, so concurrent text draws
+// serialize instead of overwriting each other's glyph (issue #712).
+var raster_locks: [1]sync.Mutex = zero
 
 fn scaled(v: i64, ratio: f64) -> f64 {
     if seg_quant { ret math.floor[f64](f64(v) * ratio + 0.5) / 64.0 }
@@ -174,7 +179,13 @@ fn flatten(cur: []const i64, tags: []const i64, ends: []const usize, nends: usiz
                 var so: [1024]bool = zero
                 var n = 0usize
                 var i = 0usize
-                while i < m && n + 2usize < 1024usize {
+                while i < m {
+                    // A contour past the point arrays cannot be flattened whole: fail the
+                    // rasterisation instead of drawing the prefix (#711).
+                    if n + 2usize >= 1024usize {
+                        seg_full = true
+                        ret
+                    }
                     let a = first + i
                     let b = first + (i + 1usize) % m
                     let ax = scaled(cur[2usize * a], ratio) + xfrac
@@ -235,6 +246,8 @@ fn flatten(cur: []const i64, tags: []const i64, ends: []const usize, nends: usiz
 // whole one), `xfrac` is the pen's fraction of a pixel (a sixth, 0..5/6) and `lut` the 256 byte table. False when the glyph
 // does not fit the scratch or has too many segments.
 fn rasterize(scratch: []u8, cur: []const i64, tags: []const i64, ends: []const usize, nends: usize, n: usize, ratio: f32, xfrac: f32, lut: []const u8) -> (GlyphMask, bool) {
+    sync.mutex_lock(&raster_locks[0usize])
+    defer sync.mutex_unlock(&raster_locks[0usize])
     var mask: GlyphMask = zero
     if n < 2usize || scratch.len < SCRATCH_BYTES { ret (mask, false) }
     let k = f64(ratio)
@@ -286,7 +299,10 @@ fn rasterize(scratch: []u8, cur: []const i64, tags: []const i64, ends: []const u
             } else {
                 hit = yb <= y && y < ya
             }
-            if hit && nc < 256usize {
+            if hit {
+                // A scan line with more crossings than the array holds cannot be filled:
+                // fail the mask instead of dropping the rest (#711).
+                if nc >= 256usize { ret (mask, false) }
                 let xa = seg_x0[s]
                 let xb = seg_x1[s]
                 let x = xa + (y - ya) * (xb - xa) / (yb - ya)
@@ -482,6 +498,8 @@ fn ft_line(x0: f64, y0: f64, x1: f64, y1: f64, stride: usize, rows: usize) {
 
 // As `rasterize`, FreeType's way (see above): `xfrac` is a quarter pixel (0, 1/4, 1/2, 3/4), `lut` the Android table.
 fn rasterize_ft(scratch: []u8, cur: []const i64, tags: []const i64, ends: []const usize, nends: usize, n: usize, ratio: f32, xfrac: f32, lut: []const u8) -> (GlyphMask, bool) {
+    sync.mutex_lock(&raster_locks[0usize])
+    defer sync.mutex_unlock(&raster_locks[0usize])
     var mask: GlyphMask = zero
     if n < 2usize || scratch.len < SCRATCH_BYTES { ret (mask, false) }
     let k = f64(ratio)

@@ -240,6 +240,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if count1 != 143usize || count2 != 881usize || digest_u32(labels[..]) != 14030671487551898344u64 { os.exit(17i32) }
 
+    // 18: a radius larger than the image clips to the whole image; the window bounds have
+    // to saturate instead of overflowing the coordinate addition (issue #710).
+    var mean = 0.0f64
+    i = 0usize
+    while i < 1024usize {
+        mean += img_a[i]
+        i += 1usize
+    }
+    mean = mean / 1024.0f64
+    if filter.box_mean(img_a[..], 32usize, 32usize, 18446744073709551615usize, dst[..], scratch[..]) != ok { os.exit(18i32) }
+    i = 0usize
+    while i < 1024usize {
+        if math.abs[f64](dst[i] - mean) > 0.000000001f64 { os.exit(18i32) }
+        i += 1usize
+    }
+    var lowest = img_a[0usize]
+    var highest = img_a[0usize]
+    i = 0usize
+    while i < 1024usize {
+        if img_a[i] < lowest { lowest = img_a[i] }
+        if img_a[i] > highest { highest = img_a[i] }
+        i += 1usize
+    }
+    if filter.morph_erode(img_a[..], 32usize, 32usize, 18446744073709551615usize, dst[..]) != ok { os.exit(18i32) }
+    i = 0usize
+    while i < 1024usize {
+        if dst[i] != lowest { os.exit(18i32) }
+        i += 1usize
+    }
+    if filter.morph_dilate(img_a[..], 32usize, 32usize, 18446744073709551615usize, dst[..]) != ok { os.exit(18i32) }
+    i = 0usize
+    while i < 1024usize {
+        if dst[i] != highest { os.exit(18i32) }
+        i += 1usize
+    }
+
     try io.print("gfx filter ok\n")
     ret ok
 }
