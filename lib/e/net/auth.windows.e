@@ -146,9 +146,11 @@ fn acquire(a: *mem.Arena, mechanism: Mechanism, accepting: bool) -> (*Context, e
 
 fn step(c: *Context, input: []const u8, out: []u8) -> (usize, bool, err) {
     if c.complete || c.failed { ret (0usize, c.complete, Failed) }
+    // a token past the declared limit never reaches a native parser
+    if input.len > MAX_TOKEN { ret (0usize, false, Invalid) }
     var room = out.len
     if room > MAX_TOKEN { room = MAX_TOKEN }
-    var in_buffer = SecBuffer { size: u32(input.len & 2147483647usize), kind: SECBUFFER_TOKEN, data: address(input) }
+    var in_buffer = SecBuffer { size: u32(input.len), kind: SECBUFFER_TOKEN, data: address(input) }
     var in_desc = SecBufferDesc { version: 0u32, count: 1u32, buffers: &in_buffer }
     var out_buffer = SecBuffer { size: u32(room), kind: SECBUFFER_TOKEN, data: address(out) }
     var out_desc = SecBufferDesc { version: 0u32, count: 1u32, buffers: &out_buffer }

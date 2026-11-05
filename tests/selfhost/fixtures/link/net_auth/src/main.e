@@ -170,9 +170,43 @@ fn nul_principal(a: *mem.Arena) -> i32 {
     ret 9i32
 }
 
+// A token longer than the declared MAX_TOKEN is Invalid before any native parser. The check
+// runs on whichever side the host's provider can create (a workgroup Windows session has an
+// inbound credential but no outbound one); with neither it is skipped.
+fn oversized(a: *mem.Arena) -> i32 {
+    let (big, big_error) = mem.alloc[u8](a, auth.MAX_TOKEN + 1usize)
+    let (out, out_error) = mem.alloc[u8](a, auth.MAX_TOKEN)
+    if big_error != ok || out_error != ok { ret 91i32 }
+    var checked = false
+    let (cl, client_error) = auth.client(a, .Ntlm, "HTTP/localhost")
+    if client_error == ok {
+        let (_, _, client_step) = auth.step(cl, big[0..], out[0..])
+        if client_step != auth.Invalid { ret 92i32 }
+        let closed_client = auth.close(cl)
+        checked = true
+    }
+    let (sv, server_error) = auth.server(a, .Ntlm)
+    if server_error == ok {
+        let (_, _, server_step) = auth.step(sv, big[0..], out[0..])
+        if server_step != auth.Invalid { ret 94i32 }
+        let closed_server = auth.close(sv)
+        checked = true
+    }
+    if !checked && client_error != auth.NotFound && server_error != auth.NotFound { ret 93i32 }
+    ret 0i32
+}
+
 fn windows(a: *mem.Arena) -> i32 {
-    var code = nul_principal(a)
+    var code = oversized(a)
     if code != 0i32 { ret code }
+    code = nul_principal(a)
+    if code != 0i32 { ret code }
+    // A workgroup session has no outbound negotiation credential (the local handshake and
+    // account naming cannot run); the provider-independent checks above still did.
+    let (probe, probe_error) = auth.client(a, .Negotiate, "HTTP/localhost")
+    if probe_error == auth.NotFound || probe_error == auth.Failed || probe_error == auth.Refused { ret 0i32 }
+    if probe_error != ok { ret 10i32 }
+    let closed_probe = auth.close(probe)
     let (domain, domain_error) = os.env(a, "USERDOMAIN")
     let (user, user_error) = os.env(a, "USERNAME")
     if domain_error != ok || user_error != ok { ret 10i32 }
@@ -190,6 +224,8 @@ fn windows(a: *mem.Arena) -> i32 {
 }
 
 fn linux(a: *mem.Arena) -> i32 {
+    var code = oversized(a)
+    if code != 0i32 { ret code }
     let (probe, probe_error) = auth.client(a, .Kerberos, "HTTP/localhost@NEPER.TEST")
     if probe_error == auth.NotFound {
         let (sv, server_error) = auth.server(a, .Negotiate)
@@ -220,7 +256,7 @@ fn linux(a: *mem.Arena) -> i32 {
     }
     let (user, user_error) = os.env(a, "NEPER_KRB5_USER")
     if user_error != ok { ret 65i32 }
-    var code = garbled(a, .Kerberos, 66i32)
+    code = garbled(a, .Kerberos, 66i32)
     if code == 0i32 { code = garbled(a, .Negotiate, 68i32) }
     if code == 0i32 { code = loopback(a, .Kerberos, service, user, 70i32) }
     if code == 0i32 { code = loopback(a, .Negotiate, service, user, 80i32) }

@@ -9,7 +9,8 @@
 // in to, and `server` for the acceptor. Each call to `step` takes the peer's last token (empty
 // for the client's first call) and writes the next token to send into `out`; when it answers
 // `complete` the context is established and `user_name` names the authenticated client. A
-// token longer than `out` is `TooSmall`; `MAX_TOKEN` bytes always hold one. A token the
+// token longer than `out` is `TooSmall`; `MAX_TOKEN` bytes always hold one, and an input token
+// longer than `MAX_TOKEN` is `Invalid` before any provider sees it. A token the
 // provider rejects is `Refused`. `negotiate_header` and `parse_negotiate` carry a token in an
 // HTTP `Authorization`/`WWW-Authenticate` value, `Negotiate <base64>` (RFC 4559).
 //

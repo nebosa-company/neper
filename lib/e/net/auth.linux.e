@@ -136,6 +136,8 @@ fn load(a: *mem.Arena, mechanism: Mechanism, accepting: bool) -> (*Context, err)
 
 fn step(c: *Context, input: []const u8, out: []u8) -> (usize, bool, err) {
     if c.complete || c.failed { ret (0usize, c.complete, Failed) }
+    // a token past the declared limit never reaches a native parser
+    if input.len > MAX_TOKEN { ret (0usize, false, Invalid) }
     var minor = 0u32
     var in_buffer = Buffer { length: 0usize, value: nil }
     if input.len != 0usize {
