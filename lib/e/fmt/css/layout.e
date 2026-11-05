@@ -2489,7 +2489,22 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
         if p.kind == .Text {
             pws = bstyle(l, p.box)
         }
-        if pos + needed > lim + 0.01f64 && has_content {
+        // Lookahead: when the next piece is a punctuation that will hang, this character still fits because the hanging
+        // punctuation takes no room in the line (`last`, `force-end`, `allow-end`).
+        var lim_eff = lim
+        if (pws.hanging_punctuation & 14u8) != 0u8 && j + 1usize < x.bd.pieces.len && p.kind == .Text {
+            let np = x.bd.pieces.items[j + 1usize]
+            if np.kind == .Text {
+                let (ncw, ncn) = hanging_close_w(l, np)
+                if ncn > 0usize {
+                    lim_eff = lim + ncw
+                } else if (pws.hanging_punctuation & 12u8) != 0u8 {
+                    let (nw2, nn2) = hanging_period_w(l, np)
+                    if nn2 > 0usize { lim_eff = lim + nw2 }
+                }
+            }
+        }
+        if pos + needed > lim_eff + 0.01f64 && has_content {
             if last_soft != NONE {
                 out.end = usize(last_soft) + 1usize
                 ret out
