@@ -148,5 +148,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let a23 = [1]u64 { 18446744073709551615u64 }
     let r23 = run_case(a, m23[0usize..36usize], a23[0usize..1usize], 4895412794951729152u64, ok)
     if r23 != 0i32 { os.exit(240 + r23) }
+    // elem_drop_no_segment: elem.drop 0 with no element segment must be rejected at
+    // instantiation, not trapped when the function runs.
+    let m24 = [34]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 4u8, 1u8, 96u8, 0u8, 0u8, 3u8, 2u8, 1u8, 0u8, 7u8, 5u8, 1u8, 1u8, 102u8, 0u8, 0u8, 10u8, 7u8, 1u8, 5u8, 0u8, 252u8, 13u8, 0u8, 11u8 }
+    let (bm, bde) = wasm.decode(a, m24[0usize..34usize])
+    if bde != ok { os.exit(250) }
+    let (bst, bse) = wasm.store_new(a)
+    if bse != ok { os.exit(251) }
+    let none24: [1]wasm.ImportVal = zero
+    let (_, bie) = wasm.instantiate(a, bst, &bm, none24[0usize..0usize])
+    if bie != wasm.Malformed { os.exit(252) }
+    // many_locals: a recursive frame of 50000 locals must answer TrapStack before it
+    // writes past the value stack.
+    let m25 = [41]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 1u8, 6u8, 1u8, 96u8, 1u8, 127u8, 1u8, 127u8, 3u8, 2u8, 1u8, 0u8, 7u8, 5u8, 1u8, 1u8, 102u8, 0u8, 0u8, 10u8, 12u8, 1u8, 10u8, 1u8, 208u8, 134u8, 3u8, 127u8, 32u8, 0u8, 16u8, 0u8, 11u8 }
+    let a25 = [1]u64 { 0u64 }
+    let r25 = run_case(a, m25[0usize..41usize], a25[0usize..1usize], 0u64, wasm.TrapStack)
+    if r25 != 0i32 { os.exit(253 + r25) }
     ret ok
 }

@@ -684,7 +684,9 @@ fn decode(a: *mem.Arena, bytes: []const u8) -> (Module, err) {
         r.at = end
     }
     if nfuncs_declared != 0u32 && !seen_code { ret (zero, Malformed) }
-    if m.has_data_count == false && datas_l.len > 0usize && false { ret (zero, Malformed) }
+    // A declared Data Count must equal the segments actually present, including the
+    // case where the Data section is absent altogether.
+    if m.has_data_count && usize(m.data_count) != datas_l.len { ret (zero, Malformed) }
     m.types = types_l.items[0usize..types_l.len]
     m.imports = imports_l.items[0usize..imports_l.len]
     m.funcs = funcs_l.items[0usize..funcs_l.len]
@@ -865,8 +867,25 @@ fn types_equal(x: FuncType, y: FuncType) -> bool {
     ret true
 }
 
-// Skips the immediates of opcode `op` (already read); the jump table pass and the interpreter share it.
-fn skip_imm(r: *Reader, op: u8) -> err {
+// The arrays an instance addresses by index: imported tables and memories precede the
+// module's own in the instance, and element/data segments are the module's.
+type BulkLimits = struct { tables: usize, memories: usize, elems: usize, datas: usize }
+
+fn limits_of(m: *const Module) -> BulkLimits {
+    var tables = m.tables.len
+    var memories = m.memories.len
+    var i = 0usize
+    while i < m.imports.len {
+        if m.imports[i].kind == .Table { tables += 1usize }
+        if m.imports[i].kind == .Memory { memories += 1usize }
+        i += 1usize
+    }
+    ret BulkLimits { tables: tables, memories: memories, elems: m.elems.len, datas: m.datas.len }
+}
+
+// Skips the immediates of opcode `op` (already read), rejecting an index that no
+// instance array can hold; the jump table pass and the interpreter share it.
+fn skip_imm(r: *Reader, op: u8, lim: BulkLimits) -> err {
     if op == 2u8 || op == 3u8 || op == 4u8 {
         let (v, e) = rd_sleb(r, 33u32)
         ret e
@@ -937,27 +956,53 @@ fn skip_imm(r: *Reader, op: u8) -> err {
             let (v, e1) = rd_u32(r)
             if e1 != ok { ret e1 }
             let (b, e2) = rd_byte(r)
-            ret e2
+            if e2 != ok { ret e2 }
+            if usize(v) >= lim.datas || usize(b) >= lim.memories { ret Malformed }
+            ret ok
         }
-        if sub == 9u32 || sub == 13u32 || sub == 15u32 || sub == 16u32 || sub == 17u32 {
+        if sub == 9u32 {
             let (v, e3) = rd_u32(r)
-            ret e3
+            if e3 != ok { ret e3 }
+            if usize(v) >= lim.datas { ret Malformed }
+            ret ok
+        }
+        if sub == 13u32 {
+            let (v, e3) = rd_u32(r)
+            if e3 != ok { ret e3 }
+            if usize(v) >= lim.elems { ret Malformed }
+            ret ok
+        }
+        if sub == 15u32 || sub == 16u32 || sub == 17u32 {
+            let (v, e3) = rd_u32(r)
+            if e3 != ok { ret e3 }
+            if usize(v) >= lim.tables { ret Malformed }
+            ret ok
         }
         if sub == 10u32 {
             let (b1, e4) = rd_byte(r)
             if e4 != ok { ret e4 }
             let (b2, e5) = rd_byte(r)
-            ret e5
+            if e5 != ok { ret e5 }
+            if usize(b1) >= lim.memories || usize(b2) >= lim.memories { ret Malformed }
+            ret ok
         }
         if sub == 11u32 {
             let (b, e6) = rd_byte(r)
-            ret e6
+            if e6 != ok { ret e6 }
+            if usize(b) >= lim.memories { ret Malformed }
+            ret ok
         }
         if sub == 12u32 || sub == 14u32 {
             let (v, e7) = rd_u32(r)
             if e7 != ok { ret e7 }
             let (v2, e8) = rd_u32(r)
-            ret e8
+            if e8 != ok { ret e8 }
+            if sub == 12u32 {
+                if usize(v) >= lim.elems || usize(v2) >= lim.tables { ret Malformed }
+            } else {
+                if usize(v) >= lim.tables || usize(v2) >= lim.tables { ret Malformed }
+            }
+            ret ok
         }
         ret Malformed
     }
@@ -981,6 +1026,7 @@ fn build_jumps(a: *mem.Arena, m: *const Module, body: *FuncBody) -> err {
     let (stk, se) = mem.alloc[usize](a, n + 2usize)
     if se != ok { ret se }
     var sp = 0usize
+    let lim = limits_of(m)
     var r = Reader { b: m.bytes[0usize..body.end], at: body.start }
     while r.at < body.end {
         let pos = r.at
@@ -1004,7 +1050,7 @@ fn build_jumps(a: *mem.Arena, m: *const Module, body: *FuncBody) -> err {
                 if else_at != 0u32 { jp[usize(else_at) - body.start] = u32(pos) }
             }
         }
-        let ie = skip_imm(&r, op)
+        let ie = skip_imm(&r, op, lim)
         if ie != ok { ret ie }
     }
     if sp != 0usize { ret Malformed }
@@ -1532,13 +1578,15 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
     let nres = fi.ftype.results.len
     let nl = body.locals.len
     let vs = st.vs
+    // The whole frame, locals included, must fit before a single slot is written.
+    if fp > vs.len || np > vs.len - fp || nl > vs.len - fp - np { ret TrapStack }
+    var sp = fp + np + nl
+    if sp + 1024usize >= vs.len { ret TrapStack }
     var i = 0usize
     while i < nl {
         vs[fp + np + i] = 0u64
         i += 1usize
     }
-    var sp = fp + np + nl
-    if sp + 1024usize >= vs.len { ret TrapStack }
     let base = st.ltop
     if base + 4096usize >= st.ls.len { ret TrapStack }
     st.ls[base] = Label { kind: 3u8, height: sp, arity: u32(nres), end_arity: u32(nres), cont: body.end, end: body.end }
@@ -1565,6 +1613,8 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                 } else if sub == 8u32 {
                     let (di, de1) = rd_u32(&r)
                     let (mi, de2) = rd_byte(&r)
+                    if usize(di) >= m.datas.len || usize(mi) >= inst.mems.len { st.ltop = base
+                        ret Malformed }
                     let n = a32(vs[sp - 1usize])
                     let s0 = a32(vs[sp - 2usize])
                     let d0 = a32(vs[sp - 3usize])
@@ -1582,10 +1632,14 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                     }
                 } else if sub == 9u32 {
                     let (di, de) = rd_u32(&r)
+                    if usize(di) >= inst.dropped_data.len { st.ltop = base
+                        ret Malformed }
                     inst.dropped_data[usize(di)] = true
                 } else if sub == 10u32 {
                     let (b1, e1) = rd_byte(&r)
                     let (b2, e2) = rd_byte(&r)
+                    if usize(b1) >= inst.mems.len || usize(b2) >= inst.mems.len { st.ltop = base
+                        ret Malformed }
                     let n = a32(vs[sp - 1usize])
                     let s0 = a32(vs[sp - 2usize])
                     let d0 = a32(vs[sp - 3usize])
@@ -1608,6 +1662,8 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                     }
                 } else if sub == 11u32 {
                     let (b1, e1) = rd_byte(&r)
+                    if usize(b1) >= inst.mems.len { st.ltop = base
+                        ret Malformed }
                     let n = a32(vs[sp - 1usize])
                     let val = u8(vs[sp - 2usize] & 255u64)
                     let d0 = a32(vs[sp - 3usize])
@@ -1623,6 +1679,8 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                 } else if sub == 12u32 {
                     let (ei, e1) = rd_u32(&r)
                     let (ti, e2) = rd_u32(&r)
+                    if usize(ei) >= m.elems.len || usize(ti) >= inst.tables.len { st.ltop = base
+                        ret Malformed }
                     let n = a32(vs[sp - 1usize])
                     let s0 = a32(vs[sp - 2usize])
                     let d0 = a32(vs[sp - 3usize])
@@ -1645,10 +1703,14 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                     }
                 } else if sub == 13u32 {
                     let (ei, e1) = rd_u32(&r)
+                    if usize(ei) >= inst.dropped_elem.len { st.ltop = base
+                        ret Malformed }
                     inst.dropped_elem[usize(ei)] = true
                 } else if sub == 14u32 {
                     let (dt, e1) = rd_u32(&r)
                     let (stb, e2) = rd_u32(&r)
+                    if usize(dt) >= inst.tables.len || usize(stb) >= inst.tables.len { st.ltop = base
+                        ret Malformed }
                     let n = a32(vs[sp - 1usize])
                     let s0 = a32(vs[sp - 2usize])
                     let d0 = a32(vs[sp - 3usize])
@@ -1672,6 +1734,8 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                     }
                 } else if sub == 15u32 {
                     let (ti, e1) = rd_u32(&r)
+                    if usize(ti) >= inst.tables.len { st.ltop = base
+                        ret Malformed }
                     let t = inst.tables[usize(ti)]
                     let n = a32(vs[sp - 1usize])
                     let init = vs[sp - 2usize]
@@ -1679,10 +1743,14 @@ fn exec(st: *Store, fi: *FuncInst, fp: usize, depth: u32) -> err {
                     vs[sp - 1usize] = u64(table_grow(st.a, t, n, init))
                 } else if sub == 16u32 {
                     let (ti, e1) = rd_u32(&r)
+                    if usize(ti) >= inst.tables.len { st.ltop = base
+                        ret Malformed }
                     vs[sp] = u64(inst.tables[usize(ti)].size)
                     sp += 1usize
                 } else if sub == 17u32 {
                     let (ti, e1) = rd_u32(&r)
+                    if usize(ti) >= inst.tables.len { st.ltop = base
+                        ret Malformed }
                     let t = inst.tables[usize(ti)]
                     let n = a32(vs[sp - 1usize])
                     let val = vs[sp - 2usize]
@@ -1963,6 +2031,8 @@ fn invoke(st: *Store, id: u32, args: []const u64, results: []u64) -> err {
     let fi = st.funcs.items[usize(id)]
     if args.len != fi.ftype.params.len || results.len != fi.ftype.results.len { ret LinkError }
     let fp = st.top
+    // The argument slots must fit before any of them is written.
+    if fp > st.vs.len || args.len > st.vs.len - fp { ret TrapStack }
     var i = 0usize
     while i < args.len {
         st.vs[fp + i] = args[i]

@@ -31,5 +31,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, start_param_error) = wasm.decode(a, start_param[..])
     let (_, start_import_result_error) = wasm.decode(a, start_import_result[..])
     if start_ok_error != ok || start_param_error != wasm.Malformed || start_import_result_error != wasm.Malformed { os.exit(6) }
+    // A Data Count of 1 with no Data section: the declared count must match the segments.
+    let count_only = [11]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 12u8, 1u8, 1u8 }
+    let (_, count_error) = wasm.decode(a, count_only[0usize..11usize])
+    if count_error != wasm.Malformed { os.exit(7) }
     ret ok
 }
