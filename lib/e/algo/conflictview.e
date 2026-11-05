@@ -23,30 +23,33 @@ use e.fmt.json as json
 use e.mem
 use e.str
 
-// The text made safe for markup, in text and quoted attribute alike.
+// The text made safe for markup, in text and quoted attribute alike. Fail closed: when the
+// arena cannot hold the escaped text the answer is empty, never the unescaped input.
 fn escape_html(a: *mem.Arena, s: str) -> str {
     let (b, e) = str.builder(a, s.len + s.len / 4usize + 16usize)
-    if e != ok { ret s }
+    if e != ok { ret "" }
     var out = b
     var at = 0usize
     while at < s.len {
         let c = s[at]
+        var pushed: err = ok
         if c == 38u8 {
-            let p = str.push(&out, "&amp;")
+            pushed = str.push(&out, "&amp;")
         } else if c == 60u8 {
-            let p = str.push(&out, "&lt;")
+            pushed = str.push(&out, "&lt;")
         } else if c == 62u8 {
-            let p = str.push(&out, "&gt;")
+            pushed = str.push(&out, "&gt;")
         } else if c == 34u8 {
-            let p = str.push(&out, "&quot;")
+            pushed = str.push(&out, "&quot;")
         } else if c == 39u8 {
-            let p = str.push(&out, "&#39;")
+            pushed = str.push(&out, "&#39;")
         } else if c == 194u8 && at + 1usize < s.len && s[at + 1usize] == 160u8 {
-            let p = str.push(&out, "&nbsp;")
+            pushed = str.push(&out, "&nbsp;")
             at += 1usize
         } else {
-            let p = str.push_byte(&out, c)
+            pushed = str.push_byte(&out, c)
         }
+        if pushed != ok { ret "" }
         at += 1usize
     }
     ret str.done(&out)

@@ -77,11 +77,17 @@ fn all_digits(s: str) -> bool {
     ret true
 }
 
+// The decimal value, leading zeros skipped; a value with more than five significant digits
+// cannot be a port, so it answers 65536 (invalid) instead of silently truncating.
 fn digits_value(s: str) -> i64 {
     var n = 0i64
+    var significant = 0usize
     var at = 0usize
-    while at < s.len && at < 12usize {
-        n = n * 10i64 + i64(s[at] - 48u8)
+    while at < s.len {
+        let d = i64(s[at] - 48u8)
+        if n != 0i64 || d != 0i64 { significant += 1usize }
+        if significant > 5usize { ret 65536i64 }
+        n = n * 10i64 + d
         at += 1usize
     }
     ret n
@@ -963,7 +969,13 @@ fn sql_diagnostic(a: *mem.Arena, error_value: json.Value, secrets: []const json.
         if ir.truthy(own_message) { message = wb.js_string(a, own_message, true) }
     }
     var detail = redact_sql_text(a, message, secrets)
-    if detail.len > 400usize { detail = detail[0usize..400usize] }
+    if detail.len > 400usize {
+        // Back the cut up while the first excluded byte is a UTF-8 continuation, so the
+        // detail never ends in a partial sequence.
+        var cut = 400usize
+        while cut > 0usize && (detail[cut] & 192u8) == 128u8 { cut -= 1usize }
+        detail = detail[0usize..cut]
+    }
     var reason = ""
     let (known, found) = reason_for_code(code)
     if found { reason = known } else { reason = reason_from_message(a, detail) }
