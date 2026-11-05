@@ -49,8 +49,8 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/ui/app.e`†
 - `lib/e/ui/asset.e`
 - `lib/e/ui/audit.e`
+- `lib/e/ui/browser.e`
 - `lib/e/ui/code_editor.e`‡
-- `lib/e/ui/collection.e`‡
 
 ## Verification
 
