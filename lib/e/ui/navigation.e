@@ -3899,6 +3899,10 @@ fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: 
 }
 
 fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], marked: bool, active: bool) -> (widget.Node, err) {
+    var none_node: widget.Node = zero
+    // A group keys its location bar at +150 and actions at +190; the tabs use
+    // +1/+2 + 2*i, so more than 73 collide with them.
+    if documents.len > 73usize { ret (none_node, TooLarge) }
     var plain: DocumentTabsOptions = zero
     let (made, made_error) = document_tabs_styled(a, key, t, label, documents, current, pick, close, move, active, plain)
     ret (made, made_error)
@@ -3958,6 +3962,8 @@ fn document_tabs_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
 }
 
 fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], active: bool, options: DocumentTabsOptions) -> (widget.Node, err) {
+    var none_node: widget.Node = zero
+    if documents.len > 73usize { ret (none_node, TooLarge) }
     if documents.len > 64usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var strip_height: f32 = 40.0

@@ -486,6 +486,10 @@ fn save_cursor(t: *Term) {
 fn restore_cursor(t: *Term) {
     t.cx = min_usize(t.saved_x, t.cols - 1usize)
     t.cy = min_usize(t.saved_y, t.rows - 1usize)
+    // The scroll region may have moved since the save; the DSR reply
+    // subtracts row_min, so a cy above it would underflow.
+    if t.cy < row_min(t) { t.cy = row_min(t) }
+    if t.cy > row_max(t) { t.cy = row_max(t) }
     t.pen_fg = t.saved_fg
     t.pen_bg = t.saved_bg
     t.pen_attr = t.saved_attr
@@ -699,6 +703,8 @@ fn erase_display(t: *Term, mode: u32) {
             r += 1usize
         }
     } else if mode == 3u32 {
+        // Dropped lines advance `sb_dropped` so row keys are never reused.
+        t.sb_dropped += t.sb_len
         t.sb_head = 0usize
         t.sb_len = 0usize
     }
@@ -921,10 +927,15 @@ fn dispatch_osc(t: *Term) {
     // "<n>;<payload>": 0 and 2 set the title; everything else is dropped.
     var i = 0usize
     var num = 0usize
-    while i < t.osc_len && t.osc[i] >= 48u8 && t.osc[i] <= 57u8 {
+    var digits = 0usize
+    while i < t.osc_len && digits < 5usize && t.osc[i] >= 48u8 && t.osc[i] <= 57u8 {
         num = num * 10usize + usize(t.osc[i]) - 48usize
+        digits += 1usize
         i += 1usize
     }
+    // More than five digits cannot name an OSC we know; stop before the
+    // accumulator wraps (which could alias OSC 0/2 and rewrite the title).
+    if i < t.osc_len && t.osc[i] >= 48u8 && t.osc[i] <= 57u8 { ret }
     if i >= t.osc_len || t.osc[i] != 59u8 { ret }
     i += 1usize
     if num == 0usize || num == 2usize {

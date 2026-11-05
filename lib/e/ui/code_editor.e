@@ -1360,6 +1360,15 @@ fn validate(e: *const Editor, edits: []const Edit, text: []const u8) -> err {
         prev_end = ed.at + ed.remove
         i += 1usize
     }
+    // Batches apply last-to-first: the peak live size (at each step) must fit,
+    // not only the final size.
+    var live = len(e)
+    var step = edits.len
+    while step > 0usize {
+        step -= 1usize
+        live = live - edits[step].remove + edits[step].text_len
+        if live > e.buf.len { ret TooLarge }
+    }
     if len(e) - total_rem + total_ins > e.buf.len { ret TooLarge }
     if e.nlines - nl_rem + nl_ins > e.lines.len { ret TooManyLines }
     ret ok

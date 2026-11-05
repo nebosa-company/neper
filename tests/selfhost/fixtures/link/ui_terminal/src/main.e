@@ -223,5 +223,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bp: [512]u8 = zero
     let rp = term.take_output(&piece, bp[..])
     if digest(&piece, bp[..rp]) != MODEL_HASH { os.exit(15i32) }
+
+    // #127: a digit run in an OSC cannot wrap the accumulator (which would
+    // alias OSC 0/2 and rewrite the title).
+    var t16 = fresh(a, 10usize, 4usize, 0usize)
+    term.feed(&t16, "\x1b]99999999999999999999999;x\x07")
+    if t16.title_len != 0usize { os.exit(16i32) }
+    // #127: restoring a cursor above a moved scroll region clamps into it, so
+    // the CSI 6n reply cannot underflow.
+    var t17 = fresh(a, 10usize, 12usize, 0usize)
+    term.feed(&t17, "\x1b[?6h\x1b7\x1b[5;10r\x1b8\x1b[6n")
+    if t17.cy < term.row_min(&t17) { os.exit(17i32) }
+    // #127: ED 3 empties scrollback and advances sb_dropped so row keys are
+    // never reused.
+    var t18 = fresh(a, 10usize, 3usize, 8usize)
+    term.feed(&t18, "a\r\nb\r\nc\r\nd\r\ne\r\nf\r\ng")
+    let dropped_before = t18.sb_dropped
+    let scrolled = t18.sb_len
+    term.feed(&t18, "\x1b[3J")
+    if t18.sb_len != 0usize || t18.sb_dropped != dropped_before + scrolled { os.exit(18i32) }
     ret ok
 }
