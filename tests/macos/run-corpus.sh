@@ -67,7 +67,10 @@ for file in "$dir"/*; do
   code=$?
   seconds=$(( $(date +%s) - start ))
   want=$(expected "$name")
-  if [ "$code" -eq 95 ] && grep -qx "$no_metal_marker" "$scratch/.err"; then
+  # 77 is the graphics fixtures' "no capability was exercised" answer.
+  if [ "$code" -eq 77 ]; then
+    skipped=$((skipped+1)); echo "SKIP $name unsupported ${seconds}s"
+  elif [ "$code" -eq 95 ] && grep -qx "$no_metal_marker" "$scratch/.err"; then
     skipped=$((skipped+1)); echo "SKIP $name no-metal ${seconds}s"
   elif [ "$want" = "skip" ]; then
     skipped=$((skipped+1)); echo "SKIP $name $code ${seconds}s"

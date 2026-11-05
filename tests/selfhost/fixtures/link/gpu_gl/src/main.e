@@ -210,7 +210,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
-        ret ok
+        os.exit(77i32)
     }
     if found_error != ok {
         try io.printf["OpenGL device enumeration failed: {}\n"](found_error)
@@ -218,7 +218,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if found.len == 0usize {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
-        ret ok
+        os.exit(77i32)
     }
     var flushing = true
     var wide_check = false
@@ -230,7 +230,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let gl_run = run(a, .Gl, gl_out, flushing, wide_check)
     if gl_run == gpu.NoDevice || gl_run == gpu.Unsupported {
         let printed = io.print("the OpenGL device refused these kernels; nothing checked\n")
-        os.exit(10i32)
+        os.exit(77i32)
     }
     if gl_run != ok { os.exit(11i32) }
     var k = 0usize
@@ -259,7 +259,7 @@ fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL ES 3.1 compute device with precise; ES not checked\n")
-        ret ok
+        os.exit(77i32)
     }
     if found_error != ok {
         try io.printf["OpenGL ES device enumeration failed: {}\n"](found_error)
@@ -267,7 +267,7 @@ fn check_es(a: *mem.Arena, cpu_out: []u32, es_out: []u32) -> err {
     }
     if found.len == 0usize {
         let printed = io.print("no OpenGL ES 3.1 compute device with precise; ES not checked\n")
-        ret ok
+        os.exit(77i32)
     }
     var flushing = true
     for capability in found[0usize].capabilities {

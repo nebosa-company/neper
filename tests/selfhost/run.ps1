@@ -3789,6 +3789,12 @@ $khronosCleanupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $khronosCleanupWritten -ne 'executable written') { throw 'x_khronos_context_cleanup emission failed' }
 & $khronosCleanupPath
 if ($LASTEXITCODE -ne 0) { throw "partial GL context cleanup answered wrongly: exit $LASTEXITCODE" }
+# A fixture that exits 77 exercised no graphics capability: report SKIP, not PASS.
+function Invoke-GpuFixture([string]$Name, [string]$Path) {
+    & $Path
+    if ($LASTEXITCODE -eq 77) { Write-Host "SKIP $Name (no graphics capability)" }
+    elseif ($LASTEXITCODE -ne 0) { throw "$Name answered wrongly: exit $LASTEXITCODE" }
+}
 # `x.khronos.context` (D5880, D5886): headless GL 3.3/4.3 through WGL and GLES 3.0/3.1 through
 # ANGLE's libEGL.dll when one is on PATH, drawn, read back and computed on; then a context on an
 # os window, cleared, scissored, read back and swapped; then examples/gl_triangle for 3 frames.
@@ -3801,8 +3807,7 @@ if ($LASTEXITCODE -ne 0) { throw "a headless GL context answered wrongly: exit $
 $khronosWindowPath = Join-Path $testBuild 'x-khronos-gl-window-selfhost.exe'
 $khronosWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_window\src\main.e') $repo 'x64' 'windows' $khronosWindowPath
 if ($LASTEXITCODE -ne 0 -or $khronosWindowWritten -ne 'executable written') { throw 'x_khronos_gl_window emission failed' }
-& $khronosWindowPath
-if ($LASTEXITCODE -ne 0) { throw "a window's GL context answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'x_khronos_gl_window' $khronosWindowPath
 # (D5899) Twelve resizes from outside, each frame drawn and read back at its new size.
 $khronosResizePath = Join-Path $testBuild 'x-khronos-gl-resize-selfhost.exe'
 $khronosResizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_khronos_gl_resize\src\main.e') $repo 'x64' 'windows' $khronosResizePath
@@ -3828,8 +3833,7 @@ if ($LASTEXITCODE -ne 0) { throw "the GL presenter answered wrongly: exit $LASTE
 $gpuGlPath = Join-Path $testBuild 'gpu-gl-selfhost.exe'
 $gpuGlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl\src\main.e') $repo 'x64' 'windows' $gpuGlPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlWritten -ne 'executable written') { throw 'gpu_gl emission failed' }
-& $gpuGlPath
-if ($LASTEXITCODE -ne 0) { throw "e.gpu on OpenGL answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl' $gpuGlPath
 # (D5908) A shared library is written for Linux and Android (run.sh loads it into a C host; Windows cannot load it).
 foreach ($sharedTarget in @(@('x64', 'linux'), @('aarch64', 'android'))) {
     $sharedPath = Join-Path $testBuild "libshared-library-$($sharedTarget[0])-$($sharedTarget[1]).so"
@@ -3840,44 +3844,37 @@ foreach ($sharedTarget in @(@('x64', 'linux'), @('aarch64', 'android'))) {
 $gpuGlExactPath = Join-Path $testBuild 'gpu-gl-exact-selfhost.exe'
 $gpuGlExactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_exact\src\main.e') $repo 'x64' 'windows' $gpuGlExactPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlExactWritten -ne 'executable written') { throw 'gpu_gl_exact emission failed' }
-& $gpuGlExactPath
-if ($LASTEXITCODE -ne 0) { throw "exact f32 division, square root or fma on OpenGL answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_exact' $gpuGlExactPath
 # (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
 $gpuGlSubgroupPath = Join-Path $testBuild 'gpu-gl-subgroup-selfhost.exe'
 $gpuGlSubgroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_subgroup\src\main.e') $repo 'x64' 'windows' $gpuGlSubgroupPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlSubgroupWritten -ne 'executable written') { throw 'gpu_gl_subgroup emission failed' }
-& $gpuGlSubgroupPath
-if ($LASTEXITCODE -ne 0) { throw "a subgroup collective on OpenGL answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_subgroup' $gpuGlSubgroupPath
 # (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
 $gpuGlLimitsPath = Join-Path $testBuild 'gpu-gl-limits-selfhost.exe'
 $gpuGlLimitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_limits\src\main.e') $repo 'x64' 'windows' $gpuGlLimitsPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlLimitsWritten -ne 'executable written') { throw 'gpu_gl_limits emission failed' }
-& $gpuGlLimitsPath
-if ($LASTEXITCODE -ne 0) { throw "an OpenGL device limit answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_limits' $gpuGlLimitsPath
 # (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
 $gpuGlF64Path = Join-Path $testBuild 'gpu-gl-f64-selfhost.exe'
 $gpuGlF64Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_f64\src\main.e') $repo 'x64' 'windows' $gpuGlF64Path --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlF64Written -ne 'executable written') { throw 'gpu_gl_f64 emission failed' }
-& $gpuGlF64Path
-if ($LASTEXITCODE -ne 0) { throw "f64 on OpenGL answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_f64' $gpuGlF64Path
 # (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
 $gpuGlNarrowPath = Join-Path $testBuild 'gpu-gl-narrow-selfhost.exe'
 $gpuGlNarrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_narrow\src\main.e') $repo 'x64' 'windows' $gpuGlNarrowPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlNarrowWritten -ne 'executable written') { throw 'gpu_gl_narrow emission failed' }
-& $gpuGlNarrowPath
-if ($LASTEXITCODE -ne 0) { throw "f16 or bf16 on OpenGL answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_narrow' $gpuGlNarrowPath
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 $gpuGlThreadsPath = Join-Path $testBuild 'gpu-gl-threads-selfhost.exe'
 $gpuGlThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_threads\src\main.e') $repo 'x64' 'windows' $gpuGlThreadsPath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlThreadsWritten -ne 'executable written') { throw 'gpu_gl_threads emission failed' }
-& $gpuGlThreadsPath
-if ($LASTEXITCODE -ne 0) { throw "the GL device answered wrongly across threads: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_threads' $gpuGlThreadsPath
 # (D5898) A reopened GL device takes its kernel from the program-binary cache.
 $gpuGlCachePath = Join-Path $testBuild 'gpu-gl-cache-selfhost.exe'
 $gpuGlCacheWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gl_cache\src\main.e') $repo 'x64' 'windows' $gpuGlCachePath --gpu glsl
 if ($LASTEXITCODE -ne 0 -or $gpuGlCacheWritten -ne 'executable written') { throw 'gpu_gl_cache emission failed' }
-& $gpuGlCachePath
-if ($LASTEXITCODE -ne 0) { throw "the GL program cache answered wrongly: exit $LASTEXITCODE" }
+Invoke-GpuFixture 'gpu_gl_cache' $gpuGlCachePath
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 $saxpyGlslPath = Join-Path $testBuild 'saxpy-glsl-selfhost.exe'
 $saxpyGlslWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyGlslPath --gpu glsl

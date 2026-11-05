@@ -1,14 +1,17 @@
 // A GL context on an `os` window (L174, L175): x.khronos.context.for_window on a 96x64
 // window, then make_current, swap_interval(1), a clear of the default framebuffer read back
 // before the swap, a scissored clear that leaves the rest alone, and five swaps with the
-// window's events pumped between them. A host explicitly reporting no display or GL exits 0 having printed
-// why; a host that opens the context and then answers wrongly fails with the check's number.
+// window's events pumped between them. A host explicitly reporting no display or GL exits 77
+// (the suite's SKIP) having printed why; a host that opens the context and then answers
+// wrongly fails with the check's number.
 
 use e.io
 use e.mem
 use e.os
 use x.khronos.context
 use x.khronos.gl
+
+error Skipped
 
 const WIDTH: usize = 96usize
 const HEIGHT: usize = 64usize
@@ -30,13 +33,15 @@ fn pump() {
 
 // GL 3.3 and 4.3 core, and GLES 3.1, each on a window of its own: on Windows a window's pixel format is WGL's once set.
 fn main(a: *mem.Arena, args: []str) -> err {
+    var skipped = false
     let first = on_window(a, context.Options { api: .Gl, major: 3u32, minor: 3u32 }, "OpenGL 3.3 core", 0i32)
-    if first == os.Unsupported { ret ok }
-    if first != ok { os.exit(12i32) }
+    if first == os.Unsupported { os.exit(77i32) }
+    if first == Skipped { skipped = true } else if first != ok { os.exit(12i32) }
     let second = on_window(a, context.Options { api: .Gl, major: 4u32, minor: 3u32 }, "OpenGL 4.3 core", 20i32)
-    if second != ok { os.exit(32i32) }
+    if second == Skipped { skipped = true } else if second != ok { os.exit(32i32) }
     let third = on_window(a, context.Options { api: .Gles, major: 3u32, minor: 1u32 }, "OpenGL ES 3.1", 40i32)
-    if third != ok { os.exit(52i32) }
+    if third == Skipped { skipped = true } else if third != ok { os.exit(52i32) }
+    if skipped { os.exit(77i32) }
     ret ok
 }
 
@@ -52,9 +57,9 @@ fn on_window(a: *mem.Arena, options: context.Options, label: str, base: i32) -> 
     let (c, context_error) = context.for_window(a, w, options)
     if context_error == context.Unsupported {
         let printed = io.print(label)
-        let skipped = io.print(" on a window: unsupported on this host\n")
+        let skipped_line = io.print(" on a window: unsupported on this host\n")
         if os.window_close(w) != ok { os.exit(base + 1i32) }
-        ret ok
+        ret Skipped
     }
     if context_error != ok { os.exit(base + 2i32) }
     var live = c

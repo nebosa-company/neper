@@ -524,7 +524,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
     if found_error == gpu.Unsupported {
         try io.print("no OpenGL compute device; nothing checked\n")
-        ret ok
+        os.exit(77i32)
     }
     if found_error != ok {
         try io.printf["OpenGL device enumeration failed: {}\n"](found_error)
@@ -532,7 +532,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if found.len == 0usize {
         try io.print("no OpenGL compute device; nothing checked\n")
-        ret ok
+        os.exit(77i32)
     }
     var flushing = true
     var narrow_ok = false
@@ -544,7 +544,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !narrow_ok {
         try io.print("no Float16 on this OpenGL device; nothing checked\n")
-        ret ok
+        os.exit(77i32)
     }
     try check_h(a, flushing, 20261027u64)
     try check_b(a, flushing, 20261028u64)

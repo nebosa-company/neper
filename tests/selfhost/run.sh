@@ -8,6 +8,15 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"
 test_build="$repo/build/linux/tests/selfhost"
 
+# A fixture that exits 77 exercised no graphics capability: report SKIP, not PASS.
+gpu_run() {
+    name=$1; shift
+    status=0
+    "$@" || status=$?
+    if [ "$status" -eq 77 ]; then echo "SKIP $name (no graphics capability)"
+    elif [ "$status" -ne 0 ]; then echo "$name answered wrongly: exit $status" >&2; exit 1; fi
+}
+
 # NEPER_REFRESH_GOLDENS=1 rewrites a tool golden whose only difference is its snapshot hashes (D5190).
 . "$repo/tests/selfhost/refresh-goldens.sh"
 sh "$repo/tests/selfhost/refresh-goldens-test.sh"
@@ -3366,7 +3375,7 @@ chmod +x "$test_build/x-khronos-gl-headless-selfhost"
 khronos_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_gl_window/src/main.e" "$repo" x64 linux "$test_build/x-khronos-gl-window-selfhost")
 [ "$khronos_window_written" = 'executable written' ]
 chmod +x "$test_build/x-khronos-gl-window-selfhost"
-"$test_build/x-khronos-gl-window-selfhost"
+gpu_run x_khronos_gl_window "$test_build/x-khronos-gl-window-selfhost"
 # The barrier fixture holds a fake Xlib initializer open until the second caller is in the wait path.
 xlib_loader_race_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_khronos_xlib_loader_race/src/main.e" "$repo" x64 linux "$test_build/x-khronos-xlib-loader-race-selfhost")
 [ "$xlib_loader_race_written" = 'executable written' ]
@@ -3394,9 +3403,9 @@ chmod +x "$test_build/x-khronos-gl-present-selfhost"
 gpu_gl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-selfhost" --gpu glsl)
 [ "$gpu_gl_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-selfhost"
-"$test_build/gpu-gl-selfhost"
+gpu_run gpu_gl "$test_build/gpu-gl-selfhost"
 # (D5904) Again with Mesa answering as an ES 3.1 driver: the ES pass takes 3.1's header with GL_OES_gpu_shader5's `precise`.
-MESA_GLES_VERSION_OVERRIDE=3.1 "$test_build/gpu-gl-selfhost"
+gpu_run gpu_gl_es env MESA_GLES_VERSION_OVERRIDE=3.1 "$test_build/gpu-gl-selfhost"
 # (D5908) A shared library: `@export`ed `@cc` functions found and called through dlopen by a C host.
 shared_library_written=$($test_build/neper-self emit-shared-library "$repo/tests/selfhost/fixtures/link/shared_library/src/main.e" "$repo" x64 linux "$test_build/libshared-library-selfhost.so")
 [ "$shared_library_written" = 'executable written' ]
@@ -3406,37 +3415,37 @@ cc -o "$test_build/shared-library-host" "$repo/tests/selfhost/fixtures/link/shar
 gpu_gl_exact_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_exact/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-exact-selfhost" --gpu glsl)
 [ "$gpu_gl_exact_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-exact-selfhost"
-"$test_build/gpu-gl-exact-selfhost"
+gpu_run gpu_gl_exact "$test_build/gpu-gl-exact-selfhost"
 # (D5902) Subgroup collectives through GL_KHR_shader_subgroup, checked lane by lane at the width the driver cut the workgroup into.
 gpu_gl_subgroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_subgroup/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-subgroup-selfhost" --gpu glsl)
 [ "$gpu_gl_subgroup_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-subgroup-selfhost"
-"$test_build/gpu-gl-subgroup-selfhost"
+gpu_run gpu_gl_subgroup "$test_build/gpu-gl-subgroup-selfhost"
 # (D5903) Shared memory or a workgroup axis past the GL device's limit is TooLarge at launch, not a driver compile failure.
 gpu_gl_limits_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_limits/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-limits-selfhost" --gpu glsl)
 [ "$gpu_gl_limits_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-limits-selfhost"
-"$test_build/gpu-gl-limits-selfhost"
+gpu_run gpu_gl_limits "$test_build/gpu-gl-limits-selfhost"
 # (D5903) f64 as GLSL's double, word-equal to the CPU where the device keeps denormals.
 gpu_gl_f64_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_f64/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-f64-selfhost" --gpu glsl)
 [ "$gpu_gl_f64_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-f64-selfhost"
-"$test_build/gpu-gl-f64-selfhost"
+gpu_run gpu_gl_f64 "$test_build/gpu-gl-f64-selfhost"
 # (D5914) f16 and bf16 on the GL device, word-equal to the CPU backend's (D5913).
 gpu_gl_narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_narrow/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-narrow-selfhost" --gpu glsl)
 [ "$gpu_gl_narrow_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-narrow-selfhost"
-"$test_build/gpu-gl-narrow-selfhost"
+gpu_run gpu_gl_narrow "$test_build/gpu-gl-narrow-selfhost"
 # (D5897) The GL device used from a thread that did not open it: its context lives on the device's own thread.
 gpu_gl_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_threads/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-threads-selfhost" --gpu glsl)
 [ "$gpu_gl_threads_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-threads-selfhost"
-"$test_build/gpu-gl-threads-selfhost"
+gpu_run gpu_gl_threads "$test_build/gpu-gl-threads-selfhost"
 # (D5898) A reopened GL device takes its kernel from the program-binary cache.
 gpu_gl_cache_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gl_cache/src/main.e" "$repo" x64 linux "$test_build/gpu-gl-cache-selfhost" --gpu glsl)
 [ "$gpu_gl_cache_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gl-cache-selfhost"
-"$test_build/gpu-gl-cache-selfhost"
+gpu_run gpu_gl_cache "$test_build/gpu-gl-cache-selfhost"
 # (C215) The GLSL emitter's output pinned: saxpy and the loop kernels against tests/conformance/glsl.
 saxpy_glsl_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-glsl-selfhost" --gpu glsl)
 [ "$saxpy_glsl_written" = 'executable written' ]
