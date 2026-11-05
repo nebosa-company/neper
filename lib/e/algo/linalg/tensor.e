@@ -8,32 +8,39 @@ use e.mem
 type Tensor[T: type] = struct { data: []T, shape: []const usize, stride: []const usize }
 type ConstTensor[T: type] = struct { data: []const T, shape: []const usize, stride: []const usize }
 error Shape
+const U64_MAX: usize = 18446744073709551615usize
 
-fn count_of(shape: []const usize) -> usize {
+fn count_of(shape: []const usize) -> (usize, err) {
     var total = 1usize
     var d = 0usize
     while d < shape.len {
+        // Checked: a product past usize wraps and would pass the extent tests.
+        if shape[d] != 0usize && total > U64_MAX / shape[d] { ret (0usize, Shape) }
         total = total * shape[d]
         d += 1usize
     }
-    ret total
+    ret (total, ok)
 }
 
 // The largest offset a view reaches, plus one; zero for an empty extent.
-fn reach(shape: []const usize, stride: []const usize) -> usize {
+fn reach(shape: []const usize, stride: []const usize) -> (usize, err) {
     var last = 0usize
     var d = 0usize
     while d < shape.len {
-        if shape[d] == 0usize { ret 0usize }
-        last += (shape[d] - 1usize) * stride[d]
+        if shape[d] == 0usize { ret (0usize, ok) }
+        let extent = shape[d] - 1usize
+        if extent != 0usize && stride[d] > (U64_MAX - last) / extent { ret (0usize, Shape) }
+        last += extent * stride[d]
         d += 1usize
     }
-    ret last + 1usize
+    if last == U64_MAX { ret (0usize, Shape) }
+    ret (last + 1usize, ok)
 }
 
 fn view[T: type](data: []T, shape: []const usize, stride: []const usize) -> (Tensor[T], err) {
     if shape.len != stride.len { ret (zero, Shape) }
-    if reach(shape, stride) > data.len { ret (zero, Shape) }
+    let (extent, reach_error) = reach(shape, stride)
+    if reach_error != ok || extent > data.len { ret (zero, Shape) }
     var t: Tensor[T] = zero
     t.data = data
     t.shape = shape
@@ -43,7 +50,8 @@ fn view[T: type](data: []T, shape: []const usize, stride: []const usize) -> (Ten
 
 // Row-major: the last dimension is contiguous.
 fn contiguous[T: type](a: *mem.Arena, data: []T, shape: []const usize) -> (Tensor[T], err) {
-    if count_of(shape) > data.len { ret (zero, Shape) }
+    let (total, count_error) = count_of(shape)
+    if count_error != ok || total > data.len { ret (zero, Shape) }
     let (stride, stride_error) = mem.alloc[usize](a, shape.len)
     if stride_error != ok { ret (zero, stride_error) }
     var step = 1usize
@@ -51,6 +59,7 @@ fn contiguous[T: type](a: *mem.Arena, data: []T, shape: []const usize) -> (Tenso
     while d > 0usize {
         d -= 1usize
         stride[d] = step
+        if shape[d] != 0usize && step > U64_MAX / shape[d] { ret (zero, Shape) }
         step = step * shape[d]
     }
     var t: Tensor[T] = zero
@@ -68,7 +77,11 @@ fn as_const[T: type](tensor: Tensor[T]) -> ConstTensor[T] {
     ret c
 }
 
-fn elements[T: type](t: Tensor[T]) -> usize { ret count_of(t.shape) }
+fn elements[T: type](t: Tensor[T]) -> usize {
+    let (total, count_error) = count_of(t.shape)
+    if count_error != ok { ret 0usize }
+    ret total
+}
 
 fn offset[T: type](t: Tensor[T], index: []const usize) -> usize {
     if index.len != t.shape.len { ret t.data.len }
@@ -88,6 +101,7 @@ fn is_row_major[T: type](t: Tensor[T]) -> bool {
     while d > 0usize {
         d -= 1usize
         if t.shape[d] != 1usize && t.stride[d] != step { ret false }
+        if t.shape[d] != 0usize && step > U64_MAX / t.shape[d] { ret false }
         step = step * t.shape[d]
     }
     ret true
@@ -117,12 +131,13 @@ fn offset_of(index: []const usize, stride: []const usize) -> usize {
 }
 
 fn reshape[T: type](a: *mem.Arena, t: Tensor[T], shape: []const usize) -> (Tensor[T], err) {
-    if count_of(shape) != count_of(t.shape) { ret (zero, Shape) }
+    let (wanted, wanted_error) = count_of(shape)
+    let (total, total_error) = count_of(t.shape)
+    if wanted_error != ok || total_error != ok || wanted != total { ret (zero, Shape) }
     if is_row_major[T](t) {
         let (same_storage, same_error) = contiguous[T](a, t.data, shape)
         ret (same_storage, same_error)
     }
-    let total = count_of(t.shape)
     let (copied, copied_error) = mem.alloc[T](a, total)
     if copied_error != ok { ret (zero, copied_error) }
     let (index, index_error) = mem.alloc[usize](a, t.shape.len)
@@ -145,16 +160,20 @@ fn reshape[T: type](a: *mem.Arena, t: Tensor[T], shape: []const usize) -> (Tenso
     ret (fresh, fresh_error)
 }
 
-fn fill[T: type](tensor: Tensor[T], value: T) {
-    if count_of(tensor.shape) == 0usize { ret }
+// The rank a rank-8 cursor cannot express is an error, not a silent no-op.
+fn fill[T: type](tensor: Tensor[T], value: T) -> err {
     var index: [8]usize = zero
-    if tensor.shape.len > index.len { ret }
+    if tensor.shape.len > index.len { ret Shape }
+    let (total, count_error) = count_of(tensor.shape)
+    if count_error != ok { ret Shape }
+    if total == 0usize { ret ok }
     let cursor = index[..tensor.shape.len]
     while true {
         let target_at = offset_of(cursor, tensor.stride)
         tensor.data[target_at] = value
         if !next_index(tensor.shape, cursor) { break }
     }
+    ret ok
 }
 
 fn same_shape(a: []const usize, b: []const usize) -> bool {
@@ -169,7 +188,9 @@ fn same_shape(a: []const usize, b: []const usize) -> bool {
 
 fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err {
     if !same_shape(dst.shape, src.shape) { ret Shape }
-    if count_of(dst.shape) == 0usize { ret ok }
+    let (total, count_error) = count_of(dst.shape)
+    if count_error != ok { ret Shape }
+    if total == 0usize { ret ok }
     var index: [8]usize = zero
     if dst.shape.len > index.len { ret Shape }
     let cursor = index[..dst.shape.len]
@@ -184,7 +205,9 @@ fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err {
 
 fn add[T: type](dst: Tensor[T], x: ConstTensor[T], y: ConstTensor[T]) -> err {
     if !same_shape(dst.shape, x.shape) || !same_shape(dst.shape, y.shape) { ret Shape }
-    if count_of(dst.shape) == 0usize { ret ok }
+    let (total, count_error) = count_of(dst.shape)
+    if count_error != ok { ret Shape }
+    if total == 0usize { ret ok }
     var index: [8]usize = zero
     if dst.shape.len > index.len { ret Shape }
     let cursor = index[..dst.shape.len]

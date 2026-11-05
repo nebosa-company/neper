@@ -641,38 +641,51 @@ fn givens_apply(m: Matrix[f64], i: usize, k: usize, c: f64, s: f64) -> err {
 }
 
 // Modified Gram-Schmidt on the columns of `m` in place; `Singular` when a column lies in
-// the span of those before it.
+// the span of those before it. Dependence is judged against rounding noise: a residual
+// norm at or under DEPENDENCE_EPS times the column's original norm is dependent, which
+// the old exact-zero test missed for general floating-point input.
 fn orthonormalize(m: Matrix[f64]) -> err {
     var j = 0usize
     while j < m.cols {
-        var norm: f64 = 0.0
+        var original: f64 = 0.0
         var i = 0usize
         while i < m.rows {
             let x = m.data[matrix_offset[f64](m, i, j)]
-            norm = norm + x * x
+            original = original + x * x
             i += 1usize
         }
-        if norm == 0.0 { ret Singular }
-        norm = math.sqrt[f64](norm)
-        i = 0usize
-        while i < m.rows {
-            m.data[matrix_offset[f64](m, i, j)] = m.data[matrix_offset[f64](m, i, j)] / norm
-            i += 1usize
-        }
-        var k = j + 1usize
-        while k < m.cols {
+        original = math.sqrt[f64](original)
+        if original == 0.0 { ret Singular }
+        // Subtract the projections onto the already-normalized columns, then judge
+        // what is left against the column's own size.
+        var k = 0usize
+        while k < j {
             var dot: f64 = 0.0
             i = 0usize
             while i < m.rows {
-                dot = dot + m.data[matrix_offset[f64](m, i, j)] * m.data[matrix_offset[f64](m, i, k)]
+                dot = dot + m.data[matrix_offset[f64](m, i, k)] * m.data[matrix_offset[f64](m, i, j)]
                 i += 1usize
             }
             i = 0usize
             while i < m.rows {
-                m.data[matrix_offset[f64](m, i, k)] = m.data[matrix_offset[f64](m, i, k)] - dot * m.data[matrix_offset[f64](m, i, j)]
+                m.data[matrix_offset[f64](m, i, j)] = m.data[matrix_offset[f64](m, i, j)] - dot * m.data[matrix_offset[f64](m, i, k)]
                 i += 1usize
             }
             k += 1usize
+        }
+        var residual: f64 = 0.0
+        i = 0usize
+        while i < m.rows {
+            let x = m.data[matrix_offset[f64](m, i, j)]
+            residual = residual + x * x
+            i += 1usize
+        }
+        residual = math.sqrt[f64](residual)
+        if residual <= 0.000000000001 * original { ret Singular }
+        i = 0usize
+        while i < m.rows {
+            m.data[matrix_offset[f64](m, i, j)] = m.data[matrix_offset[f64](m, i, j)] / residual
+            i += 1usize
         }
         j += 1usize
     }
@@ -771,7 +784,9 @@ fn power_iteration(m: ConstMatrix[f64], x: []f64, work: []f64, tolerance: f64, m
         x[i] = x[i] / norm
         i += 1usize
     }
-    var value: f64 = 0.0
+    // The first quotient has nothing to compare with: a NaN seed and a minimum of two
+    // iterations keep a start vector whose x'Ax happens to be 0 from "converging" at once.
+    var value: f64 = math.nan64()
     var iterations = 0u32
     while iterations < max_iterations {
         var rayleigh: f64 = 0.0
@@ -787,6 +802,16 @@ fn power_iteration(m: ConstMatrix[f64], x: []f64, work: []f64, tolerance: f64, m
             rayleigh = rayleigh + x[i] * total
             i += 1usize
         }
+        // The residual of this quotient and the iterate it was formed from: a pair of
+        // equal quotients on an oscillating pair still has |A x - rayleigh x| large.
+        var residual: f64 = 0.0
+        i = 0usize
+        while i < n {
+            let d = work[i] - rayleigh * x[i]
+            residual = residual + d * d
+            i += 1usize
+        }
+        residual = math.sqrt[f64](residual)
         norm = vector_norm(work[..n])
         if norm == 0.0 { ret (0.0, iterations, Singular) }
         i = 0usize
@@ -797,7 +822,7 @@ fn power_iteration(m: ConstMatrix[f64], x: []f64, work: []f64, tolerance: f64, m
         iterations += 1u32
         let moved = math.abs[f64](rayleigh - value)
         value = rayleigh
-        if moved <= tolerance { ret (value, iterations, ok) }
+        if iterations >= 2u32 && moved <= tolerance && residual <= math.sqrt[f64](tolerance) * norm { ret (value, iterations, ok) }
     }
     ret (value, iterations, NoConvergence)
 }

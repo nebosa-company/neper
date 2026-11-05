@@ -94,11 +94,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var out_data: [6]i32 = zero
     let (out_t, _) = tensor.contiguous[i32](a, out_data[0..], shape[0..])
     if tensor.add[i32](out_t, tensor.as_const[i32](tn), tensor.as_const[i32](tn)) != ok || out_data[5] != 12i32 { os.exit(37) }
-    tensor.fill[i32](out_t, 7i32)
+    if tensor.fill[i32](out_t, 7i32) != ok { os.exit(38) }
     if out_data[0] != 7i32 || out_data[5] != 7i32 { os.exit(38) }
     if tensor.copy[i32](out_t, tensor.as_const[i32](tn)) != ok || out_data[3] != 4i32 { os.exit(39) }
     let (oth, _) = tensor.contiguous[i32](a, out_data[0..], tshape[0..])
     if tensor.add[i32](out_t, tensor.as_const[i32](oth), tensor.as_const[i32](tn)) != tensor.Shape { os.exit(40) }
+    // #242: products past usize are Shape, and a rank-9 fill reports it instead of doing nothing.
+    var small: [4]i32 = zero
+    let huge_shape: [2]usize = [2]usize{ 4294967296usize, 4294967296usize }
+    let (_, huge_error) = tensor.contiguous[i32](a, small[0..], huge_shape[0..])
+    if huge_error != tensor.Shape { os.exit(46) }
+    let huge_stride: [1]usize = [1]usize{ 18446744073709551615usize }
+    let one_shape: [1]usize = [1]usize{ 2usize }
+    let (_, stride_error) = tensor.view[i32](small[0..], one_shape[0..], huge_stride[0..])
+    if stride_error != tensor.Shape { os.exit(47) }
+    let rank9: [9]usize = [9]usize{ 1usize, 1usize, 1usize, 1usize, 1usize, 1usize, 1usize, 1usize, 1usize }
+    let (nine, nine_error) = tensor.contiguous[i32](a, small[0..1], rank9[0..])
+    if nine_error != ok || tensor.fill[i32](nine, 5i32) != tensor.Shape { os.exit(48) }
+    // #240.2: the quotient on the seed is not convergence; a normal case still converges.
+    var swap_storage: [4]f64 = zero
+    swap_storage[1] = 1.0
+    swap_storage[2] = 1.0
+    let (swap, swap_error) = matrix.view_const[f64](swap_storage[0..], 2usize, 2usize, 2usize)
+    if swap_error != ok { os.exit(50) }
+    var power_start: [2]f64 = zero
+    power_start[0] = 1.0
+    var power_work: [2]f64 = zero
+    let (_, _, swap_power) = matrix.power_iteration(swap, power_start[0..], power_work[0..], 0.000000001, 10u32)
+    if swap_power == ok { os.exit(50) }
+    var diag_storage: [4]f64 = zero
+    diag_storage[0] = 2.0
+    diag_storage[3] = 1.0
+    let (diag, diag_error) = matrix.view_const[f64](diag_storage[0..], 2usize, 2usize, 2usize)
+    if diag_error != ok { os.exit(52) }
+    var diag_start: [2]f64 = zero
+    diag_start[0] = 1.0
+    var diag_work: [2]f64 = zero
+    let (diag_value, _, diag_power) = matrix.power_iteration(diag, diag_start[0..], diag_work[0..], 0.000000001, 100u32)
+    if diag_power != ok || !near(diag_value, 2.0) { os.exit(52) }
+    // #240.3: a column in the span of an earlier one is Singular, not a unit vector of noise.
+    var dep_storage: [4]f64 = zero
+    dep_storage[0] = 1.0
+    dep_storage[1] = 1.0
+    dep_storage[3] = 0.0000000000000002220446049250313
+    let (dep, dep_error) = matrix.view[f64](dep_storage[0..], 2usize, 2usize, 2usize)
+    if dep_error != ok || matrix.orthonormalize(dep) != matrix.Singular { os.exit(51) }
     os.exit(0)
     ret ok
 }
