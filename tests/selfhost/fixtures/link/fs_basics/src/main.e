@@ -792,6 +792,9 @@ fn main(a: *mem.Arena) -> err {
         if directory_copy[at] != shorter[at] { os.exit(331i32) }
         at += 1usize
     }
+    // The file existed only for the copy checks; leaving it behind makes the shallow walk
+    // below count it (and the final remove_dir fail), and it survives between runs.
+    if fs.remove_file(a, "np-fs/directory-copy.txt") != ok { os.exit(332i32) }
     if fs.copy_file(a, "np-fs/one.txt", "np-fs/copy.txt", scratch[..]) != ok { os.exit(45i32) }
     let (copied, copied_error) = fs.read_file(a, "np-fs/copy.txt", 0usize)
     if copied_error != ok { os.exit(46i32) }

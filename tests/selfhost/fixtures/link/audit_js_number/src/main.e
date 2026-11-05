@@ -1,6 +1,6 @@
 // JS number edge cases: asinh/acosh overflow (#808), toFixed with 100 fraction
-// digits (#807), and the negative-to-zero sign (#354). toLocaleString (#355) is
-// not covered here. Each check has its own exit code.
+// digits (#807), the negative-to-zero sign (#354), and toLocaleString through
+// Intl.NumberFormat (#355). Each check has its own exit code.
 use e.io
 use e.js.realm as realm
 use e.mem
@@ -22,6 +22,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != ok { os.exit(4i32) }
     let (_, e5) = realm.run(it, "if ((-0.0001).toFixed(2) !== '-0.00') throw new Error('negZero2')")
     if e5 != ok { os.exit(5i32) }
+    // #355: the locale's separators apply (de-DE groups with '.', decimals ',').
+    let (_, e6) = realm.run(it, "if ((1234.5).toLocaleString('de-DE') !== '1.234,5') throw new Error('localeDE')")
+    if e6 != ok { os.exit(6i32) }
+    // Options reach the formatter.
+    let (_, e7) = realm.run(it, "if ((1234.5).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) !== '1,234.50') throw new Error('localeOptions')")
+    if e7 != ok { os.exit(7i32) }
+    // No locales still means the default locale's grouping.
+    let (_, e8) = realm.run(it, "if ((1234.5).toLocaleString() !== '1,234.5') throw new Error('localeDefault')")
+    if e8 != ok { os.exit(8i32) }
     try io.print("audit js number ok")
     ret ok
 }
