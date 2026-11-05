@@ -464,9 +464,11 @@ fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize
                 }
                 s += 1usize
             }
-            var a = 0usize
-            while a < d {
-                var mean = 0.0f64
+            // Every feature's stratum mean, so entry (a, h) can use
+            // mean_a * mean_h; `step` is free until the Newton step below.
+            var m = 0usize
+            while m < d {
+                var mean_m = 0.0f64
                 s = 0usize
                 while s < n {
                     if stratum[s] == stratum[i] {
@@ -476,17 +478,22 @@ fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize
                             eta += x[s * d + b] * coefficients[b]
                             b += 1usize
                         }
-                        mean += math.exp[f64](eta - peak) / denom * x[s * d + a]
+                        mean_m += math.exp[f64](eta - peak) / denom * x[s * d + m]
                     }
                     s += 1usize
                 }
+                step[m] = mean_m
+                m += 1usize
+            }
+            var a = 0usize
+            while a < d {
                 var mine = 0.0f64
                 s = 0usize
                 while s < n {
                     if stratum[s] == stratum[i] && y[s] == 1u8 { mine = x[s * d + a] }
                     s += 1usize
                 }
-                gradient[a] += (mine - mean) * share
+                gradient[a] += (mine - step[a]) * share
                 var h = 0usize
                 while h < d {
                     var second = 0.0f64
@@ -503,7 +510,7 @@ fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize
                         }
                         s += 1usize
                     }
-                    hessian[a * d + h] += (second - mean * mean) * share
+                    hessian[a * d + h] += (second - step[a] * step[h]) * share
                     h += 1usize
                 }
                 a += 1usize
@@ -597,10 +604,24 @@ fn ordinal_objective(ctx: *OrdinalCtx, params: []const f64) -> f64 {
 // Nelder-Mead rounds, the `levels - 1` thresholds then the `d` slopes, and
 // the model-based covariance from a numeric Hessian. `scratch.len >=
 // (q + 1)^2 + 4 * q + 2 * q * q + q` with `q = levels - 1 + d`.
+// One entry of the delta-method Jacobian from the optimiser's parameters to
+// (thresholds, slopes): threshold k is alpha_0 + sum_{j <= k} exp(gap_j).
+fn ordinal_jac(u: usize, row: usize, gap_count: usize, params: []const f64) -> f64 {
+    let threshold_rows = gap_count + 1usize
+    if row >= threshold_rows {
+        if u == row { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if u == 0usize { ret 1.0f64 }
+    if u <= row { ret math.exp[f64](params[u]) }
+    ret 0.0f64
+}
+
 fn ordinal_logistic(x: []const f64, y: []const u8, n: usize, d: usize, levels: usize, tolerance: f64, max_iterations: u32, thresholds: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err) {
+    // Validate `levels` before `levels - 1`: zero would underflow the lengths below.
+    if n == 0usize || levels < 2usize { ret (0u32, Invalid) }
     let q = levels - 1usize + d
     if x.len < n * d || y.len < n || thresholds.len < levels - 1usize || coefficients.len < d || covariance.len < q * q { ret (0u32, TooSmall) }
-    if n == 0usize || levels < 2usize { ret (0u32, Invalid) }
     if !(tolerance > 0.0f64) || max_iterations == 0u32 { ret (0u32, Invalid) }
     if scratch.len < (q + 1usize) * (q + 1usize) + 4usize * q + 2usize * q * q + q { ret (0u32, TooSmall) }
     var i = 0usize
@@ -701,6 +722,37 @@ fn ordinal_logistic(x: []const f64, y: []const u8, n: usize, d: usize, levels: u
             j += 1usize
         }
         c += 1usize
+    }
+    // The Hessian is with respect to (alpha_0, log gaps, slopes); the answer is
+    // the covariance of (thresholds, slopes), so move it through the Jacobian
+    // of the gap parameterisation (`hessian` is free again after the solve).
+    var r = 0usize
+    while r < q {
+        var col = 0usize
+        while col < q {
+            var total = 0.0f64
+            var u = 0usize
+            while u < q {
+                let ju = ordinal_jac(u, r, levels - 2usize, params)
+                if ju != 0.0f64 {
+                    var v = 0usize
+                    while v < q {
+                        let jv = ordinal_jac(v, col, levels - 2usize, params)
+                        if jv != 0.0f64 { total += ju * covariance[u * q + v] * jv }
+                        v += 1usize
+                    }
+                }
+                u += 1usize
+            }
+            hessian[r * q + col] = total
+            col += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < q * q {
+        covariance[r] = hessian[r]
+        r += 1usize
     }
     ret (result.iterations, ok)
 }

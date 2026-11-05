@@ -121,7 +121,7 @@ fn ranks(values: []const f64, out: []f64, order: []usize) -> (f64, err) {
 }
 
 // Mann-Whitney U (two-sided, normal approximation with continuity and tie
-// correction); `scratch.len >= a.len + b.len` floats and `order` as many indices.
+// correction); `scratch.len >= 2 * (a.len + b.len)` floats and `order` as many indices.
 fn mann_whitney(a: []const f64, b: []const f64, scratch: []f64, order: []usize) -> (Result, err) {
     let n = a.len + b.len
     if a.len == 0usize || b.len == 0usize { ret (zero, Invalid) }
@@ -239,8 +239,18 @@ fn fisher_exact(a: u64, b: u64, c: u64, d: u64) -> Result {
         x += 1u64
     }
     if p > 1.0f64 { p = 1.0f64 }
+    // Zero or negative (and tiny) odds ratios: the ratio is undefined or
+    // infinite, and dividing in f64 keeps large counts from wrapping.
+    let numerator = f64(a) * f64(d)
+    let denominator = f64(b) * f64(c)
     var odds = 0.0f64
-    if b * c != 0u64 { odds = f64(a * d) / f64(b * c) }
+    if denominator != 0.0f64 {
+        odds = numerator / denominator
+    } else if numerator > 0.0f64 {
+        odds = 1.0f64 / 0.0f64
+    } else {
+        odds = 0.0f64 / 0.0f64
+    }
     ret Result { statistic: odds, p_value: p }
 }
 
@@ -296,22 +306,9 @@ fn kolmogorov_smirnov(a: []f64, b: []f64) -> (Result, err) {
     }
     let en = math.sqrt[f64](f64(a.len) * f64(b.len) / f64(a.len + b.len))
     let lambda = (en + 0.12f64 + 0.11f64 / en) * d
-    // Q_KS(lambda) = 2 sum (-1)^(k-1) exp(-2 k^2 lambda^2).
-    var p = 0.0f64
-    var sign = 1.0f64
-    var k = 1.0f64
-    var terms = 0usize
-    while terms < 100usize {
-        let term = sign * math.exp[f64](0.0f64 - 2.0f64 * k * k * lambda * lambda)
-        p += 2.0f64 * term
-        if math.abs[f64](term) < 1.0e-12f64 { break }
-        sign = 0.0f64 - sign
-        k += 1.0f64
-        terms += 1usize
-    }
-    if p > 1.0f64 { p = 1.0f64 }
-    if p < 0.0f64 { p = 0.0f64 }
-    ret (Result { statistic: d, p_value: p }, ok)
+    // The same survival function as `kolmogorov_survival`, small `lambda`
+    // included: a perfect match (D = 0) answers p = 1, not 0.
+    ret (Result { statistic: d, p_value: kolmogorov_survival(lambda) }, ok)
 }
 
 // One-way ANOVA over groups laid out consecutively in `values` with the given
@@ -466,6 +463,9 @@ fn benjamini_hochberg(p_values: []f64, order: []usize) -> err {
 // Q_KS(lambda) = 2 sum (-1)^(k-1) exp(-2 k^2 lambda^2), the asymptotic
 // survival function of the Kolmogorov distribution.
 fn kolmogorov_survival(lambda: f64) -> f64 {
+    // The alternating series loses all its digits below about 0.3 (and sums to
+    // 0 for identical samples); the survival is 1 to working precision there.
+    if lambda < 0.3f64 { ret 1.0f64 }
     var p = 0.0f64
     var sign = 1.0f64
     var k = 1.0f64

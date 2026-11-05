@@ -181,6 +181,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(p[0usize], 0.05f64, eps) || !near(p[1usize], 0.2f64, eps) || !near(p[2usize], 0.15f64, eps) || p[3usize] != 1.0f64 || p[4usize] != 1.0f64 { os.exit(6i32) }
     if test.benjamini_hochberg(p[..], order[..3usize]) != test.TooSmall { os.exit(6i32) }
 
+    // #209: identical samples are the perfect fit (D = 0, p = 1), not p = 0.
+    var ksa: [4]f64 = zero
+    var ksb: [4]f64 = zero
+    var ki = 0usize
+    while ki < 4usize {
+        ksa[ki] = f64(ki)
+        ksb[ki] = f64(ki)
+        ki += 1usize
+    }
+    let (ks_same, ks_same_error) = test.kolmogorov_smirnov(ksa[..], ksb[..])
+    if ks_same_error != ok || ks_same.statistic != 0.0f64 || ks_same.p_value < 0.999f64 { os.exit(7i32) }
+
+    // #209: a zero off-diagonal cell gives an infinite odds ratio, and both
+    // products zero an undefined one; neither may read as 0.
+    let infinite_odds = test.fisher_exact(5u64, 0u64, 0u64, 5u64)
+    if infinite_odds.statistic - infinite_odds.statistic == 0.0f64 || infinite_odds.statistic < 1.0f64 { os.exit(7i32) }
+    let undefined_odds = test.fisher_exact(0u64, 1u64, 0u64, 5u64)
+    if undefined_odds.statistic == undefined_odds.statistic { os.exit(7i32) }
+
     try io.print("algo stat test ok\n")
     ret ok
 }

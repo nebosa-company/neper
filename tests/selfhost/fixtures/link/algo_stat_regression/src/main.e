@@ -193,6 +193,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, levels_bad) = regression.ordinal_logistic(ox[..], oy[..], 400usize, 1usize, 2usize, 0.0000000001f64, 100u32, thresholds[..1usize], ocoef[..], ocov[..], oscratch[..])
     if levels_bad != regression.Invalid { os.exit(4i32) }
 
+    // #212: the conditional-logistic information matrix must be symmetric for
+    // d >= 2; entry (a, h) needs mean_a * mean_h, not mean_a squared.
+    var mx: [120]f64 = zero
+    var my2: [60]u8 = zero
+    var ms2: [60]usize = zero
+    var mi = 0usize
+    while mi < 30usize {
+        let a0 = f64((mi * 37usize + 3usize) % 7usize) / 7.0f64
+        let a1 = f64((mi * 53usize + 5usize) % 7usize) / 7.0f64
+        let b0 = f64((mi * 29usize + 1usize) % 7usize) / 7.0f64
+        let b1 = f64((mi * 61usize + 2usize) % 7usize) / 7.0f64
+        mx[mi * 4usize] = a0
+        mx[mi * 4usize + 1usize] = a1
+        mx[mi * 4usize + 2usize] = b0
+        mx[mi * 4usize + 3usize] = b1
+        if (mi % 3usize) == 0usize {
+            my2[mi * 2usize] = 0u8
+            my2[mi * 2usize + 1usize] = 1u8
+        } else {
+            my2[mi * 2usize] = 1u8
+            my2[mi * 2usize + 1usize] = 0u8
+        }
+        ms2[mi * 2usize] = mi
+        ms2[mi * 2usize + 1usize] = mi
+        mi += 1usize
+    }
+    var mcoef: [2]f64 = zero
+    var mcov: [4]f64 = zero
+    var mscratch: [16]f64 = zero
+    let (_, mfit_error) = regression.cond_logistic(mx[..], my2[..], ms2[..], 60usize, 2usize, 0.000000001f64, 200u32, mcoef[..], mcov[..], mscratch[..])
+    if mfit_error != ok { os.exit(5i32) }
+    if !near(mcov[1usize], mcov[2usize], 0.000001f64) { os.exit(5i32) }
+    if !(mcov[0usize] > 0.0f64) || !(mcov[3usize] > 0.0f64) { os.exit(5i32) }
+
+    // #212: levels = 0 is Invalid, not a usize underflow in `levels - 1`.
+    var zx: [1]f64 = zero
+    var zy2: [1]u8 = zero
+    var zstratum: [1]usize = zero
+    var zt: [1]f64 = zero
+    var zcoef: [1]f64 = zero
+    var zcov: [1]f64 = zero
+    var zscratch: [64]f64 = zero
+    let (_, level_zero) = regression.ordinal_logistic(zx[..], zy2[..], 0usize, 1usize, 0usize, 0.001f64, 10u32, zt[..], zcoef[..], zcov[..], zscratch[..])
+    if level_zero != regression.Invalid { os.exit(5i32) }
+
     try io.print("algo stat regression ok\n")
     ret ok
 }
