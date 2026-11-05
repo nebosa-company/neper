@@ -2541,7 +2541,7 @@ fn hanging_close_w(l: *Layout, p: Piece) -> (f64, usize) {
     let len = end - at
     let c = proc[at]
     var found = false
-    if len == 1usize && (c == 41u8 || c == 93u8 || c == 125u8) { found = true }
+    if len == 1usize && (c == 41u8 || c == 93u8 || c == 125u8 || c == 34u8 || c == 39u8) { found = true }
     if len == 3usize && c == 226u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 153u8 || proc[at + 2usize] == 157u8) { found = true }
     if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 137u8 || proc[at + 2usize] == 139u8 || proc[at + 2usize] == 149u8 || proc[at + 2usize] == 155u8 || proc[at + 2usize] == 157u8 || proc[at + 2usize] == 159u8 || proc[at + 2usize] == 161u8) { found = true }
     if !found { ret (0.0f64, 0usize) }
