@@ -20273,7 +20273,8 @@ targets fail explicitly. Source-file edits additionally require H09 transactions
 ### `e.fmt.json.schema`
 
 ```neper
-type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8 }
+type CachedPattern = struct { source: str, program: regex.Regex }
+type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8, patterns: []CachedPattern, pattern_count: usize }
 error Invalid
 error TooSmall
 error TooDeep
@@ -20289,7 +20290,9 @@ fn schema_f64(s: *const json.Value) -> (f64, err)
 fn schema_usize(s: *const json.Value) -> (usize, err)
 fn code_points(s: str) -> usize
 fn resolve_ref(c: *Checker, reference: str) -> (*const json.Value, err)
+fn has_numeric_keyword(s: []const json.Member) -> bool
 fn check_number(c: *Checker, s: []const json.Member, v: f64, source_number: json.Number) -> (bool, err)
+fn pattern_program(c: *Checker, source: str) -> (regex.Regex, err)
 fn check_string(c: *Checker, s: []const json.Member, v: str) -> (bool, err)
 fn check_array(c: *Checker, s: []const json.Member, items: []const json.Value, n: usize, depth: usize) -> (bool, usize, err)
 fn check_object(c: *Checker, s: []const json.Member, members: []const json.Member, n: usize, depth: usize) -> (bool, usize, err)
@@ -20615,9 +20618,10 @@ fn hue_index(space: str) -> i64
 fn is_xyz_space(space: str) -> bool
 fn parse_relative_color_fn(a: *mem.Arena, s: str) -> (u32, bool)
 fn parse_relative_color_space(a: *mem.Arena, s: str, space: str, n0: str, n1: str, n2: str) -> (u32, bool)
-fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64) -> f64
-fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str) -> (u32, bool)
+fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64, method: str) -> f64
+fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str, method: str) -> (u32, bool)
 fn component(a: *mem.Arena, t: str, pct_ref: f64) -> f64
+fn component_checked(a: *mem.Arena, t: str, pct_ref: f64) -> (f64, bool)
 fn angle_of(a: *mem.Arena, t: str) -> f64
 
 type Components = struct { good: bool, toks: []const str, alpha: f64 }
@@ -20652,6 +20656,8 @@ fn len_px(a: *mem.Arena, s: str) -> f64
 fn num_of(a: *mem.Arena, s: str) -> f64
 fn rad_of(a: *mem.Arena, s: str) -> f64
 fn arg_at(args: []const str, i: usize) -> str
+fn transform_len(a: *mem.Arena, s: str) -> (f64, bool)
+fn transform_angle(a: *mem.Arena, s: str) -> (f64, bool)
 fn transform_func(a: *mem.Arena, name: str, args: []const str) -> ([6]f64, bool)
 fn parse_transform(a: *mem.Arena, raw: str) -> ([6]f64, bool)
 fn pct_of(a: *mem.Arena, s: str) -> f64
