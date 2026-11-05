@@ -408,7 +408,7 @@ fn size_of_composite(s: *Buf) -> Composite {
     ret Composite { size: s.pos - start, instr: have }
 }
 
-type Glyphs = struct { glyf: []u8, loca: []u8, x_mins: []u32 }
+type Glyphs = struct { glyf: []u8, loca: []u8, x_mins: []u32, glyph_count: usize }
 
 fn zero_bytes(b: []u8) {
     var i = 0usize
@@ -501,6 +501,8 @@ fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs
                 buf[2usize + q] = box[q]
                 q += 1usize
             }
+            // WOFF2 5.3: a dropped composite lsb is the glyph's bbox xMin.
+            x_mins[g] = (u32(box[0]) << 8u32) | u32(box[1])
             q = 0usize
             while q < comp.size {
                 buf[10usize + q] = parts[q]
@@ -616,7 +618,7 @@ fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs
         }
         g += 1usize
     }
-    ret (Glyphs { glyf: glyf[..glyf_len], loca: loca, x_mins: x_mins }, ok)
+    ret (Glyphs { glyf: glyf[..glyf_len], loca: loca, x_mins: x_mins, glyph_count: glyph_count }, ok)
 }
 
 // A transformed `hmtx` table (WOFF2 5.3).
@@ -723,9 +725,18 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
         let version = (flag_byte >> 6u32) & 3u32
         var flags = 0u32
         if tag == 0x676C7966u32 || tag == 0x6C6F6361u32 {
-            if version == 0u32 { flags = flags | 256u32 }
+            // glyf/loca: version 0 is the transform, 3 is the null transform.
+            if version == 0u32 {
+                flags = flags | 256u32
+            } else if version != 3u32 {
+                ret (zero, Invalid)
+            }
+        } else if tag == 0x686D7478u32 {
+            // hmtx: version 1 is the only defined transform.
+            if version > 1u32 { ret (zero, Invalid) }
+            if version == 1u32 { flags = flags | 256u32 }
         } else if version != 0u32 {
-            flags = flags | 256u32
+            ret (zero, Invalid)
         }
         flags = flags | version
         let dst_len = usize(read_base128(&file))
@@ -796,17 +807,21 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
         i += 1usize
     }
     if (glyf_at == count) != (loca_at == count) { ret (zero, Invalid) }
+    // glyf and loca must be transformed together or not at all.
+    if glyf_at != count && (tables[glyf_at].flags & 256u32) != (tables[loca_at].flags & 256u32) { ret (zero, Invalid) }
     var metrics = 0usize
     if hhea_at != count && tables[hhea_at].content.len >= 36usize {
         metrics = (usize(tables[hhea_at].content[34]) << 8usize) | usize(tables[hhea_at].content[35])
     }
     var x_mins: []const u32 = zero
+    var glyf_glyphs = 0usize
     if glyf_at != count && (tables[glyf_at].flags & 256u32) != 0u32 {
         let (r, re) = reconstruct_glyf(a, tables[glyf_at].content, tables[loca_at].dst_len)
         if re != ok { ret (zero, re) }
         tables[glyf_at].content = r.glyf
         tables[loca_at].content = r.loca
         x_mins = r.x_mins
+        glyf_glyphs = r.glyph_count
     }
     // Tag-sorted directory order (a stable insertion sort of indexes).
     let (order, oe) = mem.alloc[usize](a, count)
@@ -838,13 +853,20 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     while i < count {
         let t = order[i]
         if tables[t].tag == 0x686D7478u32 && (tables[t].flags & 256u32) != 0u32 {
-            var glyph_count = 0i64
-            if loca_at != count {
+            var glyph_total = 0i64
+            if glyf_at != count && (tables[glyf_at].flags & 256u32) != 0u32 {
+                // The transformed glyf header is the authority on the count:
+                // a long loca is four bytes per entry, so the loca length
+                // cannot be halved to guess it.
+                glyph_total = i64(glyf_glyphs)
+            } else if loca_at != count {
                 var unit = 2usize
-                if (tables[loca_at].flags & 1u32) != 0u32 { unit = 4usize }
-                glyph_count = i64(tables[loca_at].dst_len / unit) - 1i64
+                if head_at != count && tables[head_at].content.len >= 52usize {
+                    if tables[head_at].content[50] != 0u8 || tables[head_at].content[51] != 0u8 { unit = 4usize }
+                }
+                glyph_total = i64(tables[loca_at].dst_len / unit) - 1i64
             }
-            let (h, he) = reconstruct_hmtx(a, tables[t].content, glyph_count, metrics, x_mins)
+            let (h, he) = reconstruct_hmtx(a, tables[t].content, glyph_total, metrics, x_mins)
             if he != ok { ret (zero, he) }
             tables[t].content = h
         }

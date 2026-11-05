@@ -22692,7 +22692,7 @@ type Composite = struct { size: usize, instr: bool }
 
 fn size_of_composite(s: *Buf) -> Composite
 
-type Glyphs = struct { glyf: []u8, loca: []u8, x_mins: []u32 }
+type Glyphs = struct { glyf: []u8, loca: []u8, x_mins: []u32, glyph_count: usize }
 
 fn zero_bytes(b: []u8)
 fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs, err)
