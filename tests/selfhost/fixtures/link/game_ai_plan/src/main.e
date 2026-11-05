@@ -8,6 +8,7 @@ use e.io
 use e.mem
 use e.os
 
+
 // --- tic-tac-toe over a stack pool of states ------------------------------------------
 type Ttt = struct { cells: []u8, side: []u8, top: usize, zob: []u64, lines: []u8 }
 
@@ -287,18 +288,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     cells[6usize] = 2u8
 
     // --- MCTS: visit counts equal the replica after 200 iterations --------------------------
+    // The sign of MCTS rewards was corrected (#789): these values are pinned to the fixed
+    // perspective and scratchpad/game_ai_plan/ref.py must be updated before regeneration.
     var nodes: [256]ai.MctsNode = zero
     var mcts_moves: [9]u32 = zero
     var rollout: [9]u32 = zero
     var m = ai.Mcts { nodes: nodes[..], count: 0usize, moves: mcts_moves[..], rollout: rollout[..], c: 92682i32 }
     var r = rand.pcg64(42u64, 7u64)
     let (mc_move, mc_error) = ai.mcts[Ttt](&g, &m, 0u32, 200u32, &r)
-    if mc_error != ok || mc_move != 8u32 { os.exit(15i32) }
-    if m.count != 171usize || t.top != 1usize { os.exit(16i32) }
-    if r.state != 3761979179459714833u64 { os.exit(17i32) }
+    if mc_error != ok || mc_move != 1u32 { os.exit(15i32) }
+    if m.count != 200usize || t.top != 1usize { os.exit(16i32) }
+    if r.state != 3187305371100377839u64 { os.exit(17i32) }
     if nodes[0usize].visits != 200u32 { os.exit(18i32) }
-    var visits = [7]u32{ 17u32, 6u32, 30u32, 13u32, 30u32, 4u32, 100u32 }
-    var wins = [7]i32{ -2i32, -4i32, 4i32, -3i32, 4i32, -4i32, 46i32 }
+    var visits = [7]u32{ 17u32, 63u32, 16u32, 18u32, 13u32, 53u32, 20u32 }
+    var wins = [7]i32{ -4i32, 9i32, -5i32, -4i32, -5i32, 5i32, -4i32 }
     var child_moves = [7]u32{ 0u32, 1u32, 2u32, 3u32, 4u32, 7u32, 8u32 }
     i = 0usize
     while i < 7usize {

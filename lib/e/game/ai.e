@@ -838,8 +838,9 @@ fn mcts[Ctx: type](g: *const Game[Ctx], m: *Mcts, root: u32, iterations: u32, r:
             g.release(g.ctx, m.rollout[k])
         }
         if length % 2usize == 1usize { v = 0i32 - v }
-        // Backpropagation.
-        var reward = 0i32 - v
+        // Backpropagation: `v` is already the expanded node's perspective, and the
+        // walk alternates signs toward the root.
+        var reward = v
         var walk = u32(n)
         while walk != NONE {
             m.nodes[usize(walk)].visits = m.nodes[usize(walk)].visits + 1u32

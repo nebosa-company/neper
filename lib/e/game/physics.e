@@ -42,11 +42,20 @@ fn predict(pos: []f64, vel: []f64, inv_mass: []const f64, prev: []f64, gravity_y
     if dt <= 0.0f64 { ret Invalid }
     var i = 0usize
     while i < n {
-        if inv_mass[i] > 0.0f64 { vel[2usize * i + 1usize] += gravity_y * dt }
-        prev[2usize * i] = pos[2usize * i]
-        prev[2usize * i + 1usize] = pos[2usize * i + 1usize]
-        pos[2usize * i] += vel[2usize * i] * dt
-        pos[2usize * i + 1usize] += vel[2usize * i + 1usize] * dt
+        if inv_mass[i] > 0.0f64 {
+            vel[2usize * i + 1usize] += gravity_y * dt
+            prev[2usize * i] = pos[2usize * i]
+            prev[2usize * i + 1usize] = pos[2usize * i + 1usize]
+            pos[2usize * i] += vel[2usize * i] * dt
+            pos[2usize * i + 1usize] += vel[2usize * i + 1usize] * dt
+        } else {
+            // Inverse mass zero is a pin: the body does not move, and its velocity
+            // does not survive into derive_velocity.
+            vel[2usize * i] = 0.0f64
+            vel[2usize * i + 1usize] = 0.0f64
+            prev[2usize * i] = pos[2usize * i]
+            prev[2usize * i + 1usize] = pos[2usize * i + 1usize]
+        }
         i += 1usize
     }
     ret ok

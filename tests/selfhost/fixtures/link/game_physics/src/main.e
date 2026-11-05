@@ -222,6 +222,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if u[0usize] != 0.0f64 || v[0usize] != 0.0f64 || v[15usize] != 0.0f64 { os.exit(7i32) }
     if physics.mac_init(&grid, 4usize, 3usize, u[..], v[..], p[..], div[..], p[..], v_next[..]) != physics.TooSmall { os.exit(7i32) }
 
+    // 8: inverse-mass-zero is a pin: no drift, and its velocity is retired.
+    var pin_pos: [2]f64 = zero
+    var pin_vel: [2]f64 = zero
+    var pin_prev: [2]f64 = zero
+    var pin_mass: [1]f64 = zero
+    var pin_lambda: [1]f64 = zero
+    var pin_constraints: [0]physics.Constraint = zero
+    pin_pos[0usize] = 1.0f64
+    pin_pos[1usize] = 2.0f64
+    pin_vel[0usize] = 5.0f64
+    pin_vel[1usize] = 0.0f64 - 3.0f64
+    var pin_step = 0usize
+    while pin_step < 3usize {
+        if physics.pbd_step(pin_pos[..], pin_vel[..], pin_mass[..], pin_prev[..], pin_constraints[..], 0.0f64 - 9.8f64, 0.01f64, 10usize) != ok { os.exit(8i32) }
+        if physics.xpbd_step(pin_pos[..], pin_vel[..], pin_mass[..], pin_prev[..], pin_lambda[..], pin_constraints[..], 0.0f64 - 9.8f64, 0.01f64, 10usize) != ok { os.exit(8i32) }
+        pin_step += 1usize
+    }
+    if pin_pos[0usize] != 1.0f64 || pin_pos[1usize] != 2.0f64 || pin_vel[0usize] != 0.0f64 || pin_vel[1usize] != 0.0f64 { os.exit(8i32) }
+
     try io.print("game physics ok\n")
     ret ok
 }
