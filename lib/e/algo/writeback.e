@@ -462,7 +462,8 @@ fn echo_set(a: *mem.Arena, delivered: []const json.Value, fields: []const str) -
         let row = delivered[at]
         at += 1usize
         let key = ir.value_of(row, "record_key")
-        if !ir.truthy(row) || !ir.truthy(key) { continue }
+        // A key is valid when it is present and not null: 0, "" and false are keys too.
+        if !ir.truthy(row) || ir.is_null(key) { continue }
         let record = ir.or_falsy(row, "fields", empty_obj())
         let h = echo_hash(a, js_string(a, key, true), record, fields)
         if !has_text(out, h) { sync.push_value(&out, sync.text(h)) }
@@ -582,8 +583,9 @@ fn map_local_to_remote(a: *mem.Arena, local: json.Value, mapping: []const json.V
 type Keyed = struct { id: str, key: json.Value, has_key: bool, row: json.Value }
 
 // The rows by key, in first-seen order, a later row with the same key replacing the earlier one in place.
-fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> list.List[Keyed] {
+fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> (list.List[Keyed], err) {
     let (made, e) = list.init[Keyed](a, rows.len + 1usize)
+    if e != ok { ret (zero, e) }
     var out = made
     var at = 0usize
     while at < rows.len {
@@ -600,10 +602,11 @@ fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> list.List[Ke
             out.items[slot] = item
         } else {
             let pushed = list.push[Keyed](&out, item)
+            if pushed != ok { ret (zero, pushed) }
         }
         at += 1usize
     }
-    ret out
+    ret (out, ok)
 }
 
 // Map-key identity: type and value, an absent key apart from a null one.
@@ -678,17 +681,41 @@ fn add_conflict(a: *mem.Arena, p: *Plan, k: Keyed, local: json.Value, remote: js
 // One two-way pass over `local`, `remote` and the last-synced `base`, all keyed by `key`, comparing `fields`; `echo` is
 // the hashes of the engine's own recent writes. Returns `{pulls, pushes, conflicts, echoes, creates: {local, remote},
 // deletes: {local, remote}, noops}`.
-fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> json.Value {
-    let local_by = index_rows(a, local_rows, key)
-    let remote_by = index_rows(a, remote_rows, key)
-    let base_by = index_rows(a, base_rows, key)
+fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> (json.Value, err) {
+    let (local_by, local_error) = index_rows(a, local_rows, key)
+    if local_error != ok { ret (.Null, local_error) }
+    let (remote_by, remote_error) = index_rows(a, remote_rows, key)
+    if remote_error != ok { ret (.Null, remote_error) }
+    let (base_by, base_error) = index_rows(a, base_rows, key)
+    if base_error != ok { ret (.Null, base_error) }
+    // A key contributes at most two entries (a conflict and the action it resolves to),
+    // so every list is sized for that up front: the pushes below cannot overflow, and
+    // an allocation failure is reported at init instead of leaving a partial plan.
+    let cap = 2usize * (local_by.len + remote_by.len + base_by.len) + 4usize
+    let (pulls0, pulls_error) = list.init[json.Value](a, cap)
+    if pulls_error != ok { ret (.Null, pulls_error) }
+    let (pushes0, pushes_error) = list.init[json.Value](a, cap)
+    if pushes_error != ok { ret (.Null, pushes_error) }
+    let (conflicts0, conflicts_error) = list.init[json.Value](a, cap)
+    if conflicts_error != ok { ret (.Null, conflicts_error) }
+    let (echoes0, echoes_error) = list.init[json.Value](a, cap)
+    if echoes_error != ok { ret (.Null, echoes_error) }
+    let (create_local0, create_local_error) = list.init[json.Value](a, cap)
+    if create_local_error != ok { ret (.Null, create_local_error) }
+    let (create_remote0, create_remote_error) = list.init[json.Value](a, cap)
+    if create_remote_error != ok { ret (.Null, create_remote_error) }
+    let (delete_local0, delete_local_error) = list.init[json.Value](a, cap)
+    if delete_local_error != ok { ret (.Null, delete_local_error) }
+    let (delete_remote0, delete_remote_error) = list.init[json.Value](a, cap)
+    if delete_remote_error != ok { ret (.Null, delete_remote_error) }
     var p = Plan {
-        pulls: sync.empty_list(a), pushes: sync.empty_list(a), conflicts: sync.empty_list(a), echoes: sync.empty_list(a),
-        create_local: sync.empty_list(a), create_remote: sync.empty_list(a), delete_local: sync.empty_list(a), delete_remote: sync.empty_list(a),
+        pulls: pulls0, pushes: pushes0, conflicts: conflicts0, echoes: echoes0,
+        create_local: create_local0, create_remote: create_remote0, delete_local: delete_local0, delete_remote: delete_remote0,
         noops: 0i64
     }
     // the union of keys in insertion order: local, then remote, then base
-    let (made, made_error) = list.init[Keyed](a, local_by.len + remote_by.len + base_by.len + 1usize)
+    let (made, made_error) = list.init[Keyed](a, cap)
+    if made_error != ok { ret (.Null, made_error) }
     var keys = made
     var side = 0usize
     while side < 3usize {
@@ -699,6 +726,7 @@ fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows:
         while at < source.len {
             if !has_id(keys, source.items[at].id) {
                 let pushed = list.push[Keyed](&keys, source.items[at])
+                if pushed != ok { ret (.Null, pushed) }
             }
             at += 1usize
         }
@@ -784,7 +812,7 @@ fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows:
     sync.put(&o, "creates", ir.obj_value(&creates))
     sync.put(&o, "deletes", ir.obj_value(&deletes))
     sync.put(&o, "noops", sync.number(a, p.noops))
-    ret ir.obj_value(&o)
+    ret (ir.obj_value(&o), ok)
 }
 
 // --- the request builder ---------------------------------------------------------------------------------------------

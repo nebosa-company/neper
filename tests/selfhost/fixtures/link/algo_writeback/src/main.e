@@ -86,7 +86,9 @@ fn run_one(a: *mem.Arena, root: json.Value) -> str {
     } else if str.eq(name, "toRemote") {
         result = wb.map_local_to_remote(a, ir.value_of(op, "record"), items(ir.value_of(op, "mapping")))
     } else if str.eq(name, "twoWayPlan") {
-        result = wb.plan_two_way_sync(a, items(ir.value_of(op, "local")), items(ir.value_of(op, "remote")), items(ir.value_of(op, "base")), text_field(op, "key"), wb.strings_of(a, ir.value_of(op, "fields")), text_field(op, "policy"), items(ir.value_of(op, "echo")))
+        let (plan, plan_error) = wb.plan_two_way_sync(a, items(ir.value_of(op, "local")), items(ir.value_of(op, "remote")), items(ir.value_of(op, "base")), text_field(op, "key"), wb.strings_of(a, ir.value_of(op, "fields")), text_field(op, "policy"), items(ir.value_of(op, "echo")))
+        if plan_error != ok { os.exit(82i32) }
+        result = plan
     } else if str.eq(name, "request") {
         result = wb.build_request(a, ir.value_of(op, "connection"), ir.value_of(op, "req"))
     } else if str.eq(name, "push") {
@@ -314,6 +316,51 @@ fn writeback_ssrf_ipv4_regressions() -> str {
     ret "{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://100.64.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://100.64.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://192.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://192.0.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://198.18.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://198.18.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://224.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://224.0.0.1\\\"}\"}\n{\"op\":{\"op\":\"request\",\"connection\":{\"baseUrl\":\"https://240.0.0.1\"},\"req\":{}},\"e\":\"{\\\"error\\\":\\\"ssrf-blocked:private-network\\\",\\\"url\\\":\\\"https://240.0.0.1\\\"}\"}\n"
 }
 
+// A falsy record key (numeric 0 or the empty string) is still a key: the echo set must
+// carry it and the next pull must recognize the write as our own (#649).
+fn writeback_echo_keys_regressions(a: *mem.Arena) -> bool {
+    let options = json.Options { allow_duplicate_keys: false, max_depth: 60u16 }
+    var fields: [1]str = zero
+    fields[0usize] = "status"
+    let (zero_row, zero_error) = json.parse(a, "{\"record_key\":0,\"fields\":{\"status\":\"a\"}}", options)
+    let (empty_row, empty_error) = json.parse(a, "{\"record_key\":\"\",\"fields\":{\"status\":\"b\"}}", options)
+    if zero_error != ok || empty_error != ok { ret false }
+    var delivered: [2]json.Value = zero
+    delivered[0usize] = zero_row
+    delivered[1usize] = empty_row
+    let echo = wb.echo_set(a, delivered[..], fields[..])
+    if items(echo).len != 2usize { ret false }
+    let (plan_root, plan_error) = json.parse(a, "{\"updates\":[{\"key\":0,\"remote\":{\"status\":\"a\"}}]}", options)
+    if plan_error != ok { ret false }
+    let suppressed = wb.suppress_echoes(a, plan_root, items(echo), "id", fields[..])
+    let (count, found) = field(suppressed, "suppressed")
+    if !found { ret false }
+    let (n, is_number) = ir.to_number(count)
+    ret is_number && n == 1.0f64
+}
+
+// An arena that cannot hold the plan must answer an error, not a partial plan (#648).
+fn writeback_plan_alloc_regressions(a: *mem.Arena) -> bool {
+    let options = json.Options { allow_duplicate_keys: false, max_depth: 60u16 }
+    let (local_row, le) = json.parse(a, "{\"id\":1,\"a\":1}", options)
+    let (remote_row, re) = json.parse(a, "{\"id\":1,\"a\":2}", options)
+    let (base_row, be) = json.parse(a, "{\"id\":1,\"a\":1}", options)
+    if le != ok || re != ok || be != ok { ret false }
+    var local: [1]json.Value = zero
+    var remote: [1]json.Value = zero
+    var base: [1]json.Value = zero
+    local[0usize] = local_row
+    remote[0usize] = remote_row
+    base[0usize] = base_row
+    var fields: [1]str = zero
+    fields[0usize] = "a"
+    var no_echo: [0]json.Value = zero
+    var small: [16]u8 = zero
+    var tiny = mem.arena_from(small[..])
+    let (_, plan_error) = wb.plan_two_way_sync(&tiny, local[..], remote[..], base[..], "id", fields[..], "manual", no_echo[..])
+    ret plan_error != ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -361,6 +408,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_43()) != 0u8 { os.exit(44i32) }
     if run_chunk(a, vectors_44()) != 0u8 { os.exit(45i32) }
     if run_chunk(a, writeback_ssrf_ipv4_regressions()) != 0u8 { os.exit(46i32) }
+    // `echo`/`alloc` select one check for pre-fix evidence.
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    if !str.eq(mode, "alloc") && !writeback_echo_keys_regressions(a) { os.exit(47i32) }
+    if !str.eq(mode, "echo") && !writeback_plan_alloc_regressions(a) { os.exit(48i32) }
     try io.print("algo writeback ok")
     ret ok
 }
