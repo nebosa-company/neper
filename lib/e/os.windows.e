@@ -208,6 +208,10 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
     }
     let buffer = state.buffer
     var produced = 0usize
+    // A completed read with no records is the host's overflow signal; more
+    // records than the caller's slice is the same situation.
+    var overflow = returned == 0u32
+    var skipped = false
     var at = 0usize
     while at + 12usize <= usize(returned) {
         let header = mem.cast[*NotifyHeader](&buffer[at])
@@ -219,15 +223,27 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
             entry.action = action_from_code(action)
             let names = mem.cast[*const u16](&buffer[at + 12usize])
             let (joined, join_error) = watch_path(a, state.base, names, units)
-            if join_error != ok { ret (produced, join_error) }
+            if join_error != ok {
+                // The read completed; the next one must be outstanding even
+                // when this call fails, or the watcher goes silent.
+                let rearm = arm_watch(state)
+                if rearm != ok { ret (produced, rearm) }
+                ret (produced, join_error)
+            }
             entry.path = joined
             events[produced] = entry
             produced += 1usize
+        } else {
+            skipped = true
         }
         // A zero `next` is the last entry, and following it is what keeps the walk on the
         // entries the call actually wrote rather than on a stride they do not have.
         if next == 0usize { break }
         at += next
+    }
+    if (overflow || skipped) && produced < events.len {
+        events[produced] = WatchEvent { action: .Overflow, path: "", old_path: "" }
+        produced += 1usize
     }
     let rearm_error = arm_watch(state)
     if rearm_error != ok { ret (produced, rearm_error) }
@@ -2068,10 +2084,27 @@ fn make_inheritable(stdio: Stdio) -> err {
     ret ok
 }
 
+// CreateProcessW runs a .bat/.cmd target through cmd.exe, whose
+// metacharacter rules differ from CommandLineToArgvW's quoting: refuse it.
+fn batch_target(text: str) -> bool {
+    if text.len < 4usize { ret false }
+    if text[text.len - 4usize] != 46u8 { ret false }
+    var b = text[text.len - 3usize]
+    var c = text[text.len - 2usize]
+    var d = text[text.len - 1usize]
+    if b >= 65u8 && b <= 90u8 { b += 32u8 }
+    if c >= 65u8 && c <= 90u8 { c += 32u8 }
+    if d >= 65u8 && d <= 90u8 { d += 32u8 }
+    if b == 98u8 && c == 97u8 && d == 116u8 { ret true }  // .bat
+    if b == 99u8 && c == 109u8 && d == 100u8 { ret true }  // .cmd
+    ret false
+}
+
 fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartResult, err) {
     var result: StartResult = zero
     let (line, line_error) = command_line(a, options.argv)
     if line_error != ok { ret (result, line_error) }
+    if options.argv.len > 0usize && batch_target(options.argv[0usize]) { ret (result, Unsupported) }
     let (wide_line, wide_line_error) = widen(a, line)
     if wide_line_error != ok { ret (result, wide_line_error) }
 
@@ -3830,10 +3863,14 @@ fn set_clipboard_text(value: str) -> err {
         let freed = raw_global_free(handle)
         ret open_error
     }
-    let emptied = raw_empty_clipboard()
+    // EmptyClipboard with a NULL owner clears ownership and makes
+    // SetClipboardData fail; replacing the text data is enough.
     let set = raw_set_clipboard_data(CF_UNICODETEXT, handle)
     let closed = raw_close_clipboard()
-    if set == 0usize { ret Failed }
+    if set == 0usize {
+        let freed = raw_global_free(handle)
+        ret Failed
+    }
     ret ok
 }
 
@@ -5088,7 +5125,8 @@ type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes:
 @import("kernel32.dll", "SetProcessMitigationPolicy")
 extern fn raw_set_mitigation(policy: i32, buffer: *u32, length: usize) -> i32
 
-const PROCESS_DYNAMIC_CODE_POLICY: i32 = 8i32
+// winnt.h: ProcessDynamicCodePolicy = 2; 8 is ProcessSignaturePolicy.
+const PROCESS_DYNAMIC_CODE_POLICY: i32 = 2i32
 const PROCESS_CHILD_PROCESS_POLICY: i32 = 13i32
 const PROHIBIT_DYNAMIC_CODE: u32 = 1u32
 const NO_CHILD_PROCESS_CREATION: u32 = 1u32

@@ -113,6 +113,27 @@ fn main(a: *mem.Arena) -> err {
     if removed_error != ok { os.exit(33i32) }
     if !removed { os.exit(34i32) }
     if os.watch_close(removing) != ok { os.exit(35i32) }
+
+    // #733: a conversion failure must leave the watch armed; the next change
+    // still has to arrive.
+    let (failing, failing_error) = os.watch_open(a, "np-watch", false)
+    if failing_error != ok { os.exit(36i32) }
+    if write_file_of(a, "np-watch/before.txt", 120u8) != ok { os.exit(37i32) }
+    let mark = mem.mark(a)
+    var exhausted = false
+    while !exhausted {
+        let (chunk, chunk_error) = mem.alloc[u8](a, 1048576usize)
+        if chunk_error != ok { exhausted = true }
+    }
+    var one: [1]os.WatchEvent = zero
+    let (failed_count, failed_read) = os.watch_read(a, failing, one[..])
+    if failed_read == ok || failed_count != 0usize { os.exit(38i32) }
+    mem.reset(a, mark)
+    if write_file_of(a, "np-watch/after.txt", 120u8) != ok { os.exit(39i32) }
+    let (recovered, recovered_error) = saw(a, failing, .Added, "after.txt")
+    if recovered_error != ok || !recovered { os.exit(40i32) }
+    if os.watch_close(failing) != ok { os.exit(42i32) }
+
     if os.remove_dir(a, "np-watch") != ok { os.exit(41i32) }
     ret ok
 }
