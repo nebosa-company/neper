@@ -67,12 +67,25 @@ fn fieldset_disabled(a: *mem.Arena) -> bool {
     ret script.run_script(it, code, "fieldset-disabled.js")
 }
 
+fn webkit_matches_args(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+    let (parsed, pe) = dom.parse(a, "<!doctype html><html><body><div id=d></div></body></html>", options, 32usize)
+    if pe != ok { ret false }
+    var tree = parsed
+    let (it, ie) = script.new_context(a, &tree, "https://webkit-matches-args.test/")
+    if ie != ok { ret false }
+    // The legacy alias passes its arguments through, so calling it with none throws TypeError like `matches` does.
+    let code = "{ const el = document.getElementById('d'); let threw = 0; try { Element.prototype.webkitMatchesSelector.call(el); } catch (e) { if (e instanceof TypeError) { threw = 1 } } if (threw !== 1) throw new Error('webkitMatchesSelector without a selector should throw TypeError'); if (!el.webkitMatchesSelector('div')) throw new Error('webkitMatchesSelector should match'); if (!el.matches('#d')) throw new Error('matches should still match'); }"
+    ret script.run_script(it, code, "webkit-matches-args.js")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
     if !frame_registry_is_live(a) { os.exit(86i32) }
     if !dom_mixins(a) { os.exit(87i32) }
     if !event_aliases(a) { os.exit(88i32) }
     if !fieldset_disabled(a) { os.exit(89i32) }
+    if !webkit_matches_args(a) { os.exit(90i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }

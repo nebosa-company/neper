@@ -2380,7 +2380,7 @@ fn part9(b: *str.Builder) -> err {
     try str.push(b, "    if (r === null) throw domError('SyntaxError', \"'\" + selectors + \"' is not a valid selector\");\n")
     try str.push(b, "    return r;\n")
     try str.push(b, "  },\n")
-    try str.push(b, "  webkitMatchesSelector(selectors) { return Element.prototype.matches.call(this, selectors); },\n")
+    try str.push(b, "  webkitMatchesSelector(...args) { return Element.prototype.matches.apply(this, args); },\n")
     try str.push(b, "  getElementsByTagName(qualifiedName_) {\n")
     try str.push(b, "    elSlot(this);\n")
     try str.push(b, "    required(arguments, 1, 'getElementsByTagName');\n")
