@@ -69,9 +69,19 @@ fn new_store(it: *js.Interp, o: *js.Obj, weak: bool) -> err {
     var blank: Store = zero
     cell[0usize] = blank
     let st = &cell[0usize]
+    let mark = mem.mark(it.a)
     let (el, ee) = list.init[Entry](it.a, 4usize)
+    // An init failure must not publish a half-built store.
+    if ee != ok {
+        mem.reset(it.a, mark)
+        ret js.throw_range(it, "out of memory")
+    }
     st.entries = el
     let (im, ie) = map.init[u64, usize](it.a, 8usize)
+    if ie != ok {
+        mem.reset(it.a, mark)
+        ret js.throw_range(it, "out of memory")
+    }
     st.index = im
     st.weak = weak
     o.data = mem.cast[*void](st)
@@ -105,7 +115,11 @@ fn store_set(it: *js.Interp, st: *Store, key_in: js.Value, value: js.Value) -> e
     if has { next = first }
     try list.push[Entry](&st.entries, Entry { key: key, value: value, live: true, next: next })
     let (r, pe) = map.put[u64, usize](&st.index, h, st.entries.len - 1usize)
-    if pe != ok { ret js.throw_range(it, "out of memory") }
+    if pe != ok {
+        // Roll the appended entry back so insertion storage and the index agree.
+        let (dropped, had) = list.pop[Entry](&st.entries)
+        ret js.throw_range(it, "out of memory")
+    }
     st.live += 1usize
     ret ok
 }

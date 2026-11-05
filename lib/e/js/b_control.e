@@ -260,15 +260,28 @@ fn promise_with_resolvers(it: *js.Interp, this_val: js.Value, args: []const js.V
 
 // Combinators share one element-collecting scheme: each element gets a function holding (state, index).
 type Agg = struct { values: *js.Obj, remaining: f64, resolve: js.Value, reject: js.Value, done: bool }
+// One allSettled input: both handlers share this guard so the first settlement
+// wins (the functions used to keep independent per-function markers).
+type Called = struct { ag: *js.Obj, idx: f64, called: bool }
 
 fn agg_of(o: *js.Obj) -> *Agg { ret mem.cast[*Agg](o.data) }
 
 fn aggregate_element(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err) {
     let fo = it.callee
-    if fo.num < 0.0f64 { ret (js.undefv(), ok) }
-    let idx = fo.num
-    fo.num = -1.0f64
-    let ag = agg_of(fo.aux)
+    var idx = 0.0f64
+    var ag: *Agg = zero
+    if kind == 1u8 {
+        let cell = mem.cast[*Called](fo.aux.data)
+        if cell.called { ret (js.undefv(), ok) }
+        cell.called = true
+        idx = cell.idx
+        ag = agg_of(cell.ag)
+    } else {
+        if fo.num < 0.0f64 { ret (js.undefv(), ok) }
+        idx = fo.num
+        fo.num = -1.0f64
+        ag = agg_of(fo.aux)
+    }
     var v = arg(args, 0usize)
     if kind == 1u8 {
         let o = js.new_plain(it)
@@ -373,11 +386,20 @@ fn combinator(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: 
             } else if kind == 1u8 {
                 let ok1 = js.make_native(it, "", 1u32, agg_settled_ok)
                 let er1 = js.make_native(it, "", 1u32, agg_settled_err)
-                ok1.aux = holder
+                let (cc, cce) = mem.alloc[Called](it.a, 1usize)
+                if cce != ok {
+                    failure = true
+                    failed_err = cce
+                    js.iterator_close_quiet(it, iter)
+                    break
+                }
+                cc[0usize] = Called { ag: holder, idx: index, called: false }
+                let guard = js.new_plain(it)
+                guard.data = mem.cast[*void](&cc[0usize])
+                ok1.aux = guard
                 ok1.num = index
-                er1.aux = holder
+                er1.aux = guard
                 er1.num = index
-                // Both functions share one `already called` flag through paired indices.
                 on_ful = js.obj_value(ok1)
                 on_rej = js.obj_value(er1)
             } else {

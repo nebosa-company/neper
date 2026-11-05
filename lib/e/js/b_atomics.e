@@ -142,7 +142,20 @@ fn at_load(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Va
     if ie != ok { ret (js.undefv(), ie) }
     if js.ta_out_of_bounds(o) { ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds")) }
     if idx >= js.ta_length(o) { ret (js.undefv(), js.throw_range(it, "Invalid atomic access index")) }
-    ret (js.ta_get_index(it, o, idx), ok)
+    // The load is indivisible with rmw/compareExchange: take the hub lock and
+    // revalidate the view and index inside it.
+    rmw_lock(it)
+    if js.ta_out_of_bounds(o) {
+        rmw_unlock(it)
+        ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds"))
+    }
+    if idx >= js.ta_length(o) {
+        rmw_unlock(it)
+        ret (js.undefv(), js.throw_range(it, "Invalid atomic access index"))
+    }
+    let loaded = js.ta_get_index(it, o, idx)
+    rmw_unlock(it)
+    ret (loaded, ok)
 }
 
 fn at_store(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -158,7 +171,19 @@ fn at_store(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.V
     if idx >= js.ta_length(o) { ret (js.undefv(), js.throw_range(it, "Invalid atomic access index")) }
     let (raw, re) = js.ta_raw_of(it, kind, cv)
     if re != ok { ret (js.undefv(), re) }
+    // The store is indivisible with rmw/compareExchange: take the hub lock and
+    // revalidate the view and index inside it.
+    rmw_lock(it)
+    if js.ta_out_of_bounds(o) {
+        rmw_unlock(it)
+        ret (js.undefv(), js.throw_type(it, "typed array is detached or out of bounds"))
+    }
+    if idx >= js.ta_length(o) {
+        rmw_unlock(it)
+        ret (js.undefv(), js.throw_range(it, "Invalid atomic access index"))
+    }
     js.ta_set_raw(it, o, idx, raw)
+    rmw_unlock(it)
     ret (cv, ok)
 }
 
