@@ -29,6 +29,16 @@ fn frame(cap: *Cap, kind: u8, flags: u8, stream: u32, payload: []const u8) {
     cap.len += n
 }
 
+fn expect_protocol(a: *mem.Arena, server_bytes: []const u8) -> bool {
+    var rd = io.SliceReader { data: server_bytes, off: 0usize }
+    let src = io.slice_reader(&rd)
+    var ours: Cap = zero
+    var csink = io.writer(mem.cast[*void](&ours), cap_write)
+    let hs = [1]http.Header { http.Header { name: "Accept", value: "*/*" } }
+    let (_, e) = h2c.exchange(a, src, csink, "GET", "example.test", "/", hs[0usize..1usize], "", 1024usize)
+    ret e == h2c.Protocol
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // The server's side, as bytes.
     var server: Cap = zero
@@ -91,5 +101,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at += used
     }
     if !saw_headers { os.exit(15i32) }
+
+    // 875: protocol-invalid peer flow control is refused before it mutates the windows.
+    var bad_settings: Cap = zero
+    let window_too_big: [6]u8 = [6]u8{ 0u8, 4u8, 128u8, 0u8, 0u8, 0u8 }
+    frame(&bad_settings, h2.SETTINGS, 0u8, 0u32, window_too_big[0usize..6usize])
+    if !expect_protocol(a, bad_settings.data[0usize..bad_settings.len]) { os.exit(16i32) }
+    var zero_window: Cap = zero
+    let zero_inc: [4]u8 = zero
+    frame(&zero_window, h2.WINDOW_UPDATE, 0u8, 0u32, zero_inc[0usize..4usize])
+    if !expect_protocol(a, zero_window.data[0usize..zero_window.len]) { os.exit(17i32) }
+    var conn_overflow: Cap = zero
+    let max_inc: [4]u8 = [4]u8{ 127u8, 255u8, 255u8, 255u8 }
+    frame(&conn_overflow, h2.WINDOW_UPDATE, 0u8, 0u32, max_inc[0usize..4usize])
+    if !expect_protocol(a, conn_overflow.data[0usize..conn_overflow.len]) { os.exit(18i32) }
+    var stream_overflow: Cap = zero
+    frame(&stream_overflow, h2.WINDOW_UPDATE, 0u8, 1u32, max_inc[0usize..4usize])
+    if !expect_protocol(a, stream_overflow.data[0usize..stream_overflow.len]) { os.exit(19i32) }
     ret ok
 }

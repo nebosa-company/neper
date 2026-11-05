@@ -241,6 +241,7 @@ fn decide(p: *const Policy, t: *Throttle, attempts: u32, code: u32, committed: b
     if attempts >= p.max_attempts { ret refuse("attempts-exhausted") }
     if !throttle_allows(t) { ret refuse("throttled") }
     if !has_pushback { delay = backoff_ns(p, attempts, jitter) }
-    if deadline_ns > 0u64 && now_ns + delay >= deadline_ns { ret refuse("deadline") }
+    // `now_ns + delay >= deadline_ns`, without the sum that can wrap near `u64::MAX`
+    if deadline_ns > 0u64 && (now_ns >= deadline_ns || delay >= deadline_ns - now_ns) { ret refuse("deadline") }
     ret Decision { retry: true, delay_ns: delay, reason: "retry" }
 }

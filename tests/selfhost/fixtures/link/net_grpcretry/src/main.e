@@ -158,6 +158,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at += 1usize
     }
     if count != 263usize { os.exit(2) }
+
+    // 871: the deadline predicate must not overflow when `now_ns + delay` would wrap.
+    let boundary_policy = good_policy(a, "{\"maxAttempts\":10,\"initialBackoff\":\"1s\",\"maxBackoff\":\"10s\",\"backoffMultiplier\":2,\"retryableStatusCodes\":[14]}")
+    var boundary_throttle = good_throttle(a, "{\"maxTokens\":10,\"tokenRatio\":1}")
+    let near_top = retry.decide(&boundary_policy, &boundary_throttle, 1u32, 14u32, false, "1000", true, 0.5f64, 18446744073709551610u64, 18446744073709551615u64)
+    if near_top.retry || !str.eq(near_top.reason, "deadline") { os.exit(3) }
+    let roomy = retry.decide(&boundary_policy, &boundary_throttle, 1u32, 14u32, false, "1000", true, 0.5f64, 10u64, 2000000010u64)
+    if !roomy.retry { os.exit(4) }
     try io.print("net grpcretry ok")
     ret ok
 }

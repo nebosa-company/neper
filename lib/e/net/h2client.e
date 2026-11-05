@@ -290,6 +290,8 @@ fn exchange(a: *mem.Arena, src: io.Reader, sink: io.Writer, method: str, authori
                 var k = 0usize
                 while k < cnt {
                     if settings_buf[k].id == 4u16 {
+                        // HTTP/2 caps an initial flow-control window at 2^31-1
+                        if settings_buf[k].value > 2147483647u32 { ret (out, Protocol) }
                         c.send_stream = c.send_stream + (i64(settings_buf[k].value) - c.peer_initial)
                         c.peer_initial = i64(settings_buf[k].value)
                     }
@@ -304,8 +306,16 @@ fn exchange(a: *mem.Arena, src: io.Reader, sink: io.Writer, method: str, authori
             }
         } else if f.kind == h2.WINDOW_UPDATE {
             if plen != 4usize { ret (out, Protocol) }
-            let inc = i64(h2.be32(f.payload, 0usize) & 2147483647u32)
-            if f.stream == 0u32 { c.send_conn += inc } else if f.stream == 1u32 { c.send_stream += inc }
+            let inc = h2.be32(f.payload, 0usize) & 2147483647u32
+            // a zero increment is a protocol error; a window past 2^31-1 is a flow-control error
+            if inc == 0u32 { ret (out, Protocol) }
+            if f.stream == 0u32 {
+                if i64(inc) > 2147483647i64 - c.send_conn { ret (out, Protocol) }
+                c.send_conn += i64(inc)
+            } else if f.stream == 1u32 {
+                if i64(inc) > 2147483647i64 - c.send_stream { ret (out, Protocol) }
+                c.send_stream += i64(inc)
+            }
             consume(&c, plen)
         } else if f.kind == h2.PING {
             if (f.flags & h2.FLAG_ACK) == 0u8 && plen == 8usize {
