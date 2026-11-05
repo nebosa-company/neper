@@ -42,6 +42,19 @@ fn karate(a: *mem.Arena) -> (graph.Graph[i64], err) {
     ret (g, g_error)
 }
 
+fn star(a: *mem.Arena, leaves: usize) -> (graph.Graph[i64], err) {
+    let (b0, b_error) = graph.builder[i64](a, leaves + 1usize, 2usize * leaves)
+    if b_error != ok { ret (zero, b_error) }
+    var b = b0
+    var i = 0usize
+    while i < leaves {
+        if graph.add_undirected[i64](&b, 0u32, u32(i + 1usize), 1i64) != ok { ret (zero, graph.TooLarge) }
+        i += 1usize
+    }
+    let (g, g_error) = graph.finish[i64](a, &b)
+    ret (g, g_error)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (g, g_error) = karate(a)
     if g_error != ok || graph.node_count[i64](&g) != 34usize || g.edges.len != 156usize { os.exit(1i32) }
@@ -84,6 +97,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if centrality.betweenness[i64](&g, true, scores[..], queue[..], distance[..], sigma[..], delta[..], first_pred[..], pred[..], next_pred[..]) != ok { os.exit(3i32) }
     if !near(scores[0usize], 231.071429f64, 0.0001f64) || !near(scores[33usize], 160.551587f64, 0.0001f64) || scores[11usize] != 0.0f64 || !near(scores[2usize], 75.850794f64, 0.0001f64) { os.exit(3i32) }
     if centrality.betweenness[i64](&g, true, scores[..], queue[..], distance[..], sigma[..], delta[..], first_pred[..], pred[..10usize], next_pred[..]) != centrality.TooSmall { os.exit(3i32) }
+
+    // 4: bipartite power iteration converges with the A + I damping, HITS reports
+    // its own convergence, and sqrt survives extreme magnitudes.
+    let (sg, sg_error) = star(a, 4usize)
+    if sg_error != ok { os.exit(4i32) }
+    var star_scores: [5]f64 = zero
+    var star_scratch: [5]f64 = zero
+    let (star_rounds, star_error) = centrality.eigenvector[i64](&sg, 0.000000000001f64, 1000u32, star_scores[..], star_scratch[..])
+    if star_error != ok || star_rounds >= 1000u32 { os.exit(4i32) }
+    if star_scores[1usize] <= 0.0f64 || !near(star_scores[0usize] / star_scores[1usize], 2.0f64, 0.000001f64) { os.exit(4i32) }
+    var star_hub: [5]f64 = zero
+    let (hits_rounds, star_hits) = centrality.hits[i64](&sg, 0.000000000001f64, 1000u32, star_scores[..], star_hub[..])
+    if star_hits != ok || hits_rounds >= 1000u32 { os.exit(4i32) }
+    if !near(centrality.sqrt(1.0e-300f64) / 1.0e-150f64, 1.0f64, 0.000000001f64) { os.exit(4i32) }
 
     try io.print("algo graph centrality ok\n")
     ret ok

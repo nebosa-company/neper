@@ -84,8 +84,12 @@ fn sqrt(x: f64) -> f64 {
     if x <= 0.0f64 { ret 0.0f64 }
     var r = x
     var k = 0usize
-    while k < 60usize {
-        r = 0.5f64 * (r + x / r)
+    // Newton from `x` needs a halving per exponent bit; stop when the fixed point
+    // is reached instead of a fixed step count that is too small beyond ~1e36/1e-35.
+    while k < 2000usize {
+        let next = 0.5f64 * (r + x / r)
+        if next == r { break }
+        r = next
         k += 1usize
     }
     ret r
@@ -109,7 +113,6 @@ fn hits[E: type](g: *const graph.Graph[E], tolerance: f64, max_iterations: u32, 
     var settled = false
     while iteration < max_iterations && !settled {
         // authority = Aᵀ hub, hub = A authority.
-        var change = 0.0f64
         i = 0usize
         while i < n {
             authority[i] = 0.0f64
@@ -125,21 +128,43 @@ fn hits[E: type](g: *const graph.Graph[E], tolerance: f64, max_iterations: u32, 
             i += 1usize
         }
         normalise(authority[..n])
+        // Compute the new hub vector, keeping the old one only long enough for its
+        // dot product; the change is then the distance between the unit vectors.
+        var dot = 0.0f64
         i = 0usize
         while i < n {
+            let previous = hub[i]
             var s = 0.0f64
             var e = g.offsets[i]
             while e < g.offsets[i + 1usize] {
                 s += authority[usize(g.edges[e].to)]
                 e += 1usize
             }
-            var d = s - hub[i]
+            dot += previous * s
             hub[i] = s
-            if d < 0.0f64 { d = 0.0f64 - d }
-            if d > change { change = d }
             i += 1usize
         }
-        normalise(hub[..n])
+        var total = 0.0f64
+        i = 0usize
+        while i < n {
+            total += hub[i] * hub[i]
+            i += 1usize
+        }
+        var scale = 0.0f64
+        var change = 1.0f64
+        if total > 0.0f64 {
+            let norm = sqrt(total)
+            scale = 1.0f64 / norm
+            // 1 - cos(angle) avoids the catastrophic cancellation of a squared
+            // distance between two nearly equal unit vectors.
+            change = 1.0f64 - dot / norm
+            if change < 0.0f64 { change = 0.0f64 }
+        }
+        i = 0usize
+        while i < n {
+            hub[i] = hub[i] * scale
+            i += 1usize
+        }
         iteration += 1u32
         if change < tolerance { settled = true }
     }
@@ -163,7 +188,9 @@ fn eigenvector[E: type](g: *const graph.Graph[E], tolerance: f64, max_iterations
     while iteration < max_iterations && !settled {
         i = 0usize
         while i < n {
-            var s = 0.0f64
+            // A + I: the same eigenvectors, eigenvalues shifted by one, so the
+            // period-2 mode of a bipartite graph is damped instead of oscillating.
+            var s = scores[i]
             var e = g.offsets[i]
             while e < g.offsets[i + 1usize] {
                 s += scores[usize(g.edges[e].to)]

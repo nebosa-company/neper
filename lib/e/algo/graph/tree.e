@@ -110,6 +110,15 @@ fn ancestor(l: *const Lifting, v: graph.NodeId, steps: u32) -> graph.NodeId {
         remaining = remaining >> 1u32
         level += 1usize
     }
+    // Bits above the table can only name the root; climb the parent chain so a
+    // step count of `count` or more still answers the root, not the node.
+    if remaining != 0u32 {
+        var guard = 0usize
+        while l.up[usize(at)] != at && guard < l.count {
+            at = l.up[usize(at)]
+            guard += 1usize
+        }
+    }
     ret at
 }
 
@@ -149,6 +158,12 @@ fn lca_offline[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Ro
     let n = tree.parent.len
     let q = queries.len / 2usize
     if out.len < q { ret TooSmall }
+    if queries.len % 2usize != 0usize { ret InvalidNode }
+    var qi = 0usize
+    while qi < q {
+        if usize(queries[2usize * qi]) >= n || usize(queries[2usize * qi + 1usize]) >= n { ret InvalidNode }
+        qi += 1usize
+    }
     let (parent_set, ps_error) = mem.alloc[u32](a, n)
     if ps_error != ok { ret ps_error }
     let (rank, rank_error) = mem.alloc[u8](a, n)
@@ -364,18 +379,50 @@ fn centroid_decompose[E: type](a: *mem.Arena, g: *const graph.Graph[E], centroid
     if wp_error != ok { ret wp_error }
     let (work_level, wl_error) = mem.alloc[u32](a, n)
     if wl_error != ok { ret wl_error }
+    let (seen, seen_error) = mem.alloc[u8](a, n)
+    if seen_error != ok { ret seen_error }
     var i = 0usize
     while i < n {
         removed[i] = 0u8
+        seen[i] = 0u8
         centroid_parent[i] = graph.NONE
         centroid_level[i] = 0u32
         i += 1usize
     }
     if n == 0usize { ret ok }
-    var work_count = 1usize
-    work_root[0usize] = 0u32
-    work_parent[0usize] = graph.NONE
-    work_level[0usize] = 0u32
+    // One work item per connected component, so a forest covers every node.
+    var work_count = 0usize
+    var seed = 0usize
+    while seed < n {
+        if seen[seed] == 0u8 {
+            var head = 0usize
+            var tail = 1usize
+            order[0usize] = u32(seed)
+            parent[seed] = u32(seed)
+            seen[seed] = 1u8
+            while head < tail {
+                let u = usize(order[head])
+                head += 1usize
+                var k = g.offsets[u]
+                while k < g.offsets[u + 1usize] {
+                    let v = usize(g.edges[k].to)
+                    if seen[v] == 0u8 {
+                        seen[v] = 1u8
+                        if tail >= n { ret NotATree }
+                        order[tail] = u32(v)
+                        tail += 1usize
+                    }
+                    k += 1usize
+                }
+            }
+            if work_count >= n { ret TooSmall }
+            work_root[work_count] = u32(seed)
+            work_parent[work_count] = graph.NONE
+            work_level[work_count] = 0u32
+            work_count += 1usize
+        }
+        seed += 1usize
+    }
     while work_count > 0usize {
         work_count -= 1usize
         let start = work_root[work_count]
@@ -395,6 +442,7 @@ fn centroid_decompose[E: type](a: *mem.Arena, g: *const graph.Graph[E], centroid
                 let v = g.edges[k].to
                 if removed[usize(v)] == 0u8 && v != parent[usize(u)] && v != u {
                     parent[usize(v)] = u
+                    if tail >= n { ret NotATree }
                     order[tail] = v
                     tail += 1usize
                 }
@@ -445,6 +493,9 @@ fn prufer_encode[E: type](a: *mem.Arena, g: *const graph.Graph[E], out: []graph.
     let n = graph.node_count[E](g)
     if n < 2usize { ret NotATree }
     if out.len < n - 2usize { ret TooSmall }
+    // A tree has exactly n - 1 undirected edges; anything else is refused before
+    // the leaf walk can run past the node range.
+    if g.edges.len != 2usize * (n - 1usize) { ret NotATree }
     let (degree, degree_error) = mem.alloc[u32](a, n)
     if degree_error != ok { ret degree_error }
     var i = 0usize
@@ -459,6 +510,7 @@ fn prufer_encode[E: type](a: *mem.Arena, g: *const graph.Graph[E], out: []graph.
     var leaf = pointer
     var written = 0usize
     while written < n - 2usize {
+        if leaf >= n { ret NotATree }
         // The leaf's one live neighbour.
         var neighbour = graph.NONE
         var k = g.offsets[leaf]

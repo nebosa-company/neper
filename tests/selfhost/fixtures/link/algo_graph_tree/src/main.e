@@ -73,6 +73,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree.lca(&l, 3u32, 6u32) != 1u32 || tree.lca(&l, 8u32, 5u32) != 0u32 || tree.lca(&l, 6u32, 7u32) != 4u32 { os.exit(2i32) }
     if tree.lca(&l, 8u32, 1u32) != 1u32 || tree.lca(&l, 0u32, 8u32) != 0u32 || tree.lca(&l, 3u32, 3u32) != 3u32 { os.exit(2i32) }
     if tree.ancestor(&l, 8u32, 3u32) != 1u32 || tree.ancestor(&l, 8u32, 9u32) != 0u32 || tree.ancestor(&l, 5u32, 0u32) != 5u32 { os.exit(2i32) }
+    // Steps above the lifting table's range still answer the root.
+    if tree.ancestor(&l, 8u32, 16u32) != 0u32 || tree.ancestor(&l, 8u32, 4294967295u32) != 0u32 { os.exit(2i32) }
     if tree.distance(&l, 8u32, 5u32) != 6u32 || tree.distance(&l, 3u32, 6u32) != 3u32 || tree.distance(&l, 4u32, 4u32) != 0u32 { os.exit(2i32) }
     var queries: [12]u32 = zero
     queries[0usize] = 3u32
@@ -198,6 +200,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Node 2 (one leaf child) and node 7 (one leaf child) are isomorphic subtrees.
     if labels[1usize] == labels[4usize] || labels[0usize] == labels[1usize] { os.exit(7i32) }
     if tree.ahu_labels[u8](a, &g, &t, labels[..], scratch[..4usize]) != tree.TooSmall { os.exit(7i32) }
+
+    // 8: non-tree Prüfer input, forest centroid coverage, cyclic centroid
+    // rejection and off-range offline LCA ids.
+    var bad_edges: [8]u32 = zero
+    bad_edges[0usize] = 0u32
+    bad_edges[1usize] = 1u32
+    bad_edges[2usize] = 2u32
+    bad_edges[3usize] = 3u32
+    bad_edges[4usize] = 3u32
+    bad_edges[5usize] = 4u32
+    bad_edges[6usize] = 4u32
+    bad_edges[7usize] = 2u32
+    let (bad_g, bad_g_error) = build_tree(a, bad_edges[..], 5usize)
+    if bad_g_error != ok { os.exit(8i32) }
+    var bad_code: [3]u32 = zero
+    if tree.prufer_encode[u8](a, &bad_g, bad_code[..]) != tree.NotATree { os.exit(8i32) }
+    var forest_edges: [4]u32 = zero
+    forest_edges[0usize] = 0u32
+    forest_edges[1usize] = 1u32
+    forest_edges[2usize] = 2u32
+    forest_edges[3usize] = 3u32
+    let (forest, forest_error) = build_tree(a, forest_edges[..], 5usize)
+    if forest_error != ok { os.exit(8i32) }
+    var forest_parent: [5]u32 = zero
+    var forest_level: [5]u32 = zero
+    if tree.centroid_decompose[u8](a, &forest, forest_parent[..], forest_level[..]) != ok { os.exit(8i32) }
+    var forest_tops = 0usize
+    v = 0usize
+    while v < 5usize {
+        if forest_parent[v] == graph.NONE {
+            forest_tops += 1usize
+            if forest_level[v] != 0u32 { os.exit(8i32) }
+        } else if forest_level[v] != forest_level[usize(forest_parent[v])] + 1u32 {
+            os.exit(8i32)
+        }
+        v += 1usize
+    }
+    if forest_tops != 3usize { os.exit(8i32) }
+    var triangle_edges: [6]u32 = zero
+    triangle_edges[0usize] = 0u32
+    triangle_edges[1usize] = 1u32
+    triangle_edges[2usize] = 1u32
+    triangle_edges[3usize] = 2u32
+    triangle_edges[4usize] = 2u32
+    triangle_edges[5usize] = 0u32
+    let (triangle, triangle_error) = build_tree(a, triangle_edges[..], 3usize)
+    if triangle_error != ok { os.exit(8i32) }
+    var triangle_parent: [3]u32 = zero
+    var triangle_level: [3]u32 = zero
+    if tree.centroid_decompose[u8](a, &triangle, triangle_parent[..], triangle_level[..]) != tree.NotATree { os.exit(8i32) }
+    var bad_queries: [2]u32 = zero
+    bad_queries[0usize] = 0u32
+    bad_queries[1usize] = 99u32
+    var bad_answers: [1]u32 = zero
+    if tree.lca_offline[u8](a, &g, &t, bad_queries[..], bad_answers[..]) != tree.InvalidNode { os.exit(8i32) }
 
     try io.print("algo graph tree ok\n")
     ret ok
