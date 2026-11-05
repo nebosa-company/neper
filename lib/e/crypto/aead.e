@@ -18,6 +18,7 @@ error InvalidKey
 error InvalidNonce
 error TooSmall
 error Authentication
+error TooLarge
 
 // --- AES
 
@@ -739,6 +740,15 @@ fn gcm_crypt(k: *const CtKey, nonce: [12]u8, data: []u8) {
     }
 }
 
+// NIST SP 800-38D 5.2.1.1: with J0 = nonce || 1 the data starts at counter 2, so at most
+// 2^32 - 2 blocks (2^36 - 32 bytes) fit before the 32-bit counter would wrap.
+const GCM_MAX_PLAINTEXT: u64 = 68719476704u64
+
+fn gcm_size_check(len: usize) -> err {
+    if u64(len) > GCM_MAX_PLAINTEXT { ret TooLarge }
+    ret ok
+}
+
 // --- Hardware GCM (C098): AES-NI key expansion and counter mode and PCLMULQDQ GHASH through
 // os.aes_expand_key, os.aes_ctr and os.ghash_blocks, which answer none for a CPU without them
 // -- and then the portable path runs. CPUID is asked once, not per call: under a hypervisor it
@@ -897,6 +907,8 @@ fn gcm_open_hw(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, seale
 
 fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err) {
     if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
+    let size_error = gcm_size_check(plain.len)
+    if size_error != ok { ret (0usize, size_error) }
     if dst.len < plain.len + 16usize { ret (0usize, TooSmall) }
     if gcm_seal_hw(dst, key, nonce, aad, plain) { ret (plain.len + 16usize, ok) }
     let (written, seal_error) = gcm_seal_portable(dst, key, nonce, aad, plain)
@@ -906,6 +918,8 @@ fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: [
 fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
     if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
     if sealed.len < 16usize { ret (0usize, Authentication) }
+    let size_error = gcm_size_check(sealed.len - 16usize)
+    if size_error != ok { ret (0usize, size_error) }
     if dst.len < sealed.len - 16usize { ret (0usize, TooSmall) }
     let (present, authentic) = gcm_open_hw(dst, key, nonce, aad, sealed)
     if present {

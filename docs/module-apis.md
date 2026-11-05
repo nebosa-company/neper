@@ -11375,7 +11375,8 @@ fn ecb_encrypt(k: *const AesKey, data: []u8) -> err
 fn ecb_decrypt(k: *const AesKey, data: []u8) -> err
 fn cbc_encrypt(k: *const AesKey, iv: [16]u8, data: []u8) -> err
 fn cbc_decrypt(k: *const AesKey, iv: [16]u8, data: []u8) -> err
-fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8)
+fn counter_add(counter: []u8, delta: u64) -> bool
+fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8) -> err
 fn ctr(k: *const AesKey, iv: [16]u8, data: []u8)
 fn pad_pkcs7(dst: []u8, src: []const u8) -> (usize, err)
 fn unpad_pkcs7(data: []const u8) -> (usize, err)
@@ -11690,6 +11691,7 @@ error InvalidKey
 error InvalidNonce
 error TooSmall
 error Authentication
+error TooLarge
 
 fn sbox(index: u8) -> u8
 fn xtime(x: u8) -> u8

@@ -117,6 +117,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n11, e11) = aead.chacha20_poly1305_seal(just_tag[0..], cp_key, cp_nonce, none[0..], none[0..])
     let (n12, e12) = aead.chacha20_poly1305_open(back[0..], cp_key, cp_nonce, none[0..], just_tag[0..])
     if e11 != ok || n11 != 16usize || e12 != ok || n12 != 0usize { os.exit(9) }
+    // 10: the NIST SP 800-38D message-size bound (issue #417): 2^36 - 32 bytes is the largest
+    // plaintext, 2^32 - 2 counter blocks at sixteen bytes, and one block more is refused.
+    if aead.gcm_size_check(68719476704usize) != ok { os.exit(10) }
+    if aead.gcm_size_check(68719476720usize) != aead.TooLarge { os.exit(10) }
     os.exit(0)
     ret ok
 }

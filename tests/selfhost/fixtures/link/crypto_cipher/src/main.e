@@ -72,7 +72,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         tail[i] = nist_plain[48usize + i]
         i += 1usize
     }
-    cipher.ctr_at(&nk, ctr_iv, 3u64, tail[0..])
+    if cipher.ctr_at(&nk, ctr_iv, 3u64, tail[0..]) != ok { os.exit(8i32) }
     if !same(tail[0..], ctr_expected[48..]) { os.exit(8i32) }
     cipher.ctr(&nk, ctr_iv, buf[0..])
     if !same(buf[0..], nist_plain[0..]) { os.exit(8i32) }
@@ -130,6 +130,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if aead.sbox(0u8) != 99u8 || aead.sbox(83u8) != 237u8 { os.exit(16i32) }
+    // 17-19: the 128-bit counter does not wrap (issue #491): an IV+block add past the top
+    // byte is refused, a request whose data would cross the last counter block is refused,
+    // and the one-block boundary still produces the right keystream.
+    var wrap_iv: [16]u8 = zero
+    i = 0usize
+    while i < 16usize {
+        wrap_iv[i] = 255u8
+        i += 1usize
+    }
+    var one_block: [16]u8 = zero
+    var two_blocks: [32]u8 = zero
+    one_block[0] = 1u8
+    two_blocks[0] = 1u8
+    if cipher.ctr_at(&nk, wrap_iv, 1u64, one_block[0..]) != cipher.Invalid { os.exit(17i32) }
+    if cipher.ctr_at(&nk, wrap_iv, 0u64, two_blocks[0..]) != cipher.Invalid { os.exit(18i32) }
+    var boundary: [16]u8 = zero
+    boundary[0] = 1u8
+    if cipher.ctr_at(&nk, wrap_iv, 0u64, boundary[0..]) != ok { os.exit(19i32) }
+    var keystream: [16]u8 = zero
+    i = 0usize
+    while i < 16usize {
+        keystream[i] = 255u8
+        i += 1usize
+    }
+    aead.aes_encrypt_block(&nk, keystream[0..])
+    keystream[0] = keystream[0] ^ 1u8
+    if !same(boundary[0..], keystream[0..]) { os.exit(19i32) }
     try io.print("crypto cipher ok\n")
     ret ok
 }

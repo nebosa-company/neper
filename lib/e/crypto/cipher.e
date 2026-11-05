@@ -163,12 +163,10 @@ fn cbc_decrypt(k: *const AesKey, iv: [16]u8, data: []u8) -> err {
     ret ok
 }
 
-// CTR from block `block_index` of the stream whose first counter block is `iv`: the
-// whole sixteen bytes are one big-endian counter. Encrypt and decrypt are the same xor.
-fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8) {
-    var counter = iv
-    // counter = iv + block_index, big-endian with carry through all sixteen bytes.
-    var carry = block_index
+// Adds `delta` to the sixteen-byte big-endian `counter` in place; false when the sum
+// leaves 128 bits and the carry past the top byte has nowhere to go.
+fn counter_add(counter: []u8, delta: u64) -> bool {
+    var carry = delta
     var i = 16usize
     while i > 0usize && carry != 0u64 {
         i -= 1usize
@@ -176,7 +174,24 @@ fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8) {
         counter[i] = u8(sum & 255u64)
         carry = (carry >> 8u32) + (sum >> 8u32)
     }
+    ret carry == 0u64
+}
+
+// CTR from block `block_index` of the stream whose first counter block is `iv`: the
+// whole sixteen bytes are one big-endian counter. Encrypt and decrypt are the same xor.
+// `Invalid` when `iv + block_index`, or the last block's counter, would leave 128 bits:
+// a wrapped counter would reuse another request's keystream.
+fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8) -> err {
+    var counter = iv
+    if !counter_add(counter[0..], block_index) { ret Invalid }
+    var blocks = data.len / 16usize
+    if data.len % 16usize != 0usize { blocks += 1usize }
+    if blocks > 0usize {
+        var last = counter
+        if !counter_add(last[0..], u64(blocks - 1usize)) { ret Invalid }
+    }
     var off = 0usize
+    var i = 0usize
     while off < data.len {
         var keystream = counter
         aead.aes_encrypt_block(k, keystream[0..])
@@ -194,10 +209,12 @@ fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8) {
         }
         off += 16usize
     }
+    ret ok
 }
 
 fn ctr(k: *const AesKey, iv: [16]u8, data: []u8) {
-    ctr_at(k, iv, 0u64, data)
+    // From block zero a `usize`-sized buffer cannot reach the wrap `ctr_at` refuses.
+    let _ = ctr_at(k, iv, 0u64, data)
 }
 
 // --- PKCS#7
