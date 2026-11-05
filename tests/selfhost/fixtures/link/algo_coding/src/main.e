@@ -2,8 +2,9 @@
 // ZigZag at the extremes, delta and delta-of-delta round trips, bit packing and
 // frame-of-reference, Elias gamma and Rice codes through one bit cursor,
 // move-to-front and Burrows-Wheeler of "banana", canonical Huffman codes that
-// round-trip text, and rANS payloads that reject invalid terminal states and
-// trailing bytes. Each check exits with its own code.
+// round-trip text, rANS payloads that reject invalid terminal states and
+// trailing bytes, and bit widths above 64 refused before any bit moves. Each
+// check exits with its own code.
 
 use e.algo.coding
 use e.io
@@ -259,6 +260,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     out[ans_len] = 123u8
     let (_, trailing_ans_error) = coding.ans_decode(out[..ans_len + 1usize], ans_freqs[..], back[..])
     if trailing_ans_error != coding.Invalid { os.exit(9i32) }
+
+    // 10: bit widths above 64 are refused before any bit moves; 64 stays exact.
+    var exact_w = coding.bit_writer(out[..])
+    if coding.write_bits(&exact_w, 18446744073709551615u64, 64u32) != ok || exact_w.bits != 64usize { os.exit(10i32) }
+    var exact_r = coding.bit_reader(out[..8usize])
+    let (exact_value, exact_error) = coding.read_bits(&exact_r, 64u32)
+    if exact_error != ok || exact_value != 18446744073709551615u64 || exact_r.bits != 64usize { os.exit(10i32) }
+    var wide_w = coding.bit_writer(out[..])
+    if coding.write_bits(&wide_w, 0u64, 65u32) != coding.Invalid || wide_w.bits != 0usize { os.exit(10i32) }
+    var wide_r = coding.bit_reader(out[..])
+    let (wide_value, wide_error) = coding.read_bits(&wide_r, 65u32)
+    if wide_error != coding.Invalid || wide_value != 0u64 || wide_r.bits != 0usize { os.exit(10i32) }
+    var wide_values: [1]u64 = zero
+    if coding.bit_unpack(out[..], 65u32, wide_values[..]) != coding.Invalid || wide_values[0usize] != 0u64 { os.exit(10i32) }
+    let (_, wide_pack_error) = coding.bit_pack(values[..], 65u32, out[..])
+    if wide_pack_error == ok { os.exit(10i32) }
 
     try io.print("algo coding ok\n")
     ret ok
