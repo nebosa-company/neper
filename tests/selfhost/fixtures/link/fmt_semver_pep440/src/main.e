@@ -1,6 +1,7 @@
 // e.fmt.semver.pep440 against python packaging: version normalization and formatting, the total order,
 // specifier sets with prerelease modes, and requirement-line acceptance. A line is `V|text|normalized`,
-// `C|a|b|-1/0/1`, `S|version|specifiers|mode|1/0` (mode 0 auto, 1 allow, 2 deny) or `R|text|ok`; `E` is refused.
+// `C|a|b|-1/0/1`, `S|version|specifiers|mode|1/0` (mode 0/1 allow, 2 deny; the `prereleases` bool has no
+// packaging-style unspecified state, so auto-detection is not represented) or `R|text|ok`; `E` is refused.
 use e.io
 use e.mem
 use e.os
@@ -212,6 +213,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if max_dev_error != ok || max_dev { os.exit(94i32) }
     let (max_post, max_post_error) = pep440.contains("1.post18446744073709551615", ">1.post18446744073709551615", true)
     if max_post_error != ok || max_post { os.exit(95i32) }
+    // `===` is case-insensitive plain equality on the version as written, not on
+    // its normalized spelling.
+    let (raw_alpha, raw_alpha_error) = pep440.contains("1.0alpha1", "===1.0alpha1", true)
+    if raw_alpha_error != ok || !raw_alpha { os.exit(96i32) }
+    let (raw_case, raw_case_error) = pep440.contains("1.0ALPHA1", "===1.0alpha1", true)
+    if raw_case_error != ok || !raw_case { os.exit(96i32) }
+    let (raw_v, raw_v_error) = pep440.contains("v1.0", "===v1.0", true)
+    if raw_v_error != ok || !raw_v { os.exit(96i32) }
+    let (raw_spelling, raw_spelling_error) = pep440.contains("1.0", "===1.0.0", true)
+    if raw_spelling_error != ok || raw_spelling { os.exit(96i32) }
+    let (raw_no_prefix, raw_no_prefix_error) = pep440.contains("v1.0", "===1.0", true)
+    if raw_no_prefix_error != ok || raw_no_prefix { os.exit(96i32) }
     try io.print("fmt semver pep440 ok")
     ret ok
 }

@@ -534,7 +534,8 @@ fn equal_spec(s: Specifier, v: Version) -> bool {
 }
 
 // The operator alone: no pre-release filtering, which `contains` does for the set.
-fn matches(s: Specifier, v: Version) -> bool {
+// `raw` is the version text as written, for the `===` spelling comparison.
+fn matches(s: Specifier, v: Version, raw: str) -> bool {
     if s.op == 2u8 { ret equal_spec(s, v) }
     if s.op == 3u8 { ret !equal_spec(s, v) }
     if s.op == 1u8 {
@@ -575,14 +576,11 @@ fn matches(s: Specifier, v: Version) -> bool {
         if family && (v.has_post || v.local.len > 0usize) { ret false }
         ret true
     }
-    // `===`: the normalized text, folded, against the spelling given.
-    var buffer: [128]u8 = zero
-    let (n, format_error) = format(v, buffer[0usize..128usize])
-    if format_error != ok { ret false }
-    if n != s.raw.len { ret false }
+    // `===`: the text as written, folded, against the spelling given.
+    if raw.len != s.raw.len { ret false }
     var i = 0usize
-    while i < n {
-        if buffer[i] != lower(s.raw[i]) { ret false }
+    while i < raw.len {
+        if lower(raw[i]) != lower(s.raw[i]) { ret false }
         i += 1usize
     }
     ret true
@@ -611,7 +609,7 @@ fn contains(version: str, specifiers: str, prereleases: bool) -> (bool, err) {
     if is_prerelease(v) && !prereleases { ret (false, ok) }
     var i = 0usize
     while i < count {
-        if !matches(specs[i], v) { ret (false, ok) }
+        if !matches(specs[i], v, trim(version)) { ret (false, ok) }
         i += 1usize
     }
     ret (true, ok)
