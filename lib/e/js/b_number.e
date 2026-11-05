@@ -348,6 +348,44 @@ fn number_to_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
 }
 
 // toFixed: digits of |x| with `frac` decimals, rounded half up, sign kept (-0 prints without a sign).
+// The fixed decimal text of a tiny positive double, `want` fraction digits, from its
+// exact expansion: push_f64_fixed's 99-place cap can miss the 100th place toFixed uses.
+fn tiny_fixed_text(it: *js.Interp, ax: f64, want: usize) -> str {
+    let et = exact_small_text(it, ax)
+    var epos = et.len
+    var i = 0usize
+    while i < et.len {
+        if et[i] == 101u8 {
+            epos = i
+            i = et.len
+        } else {
+            i += 1usize
+        }
+    }
+    let digs = et[0usize..epos]
+    var k = 0i64
+    i = epos + 2usize
+    while i < et.len {
+        k = k * 10i64 + i64(et[i] - 48u8)
+        i += 1usize
+    }
+    var lead = k - i64(digs.len)
+    if lead < 0i64 { lead = 0i64 }
+    let (b, be) = str.builder(it.a, want + 4usize)
+    if be != ok { ret "0" }
+    var out = b
+    let pd = str.push(&out, "0.")
+    var p = 0usize
+    while p < want {
+        var c = 48u8
+        let idx = i64(p) - lead
+        if idx >= 0i64 && usize(idx) < digs.len { c = digs[usize(idx)] }
+        let pc = str.push_byte(&out, c)
+        p += 1usize
+    }
+    ret str.done(&out)
+}
+
 fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64) {
     var ax = x
     var neg = false
@@ -356,12 +394,19 @@ fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64) {
         ax = -ax
     }
     if ax == 0.0f64 { ax = 0.0f64 }
-    let (b, be) = str.builder(it.a, 300usize)
-    if be != ok { ret ("", 0i64) }
-    var out = b
-    let pe = str.push_f64_fixed(&out, ax, 99u8)
-    let text = str.done(&out)
+    // Below 1e-90 the fixed rendering's 99 fraction places can lose the 100th place
+    // toFixed allows, so the exact expansion supplies the digits instead.
+    var text = ""
     var point = 0usize
+    if ax > 0.0f64 && ax < mem.bitcast[f64](3260689527820848751u64) {
+        text = tiny_fixed_text(it, ax, frac + 2usize)
+    } else {
+        let (b, be) = str.builder(it.a, 300usize)
+        if be != ok { ret ("", 0i64) }
+        var out = b
+        let pe = str.push_f64_fixed(&out, ax, 99u8)
+        text = str.done(&out)
+    }
     while point < text.len && text[point] != 46u8 { point += 1usize }
     let int_part = text[0usize..point]
     var frac_part = ""
@@ -1100,3 +1145,6 @@ fn install_math(it: *js.Interp) {
     js.add_method(it, it.last, "clz32", 1u32, math_clz32)
     js.add_method(it, it.last, "imul", 2u32, math_imul)
 }
+
+
+
