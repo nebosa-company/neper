@@ -59,6 +59,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !inside_hit || !near(inside_t, 0.0f64 - 0.5f64, 1.0e-12f64) { os.exit(1i32) }
     let (box_miss, _) = g.ray_box(g.vec3(0.0f64 - 2.0f64, 0.5f64, 0.5f64), ey, zero3, one3)
     if box_miss { os.exit(1i32) }
+    let (still_hit, _) = g.ray_box(g.vec3(0.5f64, 0.5f64, 0.5f64), zero3, zero3, one3)
+    if still_hit { os.exit(12i32) }
+    let (far_hit, _) = g.ray_box(g.vec3(2.0f64, 2.0f64, 2.0f64), zero3, zero3, one3)
+    if far_hit { os.exit(12i32) }
     let (tri_hit, tri_t, tri_u, tri_v) = g.ray_triangle(g.vec3(0.25f64, 0.25f64, 0.0f64 - 1.0f64), ez, zero3, ex, ey)
     if !tri_hit || !near(tri_t, 1.0f64, 1.0e-12f64) || !near(tri_u, 0.25f64, 1.0e-12f64) || !near(tri_v, 0.25f64, 1.0e-12f64) { os.exit(1i32) }
     let (tri_miss, _, _, _) = g.ray_triangle(g.vec3(1.0f64, 1.0f64, 0.0f64 - 1.0f64), ez, zero3, ex, ey)

@@ -133,12 +133,14 @@ type BatchResult = struct {
 fn run_batch(a: *mem.Arena, ids: []const f.Value, apply: Apply, state: *void, chunk_size: usize, start: usize, ledger: Ledger) -> BatchResult {
     var size = chunk_size
     if size == 0usize { size = 500usize }
-    var end = start + size
-    if end > ids.len { end = ids.len }
     var from = start
     if from > ids.len { from = ids.len }
-    let (succeeded, se) = mem.alloc[f.Value](a, ledger.succeeded.len + ids.len + 1usize)
-    let (failed, fe) = mem.alloc[Failed](a, ledger.failed.len + ids.len + 1usize)
+    // the chunk ends at most at the end of the list, so `from + size` cannot wrap
+    var end = ids.len
+    if size < ids.len - from { end = from + size }
+    let capacity = ledger.succeeded.len + (end - from) + 1usize
+    let (succeeded, se) = mem.alloc[f.Value](a, capacity)
+    let (failed, fe) = mem.alloc[Failed](a, capacity)
     var no_values: []const f.Value = zero
     var no_failed: []const Failed = zero
     if se != ok || fe != ok {
@@ -518,7 +520,7 @@ type Entry = struct { serial: usize, label: str, has_label: bool, changes: []con
 
 type Stack = struct { key: str, epoch: usize, undo: []Entry, undo_n: usize, redo: []Entry, redo_n: usize }
 
-type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool }
+type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool, token: usize }
 
 // Per-(editor, table) command stacks, depth-capped, cleared when the scope (the signed-in account) changes.
 type UndoStore = struct {
@@ -531,6 +533,7 @@ type UndoStore = struct {
     stacks: []Stack,
     stack_n: usize,
     serial: usize,
+    next_token: usize,
     pending: []Pending,
     pending_n: usize,
 }
@@ -544,8 +547,8 @@ fn new_undo_store(a: *mem.Arena, depth: usize, max_stacks: usize, max_pending: u
     let (pending, pe) = mem.alloc[Pending](a, max_pending + 1usize)
     var d = depth
     if d == 0usize { d = default_depth() }
-    if se != ok || pe != ok { ret UndoStore { a: a, depth: d, scope: "", owner: "", has_owner: false, epoch: 0usize, stacks: none_stacks, stack_n: 0usize, serial: 0usize, pending: none_pending, pending_n: 0usize } }
-    ret UndoStore { a: a, depth: d, scope: "", owner: "", has_owner: false, epoch: 0usize, stacks: stacks, stack_n: 0usize, serial: 0usize, pending: pending, pending_n: 0usize }
+    if se != ok || pe != ok { ret UndoStore { a: a, depth: d, scope: "", owner: "", has_owner: false, epoch: 0usize, stacks: none_stacks, stack_n: 0usize, serial: 0usize, next_token: 0usize, pending: none_pending, pending_n: 0usize } }
+    ret UndoStore { a: a, depth: d, scope: "", owner: "", has_owner: false, epoch: 0usize, stacks: stacks, stack_n: 0usize, serial: 0usize, next_token: 0usize, pending: pending, pending_n: 0usize }
 }
 
 // The host reports the current scope; a changed scope drops every history on the next use.
@@ -555,6 +558,7 @@ fn refresh_scope(s: *UndoStore) {
     if !s.has_owner || !str.eq(s.owner, s.scope) {
         if s.has_owner || s.stack_n > 0usize {
             s.stack_n = 0usize
+            s.pending_n = 0usize
             s.epoch += 1usize
         }
         s.owner = s.scope
@@ -640,22 +644,32 @@ fn writes_of(a: *mem.Arena, entry: Entry, undoing: bool, with_expected: bool) ->
 fn undo(s: *UndoStore, editor: str, table: str) -> Step {
     let at = stack_for(s, editor, table)
     if at >= s.stacks.len || s.stacks[at].undo_n == 0usize { ret no_step("nothing-to-undo") }
+    let entry = s.stacks[at].undo[s.stacks[at].undo_n - 1usize]
+    let writes = writes_of(s.a, entry, true, false)
+    if writes.len == 0usize && entry.changes.len > 0usize { ret no_step("out-of-memory") }
     s.stacks[at].undo_n -= 1usize
-    let entry = s.stacks[at].undo[s.stacks[at].undo_n]
     s.stacks[at].redo[s.stacks[at].redo_n] = entry
     s.stacks[at].redo_n += 1usize
-    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes_of(s.a, entry, true, false), token: 0usize, has_token: false }
+    if s.stacks[at].redo_n > s.depth {
+        s.stacks[at].redo_n = drop_first(s.stacks[at].redo, s.stacks[at].redo_n)
+    }
+    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes, token: 0usize, has_token: false }
 }
 
 // Redo the latest undone edit; the writes re-apply it.
 fn redo(s: *UndoStore, editor: str, table: str) -> Step {
     let at = stack_for(s, editor, table)
     if at >= s.stacks.len || s.stacks[at].redo_n == 0usize { ret no_step("nothing-to-redo") }
+    let entry = s.stacks[at].redo[s.stacks[at].redo_n - 1usize]
+    let writes = writes_of(s.a, entry, false, false)
+    if writes.len == 0usize && entry.changes.len > 0usize { ret no_step("out-of-memory") }
     s.stacks[at].redo_n -= 1usize
-    let entry = s.stacks[at].redo[s.stacks[at].redo_n]
     s.stacks[at].undo[s.stacks[at].undo_n] = entry
     s.stacks[at].undo_n += 1usize
-    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes_of(s.a, entry, false, false), token: 0usize, has_token: false }
+    if s.stacks[at].undo_n > s.depth {
+        s.stacks[at].undo_n = drop_first(s.stacks[at].undo, s.stacks[at].undo_n)
+    }
+    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes, token: 0usize, has_token: false }
 }
 
 // Prepare an undo or redo without moving anything: the writes carry the value they expect to find, and `commit`
@@ -673,10 +687,27 @@ fn prepare(s: *UndoStore, editor: str, table: str, redo_direction: bool) -> Step
         if s.stacks[at].undo_n == 0usize { ret no_step(why) }
         entry = s.stacks[at].undo[s.stacks[at].undo_n - 1usize]
     }
-    if s.pending_n >= s.pending.len { ret no_step("too-many-pending") }
-    s.pending[s.pending_n] = Pending { stack_key: s.stacks[at].key, epoch: s.stacks[at].epoch, serial: entry.serial, redo_direction: redo_direction, settled: false }
-    s.pending_n += 1usize
-    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes_of(s.a, entry, !redo_direction, true), token: s.pending_n - 1usize, has_token: true }
+    // a settled slot is reusable; the writes are allocated before the slot is claimed
+    var slot = s.pending_n
+    if slot >= s.pending.len {
+        var i = 0usize
+        var found = false
+        while i < s.pending_n && !found {
+            if s.pending[i].settled {
+                slot = i
+                found = true
+            }
+            i += 1usize
+        }
+    }
+    if slot >= s.pending.len { ret no_step("too-many-pending") }
+    let writes = writes_of(s.a, entry, !redo_direction, true)
+    if writes.len == 0usize && entry.changes.len > 0usize { ret no_step("out-of-memory") }
+    let token = s.next_token
+    s.next_token += 1usize
+    s.pending[slot] = Pending { stack_key: s.stacks[at].key, epoch: s.stacks[at].epoch, serial: entry.serial, redo_direction: redo_direction, settled: false, token: token }
+    if slot == s.pending_n { s.pending_n += 1usize }
+    ret Step { valid: true, reason: "", label: entry.label, has_label: entry.has_label, writes: writes, token: token, has_token: true }
 }
 
 type Ack = struct { record_id: f.Value, field: str }
@@ -684,11 +715,16 @@ type Ack = struct { record_id: f.Value, field: str }
 // Settle a prepared step with the fields the host acknowledged: those move between the histories, the rest of the
 // entry stays where it was. A stale token (the stack was cleared, a newer edit landed, or it is settled) moves nothing.
 fn commit(s: *UndoStore, token: usize, acknowledged: []const Ack) -> usize {
-    if token >= s.pending_n { ret 0usize }
-    var p = s.pending[token]
-    if p.settled { ret 0usize }
-    var at = s.stacks.len
+    var slot = s.pending.len
     var i = 0usize
+    while i < s.pending_n {
+        if s.pending[i].token == token && !s.pending[i].settled { slot = i }
+        i += 1usize
+    }
+    if slot >= s.pending.len { ret 0usize }
+    var p = s.pending[slot]
+    var at = s.stacks.len
+    i = 0usize
     while i < s.stack_n {
         if str.eq(s.stacks[i].key, p.stack_key) && s.stacks[i].epoch == p.epoch { at = i }
         i += 1usize
@@ -704,7 +740,7 @@ fn commit(s: *UndoStore, token: usize, acknowledged: []const Ack) -> usize {
         top = s.stacks[at].undo[s.stacks[at].undo_n - 1usize]
     }
     if top.serial != p.serial { ret 0usize }
-    s.pending[token].settled = true
+    s.pending[slot].settled = true
     let (applied, ae) = mem.alloc[Change](s.a, top.changes.len + 1usize)
     let (remaining, re) = mem.alloc[Change](s.a, top.changes.len + 1usize)
     if ae != ok || re != ok { ret 0usize }

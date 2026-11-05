@@ -618,7 +618,13 @@ fn build_kpi(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, conf
         if !compare.none && compare.n != 0.0f64 { right = compare.n }
         let delta = left - right
         var percent = no_cell()
-        if !compare.none && compare.n != 0.0f64 { percent = cell(delta / compare.n * 100.0f64) }
+        if !compare.none && compare.n != 0.0f64 {
+            // The direction follows delta's sign; the magnitude is the baseline's, so a
+            // negative baseline must not flip the ratio's sign (#252).
+            var magnitude = compare.n
+            if magnitude < 0.0f64 { magnitude = 0.0f64 - magnitude }
+            percent = cell(delta / magnitude * 100.0f64)
+        }
         var direction = "flat"
         if delta > 0.0f64 { direction = "up" }
         if delta < 0.0f64 { direction = "down" }
@@ -635,6 +641,42 @@ fn build_kpi(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, conf
 
 fn empty_mark() -> str { ret "\xe2\x88\x85" }
 
+// ` ∕ ` (U+2215) for every ` / ` in a value, so a value carrying the group-key separator
+// cannot be confused with the separator between fields (appdor's `keyOf`).
+fn escape_separator(a: *mem.Arena, s: str) -> str {
+    if !str.contains(s, " / ") { ret s }
+    var hits = 0usize
+    var at = 0usize
+    while at + 3usize <= s.len {
+        if s[at] == 32u8 && s[at + 1usize] == 47u8 && s[at + 2usize] == 32u8 {
+            hits += 1usize
+            at += 3usize
+        } else {
+            at += 1usize
+        }
+    }
+    let (out, e) = mem.alloc[u8](a, s.len + hits * 2usize + 1usize)
+    if e != ok { ret s }
+    var n = 0usize
+    at = 0usize
+    while at < s.len {
+        if at + 3usize <= s.len && s[at] == 32u8 && s[at + 1usize] == 47u8 && s[at + 2usize] == 32u8 {
+            out[n] = 32u8
+            out[n + 1usize] = 0xe2u8
+            out[n + 2usize] = 0x88u8
+            out[n + 3usize] = 0x95u8
+            out[n + 4usize] = 32u8
+            n += 5usize
+            at += 3usize
+        } else {
+            out[n] = s[at]
+            n += 1usize
+            at += 1usize
+        }
+    }
+    ret out[0usize..n]
+}
+
 // The key of a row over a list of fields: each value as text (an empty one the empty set sign), joined by " / ".
 fn key_of(a: *mem.Arena, row: view.Row, names: []const str) -> str {
     var out = ""
@@ -642,7 +684,11 @@ fn key_of(a: *mem.Arena, row: view.Row, names: []const str) -> str {
     while i < names.len {
         if i > 0usize { out = f.join(a, out, " / ") }
         let v = view.value_at(row, names[i])
-        if view.is_empty(v) { out = f.join(a, out, empty_mark()) } else { out = f.join(a, out, view.js_string(a, v)) }
+        if view.is_empty(v) {
+            out = f.join(a, out, empty_mark())
+        } else {
+            out = f.join(a, out, escape_separator(a, view.js_string(a, v)))
+        }
         i += 1usize
     }
     ret out

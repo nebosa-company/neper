@@ -42,8 +42,10 @@ fn same(a: Vec3, b: Vec3) -> bool { ret a.x == b.x && a.y == b.y && a.z == b.z }
 // ---- rays ----------------------------------------------------------------
 
 // The slab test: whether the ray meets the box and the entry parameter, which
-// is negative when the origin is inside.
+// is negative when the origin is inside; a zero direction never hits.
 fn ray_box(origin: Vec3, direction: Vec3, box_min: Vec3, box_max: Vec3) -> (bool, f64) {
+    // a stationary point is not a ray: no slab is crossed
+    if direction.x == 0.0f64 && direction.y == 0.0f64 && direction.z == 0.0f64 { ret (false, 0.0f64) }
     var t_near = 0.0f64 - 1.0e300f64
     var t_far = 1.0e300f64
     var axis = 0usize

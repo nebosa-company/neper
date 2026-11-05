@@ -2505,6 +2505,11 @@ algo_geom3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$algo_geom3_written" = 'executable written' ]
 chmod +x "$test_build/algo-geom3-selfhost"
 "$test_build/algo-geom3-selfhost"
+# `e.algo.batch`: settled pending slots are reclaimed, partial commits keep both histories inside depth, undo/redo refuse to move on allocation failure, and a resumed chunk is sized by the ledger plus the chunk.
+algo_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_batch/src/main.e" "$repo" x64 linux "$test_build/algo-batch-selfhost")
+[ "$algo_batch_written" = 'executable written' ]
+chmod +x "$test_build/algo-batch-selfhost"
+"$test_build/algo-batch-selfhost"
 # A pointer to a float is an integer-class argument after floats, in the seventh slot and beyond, from a field and an element (D867).
 pointer_float_args_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/pointer_float_args/src/main.e" "$repo" x64 linux "$test_build/pointer-float-args-selfhost")
 [ "$pointer_float_args_written" = 'executable written' ]
@@ -4841,6 +4846,12 @@ algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/algo-view-selfhost"
 algo_view_output=$("$test_build/algo-view-selfhost")
 [ "$algo_view_output" = 'algo view ok' ]
+# e.algo.pivot: a value containing the group-key separator and a KPI comparison over a negative baseline.
+algo_pivot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_pivot/src/main.e" "$repo" x64 linux "$test_build/algo-pivot-selfhost")
+[ "$algo_pivot_written" = 'executable written' ]
+chmod +x "$test_build/algo-pivot-selfhost"
+algo_pivot_output=$("$test_build/algo-pivot-selfhost")
+[ "$algo_pivot_output" = 'algo pivot ok' ]
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
 [ "$algo_page_batch_written" = 'executable written' ]

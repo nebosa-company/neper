@@ -2810,6 +2810,12 @@ $algoGeom3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoGeom3Written -ne 'executable written') { throw 'algo_geom3 emission failed' }
 & $algoGeom3Path
 if ($LASTEXITCODE -ne 0) { throw "a algo_geom3 check failed: exit $LASTEXITCODE" }
+# `e.algo.batch`: settled pending slots are reclaimed, partial commits keep both histories inside depth, undo/redo refuse to move on allocation failure, and a resumed chunk is sized by the ledger plus the chunk.
+$algoBatchPath = Join-Path $testBuild 'algo-batch-selfhost.exe'
+$algoBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_batch\src\main.e') $repo 'x64' 'windows' $algoBatchPath
+if ($LASTEXITCODE -ne 0 -or $algoBatchWritten -ne 'executable written') { throw 'algo_batch emission failed' }
+& $algoBatchPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_batch check failed: exit $LASTEXITCODE" }
 # A pointer to a float is an integer-class argument after floats, in the seventh slot and beyond, from a field and an element (D867).
 $pointerFloatArgsPath = Join-Path $testBuild 'pointer-float-args-selfhost.exe'
 $pointerFloatArgsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\pointer_float_args\src\main.e') $repo 'x64' 'windows' $pointerFloatArgsPath
@@ -5345,6 +5351,12 @@ $algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $algoViewWritten -ne 'executable written') { throw 'algo_view emission failed' }
 $algoViewOutput = & $algoViewPath
 if ($LASTEXITCODE -ne 0 -or $algoViewOutput -ne 'algo view ok') { throw "algo_view answered wrongly: exit $LASTEXITCODE" }
+# e.algo.pivot: a value containing the group-key separator and a KPI comparison over a negative baseline.
+$algoPivotPath = Join-Path $testBuild 'algo-pivot-selfhost.exe'
+$algoPivotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_pivot\src\main.e') $repo 'x64' 'windows' $algoPivotPath
+if ($LASTEXITCODE -ne 0 -or $algoPivotWritten -ne 'executable written') { throw 'algo_pivot emission failed' }
+$algoPivotOutput = & $algoPivotPath
+if ($LASTEXITCODE -ne 0 -or $algoPivotOutput -ne 'algo pivot ok') { throw "algo_pivot answered wrongly: exit $LASTEXITCODE" }
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 $algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
 $algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath
