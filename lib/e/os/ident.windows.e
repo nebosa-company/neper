@@ -34,6 +34,9 @@ fn narrow(a: *mem.Arena, units: []const u16, count: usize) -> (str, err) {
                 i += 1usize
             }
         }
+        // An unmatched surrogate has no UTF-8 form; it becomes U+FFFD like the rest of e.os
+        // (proc/sys/host do the same) instead of emitting an invalid three-byte sequence.
+        if cp >= 55296u32 && cp < 57344u32 { cp = 65533u32 }
         if cp < 128u32 {
             out[n] = u8(cp)
             n += 1usize
@@ -158,15 +161,26 @@ fn pick_adapter(info: []const u8, level: u32) -> usize {
 // when none qualifies.
 // `GetAdaptersInfo` is read for the list; adapters without IPv4 are not in it.
 fn mac_address(a: *mem.Arena) -> (str, err) {
-    var info: [32768]u8 = zero
-    var size = 32768u32
-    let status = raw_adapters(&info[0usize], &size)
+    var capacity = 32768usize
+    let (first, first_error) = mem.alloc[u8](a, capacity)
+    if first_error != ok { ret ("", first_error) }
+    var info = first
+    var size = u32(capacity)
+    var status = raw_adapters(&info[0usize], &size)
+    if status == 111u32 {
+        // ERROR_BUFFER_OVERFLOW: `size` now holds the needed bytes; retry once with them.
+        capacity = usize(size)
+        let (larger, larger_error) = mem.alloc[u8](a, capacity)
+        if larger_error != ok { ret ("", larger_error) }
+        info = larger
+        status = raw_adapters(&info[0usize], &size)
+    }
     if status == 232u32 { ret ("", os.NotFound) }
     if status != 0u32 { ret ("", os.Failed) }
-    var at = pick_adapter(info[0usize..32768usize], 2u32)
-    if at >= info.len { at = pick_adapter(info[0usize..32768usize], 1u32) }
-    if at >= info.len { at = pick_adapter(info[0usize..32768usize], 0u32) }
-    if at >= info.len { ret ("", os.NotFound) }
+    var at = pick_adapter(info[0usize..capacity], 2u32)
+    if at >= capacity { at = pick_adapter(info[0usize..capacity], 1u32) }
+    if at >= capacity { at = pick_adapter(info[0usize..capacity], 0u32) }
+    if at >= capacity { ret ("", os.NotFound) }
     let (out, alloc_error) = mem.alloc[u8](a, 17usize)
     if alloc_error != ok { ret ("", alloc_error) }
     var k = 0usize

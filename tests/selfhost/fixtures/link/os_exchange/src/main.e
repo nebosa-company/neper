@@ -55,6 +55,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (read_text, text_error) = shell.clipboard_read(a, .Text, "")
     if text_error != ok || !same(read_text.text, "neper exchange") { os.exit(8i32) }
     if shell.clipboard_sequence() == before && caps.clipboard_typed { os.exit(9i32) }
+    // 91: an item the clipboard cannot take must leave what is already there untouched.
+    var promised: [1]shell.Content = zero
+    promised[0usize] = shell.Content { kind: .Promise, mime: "", text: "promised", paths: zero, image: zero, bytes: "x" }
+    if shell.clipboard_write(a, promised[..]) != shell.Unsupported { os.exit(20i32) }
+    if !shell.clipboard_has(a, .Text, "") { os.exit(21i32) }
+    let (kept_text, kept_error) = shell.clipboard_read(a, .Text, "")
+    if kept_error != ok || !same(kept_text.text, "neper exchange") { os.exit(22i32) }
     if !caps.clipboard_typed {
         let (no_files, files_error) = shell.clipboard_read(a, .Files, "")
         if files_error != shell.Unsupported { os.exit(10i32) }

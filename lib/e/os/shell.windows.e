@@ -1479,7 +1479,8 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
     let rows = usize(height)
     let stride = ((width * bits + 31usize) / 32usize) * 4usize
     var pixel_start = usize(header_size)
-    if compression == 3u32 { pixel_start += 12usize }
+    // BITMAPINFOHEADER keeps the bit masks after the header; a V4/V5 header has them inside.
+    if compression == 3u32 && header_size < 108u32 { pixel_start += 12usize }
     if bits <= 8usize { pixel_start += usize(colours_used) * 4usize }
     if block.len < pixel_start + stride * rows {
         let unlocked = raw_global_unlock(handle)
@@ -1498,7 +1499,9 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
         while column < width {
             let offset = pixel_start + source_row * stride + column * (bits / 8usize)
             var alpha = 255u32
-            if bits == 32usize { alpha = u32(block[offset + 3usize]) }
+            // A 32-bit BI_RGB image has no alpha byte; its fourth byte is unused and often
+            // zero, so reading it would decode the whole image transparent.
+            if bits == 32usize && compression != 0u32 { alpha = u32(block[offset + 3usize]) }
             pixels[row * width + column] = (alpha << 24u32) | (u32(block[offset + 2usize]) << 16u32) | (u32(block[offset + 1usize]) << 8u32) | u32(block[offset])
             column += 1usize
         }
@@ -1513,32 +1516,39 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
 fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
     if items.len == 0usize { ret Invalid }
     try ensure_window()
+    // Validate every item and build all global blocks before the clipboard is emptied: an
+    // unsupported kind or an allocation failure must leave the user's clipboard intact.
+    let (formats, formats_error) = mem.alloc[u32](a, items.len)
+    if formats_error != ok { ret formats_error }
+    let (handles, handles_error) = mem.alloc[usize](a, items.len)
+    if handles_error != ok { ret handles_error }
     var at = 0usize
     while at < items.len {
         if items[at].kind == .Bytes && items[at].mime.len == 0usize { ret Invalid }
+        let (format, format_error) = format_of(a, items[at].kind, items[at].mime)
+        if format_error != ok { ret format_error }
+        formats[at] = format
+        let (handle, handle_error) = global_of(a, items[at])
+        if handle_error != ok { ret handle_error }
+        handles[at] = handle
         at += 1usize
     }
     try clipboard_open()
     if raw_empty_clipboard() == 0i32 {
+        at = 0usize
+        while at < items.len {
+            let freed = raw_global_free(handles[at])
+            at += 1usize
+        }
         let closed = raw_close_clipboard()
         ret Failed
     }
     var failure = ok
     at = 0usize
     while at < items.len && failure == ok {
-        let (format, format_error) = format_of(a, items[at].kind, items[at].mime)
-        if format_error != ok {
-            failure = format_error
-        } else {
-            let (handle, handle_error) = global_of(a, items[at])
-            if handle_error != ok {
-                failure = handle_error
-            } else {
-                if raw_set_clipboard_data(format, handle) == 0usize {
-                    let freed = raw_global_free(handle)
-                    failure = Failed
-                }
-            }
+        if raw_set_clipboard_data(formats[at], handles[at]) == 0usize {
+            let freed = raw_global_free(handles[at])
+            failure = Failed
         }
         at += 1usize
     }
@@ -2390,6 +2400,8 @@ type ValueSize = struct { value: u32 }
 
 const HKEY_CURRENT_USER: usize = 2147483649usize
 const KEY_WRITE_READ: u32 = 131103u32
+const KEY_READ: u32 = 131097u32
+const KEY_SET_VALUE: u32 = 2u32
 const REG_SZ: u32 = 1u32
 const ERROR_ALREADY_EXISTS: u32 = 183u32
 const ERROR_FILE_NOT_FOUND_STATUS: i32 = 2i32
@@ -2439,6 +2451,12 @@ extern fn raw_set_window_text(window: usize, text: *const u16) -> i32
 
 @import("user32.dll", "SendMessageW")
 extern fn raw_send_message(window: usize, message: u32, wparam: usize, lparam: isize) -> isize
+
+// A redirected activation must not hang forever if the first instance stopped pumping.
+@import("user32.dll", "SendMessageTimeoutW")
+extern fn raw_send_message_timeout(window: usize, message: u32, wparam: usize, lparam: isize, flags: u32, timeout: u32, answer: *usize) -> usize
+
+const SMTO_ABORTIFHUNG: u32 = 2u32
 
 fn concat_text(a: *mem.Arena, parts: []const str) -> (str, err) {
     var total = 0usize
@@ -2636,7 +2654,12 @@ fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
     let (name_wide, name_error) = widen(a, id)
     if name_error != ok { ret name_error }
     var key: KeyHandle = zero
-    if raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_WRITE_READ, &key) != 0i32 { ret Failed }
+    let opened = raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_SET_VALUE, &key)
+    if opened != 0i32 {
+        // No Run key means there is nothing to remove, which is the requested state.
+        if opened == ERROR_FILE_NOT_FOUND_STATUS { ret ok }
+        ret Failed
+    }
     let deleted = raw_reg_delete_value(key.value, &name_wide[0usize])
     let closed = raw_reg_close(key.value)
     if deleted == ERROR_FILE_NOT_FOUND_STATUS { ret ok }
@@ -2651,7 +2674,12 @@ fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
     let (name_wide, name_error) = widen(a, id)
     if name_error != ok { ret (false, name_error) }
     var key: KeyHandle = zero
-    if raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_WRITE_READ, &key) != 0i32 { ret (false, Failed) }
+    let opened = raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_READ, &key)
+    if opened != 0i32 {
+        // A missing Run key is simply "not enabled"; a query needs no write access.
+        if opened == ERROR_FILE_NOT_FOUND_STATUS { ret (false, ok) }
+        ret (false, Failed)
+    }
     var size: ValueSize = zero
     let queried = raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, 0usize, &size)
     let closed = raw_reg_close(key.value)
@@ -2716,7 +2744,7 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
     let window_error = ensure_window()
     if window_error != ok { ret (false, window_error) }
     var name_parts: [2]str = zero
-    name_parts[0usize] = "Local\neper.instance."
+    name_parts[0usize] = "Local\\neper.instance."
     name_parts[1usize] = id
     let (mutex_name, name_error) = concat_text(a, name_parts[..])
     if name_error != ok { ret (false, name_error) }
@@ -2763,7 +2791,9 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
     var copy: CopyData = zero
     copy.length = u32(written)
     copy.address = mem.address_of(&payload[0usize])
-    let delivered = raw_send_message(primary, WM_COPYDATA, shell_window, isize(mem.address_of(&copy)))
+    var delivered_answer: usize = 0usize
+    let delivered = raw_send_message_timeout(primary, WM_COPYDATA, shell_window, isize(mem.address_of(&copy)), SMTO_ABORTIFHUNG, 5000u32, &delivered_answer)
+    if delivered == 0usize { ret (false, Failed) }
     ret (false, ok)
 }
 
@@ -2819,6 +2849,8 @@ var lifecycle_events: [8]LifecycleEvent = zero
 var lifecycle_head: usize = 0usize
 var lifecycle_count: usize = 0usize
 var lifecycle_overflow: bool = false
+// SetThreadExecutionState applies to the calling thread, so acquire and release a
+// power inhibitor from the same thread; `inhibiting` only records this thread's state.
 var inhibiting: bool = zero
 
 @import("user32.dll", "RegisterHotKey")
@@ -2848,7 +2880,10 @@ fn session_message(message: u32, wparam: usize) -> (bool, isize) {
         }
         ret (true, 0isize)
     }
-    if message == WM_QUERYENDSESSION || (message == WM_ENDSESSION && wparam != 0usize) {
+    if message == WM_QUERYENDSESSION { ret (true, 1isize) }
+    if message == WM_ENDSESSION && wparam != 0usize {
+        // Only the confirmed end of the session is a Shutdown event; a vetoed
+        // WM_QUERYENDSESSION must not report one.
         push_lifecycle(.Shutdown)
         ret (true, 1isize)
     }
