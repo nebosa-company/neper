@@ -9495,7 +9495,7 @@ type Inst = struct { op: Op, x: u32, y: u32 }
 type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat, Backref, Look, Atomic }
 type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, max: u32, lazy: bool }
 type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options, backtracking: bool, names: []u32 }
-type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32 }
+type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32, steps: usize }
 type Threads = struct { pcs: []u32, caps: []usize, seen: []u32, gen: u32, count: usize }
 type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize, backtracking: bool, source: str, names: []const u32, track: []usize, depth: usize, steps: usize, failure: err }
 type Nfa = struct { state: *void }
@@ -11199,6 +11199,7 @@ fn new(a: *mem.Arena, cols: usize, rows: usize, max_cols: usize, max_rows: usize
 fn set_alt(t: *Term, on: bool, save: bool)
 fn set_mode(t: *Term, private: bool, mode: u32, on: bool)
 fn apply_sgr(t: *Term)
+fn sgr_one(t: *Term, p: u32)
 fn erase_display(t: *Term, mode: u32)
 fn erase_line(t: *Term, mode: u32)
 fn next_tab(t: *const Term, x: usize) -> usize
