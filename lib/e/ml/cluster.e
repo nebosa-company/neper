@@ -199,8 +199,8 @@ fn vector_quantize(x: []const f64, n: usize, d: usize, k: usize, epsilon: f64, c
             j = 0usize
             while j < d {
                 let v = centroids[c * d + j]
-                centroids[(have + c) * d + j] = v * (1.0f64 + epsilon)
-                centroids[c * d + j] = v * (1.0f64 - epsilon)
+                centroids[(have + c) * d + j] = v + epsilon
+                centroids[c * d + j] = v - epsilon
                 j += 1usize
             }
             c += 1usize
@@ -852,7 +852,9 @@ fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err {
             descending = false
         }
     }
-    // `node` is the leaf: absorb into a subcluster or open one.
+    // `node` is the leaf: absorb into a subcluster or open one. Reserve the whole
+    // possible split chain (one fresh node per level plus a new root) before mutating.
+    if t.nodes + depth + 2usize > t.room { ret Invalid }
     let stride = t.branching + 1usize
     var home = t.room
     if t.child_count[node] > 0u32 {
@@ -1015,3 +1017,4 @@ fn silhouette_samples(x: []const f64, n: usize, d: usize, labels: []const usize,
     }
     ret (total / f64(n), ok)
 }
+

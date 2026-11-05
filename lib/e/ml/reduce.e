@@ -28,9 +28,16 @@ fn symmetric_eigen(a: []f64, d: usize, values: []f64, vectors: []f64, tolerance:
         vectors[i * d + i] = 1.0f64
         i += 1usize
     }
+    var diag_scale = 0.0f64
+    i = 0usize
+    while i < d {
+        diag_scale += a[i * d + i] * a[i * d + i]
+        i += 1usize
+    }
+    let threshold = tolerance * diag_scale
     var sweep = 0u32
-    var off = tolerance + 1.0f64
-    while sweep < sweeps && off > tolerance {
+    var off = threshold + 1.0f64
+    while sweep < sweeps && off > threshold {
         off = 0.0f64
         var p = 0usize
         while p < d {
@@ -452,6 +459,12 @@ fn umap_affinity(dist: []const f64, k: usize, rho: f64, sigma: f64) -> f64 {
 // 1e-12 so a duplicated neighbourhood stays finite.
 fn umap_sigma(dist: []const f64, k: usize, rho: f64, goal: f64) -> f64 {
     var hi = 1.0f64
+    // Grow the bracket first: distances larger than 1 need a bigger siga.
+    var grow = 0u32
+    while grow < 1024u32 && umap_affinity(dist, k, rho, hi) < goal {
+        hi = hi * 2.0f64
+        grow += 1u32
+    }
     while hi > 1.0e-300f64 && umap_affinity(dist, k, rho, hi) > goal {
         hi = hi / 2.0f64
     }
@@ -553,11 +566,14 @@ fn umap(x: []const f64, n: usize, d: usize, neighbors: usize, a: f64, b: f64, ep
     }
     i = 0usize
     while i < n {
-        var j = 0usize
+        fuzzy[i * n + i] = 1.0f64
+        var j = i + 1usize
         while j < n {
             let fwd = fuzzy[i * n + j]
             let bwd = fuzzy[j * n + i]
-            fuzzy[i * n + j] = fwd + bwd - fwd * bwd
+            let both = fwd + bwd - fwd * bwd
+            fuzzy[i * n + j] = both
+            fuzzy[j * n + i] = both
             j += 1usize
         }
         i += 1usize
@@ -636,3 +652,4 @@ fn umap(x: []const f64, n: usize, d: usize, neighbors: usize, a: f64, b: f64, ep
     }
     ret ok
 }
+

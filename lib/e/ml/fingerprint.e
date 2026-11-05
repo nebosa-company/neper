@@ -436,9 +436,11 @@ fn fmcs_search(ga: *const Graph, gb: *const Graph, work_a: []usize, work_b: []us
                     }
                     kb += 1usize
                 }
-                used_a[ea] = 0usize
+                // Keep ea used through the skip, so a later edge is considered.
                 fmcs_search(ga, gb, work_a, work_b, used_a, used_b, map_a, best, budget, mapped, ra - 1usize, rb)
+                used_a[ea] = 0usize
             }
         }
     }
 }
+

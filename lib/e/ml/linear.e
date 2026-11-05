@@ -338,14 +338,14 @@ fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err {
 // `components` latent directions: centered NIPALS deflation, then the
 // principal regression over the loadings solved in place. Answers `d + 1`
 // coefficients, the intercept last, as `ols` does.
-// `scratch.len >= n * d + 2 * n + 2 * d + components * (components + 2)`
+// `scratch.len >= n * d + 2 * n + 2 * d + 2 * d * components + components * (components + 1)`
 // holds the deflated copies, one direction at a time, and the solve.
 // `Invalid` with no components, more components than features, or a round
 // whose covariance direction vanishes exactly; a constant target yields
 // near-zero slopes with the mean as intercept (no error).
 fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err {
     let c = components
-    if x.len < n * d || y.len < n || coefficients.len < d + 1usize || scratch.len < n * d + 2usize * n + 2usize * d + c * (c + 2usize) { ret TooSmall }
+    if x.len < n * d || y.len < n || coefficients.len < d + 1usize || scratch.len < n * d + 2usize * n + 2usize * d + 2usize * d * c + c * c + c { ret TooSmall }
     if n == 0usize || d == 0usize || c == 0usize || c > d { ret Invalid }
     var xw = scratch[..n * d]
     var off = n * d
@@ -830,3 +830,4 @@ fn huber(x: []const f64, y: []const f64, n: usize, d: usize, threshold: f64, tol
     }
     ret (iteration, ok)
 }
+
