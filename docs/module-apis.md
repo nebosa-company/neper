@@ -7993,7 +7993,7 @@ type CountSketch = struct { counts: []i64, width: usize, depth: usize }
 type Kmv = struct { hashes: []u64, size: usize }
 type Theta = struct { hashes: []u64, size: usize, theta: u64 }
 type StaticFilter = struct { fingerprints: []u8, seed: u64, kind: u8, segment_length: usize, segment_count_length: usize }
-type CuckooFilter = struct { slots: []u8, buckets: usize, state: u64 }
+type CuckooFilter = struct { slots: []u8, buckets: usize, state: u64, victim: u8 }
 type QuotientFilter = struct { slots: []u64, counts: []u32, quotient_bits: u8, remainder_bits: u8, size: usize }
 type StableBloom = struct { cells: []u8, hashes: u32, decrements: u32, max: u8, state: u64 }
 type WindowedBloom = struct { bits: []u64, slice_words: usize, hashes: u32, slices: u32, head: u32, generation: usize, inserted: usize }
@@ -8111,6 +8111,7 @@ fn gk_compress(s: *Gk)
 fn gk_add(s: *Gk, x: f64) -> err
 fn gk_quantile(s: *const Gk, q: f64) -> f64
 fn kll(items: []f64, sizes: []usize, k: usize) -> (Kll, err)
+fn kll_capacity_at(k: usize, levels: usize, h: usize) -> usize
 fn kll_capacity(s: *const Kll, h: usize) -> usize
 fn kll_add(s: *Kll, x: f64) -> err
 fn kll_rank(s: *const Kll, x: f64) -> f64

@@ -7,6 +7,7 @@
 // with its own code.
 
 use e.algo.sketch
+use e.algo.hash as hash
 use e.io
 use e.mem
 use e.os
@@ -241,6 +242,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     weighted[0usize] = 4242u64
     if sketch.simhash(weighted[..], heavy[..]) != sketch.simhash(one_feature[..], same_weights[..]) { os.exit(6i32) }
+
+    // #5: removing a false positive may decrement a shared slot twice; it must
+    // not underflow the counter.
+    var cb_counts: [2]u8 = zero
+    var (cb, cb_error) = sketch.counting_bloom_init(cb_counts[..], 3u32)
+    if cb_error != ok { os.exit(7i32) }
+    sketch.counting_bloom_insert(&cb, "inserted")
+    if !sketch.counting_bloom_remove(&cb, "other") { os.exit(7i32) }
+    sketch.counting_bloom_insert(&cb, "again")
+    if !sketch.counting_bloom_remove(&cb, "again") { os.exit(7i32) }
+    if sketch.counting_bloom_contains(&cb, "again") { os.exit(7i32) }
+
+    // #9: an even second hash must be forced odd, so the probes spread instead
+    // of stepping through span / gcd(h2, span) positions (here one bit).
+    var one_word: [1]u64 = zero
+    var (bf, bf_error) = sketch.bloom_init(one_word[..], 3u32)
+    if bf_error != ok { os.exit(7i32) }
+    var even_key = ""
+    if (hash.xxhash64("aaa", 0u64) & 4294967296u64) == 0u64 { even_key = "aaa" }
+    if even_key.len == 0usize && (hash.xxhash64("bbb", 0u64) & 4294967296u64) == 0u64 { even_key = "bbb" }
+    if even_key.len == 0usize && (hash.xxhash64("ccc", 0u64) & 4294967296u64) == 0u64 { even_key = "ccc" }
+    if even_key.len > 0usize {
+        sketch.bloom_insert(&bf, even_key)
+        let h = hash.xxhash64(even_key, 0u64)
+        let h1 = h & 4294967295u64
+        let h2 = (h >> 32u64) | 1u64
+        var pk = 0u64
+        while pk < 3u64 {
+            let bit = (h1 +% pk *% h2) % 64u64
+            if (bf.bits[0usize] & (1u64 << bit)) == 0u64 { os.exit(7i32) }
+            pk += 1u64
+        }
+    }
 
     try io.print("algo sketch ok\n")
     ret ok

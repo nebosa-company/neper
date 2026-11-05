@@ -21,7 +21,7 @@ type CountSketch = struct { counts: []i64, width: usize, depth: usize }
 type Kmv = struct { hashes: []u64, size: usize }
 type Theta = struct { hashes: []u64, size: usize, theta: u64 }
 type StaticFilter = struct { fingerprints: []u8, seed: u64, kind: u8, segment_length: usize, segment_count_length: usize }
-type CuckooFilter = struct { slots: []u8, buckets: usize, state: u64 }
+type CuckooFilter = struct { slots: []u8, buckets: usize, state: u64, victim: u8 }
 type QuotientFilter = struct { slots: []u64, counts: []u32, quotient_bits: u8, remainder_bits: u8, size: usize }
 type StableBloom = struct { cells: []u8, hashes: u32, decrements: u32, max: u8, state: u64 }
 type WindowedBloom = struct { bits: []u64, slice_words: usize, hashes: u32, slices: u32, head: u32, generation: usize, inserted: usize }
@@ -62,7 +62,7 @@ fn bloom_init(bits: []u64, hashes: u32) -> (Bloom, err) {
 fn bloom_insert(b: *Bloom, item: []const u8) {
     let h = hash.xxhash64(item, 0u64)
     let h1 = h & 4294967295u64
-    let h2 = h >> 32u64
+    let h2 = (h >> 32u64) | 1u64
     let span = u64(b.bits.len) * 64u64
     var k = 0u64
     while k < u64(b.hashes) {
@@ -76,7 +76,7 @@ fn bloom_insert(b: *Bloom, item: []const u8) {
 fn bloom_contains(b: *const Bloom, item: []const u8) -> bool {
     let h = hash.xxhash64(item, 0u64)
     let h1 = h & 4294967295u64
-    let h2 = h >> 32u64
+    let h2 = (h >> 32u64) | 1u64
     let span = u64(b.bits.len) * 64u64
     var k = 0u64
     while k < u64(b.hashes) {
@@ -112,7 +112,7 @@ fn counting_bloom_init(counts: []u8, hashes: u32) -> (CountingBloom, err) {
 fn counting_bloom_insert(b: *CountingBloom, item: []const u8) {
     let h = hash.xxhash64(item, 0u64)
     let h1 = h & 4294967295u64
-    let h2 = h >> 32u64
+    let h2 = (h >> 32u64) | 1u64
     var k = 0u64
     while k < u64(b.hashes) {
         let slot = usize((h1 +% k *% h2) % u64(b.counts.len))
@@ -122,15 +122,17 @@ fn counting_bloom_insert(b: *CountingBloom, item: []const u8) {
 }
 
 // Removes one insertion; `false` when the item was never present (nothing changes).
+// A false positive may reach a slot this item never raised, so counters are
+// decremented only while positive (and only inserted items are guaranteed safe).
 fn counting_bloom_remove(b: *CountingBloom, item: []const u8) -> bool {
     if !counting_bloom_contains(b, item) { ret false }
     let h = hash.xxhash64(item, 0u64)
     let h1 = h & 4294967295u64
-    let h2 = h >> 32u64
+    let h2 = (h >> 32u64) | 1u64
     var k = 0u64
     while k < u64(b.hashes) {
         let slot = usize((h1 +% k *% h2) % u64(b.counts.len))
-        if b.counts[slot] != 255u8 { b.counts[slot] -= 1u8 }
+        if b.counts[slot] > 0u8 { b.counts[slot] -= 1u8 }
         k += 1u64
     }
     ret true
@@ -139,7 +141,7 @@ fn counting_bloom_remove(b: *CountingBloom, item: []const u8) -> bool {
 fn counting_bloom_contains(b: *const CountingBloom, item: []const u8) -> bool {
     let h = hash.xxhash64(item, 0u64)
     let h1 = h & 4294967295u64
-    let h2 = h >> 32u64
+    let h2 = (h >> 32u64) | 1u64
     var k = 0u64
     while k < u64(b.hashes) {
         let slot = usize((h1 +% k *% h2) % u64(b.counts.len))
@@ -482,8 +484,11 @@ fn count_min_estimate_key(s: *const CountMin, key: u64) -> u32 {
 // Dyadic range counting: `levels[j]` counts `key >> j`, so any range is the sum
 // of at most `2 * levels.len` point estimates.
 fn count_min_range_add(levels: []CountMin, key: u64, amount: u32) {
+    // A u64 key carries at most 64 dyadic levels; deeper shifts are undefined.
+    var depth = levels.len
+    if depth > 64usize { depth = 64usize }
     var j = 0usize
-    while j < levels.len {
+    while j < depth {
         count_min_add_key(&levels[j], key >> u64(j), amount)
         j += 1usize
     }
@@ -491,13 +496,15 @@ fn count_min_range_add(levels: []CountMin, key: u64, amount: u32) {
 
 // The estimated total frequency of keys in `lo..=hi`; never below the truth.
 fn count_min_range(levels: []const CountMin, lo: u64, hi: u64) -> u64 {
-    if levels.len == 0usize || lo > hi { ret 0u64 }
+    var depth = levels.len
+    if depth > 64usize { depth = 64usize }
+    if depth == 0usize || lo > hi { ret 0u64 }
     var total = 0u64
     var at = lo
     var more = true
     while more {
         var j = 0usize
-        while j + 1usize < levels.len && at % (1u64 << u64(j + 1usize)) == 0u64 && hi - at >= (1u64 << u64(j + 1usize)) - 1u64 {
+        while j + 1usize < depth && at % (1u64 << u64(j + 1usize)) == 0u64 && hi - at >= (1u64 << u64(j + 1usize)) - 1u64 {
             j += 1usize
         }
         total += u64(count_min_estimate_key(&levels[j], at >> u64(j)))
@@ -622,6 +629,8 @@ fn kmv_init(hashes: []u64) -> Kmv { ret Kmv { hashes: hashes, size: 0usize } }
 fn kmv_add(s: *Kmv, key: u64) { s.size = sorted_insert(s.hashes, s.size, minhash_mix(key, 0u64)) }
 
 fn kmv(s: *const Kmv) -> f64 {
+    // A zero-length store has no k-th hash to divide by.
+    if s.hashes.len == 0usize { ret 0.0f64 }
     if s.size < s.hashes.len { ret f64(s.size) }
     ret f64(s.size - 1usize) * 18446744073709551616.0f64 / f64(s.hashes[s.size - 1usize])
 }
@@ -632,6 +641,7 @@ fn theta_init(hashes: []u64) -> Theta { ret Theta { hashes: hashes, size: 0usize
 
 fn theta_push(s: *Theta, h: u64) {
     if h >= s.theta { ret }
+    if s.hashes.len == 0usize { ret }
     s.size = sorted_insert(s.hashes, s.size, h)
     if s.size == s.hashes.len {
         s.size -= 1usize
@@ -953,7 +963,7 @@ fn cuckoo_init(slots: []u8) -> (CuckooFilter, err) {
         slots[i] = 0u8
         i += 1usize
     }
-    ret (CuckooFilter { slots: slots[..buckets * 4usize], buckets: buckets, state: 1u64 }, ok)
+    ret (CuckooFilter { slots: slots[..buckets * 4usize], buckets: buckets, state: 1u64, victim: 0u8 }, ok)
 }
 
 fn cuckoo_split(f: *const CuckooFilter, key: u64) -> (u8, usize, usize) {
@@ -974,8 +984,8 @@ fn cuckoo_slot(f: *const CuckooFilter, bucket: usize, fp: u8) -> (usize, bool) {
 }
 
 // Inserts a fingerprint into either bucket, kicking residents to their alternate
-// bucket up to 500 times; `Full` when the chain does not settle.
-// ponytail: the last evicted fingerprint is dropped on `Full` (no victim cache).
+// bucket up to 500 times; `Full` when the chain does not settle. The evicted
+// fingerprint is kept in `victim` so a previously inserted key is not lost.
 fn cuckoo_insert(f: *CuckooFilter, key: u64) -> err {
     let (fp, i1, i2) = cuckoo_split(f, key)
     let (s1, e1) = cuckoo_slot(f, i1, 0u8)
@@ -1006,6 +1016,7 @@ fn cuckoo_insert(f: *CuckooFilter, key: u64) -> err {
         }
         kicks += 1usize
     }
+    if cur != 0u8 { f.victim = cur }
     ret Full
 }
 
@@ -1013,7 +1024,7 @@ fn cuckoo_contains(f: *const CuckooFilter, key: u64) -> bool {
     let (fp, i1, i2) = cuckoo_split(f, key)
     let (_, a) = cuckoo_slot(f, i1, fp)
     let (_, b) = cuckoo_slot(f, i2, fp)
-    ret a || b
+    ret a || b || (f.victim != 0u8 && fp == f.victim)
 }
 
 // Removes one copy of the fingerprint; `false` when neither bucket holds it.
@@ -1027,6 +1038,10 @@ fn cuckoo_remove(f: *CuckooFilter, key: u64) -> bool {
     let (s2, b) = cuckoo_slot(f, i2, fp)
     if b {
         f.slots[s2] = 0u8
+        ret true
+    }
+    if f.victim != 0u8 && fp == f.victim {
+        f.victim = 0u8
         ret true
     }
     ret false
@@ -1308,7 +1323,9 @@ fn ddsketch(bins: []u64, alpha: f64) -> (DdSketch, err) {
 }
 
 fn ddsketch_add(s: *DdSketch, x: f64) -> err {
-    if x < 0.0f64 { ret Invalid }
+    // NaN compares false against everything and infinity makes the log index a
+    // non-integer: both are refused before the conversion.
+    if !(x >= 0.0f64) || x - x != 0.0f64 { ret Invalid }
     if x == 0.0f64 {
         s.zeros += 1u64
         s.count += 1u64
@@ -1325,7 +1342,12 @@ fn ddsketch_add(s: *DdSketch, x: f64) -> err {
 
 fn ddsketch_quantile(s: *const DdSketch, q: f64) -> f64 {
     if s.count == 0u64 { ret 0.0f64 }
-    let rank = u64(q * f64(s.count - 1u64))
+    // The rank is a float-to-unsigned conversion: clamp so NaN and values
+    // outside [0, 1] answer the nearest representable quantile.
+    var f = q
+    if !(f >= 0.0f64) { f = 0.0f64 }
+    if f > 1.0f64 { f = 1.0f64 }
+    let rank = u64(f * f64(s.count - 1u64))
     if rank < s.zeros { ret 0.0f64 }
     var seen = s.zeros
     var i = 0usize
@@ -1422,9 +1444,9 @@ fn kll(items: []f64, sizes: []usize, k: usize) -> (Kll, err) {
     ret (Kll { items: items[..sizes.len * 2usize * k], sizes: sizes, k: k, levels: 1usize, total: 0u64, state: 3u64 }, ok)
 }
 
-fn kll_capacity(s: *const Kll, h: usize) -> usize {
-    var cap = f64(s.k)
-    var d = s.levels - 1usize - h
+fn kll_capacity_at(k: usize, levels: usize, h: usize) -> usize {
+    var cap = f64(k)
+    var d = levels - 1usize - h
     while d > 0usize {
         cap = cap * 2.0f64 / 3.0f64
         d -= 1usize
@@ -1434,12 +1456,37 @@ fn kll_capacity(s: *const Kll, h: usize) -> usize {
     ret c
 }
 
+fn kll_capacity(s: *const Kll, h: usize) -> usize { ret kll_capacity_at(s.k, s.levels, h) }
+
 fn kll_add(s: *Kll, x: f64) -> err {
     let region = 2usize * s.k
+    if s.sizes[0usize] >= region { ret TooSmall }
+    // Dry-run the compaction cascade the value would trigger; a value must be
+    // refused before it is stored or counted, not after the top level has run
+    // out of regions (which used to keep counting into an overfull store).
+    var levels = s.levels
+    var h = 0usize
+    var level_size = s.sizes[0usize] + 1usize
+    var running = true
+    while running {
+        running = false
+        if level_size > kll_capacity_at(s.k, levels, h) {
+            if h + 1usize == s.sizes.len { ret TooSmall }
+            let carry = level_size / 2usize
+            h += 1usize
+            if h == levels {
+                levels += 1usize
+                level_size = carry
+            } else {
+                level_size = s.sizes[h] + carry
+            }
+            running = true
+        }
+    }
     s.items[s.sizes[0usize]] = x
     s.sizes[0usize] += 1usize
     s.total += 1u64
-    var h = 0usize
+    h = 0usize
     while h < s.levels {
         if s.sizes[h] > kll_capacity(s, h) {
             if h + 1usize == s.sizes.len { ret TooSmall }
@@ -1847,7 +1894,8 @@ fn hll_sliding_estimate(s: *const SlidingHll, registers: []u8, now: u64, window:
         var r = index * s.depth
         while r < (index + 1usize) * s.depth {
             let entry = s.entries[r]
-            if entry != 0u64 && now - (entry >> 8u64) < window {
+            let entry_time = entry >> 8u64
+            if entry != 0u64 && entry_time <= now && now - entry_time < window {
                 let rank = u8(entry & 255u64)
                 if rank > h.registers[index] { h.registers[index] = rank }
             }
@@ -1894,6 +1942,9 @@ fn lsh_random_projection(vector: []const f64, bits: u32, seed: u64) -> u64 {
 // p-stable LSH (Datar et al.) for Euclidean distance: the quantised projection
 // onto a Gaussian vector with a random offset, `floor((a . v + b) / width)`.
 fn lsh_p_stable(vector: []const f64, width: f64, seed: u64) -> i64 {
+    // A non-finite or zero width makes the projection meaningless, and a finite
+    // projection past i64 would trap the conversion: answer 0 or the clamp.
+    if !(width > 0.0f64) || width - width != 0.0f64 { ret 0i64 }
     var dot = 0.0f64
     var i = 0usize
     while i < vector.len {
@@ -1904,7 +1955,12 @@ fn lsh_p_stable(vector: []const f64, width: f64, seed: u64) -> i64 {
         i += 1usize
     }
     let b = unit(minhash_mix(seed, 2u64 * u64(vector.len) + 1u64)) * width
-    ret i64(math.floor[f64]((dot + b) / width))
+    let scaled = (dot + b) / width
+    if scaled - scaled != 0.0f64 { ret 0i64 }
+    let q = math.floor[f64](scaled)
+    if q >= 9223372036854775808.0f64 { ret 9223372036854775807i64 }
+    if q <= -9223372036854775808.0f64 { ret 0i64 - 9223372036854775807i64 }
+    ret i64(q)
 }
 
 // One-permutation hashing (Li, Owen & Zhang): one hash per key, binned by its

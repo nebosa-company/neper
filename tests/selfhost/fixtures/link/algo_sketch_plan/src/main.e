@@ -502,6 +502,98 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if misses != 18usize { os.exit(31i32) }
 
+    // #1: Full must not drop a key accepted earlier (one victim slot).
+    var z_slots: [4]u8 = zero
+    var (z_filter, z_ferr) = sketch.cuckoo_init(z_slots[..])
+    if z_ferr != ok { os.exit(32i32) }
+    var z_accepted: [64]u64 = zero
+    var z_nacc = 0usize
+    var z_ck = 0u64
+    var z_full = false
+    while z_ck < 64u64 && !z_full {
+        let z_ins = sketch.cuckoo_insert(&z_filter, z_ck)
+        if z_ins == sketch.Full { z_full = true }
+        if z_ins == ok {
+            z_accepted[z_nacc] = z_ck
+            z_nacc += 1usize
+        }
+        z_ck += 1u64
+    }
+    if !z_full { os.exit(32i32) }
+    var z_ai = 0usize
+    while z_ai < z_nacc {
+        if !sketch.cuckoo_contains(&z_filter, z_accepted[z_ai]) { os.exit(32i32) }
+        z_ai += 1usize
+    }
+
+    // #2: an add refused for lack of a level must not store or count the value.
+    var z_items: [4]f64 = zero
+    var z_sizes: [1]usize = zero
+    var (z_store, z_kl_error) = sketch.kll(z_items[..], z_sizes[..], 2usize)
+    if z_kl_error != ok { os.exit(33i32) }
+    var z_kept = 0u32
+    var z_x = 1u32
+    while z_x <= 6u32 {
+        if sketch.kll_add(&z_store, f64(z_x)) == ok { z_kept += 1u32 }
+        z_x += 1u32
+    }
+    if z_kept != 2u32 || z_store.total != 2u64 { os.exit(33i32) }
+
+    // #3: non-finite DDSketch inputs are refused before the integer conversion,
+    // and a quantile outside [0, 1] is clamped.
+    var z_bins: [32]u64 = zero
+    var (z_dd, z_dd_error) = sketch.ddsketch(z_bins[..], 0.01f64)
+    if z_dd_error != ok { os.exit(34i32) }
+    if sketch.ddsketch_add(&z_dd, 0.0f64 / 0.0f64) != sketch.Invalid { os.exit(34i32) }
+    if sketch.ddsketch_add(&z_dd, 1.0f64 / 0.0f64) != sketch.Invalid { os.exit(34i32) }
+    if sketch.ddsketch_add(&z_dd, 1.0f64) != ok { os.exit(34i32) }
+    if sketch.ddsketch_quantile(&z_dd, 0.0f64 - 1.0f64) <= 0.0f64 { os.exit(34i32) }
+    let z_nanq = sketch.ddsketch_quantile(&z_dd, 0.0f64 / 0.0f64)
+    if z_nanq != z_nanq || z_nanq <= 0.0f64 { os.exit(34i32) }
+
+    // #4: a window that ends before the newest add underflows a checked u64
+    // subtraction; it must answer without trapping.
+    var z_entries: [16]u64 = zero
+    var (z_sl, z_sl_error) = sketch.hll_sliding(z_entries[..], 1usize, 4u8)
+    if z_sl_error != ok { os.exit(35i32) }
+    sketch.hll_sliding_add(&z_sl, 1u64, 100u64)
+    var z_regs: [16]u8 = zero
+    let (z_early, z_early_error) = sketch.hll_sliding_estimate(&z_sl, z_regs[..], 90u64, 20u64)
+    if z_early_error != ok || z_early != 0.0f64 { os.exit(35i32) }
+
+    // #6: empty KMV/theta stores must not underflow their size.
+    var z_nohash: [1]u64 = zero
+    var z_kv = sketch.kmv_init(z_nohash[0usize..0usize])
+    if sketch.kmv(&z_kv) != 0.0f64 { os.exit(36i32) }
+    var z_th = sketch.theta_init(z_nohash[0usize..0usize])
+    sketch.theta_add(&z_th, 7u64)
+    if sketch.theta_estimate(&z_th) != 0.0f64 { os.exit(36i32) }
+
+    // #7: dyadic ranges clamp to the 64 levels a u64 key has.
+    let (z_levels, z_levels_error) = mem.alloc[sketch.CountMin](a, 65usize)
+    if z_levels_error != ok { os.exit(37i32) }
+    let (z_counters, z_counters_error) = mem.alloc[u32](a, 65usize * 4usize)
+    if z_counters_error != ok { os.exit(37i32) }
+    var z_lv = 0usize
+    while z_lv < 65usize {
+        let (z_cm, z_cm_error) = sketch.count_min_init(z_counters[z_lv * 4usize..z_lv * 4usize + 4usize], 2usize, 1usize)
+        if z_cm_error != ok { os.exit(37i32) }
+        z_levels[z_lv] = z_cm
+        z_lv += 1usize
+    }
+    sketch.count_min_range_add(z_levels[..], 1u64, 1u32)
+    if sketch.count_min_range(z_levels[..], 1u64, 1u64) < 1u64 { os.exit(37i32) }
+
+    // #8: a degenerate width or a projection past i64 saturates instead of
+    // converting out of range.
+    var z_vec: [2]f64 = zero
+    z_vec[0usize] = 1.0f64
+    z_vec[1usize] = 2.0f64
+    if sketch.lsh_p_stable(z_vec[..], 0.0f64, 3u64) != 0i64 { os.exit(38i32) }
+    if sketch.lsh_p_stable(z_vec[..], 0.0f64 / 0.0f64, 3u64) != 0i64 { os.exit(38i32) }
+    let z_sat = sketch.lsh_p_stable(z_vec[..], 1.0e-308f64, 3u64)
+    if z_sat != z_sat { os.exit(38i32) }
+
     try io.print("algo sketch plan ok\n")
     ret ok
 }
