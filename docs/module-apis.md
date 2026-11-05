@@ -18438,6 +18438,7 @@ fn check_key[T: type]() -> err
 fn key_sql(d: migrate.Dialect) -> str
 fn create_sql[T: type](s: *Session, table: str) -> (str, err)
 fn create_table[T: type](s: *Session, table: str) -> err
+fn generated_id(s: *Session, sql: str, params: []const db.Parameter) -> (i64, err)
 fn last_id(s: *Session) -> (i64, err)
 fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
 fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
@@ -31270,6 +31271,7 @@ sign; the open methods answer `false` on a vanishing derivative or an exhausted 
 
 ```neper
 fn nan() -> f64
+fn iteration_cap(parameter: f64) -> usize
 fn lgamma(x: f64) -> f64
 fn gamma(x: f64) -> f64
 fn erf(x: f64) -> f64
