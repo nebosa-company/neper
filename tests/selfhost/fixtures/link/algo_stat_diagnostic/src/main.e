@@ -1,7 +1,7 @@
 // `e.algo.stat.diagnostic`: the eight metrics of a 90/20/10/80 table against
 // hand arithmetic, the exact and log intervals against independent references,
-// and the empty-cell and bad-confidence refusals. Each check exits with its
-// own code.
+// the empty-cell and bad-confidence refusals, and the u64 totals that would
+// overflow. Each check exits with its own code.
 
 use e.algo.stat.diagnostic
 use e.io
@@ -52,6 +52,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if conf_error != diagnostic.Invalid { os.exit(3i32) }
     let (_, conf_propagates) = diagnostic.metrics_ci(perfect, 0.95f64)
     if conf_propagates != diagnostic.Invalid { os.exit(3i32) }
+
+    // 4: four cells of 5e18 each keep every margin inside u64 but make the
+    // total 20e18, which wraps; both entry points must refuse it.
+    var huge = diagnostic.Table { true_pos: 5000000000000000000u64, false_pos: 5000000000000000000u64, false_neg: 5000000000000000000u64, true_neg: 5000000000000000000u64 }
+    let (_, huge_error) = diagnostic.metrics(huge)
+    if huge_error != diagnostic.Invalid { os.exit(4i32) }
+    let (_, huge_ci_error) = diagnostic.metrics_ci(huge, 0.95f64)
+    if huge_ci_error != diagnostic.Invalid { os.exit(4i32) }
 
     try io.print("algo stat diagnostic ok\n")
     ret ok

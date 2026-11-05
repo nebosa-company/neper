@@ -45,10 +45,13 @@ fn beta_quantile(p: f64, a: f64, b: f64) -> f64 {
 
 // The eight metrics of the table; an empty denominator anywhere is `Invalid`.
 fn metrics(t: Table) -> (Metrics, err) {
+    if t.false_neg > 18446744073709551615u64 - t.true_pos || t.true_neg > 18446744073709551615u64 - t.false_pos { ret (zero, Invalid) }
+    if t.false_pos > 18446744073709551615u64 - t.true_pos || t.true_neg > 18446744073709551615u64 - t.false_neg { ret (zero, Invalid) }
     let diseased = t.true_pos + t.false_neg
     let healthy = t.false_pos + t.true_neg
     let positive = t.true_pos + t.false_pos
     let negative = t.false_neg + t.true_neg
+    if healthy > 18446744073709551615u64 - diseased { ret (zero, Invalid) }
     let n = diseased + healthy
     if diseased == 0u64 || healthy == 0u64 || positive == 0u64 || negative == 0u64 || n == 0u64 { ret (zero, Invalid) }
     let sensitivity = f64(t.true_pos) / f64(diseased)
