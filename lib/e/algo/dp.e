@@ -230,7 +230,8 @@ fn coin_change_min(coins: []const u64, amount: usize, table: []u64) -> (u64, boo
     ret (table[amount], true, ok)
 }
 
-// The number of distinct multisets of coins summing to `amount`; `table.len > amount`.
+// The number of distinct multisets of coins summing to `amount`; a denomination
+// listed more than once is still one coin type; `table.len > amount`.
 fn coin_change_ways(coins: []const u64, amount: usize, table: []u64) -> (u64, err) {
     if table.len <= amount { ret (0u64, TooSmall) }
     var a = 0usize
@@ -241,7 +242,11 @@ fn coin_change_ways(coins: []const u64, amount: usize, table: []u64) -> (u64, er
     table[0usize] = 1u64
     var i = 0usize
     while i < coins.len {
-        if coins[i] > 0u64 {
+        // The first occurrence of a denomination already counts every multiset
+        // that uses it, so a later duplicate would count each of them twice.
+        var earlier = 0usize
+        while earlier < i && coins[earlier] != coins[i] { earlier += 1usize }
+        if coins[i] > 0u64 && earlier == i {
             a = usize(coins[i])
             while a <= amount {
                 table[a] = table[a] +% table[a - usize(coins[i])]

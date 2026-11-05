@@ -108,6 +108,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ways_error != ok || ways != 2156u64 { os.exit(3i32) }
     let (ways0, ways0_error) = dp.coin_change_ways(ways_coins[..], 0usize, utable[..])
     if ways0_error != ok || ways0 != 1u64 { os.exit(3i32) }
+    // A denomination listed twice is still one coin type: [1, 1] makes amount 1
+    // in one way, not two, and [1, 1, 2] makes 3 as 1+1+1 and 1+2 only.
+    var repeated_coins: [3]u64 = zero
+    repeated_coins[0usize] = 1u64
+    repeated_coins[1usize] = 1u64
+    let (repeated_ways, repeated_ways_error) = dp.coin_change_ways(repeated_coins[..2usize], 1usize, utable[..])
+    if repeated_ways_error != ok || repeated_ways != 1u64 { os.exit(3i32) }
+    repeated_coins[2usize] = 2u64
+    let (repeated3_ways, repeated3_ways_error) = dp.coin_change_ways(repeated_coins[..], 3usize, utable[..])
+    if repeated3_ways_error != ok || repeated3_ways != 2u64 { os.exit(3i32) }
 
     // 4: subset sum and equal partition.
     var set: [6]u64 = zero
