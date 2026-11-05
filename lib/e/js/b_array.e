@@ -78,6 +78,7 @@ fn array_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     var i = 0usize
     while i < args.len {
         let pe2 = js.array_push(it, a, args[i])
+        if pe2 != ok { ret (js.undefv(), pe2) }
         i += 1usize
     }
     ret (js.obj_value(a), ok)
@@ -500,6 +501,17 @@ fn array_concat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
 fn array_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (o, oe) = js.to_object(it, this_val)
     if oe != ok { ret (js.undefv(), oe) }
+    // Cycle guard: an array already being joined contributes the empty string. Its
+    // aux slot is the marker (self), saved and restored so no other user of aux sees it.
+    if o.aux == o { ret (js.str_value(""), ok) }
+    let saved_aux = o.aux
+    o.aux = o
+    let (r, e) = join_body(it, o, args)
+    o.aux = saved_aux
+    ret (r, e)
+}
+
+fn join_body(it: *js.Interp, o: *js.Obj, args: []const js.Value) -> (js.Value, err) {
     let (len, le) = len_of(it, o)
     if le != ok { ret (js.undefv(), le) }
     var sep = ","
@@ -508,7 +520,6 @@ fn array_join(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
         if se != ok { ret (js.undefv(), se) }
         sep = s
     }
-    // Cycle guard: an array already being joined contributes the empty string.
     let (parts_l, ple) = list.init[str](it.a, usize(len) + 1usize)
     var parts = parts_l
     var k = 0.0f64
@@ -722,7 +733,11 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
         if present || kind >= 5u8 {
             let (v, ve) = js.get_index(it, o, k)
             if ve != ok { ret (js.undefv(), ve) }
-            let (r, re) = js.call_function(it, cb, this_arg, three_args(it, v, js.num_value(k), js.obj_value(o)))
+            var cb_args: [3]js.Value = zero
+            cb_args[0usize] = v
+            cb_args[1usize] = js.num_value(k)
+            cb_args[2usize] = js.obj_value(o)
+            let (r, re) = js.call_function(it, cb, this_arg, cb_args[0usize..3usize])
             if re != ok { ret (js.undefv(), re) }
             if kind == 1u8 {
                 let de = create_data(it, out, key, r)
@@ -752,6 +767,8 @@ fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind
     ret (js.undefv(), ok)
 }
 
+// Callback arguments for callers outside this module (b_typed reconstructs typed-array
+// views through it); the in-module iteration paths use stack-backed tuples instead.
 fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value {
     let (cell, ce) = mem.alloc[js.Value](it.a, 3usize)
     if ce != ok { ret js.zero_args() }
@@ -759,16 +776,6 @@ fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const 
     cell[1usize] = y
     cell[2usize] = z
     ret cell[0usize..3usize]
-}
-
-fn four_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value, w: js.Value) -> []const js.Value {
-    let (cell, ce) = mem.alloc[js.Value](it.a, 4usize)
-    if ce != ok { ret js.zero_args() }
-    cell[0usize] = x
-    cell[1usize] = y
-    cell[2usize] = z
-    cell[3usize] = w
-    ret cell[0usize..4usize]
 }
 
 fn array_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) { let (r, e) = iterate_with(it, this_val, args, 0u8)
@@ -821,7 +828,12 @@ fn reduce_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, right
         if has_elem(it, o, js.key_of(js.number_to_string(it.a, k))) {
             let (v2, ve2) = js.get_index(it, o, k)
             if ve2 != ok { ret (js.undefv(), ve2) }
-            let (r, re) = js.call_function(it, cb, js.undefv(), four_args(it, acc, v2, js.num_value(k), js.obj_value(o)))
+            var red_args: [4]js.Value = zero
+            red_args[0usize] = acc
+            red_args[1usize] = v2
+            red_args[2usize] = js.num_value(k)
+            red_args[3usize] = js.obj_value(o)
+            let (r, re) = js.call_function(it, cb, js.undefv(), red_args[0usize..4usize])
             if re != ok { ret (js.undefv(), re) }
             acc = r
         }
@@ -1030,7 +1042,11 @@ fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, m
             if ve != ok { ret (0.0f64, ve) }
             var v = v0
             if js.is_callable(mapper) {
-                let (mv, mve) = js.call_function(it, mapper, this_arg, three_args(it, v, js.num_value(k), js.obj_value(src)))
+                var map_args: [3]js.Value = zero
+                map_args[0usize] = v
+                map_args[1usize] = js.num_value(k)
+                map_args[2usize] = js.obj_value(src)
+                let (mv, mve) = js.call_function(it, mapper, this_arg, map_args[0usize..3usize])
                 if mve != ok { ret (0.0f64, mve) }
                 v = mv
             }

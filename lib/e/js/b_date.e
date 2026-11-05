@@ -230,6 +230,7 @@ fn parse_iso(s: str) -> f64 {
             if !gth || at + 3usize >= s.len || s[at + 3usize] != 58u8 { ret js.nan() }
             let (tm, gtm) = digits(s, at + 4usize, 2usize)
             if !gtm { ret js.nan() }
+            if th > 23.0f64 || tm > 59.0f64 { ret js.nan() }
             tz = ts * (th * 60.0f64 + tm)
             at += 6usize
         }
