@@ -309,6 +309,9 @@ fn h_lookup(c: *f.Call) -> f.Value {
 fn slice_bounds(length: usize, start: f64, end: f64) -> (usize, usize) {
     let n = f64(length)
     var from = start
+    // A bound that is NaN (`Infinity + -Infinity`) has no position; JavaScript's slice
+    // reads it as 0, and the cast below must not see it.
+    if from != from { from = 0.0f64 }
     if from < 0.0f64 {
         from = n + from
         if from < 0.0f64 { from = 0.0f64 }
@@ -316,6 +319,7 @@ fn slice_bounds(length: usize, start: f64, end: f64) -> (usize, usize) {
         from = n
     }
     var to = end
+    if to != to { to = 0.0f64 }
     if to < 0.0f64 {
         to = n + to
         if to < 0.0f64 { to = 0.0f64 }
@@ -397,9 +401,11 @@ fn h_npv(c: *f.Call) -> f.Value {
     if rate_value.kind != .Blank { rate = rate_value.n }
     var all: [512]f.Value = zero
     let count = f.flatten_values(c.args[1usize..c.args.len], all[0..], 0usize)
+    // The buffer holds 512 flows: more is a resource limit, not a value to drop.
+    if count > 512usize { ret f.limit_error("NPV: too many cash flows") }
     var total = 0.0f64
     var i = 0usize
-    while i < count && i < 512usize {
+    while i < count {
         let n = f.to_number(c.a, all[i])
         if f.is_error(n) { ret n }
         var x = 0.0f64
@@ -473,9 +479,11 @@ fn h_irr(c: *f.Call) -> f.Value {
     var first: [1]f.Value = zero
     first[0usize] = c.args[0usize]
     let count = f.flatten_values(first[0..], all[0..], 0usize)
+    // As `NPV`: more cash flows than the buffer holds answers #LIMIT!, never a prefix.
+    if count > 512usize { ret f.limit_error("IRR: too many cash flows") }
     var flows: [512]f64 = zero
     var n = 0usize
-    while n < count && n < 512usize {
+    while n < count {
         let x = f.to_number(c.a, all[n])
         if f.is_error(x) { ret x }
         if x.kind != .Blank { flows[n] = x.n }

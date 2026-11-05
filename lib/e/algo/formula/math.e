@@ -411,9 +411,10 @@ fn h_multiply(c: *f.Call) -> f.Value {
 }
 
 fn h_sumproduct(c: *f.Call) -> f.Value {
-    var arrays: [16][]const f.Value = zero
-    var count = c.args.len
-    if count > 16usize { count = 16usize }
+    // Every argument is a factor: one slot per argument, not a silent stop at sixteen (#271).
+    let count = c.args.len
+    let (arrays, arrays_error) = mem.alloc[[]const f.Value](c.a, count)
+    if arrays_error != ok { ret f.generic_error("Out of memory") }
     var longest = 0usize
     var i = 0usize
     while i < count {

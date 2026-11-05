@@ -4,6 +4,7 @@
 // and records each outcome as `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]` or `E|code|hex`. The fixture
 // evaluates the same source with the Neper registry. A line is `{"src": ..., "expect": ...}`.
 use e.algo.formula as f
+use e.algo.formula.basic
 //__USES__
 use e.fmt.json as json
 use e.io
@@ -214,10 +215,65 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry) -> u8 {
     ret 0u8
 }
 
+// `NPV(0,[1,1,...])` or `IRR([1,1,...])`: `count` ones after `prefix` (#270).
+fn ones_source(a: *mem.Arena, prefix: str, count: usize) -> str {
+    let (buf, e) = mem.alloc[u8](a, prefix.len + count * 2usize + 4usize)
+    if e != ok { ret "" }
+    var n = 0usize
+    var i = 0usize
+    while i < prefix.len {
+        buf[n] = prefix[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < count {
+        if i > 0usize {
+            buf[n] = 44u8
+            n += 1usize
+        }
+        buf[n] = 49u8
+        n += 1usize
+        i += 1usize
+    }
+    buf[n] = 93u8
+    n += 1usize
+    buf[n] = 41u8
+    n += 1usize
+    ret buf[0usize..n]
+}
+
+// The basic group in a registry of its own: the check must not depend on the vectors the
+// generated fixture carries.
+fn group_registry(a: *mem.Arena) -> f.Registry {
+    let (r, e) = f.registry(a, 600usize)
+    var reg = r
+    if f.register_core(&reg, a) != ok { os.exit(90i32) }
+    if basic.register(&reg, a) != ok { os.exit(91i32) }
+    ret reg
+}
+
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     var registry = build_registry(a)
     //__VECTOR_CALLS__
+    // #270: NPV and IRR hold 512 cash flows; more must answer #LIMIT!, never truncate,
+    // and an OFFSET whose bounds cancel to NaN must answer, not trap. `offset` selects
+    // that half for pre-fix evidence.
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    var ctx = make_context(a)
+    var group = group_registry(a)
+    if !str.eq(mode, "offset") {
+        let npv_source = ones_source(a, "NPV(0,[", 600usize)
+        let npv_value = f.evaluate(a, npv_source, &ctx, &group)
+        if npv_value.kind != .Error || npv_value.code != f.E_LIMIT { os.exit(80i32) }
+        let irr_source = ones_source(a, "IRR([", 600usize)
+        let irr_value = f.evaluate(a, irr_source, &ctx, &group)
+        if irr_value.kind != .Error || irr_value.code != f.E_LIMIT { os.exit(81i32) }
+    }
+    let offset_value = f.evaluate(a, "OFFSET([1,2,3],10^400,-(10^400))", &ctx, &group)
+    if offset_value.kind != .Array || offset_value.items.len != 0usize { os.exit(82i32) }
     try io.print("algo formula basic ok")
     ret ok
 }
