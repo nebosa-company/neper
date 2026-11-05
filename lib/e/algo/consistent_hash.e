@@ -27,8 +27,10 @@ fn ring_position(node: u64, replica: u32) -> u64 { ret mix(node *% 1140071481932
 // Answers the sorted points.
 fn ring_build(points: []Point, nodes: []const u64, replicas: u32) -> ([]Point, err) {
     if replicas == 0u32 { ret (points[..0usize], Invalid) }
+    // Reject a count the buffer cannot hold before computing it, so the product
+    // cannot wrap.
+    if nodes.len > points.len / usize(replicas) { ret (points[..0usize], TooSmall) }
     let total = nodes.len * usize(replicas)
-    if points.len < total { ret (points[..0usize], TooSmall) }
     var at = 0usize
     var n = 0usize
     while n < nodes.len {
@@ -170,10 +172,14 @@ fn virtual_nodes(points: []Point, nodes: []const u64, k: u32, weights: []const u
     var total = 0usize
     var n = 0usize
     while n < nodes.len {
-        total += usize(k) * usize(weights[n])
+        // `ring_position` indexes replicas with a `u32`: a per-node product past
+        // that is `Invalid` instead of a wrapped, shorter run of points.
+        if weights[n] != 0u32 && k > 4294967295u32 / weights[n] { ret (points[..0usize], Invalid) }
+        let count = usize(k) * usize(weights[n])
+        if count > points.len - total { ret (points[..0usize], TooSmall) }
+        total += count
         n += 1usize
     }
-    if points.len < total { ret (points[..0usize], TooSmall) }
     var at = 0usize
     n = 0usize
     while n < nodes.len {

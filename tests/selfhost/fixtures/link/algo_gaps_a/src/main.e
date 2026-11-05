@@ -209,6 +209,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if counts[0usize] != 88usize || counts[1usize] != 241usize || counts[2usize] != 223usize || counts[3usize] != 448usize { os.exit(8i32) }
     let (_, zero_error) = ring.virtual_nodes(points[..], nodes[..], 0u32, none[..])
     if zero_error != ring.Invalid { os.exit(8i32) }
+    // A per-node replica count past the u32 index `ring_position` takes is refused
+    // rather than wrapping to a short run of points.
+    let heavy = [2]u32{ 2147483648u32, 1u32 }
+    let (_, heavy_error) = ring.virtual_nodes(points[..], nodes[..2usize], 2u32, heavy[..])
+    if heavy_error != ring.Invalid { os.exit(8i32) }
+    // A ring count past the buffer is refused before it can wrap the product.
+    let (_, huge_error) = ring.virtual_nodes(points[..], nodes[..], 2147483648u32, none[..])
+    if huge_error != ring.TooSmall { os.exit(8i32) }
 
     // 9: global cardinality prunes by the lower bound, the upper bound, and reports unsat.
     var doms = [9]u8{ 1u8, 1u8, 0u8, 1u8, 1u8, 0u8, 1u8, 1u8, 1u8 }
