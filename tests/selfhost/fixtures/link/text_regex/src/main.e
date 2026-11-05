@@ -119,6 +119,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (wide, wide_error) = regex.replace_all(a, &star, "é", "-")
     if untouched_error != ok || wide_error != ok || !same(untouched, "nothing here") || !same(wide, "-é-") { os.exit(34i32) }
 
+    // 39: a repeated class shares one range table entry; the DFA point table must be
+    // sized by the Class instructions, not by the range count.
+    let (word_nfa, word_nfa_error) = regex.nfa_compile(a, "\\w{3}", zero)
+    if word_nfa_error != ok { os.exit(39i32) }
+    let (word_dfa, word_dfa_error) = regex.dfa_from_nfa(a, word_nfa, 64usize)
+    if word_dfa_error != ok || !regex.dfa_run(word_dfa, "a_9") || regex.dfa_run(word_dfa, "a") { os.exit(39i32) }
+    let (class_nfa, class_nfa_error) = regex.nfa_compile(a, "[a-cx-z]{10}", zero)
+    if class_nfa_error != ok { os.exit(39i32) }
+    let (_, class_dfa_error) = regex.dfa_from_nfa(a, class_nfa, 256usize)
+    if class_dfa_error != ok { os.exit(39i32) }
+
     try io.print("text regex ok\n")
     ret ok
 }

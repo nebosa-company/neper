@@ -348,7 +348,19 @@ fn unigram(word: str, vocabulary: []const str, log_probability: []const f64, out
         j += 1usize
     }
     if n > 0usize && scratch[n] == none { ret (0usize, Unknown) }
+    if piece_count(scratch, n) > out.len { ret (0usize, TooSmall) }
     ret (collect(word, scratch, n, out), ok)
+}
+
+// The number of pieces a `from` chain describes; a caller must fit that many in `out`.
+fn piece_count(from: []const usize, n: usize) -> usize {
+    var count = 0usize
+    var j = n
+    while j > 0usize {
+        count += 1usize
+        j = from[j]
+    }
+    ret count
 }
 
 fn collect(word: str, from: []const usize, n: usize, out: []str) -> usize {
@@ -422,6 +434,7 @@ fn unigram_sample(word: str, vocabulary: []const str, log_probability: []const f
         scratch[j] = j - vocabulary[chosen].len
         j = scratch[j]
     }
+    if piece_count(scratch, n) > out.len { ret (0usize, TooSmall) }
     ret (collect(word, scratch, n, out), ok)
 }
 

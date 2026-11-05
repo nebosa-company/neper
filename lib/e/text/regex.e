@@ -1477,7 +1477,17 @@ fn dfa_from_nfa(a: *mem.Arena, n: Nfa, max_states: usize) -> (Dfa, err) {
         if prog.insts[pc].op == .WordB || prog.insts[pc].op == .NotWordB { ret (zero, Unsupported) }
         pc += 1usize
     }
-    let (points, points_error) = mem.alloc[u32](a, count * 2usize + prog.ranges.len + 4usize)
+    // A Class instruction writes two points per range immediate; one shared range table
+    // entry can be reached by several Class instructions, so sum the instructions.
+    var point_cap = 4usize
+    pc = 0usize
+    while pc < count {
+        let inst = prog.insts[pc]
+        if inst.op == .Char { point_cap += 2usize }
+        if inst.op == .Class { point_cap += usize(inst.y >> 1u32) * 2usize }
+        pc += 1usize
+    }
+    let (points, points_error) = mem.alloc[u32](a, point_cap)
     if points_error != ok { ret (zero, points_error) }
     let classes = dfa_points(prog, points) - 1usize
     let words = (count + 63usize) / 64usize

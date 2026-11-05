@@ -107,7 +107,7 @@ fn acquire(p: *Pool, w: u32, now: u64) -> (u32, Outcome, err) {
     while i < p.wait_len {
         let at_ = (p.wait_head + i) % p.waiters.len
         if p.waiters[at_] == w {
-            if now - p.waiter_since[at_] >= p.connection_timeout {
+            if p.connection_timeout != 0u64 && now >= p.waiter_since[at_] && now - p.waiter_since[at_] >= p.connection_timeout {
                 unqueue(p, w)
                 ret (NONE, .Timeout, ok)
             }
@@ -218,7 +218,7 @@ fn timeouts(p: *Pool, now: u64, out_waiters: []u32) -> usize {
     var i = 0usize
     while i < p.wait_len {
         let from = (p.wait_head + i) % p.waiters.len
-        if now - p.waiter_since[from] >= p.connection_timeout && n < out_waiters.len {
+        if p.connection_timeout != 0u64 && now >= p.waiter_since[from] && now - p.waiter_since[from] >= p.connection_timeout && n < out_waiters.len {
             out_waiters[n] = p.waiters[from]
             n += 1usize
         } else {

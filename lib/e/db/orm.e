@@ -262,6 +262,13 @@ fn check_key[T: type]() -> err {
     ret ok
 }
 
+// The primary-key column type that generates its own value per dialect.
+fn key_sql(d: migrate.Dialect) -> str {
+    if d == .Postgres { ret "BIGSERIAL" }
+    if d == .Mysql { ret "BIGINT AUTO_INCREMENT" }
+    ret "INTEGER"
+}
+
 // `CREATE TABLE IF NOT EXISTS` for `T`, the auto-migrate half: columns, types and the
 // primary key, derived from the struct. Answers the statement (built in the arena).
 fn create_sql[T: type](s: *Session, table: str) -> (str, err) {
@@ -277,8 +284,13 @@ fn create_sql[T: type](s: *Session, table: str) -> (str, err) {
         if !first { try str.push(&b, ", ") }
         try str.push(&b, f.name)
         try str.push(&b, " ")
-        try str.push(&b, type_sql(s.d, meta.kind[f.ty]()))
-        if first { try str.push(&b, " PRIMARY KEY") } else { try str.push(&b, " NOT NULL") }
+        if first {
+            try str.push(&b, key_sql(s.d))
+            try str.push(&b, " PRIMARY KEY")
+        } else {
+            try str.push(&b, type_sql(s.d, meta.kind[f.ty]()))
+            try str.push(&b, " NOT NULL")
+        }
         first = false
     }
     try str.push(&b, ")")
@@ -381,6 +393,10 @@ fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err 
 
 // UPDATE every column but `id` of the row with that `id`; `NotFound` when no row has it.
 fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err {
+    try check_key[T]()
+    var update_columns = 0usize
+    for f in meta.fields[T]() { update_columns += 1usize }
+    if update_columns < 2usize { ret Invalid }
     try h.before_save(row)
     try h.before_update(row)
     // Use the key after the mutable hooks, consistently with insert and delete.
@@ -433,6 +449,7 @@ fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err 
 
 // DELETE the row with this `id`; `NotFound` when none has it.
 fn delete[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err {
+    try check_key[T]()
     try h.before_delete(row)
     // A before-delete hook can redirect the row by changing its key.
     let (key, key_error) = key_of[T](row)

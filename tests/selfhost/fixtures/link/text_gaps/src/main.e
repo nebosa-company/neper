@@ -268,6 +268,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, n3_error) = utf8.encode_utf16("abc", true, wide[0..2usize])
     if n3_error != utf8.TooSmall { os.exit(26i32) }
 
+    // 27: unigram refuses an output slice too short for the segmentation it found.
+    var uni_out: [1]str = zero
+    var uni_scores: [4]f64 = zero
+    var uni_scratch: [4]usize = zero
+    var uni_vocab: [3]str = zero
+    uni_vocab[0] = "a"
+    uni_vocab[1] = "b"
+    uni_vocab[2] = "c"
+    var uni_lp: [3]f64 = zero
+    let (uni_n, uni_error) = tokenize.unigram("abc", uni_vocab[0..], uni_lp[0..], uni_out[0..], uni_scores[0..], uni_scratch[0..])
+    if uni_error != tokenize.TooSmall || uni_n != 0usize { os.exit(27i32) }
+
+    // 28: bitap reports the start of the match, not `end - length`, when an edit
+    // changes the length.
+    let (bi, bi_found) = search.bitap("xabc", "abcd", 1u32)
+    if !bi_found || bi != 1usize { os.exit(28i32) }
+
+    // 29: duplicate patterns are refused rather than silently reported once.
+    var dup: [2]str = zero
+    dup[0] = "he"
+    dup[1] = "he"
+    let (_, dup_error) = search.aho_corasick_build(a, dup[0..])
+    if dup_error != search.Invalid { os.exit(29i32) }
+
     try io.print("text gaps ok\n")
     ret ok
 }

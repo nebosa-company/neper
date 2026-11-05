@@ -14,6 +14,7 @@ use e.mem
 type Automaton = struct { next: []u32, fail: []u32, output: []u32, length: []u32, states: usize }
 error TooLong
 error TooSmall
+error Invalid
 
 // `table[i]` is the length of the longest proper prefix of `pattern[..i+1]` that is
 // also its suffix; `table.len` must be at least `pattern.len`.
@@ -217,7 +218,8 @@ fn aho_corasick_build(a: *mem.Arena, patterns: []const str) -> (Automaton, err) 
             state = usize(next[slot])
             k += 1usize
         }
-        if patterns[p].len > 0usize && output[state] == 4294967295u32 {
+        if patterns[p].len > 0usize {
+            if output[state] != 4294967295u32 { ret (zero, Invalid) }
             output[state] = u32(p)
             length[state] = u32(patterns[p].len)
         }
@@ -304,6 +306,38 @@ fn z_array(s: str, z: []usize) -> err {
 
 // Shift-Or (Wu-Manber) allowing up to `errors` edits -- substitutions, insertions or
 // deletions; the pattern is at most 64 bytes and `errors` at most 63.
+// Whether `x` is within `errors` edits of `pattern` (whose length is at most 64).
+fn within_edits(x: str, pattern: str, errors: u32) -> bool {
+    let m = pattern.len
+    var previous: [65]usize = zero
+    var current: [65]usize = zero
+    var j = 0usize
+    while j <= m {
+        previous[j] = j
+        j += 1usize
+    }
+    var i = 0usize
+    while i < x.len {
+        current[0usize] = i + 1usize
+        j = 1usize
+        while j <= m {
+            var best = previous[j - 1usize]
+            if x[i] != pattern[j - 1usize] { best += 1usize }
+            if previous[j] + 1usize < best { best = previous[j] + 1usize }
+            if current[j - 1usize] + 1usize < best { best = current[j - 1usize] + 1usize }
+            current[j] = best
+            j += 1usize
+        }
+        j = 0usize
+        while j <= m {
+            previous[j] = current[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret previous[m] <= usize(errors)
+}
+
 fn bitap(text: str, pattern: str, errors: u32) -> (usize, bool) {
     let m = pattern.len
     if m == 0usize { ret (0usize, true) }
@@ -341,6 +375,19 @@ fn bitap(text: str, pattern: str, errors: u32) -> (usize, bool) {
         if (rows[levels - 1usize] & accept) == 0u64 {
             var start = 0usize
             if i + 1usize > m { start = i + 1usize - m }
+            // An edit changes the window length, so the match start is not `end - m`;
+            // take the leftmost window ending here that stays within the budget.
+            var lo = 0usize
+            let reach = m + usize(errors)
+            if i + 1usize > reach { lo = i + 1usize - reach }
+            // the shortest window within budget is m - errors bytes long
+            var last = i + 1usize
+            if m > usize(errors) { last = i + 1usize - (m - usize(errors)) }
+            var candidate = lo
+            while candidate < i + 1usize && candidate <= last {
+                if within_edits(text[candidate..i + 1usize], pattern, errors) { ret (candidate, true) }
+                candidate += 1usize
+            }
             ret (start, true)
         }
         i += 1usize

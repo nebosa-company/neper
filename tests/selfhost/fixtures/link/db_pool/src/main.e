@@ -248,6 +248,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, x4) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..0usize], since[..], config(0usize, 4usize, 0u64, 0u64, 60u64))
     if x1 != pool.Invalid || x2 != pool.Invalid || x3 != pool.TooSmall || x4 != pool.TooSmall { os.exit(7i32) }
 
+    // 9: a zero connection_timeout disables expiry, and a clock that steps back must
+    // not underflow the unsigned wait.
+    let (p8, pe8) = pool.pool(handle[..], state[..], created[..], used[..], uses[..], waiters[..], since[..], config(0usize, 1usize, 0u64, 0u64, 0u64))
+    if pe8 != ok { os.exit(9i32) }
+    var pz = p8
+    let (iz, _, _) = pool.acquire(&pz, 1u32, 50u64)
+    if pool.attach(&pz, iz, 11u64, 50u64) != ok { os.exit(9i32) }
+    let (_, held, held_error) = pool.acquire(&pz, 1u32, 50u64)
+    let (_, qa, qae) = pool.acquire(&pz, 2u32, 50u64)
+    if held_error != ok || held != .Acquired || qae != ok || qa != .Queued { os.exit(9i32) }
+    let (_, qb, qbe) = pool.acquire(&pz, 2u32, 100000u64)
+    var expired: [8]u32 = zero
+    let gone = pool.timeouts(&pz, 100000u64, expired[..])
+    if qbe != ok || qb != .Queued || gone != 0usize { os.exit(9i32) }
+    let (_, qc, qce) = pool.acquire(&pz, 2u32, 0u64)
+    if qce != ok || qc != .Queued { os.exit(9i32) }
+    let (served, release_error) = pool.release(&pz, 0u32, 100001u64, false)
+    if release_error != ok || served != 2u32 { os.exit(9i32) }
+
     try io.print("db pool ok\n")
     ret ok
 }

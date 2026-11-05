@@ -18,6 +18,7 @@ type Post = struct { id: i64, user_id: i64, title: str, views: u32 }
 type Keyless = struct { name: str }
 type Inner = struct { x: i32 }
 type Odd = struct { id: i64, inner: Inner }
+type OnlyId = struct { id: i64 }
 
 error Veto
 
@@ -109,11 +110,11 @@ fn checks_ddl(a: *mem.Arena) -> i32 {
     var pg = orm.session(&c, a, .Postgres)
     let (pg_sql, pg_error) = orm.create_sql[Post](&pg, "posts")
     if pg_error != ok { ret 13i32 }
-    if !str.eq(pg_sql, "CREATE TABLE IF NOT EXISTS posts (id BIGINT PRIMARY KEY, user_id BIGINT NOT NULL, title TEXT NOT NULL, views BIGINT NOT NULL)") { ret 14i32 }
+    if !str.eq(pg_sql, "CREATE TABLE IF NOT EXISTS posts (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, title TEXT NOT NULL, views BIGINT NOT NULL)") { ret 14i32 }
     var my = orm.session(&c, a, .Mysql)
     let (my_sql, my_error) = orm.create_sql[User](&my, "users")
     if my_error != ok { ret 15i32 }
-    if !str.eq(my_sql, "CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY, name TEXT NOT NULL, age BIGINT NOT NULL, score DOUBLE NOT NULL, active TINYINT(1) NOT NULL)") { ret 16i32 }
+    if !str.eq(my_sql, "CREATE TABLE IF NOT EXISTS users (id BIGINT AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, age BIGINT NOT NULL, score DOUBLE NOT NULL, active TINYINT(1) NOT NULL)") { ret 16i32 }
     let (keyless_sql, keyless_error) = orm.create_sql[Keyless](&s, "k")
     if keyless_error != orm.NoKey || keyless_sql.len != 0usize { ret 17i32 }
     let (odd_sql, odd_error) = orm.create_sql[Odd](&s, "o")
@@ -230,6 +231,18 @@ fn checks_hooks(a: *mem.Arena) -> i32 {
     if orm.delete[User](&s, "users", &deleted, &redirecting) != ok || deleted.id != 99i64 { ret 77i32 }
     let (found_deleted, deleted_error) = orm.find[User](&s, "users", 99i64, &keyed_back)
     if deleted_error != ok || found_deleted { ret 78i32 }
+    // Update and delete validate the row shape too: a nested field would be written as
+    // NULL, a struct with no key has no row, and an id-only struct has no SET columns.
+    var odd_hooks: orm.Hooks[Odd] = zero
+    var odd_row = Odd { id: 1i64, inner: Inner { x: 2i32 } }
+    if orm.update[Odd](&s, "odd", &odd_row, &odd_hooks) != orm.Invalid { ret 102i32 }
+    if orm.delete[Odd](&s, "odd", &odd_row, &odd_hooks) != orm.Invalid { ret 102i32 }
+    var keyless_hooks: orm.Hooks[Keyless] = zero
+    var keyless_row = Keyless { name: "k" }
+    if orm.update[Keyless](&s, "k", &keyless_row, &keyless_hooks) != orm.NoKey { ret 103i32 }
+    var only_hooks: orm.Hooks[OnlyId] = zero
+    var only_row = OnlyId { id: 1i64 }
+    if orm.update[OnlyId](&s, "only", &only_row, &only_hooks) != orm.Invalid { ret 104i32 }
     if db.close(&c) != ok { ret 72i32 }
     ret 0i32
 }
