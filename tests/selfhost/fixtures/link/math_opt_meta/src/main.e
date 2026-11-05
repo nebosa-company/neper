@@ -55,6 +55,14 @@ fn tiny(ctx: *Nothing, r: *rand.Pcg64, x: []const f64, out: []f64) {
     }
 }
 
+// A move that always returns the same point, so it is banned on the second iteration.
+fn pinned_move(ctx: *Nothing, r: *rand.Pcg64, x: []const f64, out: []f64) {
+    out[0usize] = 11.0f64
+    if x.len > 1usize { out[1usize] = 0.0f64 }
+}
+
+fn first_coord(ctx: *Nothing, x: []const f64) -> f64 { ret x[0usize] }
+
 fn near(x: f64, want: f64, eps: f64) -> bool {
     var d = x - want
     if d < 0.0f64 { d = 0.0f64 - d }
@@ -97,6 +105,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(x[0usize], 0.0f64, 0.05f64) || !near(x[1usize], 0.0f64, 0.05f64) || tb.value > 0.5f64 { os.exit(3i32) }
     let (_, tb_invalid) = meta.tabu[Nothing](&nothing, rastrigin, wide, &r, x[..], 0usize, 10usize, 0.05f64, 10u32, scratch[..])
     if tb_invalid != meta.Invalid { os.exit(3i32) }
+    // #130: when no candidate is admissible (the same move is banned), x still ends
+    // at the best point seen, not at the current one.
+    var tx: [2]f64 = zero
+    tx[0usize] = 10.0f64
+    tx[1usize] = 0.0f64
+    let (no_move, no_move_error) = meta.tabu[Nothing](&nothing, first_coord, pinned_move, &r, tx[..], 1usize, 1usize, 0.0f64, 5u32, scratch[..])
+    if no_move_error != ok { os.exit(38i32) }
+    if tx[0usize] != 10.0f64 || tx[1usize] != 0.0f64 || no_move.value != 10.0f64 { os.exit(39i32) }
 
     // 4: population methods on Rosenbrock in [-2, 2]^2.
     var low: [2]f64 = zero

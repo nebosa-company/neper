@@ -65,6 +65,9 @@ fn mk(p: *Pool, kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64) -> u32 {
 }
 
 fn abs64(v: i64) -> i64 {
+    // |i64::MIN| is not representable; saturate so callers' size guards fire
+    // instead of trapping.
+    if v == 0i64 - 9223372036854775807i64 - 1i64 { ret 9223372036854775807i64 }
     if v < 0i64 { ret 0i64 - v }
     ret v
 }
@@ -81,6 +84,10 @@ fn gcd64(x: i64, y: i64) -> i64 {
 }
 
 fn q(n: i64, d: i64) -> Q {
+    // A zero denominator is not a rational. `i64::MIN` cannot be negated, so a
+    // canonical positive denominator is impossible for it: both answer the
+    // documented zero instead of trapping.
+    if d == 0i64 || n == 0i64 - 9223372036854775807i64 - 1i64 || d == 0i64 - 9223372036854775807i64 - 1i64 { ret Q{ n: 0i64, d: 1i64 } }
     var nn = n
     var dd = d
     if dd < 0i64 {
@@ -782,6 +789,10 @@ fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool) {
     if !has(p, e, s) { ret (mul(p, e, x), true) }
     let (poly, is_poly) = poly_of(p, e, s)
     if is_poly {
+        // Poly.c has 20 slots: the antiderivative of degree 19 would index slot 20.
+        if poly.deg >= 19i32 { ret (0u32, false) }
+        // Poly.c has 20 slots: the antiderivative of degree 19 would index slot 20.
+
         var anti = poly_zero()
         var k = 0i32
         while k <= poly.deg {
@@ -813,7 +824,7 @@ fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool) {
         // polynomial times exp, sin or cos of a linear argument, by parts
         let (pl, plg) = poly_of(p, n.a, s)
         let fb = p.nodes[usize(n.b)]
-        if plg && fb.kind == K_FUN && fb.f <= F_EXP {
+        if plg && fb.kind == K_FUN && (fb.f == F_SIN || fb.f == F_COS || fb.f == F_EXP) {
             let (lin, ling) = poly_of(p, fb.a, s)
             if ling && lin.deg == 1i32 {
                 let (r, g) = by_parts(p, pl, fb.f, fb.a, lin.c[1], x)
@@ -822,7 +833,7 @@ fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool) {
         }
         let (pr, prg) = poly_of(p, n.b, s)
         let fa = p.nodes[usize(n.a)]
-        if prg && fa.kind == K_FUN && fa.f <= F_EXP {
+        if prg && fa.kind == K_FUN && (fa.f == F_SIN || fa.f == F_COS || fa.f == F_EXP) {
             let (lin, ling) = poly_of(p, fa.a, s)
             if ling && lin.deg == 1i32 {
                 let (r, g) = by_parts(p, pr, fa.f, fa.a, lin.c[1], x)
@@ -1088,3 +1099,6 @@ fn solve(p: *Pool, e: u32, s: u32, out: []u32) -> (usize, err) {
     if p.failed { ret (n, TooLarge) }
     ret (n, ok)
 }
+
+
+

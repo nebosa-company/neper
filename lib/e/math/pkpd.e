@@ -143,7 +143,9 @@ fn nca(times: []const f64, values: []const f64, first: usize, out: *Nca) -> err 
     out.tmax = p.time
     out.lambda_z = rate
     out.half_life = half_life(rate)
-    out.auc_inf = area + values[n - 1usize] / rate
+    // A flat or rising terminal window does not extrapolate to infinity.
+    // A flat or rising terminal window does not extrapolate to infinity.
+    if rate <= 0.0f64 { out.auc_inf = 0.0f64 / 0.0f64 } else { out.auc_inf = area + values[n - 1usize] / rate }
     out.mrt = 0.0f64
     if area > 0.0f64 { out.mrt = moment / area }
     ret ok
@@ -220,3 +222,5 @@ fn michaelis_menten(data: *Data, parameters: []f64, scale: f64, tolerance: f64, 
     let (result, fit_error) = opt.nelder_mead[Data](data, michaelis_menten_sse, parameters, scale, tolerance, max_iterations, scratch)
     ret (Fit { value: result.value, iterations: result.iterations, converged: result.converged }, fit_error)
 }
+
+

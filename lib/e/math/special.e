@@ -17,6 +17,17 @@ fn infinity() -> f64 { ret mem.bitcast[f64](9218868437227405312u64) }
 
 fn negative_infinity() -> f64 { ret 0.0f64 - infinity() }
 
+// The term count a series/continued fraction needs grows like sqrt(parameter); a fixed
+// 1000 silently truncates for large degrees of freedom.
+fn iteration_cap(parameter: f64) -> usize {
+    var cap = 1000usize
+    if parameter > 0.0f64 {
+        let wanted = 10.0f64 + 12.0f64 * math.sqrt[f64](parameter)
+        if wanted > 1000.0f64 && wanted < 1000000000.0f64 { cap = usize(wanted) }
+    }
+    ret cap
+}
+
 // ln Γ(x) for x > 0.
 fn lgamma(x: f64) -> f64 {
     if x <= 0.0f64 { ret nan() }
@@ -113,7 +124,7 @@ fn gamma_p(a: f64, x: f64) -> f64 {
         var sum = 1.0f64 / a
         var del = sum
         var i = 0usize
-        while i < 1000usize {
+        while i < iteration_cap(a) {
             ap += 1.0f64
             del = del * x / ap
             sum += del
@@ -141,7 +152,7 @@ fn gamma_q(a: f64, x: f64) -> f64 {
     var h = d
     var i = 1.0f64
     var n = 0usize
-    while n < 1000usize {
+    while n < iteration_cap(a) {
         let an = 0.0f64 - i * (i - a)
         b += 2.0f64
         d = an * d + b
@@ -180,7 +191,7 @@ fn beta_fraction(a: f64, b: f64, x: f64) -> f64 {
     var h = d
     var m = 1.0f64
     var n = 0usize
-    while n < 1000usize {
+    while n < iteration_cap(a + b) {
         let m2 = 2.0f64 * m
         var aa = m * (b - m) * x / ((qam + m2) * (a + m2))
         d = 1.0f64 + aa * d
@@ -263,3 +274,5 @@ fn choose(n: f64, k: f64) -> f64 {
     }
     ret math.floor[f64](0.5f64 + math.exp[f64](lgamma(n + 1.0f64) - lgamma(k + 1.0f64) - lgamma(n - k + 1.0f64)))
 }
+
+

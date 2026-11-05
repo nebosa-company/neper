@@ -50,6 +50,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(special.beta_i(10.0f64, 2.0f64, 0.95f64), 0.8981054088575682f64, loose) { os.exit(3i32) }
     if special.beta_i(2.0f64, 3.0f64, 0.0f64) != 0.0f64 || special.beta_i(2.0f64, 3.0f64, 1.0f64) != 1.0f64 || !is_nan(special.beta_i(2.0f64, 3.0f64, 1.5f64)) { os.exit(3i32) }
     if special.gamma_p(2.0f64, infinity) != 1.0f64 || special.gamma_q(2.0f64, infinity) != 0.0f64 || special.gamma_p(infinity, 2.0f64) != 0.0f64 || special.gamma_q(infinity, 2.0f64) != 1.0f64 { os.exit(3i32) }
+    // #130: the series must still converge at a large parameter (cap scales with sqrt(a)).
+    if !near(special.gamma_p(100000.0f64, 100000.0f64), 0.500419f64, 0.00015f64) { os.exit(53i32) }
+    if !near(special.gamma_q(100000.0f64, 100000.0f64), 0.499581f64, 0.00015f64) { os.exit(54i32) }
 
     // 4: distribution functions.
     if !near(special.normal_cdf(1.96f64), 0.9750021048517795f64, loose) || !near(special.normal_cdf(0.0f64), 0.5f64, tight) { os.exit(4i32) }

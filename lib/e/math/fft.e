@@ -228,7 +228,7 @@ fn ntt_transform(values: []u64, inverse: bool) {
 // written to `out`; `scratch.len >= n`.
 fn convolve_mod(x: []const u64, y: []const u64, out: []u64, scratch: []u64) -> err {
     let n = x.len
-    if y.len != n || out.len < n || !is_power_of_two(n) { ret Invalid }
+    if y.len != n || out.len < n || !is_power_of_two(n) || n > 8388608usize { ret Invalid }
     if scratch.len < n { ret TooSmall }
     var i = 0usize
     while i < n {

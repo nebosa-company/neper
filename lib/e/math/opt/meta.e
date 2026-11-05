@@ -157,7 +157,10 @@ fn tabu[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, neighbor: fn(*Ctx
             }
             c += 1usize
         }
-        if !found { ret (Result { value: best_value, iterations: iteration }, ok) }
+        if !found {
+            copy(x, best)
+            ret (Result { value: best_value, iterations: iteration }, ok)
+        }
         copy(list[head * n..(head + 1usize) * n], x)
         head = (head + 1usize) % tenure
         if stored < tenure { stored += 1usize }
@@ -434,3 +437,5 @@ fn ant_colony(r: *rand.Pcg64, distance: []const f64, n: usize, ants: usize, alph
     }
     ret (best_length, ok)
 }
+
+

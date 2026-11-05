@@ -47,6 +47,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(report.lambda_z, 0.6931471805599454f64, 1.0e-9f64) { os.exit(3i32) }
     if !near(report.half_life, 1.0f64, 1.0e-9f64) { os.exit(3i32) }
     if !near(report.auc_inf, 14.964184400555602f64, 1.0e-9f64) { os.exit(3i32) }
+    // #130: a flat terminal window has rate 0, so auc_inf is NaN (not a negative area).
+    var flat_times: [4]f64 = zero
+    flat_times[0usize] = 0.0f64
+    flat_times[1usize] = 1.0f64
+    flat_times[2usize] = 2.0f64
+    flat_times[3usize] = 3.0f64
+    var flat_conc: [4]f64 = zero
+    flat_conc[0usize] = 2.0f64
+    flat_conc[1usize] = 2.0f64
+    flat_conc[2usize] = 2.0f64
+    flat_conc[3usize] = 2.0f64
+    var flat_report: pkpd.Nca = zero
+    if pkpd.nca(flat_times[..], flat_conc[..], 1usize, &flat_report) != ok { os.exit(62i32) }
+    if flat_report.auc_inf > 0.0f64 { os.exit(63i32) }
     if !near(report.mrt, 1.0666666666666667f64, 1.0e-9f64) { os.exit(3i32) }
     if !near(report.cmax, 10.0f64, 1.0e-12f64) || !near(report.tmax, 0.0f64, 1.0e-12f64) { os.exit(3i32) }
     let (rate, rate_error) = pkpd.terminal_rate(times[..], conc[..], 2usize)

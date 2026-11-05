@@ -267,6 +267,18 @@ fn vectors_7() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #1604: zero denominators and i64::MIN must not trap; both canonicalise
+    // to the documented zero.
+    let (sp0, sp0_error) = sym.pool(a, 64usize)
+    if sp0_error != ok { os.exit(30i32) }
+    var sp = sp0
+    let min_i64 = 0i64 - 9223372036854775807i64 - 1i64
+    let zero_den = sym.num(&sp, 5i64, 0i64)
+    let min_den = sym.num(&sp, 1i64, min_i64)
+    let min_num = sym.num(&sp, min_i64, 1i64)
+    if sp.nodes[usize(zero_den)].n != 0i64 || sp.nodes[usize(zero_den)].d != 1i64 { os.exit(31i32) }
+    if sp.nodes[usize(min_den)].n != 0i64 || sp.nodes[usize(min_den)].d != 1i64 { os.exit(32i32) }
+    if sp.nodes[usize(min_num)].n != 0i64 || sp.nodes[usize(min_num)].d != 1i64 { os.exit(33i32) }
     let r0 = run_chunk(a, vectors_0())
     if r0 != 0u32 { os.exit(1i32) }
     let r1 = run_chunk(a, vectors_1())
@@ -298,6 +310,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad2) = sym.parse(&p, "foo(x")
     if bad2 != sym.Syntax { os.exit(94i32) }
     if sym.isqrt(9223372036854775807i64) != 3037000499i64 { os.exit(95i32) }
+    // #130: a polynomial times tan is either refused or integrated correctly; it must
+    // not silently come back as the antiderivative of x*cos(x).
+    let (pl2, pe2) = sym.pool(a, 256usize)
+    if pe2 != ok { os.exit(90i32) }
+    var p2 = pl2
+    let (x_symbol, x_ok) = sym.parse(&p2, "x")
+    let (tan_expr, tan_ok) = sym.parse(&p2, "x*tan(x)")
+    let (tan_anti, tan_good) = sym.integrate(&p2, tan_expr, x_symbol)
+    if x_ok != ok || tan_ok != ok { os.exit(96i32) }
+    if tan_good {
+        let tan_derived = sym.diff(&p2, tan_anti, x_symbol)
+        var tan_names: [1]str = zero
+        tan_names[0usize] = "x"
+        var tan_values: [1]f64 = zero
+        tan_values[0usize] = 0.8f64
+        let got = sym.eval(&p2, tan_derived, tan_names[..], tan_values[..])
+        let want = sym.eval(&p2, tan_expr, tan_names[..], tan_values[..])
+        var d = got - want
+        if d < 0.0f64 { d = 0.0f64 - d }
+        if d > 0.000001f64 { os.exit(96i32) }
+    }
+    let (deg_expr, deg_ok) = sym.parse(&p2, "x^19")
+    let (_, deg_good) = sym.integrate(&p2, deg_expr, x_symbol)
+    if deg_ok != ok || deg_good { os.exit(97i32) }
     try io.print("math sym ok")
     ret ok
 }

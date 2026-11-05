@@ -812,6 +812,8 @@ fn solve(p: *const Problem, o: Options, x: []f64, scratch: []f64, slots: []usize
     var open = 0usize
     var limited = false
     var leftover = infinity()
+    // The least open bound when the gap test ends the search (the popped node's bound).
+    var gap_bound = infinity()
     var node_ready = true
     var node_value = root
     var searching = true
@@ -893,7 +895,9 @@ fn solve(p: *const Problem, o: Options, x: []f64, scratch: []f64, slots: []usize
                 var margin = 0.000000001f64 * (1.0f64 + math.abs[f64](incumbent))
                 if have && o.gap * math.abs[f64](incumbent) > margin { margin = o.gap * math.abs[f64](incumbent) }
                 if have && bound >= incumbent - margin {
-                    // Every open node is at least this bound: done.
+                    // Every open node is at least this bound: done, but that bound is
+                    // still the proven one, so keep it for Result.bound.
+                    gap_bound = bound
                     open = 0usize
                     searching = false
                 } else if result.nodes >= o.node_limit {
@@ -930,6 +934,7 @@ fn solve(p: *const Problem, o: Options, x: []f64, scratch: []f64, slots: []usize
 
     // Best bound: the incumbent or the least open node.
     var lowest = leftover
+    if gap_bound < lowest { lowest = gap_bound }
     var k = 0usize
     while k < open {
         if pool[k * stride] < lowest { lowest = pool[k * stride] }
