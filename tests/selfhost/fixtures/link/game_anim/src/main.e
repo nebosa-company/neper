@@ -134,6 +134,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if anim.skin_linear_blend(matrices[..], verts[..], indices[..], weights[..], lbs[..]) != anim.Invalid { os.exit(5i32) }
     indices[9usize] = 1u32
     if anim.skin_linear_blend(matrices[..], verts[..], indices[..], weights[..], lbs[..6usize]) != anim.TooSmall { os.exit(5i32) }
+    // 790: packed positions must be whole triples; a short or trailing value is Invalid.
+    if anim.skin_linear_blend(matrices[..], verts[0usize..0usize], indices[..], weights[..], lbs[..]) != ok { os.exit(7i32) }
+    if anim.skin_linear_blend(matrices[..], verts[0usize..1usize], indices[..], weights[..], lbs[..]) != anim.Invalid { os.exit(7i32) }
+    if anim.skin_linear_blend(matrices[..], verts[0usize..2usize], indices[..], weights[..], lbs[..]) != anim.Invalid { os.exit(7i32) }
+    if anim.skin_linear_blend(matrices[..], verts[0usize..4usize], indices[..], weights[..], lbs[..]) != anim.Invalid { os.exit(7i32) }
 
     // 6: dual quaternion skinning matches the numpy replica and equals LBS on one bone.
     var bones: [2]anim.DualQuat = zero
@@ -145,6 +150,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near3(anim.get(dqs[..], 0usize), lbs[0usize], lbs[1usize], lbs[2usize], 0.000000000001f64) { os.exit(6i32) }
     if !near3(anim.get(dqs[..], 1usize), 1.3845529238523715f64, 2.2122265178914904f64, 0.5474663909625305f64, 0.000000001f64) { os.exit(6i32) }
     if !near3(anim.get(dqs[..], 2usize), 0.052758116846297956f64, 2.240144342743946f64, 0.7180032821070497f64, 0.000000001f64) { os.exit(6i32) }
+    // 790: the dual-quaternion path rejects the same malformed triples.
+    if anim.skin_dual_quaternion(bones[..], verts[0usize..0usize], indices[..], weights[..], dqs[..]) != ok { os.exit(7i32) }
+    if anim.skin_dual_quaternion(bones[..], verts[0usize..1usize], indices[..], weights[..], dqs[..]) != anim.Invalid { os.exit(7i32) }
+    if anim.skin_dual_quaternion(bones[..], verts[0usize..2usize], indices[..], weights[..], dqs[..]) != anim.Invalid { os.exit(7i32) }
+    if anim.skin_dual_quaternion(bones[..], verts[0usize..4usize], indices[..], weights[..], dqs[..]) != anim.Invalid { os.exit(7i32) }
     // A blend of the two bones in the antipodal sign is the same rigid motion.
     bones[1usize] = anim.dq_scale(bones[1usize], 0.0f64 - 1.0f64)
     if anim.skin_dual_quaternion(bones[..], verts[..], indices[..], weights[..], dqs[..]) != ok { os.exit(6i32) }

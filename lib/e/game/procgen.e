@@ -236,8 +236,9 @@ fn nth_bit(v: u64, k: u64) -> u32 {
     ret bytes.trailing_zeros[u64](rest)
 }
 
-// `domains` and `out` are one per cell; `stack` is the propagation stack, and a cell may
-// sit on it once per shrink, so `4 * w * h` entries are always enough.
+// `domains` and `out` are one per cell; `stack` is the propagation stack, and a cell is
+// pending at most once (a re-shrink updates the queued cell rather than enqueuing it again),
+// so `w * h` entries are enough.
 fn wave_function_collapse(allow: []const u64, tiles: usize, w: usize, h: usize, r: *rand.Pcg64, domains: []u64, stack: []u32, out: []u8) -> err {
     let cells = w * h
     if tiles == 0usize || tiles > 64usize || allow.len < tiles * 4usize { ret Invalid }
@@ -304,9 +305,19 @@ fn wave_function_collapse(allow: []const u64, tiles: usize, w: usize, h: usize, 
                 if shrunk == 0u64 { ret Invalid }
                 if shrunk != domains[n] {
                     domains[n] = shrunk
-                    if depth == stack.len { ret TooSmall }
-                    stack[depth] = u32(n)
-                    depth += 1usize
+                    // a pending cell already sees the latest domain when it is popped
+                    var queued = false
+                    var q = 0usize
+                    while q < depth {
+                        if usize(stack[q]) == n { queued = true
+                            break }
+                        q += 1usize
+                    }
+                    if !queued {
+                        if depth == stack.len { ret TooSmall }
+                        stack[depth] = u32(n)
+                        depth += 1usize
+                    }
                 }
             }
         }

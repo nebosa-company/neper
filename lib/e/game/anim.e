@@ -138,6 +138,7 @@ fn dq_blend(bones: []const DualQuat, indices: []const u32, weights: []const f64)
 // Dual quaternion skinning: four `indices`/`weights` per vertex, positions in and out
 // as triples. Rigid blending -- no candy-wrapper collapse, a slight bulge on twists.
 fn skin_dual_quaternion(bones: []const DualQuat, positions: []const f64, indices: []const u32, weights: []const f64, out: []f64) -> err {
+    if positions.len % 3usize != 0usize { ret Invalid }
     let n = positions.len / 3usize
     if out.len < 3usize * n || indices.len < 4usize * n || weights.len < 4usize * n { ret TooSmall }
     var i = 0usize
@@ -162,6 +163,7 @@ fn transform_affine(m: []const f64, v: Vec3) -> Vec3 {
 // the last column the translation): the weighted sum of each bone's image of the
 // vertex. A 4 x 4 matrix with an affine last row is the same twelve values first.
 fn skin_linear_blend(bones: []const f64, positions: []const f64, indices: []const u32, weights: []const f64, out: []f64) -> err {
+    if positions.len % 3usize != 0usize { ret Invalid }
     let n = positions.len / 3usize
     let bone_count = bones.len / 12usize
     if out.len < 3usize * n || indices.len < 4usize * n || weights.len < 4usize * n { ret TooSmall }

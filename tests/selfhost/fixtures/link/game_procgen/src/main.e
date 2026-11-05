@@ -194,7 +194,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         t += 1usize
     }
     var domains: [64]u64 = zero
-    var stack: [256]u32 = zero
+    // w * h, the documented minimum now that a cell is pending at most once
+    var stack: [64]u32 = zero
     var grid: [64]u8 = zero
     var seed = 0usize
     while seed < 5usize {
@@ -230,6 +231,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var r2 = rand.pcg64(1u64, 0u64)
     if pg.wave_function_collapse(bad[..], 2usize, 3usize, 1usize, &r2, domains[..], stack[..], grid[..]) != pg.Invalid { os.exit(8i32) }
     if pg.wave_function_collapse(bad[..], 65usize, 3usize, 1usize, &r2, domains[..], stack[..], grid[..]) != pg.Invalid { os.exit(8i32) }
+
+    // 792: a cell can shrink more than once while queued; `w * h` stack entries still suffice.
+    var many_allow: [256]u64 = zero
+    t = 0usize
+    while t < 64usize {
+        var mask = 0u64
+        var u = 0usize
+        while u < 64usize {
+            if u + 1usize >= t && u <= t + 1usize { mask = mask | (1u64 << u32(u)) }
+            u += 1usize
+        }
+        many_allow[t * 4usize] = mask
+        many_allow[t * 4usize + 1usize] = mask
+        many_allow[t * 4usize + 2usize] = mask
+        many_allow[t * 4usize + 3usize] = mask
+        t += 1usize
+    }
+    var many_domains: [256]u64 = zero
+    var many_stack: [256]u32 = zero
+    var many_grid: [256]u8 = zero
+    var many_seed = 0usize
+    while many_seed < 32usize {
+        var many_r = rand.pcg64(1000u64 + u64(many_seed), 9u64)
+        if pg.wave_function_collapse(many_allow[..], 64usize, 16usize, 16usize, &many_r, many_domains[..], many_stack[..], many_grid[..]) != ok { os.exit(9i32) }
+        many_seed += 1usize
+    }
 
     try io.print("game procgen ok\n")
     ret ok
