@@ -466,6 +466,30 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
     let (root, has_root) = widget.root_of(runtime)
     if !has_root { ret (zero, Invalid) }
     let count = widget.element_count(runtime)
+    // A canvas that draws content of its own (a page) answers that document's tree in this pre-pass, so its nodes can
+    // be appended to the same flat tree. `tree_index` maps a slot to its tree, `count` meaning none.
+    let (trees, trees_error) = mem.alloc[widget.A11yTree](a, count)
+    if trees_error != ok { ret (zero, trees_error) }
+    let (tree_index, tree_index_error) = mem.alloc[usize](a, count)
+    if tree_index_error != ok { ret (zero, tree_index_error) }
+    var content_count = 0usize
+    var content_nodes = 0usize
+    var probe_slot = 0usize
+    while probe_slot < count {
+        tree_index[probe_slot] = count
+        let (summary, live) = widget.summary_at(runtime, probe_slot)
+        if live && !hidden_at(runtime, probe_slot) && summary.has_semantics && mem.address_of(summary.semantics.content.ctx) != 0usize {
+            let (sub, sub_error) = summary.semantics.content.build(summary.semantics.content.ctx, a)
+            if sub_error != ok { ret (zero, sub_error) }
+            if sub.nodes.len > 0usize {
+                tree_index[probe_slot] = content_count
+                trees[content_count] = sub
+                content_count += 1usize
+                content_nodes += sub.nodes.len
+            }
+        }
+        probe_slot += 1usize
+    }
     var has_promotions = false
     var probe = 0usize
     while probe < count {
@@ -474,7 +498,7 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
         probe += 1usize
     }
     // One node per live element, in slot order; a table from slot to node index.
-    let (nodes, nodes_error) = mem.alloc[Node](a, count)
+    let (nodes, nodes_error) = mem.alloc[Node](a, count + content_nodes)
     if nodes_error != ok { ret (zero, nodes_error) }
     let (index_of, index_error) = mem.alloc[usize](a, count)
     if index_error != ok { ret (zero, index_error) }
@@ -631,6 +655,14 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 child_slot = child.next_sibling
             }
             node.children = children[0usize..filled]
+            // The canvas's own content stands under it in place of the canvas leaf.
+            let content_at = tree_index[slot]
+            if content_at < content_count {
+                let (content_kids, content_error) = mem.alloc[Id](a, 1usize)
+                if content_error != ok { ret (zero, content_error) }
+                content_kids[0] = Id { slot: trees[content_at].nodes[0usize].slot, generation: 0u32 }
+                node.children = content_kids[0usize..1usize]
+            }
             index_of[slot] = produced
             if has_promotions { promote[produced] = summary.has_semantics && summary.semantics.promote_actions }
             nodes[produced] = node
@@ -643,12 +675,70 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
         let promotion_error = promote_actions(a, nodes[0usize..produced], promote[0usize..produced])
         if promotion_error != ok { ret (zero, promotion_error) }
     }
+    // The content nodes follow the widget nodes; the parent's child list already names their root.
+    var written = produced
+    var tree_at = 0usize
+    while tree_at < content_count {
+        let append_error = fill_content(a, trees[tree_at], nodes[0usize..count + content_nodes], written)
+        if append_error != ok { ret (zero, append_error) }
+        written += trees[tree_at].nodes.len
+        tree_at += 1usize
+    }
+    produced = written
     ret (Tree { root: root, nodes: nodes[0usize..produced] }, ok)
 }
 
+// One canvas's content tree as accessibility nodes, written at `out[at..]`: a child index names a node's own slot, so
+// the ids stay stable across builds (these slots are above the runtime's own).
+fn fill_content(a: *mem.Arena, t: widget.A11yTree, out: []Node, at: usize) -> err {
+    var i = 0usize
+    while i < t.nodes.len {
+        let n = t.nodes[i]
+        var node: Node = zero
+        node.id = Id { slot: n.slot, generation: 0u32 }
+        node.role = role_of_code(n.semantics.role)
+        node.level = n.semantics.level
+        node.state = state_of_bits(n.semantics.states)
+        let (acts, acts_error) = actions_of_bits(a, n.semantics.actions)
+        if acts_error != ok { ret acts_error }
+        node.actions = acts
+        let (label, label_error) = copy_text(a, n.semantics.label)
+        if label_error != ok { ret label_error }
+        node.label = label
+        let (value, value_error) = copy_text(a, n.semantics.value)
+        if value_error != ok { ret value_error }
+        node.value = value
+        let (hint, hint_error) = copy_text(a, n.semantics.hint)
+        if hint_error != ok { ret hint_error }
+        node.hint = hint
+        let (kids, kids_error) = mem.alloc[Id](a, n.children.len)
+        if kids_error != ok { ret kids_error }
+        var k = 0usize
+        while k < n.children.len {
+            let child = usize(n.children[k])
+            if child < t.nodes.len { kids[k] = Id { slot: t.nodes[child].slot, generation: 0u32 } }
+            k += 1usize
+        }
+        node.children = kids[0usize..n.children.len]
+        out[at + i] = node
+        i += 1usize
+    }
+    ret ok
+}
+
+// A content tree on its own, for a host that publishes or inspects it outside a runtime (the browser control's
+// fixture, a shell that merges trees itself). Node 0 is the root.
+fn content_tree(a: *mem.Arena, t: *const widget.A11yTree) -> (Tree, err) {
+    let (out, out_error) = mem.alloc[Node](a, t.nodes.len)
+    if out_error != ok { ret (zero, out_error) }
+    if t.nodes.len == 0usize { ret (Tree { root: zero, nodes: out[0usize..0usize] }, ok) }
+    let fill_error = fill_content(a, *t, out, 0usize)
+    if fill_error != ok { ret (zero, fill_error) }
+    ret (Tree { root: out[0usize].id, nodes: out[0usize..t.nodes.len] }, ok)
+}
+
 // A role that takes a value from the person, and so needs a name to be asked by.
-fn is_field(role: Role) -> bool {
-    ret role == .TextField || role == .Combobox || role == .SpinButton || role == .Slider || role == .Checkbox || role == .Switch || role == .Listbox
+fn is_field(role: Role) -> bool {    ret role == .TextField || role == .Combobox || role == .SpinButton || role == .Slider || role == .Checkbox || role == .Switch || role == .Listbox
 }
 
 // (D1598) An unnamed field is named by the text that says it controls it (a field

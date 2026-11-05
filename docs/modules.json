@@ -2447,11 +2447,13 @@
     "e.fmt.css.style",
     "e.fmt.dom",
     "e.fmt.html",
+    "e.fmt.html.accessible",
     "e.gfx.geometry",
     "e.gfx.scene",
     "e.mem",
     "e.str",
     "e.text.fontset",
+    "e.ui.accessibility",
     "e.ui.layout",
     "e.ui.widget"
    ],
@@ -2464,9 +2466,6 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.fmt.html",
-    "e.fmt.html.accessible",
-    "e.gfx.geometry",
     "e.gfx.scene",
     "e.mem",
     "e.str",

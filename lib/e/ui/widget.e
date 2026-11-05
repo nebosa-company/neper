@@ -105,7 +105,14 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // leave the tree. `focus_inset` moves the runtime ring inside an edge-to-edge
 // control (negative: keeps it outside, even for a tab); a platform action the element offers reaches `on_action` as its bit;
 // `promote_actions` keeps nested Button/Link descendants beside this control.
-type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str }
+// `content` lets a canvas that draws a document of its own (a page, a static HTML view) hand the document's
+// accessibility tree to the runtime: the builder calls `build` and puts its nodes under this element. The nodes are
+// flat, `children` being indices into `nodes` (index 0 is the root), each with the same `Semantics` a widget uses and
+// a `slot` above the runtime's own slots; a node's id is that slot with generation 0. A zero `ctx` means no content.
+type A11yNode = struct { slot: u32, semantics: Semantics, children: []const u32 }
+type A11yTree = struct { nodes: []const A11yNode }
+type A11y = struct { ctx: *void, build: fn(*void, *mem.Arena) -> (A11yTree, err) }
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str, content: A11y }
 // An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
 // root level, last, stacked against the element `anchor` names by key (0: the
 // window) with `placement` and `offset`, kept inside the window. A modal overlay

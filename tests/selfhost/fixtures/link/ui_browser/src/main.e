@@ -13,6 +13,9 @@ use e.str
 use e.text.fontset as fontset
 use e.ui.accessibility as acc
 use e.ui.browser as browser
+use e.ui.layout as ui_layout
+use e.ui.style
+use e.ui.widget
 use e.web.shell as shell
 
 const RED: u32 = 4294901760u32
@@ -32,6 +35,13 @@ fn find_label(t: *const acc.Tree, label: str) -> (usize, bool) {
         i += 1usize
     }
     ret (0usize, false)
+}
+
+fn sized(w: f32, h: f32) -> style.Style {
+    var s = style.defaults()
+    s.width = style.Length { Px: w }
+    s.height = style.Length { Px: h }
+    ret s
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -74,7 +84,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if de != ok { os.exit(35i32) }
     let (q, qe) = gpu.queue(device)
     if qe != ok { os.exit(35i32) }
-    let (rv, re) = scene.renderer(a, device, q, 2u32, 1u32)
+    let (rv, re) = scene.renderer(a, device, q, 8u32, 4u32)
     if re != ok { os.exit(36i32) }
     var renderer = rv
     browser.ensure_renderer(&b, &renderer)
@@ -146,6 +156,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tf || tree.nodes[ti].role != acc.Role.Text { os.exit(66i32) }
     // The ids are the page's own slots, away from the widget tree's.
     if tree.nodes[hi].id.slot < 2147483648u32 { os.exit(67i32) }
+    // A runtime that holds the semantics wrapper publishes the same document under the canvas: the builder splices
+    // the provider's nodes in, so a screen reader sees the heading, not an empty custom widget.
+    let (rt, rte) = widget.runtime(a, &renderer, widget.Limits { max_elements: 32usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 64usize })
+    if rte != ok { os.exit(70i32) }
+    var runtime = rt
+    let (kids, kse) = mem.alloc[widget.Node](a, 1usize)
+    if kse != ok { os.exit(70i32) }
+    kids[0] = widget.Node { key: 2u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: sized(64.0, 64.0), children: zero }
+    let root = widget.semantics(1u64, browser.semantics(&b), sized(64.0, 64.0), kids[0usize..1usize])
+    let (widget_frame, wfe) = mem.alloc[u8](a, 262144usize)
+    if wfe != ok { os.exit(71i32) }
+    var frame = mem.arena_from(widget_frame)
+    let (compiled, wre) = widget.reconcile(&runtime, &frame, root, ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 64.0 })
+    if wre != ok { os.exit(72i32) }
+    let (published, pe2) = acc.build(a, &runtime)
+    if pe2 != ok { os.exit(72i32) }
+    let (shown, shown_found) = find_label(&published, "Title")
+    if !shown_found || published.nodes[shown].role != acc.Role.Heading { os.exit(73i32) }
+    if published.nodes[shown].id.slot < 2147483648u32 { os.exit(74i32) }
+    let (linked, linked_found) = find_label(&published, "link")
+    if !linked_found || published.nodes[linked].role != acc.Role.Link { os.exit(75i32) }
+    if widget.close(&runtime) != ok { os.exit(76i32) }
     // A load the engine cannot do leaves the error page, and the history keeps the attempt.
     if browser.navigate(&b, "ftp://nowhere.test/file") != ok { os.exit(43i32) }
     st = browser.state(&b)

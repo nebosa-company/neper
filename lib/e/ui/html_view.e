@@ -18,11 +18,13 @@ use e.fmt.css.paint as css_paint
 use e.fmt.css.style as style
 use e.fmt.dom as dom
 use e.fmt.html as html
+use e.fmt.html.accessible as accessible
 use e.gfx.geometry as geometry
 use e.gfx.scene as scene
 use e.mem
 use e.str
 use e.text.fontset as fontset
+use e.ui.accessibility
 use e.ui.layout as ui_layout
 use e.ui.widget
 
@@ -302,4 +304,151 @@ fn take_activated(v: *View) -> (str, bool) {
     if !v.has_activated { ret ("", false) }
     v.has_activated = false
     ret (v.activated, true)
+}
+
+// --- Accessibility -----------------------------------------------------------------------------------------------------
+//
+// The document as a widget content tree: `e.fmt.html.accessible` gives the roles and names (native and ARIA, accName
+// precedence); this module numbers the nodes from A11Y_SLOT_BASE and hands them to the runtime through
+// `semantics(v)`, so a host publishes them under the view's own node. Bounds, actions, relations and live regions are
+// not filled yet.
+
+const A11Y_SLOT_BASE: u32 = 2147483648u32
+
+fn a11y_role(r: accessible.Role) -> accessibility.Role {
+    switch r {
+    case .Text:
+        ret accessibility.Role.Text
+    case .Heading:
+        ret accessibility.Role.Heading
+    case .Link:
+        ret accessibility.Role.Link
+    case .Button:
+        ret accessibility.Role.Button
+    case .Image:
+        ret accessibility.Role.Image
+    case .TextField:
+        ret accessibility.Role.TextField
+    case .Checkbox:
+        ret accessibility.Role.Checkbox
+    case .Radio:
+        ret accessibility.Role.Radio
+    case .Combobox:
+        ret accessibility.Role.Combobox
+    case .Listbox:
+        ret accessibility.Role.Listbox
+    case .Slider:
+        ret accessibility.Role.Slider
+    case .Progressbar:
+        ret accessibility.Role.Progress
+    case .List:
+        ret accessibility.Role.List
+    case .ListItem:
+        ret accessibility.Role.ListItem
+    case .Table:
+        ret accessibility.Role.Table
+    case .Row:
+        ret accessibility.Role.Row
+    case .Cell:
+        ret accessibility.Role.Cell
+    case .ColumnHeader:
+        ret accessibility.Role.ColumnHeader
+    case .RowHeader:
+        ret accessibility.Role.RowHeader
+    case .Main:
+        ret accessibility.Role.Main
+    case .Region:
+        ret accessibility.Role.Region
+    case .Dialog:
+        ret accessibility.Role.Dialog
+    case .Separator:
+        ret accessibility.Role.Separator
+    case .Figure:
+        ret accessibility.Role.Image
+    default:
+        ret accessibility.Role.Group
+    }
+}
+
+fn a11y_count(n: *const accessible.Node) -> usize {
+    var total = 1usize
+    var i = 0usize
+    while i < n.children.len {
+        total += a11y_count(&n.children[i])
+        i += 1usize
+    }
+    ret total
+}
+
+// The state bits `e.ui.accessibility` uses for the flags a document exposes.
+fn a11y_flags(n: *const accessible.Node) -> u32 {
+    var bits = 0u32
+    if n.disabled { bits = bits | 1u32 }
+    if n.selected { bits = bits | 4u32 }
+    if n.checked { bits = bits | 8u32 }
+    if n.expanded { bits = bits | 16u32 }
+    if n.checked_mixed { bits = bits | 64u32 }
+    if n.invalid { bits = bits | 256u32 }
+    if n.required { bits = bits | 512u32 }
+    ret bits
+}
+
+fn a11y_fill(n: *const accessible.Node, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err) {
+    var none: u32 = 0u32
+    let at = *next
+    *next += 1usize
+    let (kids, kids_error) = mem.alloc[u32](a, n.children.len)
+    if kids_error != ok { ret (none, kids_error) }
+    var i = 0usize
+    while i < n.children.len {
+        let (child, child_error) = a11y_fill(&n.children[i], a, out, next)
+        if child_error != ok { ret (none, child_error) }
+        kids[i] = child
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.role_code(a11y_role(n.role))
+    sem.label = n.name
+    if n.has_value { sem.value = n.value }
+    if n.has_url { sem.hint = n.url }
+    sem.states = a11y_flags(n)
+    if n.has_level && n.level > 0i64 { sem.level = u8(n.level) }
+    out[at] = widget.A11yNode { slot: A11Y_SLOT_BASE + u32(at), semantics: sem, children: kids[0usize..n.children.len] }
+    ret (A11Y_SLOT_BASE + u32(at), ok)
+}
+
+// The document's content tree (node 0 is its root). Called by the accessibility builder through `semantics(v)`.
+fn a11y(v: *View, a: *mem.Arena) -> (widget.A11yTree, err) {
+    var empty = widget.A11yTree { nodes: zero }
+    var doc = html.Document { nodes: v.tree.nodes, root: v.tree.root, quirks: v.tree.quirks }
+    var root = v.tree.root
+    var i = 0usize
+    while i < v.tree.used {
+        if str.eq(v.tree.nodes[i].name, "body") {
+            root = u32(i)
+            break
+        }
+        i += 1usize
+    }
+    let acc = accessible.build_tree(a, &doc, root)
+    let (out, out_error) = mem.alloc[widget.A11yNode](a, a11y_count(&acc))
+    if out_error != ok { ret (empty, out_error) }
+    var next = 0usize
+    let (root_slot, fill_error) = a11y_fill(&acc, a, out, &next)
+    if fill_error != ok { ret (empty, fill_error) }
+    ret (widget.A11yTree { nodes: out[0usize..next] }, ok)
+}
+
+fn a11y_build(ctx: *void, a: *mem.Arena) -> (widget.A11yTree, err) {
+    let v = mem.cast[*View](ctx)
+    let (tree, tree_error) = a11y(v, a)
+    ret (tree, tree_error)
+}
+
+// The semantics a view's canvas carries so that its document reaches the accessibility tree: wrap `custom(v)` in
+// `widget.semantics(key, semantics(v), style, [the canvas])`.
+fn semantics(v: *View) -> widget.Semantics {
+    var s: widget.Semantics = zero
+    s.content = widget.A11y { ctx: mem.cast[*void](v), build: a11y_build }
+    ret s
 }

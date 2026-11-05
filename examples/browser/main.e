@@ -274,9 +274,13 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     content_style.height = style.Length { Flex: 1.0 }
     var content: widget.Node = zero
     if tab.loaded {
+        // The canvas, wrapped in the semantics that publishes the page's document to assistive technology.
+        let (canvas, ce) = mem.alloc[widget.Node](f, 1usize)
+        if ce != ok { ret (zero, ce) }
+        canvas[0usize] = widget.Node { key: 22u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: content_style, children: zero }
         let (inner, ie) = mem.alloc[widget.Node](f, 1usize)
         if ie != ok { ret (zero, ie) }
-        inner[0usize] = widget.Node { key: 21u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: content_style, children: zero }
+        inner[0usize] = widget.semantics(21u64, browser.semantics(&b), content_style, canvas[0usize..1usize])
         content = widget.region(20u64, browser.region(&b), content_style, inner[0usize..1usize])
     } else {
         content = widget.box(20u64, content_style, zero)
