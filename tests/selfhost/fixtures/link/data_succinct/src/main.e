@@ -43,7 +43,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var overflow_counts: [1]u32 = zero
     let max_usize = 0usize -% 1usize
     let (_, overflow_error) = succinct.bit_vector(bits[0usize..0usize], max_usize, overflow_counts[..])
-    if overflow_error != succinct.TooSmall { os.exit(1i32) }
+    if overflow_error != succinct.Invalid { os.exit(1i32) }
+    // The boundary: 2^32 bits could hold 2^32 ones, which a u32 directory cannot.
+    let (_, boundary_error) = succinct.bit_vector(bits[0usize..0usize], 4294967296usize, overflow_counts[..])
+    if boundary_error != succinct.Invalid { os.exit(1i32) }
     // Padding in the final storage word is not part of the logical vector.
     var padded_bits: [1]u64 = zero
     var padded_counts: [2]u32 = zero

@@ -337,6 +337,12 @@ fn octree_range_node(t: *const OcTree, node: usize, nx: f64, ny: f64, nz: f64, s
 // `first`, `count`; `order.len >= n` holds the item chain.
 fn interval_build(starts: []const f64, ends: []const f64, n: usize, order: []usize, left: []u32, right: []u32, centre: []f64, first: []u32, count: []u32) -> (IntervalTree, err) {
     if starts.len < n || ends.len < n || order.len < n || left.len < n + 1usize || right.len < n + 1usize || centre.len < n + 1usize || first.len < n + 1usize || count.len < n + 1usize { ret (zero, TooSmall) }
+    // A malformed or non-finite interval would never make partition progress.
+    var at = 0usize
+    while at < n {
+        if !(starts[at] - starts[at] == 0.0f64) || !(ends[at] - ends[at] == 0.0f64) || starts[at] > ends[at] { ret (zero, Invalid) }
+        at += 1usize
+    }
     var t = IntervalTree { starts: starts, ends: ends, order: order, left: left, right: right, centre: centre, first: first, count: count, used: 0usize }
     // Start with every interval in a chain, then partition recursively.
     var i = 0usize
@@ -356,16 +362,22 @@ fn interval_build(starts: []const f64, ends: []const f64, n: usize, order: []usi
 // Build the node for the chain at `head` (1-based item ids); answers the node index + 1 (0 for none).
 fn interval_node(t: *IntervalTree, head: usize) -> (u32, err) {
     if head == 0usize { ret (0u32, ok) }
-    // Centre: the median of the interval midpoints (approximated by the mean).
-    var total = 0.0f64
+    // Centre: the mean of the halved endpoints. `0.5 * (start + end)` overflows
+    // for finite endpoints near f64 max (e.g. [1e308, 1e308]) and the mean is
+    // scaled per item so accumulating n near-max midpoints stays finite too.
     var n = 0usize
     var it = head
     while it != 0usize {
-        total += 0.5f64 * (t.starts[it - 1usize] + t.ends[it - 1usize])
         n += 1usize
         it = t.order[it - 1usize]
     }
-    let c = total / f64(n)
+    var total = 0.0f64
+    it = head
+    while it != 0usize {
+        total += (0.5f64 * t.starts[it - 1usize] + 0.5f64 * t.ends[it - 1usize]) / f64(n)
+        it = t.order[it - 1usize]
+    }
+    let c = total
     if t.used >= t.centre.len { ret (0u32, TooSmall) }
     let node = t.used
     t.used += 1usize

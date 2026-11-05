@@ -37,6 +37,9 @@ fn words_for(n: usize) -> usize {
 // A bit vector over `bits[..words_for(n)]` with `counts.len > words_for(n)`; the counts are computed here.
 // Any unused high bits in the final storage word are outside the logical vector.
 fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err) {
+    // The rank directory is u32: a vector longer than u32::MAX bits could hold
+    // that many ones and wrap the prefix counts.
+    if n > 4294967295usize { ret (zero, Invalid) }
     let words = words_for(n)
     if bits.len < words || counts.len < words + 1usize { ret (zero, TooSmall) }
     var total = 0u32

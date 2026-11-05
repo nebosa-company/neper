@@ -166,6 +166,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var icount: [201]u32 = zero
     let (it, it_error) = spatial.interval_build(starts[..], ends[..], 200usize, iorder[..], left[..], right[..], centre[..], ifirst[..], icount[..])
     if it_error != ok { os.exit(4i32) }
+    // #506: an interval at the top of the f64 range is still a legal interval;
+    // the node centre must not overflow to infinity.
+    var huge_starts: [1]f64 = zero
+    var huge_ends: [1]f64 = zero
+    huge_starts[0usize] = 1.0e308f64
+    huge_ends[0usize] = 1.0e308f64
+    var huge_order: [1]usize = zero
+    var huge_left: [2]u32 = zero
+    var huge_right: [2]u32 = zero
+    var huge_centre: [2]f64 = zero
+    var huge_first: [2]u32 = zero
+    var huge_count: [2]u32 = zero
+    let (huge_tree, huge_error) = spatial.interval_build(huge_starts[..], huge_ends[..], 1usize, huge_order[..], huge_left[..], huge_right[..], huge_centre[..], huge_first[..], huge_count[..])
+    if huge_error != ok || huge_count[0usize] != 1u32 { os.exit(4i32) }
+    // The same interval mirrored across zero: the centre is 0 and the interval
+    // stays representable.
+    huge_starts[0usize] = 0.0f64 - 1.0e308f64
+    huge_ends[0usize] = 1.0e308f64
+    let (wide_tree, wide_error) = spatial.interval_build(huge_starts[..], huge_ends[..], 1usize, huge_order[..], huge_left[..], huge_right[..], huge_centre[..], huge_first[..], huge_count[..])
+    if wide_error != ok || huge_count[0usize] != 1u32 { os.exit(4i32) }
     let (overlaps, overlap_error) = spatial.interval_overlap(&it, 40.0f64, 45.0f64, out[..])
     if overlap_error != ok || overlaps != 19usize { os.exit(4i32) }
     // Every answer really overlaps.
