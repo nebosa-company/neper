@@ -187,6 +187,9 @@ fn serve(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response,
         if s.decimal_mode == 4u8 { decimal_body = "decimal\t18446744073709551616\n" }
         ret (reply(a, 200u16, none[0usize..0usize], decimal_body), ok)
     }
+    if s.decimal_mode == 5u8 && req.method == .Get && str.starts_with(rest, "?prefix=") {
+        ret (reply(a, 200u16, none[0usize..0usize], "decimal\t5\r\n"), ok)
+    }
     var kv = store.memory_store(&s.kv)
     if req.method == .Get && str.starts_with(rest, "?prefix=") {
         let (p, pe) = decode(a, rest[8usize..])
@@ -317,6 +320,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if store.put(&ss, a, "a", "1") != ok || store.put(&ss, a, "b", "1") != ok { os.exit(3i32) }
     if store.put(&ss, a, "c", "1") != store.TooLarge { os.exit(4i32) }
     if store.put(&ss, a, "a", "22") != ok { os.exit(5i32) }
+    // #441: capacity + 1 must not wrap before the allocations.
+    let (_, huge_capacity_error) = store.memory(a, 18446744073709551615usize)
+    if huge_capacity_error != store.TooLarge { os.exit(6i32) }
+    // #64: TAB/LF/CR in a key would break the http listing protocol.
+    if store.put(&ss, a, "a\tb", "1") != store.Invalid { os.exit(7i32) }
+    if store.put(&ss, a, "a\nb", "1") != store.Invalid { os.exit(7i32) }
+    if store.put(&ss, a, "a\rb", "1") != store.Invalid { os.exit(7i32) }
     // A failed memory-store constructor and an insertion rejected for capacity both
     // preserve the caller arena for a later request.
     var constructor_bytes: [24]u8 = zero
@@ -432,6 +442,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     server.decimal_mode = 4u8
     let (_, list_overflow_error) = store.list(&hst, a, "", decimal_entries[..])
     if list_overflow_error != store.Failed { os.exit(138i32) }
+    // #64: a CRLF listing line parses instead of failing the whole listing.
+    server.decimal_mode = 5u8
+    let (crlf_count, crlf_error) = store.list(&hst, a, "", decimal_entries[..])
+    if crlf_error != ok || crlf_count != 1usize || decimal_entries[0usize].size != 5u64 { os.exit(139i32) }
     server.decimal_mode = 0u8
     // 4. keys: validity and the HTTP encoding against Python
     let table = vectors()

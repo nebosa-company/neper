@@ -217,7 +217,10 @@ fn http_list(ctx: *void, a: *mem.Arena, prefix: str, out: []store.Entry) -> (usi
             var tab = at
             while tab < end && body[tab] != 9u8 { tab += 1usize }
             if tab == end { ret (n, store.Failed) }
-            let (size, good) = parse_decimal(body[tab + 1usize..end])
+            // A CRLF server leaves one CR after the size.
+            var size_end = end
+            if size_end > tab + 1usize && body[size_end - 1usize] == 13u8 { size_end -= 1usize }
+            let (size, good) = parse_decimal(body[tab + 1usize..size_end])
             if !good { ret (n, store.Failed) }
             if n == out.len { ret (n, store.TooLarge) }
             out[n] = store.Entry{ key: body[at..tab], size: size }

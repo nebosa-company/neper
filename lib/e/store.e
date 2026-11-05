@@ -70,7 +70,8 @@ fn valid_key(key: str) -> bool {
             if part[n - 1usize] == 46u8 || part[n - 1usize] == 32u8 || windows_device_name(part) { ret false }
             seg = i + 1usize
         } else {
-            if key[i] == 0u8 || key[i] == 58u8 || key[i] == 92u8 { ret false }
+            // Control bytes would break the TAB/LF listing protocol.
+            if key[i] == 0u8 || key[i] == 58u8 || key[i] == 92u8 || key[i] == 9u8 || key[i] == 10u8 || key[i] == 13u8 { ret false }
         }
         i += 1usize
     }
@@ -146,6 +147,8 @@ fn list(s: *Store, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err) {
 // value's bytes stay allocated until the arena is reset.
 fn memory(a: *mem.Arena, capacity: usize) -> (MemoryStore, err) {
     var m: MemoryStore = zero
+    // `capacity + 1` must not wrap: reject before any allocation.
+    if capacity >= 18446744073709551615usize { ret (m, TooLarge) }
     let start = mem.mark(a)
     let (keys, ke) = mem.alloc[str](a, capacity + 1usize)
     if ke != ok {
