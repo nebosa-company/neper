@@ -651,8 +651,9 @@ fn fft2(re: []f64, im: []f64, w: usize, h: usize, inverse: bool, col: []f64) -> 
 // ponytail: integer shift only; fit a parabola to the peak's neighbours for sub-pixel.
 // The integer shift `(dx, dy)` with `b(x, y) ~ a(x - dx, y - dy)` (cyclic)
 // by the normalised cross-power spectrum, and the peak's height; `w` and
-// `h` are powers of two, `scratch.len >= 4 w h + 2 max(w, h)`.
+// `h` are non-zero powers of two, `scratch.len >= 4 w h + 2 max(w, h)`.
 fn phase_correlate(a: []const f64, b: []const f64, w: usize, h: usize, scratch: []f64) -> (f64, f64, f64, err) {
+    if w == 0usize || h == 0usize { ret (0.0f64, 0.0f64, 0.0f64, Invalid) }
     let n = w * h
     var longest = w
     if h > longest { longest = h }

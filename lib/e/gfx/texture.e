@@ -734,7 +734,8 @@ fn astc_decode(block: []const u8, width: usize, height: usize, srgb: bool, out: 
     if weight_count > 64usize { ret Invalid }
     let weight_bits = ise_bits(weight_count, wq)
     if weight_bits < 24usize || weight_bits > 96usize { ret Invalid }
-    if dual && parts == 4usize { ret Invalid }
+    // The format returns the error colour for every texel of a four-partition block.
+    if parts == 4usize { ret Invalid }
     var color_start = 17usize
     var index = 0u32
     var cems: [4]u32 = zero

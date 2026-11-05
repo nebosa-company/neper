@@ -2,9 +2,10 @@
 // against a Python replica (FNV of the RGBA output), then 50 ASTC blocks that
 // `astcenc` 4.x produced from random and gradient images at 4x4, 5x5, 6x6, 8x8,
 // 10x8 and 12x12 in the linear and sRGB profiles, each decoded to the FNV hash
-// of what `astcenc` itself decompressed: void extents, one to four partitions,
+// of what `astcenc` itself decompressed: void extents, one to three partitions,
 // dual planes, trit and quint weights, uniform and mixed end-point modes. A
-// reserved block mode answers Invalid and an HDR end-point mode Unsupported.
+// reserved block mode and a four-partition block answer Invalid, and an HDR
+// end-point mode Unsupported.
 // Each check exits with its own code.
 
 use e.gfx.texture
@@ -108,6 +109,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if texture.astc_decode(block[..], 4usize, 4usize, false, texels[..]) != texture.Unsupported { os.exit(8i32) }
     unhex(hexes[2usize], block[..])
     if texture.astc_decode(block[..], 4usize, 4usize, false, texels[..63usize]) != texture.TooSmall { os.exit(8i32) }
+
+    // 9: four-partition blocks are the error colour in the ASTC format even without dual
+    // planes (issue #694): a 4x4 weight grid at q=2, four partitions, one CEM for all of them.
+    let four_part: [16]u8 = [16]u8{ 66, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    if texture.astc_decode(four_part[..], 4usize, 4usize, false, texels[..]) != texture.Invalid { os.exit(9i32) }
 
     try io.print("gfx texture ok\n")
     ret ok
