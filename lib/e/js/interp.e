@@ -3576,7 +3576,7 @@ fn bind_name(it: *Interp, f: *Frame, name: str, val: Value, mode: u8) -> err {
         var fl = B_LEX
         if mode == 7u8 { fl = B_LEX | B_CONST | B_STRICT_CONST }
         let (at, found) = env_index(f.env, name)
-        if found && (f.env.vars.items[at].flags & B_TDZ) == 0u8 && mode != 6u8 && false { ret ok }
+        if found && (f.env.vars.items[at].flags & B_TDZ) == 0u8 && mode != 6u8 { ret ok }
         if found {
             f.env.vars.items[at].value = val
             f.env.vars.items[at].flags = fl
@@ -3716,8 +3716,9 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
     }
     if pn.kind == ast.N_OBJECT {
         if is_nullish(val) { ret throw_type(it, "Cannot destructure undefined or null") }
-        var used: [64]Key = zero
-        var used_n = 0usize
+        let (used0, used_error) = list.init[Key](it.a, usize(pn.b) + 1usize)
+        if used_error != ok { ret used_error }
+        var used = used0
         var i2 = 0usize
         while i2 < usize(pn.b) {
             let prop_id = f.prog.kids[usize(pn.a) + i2]
@@ -3743,8 +3744,8 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
                 while kk < keys.len {
                     var skip = false
                     var u = 0usize
-                    while u < used_n {
-                        if keys_equal(used[u], keys[kk]) { skip = true }
+                    while u < used.items.len {
+                        if keys_equal(used.items[u], keys[kk]) { skip = true }
                         u += 1usize
                     }
                     if !skip {
@@ -3781,10 +3782,7 @@ fn bind_pattern(it: *Interp, f: *Frame, pid: u32, val: Value, mode: u8) -> err {
                     key = key_of(kn.text)
                 }
             }
-            if used_n < 64usize {
-                used[used_n] = key
-                used_n += 1usize
-            }
+            try list.push[Key](&used, key)
             var ptid = prop.b
             var pdflt = ast.NONE
             let pbn = f.prog.nodes[usize(prop.b)]
@@ -5099,11 +5097,10 @@ fn is_symbol_value(v: Value) -> bool {
     }
 }
 
-// Builds a RegExp object through the realm's constructor (installed by the builtins).
+// Builds a RegExp object through the realm's intrinsic constructor, never through the
+// user-reassignable global `RegExp` binding.
 fn make_regexp(it: *Interp, pattern: str, flags: str) -> (Value, err) {
-    let (ctor, ce) = get_prop(it, it.global, key_of("RegExp"), obj_value(it.global))
-    if ce != ok { ret (undefv(), ce) }
-    if !is_constructor(ctor) { ret (undefv(), throw_syntax(it, "RegExp is not available")) }
+    let ctor = obj_value(it.regexp_ctor)
     let (r, re) = construct(it, ctor, two_args(it, str_value(pattern), str_value(flags)), ctor)
     ret (r, re)
 }
@@ -6912,8 +6909,6 @@ fn exec_labeled(it: *Interp, f: *Frame, id: u32, labels: []const str) -> (Comple
 fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (Completion, err) {
     let saved = f.env
     var per_iteration = false
-    var names: [16]str = zero
-    var name_count = 0usize
     if n.a != ast.NONE {
         let init = f.prog.nodes[usize(n.a)]
         if init.kind == ast.N_VAR && init.op != ast.D_VAR {
@@ -6931,13 +6926,9 @@ fn exec_for_inner(it: *Interp, f: *Frame, n: ast.Node, labels: []const str) -> (
                 d += 1usize
             }
             if init.op == ast.D_LET {
+                // The fresh scope per iteration copies every binding of the loop head; no
+                // separate name list is needed.
                 per_iteration = true
-                var v = 0usize
-                while v < f.env.vars.len && name_count < 16usize {
-                    names[name_count] = f.env.vars.items[v].name
-                    name_count += 1usize
-                    v += 1usize
-                }
             }
         }
         var e: err = ok
@@ -8557,9 +8548,17 @@ fn async_iterator_close(it: *Interp, f: *Frame, iter: Iter) -> err {
     if is_nullish(rm) { ret ok }
     let (r, re) = call_function(it, rm, iter.obj, zero_args())
     if re != ok { ret re }
-    if iter.sync_wrapped { ret ok }
-    let (aw, awe) = await_value(it, f, r)
-    if awe != ok { ret awe }
+    if iter.sync_wrapped {
+        // AsyncFromSyncIterator.return: the sync result must be an object, and its value is
+        // awaited like any other promise in the chain.
+        if !is_object(r) { ret throw_type(it, "iterator.return() did not return an object") }
+        let (v, ve) = get_prop(it, as_object(r), key_of("value"), r)
+        if ve != ok { ret ve }
+        let (_, awe) = await_value(it, f, v)
+        ret awe
+    }
+    let (aw, awe2) = await_value(it, f, r)
+    if awe2 != ok { ret awe2 }
     if !is_object(aw) { ret throw_type(it, "iterator.return() did not return an object") }
     ret ok
 }
@@ -9209,9 +9208,17 @@ fn proto_set(it: *Interp, o: *Obj, v: Value) -> (bool, err) {
     while guard < 100000u32 {
         guard += 1u32
         if cur == o { ret (false, ok) }
-        if cur.class == C_PROXY { break }
-        if !cur.has_proto { break }
-        cur = cur.proto
+        if cur.class == C_PROXY {
+            // A proxy's [[GetPrototypeOf]] may report any object, including `o` itself.
+            let (pv, pe) = proto_get(it, cur)
+            if pe != ok { ret (false, pe) }
+            if is_null(pv) { break }
+            if !is_object(pv) { ret (false, throw_type(it, "proxy getPrototypeOf must return an object or null")) }
+            cur = as_object(pv)
+        } else {
+            if !cur.has_proto { break }
+            cur = cur.proto
+        }
     }
     o.proto = np
     o.has_proto = true
