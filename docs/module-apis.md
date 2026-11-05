@@ -8867,6 +8867,7 @@ Terminal output as pure string builders: `render_meter` is tqdm's default progre
 type Automaton = struct { next: []u32, fail: []u32, output: []u32, length: []u32, states: usize }
 error TooLong
 error TooSmall
+error Invalid
 
 fn kmp_table(pattern: str, table: []usize) -> err
 fn kmp(text: str, pattern: str, table: []const usize) -> (usize, bool)
@@ -8877,6 +8878,7 @@ fn rabin_karp(text: str, pattern: str) -> (usize, bool)
 fn aho_corasick_build(a: *mem.Arena, patterns: []const str) -> (Automaton, err)
 fn aho_corasick_find[Ctx: type](m: *const Automaton, text: str, ctx: *Ctx, on_match: fn(*Ctx, usize, usize) -> bool) -> bool
 fn z_array(s: str, z: []usize) -> err
+fn within_edits(x: str, pattern: str, errors: u32) -> bool
 fn bitap(text: str, pattern: str, errors: u32) -> (usize, bool)
 fn longest_palindrome(s: str, scratch: []usize) -> (usize, usize, err)
 fn aho_corasick(a: *mem.Arena, patterns: []const str) -> (Automaton, err)
@@ -9216,6 +9218,7 @@ fn count_pair(corpus: []const str, starts: []const usize, first: []const usize, 
 fn merge_word(word: str, starts: []usize, base: usize, live: usize, l: str, r: str) -> usize
 fn bpe_encode(b: *const Bpe, word: str, out: []str, scratch: []usize) -> (usize, err)
 fn wordpiece(word: str, vocabulary: []const str, out: []str) -> (usize, err)
+fn piece_count(from: []const usize, n: usize) -> usize
 fn unigram(word: str, vocabulary: []const str, log_probability: []const f64, out: []str, scores: []f64, scratch: []usize) -> (usize, err)
 fn collect(word: str, from: []const usize, n: usize, out: []str) -> usize
 fn unigram_sample(word: str, vocabulary: []const str, log_probability: []const f64, temperature: f64, r: *rand.Pcg64, out: []str, scores: []f64, scratch: []usize) -> (usize, err)
@@ -18430,6 +18433,7 @@ fn field_count[T: type]() -> usize
 fn push_columns[T: type](b: *str.Builder) -> err
 fn run(s: *Session, sql: str, params: []const db.Parameter) -> (u64, err)
 fn check_key[T: type]() -> err
+fn key_sql(d: migrate.Dialect) -> str
 fn create_sql[T: type](s: *Session, table: str) -> (str, err)
 fn create_table[T: type](s: *Session, table: str) -> err
 fn last_id(s: *Session) -> (i64, err)
@@ -32883,6 +32887,7 @@ fn magnitudes(re: []f64, im: []const f64, count: usize)
 fn yin_difference(x: []const f64, out: []f64) -> (usize, err)
 fn yin_pick(cmnd: []const f64, threshold: f64) -> (usize, f64)
 fn yin_frequency(cmnd: []const f64, tau: usize, sample_rate: f64) -> f64
+fn valid_rate(sample_rate: f64) -> bool
 fn pitch_yin(x: []const f64, sample_rate: f64, threshold: f64, scratch: []f64) -> (f64, f64, err)
 fn pitch_pyin(x: []const f64, sample_rate: f64, thresholds: []const f64, scratch: []f64) -> (f64, f64, err)
 fn autocorrelation_lag(x: []const f64, tau: usize) -> f64
