@@ -48,7 +48,7 @@ const EVENT_GOAWAY: u8 = 5u8
 type Message = struct { compressed: bool, payload: []const u8 }
 type Stream = struct { id: u32, used: bool, got_headers: bool, remote_closed: bool, local_closed: bool, send_window: i64, recv_window: i64, buf: []u8, buf_len: usize, consumed: usize }
 type Event = struct { kind: u8, stream: u32, code: u32, compressed: bool, text: str, payload: []const u8, headers: []const h2.Header }
-type Conn = struct { streams: []Stream, next_id: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, started: bool, got_settings: bool, goaway: bool, last_stream: u32, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool }
+type Conn = struct { streams: []Stream, next_id: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, started: bool, got_settings: bool, goaway: bool, last_stream: u32, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool, scheme: str }
 
 // --- status and messages -----------------------------------------------------------------------------------------
 
@@ -181,13 +181,26 @@ fn timeout_parse(text: str) -> (u64, err) {
         i += 1usize
     }
     let unit = text[text.len - 1usize]
-    if unit == 110u8 { ret (v, ok) }
-    if unit == 117u8 { ret (v * 1000u64, ok) }
-    if unit == 109u8 { ret (v * 1000000u64, ok) }
-    if unit == 83u8 { ret (v * 1000000000u64, ok) }
-    if unit == 77u8 { ret (v * 60000000000u64, ok) }
-    if unit == 72u8 { ret (v * 3600000000000u64, ok) }
-    ret (0u64, Invalid)
+    var multiplier = 0u64
+    if unit == 110u8 {
+        multiplier = 1u64
+    } else if unit == 117u8 {
+        multiplier = 1000u64
+    } else if unit == 109u8 {
+        multiplier = 1000000u64
+    } else if unit == 83u8 {
+        multiplier = 1000000000u64
+    } else if unit == 77u8 {
+        multiplier = 60000000000u64
+    } else if unit == 72u8 {
+        multiplier = 3600000000000u64
+    } else {
+        ret (0u64, Invalid)
+    }
+    // A peer's deadline that does not fit u64 nanoseconds is refused, not wrapped to a
+    // much shorter duration (99999999H is about 3.6e20 ns).
+    if v > 18446744073709551615u64 / multiplier { ret (0u64, TooLarge) }
+    ret (v * multiplier, ok)
 }
 
 // --- grpc-message and metadata -----------------------------------------------------------------------------------
@@ -281,7 +294,19 @@ fn conn_new(streams: []Stream, enc: h2.Table, dec: h2.Table, block: []u8, initia
         streams[i].used = false
         i += 1usize
     }
-    ret Conn { streams: streams, next_id: 1u32, enc: enc, dec: dec, send_window: 65535i64, recv_window: 65535i64, peer_initial_window: 65535i64, peer_max_frame: 16384usize, initial_recv: i64(initial_recv), max_frame: usize(max_frame), started: false, got_settings: false, goaway: false, last_stream: 0u32, block: block, block_len: 0usize, block_stream: 0u32, block_end_stream: false, block_active: false }
+    ret Conn { streams: streams, next_id: 1u32, enc: enc, dec: dec, send_window: 65535i64, recv_window: 65535i64, peer_initial_window: 65535i64, peer_max_frame: 16384usize, initial_recv: i64(initial_recv), max_frame: usize(max_frame), started: false, got_settings: false, goaway: false, last_stream: 0u32, block: block, block_len: 0usize, block_stream: 0u32, block_end_stream: false, block_active: false, scheme: "http" }
+}
+
+// The `:scheme` a call on this connection uses: "http" unless the transport is TLS,
+// set with `set_secure` (a zero-value Conn answers "http" too).
+fn scheme_of(c: *const Conn) -> str {
+    if c.scheme.len == 0usize { ret "http" }
+    ret c.scheme
+}
+
+// Whether this connection's transport is TLS; the next call_start sends `:scheme: https`.
+fn set_secure(c: *Conn, secure: bool) {
+    if secure { c.scheme = "https" } else { c.scheme = "http" }
 }
 
 fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err {
@@ -341,6 +366,12 @@ fn find_stream(c: *Conn, id: u32) -> usize {
 // `buf` is the stream's reassembly buffer for incoming messages. Answers the stream id and the bytes written.
 fn call_start(c: *Conn, dst: []u8, authority: str, path: str, timeout_nanos: u64, metadata: []const h2.Header, buf: []u8) -> (u32, usize, err) {
     if c.goaway { ret (0u32, 0usize, Protocol) }
+    // The request header list is fixed at 24 entries (seven fixed headers plus an
+    // optional timeout). Metadata that does not fit is refused instead of silently
+    // dropping the tail -- losing auth, tracing or application headers (#866).
+    var required = 7usize
+    if timeout_nanos > 0u64 { required += 1usize }
+    if metadata.len > 24usize - required { ret (0u32, 0usize, TooLarge) }
     var slot = c.streams.len
     var i = 0usize
     while i < c.streams.len {
@@ -355,7 +386,7 @@ fn call_start(c: *Conn, dst: []u8, authority: str, path: str, timeout_nanos: u64
     var n = 0usize
     headers[n] = h2.Header { name: ":method", value: "POST", staged: 0u8 }
     n += 1usize
-    headers[n] = h2.Header { name: ":scheme", value: "http", staged: 0u8 }
+    headers[n] = h2.Header { name: ":scheme", value: scheme_of(c), staged: 0u8 }
     n += 1usize
     headers[n] = h2.Header { name: ":path", value: path, staged: 0u8 }
     n += 1usize

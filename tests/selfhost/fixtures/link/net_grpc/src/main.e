@@ -513,6 +513,70 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+// #866: metadata that cannot fit the fixed header list is refused, not silently dropped;
+// #867: a grpc-timeout whose unit multiplication overflows u64 is refused, not wrapped.
+// `timeout`/`metadata` select one half for pre-fix evidence.
+fn regressions(a: *mem.Arena, mode: str) -> i32 {
+    if mode.len == 0usize || str.eq(mode, "timeout") {
+        let (_, overflow_error) = grpc.timeout_parse("99999999H")
+        if overflow_error != grpc.TooLarge { ret 1i32 }
+        // The largest hours value that still fits u64 nanoseconds.
+        let (fits, fits_error) = grpc.timeout_parse("5124095H")
+        if fits_error != ok || fits != 18446742000000000000u64 { ret 2i32 }
+        let (hours, hours_error) = grpc.timeout_parse("1H")
+        if hours_error != ok || hours != 3600000000000u64 { ret 3i32 }
+        let (minutes, minutes_error) = grpc.timeout_parse("99999999M")
+        if minutes_error != ok || minutes != 5999999940000000000u64 { ret 4i32 }
+    }
+    if mode.len == 0usize || str.eq(mode, "metadata") {
+        // Seventeen metadata fit beside the seven fixed headers; the eighteenth does not.
+        var seventeen: [17]h2.Header = zero
+        var m = 0usize
+        while m < seventeen.len {
+            seventeen[m] = h2.Header { name: "x-meta", value: "v", staged: 0u8 }
+            m += 1usize
+        }
+        var conn = new_conn(a)
+        var out: [4096]u8 = zero
+        let (_, start_error) = grpc.conn_start(&conn, out[0usize..])
+        if start_error != ok { ret 10i32 }
+        var buf: [1024]u8 = zero
+        let (_, _, fit_error) = grpc.call_start(&conn, out[0usize..], "localhost", "/x", 0u64, seventeen[0usize..], buf[0usize..])
+        if fit_error != ok { ret 11i32 }
+        var eighteen: [18]h2.Header = zero
+        m = 0usize
+        while m < eighteen.len {
+            eighteen[m] = h2.Header { name: "x-meta", value: "v", staged: 0u8 }
+            m += 1usize
+        }
+        var conn2 = new_conn(a)
+        var out2: [4096]u8 = zero
+        let (_, start_error2) = grpc.conn_start(&conn2, out2[0usize..])
+        if start_error2 != ok { ret 12i32 }
+        var buf2: [1024]u8 = zero
+        let (_, _, many_error) = grpc.call_start(&conn2, out2[0usize..], "localhost", "/x", 0u64, eighteen[0usize..], buf2[0usize..])
+        if many_error != grpc.TooLarge { ret 13i32 }
+        // A timeout takes one slot: seventeen metadata plus it no longer fit.
+        var conn3 = new_conn(a)
+        var out3: [4096]u8 = zero
+        let (_, start_error3) = grpc.conn_start(&conn3, out3[0usize..])
+        if start_error3 != ok { ret 14i32 }
+        var buf3: [1024]u8 = zero
+        let (_, _, timed_error) = grpc.call_start(&conn3, out3[0usize..], "localhost", "/x", 1000000000u64, seventeen[0usize..], buf3[0usize..])
+        if timed_error != grpc.TooLarge { ret 15i32 }
+    }
+    if mode.len == 0usize || str.eq(mode, "scheme") {
+        // #868: the :scheme header follows the connection's transport, not a constant.
+        var secure_conn = new_conn(a)
+        if !str.eq(grpc.scheme_of(&secure_conn), "http") { ret 30i32 }
+        grpc.set_secure(&secure_conn, true)
+        if !str.eq(grpc.scheme_of(&secure_conn), "https") { ret 31i32 }
+        grpc.set_secure(&secure_conn, false)
+        if !str.eq(grpc.scheme_of(&secure_conn), "http") { ret 32i32 }
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(100i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(101i32) }
@@ -539,6 +603,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_22()) != 0u8 { os.exit(122i32) }
     if run_chunk(a, vectors_23()) != 0u8 { os.exit(123i32) }
     if run_chunk(a, vectors_24()) != 0u8 { os.exit(124i32) }
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    let regression = regressions(a, mode)
+    if regression != 0i32 { os.exit(200i32 + regression) }
     try io.print("net grpc ok")
     ret ok
 }
