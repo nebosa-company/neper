@@ -21,7 +21,8 @@ param(
     [Parameter(Mandatory = $true)][string]$List,
     [string]$Baseline = "",
     [switch]$Update,
-    [string]$Tsv = ""
+    [string]$Tsv = "",
+    [int]$Chunk = 40
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,13 +30,43 @@ if (-not (Test-Path $Exe)) { throw "runner not found: $Exe" }
 if (-not (Test-Path $List)) { throw "list not found: $List" }
 if ($Tsv -eq "") { $Tsv = [System.IO.Path]::ChangeExtension($List, ".tsv") }
 
-$lines = & $Exe $Root $List 2>&1
-$summary = ($lines | Select-String '^wpt ' | Select-Object -Last 1).Line
+# The script runner leaks something per file (handover: the select-element abort is a cumulative
+# threshold between 117 and 140 files), so a long list is run in separate processes and the FILE
+# lines merged. Without this a suite of a few hundred files can lose most of its results to an
+# abort with a stale program pointer.
+$entries = Get-Content $List | Where-Object { $_.Trim() -ne "" }
 $rows = @()
-foreach ($line in $lines) {
-    if ($line -notmatch '^FILE (\S+) (\d+)/(\d+)') { continue }
-    $rows += [pscustomobject]@{ path = $matches[1]; passed = [int]$matches[2]; total = [int]$matches[3] }
+$chunkFiles = 0
+$chunkPassed = 0
+$chunkSubtests = 0
+$failedChunks = @()
+$at = 0
+while ($at -lt $entries.Count) {
+    $take = [Math]::Min($Chunk, $entries.Count - $at)
+    $part = $entries[$at..($at + $take - 1)]
+    $first = $at
+    $at += $take
+    $tmpList = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($Tsv), "chunk-" + $at + ".txt")
+    $part | Set-Content $tmpList -Encoding utf8
+    $lines = & $Exe $Root $tmpList 2>&1
+    $code = $LASTEXITCODE
+    Remove-Item $tmpList -Force
+    # A crashing chunk prints a FILE line per file it finished and no summary; say so instead of
+    # letting the merged totals silently come out short.
+    if ($code -ne 0 -or -not ($lines | Select-String '^wpt ')) {
+        $failedChunks += "files $first-$($at - 1) (exit $code)"
+    }
+    foreach ($line in $lines) {
+        if ($line -notmatch '^FILE (\S+) (\d+)/(\d+)') { continue }
+        $rows += [pscustomobject]@{ path = $matches[1]; passed = [int]$matches[2]; total = [int]$matches[3] }
+        $chunkPassed += [int]$matches[2]
+        $chunkSubtests += [int]$matches[3]
+        $chunkFiles += 1
+    }
 }
+foreach ($f in $failedChunks) { Write-Output "CHUNK ABORTED $f" }
+$summary = "wpt $chunkFiles files $chunkSubtests subtests $chunkPassed pass"
+if ($failedChunks.Count -gt 0) { $summary = "$summary  ($($failedChunks.Count) chunk(s) aborted)" }
 $rows | ForEach-Object { "$($_.path)`t$($_.passed)`t$($_.total)" } | Set-Content $Tsv -Encoding utf8
 
 if ($Update) {
