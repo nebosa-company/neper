@@ -163,5 +163,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let amp_body = find_body(&amp_document)
     let (amp_content, amp_content_error) = html.text_content(a, &amp_document, amp_body)
     if amp_content_error != ok || amp_content.len != 1000000usize { os.exit(33) }
+    // #155: `/` separates attributes as a space does, so `<a/href>` is a URI context and
+    // `<a/onclick>` an event-handler context (refused).
+    let (slash_href, slash_href_error) = render(a, "<a/href=\"{{js}}\">l</a>", bindings[0..], out[0..])
+    if slash_href_error != ok || !str.eq(slash_href, "<a/href=\"#unsafe\">l</a>") { os.exit(34) }
+    let (slash_event, slash_event_error) = render(a, "<a/onclick=\"{{v}}\">x</a>", bindings[0..], out[0..])
+    if slash_event_error != html_template.UnsafeContext { os.exit(35) }
+    // #155: `srcdoc` holds a document and meta `content` a URL; both are refused.
+    let (srcdoc, srcdoc_error) = render(a, "<iframe srcdoc=\"<p>{{v}}</p>\"></iframe>", bindings[0..], out[0..])
+    if srcdoc_error != html_template.UnsafeContext { os.exit(36) }
+    let (meta_refresh, meta_refresh_error) = render(a, "<meta http-equiv=\"refresh\" content=\"{{v}}\">", bindings[0..], out[0..])
+    if meta_refresh_error != html_template.UnsafeContext { os.exit(37) }
+    // #155: the remaining URI attributes are scheme-checked too.
+    let (xlink, xlink_error) = render(a, "<svg><a xlink:href=\"{{js}}\">x</a></svg>", bindings[0..], out[0..])
+    if xlink_error != ok || !str.eq(xlink, "<svg><a xlink:href=\"#unsafe\">x</a></svg>") { os.exit(38) }
+    let (poster, poster_error) = render(a, "<video poster=\"{{js}}\"></video>", bindings[0..], out[0..])
+    if poster_error != ok || !str.eq(poster, "<video poster=\"#unsafe\"></video>") { os.exit(39) }
+    // #155: a JS template literal cannot be broken out of by a backtick or `${`.
+    var literal_bindings: [1]template.Binding = zero
+    literal_bindings[0] = template.Binding { name: "v", value: template.Value{ Text: "`${alert(1)}" } }
+    let (literal, literal_error) = render(a, "<script>let s = `hello {{v}}`;</script>", literal_bindings[0..], out[0..])
+    if literal_error != ok || !str.eq(literal, "<script>let s = `hello \"\\x60\\x24\\x7Balert(1)}\"`;</script>") { os.exit(40) }
+    // #155: a text value over 512 bytes is streamed, not staged in a stack buffer.
+    let (long_builder, long_builder_error) = str.builder(a, 700usize)
+    if long_builder_error != ok { os.exit(41) }
+    var long_value = long_builder
+    var long_at = 0usize
+    while long_at < 600usize {
+        if str.push_byte(&long_value, 97u8) != ok { os.exit(41) }
+        long_at += 1usize
+    }
+    var long_bindings: [1]template.Binding = zero
+    long_bindings[0] = template.Binding { name: "v", value: template.Value{ Text: str.done(&long_value) } }
+    let (long_rendered, long_render_error) = render(a, "<p>{{v}}</p>", long_bindings[0..], out[0..])
+    if long_render_error != ok || long_rendered.len != 607usize { os.exit(41) }
     ret ok
 }

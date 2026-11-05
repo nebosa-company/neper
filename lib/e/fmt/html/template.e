@@ -32,8 +32,14 @@ type State = struct { nodes: []template.Node, contexts: []u8 }
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 || c == 12u8 }
 
+// Bytes that can sit in an HTML attribute name. Walking back from `=` stops at anything
+// else, so the `/` in `<a/href="...">` separates the name the way a browser reads it.
+fn is_name_byte(c: u8) -> bool {
+    ret str.is_ascii_alnum(c) || c == 45u8 || c == 58u8 || c == 46u8 || c == 95u8
+}
+
 fn is_uri_attribute(name: str) -> bool {
-    ret str.compare_ascii_fold(name, "href") == 0 || str.compare_ascii_fold(name, "src") == 0 || str.compare_ascii_fold(name, "action") == 0 || str.compare_ascii_fold(name, "formaction") == 0
+    ret str.compare_ascii_fold(name, "href") == 0 || str.compare_ascii_fold(name, "src") == 0 || str.compare_ascii_fold(name, "action") == 0 || str.compare_ascii_fold(name, "formaction") == 0 || str.compare_ascii_fold(name, "xlink:href") == 0 || str.compare_ascii_fold(name, "poster") == 0 || str.compare_ascii_fold(name, "data") == 0 || str.compare_ascii_fold(name, "ping") == 0 || str.compare_ascii_fold(name, "background") == 0 || str.compare_ascii_fold(name, "cite") == 0 || str.compare_ascii_fold(name, "manifest") == 0 || str.compare_ascii_fold(name, "codebase") == 0 || str.compare_ascii_fold(name, "longdesc") == 0 || str.compare_ascii_fold(name, "usemap") == 0 || str.compare_ascii_fold(name, "icon") == 0
 }
 
 // Feeds literal text through the scanner; the context after it is what an
@@ -122,16 +128,19 @@ fn scan(s: *Scan, text: str) {
             continue
         }
         if c == 61u8 {
-            // The attribute name is what preceded this sign.
+            // The attribute name is what preceded this sign. Only an attribute-name
+            // byte continues it, so `/`, `<`, `"`, `'`, `=` and white space end it.
             var name_stop = i
-            while name_stop > 0usize && is_space(text[name_stop - 1usize]) { name_stop -= 1usize }
             var name_start = name_stop
-            while name_start > 0usize && !is_space(text[name_start - 1usize]) && text[name_start - 1usize] != 60u8 && text[name_start - 1usize] != 34u8 && text[name_start - 1usize] != 39u8 { name_start -= 1usize }
+            while name_start > 0usize && is_name_byte(text[name_start - 1usize]) { name_start -= 1usize }
             let name = text[name_start..name_stop]
             s.attribute_kind = 1u8
             if is_uri_attribute(name) { s.attribute_kind = 2u8 }
             if str.compare_ascii_fold(name, "style") == 0 { s.attribute_kind = 3u8 }
             if name.len > 2usize && (name[0] == 111u8 || name[0] == 79u8) && (name[1] == 110u8 || name[1] == 78u8) { s.attribute_kind = 4u8 }
+            // `srcdoc` is an HTML document and a meta `content` is a URL: neither can be
+            // escaped inside an attribute.
+            if str.compare_ascii_fold(name, "srcdoc") == 0 || (str.compare_ascii_fold(s.element, "meta") == 0 && str.compare_ascii_fold(name, "content") == 0) { s.attribute_kind = 5u8 }
             var j = i + 1usize
             while j < text.len && is_space(text[j]) { j += 1usize }
             s.in_value = true
@@ -163,6 +172,7 @@ fn context_of(s: *const Scan) -> u8 {
     if s.in_raw == 2u8 { ret 5u8 }
     if !s.in_tag { ret 0u8 }
     if !s.in_value || s.quote == 0u8 { ret 7u8 }
+    if s.attribute_kind == 5u8 { ret 7u8 }
     if s.attribute_kind == 4u8 { ret 7u8 }
     if s.attribute_kind == 3u8 { ret 5u8 }
     if s.attribute_kind == 2u8 {
@@ -302,13 +312,14 @@ fn write_css_escaped(writer: *io.Writer, text: str) -> err {
 }
 
 // Script: the value becomes a JavaScript string literal, every byte outside the
-// plain printable set as a `\xNN` escape, so no `</script` or quote can form.
+// plain printable set as a `\xNN` escape, so no `</script`, quote, backtick or `${`
+// can form (the interpolation may sit inside a template literal).
 fn write_script_escaped(writer: *io.Writer, text: str) -> err {
     try io.write_all(writer, "\"")
     var i = 0usize
     while i < text.len {
         let c = text[i]
-        if c >= 32u8 && c < 127u8 && c != 34u8 && c != 92u8 && c != 60u8 && c != 62u8 && c != 38u8 && c != 39u8 {
+        if c >= 32u8 && c < 127u8 && c != 34u8 && c != 92u8 && c != 60u8 && c != 62u8 && c != 38u8 && c != 39u8 && c != 36u8 && c != 96u8 && c != 123u8 {
             var one: [1]u8 = zero
             one[0] = c
             try io.write_all(writer, one[0..])
@@ -332,13 +343,23 @@ fn write_escaped(writer: *io.Writer, context: u8, text: str) -> err {
     ret write_text_escaped(writer, text)
 }
 
-// A value as text, through the core engine's own formatting into a stack buffer.
-fn value_text(value: template.Value, scratch: []u8) -> (str, err) {
-    var state = io.SliceWriter { data: scratch, off: 0usize }
-    var sink = io.slice_writer(&state)
-    let write_error = template.write_value(&sink, value)
-    if write_error != ok { ret ("", write_error) }
-    ret (scratch[..state.off], ok)
+// A value escaped for its context. Text and bytes stream straight through the escaper,
+// so any length renders; the other kinds format into a stack buffer first (a decimal
+// number is at most 24 bytes).
+fn write_value_escaped(writer: *io.Writer, context: u8, value: template.Value) -> err {
+    switch value {
+    case .Text as text:
+        ret write_escaped(writer, context, text)
+    case .Bytes as bytes:
+        ret write_escaped(writer, context, bytes)
+    default:
+        var scratch: [64]u8 = zero
+        var state = io.SliceWriter { data: scratch[0..], off: 0usize }
+        var sink = io.slice_writer(&state)
+        let write_error = template.write_value(&sink, value)
+        if write_error != ok { ret write_error }
+        ret write_escaped(writer, context, scratch[0..state.off])
+    }
 }
 
 fn run(nodes: []const template.Node, contexts: []const u8, from: usize, to: usize, writer: *io.Writer, bindings: []const template.Binding, index: u64) -> err {
@@ -364,10 +385,7 @@ fn run_bounded(nodes: []const template.Node, contexts: []const u8, from: usize, 
                 if !present { ret MissingValue }
                 value = found
             }
-            var scratch: [512]u8 = zero
-            let (text, text_error) = value_text(value, scratch[0..])
-            if text_error != ok { ret TooLarge }
-            try write_escaped(writer, contexts[at], text)
+            try write_value_escaped(writer, contexts[at], value)
         } else {
         if node.kind == 2u8 {
             let (value, found) = template.lookup(bindings, node.text)
