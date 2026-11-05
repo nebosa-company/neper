@@ -7,8 +7,13 @@
 // The control keeps no state of its own: a `Browser` is two pointers, so a caller may make one wherever it needs it (a
 // frame, an event handler) and never has to keep it in step with a tab. The page and its history live in the tab,
 // which is what lets a reload, a back or a forward replace the page without the caller re-binding anything.
+use e.fmt.html as html
+use e.fmt.html.accessible as accessible
+use e.gfx.geometry as geometry
 use e.gfx.scene as scene
 use e.mem
+use e.str
+use e.ui.accessibility
 use e.ui.html_view as view
 use e.ui.widget
 use e.web.page as page
@@ -114,4 +119,146 @@ fn canvas(b: *Browser) -> widget.Custom {
 fn region(b: *Browser) -> widget.Region {
     if !b.tab.loaded { ret zero }
     ret view.region(b.tab.pg.view)
+}
+
+// --- Accessibility -----------------------------------------------------------------------------------------------------
+//
+// The page's document tree as an `e.ui.accessibility` tree, for a host that publishes one: the roles and names come
+// from `e.fmt.html.accessible` (native and ARIA roles, accName precedence) and are numbered from `A11Y_SLOT_BASE`, so
+// their slots cannot collide with the widget tree's and can be spliced under the canvas. What is not built yet: bounds
+// (they need the layout boxes and the canvas origin), actions, relations and live regions.
+
+const A11Y_SLOT_BASE: u32 = 2147483648u32
+
+fn a11y_role(r: accessible.Role) -> accessibility.Role {
+    switch r {
+    case .Text:
+        ret accessibility.Role.Text
+    case .Heading:
+        ret accessibility.Role.Heading
+    case .Link:
+        ret accessibility.Role.Link
+    case .Button:
+        ret accessibility.Role.Button
+    case .Image:
+        ret accessibility.Role.Image
+    case .TextField:
+        ret accessibility.Role.TextField
+    case .Checkbox:
+        ret accessibility.Role.Checkbox
+    case .Radio:
+        ret accessibility.Role.Radio
+    case .Combobox:
+        ret accessibility.Role.Combobox
+    case .Listbox:
+        ret accessibility.Role.Listbox
+    case .Slider:
+        ret accessibility.Role.Slider
+    case .Progressbar:
+        ret accessibility.Role.Progress
+    case .List:
+        ret accessibility.Role.List
+    case .ListItem:
+        ret accessibility.Role.ListItem
+    case .Table:
+        ret accessibility.Role.Table
+    case .Row:
+        ret accessibility.Role.Row
+    case .Cell:
+        ret accessibility.Role.Cell
+    case .ColumnHeader:
+        ret accessibility.Role.ColumnHeader
+    case .RowHeader:
+        ret accessibility.Role.RowHeader
+    case .Main:
+        ret accessibility.Role.Main
+    case .Region:
+        ret accessibility.Role.Region
+    case .Dialog:
+        ret accessibility.Role.Dialog
+    case .Separator:
+        ret accessibility.Role.Separator
+    case .Figure:
+        ret accessibility.Role.Image
+    default:
+        ret accessibility.Role.Group
+    }
+}
+
+fn count_a11y(n: *const accessible.Node) -> usize {
+    var total = 1usize
+    var i = 0usize
+    while i < n.children.len {
+        total += count_a11y(&n.children[i])
+        i += 1usize
+    }
+    ret total
+}
+
+fn fill_a11y(n: *const accessible.Node, a: *mem.Arena, out: []accessibility.Node, next: *usize) -> (accessibility.Id, err) {
+    var none_id: accessibility.Id = zero
+    let at = *next
+    *next += 1usize
+    let (ids, ie) = mem.alloc[accessibility.Id](a, n.children.len)
+    if ie != ok { ret (none_id, ie) }
+    var i = 0usize
+    while i < n.children.len {
+        let (child, ce) = fill_a11y(&n.children[i], a, out, next)
+        if ce != ok { ret (none_id, ce) }
+        ids[i] = child
+        i += 1usize
+    }
+    var st = accessibility.State { disabled: n.disabled, focused: false, selected: n.selected, checked: n.checked, expanded: n.expanded, hidden: false, mixed: n.checked_mixed, busy: false, invalid: n.invalid, required: n.required, read_only: false, modal: false, current: false, secret: false }
+    var value = ""
+    if n.has_value { value = n.value }
+    var hint = ""
+    if n.has_url { hint = n.url }
+    var level = 0u8
+    if n.has_level && n.level > 0i64 { level = u8(n.level) }
+    var id = accessibility.Id { slot: A11Y_SLOT_BASE + u32(at), generation: 1u32 }
+    out[at] = accessibility.Node {
+        id: id,
+        role: a11y_role(n.role),
+        label: n.name,
+        value: value,
+        hint: hint,
+        state: st,
+        bounds: geometry.rect(0.0, 0.0, 0.0, 0.0),
+        actions: zero,
+        children: ids,
+        relations: zero,
+        live: .Off,
+        position: zero,
+        level: level,
+        sort: .None,
+        selection_start: 0usize,
+        selection_end: 0usize,
+        names: zero
+    }
+    ret (id, ok)
+}
+
+// The accessibility tree under the page's `<body>`, numbered from A11Y_BASE; a tab with no page answers an empty tree.
+fn a11y_tree(b: *Browser, a: *mem.Arena) -> (accessibility.Tree, err) {
+    var empty = accessibility.Tree { root: zero, nodes: zero }
+    let t = b.tab
+    if !t.loaded { ret (empty, ok) }
+    let p = t.pg
+    var doc = html.Document { nodes: p.tree.nodes, root: p.tree.root, quirks: p.tree.quirks }
+    var root = p.tree.root
+    var i = 0usize
+    while i < p.tree.used {
+        if str.eq(p.tree.nodes[i].name, "body") {
+            root = u32(i)
+            break
+        }
+        i += 1usize
+    }
+    let acc = accessible.build_tree(a, &doc, root)
+    let (out, oe) = mem.alloc[accessibility.Node](a, count_a11y(&acc))
+    if oe != ok { ret (empty, oe) }
+    var next = 0usize
+    let (root_id, re) = fill_a11y(&acc, a, out, &next)
+    if re != ok { ret (empty, re) }
+    ret (accessibility.Tree { root: root_id, nodes: out[0usize..next] }, ok)
 }

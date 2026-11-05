@@ -25548,6 +25548,11 @@ fn pump(b: *Browser, now_ms: f64) -> bool
 fn timer_due(b: *const Browser, now_ms: f64) -> bool
 fn canvas(b: *Browser) -> widget.Custom
 fn region(b: *Browser) -> widget.Region
+const A11Y_SLOT_BASE: u32 = 2147483648u32
+fn a11y_role(r: accessible.Role) -> accessibility.Role
+fn count_a11y(n: *const accessible.Node) -> usize
+fn fill_a11y(n: *const accessible.Node, a: *mem.Arena, out: []accessibility.Node, next: *usize) -> (accessibility.Id, err)
+fn a11y_tree(b: *Browser, a: *mem.Arena) -> (accessibility.Tree, err)
 ```
 
 ### `e.fmt.url`

@@ -2464,8 +2464,13 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.fmt.html",
+    "e.fmt.html.accessible",
+    "e.gfx.geometry",
     "e.gfx.scene",
     "e.mem",
+    "e.str",
+    "e.ui.accessibility",
     "e.ui.html_view",
     "e.ui.widget",
     "e.web.page",

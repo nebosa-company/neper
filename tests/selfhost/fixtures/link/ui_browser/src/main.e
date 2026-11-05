@@ -11,6 +11,7 @@ use e.net.fetch as fetch
 use e.os
 use e.str
 use e.text.fontset as fontset
+use e.ui.accessibility as acc
 use e.ui.browser as browser
 use e.web.shell as shell
 
@@ -22,6 +23,15 @@ fn data_page(a: *mem.Arena, title: str) -> str {
     let (s, e) = str.concat(a, "data:text/html,<title>", title)
     let (s2, e2) = str.concat(a, s, "</title><p>x</p>")
     ret s2
+}
+
+fn find_label(t: *const acc.Tree, label: str) -> (usize, bool) {
+    var i = 0usize
+    while i < t.nodes.len {
+        if str.eq(t.nodes[i].label, label) { ret (i, true) }
+        i += 1usize
+    }
+    ret (0usize, false)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -121,6 +131,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pixels[30usize * side + 10usize] != BLUE { os.exit(58i32) }
     // A page loaded after the preference was set is laid out with it from the start.
     if browser.navigate(&b, styled) != ok || !browser.state(&b).ready { os.exit(59i32) }
+    // The page's accessibility tree: roles and names from the document, numbered above the widget tree's slots.
+    let content = "data:text/html,<h1>Title</h1><p>Hello<a href=/x>link</a></p><button>Go</button>"
+    if browser.navigate(&b, content) != ok { os.exit(61i32) }
+    let (tree, te) = browser.a11y_tree(&b, a)
+    if te != ok || tree.nodes.len == 0usize { os.exit(62i32) }
+    let (hi, hf) = find_label(&tree, "Title")
+    if !hf || tree.nodes[hi].role != acc.Role.Heading || tree.nodes[hi].level != 1u8 { os.exit(63i32) }
+    let (li, lf) = find_label(&tree, "link")
+    if !lf || tree.nodes[li].role != acc.Role.Link || !str.eq(tree.nodes[li].hint, "/x") { os.exit(64i32) }
+    let (bi, bf) = find_label(&tree, "Go")
+    if !bf || tree.nodes[bi].role != acc.Role.Button { os.exit(65i32) }
+    let (ti, tf) = find_label(&tree, "Hello")
+    if !tf || tree.nodes[ti].role != acc.Role.Text { os.exit(66i32) }
+    // The ids are the page's own slots, away from the widget tree's.
+    if tree.nodes[hi].id.slot < 2147483648u32 { os.exit(67i32) }
     // A load the engine cannot do leaves the error page, and the history keeps the attempt.
     if browser.navigate(&b, "ftp://nowhere.test/file") != ok { os.exit(43i32) }
     st = browser.state(&b)

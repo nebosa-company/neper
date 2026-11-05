@@ -3554,6 +3554,7 @@
     "ui_algorithms",
     "ui_app",
     "ui_audit",
+    "ui_browser",
     "ui_button",
     "ui_button_v2",
     "ui_choice",
