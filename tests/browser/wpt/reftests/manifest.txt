@@ -204,3 +204,4 @@ hanging-punct-first-span-002.html | hanging-punct-first-span-002-ref.html | matc
 hanging-punct-first-u3000-003.html | hanging-punct-first-u3000-003-ref.html | match
 hanging-punct-last-quote-004.html | hanging-punct-last-quote-004-ref.html | match
 hanging-punct-last-cjk-005.html | hanging-punct-last-cjk-005-ref.html | match
+hanging-punct-allow-end-006.html | hanging-punct-allow-end-006-ref.html | match

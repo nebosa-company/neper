@@ -2461,6 +2461,20 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 }
             }
         }
+        // `hanging-punctuation: force-end` and `allow-end`: a trailing comma or full stop hangs past the content edge;
+        // `allow-end` only when it is the character that would otherwise overflow the line.
+        if p.kind == .Text && (bstyle(l, p.box).hanging_punctuation & 12u8) != 0u8 && !hangs {
+            let (pw2, pn2) = hanging_period_w(l, p)
+            if pn2 > 0usize {
+                if (bstyle(l, p.box).hanging_punctuation & 4u8) != 0u8 {
+                    hangs = true
+                    needed = p.w - pw2
+                } else if pos + p.w - pw2 <= lim + 0.01f64 && pos + p.w > lim + 0.01f64 {
+                    hangs = true
+                    needed = p.w - pw2
+                }
+            }
+        }
         // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
         if pos + needed > lim + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
             let below = next_float_end(l, fc.base, fc.oy + x.y)
@@ -2552,6 +2566,25 @@ fn hanging_close_w(l: *Layout, p: Piece) -> (f64, usize) {
     if len == 1usize && (c == 41u8 || c == 93u8 || c == 125u8 || c == 34u8 || c == 39u8) { found = true }
     if len == 3usize && c == 226u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 153u8 || proc[at + 2usize] == 157u8) { found = true }
     if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && proc[at + 2usize] >= 137u8 && proc[at + 2usize] <= 161u8 && (proc[at + 2usize] & 1u8) == 1u8 { found = true }
+    if !found { ret (0.0f64, 0usize) }
+    ret (text_advance(l, bstyle(l, p.box), proc[at..end]), len)
+}
+
+// The advance and byte length of a comma or full stop at the end of a text piece (`hanging-punctuation: force-end` and
+// `allow-end`), both 0 when the piece does not end with one.
+fn hanging_period_w(l: *Layout, p: Piece) -> (f64, usize) {
+    if p.kind != .Text || p.clen == 0usize { ret (0.0f64, 0usize) }
+    let proc = l.boxes.items[usize(p.box)].proc
+    let end = p.start + p.clen
+    if end > proc.len || end == 0usize { ret (0.0f64, 0usize) }
+    var at = end - 1usize
+    while at > p.start && (proc[at] & 192u8) == 128u8 { at -= 1usize }
+    let len = end - at
+    let c = proc[at]
+    var found = false
+    if len == 1usize && (c == 44u8 || c == 46u8) { found = true }
+    if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 129u8 || proc[at + 2usize] == 130u8) { found = true }
+    if len == 3usize && c == 239u8 && proc[at + 1usize] == 188u8 && (proc[at + 2usize] == 140u8 || proc[at + 2usize] == 142u8) { found = true }
     if !found { ret (0.0f64, 0usize) }
     ret (text_advance(l, bstyle(l, p.box), proc[at..end]), len)
 }
@@ -3520,10 +3553,10 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
     // Width and alignment.
     var used_w = 0.0f64
     // `hanging-punctuation: last`: a closing punctuation at the very end of the line hangs past the content edge and
-    // takes no room in the line.
+    // takes no room in the line. `force-end`/`allow-end` do the same for a trailing comma or full stop.
     var close_idx = trim_end
     var close_w = 0.0f64
-    if (cs.hanging_punctuation & 2u8) != 0u8 {
+    if (cs.hanging_punctuation & 14u8) != 0u8 {
         var ck = trim_end
         while ck > lead {
             ck -= 1usize
@@ -3533,6 +3566,12 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 if cn > 0usize {
                     close_idx = ck
                     close_w = cw
+                } else if (cs.hanging_punctuation & 12u8) != 0u8 {
+                    let (pw2, pn2) = hanging_period_w(l, cp)
+                    if pn2 > 0usize {
+                        close_idx = ck
+                        close_w = pw2
+                    }
                 }
                 break
             }
