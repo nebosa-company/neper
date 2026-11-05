@@ -19,9 +19,9 @@
 - `.text`: `src/check.e`×143‡, `lib/e/js/parser.e`×119†, `lib/e/js/interp.e`×106‡, `lib/e/ui/navigation.e`×102‡, `lib/e/ui/collection.e`×92‡, `lib/e/ui/overlay.e`×81‡, `lib/e/ui/control.e`×75‡, `lib/e/ui/style.e`×62†
 - `.idata`: `src/link_pe.e`×4
 - `project.yaml`: `src/main.e`×8‡, `src/assets.e`×5, `lib/e/asset.e`×1, `src/graph.e`×1†
-- `ICON`: `lib/e/os/shell.windows.e`×10‡, `scripts/material/gen_glyphs.py`×4, `scripts/linux_cmp_l3.py`×3, `scripts/material/gallery.html`×3, `scripts/winnative/gallery.c`×3†, `scripts/linux_cmp_lc.py`×2, `scripts/linux_flat_la.py`×2, `lib/e/algo/transpile.e`×1
+- `ICON`: `lib/e/os/shell.windows.e`×10‡, `scripts/material/gen_glyphs.py`×4, `scripts/linux_cmp_l3.py`×3, `scripts/material/gallery.html`×3, `scripts/winnative/gallery.c`×3†, `scripts/linux_cmp_lc.py`×2, `scripts/linux_flat_la.py`×2, `lib/e/algo/transpile.e`×1†
 - `CURSOR`: `lib/e/ui/terminal.e`×5†, `lib/e/os/shell.windows.e`×2‡, `lib/wasm/window.js`×2, `scripts/syncpull_reference.mjs`×2, `scripts/khronos/eglext.h`×1†, `src/main.e`×1‡
-- `BITMAP`: `scripts/khronos/eglext.h`×9†, `scripts/winnative/glyphs.c`×9, `scripts/winnative/gallery.c`×6†, `lib/e/gfx/cleartype.e`×3, `scripts/material/ftprobe.py`×2, `lib/e/os.windows.e`×1‡
+- `BITMAP`: `scripts/khronos/eglext.h`×9†, `scripts/winnative/glyphs.c`×9, `scripts/winnative/gallery.c`×6†, `lib/e/gfx/cleartype.e`×3, `scripts/material/ftprobe.py`×2, `lib/e/os.windows.e`×1‡, `lib/e/os/shell.windows.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×13‡
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5, `scripts/gen_highlight.py`×3, `scripts/source_metrics.py`×3, `lib/e/js/intl.e`×2‡, `lib/e/js/intl/82_displaynames.js`×2, `lib/e/text/highlight.e`×2, `lib/x/khronos/gl.e`×2‡, `scripts/khronos/glcorearb.h`×2‡
 - `.ico`: `lib/e/ui/control.e`×74‡, `lib/e/ui/navigation.e`×54‡, `lib/e/ui/collection.e`×38‡, `lib/e/ui/overlay.e`×21‡, `lib/e/ui/datagrid.e`×4‡, `lib/e/ui/looks_a.e`×4, `lib/e/ui/window.e`×3, `lib/e/fmt/brotli.e`×2‡

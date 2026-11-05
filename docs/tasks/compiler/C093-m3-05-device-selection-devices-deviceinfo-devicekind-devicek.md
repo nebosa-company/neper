@@ -34,8 +34,8 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `.Cpu`: `lib/e/gpu.e`×15‡, `benchmarks/gfx_gpu_raster.e`×2, `lib/e/proc/sys/host.linux.e`×2, `lib/e/proc/sys/host.neperos.e`×2, `lib/e/proc/sys/host.wasi.e`×2, `lib/e/proc/sys/host.windows.e`×2, `scripts/gen_gpu_gl_narrow.py`×2, `benchmarks/charts/chart_bench.e`×1
-- `NoDevice`: `lib/e/gpu.e`×22‡, `lib/e/gpu/cuda.e`×4, `lib/e/gpu/metal.macos.e`×4, `lib/e/gpu/vulkan.e`×2†, `benchmarks/gp/neper/gp10.e`×1, `lib/e/gpu/metal.e`×1
-- `Unsupported`: `lib/x/khronos/gl.e`×671‡, `src/codegen_x64.e`×121‡, `src/codegen_a64.e`×85‡, `lib/e/os.neperos.e`×82, `src/check.e`×74‡, `src/lower.e`×57‡, `lib/e/gpu.e`×55‡, `lib/e/os/shell.neperos.e`×51
+- `NoDevice`: `lib/e/gpu.e`×22‡, `lib/e/gpu/cuda.e`×5, `lib/e/gpu/metal.macos.e`×4, `lib/e/gpu/vulkan.e`×2†, `benchmarks/gp/neper/gp10.e`×1, `lib/e/gpu/metal.e`×1
+- `Unsupported`: `lib/x/khronos/gl.e`×671‡, `src/codegen_x64.e`×121‡, `src/codegen_a64.e`×85‡, `lib/e/os.neperos.e`×82, `src/check.e`×74‡, `src/lower.e`×57‡, `lib/e/gpu.e`×56‡, `lib/e/os/shell.neperos.e`×51
 - `open_id`: `lib/e/gpu.e`×1‡
 - `AmbiguousDevice`: `lib/e/gpu.e`×3‡
 

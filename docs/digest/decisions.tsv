@@ -1433,7 +1433,7 @@ D1526	3056	A batch's snapshots: edits, pins, eviction and stale keys
 D1527	3684	A memory budget for the lowering workers
 D1528	2050	Provenance through inlining in a selection diagnostic
 D1529	2472	Spec surfaces per variant and the deferred-library fixture manifest
-D1530	1814	The filled "on" form of an icon
+D1530	1814	The filled 'on' form of an icon
 D1531	750	A selected icon tab shows its filled icon
 D1532	1244	Icon buttons: a badge on the icon, a filled selected toggle
 D1533	1465	A tree table sorts within each parent and counts in a footer
@@ -3033,4 +3033,5 @@ D5955	675	The browser on wasm32-wasi
 D5956	923	NeperOS shell: Cancel rebuilds Home from the floor; install fixtures size clipboard life
 D5957	928	Optimization roadmap: eleven queue items from a survey of the fastest compilers
 D5960	5003	Real SIMD on x64: `e.simd` calls lower to packed instructions, SSE2 baseline, SSE4.1 at `x64-v2`, AVX2 at `x64-v3`
-D5961	2873	The 2026-11-04 language design review is queued as C258-C264, and the token cost is the gate on each
+D5961	2874	The 2026-11-04 language design review is queued as C258-C264, and the token cost is the gate on each
+D5962	2127	GitHub Pages caching: HTML keeps max-age=600, long-lived assets are fingerprinted, a fronting CDN is optional

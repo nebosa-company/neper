@@ -35,7 +35,7 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Code anchors
 
-- `.dll`: `lib/e/os.windows.e`×135‡, `lib/e/os/shell.windows.e`×95‡, `lib/x/postgresql/capi.windows.e`×34, `lib/x/sqlite/capi.windows.e`×30, `scripts/v3_states_lib.ps1`×25, `lib/x/microsoft/capi.windows.e`×21, `lib/x/oracle/mysqlclient.windows.e`×20, `scripts/grab_v3_dialogs.ps1`×16
+- `.dll`: `lib/e/os.windows.e`×139‡, `lib/e/os/shell.windows.e`×96‡, `lib/x/postgresql/capi.windows.e`×34, `lib/x/sqlite/capi.windows.e`×30, `scripts/v3_states_lib.ps1`×25, `lib/x/microsoft/capi.windows.e`×21, `lib/x/oracle/mysqlclient.windows.e`×20, `scripts/grab_v3_dialogs.ps1`×16
 - `.dylib`: `lib/e/os.macos.e`×25‡, `lib/e/os/shell.macos.e`×14‡, `src/link_macho.e`×4, `lib/e/gpu/metal.macos.e`×2
 - nearest existing implementation: `src/link_pe.e`, `src/link_elf.e`†, `src/em_link.e`†, `src/object_coff.e` († over 40 KB, ‡ over 120 KB — read by region)
 

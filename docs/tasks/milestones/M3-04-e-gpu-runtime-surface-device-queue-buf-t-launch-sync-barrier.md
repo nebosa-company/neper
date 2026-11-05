@@ -33,7 +33,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 ## Code anchors
 
 - `e.gpu`: `src/check.e`×39‡, `src/resolve.e`×27†, `src/lower.e`×12‡, `lib/x/khronos/compute.e`×10, `lib/e/gpu.e`×6‡, `lib/e/os.neperos.e`×3, `lib/e/os.wasi.e`×3‡, `lib/e/gfx/scene.e`×2‡
-- `Device`: `lib/e/gpu.e`×104‡, `lib/e/gpu/vulkan.e`×23†, `src/check.e`×21‡, `lib/e/gpu/cuda.e`×11, `scripts/khronos/eglext.h`×10†, `lib/e/gpu/metal.macos.e`×5, `lib/e/os/shell.macos.e`×5‡, `scripts/khronos/eglext_angle.h`×4
+- `Device`: `lib/e/gpu.e`×105‡, `lib/e/gpu/vulkan.e`×23†, `src/check.e`×21‡, `lib/e/gpu/cuda.e`×12, `scripts/khronos/eglext.h`×10†, `lib/e/gpu/metal.macos.e`×5, `lib/e/os/shell.macos.e`×5‡, `lib/e/web/dom_js.e`×5‡
 - `Queue`: `lib/e/web/dom_js.e`×60‡, `lib/e/gpu.e`×51‡, `lib/e/web/js/34_byte_streams.js`×28, `lib/e/task/jobs.e`×24, `lib/e/web/js/33_writable.js`×15, `lib/e/concurrent/queue.e`×13, `lib/e/data/cache.e`×12, `lib/e/data/queue.e`×11
 - `gpu.barrier`: `src/check.e`×7‡, `tests/conformance/spirv/sync.e`×3, `lib/e/gpu.e`×1‡, `src/lower.e`×1‡
 - `gpu.memory_barrier`: `tests/conformance/spirv/sync.e`×2, `src/check.e`×1‡

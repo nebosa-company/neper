@@ -26,7 +26,7 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `project.yaml`: `src/main.e`×8‡, `src/assets.e`×5, `lib/e/asset.e`×1, `src/graph.e`×1†
-- `.res`: `src/check.e`×549‡, `src/codegen_x64.e`×83‡, `lib/e/web/dom_js.e`×76‡, `src/glsl.e`×76†, `src/spirv.e`×72‡, `lib/e/os.windows.e`×71‡, `lib/e/os.linux.e`×65‡, `src/codegen_a64.e`×63‡
+- `.res`: `src/check.e`×549‡, `src/codegen_x64.e`×83‡, `lib/e/web/dom_js.e`×76‡, `src/glsl.e`×76†, `lib/e/os.windows.e`×74‡, `src/spirv.e`×72‡, `lib/e/os.linux.e`×65‡, `src/codegen_a64.e`×63‡
 
 ## Verification
 

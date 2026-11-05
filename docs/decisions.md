@@ -27791,7 +27791,7 @@ The catalogue now states what is delivered, `WindowMode` included, and the gate 
 
 `tests/test_module_plan.py` fails at HEAD, before this row, on `e.algo.uuid` and other catalogue items (duplicate import qualifiers). Nothing here touches that, and it is left for its own work. C050 closes at 1.
 
-## D1530 — The filled "on" form of an icon
+## D1530 — The filled 'on' form of an icon
 
 The Icon spec draws every icon at rest as outline strokes and the selected or "on" form filled: a selected navigation destination, a favourited item. `icon_of` drew outlines only. Its `ponytail:` marker waited on a full icon set, but the fill needs a body, not more glyphs.
 
@@ -43798,3 +43798,35 @@ the card and the grammar respectively.
 **Not done.** No checker, grammar, card or specification text changes here; all seven
 rows are score 0 in `docs/work-queue.json`, and C104 remains the first item, so none of
 them is eligible for the next session until the NeperOS priority releases it.
+
+## D5962 — GitHub Pages caching: HTML keeps max-age=600, long-lived assets are fingerprinted, a fronting CDN is optional
+
+**What was measured.** neper.dev is served by GitHub Pages, which fixes
+`Cache-Control: max-age=600` for every response and exposes no setting to change it.
+So the 27 KB gzipped `docs/ux/components/bundle.css`, every `/blog/img/*` file and the
+`/gtm/*.png` tags are revalidated by repeat visitors every ten minutes, and a
+SearchFit Lighthouse run flags "Serve static assets with an efficient cache policy"
+(issue #340).
+
+**Chosen route.** Accept `max-age=600` for HTML: a page's URL must stay stable for
+links and search engines, so an HTML response is the one thing that should revalidate.
+Fingerprint the long-lived assets instead — `bundle.<hash>.css` and hash-named
+`/blog/img/*` files — so a changed byte changes the referenced URL while the old URL
+can be cached until its next edit. Nothing in this repository adds a CDN; if one is
+fronted over neper.dev later, the hashed asset URLs are already the ones it can serve
+with a year or more of `max-age`, while the HTML stays at 600. Until hashed names and
+the byte cuts land, the byte-reduction work (render-blocking CSS and image weight) is
+the documented fallback, not a caching change.
+
+**Generator change.** None is needed in this repository for the decision or for the
+accepted route: the site's HTML (`docs/blog/*.html`) and `docs/ux/components` are
+maintained in-tree and there is no site generator here to teach about hashes. When
+those assets are next edited, the rename and its references are a manual, reviewable
+change; any generator added later must write the hash into both the file name and every
+reference to it. No CDN is implemented, so the "year or more" condition in #340 stays
+an option for a fronting proxy rather than a Pages configuration.
+
+**Done when.** The decision is recorded (this entry). Since the CDN route is not taken,
+no `max-age` change is required on GitHub Pages; a future CDN front must serve the
+hashed `bundle.<hash>.css` and `/blog/img/*` names with a year or more and leave HTML
+at the Pages default.

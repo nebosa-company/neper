@@ -50,7 +50,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `link-em`: `src/main.e`×5‡, `benchmarks/fuzz/fuzz.py`×1, `src/em_link.e`×1†, `src/tool.e`×1‡, `tests/conformance/tools/capabilities.expected.jsonl`×1
-- `perturb`: `src/main.e`×12‡, `lib/e/thread.e`×5, `src/graph.e`×4†, `scripts/environment_reference.py`×3, `lib/e/gfx/chart.e`×1‡, `scripts/environment_fixture_template.e`×1, `scripts/text_mask_reference.py`×1, `src/tool.e`×1‡
+- `perturb`: `src/main.e`×12‡, `lib/e/thread.e`×5, `src/graph.e`×4†, `scripts/environment_reference.py`×3, `lib/e/algo/project.e`×1, `lib/e/gfx/chart.e`×1‡, `scripts/environment_fixture_template.e`×1, `scripts/text_mask_reference.py`×1
 
 ## Existing fixtures
 
