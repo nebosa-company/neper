@@ -675,6 +675,12 @@ extern fn raw_wsa_startup(version: u16, data: *WsaData) -> i32
 @import("ws2_32.dll", "socket")
 extern fn raw_socket_open(family: i32, kind: i32, protocol: i32) -> usize
 
+// `WSASocketW` with WSA_FLAG_NO_HANDLE_INHERIT (| overlapped) so sockets never leak into
+// unrelated children spawned later.
+@import("ws2_32.dll", "WSASocketW")
+extern fn raw_socket_open_ex(family: i32, kind: i32, protocol: i32, protocol_info: usize, group: u32, flags: u32) -> usize
+const WSA_FLAG_SOCKET: u32 = 129u32
+
 @import("ws2_32.dll", "closesocket")
 extern fn raw_socket_close(s: usize) -> i32
 
@@ -2100,6 +2106,20 @@ fn batch_target(text: str) -> bool {
     ret false
 }
 
+// Undo the child-only marking: the handles stay the parent's and must not leak into a
+// later, unrelated child (the pipe write end is the case that matters).
+fn make_uninheritable(stdio: Stdio) {
+    var none = 0u32
+    if stdio.stdin.raw != 0usize { let e = raw_set_handle_information(stdio.stdin.raw, HANDLE_FLAG_INHERIT, 0u32) }
+    if stdio.stdout.raw != 0usize { let e = raw_set_handle_information(stdio.stdout.raw, HANDLE_FLAG_INHERIT, 0u32) }
+    if stdio.stderr.raw != 0usize { let e = raw_set_handle_information(stdio.stderr.raw, HANDLE_FLAG_INHERIT, 0u32) }
+    var at = 0usize
+    while at < stdio.inherit.len {
+        let e = raw_set_handle_information(stdio.inherit[at].raw, HANDLE_FLAG_INHERIT, 0u32)
+        at += 1usize
+    }
+}
+
 fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartResult, err) {
     var result: StartResult = zero
     let (line, line_error) = command_line(a, options.argv)
@@ -2155,7 +2175,9 @@ fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartR
     }
     var information: ProcessInformation = zero
     // Handles are inherited, which is what makes the three above reach the child at all.
-    if raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags, environment, directory, &startup, &information) == 0i32 {
+    let started = raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags, environment, directory, &startup, &information)
+    make_uninheritable(options.stdio)
+    if started == 0i32 {
         let start_error = from_last_error()
         if job != 0usize { let unused_job = raw_close_handle(job) }
         ret (result, start_error)
@@ -2472,7 +2494,7 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     if raw_wsa_startup(WSA_VERSION, &data) != 0i32 { ret (socket, Failed) }
     var type_bits = SOCK_STREAM
     if kind == .Datagram { type_bits = SOCK_DGRAM }
-    let handle = raw_socket_open(i32(family_value(family)), type_bits, 0i32)
+    let handle = raw_socket_open_ex(i32(family_value(family)), type_bits, 0i32, 0usize, 0u32, WSA_FLAG_SOCKET)
     if handle == INVALID_HANDLE { ret (socket, from_socket_error()) }
     socket.raw = handle
     ret (socket, ok)
@@ -5143,3 +5165,4 @@ fn sandbox(policy: *const SandboxPolicy) -> err {
     if policy.allow_syscalls.len != 0usize { ret Unsupported }
     ret ok
 }
+
