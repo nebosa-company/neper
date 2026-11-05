@@ -192,6 +192,8 @@ fn skip_space(lx: *Lexer) -> (bool, err) {
                     if l2 > 0usize {
                         nl = true
                         lx.line += 1u32
+                        // CRLF is one terminator here, exactly as in the outer loop
+                        if lx.src[lx.pos] == 13u8 && lx.pos + 1usize < lx.src.len && lx.src[lx.pos + 1usize] == 10u8 { lx.pos += 1usize }
                         lx.pos += l2
                     } else {
                         lx.pos += 1usize
@@ -605,8 +607,21 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
                 lx.line += 1u32
                 if pos + 1usize < src.len && src[pos + 1usize] == 10u8 { pos += 1usize }
                 pos += 1usize
+            } else if c == 10u8 {
+                let pe10 = str.push_byte(&out, c)
+                lx.line += 1u32
+                pos += 1usize
+            } else if line_terminator(src, pos) > 0usize {
+                // U+2028/U+2029: one line, the bytes written as they are
+                let lt = line_terminator(src, pos)
+                lx.line += 1u32
+                var unit = 0usize
+                while unit < lt {
+                    let pu = str.push_byte(&out, src[pos])
+                    pos += 1usize
+                    unit += 1usize
+                }
             } else {
-                if c == 10u8 { lx.line += 1u32 }
                 let pe2 = str.push_byte(&out, c)
                 pos += 1usize
             }
@@ -665,7 +680,24 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
                 } else if c2 == 34u8 || c2 == 39u8 {
                     pos += 1usize
                     while pos < src.len && src[pos] != c2 {
-                        if src[pos] == 92u8 { pos += 1usize }
+                        if src[pos] == 92u8 {
+                            pos += 1usize
+                            let cont = line_terminator(src, pos)
+                            if cont > 0usize {
+                                lx.line += 1u32
+                                if src[pos] == 13u8 && pos + 1usize < src.len && src[pos + 1usize] == 10u8 { pos += 1usize }
+                                pos += cont
+                                continue
+                            }
+                        } else {
+                            let inner = line_terminator(src, pos)
+                            if inner > 0usize {
+                                lx.line += 1u32
+                                if src[pos] == 13u8 && pos + 1usize < src.len && src[pos + 1usize] == 10u8 { pos += 1usize }
+                                pos += inner
+                                continue
+                            }
+                        }
                         pos += 1usize
                     }
                     pos += 1usize
@@ -676,6 +708,8 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
                     var dummy: Tok = zero
                     try read_template(&sub, &dummy)
                     pos = sub.pos
+                    // the nested template's terminators count for the parent lexer too
+                    lx.line = sub.line
                 } else if c2 == 47u8 && regex_may_start(src, expr_start, pos) {
                     pos += 1usize
                     var in_class = false
@@ -688,11 +722,26 @@ fn read_template(lx: *Lexer, t: *Tok) -> err {
                     while pos < src.len && line_terminator(src, pos) == 0usize { pos += 1usize }
                 } else if c2 == 47u8 && pos + 1usize < src.len && src[pos + 1usize] == 42u8 {
                     pos += 2usize
-                    while pos + 1usize < src.len && !(src[pos] == 42u8 && src[pos + 1usize] == 47u8) { pos += 1usize }
+                    while pos + 1usize < src.len && !(src[pos] == 42u8 && src[pos + 1usize] == 47u8) {
+                        let comment = line_terminator(src, pos)
+                        if comment > 0usize {
+                            lx.line += 1u32
+                            if src[pos] == 13u8 && pos + 1usize < src.len && src[pos + 1usize] == 10u8 { pos += 1usize }
+                            pos += comment
+                        } else {
+                            pos += 1usize
+                        }
+                    }
                     pos += 2usize
                 } else {
-                    if c2 == 10u8 { lx.line += 1u32 }
-                    pos += 1usize
+                    let term = line_terminator(src, pos)
+                    if term > 0usize {
+                        lx.line += 1u32
+                        if c2 == 13u8 && pos + 1usize < src.len && src[pos + 1usize] == 10u8 { pos += 1usize }
+                        pos += term
+                    } else {
+                        pos += 1usize
+                    }
                 }
             }
             if !found { ret fail(lx, "unterminated template substitution") }
