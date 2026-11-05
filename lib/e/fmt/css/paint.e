@@ -947,26 +947,35 @@ fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64) 
 }
 
 fn paint_text_run(p: *Painter, text_box: u32, text: str, x: f64, y: f64, w: f64) {
-    if layout.st(p.l, p.l.boxes.items[usize(text_box)].style).visibility != .Visible { ret }
+    paint_text_run_color(p, text_box, zero, text, x, y, w)
+}
+
+// As `paint_text_run`, with `sty` (when not null) naming the brush colour: `::first-line` colours the block's first line.
+// Only the colour is taken from it - the metrics stay the box's, so line breaking is untouched.
+fn paint_text_run_color(p: *Painter, text_box: u32, sty: *const style.Style, text: str, x: f64, y: f64, w: f64) {
+    let box_style = layout.st(p.l, p.l.boxes.items[usize(text_box)].style)
+    var ink = box_style.color
+    if mem.address_of(sty) != 0usize { ink = sty.color }
+    if box_style.visibility != .Visible { ret }
     if text.len > 0usize {
         let env = p.env
-        let lay = env.text(env.ctx, layout.st(p.l, p.l.boxes.items[usize(text_box)].style), text)
-        let ts0 = layout.st(p.l, p.l.boxes.items[usize(text_box)].style)
+        let lay = env.text(env.ctx, box_style, text)
+        let ts0 = box_style
         if mem.address_of(lay) != 0usize {
             if ts0.writing_mode != .HorizontalTb {
                 // Vertical text is set sideways: the run is turned a quarter clockwise about its top-right corner.
                 save(p)
                 emit(p, scene.Command { Transform: geo.Transform { m00: 0.0f32, m01: -1.0f32, m02: f32(snap(x + w)), m10: 1.0f32, m11: 0.0f32, m12: f32(snap(y)) } })
-                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: 0.0f32, y: 0.0f32 }, brush: solid(ts0.color) } })
+                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: 0.0f32, y: 0.0f32 }, brush: solid(ink) } })
                 restore(p)
             } else if ts0.letter_spacing != 0.0f64 || ts0.word_spacing != 0.0f64 {
                 paint_spaced(p, ts0, text, x, y)
             } else {
-                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(snap(x)), y: f32(snap(y)) }, brush: solid(ts0.color) } })
+                emit(p, scene.Command { Text: scene.DrawText { layout: lay, origin: geo.Point { x: f32(snap(x)), y: f32(snap(y)) }, brush: solid(ink) } })
             }
         }
     }
-    let ts = layout.st(p.l, p.l.boxes.items[usize(text_box)].style)
+    let ts = box_style
     let (bits, col, how) = decoration_in_force(p, text_box)
     if bits != 0u8 {
         let fm = font_metrics_of(p, ts)
@@ -1181,6 +1190,11 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
     if bb.line_count == 0u32 { ret }
     let cx = ax + bb.border[3usize] + bb.padding[3usize]
     let cy = ay + bb.border[0usize] + bb.padding[0usize]
+    // `::first-line`: the block's first line takes the pseudo-element's colour. Only the colour, so the metrics and the
+    // line breaking stay the box's; that covers colour-only cases like `quotes-first-line`.
+    var first_line: *const style.Style = zero
+    let fln = layout.st(p.l, bb.style)
+    if mem.address_of(fln.pseudo[4usize]) != 0usize { first_line = fln.pseudo[4usize] }
     var li = 0usize
     while li < usize(bb.line_count) {
         let ln = p.l.lines.items[usize(bb.line_first) + li]
@@ -1212,7 +1226,9 @@ fn paint_lines(p: *Painter, b: u32, ax: f64, ay: f64) {
                 if ln.overflow_ellipsis {
                     paint_ellipsized(p, b, bb, ln, fr, cx, cy, is_last_content)
                 } else {
-                    paint_text_run(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
+                    var fl_sty: *const style.Style = zero
+                    if li == 1usize { fl_sty = first_line }
+                    paint_text_run_color(p, fr.box, fl_sty, fr.text, cx + fr.x, cy + fr.y, fr.w)
                 }
             } else if fr.kind == .Marker {
                 paint_marker(p, fr.box, fr.text, cx + fr.x, cy + fr.y, fr.w)
