@@ -1005,11 +1005,11 @@ fn merge_sort(job: *SortJob, cmp: Compare, order: []usize, tmp: []usize, lo: usi
     }
 }
 
-fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> []usize {
+fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> ([]usize, err) {
     var none: []usize = zero
-    if n == 0usize { ret none }
+    if n == 0usize { ret (none, ok) }
     let (order, e) = mem.alloc[usize](job.a, n)
-    if e != ok { ret none }
+    if e != ok { ret (none, e) }
     var i = 0usize
     while i < n {
         order[i] = i
@@ -1019,16 +1019,19 @@ fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> []usize {
         sort_small(job, cmp, order)
     } else {
         let (tmp, te) = mem.alloc[usize](job.a, n)
-        if te == ok { merge_sort(job, cmp, order, tmp, 0usize, n) }
+        if te != ok { ret (none, te) }
+        merge_sort(job, cmp, order, tmp, 0usize, n)
     }
-    ret order
+    ret (order, ok)
 }
 
-// Stable multi-level sort; empty cells sort last regardless of direction.
+// Stable multi-level sort; empty cells sort last regardless of direction. On any allocation
+// failure the original rows are returned, matching the output-buffer fallback below.
 fn sort_rows(a: *mem.Arena, rows: []const Row, sorts: []const SortSpec, fields: []const FieldDef) -> []const Row {
     if sorts.len == 0usize { ret rows }
     var job = SortJob { a: a, mode: 0u8, rows: rows, sorts: sorts, fields: fields, keys: f.zero_items(), key_none: zero, def: zero, has_def: false, descending: false }
-    let order = sorted_order(&job, compare_rows, rows.len)
+    let (order, order_error) = sorted_order(&job, compare_rows, rows.len)
+    if order_error != ok || order.len != rows.len { ret rows }
     let (out, e) = mem.alloc[Row](a, rows.len + 1usize)
     if e != ok { ret rows }
     var i = 0usize
@@ -1090,7 +1093,8 @@ fn group_rows(a: *mem.Arena, rows: []const Row, field: str, direction: str, fiel
     }
     let (def, has_def) = find_field(fields, field)
     var job = SortJob { a: a, mode: 1u8, rows: rows, sorts: zero, fields: fields, keys: keys[0usize..key_count], key_none: key_none[0usize..key_count], def: def, has_def: has_def, descending: str.eq(direction, "desc") }
-    let order = sorted_order(&job, compare_keys, key_count)
+    let (order, order_error) = sorted_order(&job, compare_keys, key_count)
+    if order_error != ok || order.len != key_count { ret none }
     let (groups, ge) = mem.alloc[Group](a, key_count + 1usize)
     if ge != ok { ret none }
     var g = 0usize
@@ -1198,7 +1202,24 @@ fn json_key(a: *mem.Arena, v: f.Value) -> str {
         }
         ret f.join(a, out, "]")
     }
-    ret "{}"
+    if v.kind == .Date {
+        // `JSON.stringify(Date)` is the ISO text, or null for an invalid date.
+        if !is_finite(v.n) { ret "null" }
+        ret f.join(a, f.join(a, "\"", f.date_iso(a, v.n)), "\"")
+    }
+    if v.kind == .Record {
+        // No object keys reach this value: the attachment descriptor's items are the identity.
+        var out = "{\"items\":["
+        var i = 0usize
+        while i < v.items.len {
+            if i > 0usize { out = f.join(a, out, ",") }
+            out = f.join(a, out, json_key(a, v.items[i]))
+            i += 1usize
+        }
+        ret f.join(a, out, "]}")
+    }
+    // An error serialises as null, as JSON.stringify does for a non-finite value.
+    ret "null"
 }
 
 fn unique_count(a: *mem.Arena, vals: []const f.Value) -> usize {
@@ -1366,8 +1387,18 @@ fn summarize_values(a: *mem.Arena, vals: []const f.Value, name: str) -> Summary 
         ret summary_number((hi.n - lo.n) / month_ms())
     }
     if str.eq(name, "distribution") {
-        let (labels, le) = mem.alloc[str](a, vals.len * 4usize + 4usize)
-        let (counts, ce) = mem.alloc[usize](a, vals.len * 4usize + 4usize)
+        // A multiselect cell contributes every item, so the label tables are sized by the
+        // total item count rather than by the number of cells.
+        var item_total = 0usize
+        var t = 0usize
+        while t < vals.len {
+            let v = vals[t]
+            t += 1usize
+            if is_empty(v) { continue }
+            if v.kind == .Array { item_total += v.items.len } else { item_total += 1usize }
+        }
+        let (labels, le) = mem.alloc[str](a, item_total + 1usize)
+        let (counts, ce) = mem.alloc[usize](a, item_total + 1usize)
         if le != ok || ce != ok { ret summary_none() }
         var n = 0usize
         var i = 0usize
@@ -1916,9 +1947,10 @@ fn move_sort_level(a: *mem.Arena, sorts: []const SortSpec, field: str, delta: i6
     var n = 0usize
     var i = 0usize
     // the list without the moved level, then the level inserted at `to`
-    var rest: [32]SortSpec = zero
+    let (rest, rest_error) = mem.alloc[SortSpec](a, sorts.len)
+    if rest_error != ok { ret (sorts, false) }
     var rn = 0usize
-    while i < sorts.len && rn < 32usize {
+    while i < sorts.len {
         if i != at - 1usize {
             rest[rn] = sorts[i]
             rn += 1usize
