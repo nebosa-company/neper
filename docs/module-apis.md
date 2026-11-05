@@ -3627,7 +3627,7 @@ fn compare_keys(job: *SortJob, x: usize, y: usize) -> f64
 fn order_of(job: *SortJob, cmp: Compare, x: usize, y: usize) -> f64
 fn sort_small(job: *SortJob, cmp: Compare, order: []usize)
 fn merge_sort(job: *SortJob, cmp: Compare, order: []usize, tmp: []usize, lo: usize, hi: usize)
-fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> []usize
+fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> ([]usize, err)
 fn sort_rows(a: *mem.Arena, rows: []const Row, sorts: []const SortSpec, fields: []const FieldDef) -> []const Row
 
 type Group = struct { value: f.Value, is_none: bool, label: str, rows: []const Row, count: usize }
@@ -8444,7 +8444,7 @@ fn as_const[T: type](tensor: Tensor[T]) -> ConstTensor[T]
 fn elements[T: type](t: Tensor[T]) -> usize
 fn offset[T: type](t: Tensor[T], index: []const usize) -> usize
 fn reshape[T: type](a: *mem.Arena, t: Tensor[T], shape: []const usize) -> (Tensor[T], err)
-fn fill[T: type](tensor: Tensor[T], value: T)
+fn fill[T: type](tensor: Tensor[T], value: T) -> err
 fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err
 fn add[T: type](dst: Tensor[T], x: ConstTensor[T], y: ConstTensor[T]) -> err
 ```
