@@ -29,9 +29,13 @@ type Logging = struct { ctx: *void, sink: fn(*void, str) }
 error NoHandler
 error Duplicate
 error Full
+error TooLarge
 
 fn mediator(a: *mem.Arena, handlers: usize, listeners: usize, behaviors: usize) -> (Mediator, err) {
     var m: Mediator = zero
+    // `count + 1` must not wrap; reject before the first allocation so an invalid
+    // configuration leaves the arena untouched.
+    if handlers >= 18446744073709551615usize || listeners >= 18446744073709551615usize || behaviors >= 18446744073709551615usize { ret (m, TooLarge) }
     let start = mem.mark(a)
     let (h, he) = mem.alloc[Handler](a, handlers + 1usize)
     if he != ok {

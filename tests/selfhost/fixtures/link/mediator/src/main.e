@@ -2420,6 +2420,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let pl = pool_entry(a)
     if pl != 0u32 { os.exit(i32(120u32 + pl)) }
     if !constructor_rollback() { os.exit(130i32) }
+    // #441: a count at usize.max would wrap count+1; reject before allocating.
+    let capacity_mark = mem.mark(a)
+    let (_, capacity_error) = med.mediator(a, 18446744073709551615usize, 1usize, 1usize)
+    if capacity_error != med.TooLarge || mem.mark(a) != capacity_mark { os.exit(131i32) }
     try io.print("mediator ok")
     ret ok
 }

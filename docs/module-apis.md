@@ -13735,6 +13735,7 @@ observable and callers synchronize shared state explicitly.
 error NoHandler
 error Duplicate
 error Full
+error TooLarge
 type Message = struct { kind: u32, data: []const u8 }
 type Handler = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> (Message, err) }
 type Listener = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> err }
