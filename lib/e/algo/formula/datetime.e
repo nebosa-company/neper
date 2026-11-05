@@ -1297,6 +1297,7 @@ fn offset_zone_seconds(name: str) -> (i64, bool) {
     if name[0usize] != 43u8 && name[0usize] != 45u8 { ret (0i64, false) }
     var digits: [4]u8 = zero
     var n = 0usize
+    var has_colon = false
     var i = 1usize
     while i < name.len {
         let b = name[i]
@@ -1304,13 +1305,15 @@ fn offset_zone_seconds(name: str) -> (i64, bool) {
             if n >= 4usize { ret (0i64, false) }
             digits[n] = b - 48u8
             n += 1usize
-        } else if b == 58u8 && n == 2usize {
-            i += 0usize
+        } else if b == 58u8 && n == 2usize && !has_colon {
+            // One colon only, exactly between the two digit pairs.
+            has_colon = true
         } else {
             ret (0i64, false)
         }
         i += 1usize
     }
+    if has_colon && name.len != 6usize { ret (0i64, false) }
     if n != 2usize && n != 4usize { ret (0i64, false) }
     var hours = i64(digits[0usize]) * 10i64 + i64(digits[1usize])
     var minutes = 0i64
@@ -1441,3 +1444,5 @@ fn register(r: *f.Registry, a: *mem.Arena) -> err {
     try add(r, a, "SET_LOCALE", al1(a, "SETLOCALE"), false, 2i32, 2i32, h_set_locale)
     ret ok
 }
+
+

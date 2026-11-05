@@ -1417,6 +1417,7 @@ fn xml_node(x: *Xml, parent: usize, has_parent: bool) -> usize {
     x.attr_count[me] = attrs
     if x.at < n && x.src[x.at] == 47u8 {
         x.at += 2usize
+        if x.at > n { x.failed = true }
         ret me + 1usize
     }
     x.at += 1usize
@@ -1429,8 +1430,16 @@ fn xml_node(x: *Xml, parent: usize, has_parent: bool) -> usize {
             if run_open { xml_push_run(x, me, run_from, x.at) }
             run_open = false
             x.at += 2usize
+            let close_from = x.at
+            while x.at < n && !xml_ws(x.src[x.at]) && x.src[x.at] != 62u8 { x.at += 1usize }
+            // The closing name must match the opening one.
+            if !str.eq(x.src[close_from..x.at], x.tags[me]) { x.failed = true }
             while x.at < n && x.src[x.at] != 62u8 { x.at += 1usize }
-            x.at += 1usize
+            if x.at >= n {
+                x.failed = true
+            } else {
+                x.at += 1usize
+            }
             done = true
         } else if x.src[x.at] == 60u8 {
             if run_open { xml_push_run(x, me, run_from, x.at) }
@@ -1463,6 +1472,8 @@ fn xml_node(x: *Xml, parent: usize, has_parent: bool) -> usize {
         }
     }
     if run_open { xml_push_run(x, me, run_from, x.at) }
+    // Reaching the end of the text with the element still open is unterminated XML.
+    if !done { x.failed = true }
     x.depth -= 1usize
     ret me + 1usize
 }
@@ -1551,6 +1562,14 @@ fn h_xmlquery(c: *f.Call) -> f.Value {
     x.run_next = run_next
     let root = xml_node(&x, 0usize, false)
     if root == 0usize || x.failed { ret f.value_error("xmlquery: invalid XML input") }
+    // Exactly one document element: only whitespace, comments and processing
+    // instructions may follow it.
+    xml_skip_ws(&x)
+    while xml_starts(&x, "<?") || xml_starts(&x, "<!--") {
+        if xml_starts(&x, "<!--") { xml_past(&x, "-->") } else { xml_past(&x, ">") }
+        xml_skip_ws(&x)
+    }
+    if x.at != source.len { ret f.value_error("xmlquery: invalid XML input") }
     // the path: no leading slash, non-empty segments
     var p = path
     if p.len > 0usize && p[0usize] == 47u8 { p = p[1usize..p.len] }

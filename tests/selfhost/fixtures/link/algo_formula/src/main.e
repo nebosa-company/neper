@@ -7,6 +7,7 @@
 // checked by its own fixtures. A line is a JSON case with kind `E` (evaluate), `P` (parse) or `G` (graph) and the
 // outcome as the reference rendered it: `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]`, `E|code|hex`.
 use e.algo.formula as f
+use e.algo.formula.library as flib
 use e.fmt.json as json
 use e.io
 use e.mem
@@ -507,6 +508,22 @@ fn vectors_28() -> str {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #728 and #727: malformed XML and repeated-colon UTC offsets are rejected.
+    let (full, full_error) = flib.build(a)
+    if full_error != ok { os.exit(90i32) }
+    var ctx: f.Context = zero
+    let bad_close = f.evaluate(a, "XMLQUERY(\"<a><b>1</a>\", \"/a/b\")", &ctx, &full)
+    if !f.is_error(bad_close) { os.exit(91i32) }
+    let unterminated = f.evaluate(a, "XMLQUERY(\"<a>1\", \"/a\")", &ctx, &full)
+    if !f.is_error(unterminated) { os.exit(92i32) }
+    let two_roots = f.evaluate(a, "XMLQUERY(\"<a/><b/>\", \"/b\")", &ctx, &full)
+    if !f.is_error(two_roots) { os.exit(93i32) }
+    let valid_xml = f.evaluate(a, "XMLQUERY(\"<a><b>1</b></a>\", \"/a/b\")", &ctx, &full)
+    if f.is_error(valid_xml) || !str.eq(valid_xml.s, "1") { os.exit(94i32) }
+    let bad_offset = f.evaluate(a, "SET_TIMEZONE(DATE(2020,1,1), \"+12::34\")", &ctx, &full)
+    if !f.is_error(bad_offset) { os.exit(95i32) }
+    let good_offset = f.evaluate(a, "SET_TIMEZONE(DATE(2020,1,1), \"+12:34\")", &ctx, &full)
+    if f.is_error(good_offset) { os.exit(96i32) }
     var registry = build_registry(a)
     if run(a, vectors_0(), &registry) != 0u8 { os.exit(1i32) }
     if run(a, vectors_1(), &registry) != 0u8 { os.exit(2i32) }
