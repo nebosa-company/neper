@@ -84,6 +84,14 @@ fn main() {
     if overflowing_sin_negative_zero.re != overflowing_sin_negative_zero.re || mem.bitcast[u64](overflowing_sin_negative_zero.re) != 9223372036854775808u64 { os.exit(23) }
     if overflowing_cos.re != overflowing_cos.re || overflowing_cos.im != overflowing_cos.im || mem.bitcast[u64](overflowing_cos.im) != 9223372036854775808u64 { os.exit(24) }
     if overflowing_cos_negative_zero.im != overflowing_cos_negative_zero.im || mem.bitcast[u64](overflowing_cos_negative_zero.im) != 0u64 { os.exit(25) }
+    // #452: sqrt of a large finite input must stay finite; the unscaled
+    // (|re| + |z|) sum overflowed to infinity before it was halved.
+    let sqrt_max = cx.sqrt[f64](cx.make[f64](1.7976931348623157e308, 0.0))
+    if !finite(sqrt_max.re) || !finite(sqrt_max.im) || sqrt_max.im != 0.0 { os.exit(26) }
+    if !near(sqrt_max.re / 1.3407807929942596e154, 1.0) { os.exit(26) }
+    let sqrt_negative_max = cx.sqrt[f64](cx.make[f64](-1.7976931348623157e308, 0.0))
+    if !finite(sqrt_negative_max.re) || !finite(sqrt_negative_max.im) || sqrt_negative_max.re != 0.0 { os.exit(27) }
+    if !near(sqrt_negative_max.im / 1.3407807929942596e154, 1.0) { os.exit(27) }
     let n = cx.neg[f64](a)
     let d = cx.sub[f64](a, cx.neg[f64](n))
     if n.re != -3.0 || n.im != -4.0 || d.re != 0.0 || d.im != 0.0 { os.exit(16) }

@@ -76,7 +76,9 @@ fn log[F: type](z: Complex[F]) -> Complex[F] { ret make[F](math.log[F](abs[F](z)
 fn sqrt[F: type](z: Complex[F]) -> Complex[F] {
     let modulus = abs[F](z)
     if modulus == zero_of[F]() { ret make[F](zero_of[F](), z.im) }
-    let t = math.sqrt[F]((math.abs[F](z.re) + modulus) * F(0.5f64))
+    // Halve before adding: |re| + |z| overflows for an input near F64_MAX
+    // although the mean behind the root is finite.
+    let t = math.sqrt[F](math.abs[F](z.re) * F(0.5f64) + modulus * F(0.5f64))
     if z.re >= zero_of[F]() { ret make[F](t, z.im / (t + t)) }
     ret make[F](math.abs[F](z.im) / (t + t), math.copysign[F](t, z.im))
 }
