@@ -379,6 +379,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, empty_varopt_error) = rand.varopt_sample(&zero_rng, weights[..], 0usize, no_chosen[..], no_adjusted[..])
     if empty_varopt_error != rand.Invalid { os.exit(24i32) }
 
+    // 25: two long identical strings share every byte of their prefix; the sort must
+    // not recurse once per byte (a pair this long used to exhaust the stack) (#286).
+    var long_text: [1000000]u8 = zero
+    var long_at = 0usize
+    while long_at < 1000000usize {
+        long_text[long_at] = 97u8
+        long_at += 1usize
+    }
+    var long_words: [2]str = zero
+    long_words[0usize] = long_text[..]
+    long_words[1usize] = long_text[..]
+    sort.strings(long_words[..])
+    if long_words[0usize].len != 1000000usize || long_words[1usize].len != 1000000usize || long_words[1usize][999999usize] != 97u8 { os.exit(25i32) }
+
     try io.print("algo sort rand plan ok\n")
     ret ok
 }

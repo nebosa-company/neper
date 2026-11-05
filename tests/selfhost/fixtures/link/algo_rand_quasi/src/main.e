@@ -82,6 +82,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(quasi.van_der_corput(100u64, 10u64), 0.001f64, 0.000000000000001f64) { os.exit(4i32) }
     if quasi.halton(37u64, 2u64) != 0.640625f64 { os.exit(4i32) }
 
+    // 5: a base below two has no radical inverse: it answers 0.0 instead of trapping
+    // (base 0) or never terminating (base 1) (#245).
+    if quasi.van_der_corput(5u64, 0u64) != 0.0f64 { os.exit(5i32) }
+    if quasi.van_der_corput(5u64, 1u64) != 0.0f64 { os.exit(5i32) }
+    if quasi.halton(5u64, 0u64) != 0.0f64 || quasi.halton(5u64, 1u64) != 0.0f64 { os.exit(5i32) }
+
     try io.print("algo rand quasi ok\n")
     ret ok
 }

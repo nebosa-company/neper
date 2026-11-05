@@ -120,8 +120,10 @@ fn sobol_next(s: *Sobol, out: []f64) -> err {
 }
 
 // The radical inverse of `index` in `base` (at least 2): the digits mirrored
-// past the point.
+// past the point. A base below 2 has no inverse, so it answers 0.0 rather than
+// dividing by zero or looping forever.
 fn van_der_corput(index: u64, base: u64) -> f64 {
+    if base < 2u64 { ret 0.0f64 }
     var result = 0.0f64
     var fraction = 1.0f64
     var n = index

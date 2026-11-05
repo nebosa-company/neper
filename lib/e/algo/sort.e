@@ -745,35 +745,63 @@ fn external_merge[T: type](runs: []const T, bounds: []const usize, cursor: []usi
 fn strings(items: []str) { strings_from(items, 0usize) }
 
 fn strings_from(items: []str, depth: usize) {
-    if items.len < 2usize { ret }
-    let middle = items[items.len / 2usize]
-    var pivot = 0i32 - 1i32
-    if middle.len > depth { pivot = i32(middle[depth]) }
-    var lt = 0usize
-    var gt = items.len
-    var i = 0usize
-    while i < gt {
-        var c = 0i32 - 1i32
-        let current = items[i]
-        if current.len > depth { c = i32(current[depth]) }
-        if c < pivot {
-            let carried = items[lt]
-            items[lt] = items[i]
-            items[i] = carried
-            lt += 1usize
-            i += 1usize
-        } else {
-            if c > pivot {
-                gt -= 1usize
-                let carried = items[gt]
-                items[gt] = items[i]
-                items[i] = carried
-            } else {
+    var band = items
+    var at = depth
+    while true {
+        if band.len < 2usize { ret }
+        let middle = band[band.len / 2usize]
+        var pivot = 0i32 - 1i32
+        if middle.len > at { pivot = i32(middle[at]) }
+        var lt = 0usize
+        var gt = band.len
+        var i = 0usize
+        while i < gt {
+            var c = 0i32 - 1i32
+            let current = band[i]
+            if current.len > at { c = i32(current[at]) }
+            if c < pivot {
+                let carried = band[lt]
+                band[lt] = band[i]
+                band[i] = carried
+                lt += 1usize
                 i += 1usize
+            } else {
+                if c > pivot {
+                    gt -= 1usize
+                    let carried = band[gt]
+                    band[gt] = band[i]
+                    band[i] = carried
+                } else {
+                    i += 1usize
+                }
             }
         }
+        if pivot < 0i32 {
+            // Every string ends at or before this byte: only those with more bytes
+            // remain, and they sort at the same depth.
+            strings_from(band[gt..band.len], at)
+            ret
+        }
+        // Three bands: below the pivot byte (`band[..lt]`), equal to it (`band[lt..gt]`,
+        // one byte deeper) and above it (`band[gt..]`). Recurse into the two smaller and
+        // keep looping on the largest, so the stack depth is logarithmic and a shared
+        // prefix is walked a byte at a time without a call per byte (#286).
+        let n_less = lt
+        let n_equal = gt - lt
+        let n_rest = band.len - gt
+        if n_equal >= n_less && n_equal >= n_rest {
+            strings_from(band[..lt], at)
+            strings_from(band[gt..band.len], at)
+            band = band[lt..gt]
+            at += 1usize
+        } else if n_less >= n_rest {
+            strings_from(band[lt..gt], at + 1usize)
+            strings_from(band[gt..band.len], at)
+            band = band[..lt]
+        } else {
+            strings_from(band[..lt], at)
+            strings_from(band[lt..gt], at + 1usize)
+            band = band[gt..band.len]
+        }
     }
-    strings_from(items[..lt], depth)
-    if pivot >= 0i32 { strings_from(items[lt..gt], depth + 1usize) }
-    strings_from(items[gt..items.len], depth)
 }
