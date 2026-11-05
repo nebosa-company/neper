@@ -483,7 +483,47 @@ fn compare_cell(sc: *cleartype.Scratch, img: image.Image, at: Atlas, cx: usize, 
     ret d
 }
 
+// The sweep layer through add_glyph: `count` side-by-side rectangles all start their
+// profiles on one scan line, so the row sweep sees `count` simultaneously active runs.
+// Answers 1 when add_glyph rendered, 0 when it refused, -1 when scratch failed.
+fn renders(a: *mem.Arena, count: usize) -> i64 {
+    let (sc, sc_error) = cleartype.scratch(a)
+    if sc_error != ok { ret -1i64 }
+    var cur: [1032]i64 = zero
+    var tags: [516]i64 = zero
+    var ends: [129]usize = zero
+    var r = 0usize
+    while r < count {
+        let x = i64(r) * 64i64
+        let base = 4usize * r
+        cur[2usize * base] = x
+        cur[2usize * base + 1usize] = 0i64
+        cur[2usize * (base + 1usize)] = x + 32i64
+        cur[2usize * (base + 1usize) + 1usize] = 0i64
+        cur[2usize * (base + 2usize)] = x + 32i64
+        cur[2usize * (base + 2usize) + 1usize] = 128i64
+        cur[2usize * (base + 3usize)] = x
+        cur[2usize * (base + 3usize) + 1usize] = 128i64
+        tags[base] = 1i64
+        tags[base + 1usize] = 1i64
+        tags[base + 2usize] = 1i64
+        tags[base + 3usize] = 1i64
+        ends[r] = base + 3usize
+        r += 1usize
+    }
+    let o = tthint.Outline { n: 4usize * count, cur: cur[..], hinted: true, tags: tags[..], ends: ends[..], nends: count, pp1x: 0i64, adv: 0i64, scan: 0i64, smooth: false }
+    if cleartype.add_glyph(sc, &o, 0i64, 0i64) { ret 1i64 }
+    ret 0i64
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #778: 128 simultaneously active runs fill, one more must fail rather than drop the
+    // extra profiles and report success. Constructed directly, so no font or oracle is needed.
+    let sweep_mark = mem.mark(a)
+    if renders(a, 128usize) != 1i64 { os.exit(4i32) }
+    mem.reset(a, sweep_mark)
+    if renders(a, 129usize) != 0i64 { os.exit(5i32) }
+    mem.reset(a, sweep_mark)
     var dir: str = "docs/ui/looks/ref/windows-native/glyphs"
     var only: str = ""
     var dump_dir: str = ""

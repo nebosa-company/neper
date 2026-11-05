@@ -729,12 +729,20 @@ fn r_sweep(sc: *Scratch) {
         while p < sc.np {
             if !sc.pdone[p] && sc.pht[p] > 0i64 && sc.pst[p] == y {
                 sc.pdone[p] = true
+                // A scan line with more runs on one side than the queues hold cannot be
+                // filled: fail the render instead of dropping the extra profiles.
                 if (sc.pfl[p] & FLOW_UP) != 0i64 {
-                    if nl < MAX_ACTIVE {
-                        sc.lq[nl] = p
-                        nl += 1usize
+                    if nl >= MAX_ACTIVE {
+                        sc.over = true
+                        ret
                     }
-                } else if nr < MAX_ACTIVE {
+                    sc.lq[nl] = p
+                    nl += 1usize
+                } else {
+                    if nr >= MAX_ACTIVE {
+                        sc.over = true
+                        ret
+                    }
                     sc.rq[nr] = p
                     nr += 1usize
                 }
@@ -845,11 +853,13 @@ fn r_render(sc: *Scratch, o: *const tthint.Outline) -> bool {
     r_convert(sc, o, 0i64, i64(sc.bmh) - 1i64)
     if sc.over { ret false }
     r_sweep(sc)
+    if sc.over { ret false }
     if (sc.mode & 2i64) == 0i64 {
         sc.flipped = true
         r_convert(sc, o, 0i64, i64(sc.bmw) - 1i64)
         if sc.over { ret false }
         r_sweep(sc)
+        if sc.over { ret false }
     }
     ret true
 }
