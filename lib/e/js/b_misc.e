@@ -232,6 +232,8 @@ fn js_unescape(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (j
 // --- AggregateError
 
 fn aggregate_error_ctor(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    // AggregateError is constructor-only.
+    if !it.has_new_target { ret (js.undefv(), js.throw_type(it, "Constructor AggregateError requires 'new'")) }
     var proto = it.protos.aggregate_error
     if it.has_new_target {
         let nto = js.as_object(it.new_target)
@@ -384,25 +386,46 @@ fn object_group_by(it: *js.Interp, this_val: js.Value, args: []const js.Value) -
     let src = arg(args, 0usize)
     if js.is_nullish(src) { ret (js.undefv(), js.throw_type(it, "Object.groupBy called on null or undefined")) }
     let out = js.new_obj(it, js.C_OBJECT, js.null_obj())
-    let (items, ie) = js.iterate_to_list(it, src)
+    let (iter, ie) = js.get_iterator(it, src)
     if ie != ok { ret (js.undefv(), ie) }
-    var i = 0usize
-    while i < items.len {
-        let (kv, ke) = js.call_function(it, cb, js.undefv(), js.two_args(it, items.items[i], js.num_value(f64(i))))
-        if ke != ok { ret (js.undefv(), ke) }
+    var index = 0.0f64
+    while true {
+        let (value, done, se) = js.iterator_step(it, iter)
+        if se != ok { ret (js.undefv(), se) }
+        if done { break }
+        // The callback runs as the iterator advances; a throw closes the iterator.
+        let (kv, ke) = js.call_function(it, cb, js.undefv(), js.two_args(it, value, js.num_value(index)))
+        if ke != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), ke)
+        }
         let (key, pke) = js.to_property_key(it, kv)
-        if pke != ok { ret (js.undefv(), pke) }
+        if pke != ok {
+            js.iterator_close_quiet(it, iter)
+            ret (js.undefv(), pke)
+        }
         let (p, found) = js.get_own(it, out, key)
         if found {
             let ga = js.as_object(p.value)
-            try js.array_push(it, ga, items.items[i])
+            let pe = js.array_push(it, ga, value)
+            if pe != ok {
+                js.iterator_close_quiet(it, iter)
+                ret (js.undefv(), pe)
+            }
         } else {
             let ga2 = js.new_array(it)
-            try js.array_push(it, ga2, items.items[i])
-            let (done, de) = js.define_own(it, out, key, js.data_desc(js.obj_value(ga2), js.P_DEFAULT))
-            if de != ok { ret (js.undefv(), de) }
+            let pe2 = js.array_push(it, ga2, value)
+            if pe2 != ok {
+                js.iterator_close_quiet(it, iter)
+                ret (js.undefv(), pe2)
+            }
+            let (done2, de) = js.define_own(it, out, key, js.data_desc(js.obj_value(ga2), js.P_DEFAULT))
+            if de != ok {
+                js.iterator_close_quiet(it, iter)
+                ret (js.undefv(), de)
+            }
         }
-        i += 1usize
+        index += 1.0f64
     }
     ret (js.obj_value(out), ok)
 }

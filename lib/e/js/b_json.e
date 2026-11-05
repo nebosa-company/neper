@@ -93,7 +93,8 @@ fn parse_string(it: *js.Interp, p: *P) -> (str, err) {
                     continue
                 }
             }
-            if v >= 55296u32 && v <= 57343u32 { js.put_cp(&out, 65533u32) } else { js.put_cp(&out, v) }
+            // Lone surrogates stay code units in WTF-8; only a valid pair is combined.
+            js.put_cp(&out, v)
         } else {
             ret ("", syntax(it, p))
         }
