@@ -698,7 +698,7 @@ fn batch_upsert(ix: *SearchIndex, entries: []const IndexDoc) -> BatchUpsert {
     }
     var j = 0usize
     while j < mn {
-        if put_doc(ix, merged[j]) { ok_count += 1usize }
+        if put_doc(ix, merged[j]) { ok_count += 1usize } else { errors += 1usize }
         j += 1usize
     }
     ix.upserts += ok_count
@@ -1147,12 +1147,12 @@ type Drained = struct { processed: usize, upserts: usize, removals: usize, error
 fn is_removal(t: str) -> bool { ret str.eq(t, "trashed") || str.eq(t, "purged") }
 
 // Apply one event: a removal removes, anything else upserts what `to_document` makes of it (a thrown failure is a
-// dead letter). The index's own refusals do not count as consumer errors, as appdor's do not.
-fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument, state: *void, now_iso: str, upserts: *Counter) {
+// dead letter). False when the index refused the upsert, so the caller keeps the cursor before it.
+fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument, state: *void, now_iso: str, upserts: *Counter) -> bool {
     if is_removal(e.type_name) {
         remove(ix, e.artifact_id)
         upserts.removals += 1usize
-        ret
+        ret true
     }
     let m = to_document(state, e)
     if m.threw {
@@ -1161,12 +1161,17 @@ fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument
             c.dead_count += 1usize
         }
         upserts.errors += 1usize
-        ret
+        ret true
     }
     if m.has_doc {
         let upserted = upsert(ix, m.doc)
+        if !upserted.valid {
+            upserts.errors += 1usize
+            ret false
+        }
         upserts.upserts += 1usize
     }
+    ret true
 }
 
 type Counter = struct { upserts: usize, removals: usize, errors: usize }
@@ -1188,6 +1193,9 @@ fn drain(c: *Consumer, ix: *SearchIndex, events: []const Event, batch_mode: bool
         i += 1usize
     }
     var counter = Counter { upserts: 0usize, removals: 0usize, errors: 0usize }
+    // Events committed to the cursor; a refused upsert leaves the cursor before it so the
+    // event is replayed, while a dead-lettered one is consumed.
+    var consumed = 0usize
     if batch_mode && fn_count > 100usize {
         // the newest event per artifact, in first-seen order
         let (picked, pe) = mem.alloc[Event](a, fn_count + 1usize)
@@ -1213,25 +1221,30 @@ fn drain(c: *Consumer, ix: *SearchIndex, events: []const Event, batch_mode: bool
             }
             i += 1usize
         }
+        var all_applied = true
         i = 0usize
         while i < pn {
-            apply_event(c, ix, picked[i], to_document, state, now_iso, &counter)
+            if !apply_event(c, ix, picked[i], to_document, state, now_iso, &counter) { all_applied = false }
             i += 1usize
         }
-        i = 0usize
-        while i < fn_count {
-            if fresh[i].seq > c.cursor { c.cursor = fresh[i].seq }
-            i += 1usize
+        if all_applied {
+            i = 0usize
+            while i < fn_count {
+                if fresh[i].seq > c.cursor { c.cursor = fresh[i].seq }
+                i += 1usize
+            }
+            consumed = fn_count
         }
     } else {
         i = 0usize
         while i < fn_count {
-            apply_event(c, ix, fresh[i], to_document, state, now_iso, &counter)
+            if !apply_event(c, ix, fresh[i], to_document, state, now_iso, &counter) { break }
             if fresh[i].seq > c.cursor { c.cursor = fresh[i].seq }
             i += 1usize
         }
+        consumed = i
     }
-    c.total_processed += fn_count
+    c.total_processed += consumed
     c.total_upserts += counter.upserts
     c.total_removals += counter.removals
     c.last_drain_at = now_iso
@@ -1242,7 +1255,7 @@ fn drain(c: *Consumer, ix: *SearchIndex, events: []const Event, batch_mode: bool
         if c.dead_count > 10usize { from = c.dead_count - 10usize }
         dead_view = c.dead[from..c.dead_count]
     }
-    ret Drained { processed: fn_count, upserts: counter.upserts, removals: counter.removals, errors: counter.errors, cursor: c.cursor, dead_letters: dead_view }
+    ret Drained { processed: consumed, upserts: counter.upserts, removals: counter.removals, errors: counter.errors, cursor: c.cursor, dead_letters: dead_view }
 }
 
 type Backlog = struct { depth: usize, oldest_seq: f64, oldest_at: str, has_oldest: bool, has_oldest_at: bool, cursor: f64 }

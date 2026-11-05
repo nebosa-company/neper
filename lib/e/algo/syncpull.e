@@ -74,8 +74,14 @@ fn includes_text(values: json.Value, s: str) -> bool {
 // The field type a connector's native type maps to: `{lc8Type, downgraded}` or, for a type with no equivalent, `{lc8Type:
 // "text", downgraded: true, diagnostic}`. A connector with no map downgrades everything.
 fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value {
-    var o = sync.obj(a)
     let maps = type_maps(a)
+    ret map_external_type_from(a, maps, connector, native, has_native, translate)
+}
+
+// The mapping over an already-parsed `maps` tree, so a column list parses the registry
+// once instead of once per column.
+fn map_external_type_from(a: *mem.Arena, maps: json.Value, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value {
+    var o = sync.obj(a)
     let (map, found) = sync.get(maps, connector)
     if !found {
         sync.put(&o, "lc8Type", sync.text("text"))
@@ -129,12 +135,13 @@ fn list_native_types(a: *mem.Arena, connector: str) -> json.Value {
 fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value {
     var proposed = sync.empty_list(a)
     var downgrades = 0i64
+    let maps = type_maps(a)
     var at = 0usize
     while at < columns.len {
         let column = columns[at]
         at += 1usize
         let (native, have_native) = sync.get(column, "nativeType")
-        let mapped = map_external_type(a, connector, native, have_native, translate)
+        let mapped = map_external_type_from(a, maps, connector, native, have_native, translate)
         if ir.truthy(ir.value_of(mapped, "downgraded")) { downgrades += 1i64 }
         var c = sync.obj(a)
         let (name, have_name) = sync.get(column, "name")
@@ -359,7 +366,44 @@ fn digits_at(s: str) -> i64 {
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 11u8 || c == 12u8 || c == 13u8 }
 
-// The target of the first `<url>; rel="next"` in a Link header, or none.
+fn lower_byte(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+fn text_eq_ignore_case(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if lower_byte(a[i]) != lower_byte(b[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn trim_space(s: str) -> str {
+    var start = 0usize
+    var end = s.len
+    while start < end && is_space(s[start]) { start += 1usize }
+    while end > start && is_space(s[end - 1usize]) { end -= 1usize }
+    ret s[start..end]
+}
+
+// Is the registered relation type `next` one of the space-separated tokens of `rel`?
+fn rel_has_next(rel: str) -> bool {
+    var at = 0usize
+    while at < rel.len {
+        while at < rel.len && is_space(rel[at]) { at += 1usize }
+        let start = at
+        while at < rel.len && !is_space(rel[at]) { at += 1usize }
+        if at > start && text_eq_ignore_case(rel[start..at], "next") { ret true }
+    }
+    ret false
+}
+
+// The target of the first link-value whose `rel` parameter names `next`, or none. The
+// parameters are parsed (unquoted values, parameter order, case and token lists) as
+// RFC 8288 writes them.
 fn next_link(link: str) -> (str, bool) {
     var at = 0usize
     while at < link.len {
@@ -367,13 +411,37 @@ fn next_link(link: str) -> (str, bool) {
             var close = at + 1usize
             while close < link.len && link[close] != 62u8 { close += 1usize }
             if close < link.len && close > at + 1usize {
+                let url = link[at + 1usize..close]
                 var k = close + 1usize
-                if k < link.len && link[k] == 59u8 {
+                while k < link.len && link[k] != 44u8 {
+                    if link[k] == 59u8 {
+                        k += 1usize
+                        while k < link.len && is_space(link[k]) { k += 1usize }
+                        let key_start = k
+                        while k < link.len && link[k] != 61u8 && link[k] != 59u8 && link[k] != 44u8 { k += 1usize }
+                        let key = trim_space(link[key_start..k])
+                        var value = ""
+                        if k < link.len && link[k] == 61u8 {
+                            k += 1usize
+                            while k < link.len && is_space(link[k]) { k += 1usize }
+                            if k < link.len && link[k] == 34u8 {
+                                k += 1usize
+                                let start = k
+                                while k < link.len && link[k] != 34u8 { k += 1usize }
+                                value = link[start..k]
+                                if k < link.len { k += 1usize }
+                            } else {
+                                let start = k
+                                while k < link.len && link[k] != 59u8 && link[k] != 44u8 && !is_space(link[k]) { k += 1usize }
+                                value = link[start..k]
+                            }
+                            if text_eq_ignore_case(key, "rel") && rel_has_next(value) { ret (url, true) }
+                        }
+                        continue
+                    }
                     k += 1usize
-                    while k < link.len && is_space(link[k]) { k += 1usize }
-                    let want = "rel=\"next\""
-                    if k + want.len <= link.len && str.eq(link[k..k + want.len], want) { ret (link[at + 1usize..close], true) }
                 }
+                at = close
             }
         }
         at += 1usize
@@ -507,6 +575,7 @@ fn parse_url(a: *mem.Arena, text: str) -> Url {
     // the path: backslashes are slashes, dot segments resolved, the characters of the path encode set escaped
     if tail.len == 0usize { tail = "/" }
     let (segments_buf, e) = mem.alloc[str](a, tail.len + 2usize)
+    if e != ok { ret bad_url() }
     var count = 0usize
     var start = 1usize
     var s = 1usize
