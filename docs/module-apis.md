@@ -2592,6 +2592,8 @@ fn has_prefix(text: str, prefix: str) -> bool
 fn compare(left: str, right: str) -> i32
 fn before(x: Finding, y: Finding) -> bool
 fn find_by_id(existing: []const Finding, id: str) -> usize
+fn find_pair(existing: []const Finding, consumed: []const bool, id: str, description: str) -> usize
+fn find_nth_by_id(existing: []const Finding, id: str, nth: usize) -> usize
 fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const Reported, now: str, owner_tool: str) -> ([]const Finding, err)
 ```
 
@@ -6622,6 +6624,7 @@ fn rebase(a: *mem.Arena, c: *Commit, next_seq: usize) -> err
 fn build(a: *mem.Arena, c: *const Commit) -> (json.Value, err)
 fn failure(a: *mem.Arena, reason: str, detail_key: str, detail: json.Value, second_key: str, second: json.Value) -> (json.Value, err)
 fn apply_commit(a: *mem.Arena, run: json.Value, commit: json.Value) -> (Applied, err)
+fn buffered_recorded(c: *const Commit, key: str) -> (json.Value, bool, bool)
 fn record_clock(a: *mem.Arena, run: json.Value, c: *Commit, key: str, host_now: json.Value) -> (json.Value, bool, err)
 fn summarize_run(a: *mem.Arena, run: json.Value) -> (json.Value, err)
 fn number_f64(v: json.Value) -> (f64, err)
@@ -6912,7 +6915,8 @@ fn discard(o: *Outbox, seq: i64) -> bool
 fn settle(o: *Outbox, seq: i64) -> bool
 fn clear(o: *Outbox)
 fn describe_outbox(a: *mem.Arena, o: *const Outbox) -> json.Value
-fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, local: []const json.Value, cursor: json.Value, strategy: str) -> json.Value
+fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, local: []const json.Value, cursor: json.Value, strategy: str, table: json.Value) -> json.Value
+fn queue_ids(a: *mem.Arena, o: *const Outbox, table: json.Value) -> []const str
 fn to_ids(a: *mem.Arena, values: []const json.Value) -> []const str
 ```
 
@@ -7089,6 +7093,8 @@ fn queue_status(a: *mem.Arena, o: *const sync.Outbox, has_outbox: bool) -> json.
 fn plural(count: json.Value) -> str
 fn describe_queue(a: *mem.Arena, status: json.Value, has_status: bool) -> json.Value
 fn new_read_cache(a: *mem.Arena, fresh_ms: i64) -> ReadCache
+fn same_js_id(x: json.Value, y: json.Value) -> bool
+fn same_overlay_id(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool
 fn snapshot_index(c: *const ReadCache, table_id: json.Value) -> i64
 fn cache_store(c: *ReadCache, table_id: json.Value, records: json.Value, fetched_at: json.Value)
 fn cache_read(c: *const ReadCache, table_id: json.Value, now_ms: i64, online: bool) -> json.Value
@@ -7191,7 +7197,7 @@ fn outbox_line(a: *mem.Arena, entries: []const json.Value, translate: *const syn
 fn map_remote_to_local(a: *mem.Arena, remote: json.Value, mapping: []const json.Value) -> json.Value
 fn map_local_to_remote(a: *mem.Arena, local: json.Value, mapping: []const json.Value) -> json.Value
 type Keyed = struct { id: str, key: json.Value, has_key: bool, row: json.Value }
-fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> list.List[Keyed]
+fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> (list.List[Keyed], err)
 fn js_identity(a: *mem.Arena, v: json.Value, present: bool) -> str
 fn find_row(l: list.List[Keyed], id: str) -> (json.Value, bool)
 fn has_id(l: list.List[Keyed], id: str) -> bool
@@ -7199,7 +7205,7 @@ fn fields_changed(a: *mem.Arena, x: json.Value, base: json.Value, fields: []cons
 type Plan = struct { pulls: list.List[json.Value], pushes: list.List[json.Value], conflicts: list.List[json.Value], echoes: list.List[json.Value], create_local: list.List[json.Value], create_remote: list.List[json.Value], delete_local: list.List[json.Value], delete_remote: list.List[json.Value], noops: i64 }
 fn move_entry(a: *mem.Arena, k: Keyed, record: json.Value, via_conflict: bool) -> json.Value
 fn add_conflict(a: *mem.Arena, p: *Plan, k: Keyed, local: json.Value, remote: json.Value, base: json.Value, policy: str)
-fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> json.Value
+fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> (json.Value, err)
 fn lower_ascii(a: *mem.Arena, s: str) -> str
 fn upper_ascii(a: *mem.Arena, s: str) -> str
 fn hex_digit(n: u8) -> u8
@@ -18025,6 +18031,7 @@ fn same_alpha(al: Alpha, kind_id: u32, n: u32, tests: [6]Term) -> bool
 fn add_rule(e: *Engine, rule_in: Rule) -> err
 fn find_fact(e: *Engine, f: Fact) -> u32
 fn right_activate(e: *Engine, ri: usize, ci: usize, fid: u32) -> err
+fn drop_fact(e: *Engine, fid: u32, nfacts_before: usize, entries_before: usize)
 fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err)
 fn retract(e: *Engine, fid: u32) -> err
 fn count(e: *Engine, kind_id: u32) -> usize
