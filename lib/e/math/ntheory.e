@@ -241,14 +241,25 @@ fn sieve(limit: usize, flags: []u8) -> err {
     ret ok
 }
 
+// `floor(sqrt(high))` without forming a square past `u64`: the comparison `m*m <= high`
+// becomes `m <= high / m`, which cannot overflow.
+fn floor_root(high: u64) -> u64 {
+    var lo = 0u64
+    var hi = 4294967296u64
+    while lo + 1u64 < hi {
+        let mid = lo + (hi - lo) / 2u64
+        if mid <= high / mid { lo = mid } else { hi = mid }
+    }
+    ret lo
+}
+
 // Marks `flags[i]` 1 when `low + i` is prime, for `low + i <= high`;
 // `flags.len > high - low` and `scratch.len > sqrt(high)`.
 fn sieve_segmented(low: u64, high: u64, flags: []u8, scratch: []u8) -> err {
     if high < low { ret Invalid }
     let span = usize(high - low)
     if flags.len <= span { ret TooSmall }
-    var root = 0usize
-    while u64(root + 1usize) * u64(root + 1usize) <= high { root += 1usize }
+    let root = usize(floor_root(high))
     if scratch.len <= root { ret TooSmall }
     if sieve(root, scratch) != ok { ret TooSmall }
     var i = 0usize
@@ -259,14 +270,23 @@ fn sieve_segmented(low: u64, high: u64, flags: []u8, scratch: []u8) -> err {
     var p = 2usize
     while p <= root {
         if scratch[p] == 1u8 {
-            var start = u64(p) * u64(p)
+            let prime = u64(p)
+            var start = prime * prime
+            var skip = false
             if start < low {
-                start = (low + u64(p) - 1u64) / u64(p) * u64(p)
+                start = low / prime * prime
+                if start < low {
+                    if start > 18446744073709551615u64 - prime { skip = true } else { start += prime }
+                }
             }
-            var j = start
-            while j <= high {
-                flags[usize(j - low)] = 0u8
-                j += u64(p)
+            if !skip {
+                var j = start
+                var stop = false
+                while !stop && j <= high {
+                    flags[usize(j - low)] = 0u8
+                    // the next multiple is past `u64::MAX`: this prime has no more work
+                    if j > 18446744073709551615u64 - prime { stop = true } else { j += prime }
+                }
             }
         }
         p += 1usize
@@ -401,7 +421,8 @@ fn factor_p_minus_1(n: u64, bound: u64) -> (u64, bool) {
     while p <= bound {
         if is_prime(p) {
             var power = p
-            while power * p <= bound { power = power * p }
+            // `power * p <= bound` without forming the product that may overflow
+            while power <= bound / p { power = power * p }
             a = pow_mod(a, power, n)
             let g = gcd(a - 1u64, n)
             if g == n { ret (0u64, false) }
@@ -626,8 +647,9 @@ fn discrete_log_pohlig_hellman(base: u64, wanted: u64, p: u64, scratch: []u64) -
 fn discrete_log_kangaroo(base: u64, wanted: u64, m: u64, low: u64, high: u64) -> (u64, bool) {
     if m < 2u64 || high < low { ret (0u64, false) }
     let width = high - low
+    // ceil(sqrt(width + 1)) without forming `width + 1` past `u64`
     var k = 1u64
-    while k * k < width + 1u64 { k += 1u64 }
+    while k < 4294967296u64 && k * k <= width { k += 1u64 }
     // Jump sizes are powers of two chosen by the low bits of the position.
     var jumps = 0u64
     while (1u64 << jumps) < k { jumps += 1u64 }
@@ -640,7 +662,9 @@ fn discrete_log_kangaroo(base: u64, wanted: u64, m: u64, low: u64, high: u64) ->
     let step_limit = 4u64 * k + 16u64
     while steps < step_limit {
         let jump = 1u64 << (tame_y % jumps)
-        tame_x += jump
+        // the tame kangaroo may walk past `u64::MAX`; its position saturates there and
+        // the final range check rejects any answer that is not a valid in-range `x`
+        if tame_x > 18446744073709551615u64 - jump { tame_x = 18446744073709551615u64 } else { tame_x += jump }
         tame_y = mul_mod(tame_y, pow_mod(b, jump, m), m)
         steps += 1u64
     }
@@ -656,6 +680,7 @@ fn discrete_log_kangaroo(base: u64, wanted: u64, m: u64, low: u64, high: u64) ->
             ret (0u64, false)
         }
         let jump = 1u64 << (wild_y % jumps)
+        if wild_x > 18446744073709551615u64 - jump { break }
         wild_x += jump
         wild_y = mul_mod(wild_y, pow_mod(b, jump, m), m)
     }

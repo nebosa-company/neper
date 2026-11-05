@@ -207,6 +207,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, farey_room) = ntheory.farey(5u64, terms[..8usize])
     if farey_room != ntheory.TooSmall { os.exit(10i32) }
 
+    // 11: a full-width p-1 bound terminates instead of overflowing on its first prime.
+    let (wide_factor, wide_found) = ntheory.factor_p_minus_1(33u64, 9223372036854775808u64)
+    if !wide_found || wide_factor != 3u64 { os.exit(11i32) }
+    // 12: the kangaroo walk saturates at u64::MAX and still finds the in-range exponent.
+    let (wide_log, wide_log_found) = ntheory.discrete_log_kangaroo(1u64, 1u64, 3u64, 18446744073709551615u64, 18446744073709551615u64)
+    if !wide_log_found || wide_log != 18446744073709551615u64 { os.exit(12i32) }
+    // 13: a segment ending at u64::MAX reports TooSmall, never a wrap or trap.
+    if ntheory.sieve_segmented(18446744073709551515u64, 18446744073709551615u64, window[..], scratch[..]) != ntheory.TooSmall { os.exit(13i32) }
+
     try io.print("math ntheory ok\n")
     ret ok
 }
