@@ -150,6 +150,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e4 != reclaim.Invalid { os.exit(17i32) }
     let (few_slots, e5) = reclaim.hazards(slots[0..], hretired[0..], hcounts[0..], hfreed[0..], 2usize, 3usize)
     if e5 != reclaim.TooSmall { os.exit(18i32) }
+    // threads * k wraps to 4 here: the huge k must be refused before the slot table is validated.
+    let (overflow_k, e55) = reclaim.hazards(slots[0..], hretired[0..], hcounts[0..], hfreed[0..], 2usize, 9223372036854775810usize)
+    if e55 != reclaim.Invalid { os.exit(55i32) }
     let (h0, e6) = reclaim.hazards(slots[0..], hretired[0..], hcounts[0..], hfreed[0..], 2usize, 2usize)
     if e6 != ok || h0.threshold != 8usize || h0.retire_cap != 10usize { os.exit(19i32) }
     var h = h0

@@ -20,7 +20,8 @@ type Producer = struct { q: queue.Queue[u64], base: u64, count: u64, failed: boo
 fn produce(p: *Producer) {
     var i = 0u64
     while i < p.count {
-        if queue.push[u64](&p.q, p.base + i) != ok { p.failed = true }
+        let (ignored, push_error) = queue.push[u64](&p.q, p.base + i)
+        if push_error != ok { p.failed = true }
         i += 1u64
     }
 }
@@ -133,7 +134,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if queue.close[u64](&q) != queue.Closed { os.exit(20) }
     let (refused, e13) = queue.try_push[u64](&q, 8u64)
     if e13 != queue.Closed { os.exit(21) }
-    if queue.push[u64](&q, 8u64) != queue.Closed { os.exit(22) }
+    let (returned_value, closed_push_error) = queue.push[u64](&q, 8u64)
+    if closed_push_error != queue.Closed || returned_value != 8u64 { os.exit(22) }
     let (last, e14) = queue.pop[u64](&q)
     if e14 != ok || last != 7u64 { os.exit(23) }
     let (after, e15) = queue.pop[u64](&q)

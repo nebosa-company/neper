@@ -1,8 +1,9 @@
 // A bounded multi-producer, multi-consumer FIFO: a ring of `T` in the arena under one
 // mutex, with a condition for the consumers and one for the producers. `push` waits
-// for room and `pop` for an item; the timed forms answer `false` on the timeout and
-// the `try` forms at once. `close` wakes every waiter; what is buffered is still
-// popped, and only then is the queue `Closed`. A capacity of zero is `Invalid`.
+// for room and answers the value it did not take when the queue is closed; `pop` waits
+// for an item; the timed forms answer `false` on the timeout and the `try` forms at
+// once. `close` wakes every waiter; what is buffered is still popped, and only then is
+// the queue `Closed`. A capacity of zero is `Invalid`.
 // Everything is allocated in `init`, as the fence says.
 use e.mem
 use e.sync
@@ -77,17 +78,19 @@ fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err) {
     ret (true, ok)
 }
 
-fn push[T: type](q: *Queue[T], value: own T) -> err {
+// Waits for room, then appends. The answer is the value the queue did not take: the
+// caller owns it again on `Closed`; on success it is zero and the queue owns the value.
+fn push[T: type](q: *Queue[T], value: own T) -> (T, err) {
     let s = state_of[T](q)
     sync.mutex_lock(&s.lock)
     while !s.closed && s.count == s.items.len { sync.condition_wait(&s.not_full, &s.lock) }
     if s.closed {
         sync.mutex_unlock(&s.lock)
-        ret Closed
+        ret (value, Closed)
     }
     place[T](s, value)
     sync.mutex_unlock(&s.lock)
-    ret ok
+    ret (zero, ok)
 }
 
 fn push_for[T: type](q: *Queue[T], value: T, timeout: time.Duration) -> (bool, err) {

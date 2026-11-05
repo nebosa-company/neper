@@ -71,7 +71,7 @@ fn release_dependents[Ctx: type](s: *State[Ctx], id: u32) {
 
 fn submit_state[Ctx: type](s: *State[Ctx], id: u32, dag: bool) -> err {
     let before = atomic.add(&s.pending, 1u32, .AcqRel)
-    let push_error = queue.push[Work](&s.q, Work { id: id, dag: dag })
+    let (rejected_work, push_error) = queue.push[Work](&s.q, Work { id: id, dag: dag })
     if push_error != ok {
         finish_one[Ctx](s)
         ret Invalid

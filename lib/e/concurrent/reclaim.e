@@ -168,6 +168,8 @@ fn collect(e: *Epoch, thread: usize) -> usize {
 
 fn hazards(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: []u32, threads: usize, k: usize) -> (Hazards, err) {
     if threads == 0usize || k == 0usize { ret (zero, Invalid) }
+    // Reject a slot table the multiplication could not describe before it wraps.
+    if k > 18446744073709551615usize / threads { ret (zero, Invalid) }
     let total = threads * k
     if slots.len < total || retired_count.len < threads || retired.len < threads { ret (zero, TooSmall) }
     var h: Hazards = zero
@@ -175,7 +177,10 @@ fn hazards(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: 
     h.retired = retired
     h.retired_count = retired_count[..threads]
     h.retire_cap = retired.len / threads
-    h.threshold = 2usize * total
+    // the scan threshold saturates, so a large but valid table cannot wrap it
+    var threshold = 18446744073709551615usize
+    if total <= 18446744073709551615usize / 2usize { threshold = 2usize * total }
+    h.threshold = threshold
     h.threads = threads
     h.k = k
     h.sink.freed = freed
