@@ -173,5 +173,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if lc.color != ld.color { os.exit(47) }
     let hs = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "hs"))]
     if hs.color != 4286611584u32 { os.exit(48) }
+
+    // #713 malformed color()/lab channel counts are refused; #714 the hue
+    // interpolation method applies and an unknown modifier is refused; #715
+    // relative channels and alpha must resolve; #717 length functions keep
+    // terms past the sixteenth; #718 units without a base are refused; #719
+    // color-mix premultiplies the channels by alpha.
+    let fixes_source = "<html><head></head><body><div id=c71a style=\"color: color(srgb 1 0)\"></div><div id=c71b style=\"color: color(srgb nonsense 1 1)\"></div><div id=c71c style=\"color: lab(50% 20 30 40)\"></div><div id=c74s style=\"color: color-mix(in oklch, red, blue)\"></div><div id=c74l style=\"color: color-mix(in oklch longer hue, red, blue)\"></div><div id=c74x style=\"color: color-mix(in oklch sideways hue, red, blue)\"></div><div id=c75r style=\"color: rgb(from red r nonsense b)\"></div><div id=c75h style=\"color: hsl(from red h nonsense l)\"></div><div id=c75a style=\"color: hsl(from red h s l / nonsense)\"></div><div id=c79 style=\"color: color-mix(in srgb, transparent 50%, red 50%)\"></div><div id=c77 style=\"margin-left: min(100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,100px,1px)\"></div><div id=c78 style=\"margin-left: 100svw\"></div></body></html>"
+    let (fixes_dom, fixes_parse) = dom.parse(a, fixes_source, options(), 16usize)
+    if fixes_parse != ok { os.exit(49) }
+    var fixes_tree = fixes_dom
+    let (fixes_styles, fixes_alloc) = mem.alloc[style.Style](a, fixes_tree.used)
+    if fixes_alloc != ok { os.exit(49) }
+    var fixes_table = fixes_styles
+    var fixes_ctx = style.new_context(a, 800.0f64, 600.0f64)
+    if style.compute_tree(&fixes_ctx, &fixes_tree, none, none, fixes_table) != ok { os.exit(49) }
+    let c71a = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c71a"))]
+    let c71b = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c71b"))]
+    let c71c = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c71c"))]
+    if c71a.color != BLACK || c71b.color != BLACK || c71c.color != BLACK { os.exit(50) }
+    let c74x = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c74x"))]
+    if c74x.color != BLACK { os.exit(51) }
+    let c74s = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c74s"))]
+    let c74l = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c74l"))]
+    if c74s.color == c74l.color { os.exit(52) }
+    let c75r = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c75r"))]
+    let c75h = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c75h"))]
+    let c75a = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c75a"))]
+    if c75r.color != BLACK || c75h.color != BLACK || c75a.color != BLACK { os.exit(53) }
+    let c79 = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c79"))]
+    if c79.color != 2164195328u32 { os.exit(54) }
+    let c77 = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c77"))]
+    if !near(c77.margin[3usize].px, 1.0f64) { os.exit(55) }
+    let c78 = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c78"))]
+    if !near(c78.margin[3usize].px, 0.0f64) { os.exit(56) }
     ret ok
 }

@@ -834,65 +834,59 @@ fn zero_length() -> CssLength { ret plain_length(0.0f64, .Px) }
 // A length in pixels against the given bases; absent when a needed base is missing or a function is indefinite.
 fn to_px(l: CssLength, b: Bases) -> (f64, bool) {
     if l.op != .None {
-        var r: [16]f64 = zero
+        // Fold every term: a caller may pass any number of min()/max()/hypot()
+        // arguments, and stopping at a fixed buffer would drop the real answer.
+        var first = 0.0f64
+        var second = 0.0f64
+        var third = 0.0f64
+        var acc = 0.0f64
+        var sum = 0.0f64
         var n = 0usize
         var i = 0usize
-        while i < l.terms.len && n < 16usize {
+        while i < l.terms.len {
             let (px, good) = to_px(l.terms[i], b)
             if !good { ret (0.0f64, false) }
-            r[n] = px
+            if n == 0usize { first = px }
+            if n == 1usize { second = px }
+            if n == 2usize { third = px }
+            if l.op == .Min && (n == 0usize || px < acc) { acc = px }
+            if l.op == .Max && (n == 0usize || px > acc) { acc = px }
+            if l.op == .Hypot { sum = sum + px * px }
             n += 1usize
             i += 1usize
         }
         if n == 0usize { ret (0.0f64, false) }
         switch l.op {
         case .Min:
-            var acc = r[0]
-            var k = 1usize
-            while k < n {
-                acc = dart_min(acc, r[k])
-                k += 1usize
-            }
             ret (acc, true)
         case .Max:
-            var acc = r[0]
-            var k = 1usize
-            while k < n {
-                acc = dart_max(acc, r[k])
-                k += 1usize
-            }
             ret (acc, true)
         case .Clamp:
-            if n < 3usize { ret (0.0f64, false) }
-            ret (dart_max(r[0], dart_min(r[1], r[2])), true)
+            if n != 3usize { ret (0.0f64, false) }
+            ret (dart_max(first, dart_min(second, third)), true)
         case .Abs:
-            ret (math.abs[f64](r[0]), true)
+            if n != 1usize { ret (0.0f64, false) }
+            ret (math.abs[f64](first), true)
         case .Hypot:
-            var sum = 0.0f64
-            var k = 0usize
-            while k < n {
-                sum = sum + r[k] * r[k]
-                k += 1usize
-            }
             ret (math.sqrt[f64](sum), true)
         case .Mod:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (r[0] - r[1] * math.floor[f64](r[0] / r[1]), true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (first - second * math.floor[f64](first / second), true)
         case .Rem:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (r[0] - r[1] * math.trunc[f64](r[0] / r[1]), true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (first - second * math.trunc[f64](first / second), true)
         case .RoundNearest:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (round_nearest(r[0] / r[1]) * r[1], true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (round_nearest(first / second) * second, true)
         case .RoundUp:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (math.ceil[f64](r[0] / r[1]) * r[1], true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (math.ceil[f64](first / second) * second, true)
         case .RoundDown:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (math.floor[f64](r[0] / r[1]) * r[1], true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (math.floor[f64](first / second) * second, true)
         case .RoundToZero:
-            if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (math.trunc[f64](r[0] / r[1]) * r[1], true)
+            if n != 2usize || second == 0.0f64 { ret (0.0f64, false) }
+            ret (math.trunc[f64](first / second) * second, true)
         default:
             ret (0.0f64, false)
         }
@@ -961,7 +955,7 @@ fn match_length(s: str) -> (str, str, bool) {
 }
 
 fn length_unit_known(u: str) -> bool {
-    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "lh") || str.eq(u, "rlh") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "vb") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
+    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "lh") || str.eq(u, "rlh") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
 }
 
 fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
@@ -984,8 +978,8 @@ fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
     if str.eq(unit, "q") { ret (plain_length(value * 96.0f64 / 25.4f64 / 4.0f64, .Px), true) }
     if str.eq(unit, "pc") { ret (plain_length(value * 16.0f64, .Px), true) }
     if str.eq(unit, "%") { ret (plain_length(value, .Percent), true) }
-    if str.eq(unit, "vw") || str.eq(unit, "dvw") || str.eq(unit, "svw") || str.eq(unit, "lvw") || str.eq(unit, "vi") { ret (plain_length(value, .Vw), true) }
-    if str.eq(unit, "vh") || str.eq(unit, "dvh") || str.eq(unit, "svh") || str.eq(unit, "lvh") || str.eq(unit, "vb") { ret (plain_length(value, .Vh), true) }
+    if str.eq(unit, "vw") { ret (plain_length(value, .Vw), true) }
+    if str.eq(unit, "vh") { ret (plain_length(value, .Vh), true) }
     if str.eq(unit, "vmin") { ret (plain_length(value, .Vmin), true) }
     if str.eq(unit, "vmax") { ret (plain_length(value, .Vmax), true) }
     if str.eq(unit, "lh") { ret (plain_length(value, .Lh), true) }
@@ -1511,6 +1505,7 @@ fn resolve_rel_channel(a: *mem.Arena, tok: str, v: *const Vars, pct_ref: f64) ->
 
 fn resolve_rel_hue(a: *mem.Arena, tok: str, v: *const Vars) -> (f64, bool) {
     let t = trim_ws(tok)
+    if t.len == 0usize { ret (0.0f64, false) }
     let (known, have) = vars_get(v, t)
     if have { ret (known, true) }
     if str.eq(t, "none") { ret (0.0f64, true) }
@@ -1519,7 +1514,9 @@ fn resolve_rel_hue(a: *mem.Arena, tok: str, v: *const Vars) -> (f64, bool) {
         let (r0, r1) = eval_number(a, expr)
         ret (r0, r1)
     }
-    ret (parse_hue(a, expr), true)
+    if str.ends_with(expr, "deg") || str.ends_with(expr, "grad") || str.ends_with(expr, "turn") || str.ends_with(expr, "rad") { ret (parse_hue(a, expr), true) }
+    let (degrees, good) = try_parse(a, expr)
+    ret (degrees, good)
 }
 
 // `(origin, rest)` of the text after `from `: the first colour token (a function with its parentheses, or a word).
@@ -1593,15 +1590,15 @@ fn parse_relative_rgb(a: *mem.Arena, s: str) -> (u32, bool) {
     var i = 0usize
     while i < 3usize {
         let (v, good) = resolve_rel_channel(a, chans[i], &vars, 255.0f64)
-        if good { comp[i] = clamp255(v) } else { comp[i] = 0i64 }
+        if !good { ret (0u32, false) }
+        comp[i] = clamp255(v)
         i += 1usize
     }
     var ai = channel_a(h.base)
     if h.has_alpha {
         let (v, good) = resolve_rel_channel(a, h.alpha_tok, &vars, 1.0f64)
-        var al = f64(channel_a(h.base)) / 255.0f64
-        if good { al = v }
-        ai = clamp255(clamp_f(al, 0.0f64, 1.0f64) * 255.0f64)
+        if !good { ret (0u32, false) }
+        ai = clamp255(clamp_f(v, 0.0f64, 1.0f64) * 255.0f64)
     }
     var ai_clamped = ai
     if ai_clamped < 0i64 { ai_clamped = 0i64 }
@@ -1623,17 +1620,14 @@ fn parse_relative_hsl(a: *mem.Arena, s: str) -> (u32, bool) {
     let (hv, h_ok) = resolve_rel_hue(a, chans[0], &vars)
     let (sv_raw, s_ok) = resolve_rel_channel(a, chans[1], &vars, 100.0f64)
     let (lv_raw, l_ok) = resolve_rel_channel(a, chans[2], &vars, 100.0f64)
-    var sv = 0.0f64
-    if s_ok { sv = clamp_f(sv_raw, 0.0f64, 100.0f64) }
-    var lv = 0.0f64
-    if l_ok { lv = clamp_f(lv_raw, 0.0f64, 100.0f64) }
-    if !h_ok { ret (0u32, false) }
+    if !h_ok || !s_ok || !l_ok { ret (0u32, false) }
+    let sv = clamp_f(sv_raw, 0.0f64, 100.0f64)
+    let lv = clamp_f(lv_raw, 0.0f64, 100.0f64)
     var av = f64(channel_a(h.base)) / 255.0f64
     if h.has_alpha {
         let (v, good) = resolve_rel_channel(a, h.alpha_tok, &vars, 1.0f64)
-        var al = vars.values[3]
-        if good { al = v }
-        av = clamp_f(al, 0.0f64, 1.0f64)
+        if !good { ret (0u32, false) }
+        av = clamp_f(v, 0.0f64, 1.0f64)
     }
     ret (hsl_to_argb(hv, sv / 100.0f64, lv / 100.0f64, av), true)
 }
@@ -1657,17 +1651,14 @@ fn parse_relative_hwb(a: *mem.Arena, s: str) -> (u32, bool) {
     let (hv, h_ok) = resolve_rel_hue(a, chans[0], &vars)
     let (wv_raw, w_ok) = resolve_rel_channel(a, chans[1], &vars, 100.0f64)
     let (bv_raw, b_ok) = resolve_rel_channel(a, chans[2], &vars, 100.0f64)
-    var wv = 0.0f64
-    if w_ok { wv = clamp_f(wv_raw, 0.0f64, 100.0f64) }
-    var bv = 0.0f64
-    if b_ok { bv = clamp_f(bv_raw, 0.0f64, 100.0f64) }
-    if !h_ok { ret (0u32, false) }
+    if !h_ok || !w_ok || !b_ok { ret (0u32, false) }
+    let wv = clamp_f(wv_raw, 0.0f64, 100.0f64)
+    let bv = clamp_f(bv_raw, 0.0f64, 100.0f64)
     var av = f64(channel_a(h.base)) / 255.0f64
     if h.has_alpha {
         let (v, good) = resolve_rel_channel(a, h.alpha_tok, &vars, 1.0f64)
-        var al = vars.values[3]
-        if good { al = v }
-        av = clamp_f(al, 0.0f64, 1.0f64)
+        if !good { ret (0u32, false) }
+        av = clamp_f(v, 0.0f64, 1.0f64)
     }
     ret (hwb_to_argb(hv, wv / 100.0f64, bv / 100.0f64, clamp255(av * 255.0f64)), true)
 }
@@ -1875,9 +1866,8 @@ fn parse_relative_color_fn(a: *mem.Arena, s: str) -> (u32, bool) {
     var av = coords.alpha
     if h.has_alpha {
         let (v, good) = resolve_rel_channel(a, h.alpha_tok, &vars, 1.0f64)
-        var al = coords.alpha
-        if good { al = v }
-        av = clamp_f(al, 0.0f64, 1.0f64)
+        if !good { ret (0u32, false) }
+        av = clamp_f(v, 0.0f64, 1.0f64)
     }
     ret (from_space_coords(Coords { v: Vec3 { x: resolved[0], y: resolved[1], z: resolved[2] }, alpha: av }, space), true)
 }
@@ -1916,20 +1906,25 @@ fn parse_relative_color_space(a: *mem.Arena, s: str, space: str, n0: str, n1: st
     var av = coords.alpha
     if h.has_alpha {
         let (v, good) = resolve_rel_channel(a, h.alpha_tok, &vars, 1.0f64)
-        var al = coords.alpha
-        if good { al = v }
-        av = clamp_f(al, 0.0f64, 1.0f64)
+        if !good { ret (0u32, false) }
+        av = clamp_f(v, 0.0f64, 1.0f64)
     }
     ret (from_space_coords(Coords { v: Vec3 { x: resolved[0], y: resolved[1], z: resolved[2] }, alpha: av }, space), true)
 }
 
-fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64) -> f64 {
+fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64, method: str) -> f64 {
     var x = euclid_mod(h1, 360.0f64)
     if x < 0.0f64 { x = x + 360.0f64 }
     var y = euclid_mod(h2, 360.0f64)
     if y < 0.0f64 { y = y + 360.0f64 }
     let dh = y - x
-    if dh > 180.0f64 {
+    if str.eq(method, "longer") {
+        if dh > 0.0f64 && dh < 180.0f64 { y = y - 360.0f64 } else if dh > -180.0f64 && dh <= 0.0f64 { y = y + 360.0f64 }
+    } else if str.eq(method, "increasing") {
+        if dh < 0.0f64 { y = y + 360.0f64 }
+    } else if str.eq(method, "decreasing") {
+        if dh > 0.0f64 { y = y - 360.0f64 }
+    } else if dh > 180.0f64 {
         y = y - 360.0f64
     } else if dh < -180.0f64 {
         y = y + 360.0f64
@@ -1937,22 +1932,39 @@ fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64) -> f64 {
     ret x * w1 + y * w2
 }
 
-fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str) -> (u32, bool) {
+// `out` becomes the mix of `c1` and `c2` in `space`; non-hue components are
+// premultiplied by alpha (CSS interpolation), the hue follows `method`.
+fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str, method: str) -> (u32, bool) {
     let (ca, a_ok) = to_space_coords(c1, space)
     let (cb, b_ok) = to_space_coords(c2, space)
     if !a_ok || !b_ok { ret (0u32, false) }
     let hue_idx = hue_index(space)
+    let alpha = ca.alpha * w1 + cb.alpha * w2
     var out = Vec3 { x: 0.0f64, y: 0.0f64, z: 0.0f64 }
-    if hue_idx == 0i64 { out.x = interp_hue(ca.v.x, cb.v.x, w1, w2) } else { out.x = ca.v.x * w1 + cb.v.x * w2 }
-    if hue_idx == 1i64 { out.y = interp_hue(ca.v.y, cb.v.y, w1, w2) } else { out.y = ca.v.y * w1 + cb.v.y * w2 }
-    if hue_idx == 2i64 { out.z = interp_hue(ca.v.z, cb.v.z, w1, w2) } else { out.z = ca.v.z * w1 + cb.v.z * w2 }
-    ret (from_space_coords(Coords { v: out, alpha: ca.alpha * w1 + cb.alpha * w2 }, space), true)
+    if alpha > 0.0f64 {
+        if hue_idx == 0i64 { out.x = interp_hue(ca.v.x, cb.v.x, w1, w2, method) } else { out.x = (ca.v.x * ca.alpha * w1 + cb.v.x * cb.alpha * w2) / alpha }
+        if hue_idx == 1i64 { out.y = interp_hue(ca.v.y, cb.v.y, w1, w2, method) } else { out.y = (ca.v.y * ca.alpha * w1 + cb.v.y * cb.alpha * w2) / alpha }
+        if hue_idx == 2i64 { out.z = interp_hue(ca.v.z, cb.v.z, w1, w2, method) } else { out.z = (ca.v.z * ca.alpha * w1 + cb.v.z * cb.alpha * w2) / alpha }
+    }
+    ret (from_space_coords(Coords { v: out, alpha: alpha }, space), true)
 }
 
 fn component(a: *mem.Arena, t: str, pct_ref: f64) -> f64 {
     if str.eq(t, "none") { ret 0.0f64 }
     if str.ends_with(t, "%") { ret parse_or(a, t[0usize..t.len - 1usize], 0.0f64) / 100.0f64 * pct_ref }
     ret parse_or(a, t, 0.0f64)
+}
+
+// A colour component that must be present: `none`, a number or a percentage.
+fn component_checked(a: *mem.Arena, t: str, pct_ref: f64) -> (f64, bool) {
+    if str.eq(t, "none") { ret (0.0f64, true) }
+    if str.ends_with(t, "%") {
+        let (v, good) = try_parse(a, t[0usize..t.len - 1usize])
+        if !good { ret (0.0f64, false) }
+        ret (v / 100.0f64 * pct_ref, true)
+    }
+    let (v, good) = try_parse(a, t)
+    ret (v, good)
 }
 
 fn angle_of(a: *mem.Arena, t: str) -> f64 {
@@ -1978,16 +1990,31 @@ fn func_components(a: *mem.Arena, s: str) -> Components {
 
 fn parse_lab_lch(a: *mem.Arena, s: str, space: str) -> (u32, bool) {
     let comps = func_components(a, s)
-    if !comps.good || comps.toks.len < 3usize { ret (0u32, false) }
+    // Exactly three components; alpha is `/ <alpha>` in the head, never a token.
+    if !comps.good || comps.toks.len != 3usize { ret (0u32, false) }
     let ok_space = str.eq(space, "oklab") || str.eq(space, "oklch")
+    let polar = str.eq(space, "lch") || str.eq(space, "oklch")
     var l_ref = 100.0f64
     if ok_space { l_ref = 1.0f64 }
-    let l = component(a, comps.toks[0], l_ref)
-    if str.eq(space, "lab") { ret (from_space_coords(Coords { v: Vec3 { x: l, y: component(a, comps.toks[1], 125.0f64), z: component(a, comps.toks[2], 125.0f64) }, alpha: comps.alpha }, "lab"), true) }
-    if str.eq(space, "lch") { ret (from_space_coords(Coords { v: Vec3 { x: l, y: component(a, comps.toks[1], 150.0f64), z: angle_of(a, comps.toks[2]) }, alpha: comps.alpha }, "lch"), true) }
-    if str.eq(space, "oklab") { ret (from_space_coords(Coords { v: Vec3 { x: l, y: component(a, comps.toks[1], 0.4f64), z: component(a, comps.toks[2], 0.4f64) }, alpha: comps.alpha }, "oklab"), true) }
-    if str.eq(space, "oklch") { ret (from_space_coords(Coords { v: Vec3 { x: l, y: component(a, comps.toks[1], 0.4f64), z: angle_of(a, comps.toks[2]) }, alpha: comps.alpha }, "oklch"), true) }
-    ret (0u32, false)
+    var mid_ref = 125.0f64
+    if ok_space { mid_ref = 0.4f64 } else if polar { mid_ref = 150.0f64 }
+    let (l, l_ok) = component_checked(a, comps.toks[0], l_ref)
+    let (mid, mid_ok) = component_checked(a, comps.toks[1], mid_ref)
+    var z = 0.0f64
+    var z_ok = true
+    if polar {
+        z = angle_of(a, comps.toks[2])
+        if !str.eq(comps.toks[2], "none") {
+            let (_, hue_ok) = parse_css_angle_radians(a, comps.toks[2])
+            z_ok = hue_ok
+        }
+    } else {
+        let (cart, cart_ok) = component_checked(a, comps.toks[2], mid_ref)
+        z = cart
+        z_ok = cart_ok
+    }
+    if !l_ok || !mid_ok || !z_ok { ret (0u32, false) }
+    ret (from_space_coords(Coords { v: Vec3 { x: l, y: mid, z: z }, alpha: comps.alpha }, space), true)
 }
 
 fn a98_to_linear(v: f64) -> f64 {
@@ -2024,12 +2051,15 @@ fn map_v3(v: Vec3, which: u8) -> Vec3 {
 
 fn parse_color_function(a: *mem.Arena, s: str) -> (u32, bool) {
     let comps = func_components(a, s)
-    if !comps.good || comps.toks.len == 0usize { ret (0u32, false) }
+    // `color(<space> <c1> <c2> <c3> [/ <alpha>])`: exactly the space and three
+    // components; a missing or extra channel is malformed, not a default.
+    if !comps.good || comps.toks.len != 4usize { ret (0u32, false) }
     let space = comps.toks[0]
-    var c = Vec3 { x: 0.0f64, y: 0.0f64, z: 0.0f64 }
-    if comps.toks.len > 1usize { c.x = component(a, comps.toks[1], 1.0f64) }
-    if comps.toks.len > 2usize { c.y = component(a, comps.toks[2], 1.0f64) }
-    if comps.toks.len > 3usize { c.z = component(a, comps.toks[3], 1.0f64) }
+    let (x, x_ok) = component_checked(a, comps.toks[1], 1.0f64)
+    let (y, y_ok) = component_checked(a, comps.toks[2], 1.0f64)
+    let (z, z_ok) = component_checked(a, comps.toks[3], 1.0f64)
+    if !x_ok || !y_ok || !z_ok { ret (0u32, false) }
+    let c = Vec3 { x: x, y: y, z: z }
     if str.eq(space, "srgb") { ret (from_space_coords(Coords { v: c, alpha: comps.alpha }, "srgb"), true) }
     var xyz = Vec3 { x: 0.0f64, y: 0.0f64, z: 0.0f64 }
     if str.eq(space, "srgb-linear") {
@@ -2398,8 +2428,16 @@ fn parse_color_mix(a: *mem.Arena, raw: str, has_current: bool, current: u32) -> 
         i += 1usize
     }
     if head.len < 2usize || !str.eq(head.items[0], "in") { ret (0u32, false) }
+    if head.len != 2usize && head.len != 4usize { ret (0u32, false) }
     let space = head.items[1]
     if !mix_space_known(space) { ret (0u32, false) }
+    var method = "shorter"
+    if head.len == 4usize {
+        if !str.eq(head.items[3], "hue") || hue_index(space) < 0i64 { ret (0u32, false) }
+        let named = head.items[2]
+        if !(str.eq(named, "shorter") || str.eq(named, "longer") || str.eq(named, "increasing") || str.eq(named, "decreasing")) { ret (0u32, false) }
+        method = named
+    }
     let s1 = color_stop(a, trim_ws(parts[1]), has_current, current)
     let s2 = color_stop(a, trim_ws(parts[2]), has_current, current)
     if !s1.good || !s2.good { ret (0u32, false) }
@@ -2422,7 +2460,7 @@ fn parse_color_mix(a: *mem.Arena, raw: str, has_current: bool, current: u32) -> 
     if total <= 0.0f64 { ret (0u32, false) }
     let w1 = pct1 / total
     let w2 = pct2 / total
-    let (mixed, mixed_ok) = mix_in_space(s1.color, s2.color, w1, w2, space)
+    let (mixed, mixed_ok) = mix_in_space(s1.color, s2.color, w1, w2, space, method)
     if !mixed_ok { ret (0u32, false) }
     if total < 100.0f64 {
         let al = clamp255(f64(channel_a(mixed)) * total / 100.0f64)
@@ -2576,61 +2614,140 @@ fn arg_at(args: []const str, i: usize) -> str {
     ret ""
 }
 
+// A transform argument length in pixels. A percentage contributes no fixed
+// pixels here; parse_translate_percent reads percentages separately.
+fn transform_len(a: *mem.Arena, s: str) -> (f64, bool) {
+    if str.ends_with(s, "%") {
+        let (_, good) = try_parse(a, s[0usize..s.len - 1usize])
+        ret (0.0f64, good)
+    }
+    var body = s
+    if str.ends_with(s, "px") { body = s[0usize..s.len - 2usize] }
+    let (v, good) = try_parse(a, body)
+    if good { ret (v, true) }
+    let (l, l_ok) = parse_length(a, s, no_bases())
+    if !l_ok { ret (0.0f64, false) }
+    let (px, px_ok) = to_px(l, no_bases())
+    ret (px, px_ok)
+}
+
+fn transform_angle(a: *mem.Arena, s: str) -> (f64, bool) {
+    let (radians, good) = parse_css_angle_radians(a, s)
+    ret (radians, good)
+}
+
 fn transform_func(a: *mem.Arena, name: str, args: []const str) -> ([6]f64, bool) {
     let none = identity()
-    if args.len == 0usize && !str.eq(name, "matrix") { ret (none, false) }
     if str.eq(name, "translate") {
+        if args.len < 1usize || args.len > 2usize { ret (none, false) }
+        let (tx, tx_ok) = transform_len(a, args[0])
+        if !tx_ok { ret (none, false) }
         var ty = 0.0f64
-        if args.len > 1usize { ty = len_px(a, arg_at(args, 1usize)) }
-        ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, len_px(a, arg_at(args, 0usize)), ty), true)
+        if args.len == 2usize {
+            let (v, ty_ok) = transform_len(a, args[1])
+            if !ty_ok { ret (none, false) }
+            ty = v
+        }
+        ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, tx, ty), true)
     }
-    if str.eq(name, "translatex") { ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, len_px(a, arg_at(args, 0usize)), 0.0f64), true) }
-    if str.eq(name, "translatey") { ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, 0.0f64, len_px(a, arg_at(args, 0usize))), true) }
+    if str.eq(name, "translatex") {
+        if args.len != 1usize { ret (none, false) }
+        let (tx, tx_ok) = transform_len(a, args[0])
+        if !tx_ok { ret (none, false) }
+        ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, tx, 0.0f64), true)
+    }
+    if str.eq(name, "translatey") {
+        if args.len != 1usize { ret (none, false) }
+        let (ty, ty_ok) = transform_len(a, args[0])
+        if !ty_ok { ret (none, false) }
+        ret (six(1.0f64, 0.0f64, 0.0f64, 1.0f64, 0.0f64, ty), true)
+    }
     if str.eq(name, "scale") {
-        let sx = num_of(a, arg_at(args, 0usize))
+        if args.len < 1usize || args.len > 2usize { ret (none, false) }
+        let (sx, sx_ok) = parse_css_number(a, args[0])
+        if !sx_ok { ret (none, false) }
         var sy = sx
-        if args.len > 1usize { sy = num_of(a, arg_at(args, 1usize)) }
+        if args.len == 2usize {
+            let (v, sy_ok) = parse_css_number(a, args[1])
+            if !sy_ok { ret (none, false) }
+            sy = v
+        }
         ret (six(sx, 0.0f64, 0.0f64, sy, 0.0f64, 0.0f64), true)
     }
-    if str.eq(name, "scalex") { ret (six(num_of(a, arg_at(args, 0usize)), 0.0f64, 0.0f64, 1.0f64, 0.0f64, 0.0f64), true) }
-    if str.eq(name, "scaley") { ret (six(1.0f64, 0.0f64, 0.0f64, num_of(a, arg_at(args, 0usize)), 0.0f64, 0.0f64), true) }
+    if str.eq(name, "scalex") {
+        if args.len != 1usize { ret (none, false) }
+        let (sx, sx_ok) = parse_css_number(a, args[0])
+        if !sx_ok { ret (none, false) }
+        ret (six(sx, 0.0f64, 0.0f64, 1.0f64, 0.0f64, 0.0f64), true)
+    }
+    if str.eq(name, "scaley") {
+        if args.len != 1usize { ret (none, false) }
+        let (sy, sy_ok) = parse_css_number(a, args[0])
+        if !sy_ok { ret (none, false) }
+        ret (six(1.0f64, 0.0f64, 0.0f64, sy, 0.0f64, 0.0f64), true)
+    }
     if str.eq(name, "rotate") {
-        let r = rad_of(a, arg_at(args, 0usize))
+        if args.len != 1usize { ret (none, false) }
+        let (r, r_ok) = transform_angle(a, args[0])
+        if !r_ok { ret (none, false) }
         let c = math.cos[f64](r)
         let s = math.sin[f64](r)
         ret (six(c, s, -s, c, 0.0f64, 0.0f64), true)
     }
-    if str.eq(name, "skewx") { ret (six(1.0f64, 0.0f64, math.tan[f64](rad_of(a, arg_at(args, 0usize))), 1.0f64, 0.0f64, 0.0f64), true) }
-    if str.eq(name, "skewy") { ret (six(1.0f64, math.tan[f64](rad_of(a, arg_at(args, 0usize))), 0.0f64, 1.0f64, 0.0f64, 0.0f64), true) }
+    if str.eq(name, "skewx") {
+        if args.len != 1usize { ret (none, false) }
+        let (r, r_ok) = transform_angle(a, args[0])
+        if !r_ok { ret (none, false) }
+        ret (six(1.0f64, 0.0f64, math.tan[f64](r), 1.0f64, 0.0f64, 0.0f64), true)
+    }
+    if str.eq(name, "skewy") {
+        if args.len != 1usize { ret (none, false) }
+        let (r, r_ok) = transform_angle(a, args[0])
+        if !r_ok { ret (none, false) }
+        ret (six(1.0f64, math.tan[f64](r), 0.0f64, 1.0f64, 0.0f64, 0.0f64), true)
+    }
     if str.eq(name, "skew") {
+        if args.len < 1usize || args.len > 2usize { ret (none, false) }
+        let (rx, rx_ok) = transform_angle(a, args[0])
+        if !rx_ok { ret (none, false) }
         var sy = 0.0f64
-        if args.len > 1usize { sy = math.tan[f64](rad_of(a, arg_at(args, 1usize))) }
-        ret (six(1.0f64, sy, math.tan[f64](rad_of(a, arg_at(args, 0usize))), 1.0f64, 0.0f64, 0.0f64), true)
+        if args.len == 2usize {
+            let (ry, ry_ok) = transform_angle(a, args[1])
+            if !ry_ok { ret (none, false) }
+            sy = math.tan[f64](ry)
+        }
+        ret (six(1.0f64, sy, math.tan[f64](rx), 1.0f64, 0.0f64, 0.0f64), true)
     }
     if str.eq(name, "matrix") {
-        if args.len < 6usize { ret (none, false) }
-        ret (six(num_of(a, args[0]), num_of(a, args[1]), num_of(a, args[2]), num_of(a, args[3]), num_of(a, args[4]), num_of(a, args[5])), true)
+        if args.len != 6usize { ret (none, false) }
+        var m: [6]f64 = zero
+        var i = 0usize
+        while i < 6usize {
+            let (v, good) = parse_css_number(a, args[i])
+            if !good { ret (none, false) }
+            m[i] = v
+            i += 1usize
+        }
+        ret (m, true)
     }
     ret (none, false)
 }
 
-// A transform list reduced to one affine `[a, b, c, d, e, f]`; absent for `none`, empty or nothing recognised.
+// A transform list reduced to one affine `[a, b, c, d, e, f]`; absent for `none`, empty or anything malformed.
 fn parse_transform(a: *mem.Arena, raw: str) -> ([6]f64, bool) {
     let s = lower(a, trim_ws(raw))
     if s.len == 0usize || str.eq(s, "none") { ret (identity(), false) }
     var m = identity()
-    var any = false
     let funcs = transform_functions(a, s)
+    if funcs.len == 0usize { ret (identity(), false) }
     var i = 0usize
     while i < funcs.len {
         let (f, good) = transform_func(a, funcs[i].name, funcs[i].args)
-        if good {
-            m = affine_mul(m, f)
-            any = true
-        }
+        if !good { ret (identity(), false) }
+        m = affine_mul(m, f)
         i += 1usize
     }
-    ret (m, any)
+    ret (m, true)
 }
 
 fn pct_of(a: *mem.Arena, s: str) -> f64 {

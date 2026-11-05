@@ -375,5 +375,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has16 || !rect_is(r16, -2.0, 0.0, 10.0, 10.0) || red16 < 0.99 || green16 > 0.01 { os.exit(38) }
     let (rc16, redc16, greenc16, hasc16) = nth_fill(c16, 1usize)
     if !hasc16 || !rect_is(rc16, 0.0, 10.0, 10.0, 10.0) || greenc16 < 0.99 || redc16 > 0.01 { os.exit(39) }
+    // 17. A malformed recognized transform is rejected whole (not truncated to
+    // a prefix, zero-filled, or given extra arity) and the list gives no transform.
+    let (p17, ok17) = build(a, "<div style=\"width:10px;height:10px;background:#f00;transform:translate(10px,20px) bogus(1)\"></div><div style=\"width:10px;height:10px;background:#f00;transform:rotate(10deg, 20deg)\"></div><div style=\"width:10px;height:10px;background:#f00;transform:matrix(1,2,3,4,5,nonsense)\"></div><div style=\"width:10px;height:10px;background:#f00;transform:scale(2px)\"></div>", "")
+    if !ok17 { os.exit(40) }
+    let (c17, pc17) = paint_page(a, p17, &counter, view)
+    // One Transform command is the page view; a rejected list adds none.
+    if !pc17 || count_transform(c17) != 1usize { os.exit(40) }
     ret ok
 }
