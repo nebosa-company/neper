@@ -234,6 +234,19 @@ fn check_spawn_race(a: *mem.Arena, image: str) -> err {
 fn main(a: *mem.Arena) -> err {
     if run_child(a) { ret ok }
 
+    // #190.6: a NUL inside a path is refused instead of truncating it.
+    var nflags: os.OpenFlags = zero
+    nflags.write = true
+    nflags.create = true
+    nflags.truncate = true
+    let (nfile, nopen_error) = os.open(a, "np-nul-check.txt", nflags)
+    if nopen_error != ok { os.exit(76i32) }
+    if os.close(nfile) != ok { os.exit(76i32) }
+    if os.remove_file(a, "np-nul-check.txt\x00.bak") != os.NotFound { os.exit(77i32) }
+    let (ninfo, nstat_error) = os.stat(a, "np-nul-check.txt")
+    if nstat_error != ok || ninfo.size != 0u64 { os.exit(78i32) }
+    if os.remove_file(a, "np-nul-check.txt") != ok { os.exit(79i32) }
+
     let (image, image_error) = os.executable_path(a)
     if image_error != ok { os.exit(10i32) }
 

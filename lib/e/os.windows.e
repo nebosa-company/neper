@@ -97,6 +97,9 @@ type StartupInfo = struct { size: u32, padding: u32, reserved: usize, desktop: u
 
 type ProcessInformation = struct { process: usize, thread: usize, process_id: u32, thread_id: u32 }
 
+// `STARTUPINFOEXW`: the STARTUPINFO first, then the attribute list pointer.
+type StartupInfoEx = struct { startup: StartupInfo, attribute_list: usize }
+
 // `SYSTEM_INFO`. Only the page size is read, but the whole thing has to be here for the call
 // to have somewhere to put it -- and for `page_size` to be at the offset it is.
 type SystemInfo = struct { oem_id: u32, page_size: u32, minimum_address: usize, maximum_address: usize, active_mask: usize, processor_count: u32, processor_type: u32, allocation_granularity: u32, processor_level: u16, processor_revision: u16 }
@@ -485,10 +488,16 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
     var milliseconds = -1i32
     if timeout_ns == 0i64 { milliseconds = 0i32 }
     if timeout_ns > 0i64 {
-        milliseconds = i32(timeout_ns / 1000000i64)
-        // Anything positive but shorter than a millisecond is rounded up, so asking for a
-        // little time never means asking for none.
-        if milliseconds == 0i32 { milliseconds = 1i32 }
+        let wanted = timeout_ns / 1000000i64
+        // A 32-bit millisecond count would trap or wrap past ~24.8 days.
+        if wanted > 2147483647i64 {
+            milliseconds = 2147483647i32
+        } else {
+            milliseconds = i32(wanted)
+            // Anything positive but shorter than a millisecond is rounded up, so asking for a
+            // little time never means asking for none.
+            if milliseconds == 0i32 { milliseconds = 1i32 }
+        }
     }
     let ready = raw_socket_poll(&entries[0usize], u32(count), milliseconds)
     if ready < 0i32 { ret (0usize, from_socket_error()) }
@@ -811,7 +820,14 @@ extern fn raw_unlock_file(file: usize, reserved: u32, length_low: u32, length_hi
 extern fn raw_sleep(milliseconds: u32)
 
 @import("kernel32.dll", "CreateProcessW")
-extern fn raw_create_process(image: usize, command: *u16, process_attributes: usize, thread_attributes: usize, inherit: i32, flags: u32, environment: usize, directory: usize, startup: *StartupInfo, information: *ProcessInformation) -> i32
+extern fn raw_create_process(image: usize, command: *u16, process_attributes: usize, thread_attributes: usize, inherit: i32, flags: u32, environment: usize, directory: usize, startup: usize, information: *ProcessInformation) -> i32
+
+@import("kernel32.dll", "InitializeProcThreadAttributeList")
+extern fn raw_init_attribute_list(list: usize, count: u32, flags: u32, size: *usize) -> i32
+@import("kernel32.dll", "UpdateProcThreadAttribute")
+extern fn raw_update_attribute(list: usize, flags: u32, attribute: usize, value: usize, size: usize, previous: usize, return_size: usize) -> i32
+@import("kernel32.dll", "DeleteProcThreadAttributeList")
+extern fn raw_delete_attribute_list(list: usize)
 
 @import("kernel32.dll", "CreateJobObjectW")
 extern fn raw_create_job(security: usize, name: usize) -> usize
@@ -1010,6 +1026,8 @@ const LOCK_POLL_MS: u32 = 10u32
 // Suspended, so the child is in the job before it can start anything of its own; assigning
 // afterwards is a race against the children it has already had.
 const CREATE_SUSPENDED: u32 = 4u32
+const EXTENDED_STARTUPINFO_PRESENT: u32 = 524288u32
+const PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 131074usize
 const CREATE_UNICODE_ENVIRONMENT: u32 = 1024u32
 const STARTF_USESTDHANDLES: u32 = 256u32
 const HANDLE_FLAG_INHERIT: u32 = 1u32
@@ -1068,6 +1086,13 @@ const MODE_TRAVERSABLE: u32 = 73u32
 // argument.
 fn widen(a: *mem.Arena, text: str) -> ([]u16, err) {
     var nothing: []u16 = zero
+    // A NUL would end the wide string early: the call would see a shorter path
+    // than the caller wrote.
+    var nul_at = 0usize
+    while nul_at < text.len {
+        if text[nul_at] == 0u8 { ret (nothing, NotFound) }
+        nul_at += 1usize
+    }
     // A UTF-16 encoding never needs more units than the UTF-8 encoding needs bytes --
     // a four-byte sequence becomes two units -- so one allocation of the byte length
     // plus the terminator always fits.
@@ -1385,7 +1410,10 @@ fn pair_to_u64(high: u32, low: u32) -> u64 {
 fn time_from_filetime(high: u32, low: u32) -> i64 {
     let ticks = pair_to_u64(high, low)
     if ticks < FILETIME_UNIX_EPOCH { ret -1i64 }
-    ret i64((ticks - FILETIME_UNIX_EPOCH) * 100u64)
+    // 100ns ticks past year 2262 would overflow i64; saturate at its maximum.
+    let delta = ticks - FILETIME_UNIX_EPOCH
+    if delta > 92233720368547758u64 { ret 9223372036854775807i64 }
+    ret i64(delta * 100u64)
 }
 
 fn mode_from_attributes(attributes: u32) -> u32 {
@@ -1596,6 +1624,12 @@ fn open_relative(a: *mem.Arena, dir: Dir, relative_path: str, access: u32, dispo
     if name_error != ok {
         mem.reset(a, checkpoint)
         ret (INVALID_HANDLE, name_error)
+    }
+    // `UnicodeString.length` is u16: a longer name would wrap and open a
+    // shorter path than the caller named.
+    if count > 32767usize {
+        mem.reset(a, checkpoint)
+        ret (INVALID_HANDLE, Failed)
     }
     var text: UnicodeString = zero
     text.length = u16(count * 2usize)
@@ -2120,6 +2154,21 @@ fn make_uninheritable(stdio: Stdio) {
     }
 }
 
+// The substituted standard handles are the parent's own; they are marked for
+// this child only and cleared again afterwards.
+fn mark_startup_handles(startup: StartupInfo) -> err {
+    if startup.standard_input != 0usize && raw_set_handle_information(startup.standard_input, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    if startup.standard_output != 0usize && raw_set_handle_information(startup.standard_output, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    if startup.standard_error != 0usize && raw_set_handle_information(startup.standard_error, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+fn clear_startup_handles(startup: StartupInfo) {
+    if startup.standard_input != 0usize { let e = raw_set_handle_information(startup.standard_input, HANDLE_FLAG_INHERIT, 0u32) }
+    if startup.standard_output != 0usize { let e = raw_set_handle_information(startup.standard_output, HANDLE_FLAG_INHERIT, 0u32) }
+    if startup.standard_error != 0usize { let e = raw_set_handle_information(startup.standard_error, HANDLE_FLAG_INHERIT, 0u32) }
+}
+
 fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartResult, err) {
     var result: StartResult = zero
     let (line, line_error) = command_line(a, options.argv)
@@ -2173,9 +2222,77 @@ fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartR
         if job != 0usize { let unused_job = raw_close_handle(job) }
         ret (result, inherit_error)
     }
+    let startup_mark = mark_startup_handles(startup)
+    if startup_mark != ok {
+        clear_startup_handles(startup)
+        make_uninheritable(options.stdio)
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, startup_mark)
+    }
+    // Only the three streams and the declared `inherit` handles may reach the
+    // child: an explicit PROC_THREAD_ATTRIBUTE_HANDLE_LIST, not every
+    // inheritable handle the parent happens to hold.
+    let (handles, handles_error) = mem.alloc[usize](a, 3usize + options.stdio.inherit.len)
+    if handles_error != ok {
+        clear_startup_handles(startup)
+        make_uninheritable(options.stdio)
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, handles_error)
+    }
+    var handle_count = 0usize
+    if startup.standard_input != 0usize {
+        handles[handle_count] = startup.standard_input
+        handle_count += 1usize
+    }
+    if startup.standard_output != 0usize {
+        handles[handle_count] = startup.standard_output
+        handle_count += 1usize
+    }
+    if startup.standard_error != 0usize {
+        handles[handle_count] = startup.standard_error
+        handle_count += 1usize
+    }
+    var hx = 0usize
+    while hx < options.stdio.inherit.len {
+        handles[handle_count] = options.stdio.inherit[hx].raw
+        handle_count += 1usize
+        hx += 1usize
+    }
+    var list_size = 0usize
+    let probe = raw_init_attribute_list(0usize, 1u32, 0u32, &list_size)
+    // The list must be pointer-aligned: allocate whole words.
+    let list_words = (list_size + 7usize) / 8usize
+    let (list_buffer, list_error) = mem.alloc[usize](a, list_words)
+    if list_error != ok || list_size == 0usize || list_words == 0usize {
+        clear_startup_handles(startup)
+        make_uninheritable(options.stdio)
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, OutOfMemory)
+    }
+    let list_at = mem.address_of(&list_buffer[0usize])
+    if raw_init_attribute_list(list_at, 1u32, 0u32, &list_size) == 0i32 {
+        raw_delete_attribute_list(list_at)
+        clear_startup_handles(startup)
+        make_uninheritable(options.stdio)
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, Failed)
+    }
+    if raw_update_attribute(list_at, 0u32, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, mem.address_of(&handles[0usize]), handle_count * 8usize, 0usize, 0usize) == 0i32 {
+        raw_delete_attribute_list(list_at)
+        clear_startup_handles(startup)
+        make_uninheritable(options.stdio)
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, Failed)
+    }
+    var ex: StartupInfoEx = zero
+    ex.startup = startup
+    // With EXTENDED_STARTUPINFO_PRESENT, cb is sizeof(STARTUPINFOEXW).
+    ex.startup.size = 112u32
+    ex.attribute_list = list_at
     var information: ProcessInformation = zero
-    // Handles are inherited, which is what makes the three above reach the child at all.
-    let started = raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags, environment, directory, &startup, &information)
+    let started = raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags | EXTENDED_STARTUPINFO_PRESENT, environment, directory, mem.address_of(&ex.startup), &information)
+    raw_delete_attribute_list(list_at)
+    clear_startup_handles(startup)
     make_uninheritable(options.stdio)
     if started == 0i32 {
         let start_error = from_last_error()
@@ -2883,6 +3000,12 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
     if units == 0usize {
         offset = usize(holder[0usize].substitute_offset) / 2usize
         units = usize(holder[0usize].substitute_length) / 2usize
+        // Offsets and lengths come from the buffer; validate them against the
+        // array and the bytes the call returned before indexing.
+        if offset + units > 8188usize || units * 2usize + 8usize > usize(returned) {
+            mem.reset(a, checkpoint)
+            ret ("", Failed)
+        }
         if units >= 4usize {
             if holder[0usize].path[offset] == 92u16 && holder[0usize].path[offset + 1usize] == 63u16 {
                 if holder[0usize].path[offset + 2usize] == 63u16 && holder[0usize].path[offset + 3usize] == 92u16 {
@@ -2891,6 +3014,10 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
                 }
             }
         }
+    }
+    if offset + units > 8188usize || units * 2usize + 8usize > usize(returned) {
+        mem.reset(a, checkpoint)
+        ret ("", Failed)
     }
     if units == 0usize {
         mem.reset(a, checkpoint)
@@ -3669,7 +3796,8 @@ fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var none: WindowEvent = zero
     if window_event_count == 0usize {
         if timeout_ns > 0i64 {
-            var milliseconds = u32(timeout_ns / 1000000i64)
+            var milliseconds = 4294967295u32
+    if timeout_ns / 1000000i64 < 4294967295i64 { milliseconds = u32(timeout_ns / 1000000i64) }
             if timeout_ns % 1000000i64 != 0i64 { milliseconds += 1u32 }
             let woke = raw_message_wait(0u32, 0usize, 0i32, milliseconds, QS_ALLINPUT)
         }
