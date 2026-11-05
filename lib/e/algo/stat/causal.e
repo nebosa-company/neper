@@ -22,8 +22,18 @@ error Singular
 error Invalid
 
 // Solve the dense `n × n` system in place by Gaussian elimination with
-// partial pivoting; the answer replaces `rhs`. `Singular` below 1e-12 pivots.
+// partial pivoting; the answer replaces `rhs`. `Singular` below a pivot of
+// 1e-12 times the largest diagonal, so a uniformly scaled system still fits.
 fn causal_solve(matrix: []f64, rhs: []f64, n: usize) -> err {
+    if n == 0usize { ret ok }
+    var scale = 0.0f64
+    var diagonal = 0usize
+    while diagonal < n {
+        scale = math.max[f64](scale, math.abs[f64](matrix[diagonal * n + diagonal]))
+        diagonal += 1usize
+    }
+    if !(scale > 0.0f64) { ret Singular }
+    let floor = 1.0e-12f64 * scale
     var column = 0usize
     while column < n {
         var pivot = column
@@ -32,7 +42,7 @@ fn causal_solve(matrix: []f64, rhs: []f64, n: usize) -> err {
             if math.abs[f64](matrix[row * n + column]) > math.abs[f64](matrix[pivot * n + column]) { pivot = row }
             row += 1usize
         }
-        if math.abs[f64](matrix[pivot * n + column]) < 1.0e-12f64 { ret Singular }
+        if math.abs[f64](matrix[pivot * n + column]) < floor { ret Singular }
         if pivot != column {
             var c = 0usize
             while c < n {
@@ -286,7 +296,7 @@ fn iptw_ate(y: []const f64, treated: []const u8, scores: []const f64, n: usize) 
     let se = math.sqrt[f64](total) / f64(n)
     if !(se > 0.0f64) { ret (ate, se, 0.0f64, Invalid) }
     let z = math.abs[f64](ate) / se
-    ret (ate, se, 2.0f64 * (1.0f64 - special.normal_cdf(z)), ok)
+    ret (ate, se, 2.0f64 * special.normal_cdf(0.0f64 - z), ok)
 }
 
 // The augmented (doubly robust) treatment effect from caller outcome
@@ -330,7 +340,7 @@ fn doubly_robust(y: []const f64, treated: []const u8, scores: []const f64, mu1: 
     let se = math.sqrt[f64](spread / f64(n - 1usize)) / math.sqrt[f64](f64(n))
     if !(se > 0.0f64) { ret (ate, se, 0.0f64, Invalid) }
     let z = math.abs[f64](ate) / se
-    ret (ate, se, 2.0f64 * (1.0f64 - special.normal_cdf(z)), ok)
+    ret (ate, se, 2.0f64 * special.normal_cdf(0.0f64 - z), ok)
 }
 
 // One Bayesian completed dataset by chained equations for continuous
@@ -385,10 +395,17 @@ fn mice_impute(data: []const f64, missing: []const u8, n: usize, d: usize, cycle
         j = 0usize
         while j < d {
             var observed = 0usize
+            var absent = 0usize
             i = 0usize
             while i < n {
-                if missing[i * d + j] == 0u8 { observed += 1usize }
+                if missing[i * d + j] == 0u8 { observed += 1usize } else { absent += 1usize }
                 i += 1usize
+            }
+            // A fully observed column has nothing to impute; drawing for it would only
+            // move the generator stream seen by every later column.
+            if absent == 0usize {
+                j += 1usize
+                continue
             }
             if observed > 0usize {
                 if observed <= d { ret Invalid }

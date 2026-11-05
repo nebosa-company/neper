@@ -308,5 +308,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, _, pool_neg_error) = causal.mice_pool(pest[..], pvar[..], 3usize)
     if pool_neg_error != causal.Invalid { os.exit(5i32) }
     pvar[1usize] = 0.2f64
+
+    // 6: a fully observed matrix needs no imputation, even when n == d.
+    var cdata: [16]f64 = zero
+    var cmask: [16]u8 = zero
+    i = 0usize
+    while i < 16usize {
+        cdata[i] = f64(i) + 1.0f64
+        i += 1usize
+    }
+    var ccompleted: [16]f64 = zero
+    var cscratch: [40]f64 = zero
+    var cring = rand.pcg64(7u64, 11u64)
+    if causal.mice_impute(cdata[..], cmask[..], 4usize, 4usize, 3u32, &cring, ccompleted[..], cscratch[..]) != ok { os.exit(6i32) }
+    i = 0usize
+    while i < 16usize {
+        if ccompleted[i] != cdata[i] { os.exit(6i32) }
+        i += 1usize
+    }
+    var cmctx = MeanCtx { col: 0usize }
+    var cpooled: [3]f64 = zero
+    var cmice_scratch: [44]f64 = zero
+    if causal.mice[MeanCtx](cdata[..], cmask[..], 4usize, 4usize, 2u32, 2usize, &cring, &cmctx, mean_estimate, ccompleted[..], cpooled[..], cmice_scratch[..]) != ok { os.exit(6i32) }
+    if !(cpooled[0usize] > 1.0f64 && cpooled[0usize] < 16.0f64) { os.exit(6i32) }
+
+    // 7: a z above 8.3 keeps a positive p-value in the tail rather than cancelling
+    // `1 - cdf` to zero.
+    var tail_y: [4]f64 = zero
+    tail_y[0usize] = 8.5f64
+    tail_y[1usize] = 11.5f64
+    var tail_t: [4]u8 = zero
+    tail_t[0usize] = 1u8
+    tail_t[1usize] = 1u8
+    var tail_s: [4]f64 = zero
+    tail_s[0usize] = 0.5f64
+    tail_s[1usize] = 0.5f64
+    tail_s[2usize] = 0.5f64
+    tail_s[3usize] = 0.5f64
+    let (_, _, tail_p, tail_error) = causal.iptw_ate(tail_y[..], tail_t[..], tail_s[..], 4usize)
+    if tail_error != ok { os.exit(7i32) }
+    if !(tail_p > 0.0f64) || !(tail_p < 1.0e-15f64) { os.exit(7i32) }
+
+    // 8: a uniformly scaled system solves; the pivot floor is relative to its scale.
+    var scaled_matrix: [4]f64 = zero
+    scaled_matrix[0usize] = 1.0e-18f64
+    scaled_matrix[3usize] = 1.0e-18f64
+    var scaled_rhs: [2]f64 = zero
+    scaled_rhs[0usize] = 1.0e-18f64
+    scaled_rhs[1usize] = 2.0e-18f64
+    if causal.causal_solve(scaled_matrix[..], scaled_rhs[..], 2usize) != ok { os.exit(8i32) }
+    if !near(scaled_rhs[0usize], 1.0f64, 0.000000000001f64) || !near(scaled_rhs[1usize], 2.0f64, 0.000000000001f64) { os.exit(8i32) }
+
     ret ok
 }

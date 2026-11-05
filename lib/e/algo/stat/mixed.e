@@ -22,6 +22,7 @@ use e.math.special
 error TooSmall
 error Singular
 error Invalid
+error NotConverged
 
 type Corr = enum u8 { Independence, Exchangeable, Ar1 }
 type Family = enum u8 { Binomial, Poisson }
@@ -215,7 +216,9 @@ fn gee_solve_block(corr: Corr, alpha: f64, phi: f64, v: []const f64, m: usize, w
     }
     let denom = phi * (1.0f64 - alpha * alpha)
     if m == 1usize {
-        w[0usize] = v[0usize] / denom
+        // A 1x1 AR(1) block is just `phi`; the tridiagonal inverse's denominator is
+        // only for m >= 2.
+        w[0usize] = v[0usize] / phi
         ret ok
     }
     w[0usize] = (v[0usize] - alpha * v[1usize]) / denom
@@ -821,6 +824,7 @@ fn mmrm_un(y: []const f64, x: []const f64, n: usize, p: usize, counts: []const u
     }
     let (result, nm_error) = opt.nelder_mead[MmrmCtx](&ctx, mmrm_objective, theta, 0.5f64, 0.0000000001f64, 5000u32, scratch[..(m + 1usize) * (m + 1usize) + 4usize * m])
     if nm_error != ok { ret (0u32, nm_error) }
+    if !result.converged { ret (0u32, NotConverged) }
     mmrm_unpack(theta, v, lbuf)
     var i = 0usize
     while i < v {
@@ -1028,6 +1032,7 @@ fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []c
     theta[1usize] = start
     let (result, nm_error) = opt.nelder_mead[RiCtx](&ctx, ri_objective, theta, 0.5f64, 0.000000000001f64, 500u32, nm)
     if nm_error != ok { ret (0u32, nm_error) }
+    if !result.converged { ret (0u32, NotConverged) }
     let tau2 = math.exp[f64](theta[0usize])
     let sig2 = math.exp[f64](theta[1usize])
     variances[0usize] = tau2
@@ -1351,6 +1356,7 @@ fn lmm_slopes(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize
     theta[r] = logsig
     let (result, nm_error) = opt.nelder_mead[RsCtx](&ctx, rs_objective, theta, 0.5f64, 0.000000000001f64, 500u32, nm)
     if nm_error != ok { ret (0u32, nm_error) }
+    if !result.converged { ret (0u32, NotConverged) }
     let sig2 = math.exp[f64](theta[r])
     let (_, fit_error) = rs_fit_given(&ctx, theta, sig2)
     if fit_error != ok { ret (0u32, fit_error) }
@@ -1524,6 +1530,7 @@ fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, 
     var rbuf = scratch[at..at + maxm]
     var ctx = RsCtx { y: zw, x: x, z: z, w: dw, n: n, d: d, q: q, counts: counts, groups: groups, xvx: xvx, xvy: xvy, gbuf: gbuf, vbuf: vbuf, rbuf: rbuf, tbuf: tbuf }
     var started = false
+    var nm_converged = false
     var done = 0u32
     while done < max_outer {
         var off = 0usize
@@ -1593,8 +1600,11 @@ fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, 
             theta[r] = logsig
             started = true
         }
-        let (_, nm_error) = opt.nelder_mead[RsCtx](&ctx, rs_objective, theta, 0.5f64, 0.000000000001f64, 500u32, nm)
+        let (nm_result, nm_error) = opt.nelder_mead[RsCtx](&ctx, rs_objective, theta, 0.5f64, 0.000000000001f64, 500u32, nm)
         if nm_error != ok { ret (0u32, nm_error) }
+        // An intermediate round may miss the Nelder-Mead tolerance and still feed a
+        // later, converged round; only the fit the answer is taken from matters.
+        nm_converged = nm_result.converged
         let sig2 = math.exp[f64](theta[r])
         let (_, fit_error) = rs_fit_given(&ctx, theta, sig2)
         if fit_error != ok { ret (0u32, fit_error) }
@@ -1612,6 +1622,7 @@ fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, 
         done += 1u32
         if move <= tolerance { break }
     }
+    if !nm_converged { ret (done, NotConverged) }
     let sig2 = math.exp[f64](theta[r])
     i = 0usize
     while i < q {
@@ -1638,7 +1649,7 @@ fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, 
         if inverse_error != ok { ret (0u32, inverse_error) }
         c = 0usize
         while c < d {
-            inverse[c * d + j] = xvy[c] * sig2
+            inverse[c * d + j] = xvy[c]
             c += 1usize
         }
         j += 1usize

@@ -195,6 +195,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bvariances[0usize] <= 0.05f64 || bvariances[0usize] >= 3.0f64 { os.exit(4i32) }
     if !near(bvariances[2usize], 0.3f64, 0.7f64) { os.exit(4i32) }
     if bvariances[3usize] <= 0.3f64 || bvariances[3usize] >= 2.0f64 { os.exit(4i32) }
+    // 8: the fixed-effect covariance is the model-based inverse, not scaled by the
+    // dispersion twice; sig2 is 0.74 here, so a double scale would be 14% off.
+    if !(bvariances[3usize] < 0.9f64) { os.exit(8i32) }
+    if !near(math.sqrt[f64](bbeta_cov[0usize]), 0.23914808989896488f64, 0.004f64) { os.exit(8i32) }
+    if !near(math.sqrt[f64](bbeta_cov[3usize]), 0.1458378655879838f64, 0.0025f64) { os.exit(8i32) }
 
     // 5: a Poisson GLMM with beta = [3, 0.1] and G = [[0.4, 0.05], [0.05,
     // 0.2]] recovers fully at informative counts; the dispersion rides loose
@@ -259,6 +264,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tiny_work: [8]f64 = zero
     let (_, tiny_error) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Binomial, bbeta[..], bbeta_cov[..], bvariances[..], bblups[..], 0.0001f64, 100u32, tiny_work[..])
     if tiny_error != mixed.TooSmall { os.exit(6i32) }
+
+    // 7: a one-row AR(1) cluster has covariance phi, so its inverse weight is v/phi;
+    // the (1 - alpha^2) denominator applies only to the tridiagonal m >= 2 inverse.
+    var one_v: [1]f64 = zero
+    one_v[0usize] = 2.0f64
+    var one_w: [1]f64 = zero
+    if mixed.gee_solve_block(.Ar1, 0.8f64, 2.0f64, one_v[..], 1usize, one_w[..]) != ok { os.exit(7i32) }
+    if !near(one_w[0usize], 1.0f64, 0.000000001f64) { os.exit(7i32) }
 
     try io.print("algo stat mixed ok\n")
     ret ok
