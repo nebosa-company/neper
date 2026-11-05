@@ -427,7 +427,31 @@ fn quickbase_text(a: *mem.Arena, text: str, comments: []str, comment_count: []us
     while i <= text.len {
         if i == text.len || text[i] == 10u8 {
             let line = text[line_start..i]
-            let (cut, found) = str.find(line, "//")
+            // `//` starts a comment only outside a string literal.
+            var cut = line.len
+            var found = false
+            var in_string = false
+            var escaping = false
+            var sc = 0usize
+            while sc < line.len {
+                let ch = line[sc]
+                if in_string {
+                    if escaping {
+                        escaping = false
+                    } else if ch == 92u8 {
+                        escaping = true
+                    } else if ch == 34u8 {
+                        in_string = false
+                    }
+                } else if ch == 34u8 {
+                    in_string = true
+                } else if ch == 47u8 && sc + 1usize < line.len && line[sc + 1usize] == 47u8 {
+                    cut = sc
+                    found = true
+                    break
+                }
+                sc += 1usize
+            }
             var keep = line
             if found {
                 let c = trim(line[cut + 2usize..line.len])
@@ -465,8 +489,27 @@ fn quickbase_text(a: *mem.Arena, text: str, comments: []str, comment_count: []us
     var has_body = false
     var from = 0usize
     var p = 0usize
+    var in_string = false
+    var escaping = false
     while p <= no_comments.len {
-        if p == no_comments.len || no_comments[p] == 59u8 {
+        var boundary = p == no_comments.len
+        if p < no_comments.len {
+            let ch = no_comments[p]
+            if in_string {
+                if escaping {
+                    escaping = false
+                } else if ch == 92u8 {
+                    escaping = true
+                } else if ch == 34u8 {
+                    in_string = false
+                }
+            } else if ch == 34u8 {
+                in_string = true
+            } else if ch == 59u8 {
+                boundary = true
+            }
+        }
+        if boundary {
             let part = trim(no_comments[from..p])
             if part.len > 0usize {
                 let (name, expr, is_var) = match_var(part)
@@ -556,6 +599,26 @@ fn apply_rewrites(w: *Work, node: f.Node, m: Mapping) -> f.Node {
                 }
                 i = to
             }
+        }
+        // Every source argument kept: listed ones in reorder order, the rest after.
+        var extra = 0usize
+        while extra < args.len {
+            var listed = false
+            var r = 0usize
+            while r < m.reorder.len {
+                if m.reorder[r] >= 48u8 && m.reorder[r] <= 57u8 {
+                    let (rf, rt) = number_at(m.reorder, r)
+                    if usize(parse_index(m.reorder[rf..rt])) == extra { listed = true }
+                    r = rt
+                } else {
+                    r += 1usize
+                }
+            }
+            if !listed && n < out.len {
+                out[n] = args[extra]
+                n += 1usize
+            }
+            extra += 1usize
         }
         args = out[0usize..n]
     }

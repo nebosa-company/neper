@@ -9,7 +9,7 @@ error TooSmall
 error Invalid
 error Unsolvable
 
-type Links = struct { left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, columns: usize, nodes: usize }
+type Links = struct { left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, columns: usize, nodes: usize, full: bool }
 
 // The node arrays each need `columns + 1 + ones` entries; `size` needs
 // `columns + 1`. Answers the threaded structure.
@@ -68,7 +68,7 @@ fn links(matrix: []const u8, rows: usize, columns: usize, left: []u32, right: []
         }
         r += 1usize
     }
-    ret (Links { left: left, right: right, up: up, down: down, column: column, row: row, size: size, columns: columns, nodes: next }, ok)
+    ret (Links { left: left, right: right, up: up, down: down, column: column, row: row, size: size, columns: columns, nodes: next, full: false }, ok)
 }
 
 fn cover(l: *Links, header: u32) {
@@ -117,7 +117,12 @@ fn search(l: *Links, chosen: []usize, depth: usize) -> (usize, bool) {
         c = l.right[usize(c)]
     }
     if l.size[usize(best)] == 0u32 { ret (depth, false) }
-    if depth >= chosen.len { ret (depth, false) }
+    if depth >= chosen.len {
+        // Marked so solve can tell "buffer too short" from "no cover" and answer
+        // TooSmall instead of backtracking to Unsolvable.
+        l.full = true
+        ret (depth, false)
+    }
     cover(l, best)
     var r = l.down[usize(best)]
     while r != best {
@@ -146,8 +151,12 @@ fn search(l: *Links, chosen: []usize, depth: usize) -> (usize, bool) {
 // The first exact cover of the threaded matrix as row indices into
 // `chosen`; answers the row count or `Unsolvable`.
 fn solve(l: *Links, chosen: []usize) -> (usize, err) {
+    l.full = false
     let (count, found) = search(l, chosen, 0usize)
-    if !found { ret (0usize, Unsolvable) }
+    if !found {
+        if l.full { ret (0usize, TooSmall) }
+        ret (0usize, Unsolvable)
+    }
     ret (count, ok)
 }
 

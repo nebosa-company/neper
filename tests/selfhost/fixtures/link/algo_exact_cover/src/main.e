@@ -96,6 +96,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     grid[2usize] = 12u8
     if exact_cover.sudoku(grid[..], big, links_left, links_right, links_up, links_down, links_column, links_row, sizes[..], cells[..]) != exact_cover.Invalid { os.exit(2i32) }
 
+    // 3: a chosen buffer shorter than the cover is TooSmall, not Unsolvable.
+    var id_matrix: [16]u8 = zero
+    var k = 0usize
+    while k < 4usize {
+        id_matrix[4usize * k + k] = 1u8
+        k += 1usize
+    }
+    var id_left: [16]u32 = zero
+    var id_right: [16]u32 = zero
+    var id_up: [16]u32 = zero
+    var id_down: [16]u32 = zero
+    var id_column: [16]u32 = zero
+    var id_row: [16]u32 = zero
+    var id_size: [8]u32 = zero
+    let (il, ile) = exact_cover.links(id_matrix[..], 4usize, 4usize, id_left[..], id_right[..], id_up[..], id_down[..], id_column[..], id_row[..], id_size[..])
+    if ile != ok { os.exit(3i32) }
+    var id_links = il
+    var small_choice: [3]usize = zero
+    let (small_count, small_error) = exact_cover.solve(&id_links, small_choice[..])
+    if small_error != exact_cover.TooSmall || small_count != 0usize { os.exit(3i32) }
+    var full_choice: [4]usize = zero
+    let (id_count, id_error) = exact_cover.solve(&id_links, full_choice[..])
+    if id_error != ok || id_count != 4usize { os.exit(3i32) }
+
     try io.print("algo exact cover ok\n")
     ret ok
 }
+
