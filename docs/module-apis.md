@@ -20813,7 +20813,7 @@ fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, 
 ```neper
 type Role = enum u8 { Generic, Text, Heading, Link, Button, Image, TextField, Checkbox, Radio, Combobox, Listbox, Slider, Progressbar, List, ListItem, Table, Row, Cell, ColumnHeader, RowHeader, Navigation, Main, Banner, ContentInfo, Complementary, Form, Search, Region, Article, Dialog, Separator, Figure, Group }
 type Node = struct { role: Role, name: str, has_value: bool, value: str, node_id: i64, has_level: bool, level: i64, has_checked: bool, checked: bool, checked_mixed: bool, disabled: bool, has_expanded: bool, expanded: bool, has_selected: bool, selected: bool, required: bool, invalid: bool, has_now: bool, now: f64, has_min: bool, min: f64, has_max: bool, max: f64, has_url: bool, url: str, focusable: bool, children: []const Node }
-type Builder = struct { a: *mem.Arena, doc: *const html.Document, next_id: i64 }
+type Builder = struct { a: *mem.Arena, doc: *const html.Document, next_id: i64, ids: map.Map[str, html.NodeId], labels: map.Map[str, html.NodeId], indexed: bool }
 
 fn role_name(r: Role) -> str
 fn blank_node(role: Role) -> Node
@@ -20840,6 +20840,8 @@ fn role_of(b: *const Builder, el: html.NodeId) -> Role
 fn names_from_content(r: Role) -> bool
 fn find_by_id(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId
 fn find_label_for(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId
+fn index_put(m: *map.Map[str, html.NodeId], key: str, value: html.NodeId) -> err
+fn index_tree(b: *Builder, id: html.NodeId) -> err
 fn label_text(b: *const Builder, control: html.NodeId) -> (str, bool)
 fn child_text(b: *const Builder, el: html.NodeId, name: str) -> (str, bool)
 fn trimmed_attr(b: *const Builder, el: html.NodeId, name: str) -> (str, bool)
@@ -20874,6 +20876,8 @@ fn has_token(list: str, token: str) -> bool
 fn tag_attribute_allowed(policy: Policy, tag: str, name: str) -> bool
 fn is_url_attribute(name: str) -> bool
 fn lower(c: u8) -> u8
+fn fold_at(s: str, at: usize, lit: str) -> bool
+fn has_token_fold(list: str, token: str) -> bool
 fn url_allowed(value: str, policy: Policy) -> bool
 fn push_text(b: *str.Builder, s: str, attribute: bool) -> err
 fn is_void(name: str) -> bool
