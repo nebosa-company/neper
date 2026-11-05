@@ -171,16 +171,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if h.retired_count[1] != 8usize || reclaim.freed_count(&h.sink) != 2usize { os.exit(26i32) }
     if reclaim.retire_hazard(&h, 1usize, 108u32) != ok { os.exit(27i32) }
     if h.retired_count[1] != 0usize || reclaim.freed_count(&h.sink) != 11usize { os.exit(28i32) }
+    // A retire capacity the automatic scan can never reach is refused up front: the list
+    // would fill before the scan that empties it could fire.
     var tiny: [6]u32 = zero
-    let (h3, e7) = reclaim.hazards(slots[0..], tiny[0..], hcounts[0..], hfreed[0..], 2usize, 2usize)
-    if e7 != ok || h3.retire_cap != 3usize { os.exit(29i32) }
-    var hz3 = h3
+    let (_, tiny_error) = reclaim.hazards(slots[0..], tiny[0..], hcounts[0..], hfreed[0..], 2usize, 2usize)
+    if tiny_error != reclaim.TooSmall { os.exit(29i32) }
+    // A full list gets one scan and a retry: the protected entry stays, the rest free, and
+    // the new node lands in the space they made.
+    var cap_retired: [18]u32 = zero
+    var cap_counts: [2]usize = zero
+    var cap_freed: [18]u32 = zero
+    let (h4, cap_error) = reclaim.hazards(slots[0..], cap_retired[0..], cap_counts[0..], cap_freed[0..], 2usize, 2usize)
+    if cap_error != ok || h4.retire_cap != 9usize { os.exit(30i32) }
+    var hz4 = h4
     k = 0u32
-    while k < 3u32 {
-        if reclaim.retire_hazard(&hz3, 0usize, k) != ok { os.exit(30i32) }
+    while k < 9u32 {
+        hz4.retired[usize(k)] = 200u32 + k
         k += 1u32
     }
-    if reclaim.retire_hazard(&hz3, 0usize, 3u32) != reclaim.Full { os.exit(31i32) }
+    hz4.retired_count[0] = 9usize
+    reclaim.protect(&hz4, 0usize, 0usize, 200u32)
+    if reclaim.retire_hazard(&hz4, 0usize, 299u32) != ok { os.exit(31i32) }
+    if hz4.retired_count[0] != 2usize || hz4.retired[0] != 200u32 || hz4.retired[1] != 299u32 { os.exit(32i32) }
+    reclaim.clear(&hz4, 0usize, 0usize)
     // --- 3: four threads over the list under epochs.
     let (next_store, m1) = mem.alloc[Atomic[u32]](a, NODES)
     if m1 != ok { ret m1 }

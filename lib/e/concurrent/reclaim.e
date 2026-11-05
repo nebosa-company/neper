@@ -183,6 +183,9 @@ fn hazards(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: 
     h.threshold = threshold
     h.threads = threads
     h.k = k
+    // A capacity at or below the automatic scan threshold would fill before the scan that
+    // empties it can fire, so the list could never retire another node.
+    if h.retire_cap <= h.threshold { ret (zero, TooSmall) }
     h.sink.freed = freed
     var at = 0usize
     while at < total {
@@ -230,10 +233,15 @@ fn is_protected(h: *Hazards, node: u32) -> bool {
 }
 
 // Onto the thread's own retired list, scanning it once it holds more than R nodes.
-// `Full` when the list is at its capacity even so.
+// `Full` when the list stays full even after a scan (every node is still protected).
 fn retire_hazard(h: *Hazards, thread: usize, node: u32) -> err {
-    let n = h.retired_count[thread]
-    if n >= h.retire_cap { ret Full }
+    var n = h.retired_count[thread]
+    if n >= h.retire_cap {
+        // A full list gets one scan before refusing: unprotected nodes make room.
+        let ignored = scan(h, thread)
+        n = h.retired_count[thread]
+        if n >= h.retire_cap { ret Full }
+    }
     h.retired[thread * h.retire_cap + n] = node
     h.retired_count[thread] = n + 1usize
     if n + 1usize > h.threshold { let ignored = scan(h, thread) }
