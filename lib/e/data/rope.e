@@ -3,7 +3,14 @@
 // length of the left subtree and always have both children. A root of
 // `NONE` is the empty rope. `split` and `concat` are the primitives; `insert`,
 // `remove`, `byte_at` and `report` (flatten) sit on top, and `rebalance`
-// rebuilds a balanced tree from a fresh flat copy.
+// rebuilds a balanced tree from a fresh flat copy. `report` and `split` walk
+// with an explicit stack, not one frame per level, so an unbalanced tree does
+// not put its depth on the native stack; both answer TooSmall for a tree
+// deeper than the stack's 131072 entries.
+// ponytail: a fixed depth ceiling, not rebalancing; the upgrade is Boehm's
+// fibonacci rebalancing in `concat`, which keeps every legal spine under it.
+// The walk stack is 512 KiB in `report` and 1 MiB in `split`, so call these on
+// the main stack or a thread's own larger stack, not `e.thread.DEFAULT_STACK`.
 
 type Rope = struct { text: []u8, used: usize, weight: []u32, left: []u32, right: []u32, start: []u32, nodes: usize }
 error TooSmall
@@ -119,30 +126,65 @@ fn split(r: *Rope, root: u32, i: usize) -> (u32, u32, err) {
         if i == 0usize { ret (NONE, NONE, ok) }
         ret (NONE, NONE, Invalid)
     }
-    let n = usize(root)
-    let w = usize(r.weight[n])
-    if r.left[n] == NONE {
-        if i == 0usize { ret (NONE, root, ok) }
-        if i == w { ret (root, NONE, ok) }
-        if i > w { ret (NONE, NONE, Invalid) }
-        let (tail, e) = new_node(r, u32(w - i), NONE, NONE, r.start[n] + u32(i))
-        if e != ok { ret (NONE, NONE, e) }
-        r.weight[n] = u32(i)
-        ret (root, tail, ok)
+    let total = len(r, root)
+    if i > total { ret (NONE, NONE, Invalid) }
+    if i == 0usize { ret (NONE, root, ok) }
+    if i == total { ret (root, NONE, ok) }
+    // Walk to the cut, keeping the internal nodes and the index that reached
+    // each, then rebuild the cut path on the way back up.
+    var nodes: [131072]u32 = undef
+    var cuts: [131072]u32 = undef
+    var top = 0usize
+    var node = root
+    var index = i
+    while true {
+        let at = usize(node)
+        let width = usize(r.weight[at])
+        if r.left[at] == NONE { break }
+        if top >= 131072usize { ret (NONE, NONE, TooSmall) }
+        nodes[top] = node
+        cuts[top] = u32(index)
+        top += 1usize
+        if index <= width {
+            node = r.left[at]
+        } else {
+            index -= width
+            node = r.right[at]
+        }
     }
-    if i <= w {
-        let (l1, l2, e) = split(r, r.left[n], i)
-        if e != ok { ret (NONE, NONE, e) }
-        if l2 == NONE { ret (l1, r.right[n], ok) }
-        r.left[n] = l2
-        r.weight[n] = u32(w - i)
-        ret (l1, root, ok)
+    let leaf = usize(node)
+    let leaf_width = usize(r.weight[leaf])
+    if index > leaf_width { ret (NONE, NONE, Invalid) }
+    var lo = node
+    var hi = NONE
+    if index < leaf_width {
+        let (tail, tail_error) = new_node(r, u32(leaf_width - index), NONE, NONE, r.start[leaf] + u32(index))
+        if tail_error != ok { ret (NONE, NONE, tail_error) }
+        r.weight[leaf] = u32(index)
+        hi = tail
     }
-    let (r1, r2, e) = split(r, r.right[n], i - w)
-    if e != ok { ret (NONE, NONE, e) }
-    if r1 == NONE { ret (r.left[n], r2, ok) }
-    r.right[n] = r1
-    ret (root, r2, ok)
+    while top > 0usize {
+        top -= 1usize
+        let parent = nodes[top]
+        let cut = usize(cuts[top])
+        let p = usize(parent)
+        let width = usize(r.weight[p])
+        if cut <= width {
+            if hi == NONE {
+                hi = r.right[p]
+            } else {
+                r.left[p] = hi
+                r.weight[p] = u32(width - cut)
+                hi = parent
+            }
+        } else if lo == NONE {
+            lo = r.left[p]
+        } else {
+            r.right[p] = lo
+            lo = parent
+        }
+    }
+    ret (lo, hi, ok)
 }
 
 // Insert `text` before byte `i` (`i == len` appends).
@@ -189,23 +231,37 @@ fn remove(r: *Rope, root: u32, i: usize, count: usize) -> (u32, err) {
 
 // The bytes of `root` into `out`; answers the count.
 fn report(r: *const Rope, root: u32, out: []u8) -> (usize, err) {
-    if root == NONE { ret (0usize, ok) }
-    let n = usize(root)
-    let w = usize(r.weight[n])
-    if r.left[n] == NONE {
-        if w > out.len { ret (0usize, TooSmall) }
-        let s = usize(r.start[n])
-        var i = 0usize
-        while i < w {
-            out[i] = r.text[s + i]
-            i += 1usize
+    var nodes: [131072]u32 = undef
+    var top = 0usize
+    var node = root
+    var written = 0usize
+    while node != NONE || top > 0usize {
+        while node != NONE {
+            let at = usize(node)
+            if r.left[at] == NONE {
+                let width = usize(r.weight[at])
+                if width > out.len - written { ret (written, TooSmall) }
+                let s = usize(r.start[at])
+                var i = 0usize
+                while i < width {
+                    out[written + i] = r.text[s + i]
+                    i += 1usize
+                }
+                written += width
+                node = NONE
+            } else {
+                if top >= 131072usize { ret (written, TooSmall) }
+                nodes[top] = r.right[at]
+                top += 1usize
+                node = r.left[at]
+            }
         }
-        ret (w, ok)
+        if top > 0usize {
+            top -= 1usize
+            node = nodes[top]
+        }
     }
-    let (before, left_error) = report(r, r.left[n], out)
-    if left_error != ok { ret (before, left_error) }
-    let (after, right_error) = report(r, r.right[n], out[before..])
-    ret (before + after, right_error)
+    ret (written, ok)
 }
 
 fn build(r: *Rope, lo: usize, hi: usize) -> (u32, err) {

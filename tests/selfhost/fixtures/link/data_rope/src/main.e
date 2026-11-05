@@ -1,16 +1,60 @@
 // `e.data.rope`: a leaf reports its text, concat joins, and sixty random
 // inserts, removes and concats (with a rebalance midway) agree with a
 // Python bytearray through a running hash of the flattened rope, its length
-// and sampled bytes; the error paths answer Invalid and TooSmall. Each check
-// exits with its own code.
+// and sampled bytes; an append-only left spine LONG_APPENDS levels deep still
+// flattens and splits near either end without exhausting the stack; the error
+// paths answer Invalid and TooSmall. Each check exits with its own code.
 
 use e.data.rope
 use e.io
 use e.mem
 use e.os
 
+// The spine is deep enough that a walk recursing once per level runs out of
+// the emitted program's native stack (issue #1599).
+const LONG_APPENDS: usize = 80000usize
+
 fn lcg(s: u64) -> u64 { ret s *% 6364136223846793005u64 +% 1442695040888963407u64 }
 fn fnv(h: u64, b: u64) -> u64 { ret (h ^ b) *% 1099511628211u64 }
+
+// Flattening and splitting the append-only spine near both ends: #1599.
+type LongJob = struct { r: rope.Rope, root: u32, out: []u8, status: i32 }
+
+fn check_long_rope(j: *LongJob) {
+    let (count, report_error) = rope.report(&j.r, j.root, j.out)
+    if report_error != ok || count != LONG_APPENDS {
+        j.status = 7i32
+        ret
+    }
+    if j.out[0usize] != 97u8 || j.out[LONG_APPENDS - 1usize] != u8((LONG_APPENDS - 1usize) % 26usize) + 97u8 {
+        j.status = 7i32
+        ret
+    }
+    let (front, back, split_error) = rope.split(&j.r, j.root, LONG_APPENDS - 1usize)
+    if split_error != ok || rope.len(&j.r, front) != LONG_APPENDS - 1usize || rope.len(&j.r, back) != 1usize {
+        j.status = 8i32
+        ret
+    }
+    let (last_front, front_ok) = rope.byte_at(&j.r, front, LONG_APPENDS - 2usize)
+    let (last_back, back_ok) = rope.byte_at(&j.r, back, 0usize)
+    if !front_ok || !back_ok || last_front != j.out[LONG_APPENDS - 2usize] || last_back != j.out[LONG_APPENDS - 1usize] {
+        j.status = 8i32
+        ret
+    }
+    // The deep end of the left spine: splitting one byte in descends every
+    // level, and answers before the stack runs out too.
+    let (first, middle, deep_error) = rope.split(&j.r, front, 1usize)
+    if deep_error != ok || rope.len(&j.r, first) != 1usize || rope.len(&j.r, middle) != LONG_APPENDS - 2usize {
+        j.status = 9i32
+        ret
+    }
+    let (first_byte, first_ok) = rope.byte_at(&j.r, first, 0usize)
+    let (second_byte, second_ok) = rope.byte_at(&j.r, middle, 0usize)
+    if !first_ok || !second_ok || first_byte != j.out[0usize] || second_byte != j.out[1usize] {
+        j.status = 9i32
+        ret
+    }
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var text: [2048]u8 = zero
@@ -201,6 +245,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (unchanged_rebalance_root, rebalance_error) = rope.rebalance(&rebalance_rope, rebalance_root)
     let (rebalance_count, rebalance_report_error) = rope.report(&rebalance_rope, rebalance_root, failed_out[..])
     if rebalance_make_error != ok || rebalance_error != rope.TooSmall || unchanged_rebalance_root != rebalance_root || rebalance_rope.used != 4usize || rebalance_rope.nodes != 1usize || rebalance_report_error != ok || rebalance_count != 4usize || failed_out[0usize] != 97u8 || failed_out[1usize] != 98u8 || failed_out[2usize] != 99u8 || failed_out[3usize] != 100u8 { os.exit(6i32) }
+
+    // 7: LONG_APPENDS appends make a legal left spine that deep; flatten it,
+    // 8: split it near its end and 9: near its deep end. The pools are arena
+    // storage, so the whole stack is left for the walk.
+    let (long_text, long_text_error) = mem.alloc[u8](a, LONG_APPENDS)
+    if long_text_error != ok { os.exit(7i32) }
+    let (long_weight, long_weight_error) = mem.alloc[u32](a, LONG_APPENDS * 2usize + 2usize)
+    if long_weight_error != ok { os.exit(7i32) }
+    let (long_left, long_left_error) = mem.alloc[u32](a, LONG_APPENDS * 2usize + 2usize)
+    if long_left_error != ok { os.exit(7i32) }
+    let (long_right, long_right_error) = mem.alloc[u32](a, LONG_APPENDS * 2usize + 2usize)
+    if long_right_error != ok { os.exit(7i32) }
+    let (long_start, long_start_error) = mem.alloc[u32](a, LONG_APPENDS * 2usize + 2usize)
+    if long_start_error != ok { os.exit(7i32) }
+    let (long_out, long_out_error) = mem.alloc[u8](a, LONG_APPENDS)
+    if long_out_error != ok { os.exit(7i32) }
+    var long_data = LongJob { r: rope.rope(long_text, long_weight, long_left, long_right, long_start), root: rope.NONE, out: long_out, status: 0i32 }
+    var one: [1]u8 = zero
+    var long_index = 0usize
+    while long_index < LONG_APPENDS {
+        one[0usize] = u8(long_index % 26usize) + 97u8
+        let (long_leaf, long_leaf_error) = rope.from_text(&long_data.r, one[..])
+        if long_leaf_error != ok { os.exit(7i32) }
+        let (long_grown, long_grow_error) = rope.concat(&long_data.r, long_data.root, long_leaf)
+        if long_grow_error != ok { os.exit(7i32) }
+        long_data.root = long_grown
+        long_index += 1usize
+    }
+    if rope.len(&long_data.r, long_data.root) != LONG_APPENDS { os.exit(7i32) }
+    check_long_rope(&long_data)
+    if long_data.status == 7i32 { os.exit(7i32) }
+    if long_data.status == 8i32 { os.exit(8i32) }
+    if long_data.status == 9i32 { os.exit(9i32) }
 
     try io.print("data rope ok\n")
     ret ok
