@@ -669,9 +669,15 @@ fn add_conflict(a: *mem.Arena, p: *Plan, k: Keyed, local: json.Value, remote: js
     if str.eq(policy, "source-wins") && ir.truthy(remote) {
         sync.put(&c, "resolution", sync.text("pull"))
         sync.push_value(&p.pulls, move_entry(a, k, remote, true))
+    } else if str.eq(policy, "source-wins") && ir.is_null(remote) && !ir.is_null(local) {
+        sync.put(&c, "resolution", sync.text("delete-local"))
+        sync.push_value(&p.delete_local, local)
     } else if str.eq(policy, "local-wins") && ir.truthy(local) {
         sync.put(&c, "resolution", sync.text("push"))
         sync.push_value(&p.pushes, move_entry(a, k, local, true))
+    } else if str.eq(policy, "local-wins") && ir.is_null(local) && !ir.is_null(remote) {
+        sync.put(&c, "resolution", sync.text("delete-remote"))
+        sync.push_value(&p.delete_remote, remote)
     } else {
         sync.put(&c, "resolution", sync.text("manual"))
     }

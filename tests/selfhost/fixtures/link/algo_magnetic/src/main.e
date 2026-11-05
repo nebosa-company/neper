@@ -56,5 +56,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_y, _) = mag.calibrate_hard_iron(hx[0usize..7usize], hy[0usize..6usize], hz[0usize..7usize], 7usize)
     let (_, _, bad_z) = mag.calibrate_hard_iron(hx[0usize..7usize], hy[0usize..7usize], hz[0usize..6usize], 7usize)
     if bad_x != 0.0f64 || bad_y != 0.0f64 || bad_z != 0.0f64 { os.exit(22) }
+
+    // At the geographic poles the east component is the limit of P(n, 1)/cos(phi):
+    // non-zero and continuous with the latitude just below the pole.
+    let polar = mag.field(90.0, 0.0, 0.0, 2025.0)
+    let below = mag.field(89.9999, 0.0, 0.0, 2025.0)
+    if polar.east == 0.0f64 { os.exit(23) }
+    if !near(polar.north, below.north, 0.1f64) || !near(polar.east, below.east, 0.1f64) || !near(polar.down, below.down, 0.1f64) { os.exit(23) }
+    let south = mag.field(-90.0, 120.0, 0.0, 2025.0)
+    let south_below = mag.field(-89.9999, 120.0, 0.0, 2025.0)
+    if south.east == 0.0f64 { os.exit(24) }
+    if !near(south.north, south_below.north, 0.1f64) || !near(south.east, south_below.east, 0.1f64) || !near(south.down, south_below.down, 0.1f64) { os.exit(24) }
     ret ok
 }

@@ -153,7 +153,39 @@ fn field(latitude: f64, longitude: f64, height: f64, year: f64) -> Field {
         n += 1usize
     }
     let cos_phi = math.cos[f64](phi)
-    if cos_phi > 0.000000001f64 || cos_phi < 0.0f64 - 0.000000001f64 { by = by / cos_phi }
+    if cos_phi > 0.000000001f64 || cos_phi < 0.0f64 - 0.000000001f64 {
+        by = by / cos_phi
+    } else {
+        // At a geographic pole every m >= 1 term carries a factor cos(phi)^m, so the east
+        // sum is the m = 1 limit of P(n, 1)/cos(phi). The recurrence q = P(n, 1)/cos(phi)
+        // divides that factor out before normalisation.
+        var q_prev = 0.0f64
+        var q_here = 1.0f64
+        let pn_cos = math.cos[f64](lon)
+        let pn_sin = math.sin[f64](lon)
+        let pn_ratio = 6371.2f64 / r
+        var pn = 1usize
+        while pn <= DEGREE {
+            if pn >= 2usize {
+                let kq = (f64((pn - 1usize) * (pn - 1usize)) - 1.0f64) / (f64(2usize * pn - 1usize) * f64(2usize * pn - 3usize))
+                let q_next = x * q_here - kq * q_prev
+                q_prev = q_here
+                q_here = q_next
+            }
+            let pn_c = pn * (pn + 1usize) / 2usize
+            let pn_g = coefficient_g(pn_c) + dt * coefficient_g_dot(pn_c)
+            let pn_h = coefficient_h(pn_c) + dt * coefficient_h_dot(pn_c)
+            var pn_power = pn_ratio * pn_ratio
+            var pn_scale = 1usize
+            while pn_scale <= pn {
+                pn_power = pn_power * pn_ratio
+                pn_scale += 1usize
+            }
+            let pn_index = pn * (pn + 1usize) / 2usize + 1usize
+            by = by + pn_power * (pn_g * pn_sin - pn_h * pn_cos) * q_here * schmidt[pn_index]
+            pn += 1usize
+        }
+    }
     // Back to geodetic axes.
     let psi = phi - lat
     let north = bx * math.cos[f64](psi) - bz * math.sin[f64](psi)
