@@ -4,6 +4,7 @@
 // and records each outcome as `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]` or `E|code|hex`. The fixture
 // evaluates the same source with the Neper registry. A line is `{"src": ..., "expect": ...}`.
 use e.algo.formula as f
+use e.algo.formula.text as ft
 //__USES__
 use e.fmt.json as json
 use e.io
@@ -134,7 +135,7 @@ fn build_registry(a: *mem.Arena) -> f.Registry {
     let (r, e) = f.registry(a, 600usize)
     var reg = r
     if f.register_core(&reg, a) != ok { os.exit(90i32) }
-    //__REGISTERS__
+    if ft.register(&reg, a) != ok { os.exit(90i32) }
     ret reg
 }
 
@@ -214,10 +215,62 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry) -> u8 {
     ret 0u8
 }
 
+// The field bag the reference ran with plus a field whose bytes are not UTF-8.
+fn bad_text_context(a: *mem.Arena) -> f.Context {
+    var ctx = make_context(a)
+    let (fields, e) = mem.alloc[f.Field](a, ctx.fields.len + 1usize)
+    if e != ok { os.exit(95i32) }
+    var i = 0usize
+    while i < ctx.fields.len {
+        fields[i] = ctx.fields[i]
+        i += 1usize
+    }
+    fields[ctx.fields.len] = f.Field { name: "Bad", value: f.text("\xFF\xFF\xFF@x.yy") }
+    ctx.fields = fields[0usize..ctx.fields.len + 1usize]
+    ret ctx
+}
+
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     var registry = build_registry(a)
     //__VECTOR_CALLS__
+    var ctx = make_context(a)
+    var bad = bad_text_context(a)
+    // #304: invalid UTF-8 text answers instead of trapping; empty REPEAT is empty;
+    // a regex whose step budget runs out is an error, not a silent false.
+    let email_bad = f.evaluate(a, "ISEMAIL({Bad})", &bad, &registry)
+    if f.is_error(email_bad) || email_bad.kind != .Bool { os.exit(101i32) }
+    let casing_bad = f.evaluate(a, "CASING({Bad}, \"snake\")", &bad, &registry)
+    if f.is_error(casing_bad) || casing_bad.kind != .Text { os.exit(101i32) }
+    let initials_bad = f.evaluate(a, "INITIALS({Bad})", &bad, &registry)
+    if f.is_error(initials_bad) || initials_bad.kind != .Text { os.exit(101i32) }
+    let empty_repeat = f.evaluate(a, "REPEAT(\"\", 1e300)", &ctx, &registry)
+    if f.is_error(empty_repeat) || empty_repeat.kind != .Text || empty_repeat.s.len != 0usize { os.exit(102i32) }
+    let complex = f.evaluate(a, "REGEXMATCH(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac\", \"(a+)+b|c$\")", &ctx, &registry)
+    if !f.is_error(complex) {
+        if complex.kind != .Bool || complex.n == 0.0f64 { os.exit(103i32) }
+    }
+    // #485: ports, queries and fragments are valid; a bad port is not.
+    let port = f.evaluate(a, "ISURL(\"https://example.com:8443\")", &ctx, &registry)
+    if port.kind != .Bool || port.n == 0.0f64 { os.exit(104i32) }
+    let query = f.evaluate(a, "ISURL(\"https://example.com?x=1\")", &ctx, &registry)
+    if query.kind != .Bool || query.n == 0.0f64 { os.exit(104i32) }
+    let fragment = f.evaluate(a, "ISURL(\"https://example.com#section\")", &ctx, &registry)
+    if fragment.kind != .Bool || fragment.n == 0.0f64 { os.exit(104i32) }
+    let bad_port = f.evaluate(a, "ISURL(\"https://example.com:99999\")", &ctx, &registry)
+    if bad_port.kind != .Bool || bad_port.n != 0.0f64 { os.exit(104i32) }
+    // #730: empty domain labels are invalid.
+    let double_dot = f.evaluate(a, "ISEMAIL(\"x@a..b\")", &ctx, &registry)
+    if double_dot.kind != .Bool || double_dot.n != 0.0f64 { os.exit(105i32) }
+    let dots_only = f.evaluate(a, "ISEMAIL(\"x@...\")", &ctx, &registry)
+    if dots_only.kind != .Bool || dots_only.n != 0.0f64 { os.exit(105i32) }
+    let trailing = f.evaluate(a, "ISEMAIL(\"x@example.com.\")", &ctx, &registry)
+    if trailing.kind != .Bool || trailing.n != 0.0f64 { os.exit(105i32) }
+    let good = f.evaluate(a, "ISEMAIL(\"x@example.com\")", &ctx, &registry)
+    if good.kind != .Bool || good.n == 0.0f64 { os.exit(105i32) }
     try io.print("algo formula text ok")
     ret ok
 }
+
+
+

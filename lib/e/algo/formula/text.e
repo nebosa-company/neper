@@ -375,31 +375,44 @@ fn h_isemail(c: *f.Call) -> f.Value {
     let s = text_arg(c, 0usize)
     var ats = 0usize
     var at_pos = 0usize
-    var it = utf8.iterator(s)
-    var more = true
-    var pos = 0usize
-    while more {
-        let (scalar, got) = utf8.iterator_next(&it)
-        if !got {
-            more = false
-        } else {
-            if js_space(scalar) { ret f.boolean(false) }
-            if scalar == 64u32 {
-                ats += 1usize
-                at_pos = pos
-            }
-            pos += scalar_width(scalar)
+    // `@` is ASCII: scan bytes, so malformed UTF-8 cannot skew the offset.
+    var i = 0usize
+    while i < s.len {
+        let b = s[i]
+        if b == 64u8 {
+            ats += 1usize
+            at_pos = i
         }
-    }
-    if ats != 1usize || at_pos == 0usize { ret f.boolean(false) }
-    let domain = s[at_pos + 1usize..s.len]
-    // a '.' with something on both sides
-    var i = 1usize
-    while i + 1usize < domain.len {
-        if domain[i] == 46u8 { ret f.boolean(true) }
         i += 1usize
     }
-    ret f.boolean(false)
+    if ats != 1usize || at_pos == 0usize { ret f.boolean(false) }
+    let it = utf8.iterator(s)
+    var scan = it
+    var more = true
+    while more {
+        let (scalar, got) = utf8.iterator_next(&scan)
+        if !got {
+            more = false
+        } else if js_space(scalar) {
+            ret f.boolean(false)
+        }
+    }
+    let domain = s[at_pos + 1usize..s.len]
+    // Every label non-empty (no leading, trailing or doubled dots), at least two.
+    var labels = 0usize
+    var label_len = 0usize
+    var q = 0usize
+    while q <= domain.len {
+        if q == domain.len || domain[q] == 46u8 {
+            if label_len == 0usize { ret f.boolean(false) }
+            labels += 1usize
+            label_len = 0usize
+        } else {
+            label_len += 1usize
+        }
+        q += 1usize
+    }
+    ret f.boolean(labels >= 2usize)
 }
 
 fn is_label_byte(b: u8) -> bool { ret is_word_unit(u32(b)) || b == 45u8 }
@@ -428,9 +441,23 @@ fn h_isurl(c: *f.Call) -> f.Value {
         i += 1usize
     }
     if labels < 2usize { ret f.boolean(false) }
-    if end == s.len { ret f.boolean(true) }
-    if s[end] != 47u8 { ret f.boolean(false) }
-    var p = end + 1usize
+    // An optional port: one to five digits, at most 65535.
+    var next = end
+    if next < s.len && s[next] == 58u8 {
+        next += 1usize
+        var digits = 0usize
+        var port = 0usize
+        while next < s.len && s[next] >= 48u8 && s[next] <= 57u8 {
+            port = port * 10usize + usize(s[next] - 48u8)
+            digits += 1usize
+            next += 1usize
+        }
+        if digits == 0usize || digits > 5usize || port > 65535usize { ret f.boolean(false) }
+    }
+    if next == s.len { ret f.boolean(true) }
+    // A path, query or fragment may follow the authority without a '/'.
+    if s[next] != 47u8 && s[next] != 63u8 && s[next] != 35u8 { ret f.boolean(false) }
+    var p = next + 1usize
     var it = utf8.iterator(s[p..s.len])
     var more = true
     while more {
@@ -571,7 +598,9 @@ fn h_repeat(c: *f.Call) -> f.Value {
     var count = 0.0f64
     if n.kind != .Blank { count = math.trunc[f64](n.n) }
     if count < 0.0f64 { count = 0.0f64 }
+    if s.len == 0usize { ret f.text("") }
     let units = f64(utf16_len(s))
+    if count > f64(max_regex_input()) / units { ret f.value_error("REPEAT result too large") }
     if units * count > f64(max_regex_input()) { ret f.value_error("REPEAT result too large") }
     ret f.text(repeat_text(c.a, s, usize(count)))
 }
@@ -880,7 +909,9 @@ fn h_regexmatch(c: *f.Call) -> f.Value {
     if utf16_len(s) > max_regex_input() { ret f.value_error("Input too large for regex") }
     let (re, failure) = compile_pattern(c, text_arg(c, 1usize), false)
     if f.is_error(failure) { ret failure }
-    ret f.boolean(regex.is_match(&re, s))
+    let (_, found, ce) = regex.captures(c.a, &re, s, 0usize)
+    if ce != ok { ret f.value_error("Regular expression too complex") }
+    ret f.boolean(found)
 }
 
 fn h_regexextract(c: *f.Call) -> f.Value {
@@ -889,6 +920,7 @@ fn h_regexextract(c: *f.Call) -> f.Value {
     let (re, failure) = compile_pattern(c, text_arg(c, 1usize), false)
     if f.is_error(failure) { ret failure }
     let (caps, found, ce) = regex.captures(c.a, &re, s, 0usize)
+    if ce != ok { ret f.value_error("Regular expression too complex") }
     if !found { ret f.text("") }
     var group = 0.0f64
     if c.args.len > 2usize {
@@ -978,6 +1010,7 @@ fn h_regexreplace(c: *f.Call) -> f.Value {
     var more = true
     while more && pos <= s.len {
         let (caps, found, ce) = regex.captures(c.a, &re, s, pos)
+        if ce != ok { ret f.value_error("Regular expression too complex") }
         if !found {
             more = false
         } else {
@@ -1049,17 +1082,25 @@ fn casing_words(a: *mem.Arena, s: str, out: []str) -> usize {
     let (sc, se) = mem.alloc[u32](a, count)
     if se != ok { ret 0usize }
     scalars = sc
-    it = utf8.iterator(s)
+    let (ws, we) = mem.alloc[usize](a, count)
+    if we != ok { ret 0usize }
+    var widths = ws
+    // Byte widths from the decoder itself: an invalid byte is one byte wide, which
+    // scalar_width's U+FFFD guess would overstate and push later offsets out of bounds.
+    var off = 0usize
     var k = 0usize
-    more = true
-    while more {
-        let (scalar, got) = utf8.iterator_next(&it)
-        if !got {
-            more = false
-        } else {
-            scalars[k] = scalar
-            k += 1usize
+    while k < count {
+        let (dec, de) = utf8.decode(s, off)
+        var cw = 1usize
+        var scalar = 65533u32
+        if de == ok {
+            scalar = dec.scalar
+            cw = usize(dec.width)
         }
+        scalars[k] = scalar
+        widths[k] = cw
+        off += cw
+        k += 1usize
     }
     let (marks, me) = mem.alloc[bool](a, count + 1usize)
     if me != ok { ret 0usize }
@@ -1128,7 +1169,7 @@ fn casing_words(a: *mem.Arena, s: str, out: []str) -> usize {
             in_word = true
             word_start_byte = byte_pos
         }
-        if i < count { byte_pos += scalar_width(scalars[i]) }
+        if i < count { byte_pos += widths[i] }
         i += 1usize
     }
     ret n
@@ -1392,12 +1433,13 @@ fn h_part(c: *f.Call) -> f.Value {
 // --- extractors -----------------------------------------------------------------------------------------------------
 
 // Every non-overlapping match of a global pattern, as JavaScript's `match(/g)` and `matchAll` walk them.
-fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) -> usize {
+fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) -> (usize, err) {
     var n = 0usize
     var pos = 0usize
     var more = true
     while more && pos <= s.len && n < out.len {
         let (caps, found, ce) = regex.captures(c.a, re, s, pos)
+        if ce != ok { ret (n, ce) }
         if !found {
             more = false
         } else {
@@ -1417,7 +1459,7 @@ fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) 
             }
         }
     }
-    ret n
+    ret (n, ok)
 }
 
 // kind 0 text, 1 number (parsed), 2 trimmed text
@@ -1428,7 +1470,8 @@ fn extract_with(c: *f.Call, pattern: str, ignore_case: bool, kind: u8) -> f.Valu
     if f.is_error(failure) { ret failure }
     let (found, e) = mem.alloc[regex.Captures](c.a, s.len + 2usize)
     if e != ok { ret f.generic_error("Out of memory") }
-    let n = match_all(c, &re, s, found)
+    let (n, me) = match_all(c, &re, s, found)
+    if me != ok { ret f.value_error("Regular expression too complex") }
     if n == 0usize { ret f.array(f.zero_items()) }
     let (items, ie) = mem.alloc[f.Value](c.a, n)
     if ie != ok { ret f.generic_error("Out of memory") }
@@ -1517,7 +1560,8 @@ fn h_extract(c: *f.Call) -> f.Value {
     if f.is_error(failure) { ret failure }
     let (found, e) = mem.alloc[regex.Captures](c.a, s.len + 2usize)
     if e != ok { ret f.generic_error("Out of memory") }
-    let n = match_all(c, &re, s, found)
+    let (n, me) = match_all(c, &re, s, found)
+    if me != ok { ret f.value_error("Regular expression too complex") }
     if n == 0usize { ret f.array(f.zero_items()) }
     let (items, ie) = mem.alloc[f.Value](c.a, n)
     if ie != ok { ret f.generic_error("Out of memory") }
