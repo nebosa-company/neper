@@ -699,6 +699,7 @@ fn fill_content(a: *mem.Arena, t: widget.A11yTree, out: []Node, at: usize) -> er
         node.role = role_of_code(n.semantics.role)
         node.level = n.semantics.level
         node.state = state_of_bits(n.semantics.states)
+        node.bounds = n.bounds
         let (acts, acts_error) = actions_of_bits(a, n.semantics.actions)
         if acts_error != ok { ret acts_error }
         node.actions = acts

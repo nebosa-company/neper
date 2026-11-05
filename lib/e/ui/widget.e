@@ -109,7 +109,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // accessibility tree to the runtime: the builder calls `build` and puts its nodes under this element. The nodes are
 // flat, `children` being indices into `nodes` (index 0 is the root), each with the same `Semantics` a widget uses and
 // a `slot` above the runtime's own slots; a node's id is that slot with generation 0. A zero `ctx` means no content.
-type A11yNode = struct { slot: u32, semantics: Semantics, children: []const u32 }
+type A11yNode = struct { slot: u32, semantics: Semantics, bounds: geometry.Rect, children: []const u32 }
 type A11yTree = struct { nodes: []const A11yNode }
 type A11y = struct { ctx: *void, build: fn(*void, *mem.Arena) -> (A11yTree, err) }
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str, content: A11y }

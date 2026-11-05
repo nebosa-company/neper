@@ -44,6 +44,15 @@ fn sized(w: f32, h: f32) -> style.Style {
     ret s
 }
 
+fn has_action(actions: []const acc.Action, want: acc.Action) -> bool {
+    var i = 0usize
+    while i < actions.len {
+        if actions[i] == want { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (made, me) = fontset.new(a)
     if me != ok { os.exit(1i32) }
@@ -177,6 +186,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if published.nodes[shown].id.slot < 2147483648u32 { os.exit(74i32) }
     let (linked, linked_found) = find_label(&published, "link")
     if !linked_found || published.nodes[linked].role != acc.Role.Link { os.exit(75i32) }
+    // The heading carries the box layout gave it, and the link offers a press.
+    if published.nodes[shown].bounds.width <= 0.0 || published.nodes[shown].bounds.height <= 0.0 { os.exit(77i32) }
+    if !has_action(published.nodes[linked].actions, acc.Action.Press) { os.exit(78i32) }
     if widget.close(&runtime) != ok { os.exit(76i32) }
     // A load the engine cannot do leaves the error page, and the history keeps the attempt.
     if browser.navigate(&b, "ftp://nowhere.test/file") != ok { os.exit(43i32) }

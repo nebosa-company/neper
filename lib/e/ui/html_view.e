@@ -393,7 +393,7 @@ fn a11y_flags(n: *const accessible.Node) -> u32 {
     ret bits
 }
 
-fn a11y_fill(n: *const accessible.Node, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err) {
+fn a11y_fill(n: *const accessible.Node, v: *const View, boxes: []const u32, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err) {
     var none: u32 = 0u32
     let at = *next
     *next += 1usize
@@ -401,19 +401,29 @@ fn a11y_fill(n: *const accessible.Node, a: *mem.Arena, out: []widget.A11yNode, n
     if kids_error != ok { ret (none, kids_error) }
     var i = 0usize
     while i < n.children.len {
-        let (child, child_error) = a11y_fill(&n.children[i], a, out, next)
+        let (child, child_error) = a11y_fill(&n.children[i], v, boxes, a, out, next)
         if child_error != ok { ret (none, child_error) }
         kids[i] = child
         i += 1usize
     }
+    var bounds = geometry.rect(0.0, 0.0, 0.0, 0.0)
+    if n.node_id >= 0i64 && usize(n.node_id) < boxes.len {
+        let box_at = boxes[usize(n.node_id)]
+        if box_at != layout.NONE {
+            let r = geom.bounding_rect(a, &v.lay, box_at)
+            bounds = geometry.rect(f32(r.x) - v.scroll_x + v.origin_x, f32(r.y) - v.scroll_y + v.origin_y, f32(r.w), f32(r.h))
+        }
+    }
+    let role = a11y_role(n.role)
     var sem: widget.Semantics = zero
-    sem.role = accessibility.role_code(a11y_role(n.role))
+    sem.role = accessibility.role_code(role)
     sem.label = n.name
     if n.has_value { sem.value = n.value }
     if n.has_url { sem.hint = n.url }
     sem.states = a11y_flags(n)
+    if role == accessibility.Role.Link || role == accessibility.Role.Button { sem.actions = accessibility.ACTION_PRESS }
     if n.has_level && n.level > 0i64 { sem.level = u8(n.level) }
-    out[at] = widget.A11yNode { slot: A11Y_SLOT_BASE + u32(at), semantics: sem, children: kids[0usize..n.children.len] }
+    out[at] = widget.A11yNode { slot: A11Y_SLOT_BASE + u32(at), semantics: sem, bounds: bounds, children: kids[0usize..n.children.len] }
     ret (A11Y_SLOT_BASE + u32(at), ok)
 }
 
@@ -433,8 +443,22 @@ fn a11y(v: *View, a: *mem.Arena) -> (widget.A11yTree, err) {
     let acc = accessible.build_tree(a, &doc, root)
     let (out, out_error) = mem.alloc[widget.A11yNode](a, a11y_count(&acc))
     if out_error != ok { ret (empty, out_error) }
+    // One laid-out box per element, the way the page's own geometry hook finds them.
+    let (boxes, boxes_error) = mem.alloc[u32](a, v.tree.used)
+    if boxes_error != ok { ret (empty, boxes_error) }
+    var bi = 0usize
+    while bi < v.tree.used {
+        boxes[bi] = layout.NONE
+        bi += 1usize
+    }
+    var b = 0usize
+    while b < v.lay.boxes.len {
+        let bx = &v.lay.boxes.items[b]
+        if !bx.anonymous && bx.node != html.NONE && usize(bx.node) < boxes.len && boxes[usize(bx.node)] == layout.NONE { boxes[usize(bx.node)] = u32(b) }
+        b += 1usize
+    }
     var next = 0usize
-    let (root_slot, fill_error) = a11y_fill(&acc, a, out, &next)
+    let (root_slot, fill_error) = a11y_fill(&acc, v, boxes, a, out, &next)
     if fill_error != ok { ret (empty, fill_error) }
     ret (widget.A11yTree { nodes: out[0usize..next] }, ok)
 }

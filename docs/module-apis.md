@@ -19302,7 +19302,7 @@ type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focu
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit, keys: Change[input.KeyEvent] }
 type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool }
-type A11yNode = struct { slot: u32, semantics: Semantics, children: []const u32 }
+type A11yNode = struct { slot: u32, semantics: Semantics, bounds: geometry.Rect, children: []const u32 }
 type A11yTree = struct { nodes: []const A11yNode }
 type A11y = struct { ctx: *void, build: fn(*void, *mem.Arena) -> (A11yTree, err) }
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, sort: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, focus_inset: f32, hidden: bool, promote_actions: bool, on_action: Change[u32], names: str, content: A11y }
@@ -25537,7 +25537,7 @@ const A11Y_SLOT_BASE: u32 = 2147483648u32
 fn a11y_role(r: accessible.Role) -> accessibility.Role
 fn a11y_count(n: *const accessible.Node) -> usize
 fn a11y_flags(n: *const accessible.Node) -> u32
-fn a11y_fill(n: *const accessible.Node, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err)
+fn a11y_fill(n: *const accessible.Node, v: *View, boxes: []const u32, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err)
 fn a11y(v: *View, a: *mem.Arena) -> (widget.A11yTree, err)
 fn a11y_build(ctx: *void, a: *mem.Arena) -> (widget.A11yTree, err)
 fn semantics(v: *View) -> widget.Semantics
