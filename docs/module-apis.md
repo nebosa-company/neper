@@ -7547,6 +7547,9 @@ A protocol buffer descriptor reader (L164): `parse_set` and `parse_file` read th
 ```neper
 error Invalid
 type Gen = struct { a: *mem.Arena, o: rt.Out, good: bool }
+fn presence_text(g: *Gen, info: Info) -> str
+fn oneof_clears(g: *Gen, fields: []const json.Value, at: usize, info: Info, proto3: bool) -> str
+fn oneof_later(g: *Gen, fields: []const json.Value, at: usize, info: Info, proto3: bool) -> str
 fn put(g: *Gen, s: str)
 fn cat(g: *Gen, x: str, y: str) -> str
 fn num_text(g: *Gen, n: i64) -> str
@@ -16766,7 +16769,7 @@ const EVENT_GOAWAY: u8 = 5u8
 type Message = struct { compressed: bool, payload: []const u8 }
 type Stream = struct { id: u32, used: bool, got_headers: bool, remote_closed: bool, local_closed: bool, send_window: i64, recv_window: i64, buf: []u8, buf_len: usize, consumed: usize }
 type Event = struct { kind: u8, stream: u32, code: u32, compressed: bool, text: str, payload: []const u8, headers: []const h2.Header }
-type Conn = struct { streams: []Stream, next_id: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, started: bool, got_settings: bool, goaway: bool, last_stream: u32, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool }
+type Conn = struct { streams: []Stream, next_id: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, started: bool, got_settings: bool, goaway: bool, last_stream: u32, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool, scheme: str }
 
 fn status_name(code: u32) -> str
 fn http_to_grpc(status: u32) -> u32
@@ -16783,6 +16786,8 @@ fn message_percent_decode(dst: []u8, text: str) -> (usize, err)
 fn ends_with_bin(name: str) -> bool
 fn binary_value_encode(dst: []u8, value: []const u8) -> (usize, err)
 fn binary_value_decode(dst: []u8, text: str) -> (usize, err)
+fn scheme_of(c: *const Conn) -> str
+fn set_secure(c: *Conn, secure: bool)
 fn conn_new(streams: []Stream, enc: h2.Table, dec: h2.Table, block: []u8, initial_recv: u32, max_frame: u32) -> Conn
 fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err
 fn u32_bytes(v: u32) -> [4]u8
