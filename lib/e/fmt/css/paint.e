@@ -1142,10 +1142,11 @@ fn paint_ellipsized(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.L
 }
 
 // How a clamped line may end: 0 nowhere (no soft wrap opportunity in an unbreakable run), 1 at any character
-// (`break-all`, `overflow-wrap: anywhere`), 2 at a space.
+// (`break-all`, `overflow-wrap: anywhere`), 2 at a space. `white-space: pre` and `nowrap` come first: they allow no wrap
+// at all, so `break-all` cannot put a character before the ellipsis of a clamped line.
 fn clamp_break_mode(s: *const style.Style) -> u8 {
-    if s.word_break == .BreakAll || s.overflow_wrap == .Anywhere { ret 1u8 }
     if s.white_space == .Pre || s.white_space == .Nowrap { ret 0u8 }
+    if s.word_break == .BreakAll || s.overflow_wrap == .Anywhere { ret 1u8 }
     ret 2u8
 }
 
