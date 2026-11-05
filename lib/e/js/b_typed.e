@@ -52,7 +52,8 @@ fn to_index(it: *js.Interp, v: js.Value, what: str) -> (f64, err) {
 
 // The `maxByteLength` of an options object (RangeError when it is invalid); `present` is false when there is none.
 fn max_length_option(it: *js.Interp, options: js.Value) -> (f64, bool, err) {
-    if !js.is_object(options) { ret (0.0f64, false, ok) }
+    if js.is_undefined(options) { ret (0.0f64, false, ok) }
+    if !js.is_object(options) { ret (0.0f64, false, js.throw_type(it, "options must be an object")) }
     let (mv, me) = js.get_prop(it, js.as_object(options), js.key_of("maxByteLength"), options)
     if me != ok { ret (0.0f64, false, me) }
     if js.is_undefined(mv) { ret (0.0f64, false, ok) }
@@ -512,7 +513,7 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
         let (off, offe) = js.to_number(it, arg(args, 1usize))
         if offe != ok { ret (js.undefv(), offe) }
         let offset = js.to_integer(off)
-        if offset < 0.0f64 || js.is_infinite(offset) { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
+        if offset < 0.0f64 || js.is_infinite(offset) || offset > 9007199254740991.0f64 { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
         if f64(usize(offset)) != offset || usize(offset) % size != 0usize { ret (js.undefv(), js.throw_range(it, "start offset must be a multiple of the element size")) }
         var new_len = 0usize
         var tracking = false
@@ -530,9 +531,14 @@ fn typed_ctor_common(it: *js.Interp, kind: u8, args: []const js.Value) -> (js.Va
             let (ln, lne) = js.to_number(it, args[2usize])
             if lne != ok { ret (js.undefv(), lne) }
             let l2 = js.to_integer(ln)
-            if l2 < 0.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
+            // ToIndex: NaN is 0, but an infinity or a value past 2^53-1 is a
+            // RangeError rather than a wrapping cast.
+            if l2 < 0.0f64 || js.is_infinite(l2) || l2 > 9007199254740991.0f64 { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
             if b.detached { ret (js.undefv(), js.throw_type(it, "ArrayBuffer is detached")) }
-            if usize(offset) + usize(l2) * size > b.bytes.len { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
+            if usize(offset) > b.bytes.len { ret (js.undefv(), js.throw_range(it, "Start offset is outside the bounds of the buffer")) }
+            let remaining = b.bytes.len - usize(offset)
+            // Divide rather than multiply so `length * size` cannot overflow.
+            if usize(l2) > remaining / size { ret (js.undefv(), js.throw_range(it, "Invalid typed array length")) }
             new_len = usize(l2)
         }
         let (o2, oe2) = alloc_ta(it, kind, proto, fo, usize(offset), new_len, tracking)
@@ -734,8 +740,8 @@ fn ta_set(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Val
 }
 
 fn ta_subarray(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    if !js.is_object(this_val) || js.as_object(this_val).class != js.C_TYPEDARRAY { ret (js.undefv(), js.throw_type(it, "not a typed array")) }
-    let o = js.as_object(this_val)
+    let (o, ve) = validate_ta(it, this_val)
+    if ve != ok { ret (js.undefv(), ve) }
     let t = js.ta_of(o)
     let len = f64(js.ta_length(o))
     let (b0, be0) = barr.rel_index(it, arg(args, 0usize), len, 0.0f64)
@@ -1210,7 +1216,8 @@ fn ta_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.Valu
         if !js.is_nullish(el) {
             let (f, fe) = js.get_value(it, el, js.key_of("toLocaleString"))
             if fe != ok { ret (js.undefv(), fe) }
-            let (rv, re) = js.call_function(it, f, el, js.zero_args())
+            // Forward this call's locales and options to the element method.
+            let (rv, re) = js.call_function(it, f, el, args)
             if re != ok { ret (js.undefv(), re) }
             let (rs, rse) = js.to_string(it, rv)
             if rse != ok { ret (js.undefv(), rse) }
