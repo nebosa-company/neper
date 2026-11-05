@@ -347,7 +347,8 @@ fn query(dst: []u8, name: str, qtype: u16, unicast: bool, known: []const Known) 
 
 fn eq_wire(a: []const u8, b: []const u8) -> bool { ret dns.name_equal_fold(a, b) }
 
-// Whether the query's answer section lists a PTR for `name` pointing at `target` with at least half of `ttl` left.
+// Whether the query's answer section lists a PTR for `name` pointing at `target` with at least half of `ttl` left
+// (rounded up, so an odd TTL accepts a ceiling-half remainder and TTL 1 only accepts a full second).
 fn known_answer(query_packet: []const u8, pos_start: usize, answers: usize, name: []const u8, wanted_target: []const u8, ttl: u32) -> bool {
     var pos = pos_start
     var owner: [300]u8 = zero
@@ -355,7 +356,7 @@ fn known_answer(query_packet: []const u8, pos_start: usize, answers: usize, name
     while k < answers {
         let (r, rr_error) = dns.decode_rr(query_packet, &pos, owner[0..])
         if rr_error != ok { ret false }
-        if r.kind == dns.TYPE_PTR && r.ttl >= ttl / 2u32 && eq_wire(owner[..r.name_len], name) {
+        if r.kind == dns.TYPE_PTR && r.ttl >= ttl - ttl / 2u32 && eq_wire(owner[..r.name_len], name) {
             var target_buf: [300]u8 = zero
             let (t_len, t_error) = dns.rdata_name(query_packet, r, target_buf[0..])
             if t_error == ok && eq_wire(target_buf[..t_len], wanted_target) { ret true }
@@ -562,12 +563,27 @@ fn store(c: *Cache, candidate: Record, flush: bool, ttl: u32, now: u64) -> err {
         i += 1usize
     }
     if found { ret ok }
-    if c.count >= c.records.len { ret TooLarge }
     var added = candidate
     added.born = now
     added.expires = now + life
-    c.records[c.count] = added
-    c.count += 1usize
+    var slot = c.count
+    if slot >= c.records.len {
+        // reclaim the first expired slot rather than appending forever: expired records must not keep a long,
+        // running cache at its limit
+        var e = 0usize
+        var reclaimed = false
+        while e < c.count {
+            if c.records[e].expires <= now {
+                slot = e
+                reclaimed = true
+                break
+            }
+            e += 1usize
+        }
+        if !reclaimed { ret TooLarge }
+    }
+    c.records[slot] = added
+    if slot == c.count { c.count += 1usize }
     ret ok
 }
 

@@ -250,6 +250,82 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, cut_error) = mdns.learn(&flush_cache, "\x00\x00\x84\x00\x00\x00\x00\x02\x00\x00\x00\x00\x03abc", 5000u64)
     if cut_error != mdns.Malformed { ret fail(32i32) }
 
+    // ---- the cache reclaims expired slots ----
+    // `CACHE_LIMIT` is 1024: four instance records (enumeration, PTR, SRV, TXT) plus one A per address fill it.
+    var fill_addrs: [1020]mdns.Address = zero
+    var fill_i = 0usize
+    while fill_i < fill_addrs.len {
+        var fill_address: mdns.Address = zero
+        fill_address.bytes[0] = 10u8
+        fill_address.bytes[2] = u8(fill_i / 256usize)
+        fill_address.bytes[3] = u8(fill_i % 256usize)
+        fill_addrs[fill_i] = fill_address
+        fill_i += 1usize
+    }
+    var fill_service = services[0]
+    fill_service.instance = "Fill"
+    fill_service.service = "_fill._tcp"
+    fill_service.host = "fill.local"
+    fill_service.txt = txt_1[0..]
+    fill_service.addresses = fill_addrs[0..]
+    let fill_services = [1]mdns.Service{ fill_service }
+    var fill_out: [40000]u8 = zero
+    let (fill_len, fill_build_error) = mdns.announce(a, fill_out[0..], fill_services[0..], false)
+    if fill_build_error != ok { ret fail(36i32) }
+    let (fill_cache0, fill_cache_error) = mdns.cache_new(a)
+    if fill_cache_error != ok { ret fail(36i32) }
+    var fill_cache = fill_cache0
+    let (fill_seen, fill_learn_error) = mdns.learn(&fill_cache, fill_out[..fill_len], 1000u64)
+    if fill_learn_error != ok || fill_seen != 1024usize { ret fail(36i32) }
+    // while every slot holds a live record the cache still reports capacity exhaustion
+    let (full_len, full_build_error) = mdns.announce(a, out[0..], services[1usize..2usize], false)
+    if full_build_error != ok { ret fail(36i32) }
+    let (_, full_error) = mdns.learn(&fill_cache, out[..full_len], 1000u64)
+    if full_error != mdns.TooLarge { ret fail(36i32) }
+    // once those records expired the same learn reclaims slots instead of reporting TooLarge
+    let (reuse_seen, reuse_error) = mdns.learn(&fill_cache, out[..full_len], 5000000u64)
+    if reuse_error != ok || reuse_seen != 5usize { ret fail(37i32) }
+    // the reclaimed cache discovers the instance that replaced the expired records, and keeps reclaiming
+    let (reused, reused_error) = mdns.discover(&fill_cache, a, "_http._tcp", "local", 5000000u64)
+    if reused_error != ok || reused.len != 1usize || !same(reused[0].instance, "Web Server") || reused[0].port != 80u16 || !reused[0].resolved { ret fail(38i32) }
+    let (ipp_len, ipp_build_error) = mdns.announce(a, out[0..], services[0..1], false)
+    if ipp_build_error != ok { ret fail(38i32) }
+    let (ipp_seen, ipp_error) = mdns.learn(&fill_cache, out[..ipp_len], 5000000u64)
+    if ipp_error != ok || ipp_seen != 7usize { ret fail(38i32) }
+    let (reused2, reused2_error) = mdns.discover(&fill_cache, a, "_ipp._tcp", "local", 5000000u64)
+    if reused2_error != ok || reused2.len != 1usize || !same(reused2[0].instance, "My Printer") { ret fail(38i32) }
+
+    // ---- known-answer suppression rounds the half-TTL threshold up ----
+    var odd_service = services[0]
+    odd_service.ttl_other = 3u32
+    let odd_services = [1]mdns.Service{ odd_service }
+    let odd_known_1 = [1]mdns.Known{ mdns.Known { target: known[0].target, ttl: 1u32 } }
+    let odd_known_2 = [1]mdns.Known{ mdns.Known { target: known[0].target, ttl: 2u32 } }
+    var probe: [512]u8 = zero
+    let (odd_q1_len, odd_q1_error) = mdns.query(probe[0..], "_ipp._tcp.local", 12u16, false, odd_known_1[0..])
+    if odd_q1_error != ok { ret fail(39i32) }
+    let (odd_reply1, odd_error1) = mdns.answer(a, out[0..], odd_services[0..], probe[..odd_q1_len], false)
+    // TTL 3: one second left is less than the 2-second ceiling half, so the known answer does not suppress
+    if odd_error1 != ok || odd_reply1.len == 0usize { ret fail(39i32) }
+    let (odd_q2_len, odd_q2_error) = mdns.query(probe[0..], "_ipp._tcp.local", 12u16, false, odd_known_2[0..])
+    if odd_q2_error != ok { ret fail(39i32) }
+    let (odd_reply2, odd_error2) = mdns.answer(a, out[0..], odd_services[0..], probe[..odd_q2_len], false)
+    if odd_error2 != ok || odd_reply2.len != 0usize { ret fail(39i32) }
+    // TTL 1: the half rounds up to the whole second, and a TTL-0 known answer never suppresses
+    var one_service = services[0]
+    one_service.ttl_other = 1u32
+    let one_services = [1]mdns.Service{ one_service }
+    let one_known_1 = [1]mdns.Known{ mdns.Known { target: known[0].target, ttl: 1u32 } }
+    let one_known_0 = [1]mdns.Known{ mdns.Known { target: known[0].target, ttl: 0u32 } }
+    let (one_q1_len, one_q1_error) = mdns.query(probe[0..], "_ipp._tcp.local", 12u16, false, one_known_1[0..])
+    if one_q1_error != ok { ret fail(40i32) }
+    let (one_reply1, one_error1) = mdns.answer(a, out[0..], one_services[0..], probe[..one_q1_len], false)
+    if one_error1 != ok || one_reply1.len != 0usize { ret fail(40i32) }
+    let (one_q0_len, one_q0_error) = mdns.query(probe[0..], "_ipp._tcp.local", 12u16, false, one_known_0[0..])
+    if one_q0_error != ok { ret fail(40i32) }
+    let (one_reply0, one_error0) = mdns.answer(a, out[0..], one_services[0..], probe[..one_q0_len], false)
+    if one_error0 != ok || one_reply0.len == 0usize { ret fail(40i32) }
+
     // The loopback UDP exchange is an opt-in integration probe.  The default
     // fixture remains finite even when the host cannot deliver UDP replies.
     if args.len == 1usize && same(args[0usize], "--live") {
