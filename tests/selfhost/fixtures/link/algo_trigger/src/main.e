@@ -1215,6 +1215,50 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry, clock: *const t.Clock) -> u8 
     ret 0u8
 }
 
+// #204: malformed cron text, a daily spec that also carries monthly, the stamp table at
+// capacity, and state reclaimed for a record that no longer exists.
+fn trigger_split_regression() -> bool {
+    let (_, good) = t.parse_cron("* * * * \xff *")
+    ret !good
+}
+
+fn trigger_stamps_regression(a: *mem.Arena) -> bool {
+    var ids: [2]str = zero
+    ids[0usize] = "a"
+    ids[1usize] = "b"
+    var dates: [2]str = zero
+    dates[0usize] = "2026-01-01"
+    dates[1usize] = "2026-01-01"
+    var stamps: [1]t.Stamp = zero
+    let now = 1900000000000.0f64
+    let first = t.due_date_events(a, ids[..], dates[..], 0.0f64, stamps[..], 0usize, now)
+    if first.events.len != 1usize { ret false }
+    let second = t.due_date_events(a, ids[..], dates[..], 0.0f64, stamps[..], first.stamp_count, now)
+    if second.events.len != 0usize { ret false }
+    var one_date: [1]str = zero
+    one_date[0usize] = "2026-01-01"
+    let short = t.due_date_events(a, ids[..], one_date[..], 0.0f64, stamps[..], first.stamp_count, now)
+    ret short.events.len == 0usize
+}
+
+fn trigger_state_regression(a: *mem.Arena, reg: *const f.Registry) -> bool {
+    let options = json.Options { allow_duplicate_keys: false, max_depth: 24u16 }
+    let (rows_root, rows_error) = json.parse(a, "[{\"id\":\"b\"}]", options)
+    if rows_error != ok { ret false }
+    let (fields_root, fields_error) = json.parse(a, "[]", options)
+    if fields_error != ok { ret false }
+    let rows = rows_of(a, rows_root)
+    let fields = field_defs_of(a, fields_root)
+    var no_filter = false
+    var tree = v.empty_group("and")
+    var ctx: v.Context = zero
+    ctx.user_id = f.blank()
+    var state: [1]t.InState = zero
+    state[0usize] = t.InState { id: "z", since: 0.0f64, fired: false }
+    let r = t.duration_in_state_due(a, reg, rows, tree, no_filter, fields, &ctx, 0.0f64, state[..], 1usize, 10.0f64)
+    ret r.events.len == 1usize && r.state_count == 1usize && str.eq(state[0usize].id, "b")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (built, build_error) = library.build(a)
     if build_error != ok { os.exit(90i32) }
@@ -1344,6 +1388,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_112(), &registry, &clock) != 0u8 { os.exit(113i32) }
     if run(a, vectors_113(), &registry, &clock) != 0u8 { os.exit(114i32) }
     if run(a, vectors_114(), &registry, &clock) != 0u8 { os.exit(115i32) }
+    // `split`/`stamps`/`state` select one #204 check for pre-fix evidence.
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    if mode.len == 0usize || str.eq(mode, "split") {
+        if !trigger_split_regression() { os.exit(119i32) }
+    }
+    if mode.len == 0usize || str.eq(mode, "stamps") {
+        if !trigger_stamps_regression(a) { os.exit(121i32) }
+    }
+    if mode.len == 0usize || str.eq(mode, "state") {
+        if !trigger_state_regression(a, &registry) { os.exit(122i32) }
+    }
     try io.print("algo trigger ok")
     ret ok
 }

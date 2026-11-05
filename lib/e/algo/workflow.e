@@ -44,6 +44,9 @@ const FAIL: u8 = 3u8
 const STALE: u8 = 4u8
 const CANCEL: u8 = 5u8
 const ERROR: u8 = 6u8
+// A store/build failure: unlike a step error it is not the workflow's to catch, so it
+// unwinds past `try` and `continueOnError`.
+const FATAL: u8 = 7u8
 
 // A step's outcome: a value (or none), or one of the signals that unwind a run.
 type Flow = struct { kind: u8, value: json.Value, has_value: bool, wait: json.Value, message: str, step_id: str, has_step_id: bool, reason: str, budget: usize, has_budget: bool }
@@ -266,10 +269,10 @@ fn record_obj(ex: *Executor, kind: str, fields: ir.Obj) -> usize {
 fn flush(ex: *Executor) -> Flow {
     if journal.is_empty(&ex.commit) { ret nothing() }
     let (built, built_error) = journal.build(ex.a, &ex.commit)
-    if built_error != ok { ret signal(ERROR, "build-failed") }
+    if built_error != ok { ret signal(FATAL, "build-failed") }
     begin(ex)
     let (landed, store_error) = journal.store_commit(ex.store, member_text(ex.run, "runId"), built)
-    if store_error != ok { ret signal(ERROR, "store-failed") }
+    if store_error != ok { ret signal(FATAL, "store-failed") }
     let (ok_value, have_ok) = get(landed, "ok")
     var good = false
     switch ok_value {
@@ -547,7 +550,7 @@ fn exec_step(ex: *Executor, step: json.Value, frames: []const str, scope: json.V
         if flushed.kind != OK { ret flushed }
         ret outcome
     }
-    if outcome.kind == SUSPEND || outcome.kind == STOP || outcome.kind == STALE || outcome.kind == CANCEL { ret outcome }
+    if outcome.kind == SUSPEND || outcome.kind == STOP || outcome.kind == STALE || outcome.kind == CANCEL || outcome.kind == FATAL { ret outcome }
     // A failure: journaled, then either swallowed (continueOnError, an ordinary error) or raised.
     let failed_at = ex.hooks.now(ex.hooks.ctx)
     var failed_fields = obj(ex.a)
@@ -561,7 +564,7 @@ fn exec_step(ex: *Executor, step: json.Value, frames: []const str, scope: json.V
     let failed_index = record_obj(ex, "step-failed", failed_fields)
     let flushed = flush(ex)
     if flushed.kind != OK { ret flushed }
-    if outcome.kind == FAIL { ret outcome }
+    if outcome.kind == FAIL || outcome.kind == FATAL { ret outcome }
     let (continue_value, have_continue) = get(step, "continueOnError")
     if have_continue && ir.truthy(continue_value) { ret nothing() }
     ret fail_run("Step failed", id)
@@ -982,7 +985,7 @@ fn dispatch(ex: *Executor, step: json.Value, frames: []const str, key: str, scop
             put(&result, "caught", flag(false))
             ret done(ir.obj_value(&result), true)
         }
-        if ran.kind == SUSPEND || ran.kind == STALE || ran.kind == STOP || ran.kind == CANCEL { ret ran }
+        if ran.kind == SUSPEND || ran.kind == STALE || ran.kind == STOP || ran.kind == CANCEL || ran.kind == FATAL { ret ran }
         var error_object = obj(ex.a)
         put(&error_object, "message", text(ran.message))
         if ran.has_step_id { put(&error_object, "stepId", text(ran.step_id)) }
@@ -1556,14 +1559,18 @@ fn run_branches(ex: *Executor, step: json.Value, frames: []const str, scope: jso
             failure = f
         } else if f.kind == CANCEL && failure.kind != STALE && failure.kind != CANCEL {
             failure = f
+        } else if f.kind == FATAL {
+            failure = f
         }
+        // A stale worker (or a failed journal) must not run the next branch's effects.
+        if f.kind == STALE || f.kind == FATAL { break }
         b += 1usize
     }
     let flushed = flush(ex)
     if flushed.kind != OK { ret flushed }
     let suspension_count = waits.len
     if have_failure {
-        if failure.kind == STALE || failure.kind == CANCEL { ret failure }
+        if failure.kind == STALE || failure.kind == CANCEL || failure.kind == FATAL { ret failure }
         if failure.kind == STOP && !str.eq(join, "all") { ret failure }
         if str.eq(join, "all") || (completed == 0usize && suspension_count == 0usize) { ret failure }
     }
@@ -1858,6 +1865,13 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         let set = journal.set_header(&ex.commit, ir.obj_value(&patch))
         prologue = flush(&ex)
     }
+    // A prologue flush that lost the run or failed the store must not start executing.
+    if prologue.kind == STALE {
+        var conflict = result_object(&ex, "conflict")
+        put(&conflict, "reason", text(prologue.message))
+        ret (ir.obj_value(&conflict), ok)
+    }
+    if prologue.kind != OK { ret (.Null, Exhausted) }
     var outcome = prologue
     if outcome.kind == OK {
         var no_frames: []const str = zero
@@ -1873,6 +1887,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         put(&patch, "waiting", .Null)
         finish(&ex, "run-completed", f, patch)
         let flushed = flush(&ex)
+        if flushed.kind == STALE {
+            var conflict = result_object(&ex, "conflict")
+            put(&conflict, "reason", text(flushed.message))
+            ret (ir.obj_value(&conflict), ok)
+        }
+        if flushed.kind != OK { ret (.Null, Exhausted) }
         let out = result_object(&ex, "succeeded")
         ret (ir.obj_value(&out), ok)
     }
@@ -1892,6 +1912,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         }
         let set = journal.set_header(&ex.commit, ir.obj_value(&patch))
         let flushed = flush(&ex)
+        if flushed.kind == STALE {
+            var conflict = result_object(&ex, "conflict")
+            put(&conflict, "reason", text(flushed.message))
+            ret (ir.obj_value(&conflict), ok)
+        }
+        if flushed.kind != OK { ret (.Null, Exhausted) }
         var out = result_object(&ex, choose(paused, "paused", "suspended"))
         put(&out, "suspension", outcome.wait)
         ret (ir.obj_value(&out), ok)
@@ -1907,6 +1933,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         put(&patch, "cancelRequested", flag(false))
         finish(&ex, "run-cancelled", f, patch)
         let flushed = flush(&ex)
+        if flushed.kind == STALE {
+            var conflict = result_object(&ex, "conflict")
+            put(&conflict, "reason", text(flushed.message))
+            ret (ir.obj_value(&conflict), ok)
+        }
+        if flushed.kind != OK { ret (.Null, Exhausted) }
         var out = result_object(&ex, "cancelled")
         put(&out, "reason", text(outcome.message))
         ret (ir.obj_value(&out), ok)
@@ -1921,6 +1953,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         put(&patch, "waiting", .Null)
         finish(&ex, "run-completed", f, patch)
         let flushed = flush(&ex)
+        if flushed.kind == STALE {
+            var conflict = result_object(&ex, "conflict")
+            put(&conflict, "reason", text(flushed.message))
+            ret (ir.obj_value(&conflict), ok)
+        }
+        if flushed.kind != OK { ret (.Null, Exhausted) }
         var out = result_object(&ex, "succeeded")
         put(&out, "stopped", text(outcome.message))
         ret (ir.obj_value(&out), ok)
@@ -1943,6 +1981,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
     put(&patch, "waiting", .Null)
     finish(&ex, "run-failed", f, patch)
     let flushed = flush(&ex)
+    if flushed.kind == STALE {
+        var conflict = result_object(&ex, "conflict")
+        put(&conflict, "reason", text(flushed.message))
+        ret (ir.obj_value(&conflict), ok)
+    }
+    if flushed.kind != OK { ret (.Null, Exhausted) }
     var out = result_object(&ex, "failed")
     put(&out, "error", text(outcome.message))
     if outcome.reason.len > 0usize && !str.eq(outcome.reason, "permanent") {

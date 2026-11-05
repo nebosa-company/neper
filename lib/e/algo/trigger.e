@@ -233,12 +233,14 @@ fn split_fields(s: str, out: []str) -> usize {
     var at = 0usize
     var more = true
     while more {
+        let before = it.off
         let (scalar, got) = utf8.iterator_next(&it)
         if !got {
             more = false
         } else {
-            var width = 1usize
-            if scalar >= 65536u32 { width = 4usize } else if scalar >= 2048u32 { width = 3usize } else if scalar >= 128u32 { width = 2usize }
+            // The iterator's own advance, not the scalar: a malformed byte reads as U+FFFD
+            // but consumes one byte, and recomputing 3 would drift past the end.
+            let width = it.off - before
             if view.js_space(scalar) {
                 if in_field {
                     if n < out.len { out[n] = s[start..at] }
@@ -595,6 +597,10 @@ fn normalize_schedule(a: *mem.Arena, c: *const Clock, spec: Spec) -> Schedule {
         var day_ok = true
         var dom = "*"
         var dom_ok = true
+        // The day value belongs to the form that was selected, not to whichever forms
+        // happen to be present as well: a daily rule must not become monthly or weekly.
+        // Matches appdor's `normalizeSchedule`: the selected simple form supplies the values,
+        // and the presence flags pick the field the day value lands in.
         if spec.weekly.present {
             let (value, good) = field_text(simple.day, "0")
             day = value
@@ -606,7 +612,6 @@ fn normalize_schedule(a: *mem.Arena, c: *const Clock, spec: Spec) -> Schedule {
             dom_ok = good
         }
         if !ok_minute || !ok_hour || !day_ok || !dom_ok { ret failure("Unrecognized") }
-        // The day value is shared: `weekly` puts it in the weekday field and `monthly` in the date field.
         var text = f.join3(a, minute, " ", hour)
         if spec.monthly.present { text = f.join3(a, text, " ", dom) } else { text = f.join(a, text, " *") }
         text = f.join(a, text, " *")
@@ -989,6 +994,8 @@ type DateEvents = struct { events: []const DateEvent, stamp_count: usize }
 
 fn due_date_events(a: *mem.Arena, ids: []const str, dates: []const str, offset_ms: f64, stamps: []Stamp, stamp_count: usize, now_ms: f64) -> DateEvents {
     var none: []const DateEvent = zero
+    // A shorter date list cannot be paired with the ids: answer no events rather than read past it.
+    if dates.len < ids.len { ret DateEvents { events: none, stamp_count: stamp_count } }
     let (out, e) = mem.alloc[DateEvent](a, ids.len + 1usize)
     if e != ok { ret DateEvents { events: none, stamp_count: stamp_count } }
     var n = 0usize
@@ -1012,6 +1019,11 @@ fn due_date_events(a: *mem.Arena, ids: []const str, dates: []const str, offset_m
                     } else if count < stamps.len {
                         stamps[count] = Stamp { id: ids[i], goal: goal }
                         count += 1usize
+                    } else {
+                        // No stamp slot: emitting unstamped would fire this record on every
+                        // poll, so fail closed and leave it due until a slot frees.
+                        i += 1usize
+                        continue
                     }
                     out[n] = DateEvent { id: ids[i], goal: goal, fire_at: fire_at }
                     n += 1usize
@@ -1038,8 +1050,8 @@ fn duration_in_state_due(a: *mem.Arena, reg: *const f.Registry, rows: []const vi
     var none: []const StateEvent = zero
     let (out, e) = mem.alloc[StateEvent](a, rows.len + 1usize)
     if e != ok { ret StateResult { events: none, state_count: state_count } }
-    var n = 0usize
     var count = state_count
+    var n = 0usize
     var i = 0usize
     while i < rows.len {
         let id = row_id(a, rows[i])
@@ -1055,8 +1067,28 @@ fn duration_in_state_due(a: *mem.Arena, reg: *const f.Registry, rows: []const vi
                     state[count] = InState { id: id, since: now_ms, fired: false }
                     count += 1usize
                 } else {
-                    i += 1usize
-                    continue
+                    // The table is full: reclaim the slot of a record that no longer exists
+                    // (its clock can never fire) instead of never tracking this row.
+                    var reclaimed = false
+                    var s = 0usize
+                    while s < count && !reclaimed {
+                        var present = false
+                        var r = 0usize
+                        while r < rows.len && !present {
+                            if str.eq(row_id(a, rows[r]), state[s].id) { present = true }
+                            r += 1usize
+                        }
+                        if !present {
+                            state[s] = InState { id: id, since: now_ms, fired: false }
+                            at = s
+                            reclaimed = true
+                        }
+                        s += 1usize
+                    }
+                    if !reclaimed {
+                        i += 1usize
+                        continue
+                    }
                 }
             }
             if !state[at].fired && now_ms - state[at].since >= duration_ms {
