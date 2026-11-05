@@ -207,3 +207,4 @@ hanging-punct-last-cjk-005.html | hanging-punct-last-cjk-005-ref.html | match
 hanging-punct-allow-end-006.html | hanging-punct-allow-end-006-ref.html | match
 block-ellipsis-pre-breakall-008.html | block-ellipsis-pre-breakall-008-ref.html | match
 multicol-span-single-line-009.html | multicol-span-single-line-009-ref.html | match
+q-element-quotes-012.html | q-element-quotes-012-ref.html | match
