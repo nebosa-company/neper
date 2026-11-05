@@ -63,6 +63,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if room_error != analysis.TooSmall { os.exit(2i32) }
     let (_, overflow_error) = analysis.pitch_hps(x[..4usize], sr, 4611686018427387904usize, scratch[..12usize])
     if overflow_error != analysis.Invalid { os.exit(2i32) }
+    // 443: every pitch estimator refuses a non-positive or non-finite sample rate.
+    let bad_rates: [3]f64 = [3]f64{ 0.0f64, 0.0f64 - 1.0f64, math.nan64() }
+    var bad_at = 0usize
+    while bad_at < 3usize {
+        let (_, _, bad_yin) = analysis.pitch_yin(x[..], bad_rates[bad_at], 0.1f64, scratch)
+        let (_, _, bad_pyin) = analysis.pitch_pyin(x[..], bad_rates[bad_at], thresholds[..], scratch)
+        let (_, bad_acf) = analysis.pitch_autocorrelation(x[..], bad_rates[bad_at], 80.0f64, 1000.0f64, scratch)
+        let (_, bad_hps) = analysis.pitch_hps(x[..], bad_rates[bad_at], 3usize, scratch)
+        if bad_yin != analysis.Invalid || bad_pyin != analysis.Invalid || bad_acf != analysis.Invalid || bad_hps != analysis.Invalid { os.exit(7i32) }
+        bad_at += 1usize
+    }
+    let (_, _, inf_yin) = analysis.pitch_yin(x[..], math.inf64(), 0.1f64, scratch)
+    let (_, _, inf_pyin) = analysis.pitch_pyin(x[..], math.inf64(), thresholds[..], scratch)
+    let (_, inf_acf) = analysis.pitch_autocorrelation(x[..], math.inf64(), 80.0f64, 1000.0f64, scratch)
+    let (_, inf_hps) = analysis.pitch_hps(x[..], math.inf64(), 3usize, scratch)
+    if inf_yin != analysis.Invalid || inf_pyin != analysis.Invalid || inf_acf != analysis.Invalid || inf_hps != analysis.Invalid { os.exit(7i32) }
 
     // 3: frame counting and onsets, tempo and beats of a click train at 120 BPM.
     if analysis.frame_count(512usize, 0usize, 128usize) != 0usize { os.exit(3i32) }

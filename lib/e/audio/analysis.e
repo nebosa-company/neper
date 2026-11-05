@@ -21,6 +21,12 @@ fn abs(x: f64) -> f64 {
     ret x
 }
 
+// A sample rate a frequency calculation can use: positive and finite (rejects NaN and both
+// infinities, for which `x - x` is not zero).
+fn valid_rate(sample_rate: f64) -> bool {
+    ret sample_rate > 0.0f64 && sample_rate - sample_rate == 0.0f64
+}
+
 // The offset in [-0.5, 0.5] of the extremum of the parabola through three
 // equally spaced samples (`0` when they are collinear).
 fn parabolic(ym: f64, y0: f64, yp: f64) -> f64 {
@@ -93,6 +99,7 @@ fn yin_frequency(cmnd: []const f64, tau: usize, sample_rate: f64) -> f64 {
 // normalised difference below `threshold`, parabolically refined; answers
 // (f0, confidence = 1 - dip depth); `scratch.len >= x.len / 2`.
 fn pitch_yin(x: []const f64, sample_rate: f64, threshold: f64, scratch: []f64) -> (f64, f64, err) {
+    if !valid_rate(sample_rate) { ret (0.0f64, 0.0f64, Invalid) }
     let (w, difference_error) = yin_difference(x, scratch)
     if difference_error != ok { ret (0.0f64, 0.0f64, difference_error) }
     let cmnd = scratch[..w]
@@ -108,6 +115,7 @@ fn pitch_yin(x: []const f64, sample_rate: f64, threshold: f64, scratch: []f64) -
 // ponytail: no Viterbi over frames (Mauch and Dixon 2014 smooth the candidate
 // distributions with an HMM); the per-frame candidate mean is the estimate.
 fn pitch_pyin(x: []const f64, sample_rate: f64, thresholds: []const f64, scratch: []f64) -> (f64, f64, err) {
+    if !valid_rate(sample_rate) { ret (0.0f64, 0.0f64, Invalid) }
     if thresholds.len == 0usize { ret (0.0f64, 0.0f64, Invalid) }
     let (w, difference_error) = yin_difference(x, scratch)
     if difference_error != ok { ret (0.0f64, 0.0f64, difference_error) }
@@ -143,7 +151,7 @@ fn autocorrelation_lag(x: []const f64, tau: usize) -> f64 {
 // The lag of the largest normalised autocorrelation between the periods of
 // `f_max` and `f_min`, parabolically refined; `scratch.len >= sample_rate / f_min + 2`.
 fn pitch_autocorrelation(x: []const f64, sample_rate: f64, f_min: f64, f_max: f64, scratch: []f64) -> (f64, err) {
-    if f_min <= 0.0f64 || f_max <= f_min || sample_rate <= 0.0f64 { ret (0.0f64, Invalid) }
+    if f_min <= 0.0f64 || f_max <= f_min || !valid_rate(sample_rate) { ret (0.0f64, Invalid) }
     let lo = usize(sample_rate / f_max)
     let hi = usize(sample_rate / f_min)
     if lo < 2usize || hi + 2usize > x.len { ret (0.0f64, Invalid) }
@@ -169,6 +177,7 @@ fn pitch_autocorrelation(x: []const f64, sample_rate: f64, f_min: f64, f_max: f6
 // magnitude spectra of the Hann-windowed FFT of `x` (a power of two) peaks at
 // f0, refined by a parabola through the log product; `scratch.len >= 3 * x.len`.
 fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64) -> (f64, err) {
+    if !valid_rate(sample_rate) { ret (0.0f64, Invalid) }
     let n = x.len
     if harmonics == 0usize || harmonics > n / 4usize { ret (0.0f64, Invalid) }
     if scratch.len < 3usize * n { ret (0.0f64, TooSmall) }
