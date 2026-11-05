@@ -6239,9 +6239,10 @@ fn part20(b: *str.Builder) -> err {
     try str.push(b, "    set(v) {\n")
     try str.push(b, "      elSlot(this);\n")
     try str.push(b, "      if (inputTypeOf(this) !== 'file') return;\n")
-    try str.push(b, "      if (v === null || !(isObject(v) && slotOf(v) && slotOf(v).isFileList)) throw new TypeError(\"Failed to set the 'files' property on 'HTMLInputElement': The provided value is not of type 'FileList'.\");\n")
+    try str.push(b, "      if (v === null) return;\n")
+    try str.push(b, "      if (!(isObject(v) && slotOf(v) && slotOf(v).isFileList)) throw new TypeError(\"Failed to set the 'files' property on 'HTMLInputElement': The provided value is not of type 'FileList'.\");\n")
     try str.push(b, "      inputState(this).files = slotOf(v).files.slice();\n")
-    try str.push(b, "      delete inputState(this).fileList;\n")
+    try str.push(b, "      inputState(this).fileList = v;\n")
     try str.push(b, "    }\n")
     try str.push(b, "  },\n")
     try str.push(b, "  formEnctype: { get() { elSlot(this); const v = getAttributeValue(this, 'formenctype'); const l = v === null ? '' : asciiLowercase(v); return ['application/x-www-form-urlencoded', 'multipart/form-data', 'text/plain'].indexOf(l) >= 0 ? l : (v === null ? '' : 'application/x-www-form-urlencoded'); }, set(v) { elSlot(this); setAttributeValue(this, 'formenctype', toDOMString(v)); } },\n")
@@ -10245,7 +10246,7 @@ fn part35(b: *str.Builder) -> err {
     try str.push(b, "  effectAllowed: { get() { return dataTransferSlot(this).effectAllowed; }, set(v) { const s = dataTransferSlot(this); const str = String(v); if (['none', 'copy', 'copyLink', 'copyMove', 'link', 'linkMove', 'move', 'all', 'uninitialized'].indexOf(str) >= 0) s.effectAllowed = str; } },\n")
     try str.push(b, "  items: { get() { return dataTransferSlot(this).itemList; } },\n")
     try str.push(b, "  types: { get() { const s = dataTransferSlot(this); const out = []; let hasFiles = false; for (const e of s.items) { if (e.kind === 'file') { if (!hasFiles) out.push('Files'); hasFiles = true; } else out.push(e.type); } return out; } },\n")
-    try str.push(b, "  files: { get() { const s = dataTransferSlot(this); const files = s.items.filter(e => e.kind === 'file').map(e => e.file); return makeFileListFrom(() => files); } }\n")
+    try str.push(b, "  files: { get() { const s = dataTransferSlot(this); if (!s.fileList) { const files = s.items.filter(e => e.kind === 'file').map(e => e.file); s.fileList = makeFileListFrom(() => files); } return s.fileList; } }\n")
     try str.push(b, "});\n")
     ret ok
 }
