@@ -26,6 +26,8 @@ use e.fmt.css.selector as selector
 use e.fmt.css.syntax as syntax
 use e.fmt.html as html
 use e.mem
+use e.text.bidi as bidi
+use e.text.utf8 as utf8
 use e.str
 
 const UNSCOPED: i64 = 2147483647i64
@@ -512,6 +514,29 @@ fn push_hint(out: *list.List[Declaration], property: str, value: str) -> err {
     ret list.push[Declaration](out, hint(property, value))
 }
 
+// The direction the first strong character of the element's text asks for ("rtl"/"ltr"), for `dir=auto`: false when the
+// text has no strong character, in which case the parent's direction applies and no hint is emitted.
+fn auto_direction(m: *const match.Matcher, el: html.NodeId) -> (str, bool) {
+    let a = m.a
+    let (text, te) = html.text_content(a, m.doc, el)
+    if te != ok || text.len == 0usize { ret ("", false) }
+    let (points, pe) = mem.alloc[u32](a, text.len + 1usize)
+    if pe != ok { ret ("", false) }
+    var n = 0usize
+    var at = 0usize
+    while at < text.len && n < points.len {
+        let (d, de) = utf8.decode(text, at)
+        if de != ok { break }
+        points[n] = d.scalar
+        n += 1usize
+        at += usize(d.width)
+    }
+    if n == 0usize { ret ("", false) }
+    let level = bidi.first_strong(points[0usize..n], 0usize, n, false)
+    if level == 1u8 { ret ("rtl", true) }
+    ret ("ltr", true)
+}
+
 fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> ([]const Declaration, err) {
     let a = m.a
     let (made, e) = list.init[Declaration](a, 8usize)
@@ -522,7 +547,12 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> ([]const De
     let (dir_raw, have_dir) = trimmed_attr(m, el, "dir")
     if have_dir {
         let dir = match.lower(a, dir_raw)
-        if str.eq(dir, "rtl") || str.eq(dir, "ltr") { try push_hint(&out, "direction", dir) }
+        if str.eq(dir, "rtl") || str.eq(dir, "ltr") {
+            try push_hint(&out, "direction", dir)
+        } else if str.eq(dir, "auto") {
+            let (auto_dir, has_auto) = auto_direction(m, el)
+            if has_auto { try push_hint(&out, "direction", auto_dir) }
+        }
     }
     if one_of(tag, "body", "table", "tr", "td", "th", "thead", "tbody", "tfoot") {
         let (bg, have_bg) = trimmed_attr(m, el, "bgcolor")
