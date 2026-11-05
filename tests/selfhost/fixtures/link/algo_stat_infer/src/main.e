@@ -291,6 +291,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     table[0usize] = mem.bitcast[f64](9218868437227405312u64)
     let (_, inf_chi_error) = infer.chi_squared_independence(table[..], 2usize, 2usize, false, expected[..])
     if inf_chi_error != infer.Invalid { os.exit(4i32) }
+    // #732: an answer between the last power-of-two bracket and the cap is feasible; the
+    // bracket must clamp to the cap instead of doubling past it.
+    let (gap_t, gap_t_error) = infer.sample_size_t(.OneSample, 0.00091f64, 0.05f64, 0.8f64, true)
+    if gap_t_error != ok || gap_t <= 8388608usize || gap_t > 10000000usize { os.exit(5i32) }
+    let (gap_z, gap_z_error) = infer.sample_size_z(.OneSample, 0.000304f64, 0.05f64, 0.8f64, true)
+    if gap_z_error != ok || gap_z <= 67108864usize || gap_z > 100000000usize { os.exit(6i32) }
     try io.print("algo stat infer ok")
     ret ok
 }

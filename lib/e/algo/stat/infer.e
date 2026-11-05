@@ -569,9 +569,13 @@ fn sample_size_t(design: Design, effect: f64, alpha: f64, power: f64, two_sided:
     var reached = power_t(design, hi, effect, alpha, two_sided)
     if !finite(reached) { ret (0usize, Invalid) }
     while reached < power {
+        // The answer may sit between the last power-of-two bracket and the cap, so the
+        // final bracket is the cap itself; only the cap failing gives Invalid (#732).
+        if hi >= 10000000usize { ret (0usize, Invalid) }
         lo = hi
-        hi = hi * 2usize
-        if hi > 10000000usize { ret (0usize, Invalid) }
+        var next = hi * 2usize
+        if next > 10000000usize { next = 10000000usize }
+        hi = next
         reached = power_t(design, hi, effect, alpha, two_sided)
         if !finite(reached) { ret (0usize, Invalid) }
     }
@@ -592,9 +596,13 @@ fn sample_size_z(design: Design, effect: f64, alpha: f64, power: f64, two_sided:
     var reached = power_z(design, hi, effect, alpha, two_sided)
     if !finite(reached) { ret (0usize, Invalid) }
     while reached < power {
+        // Same clamp as sample_size_t: the cap is the last bracket, not one doubling past
+        // the first value above it (#732).
+        if hi >= 100000000usize { ret (0usize, Invalid) }
         lo = hi
-        hi = hi * 2usize
-        if hi > 100000000usize { ret (0usize, Invalid) }
+        var next = hi * 2usize
+        if next > 100000000usize { next = 100000000usize }
+        hi = next
         reached = power_z(design, hi, effect, alpha, two_sided)
         if !finite(reached) { ret (0usize, Invalid) }
     }
