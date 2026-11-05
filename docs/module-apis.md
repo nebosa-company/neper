@@ -4220,7 +4220,7 @@ error BadCountOp
 
 type Op = enum u8 { Eq, Ne, Gt, Lt, Ge, Le, In, NotIn, Contains, Regex, Glob, Present, Absent, Any, All, Count }
 type Kind = enum u8 { And, Or, Not, Leaf, Builtin }
-type Filter = struct { kind: Kind, children: []const Filter, key: str, op: Op, value: json.Value, has_value: bool, element: []const Filter, count_op: Op, has_count_op: bool, name: str, args: json.Value, has_args: bool }
+type Filter = struct { kind: Kind, children: []const Filter, key: str, op: Op, value: json.Value, has_value: bool, element: []const Filter, count_op: Op, has_count_op: bool, name: str, args: json.Value, has_args: bool, program: regex.Regex, compiled: bool }
 
 fn same(left: str, right: str) -> bool
 fn lower_byte(c: u8) -> u8
@@ -4311,6 +4311,8 @@ type MoKey = struct { lefts: []const usize, rights: []const usize, block: usize 
 type HilbertKey = struct { lefts: []const usize, rights: []const usize, bits: u32 }
 error Invalid
 
+fn queries_valid(lefts: []const usize, rights: []const usize) -> bool
+fn order_valid(order: []const usize, count: usize) -> bool
 fn mo_block_size(n: usize, q: usize) -> usize
 fn mo_compare(k: *MoKey, a: usize, b: usize) -> i32
 fn mo_order(lefts: []const usize, rights: []const usize, block: usize, order: []usize) -> err
@@ -4957,6 +4959,7 @@ fn cnf(literals: []i32, starts: []usize, variables: usize) -> (Cnf, err)
 fn fresh(f: *Cnf) -> i32
 fn add_clause(f: *Cnf, lits: []const i32) -> err
 fn abs(x: i32) -> i32
+fn valid_lit(f: *const Cnf, lit: i32) -> bool
 fn clause1(f: *Cnf, a: i32) -> err
 fn clause2(f: *Cnf, a: i32, b: i32) -> err
 fn clause3(f: *Cnf, a: i32, b: i32, c3: i32) -> err
@@ -5085,8 +5088,7 @@ fn op_apply(op: Op, a: bool, c: bool) -> bool
 fn apply(b: *Bdd, op: Op, f: u32, g: u32, memo_keys: []u64, memo_values: []u32, memo_count: *usize) -> (u32, err)
 fn negate(b: *Bdd, f: u32, memo_keys: []u64, memo_values: []u32, memo_count: *usize) -> (u32, err)
 fn evaluate(b: *const Bdd, f: u32, assignment: []const bool) -> bool
-fn count(b: *const Bdd, f: u32) -> u64
-fn count_from(b: *const Bdd, f: u32, from: u32) -> u64
+fn count(b: *const Bdd, f: u32, memo: []u64) -> (u64, err)
 fn build(b: *Bdd, kind: []const Expr, left: []const u32, right: []const u32, root: u32, memo_keys: []u64, memo_values: []u32) -> (u32, err)
 ```
 
@@ -6537,15 +6539,18 @@ fn value_number(v: json.Value) -> f64
 type Errors = struct { items: list.List[Problem], failed: bool }
 
 fn problem(e: *Errors, path: str, message: str)
-fn join_dots(a: *mem.Arena, parts: []const str) -> str
-fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn join_dots(a: *mem.Arena, errors: *Errors, parts: []const str) -> str
+fn cat(a: *mem.Arena, errors: *Errors, x: str, y: str) -> str
+fn index_text_result(a: *mem.Arena, n: usize) -> (str, err)
 fn index_text(a: *mem.Arena, n: usize) -> str
+fn index_path(errors: *Errors, a: *mem.Arena, n: usize) -> str
 fn record_values_present(config: json.Value) -> bool
 fn array_has(v: json.Value) -> bool
 fn array_len(v: json.Value) -> usize
 fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const Plugins, routing: RoutingCheck, definition: json.Value) -> (json.Value, err)
 fn same_scalar(x: json.Value, y: json.Value) -> bool
-fn render(a: *mem.Arena, e: *const Errors) -> json.Value
+fn render(a: *mem.Arena, e: *const Errors) -> (json.Value, err)
+fn render_report(a: *mem.Arena, errors: *Errors) -> (json.Value, err)
 fn execution_key(a: *mem.Arena, step_id: str, frames: []const str) -> (str, err)
 fn loop_frame(a: *mem.Arena, step_id: str, index: usize) -> (str, err)
 fn fork_frame(a: *mem.Arena, step_id: str, branch_name: str) -> (str, err)
@@ -6737,7 +6742,7 @@ type Effect = struct { present: bool, failed: bool, permanent: bool, message: st
 type Stepped = struct { status: str, code: str, has_code: bool, message: str, output: json.Value, has_output: bool, typed: json.Value, has_typed: bool }
 type Hooks = struct { ctx: *void, effect: fn(*void, str, json.Value) -> Effect, filter_matches: fn(*void, json.Value, json.Value) -> bool, dataset_find: fn(*void, str, json.Value, json.Value, json.Value) -> (json.Value, bool), script: fn(*void, json.Value, json.Value) -> Stepped, ai: fn(*void, json.Value, json.Value, json.Value, str, bool) -> Stepped }
 type Control = struct { status: str, reason: str }
-type Runner = struct { a: *mem.Arena, hooks: *const Hooks, reg: *const f.Registry, steps: list.List[json.Value], vars: ir.Obj, step_outputs: ir.Obj, reason: str, has_reason: bool, budget: json.Value, has_budget: bool, step_budget: usize, max_depth: i64, depth: i64, dry_run: json.Value, on_failure: str, error_branch: json.Value, has_error_branch: bool, refs: json.Value, dataset: json.Value }
+type Runner = struct { a: *mem.Arena, hooks: *const Hooks, reg: *const f.Registry, steps: list.List[json.Value], vars: ir.Obj, step_outputs: ir.Obj, reason: str, has_reason: bool, budget: json.Value, has_budget: bool, step_budget: usize, max_depth: i64, depth: i64, dry_run: json.Value, on_failure: str, error_branch: json.Value, has_error_branch: bool, in_error_branch: bool, refs: json.Value, dataset: json.Value }
 type Frame = struct { trigger: json.Value, trigger_meta: json.Value, current: json.Value, has_current: bool, index: usize }
 
 fn carry() -> Control
@@ -29543,6 +29548,7 @@ const OP_EMPTY: u8 = 23u8
 const OP_SIZE: u8 = 24u8
 fn parse_expr(p: *Parser) -> (u32, err)
 fn parse_ternary(p: *Parser) -> (u32, err)
+fn parse_ternary_body(p: *Parser) -> (u32, err)
 fn parse_or(p: *Parser) -> (u32, err)
 fn parse_and(p: *Parser) -> (u32, err)
 fn equality_op(p: *const Parser) -> u8
@@ -29572,6 +29578,7 @@ fn arith(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err)
 fn compare(x: Value, y: Value) -> (i32, err)
 fn contains(container: Value, item: Value) -> (bool, err)
 fn size_of(v: Value) -> (i64, err)
+fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err)
 fn eval(it: *Interp, id: u32) -> (Value, err)
 fn eval_args(it: *Interp, first: u32, count: u32, out: []Value) -> err
 fn eval_node(it: *Interp, id: u32) -> (Value, err)
