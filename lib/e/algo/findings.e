@@ -172,34 +172,84 @@ fn find_by_id(existing: []const Finding, id: str) -> usize {
     ret found
 }
 
+// The recorded finding to pair with a report: the same id and description if
+// one is unconsumed (reports of one rule differ in description), else the
+// first unconsumed record with that id.
+fn find_pair(existing: []const Finding, consumed: []const bool, id: str, description: str) -> usize {
+    var i = 0usize
+    while i < existing.len {
+        if !consumed[i] && existing[i].id.present && same(existing[i].id.text, id) && same(existing[i].description, description) { ret i }
+        i += 1usize
+    }
+    i = 0usize
+    while i < existing.len {
+        if !consumed[i] && existing[i].id.present && same(existing[i].id.text, id) { ret i }
+        i += 1usize
+    }
+    ret existing.len
+}
+
+// The index of the `nth` (zero-based) recorded finding whose id equals `id`,
+// or `existing.len`. A scanner may report one rule several times for the same
+// resource, so duplicates pair positionally instead of collapsing onto the
+// last record (which dropped an accepted decision).
+fn find_nth_by_id(existing: []const Finding, id: str, nth: usize) -> usize {
+    var seen = 0usize
+    var i = 0usize
+    while i < existing.len {
+        if existing[i].id.present && same(existing[i].id.text, id) {
+            if seen == nth { ret i }
+            seen += 1usize
+        }
+        i += 1usize
+    }
+    ret existing.len
+}
+
 // Merge a scanner's report for resource `base` into the recorded findings. `owner_tool` is the scanner whose
 // disappearing findings count as fixed.
 fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const Reported, now: str, owner_tool: str) -> ([]const Finding, err) {
     var none_list: []const Finding = zero
+    // An empty owner would prefix-match every tool and "fix" their findings.
+    if owner_tool.len == 0usize { ret (none_list, Invalid) }
     let capacity = existing.len + reported.len
     if capacity == 0usize { ret (none_list, ok) }
     let (out, out_error) = mem.alloc[Finding](a, capacity)
     if out_error != ok { ret (none_list, out_error) }
     let (ids, ids_error) = mem.alloc[str](a, reported.len + 1usize)
     if ids_error != ok { ret (none_list, ids_error) }
+    let (consumed, consumed_error) = mem.alloc[bool](a, existing.len + 1usize)
+    if consumed_error != ok { ret (none_list, consumed_error) }
+    var c = 0usize
+    while c < existing.len {
+        consumed[c] = false
+        c += 1usize
+    }
     var n = 0usize
     var r = 0usize
     while r < reported.len {
         let (id, id_error) = finding_id(a, base, reported[r].tool, reported[r].rule)
         if id_error != ok { ret (none_list, id_error) }
         ids[r] = id
-        let at = find_by_id(existing, id)
+        let at = find_pair(existing, consumed, id, reported[r].description)
         if at < existing.len {
+            consumed[at] = true
             let prev = existing[at]
             let changed = !same(prev.description, reported[r].description) || prev.severity != reported[r].severity
             var solution = reported[r].solution
             if prev.solution.present { solution = prev.solution }
+            var state = prev.state
             var updated = prev.last_update
+            // The scanner is reporting it again: a fixed finding regressed.
+            if state == .Fixed {
+                state = .Open
+                updated = now
+            }
             if changed { updated = now }
             out[n] = Finding {
                 id: some(id),
                 tool: reported[r].tool,
-                state: prev.state,
+                state: state,
                 severity: reported[r].severity,
                 rule: some(reported[r].rule),
                 description: reported[r].description,
@@ -229,15 +279,10 @@ fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const 
     }
     var e = 0usize
     while e < existing.len {
-        var emitted = false
+        var emitted = consumed[e]
         var gone = false
-        if existing[e].id.present {
-            var k = 0usize
-            while k < reported.len {
-                if same(ids[k], existing[e].id.text) { emitted = true }
-                k += 1usize
-            }
-            gone = !emitted && has_prefix(existing[e].tool, owner_tool) && existing[e].state == .Open
+        if !emitted && existing[e].id.present {
+            gone = has_prefix(existing[e].tool, owner_tool) && existing[e].state == .Open
         }
         if !emitted {
             if gone {

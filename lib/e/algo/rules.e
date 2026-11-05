@@ -326,6 +326,12 @@ fn add_rule(e: *Engine, rule_in: Rule) -> err {
     var r = rule_in
     if r.nconds == 0u32 || usize(r.nconds) > MAX_CONDS || usize(r.nacts) > MAX_ACTS { ret BadRule }
     if e.nrules >= e.rules.len { ret Full }
+    // Full must leave the network exactly as it was: a partly loaded alpha or
+    // a registered rule without its root token breaks later rules.
+    let alphas_before = e.nalphas
+    let entries_before = e.nentries
+    let nodes_before = e.nnodes
+    let rules_before = e.nrules
     var bound: [12]bool = zero
     var spec = 0u32
     var maxvar = 0u32
@@ -365,7 +371,11 @@ fn add_rule(e: *Engine, rule_in: Rule) -> err {
             k += 1usize
         }
         if found == NONE {
-            if e.nalphas >= e.alphas.len { ret Full }
+            if e.nalphas >= e.alphas.len {
+                e.nalphas = alphas_before
+                e.nentries = entries_before
+                ret Full
+            }
             var al: Alpha = zero
             al.kind = c.kind
             al.n = c.n
@@ -377,7 +387,11 @@ fn add_rule(e: *Engine, rule_in: Rule) -> err {
             var fi = 0usize
             while fi < e.nfacts {
                 if e.facts[fi].alive && alpha_pass(al, e.facts[fi]) {
-                    if e.nentries >= e.entries.len { ret Full }
+                    if e.nentries >= e.entries.len {
+                        e.nalphas = alphas_before
+                        e.nentries = entries_before
+                        ret Full
+                    }
                     e.entries[e.nentries] = Entry { fact: u32(fi), next: e.alphas[usize(found)].head }
                     e.alphas[usize(found)].head = u32(e.nentries)
                     e.nentries += 1usize
@@ -414,7 +428,11 @@ fn add_rule(e: *Engine, rule_in: Rule) -> err {
         }
         ai += 1usize
     }
-    if e.nnodes + usize(r.nconds) + 1usize > e.nodes.len { ret Full }
+    if e.nnodes + usize(r.nconds) + 1usize > e.nodes.len {
+        e.nalphas = alphas_before
+        e.nentries = entries_before
+        ret Full
+    }
     r.node0 = u32(e.nnodes)
     r.specificity = spec
     r.nvars = maxvar
@@ -428,7 +446,13 @@ fn add_rule(e: *Engine, rule_in: Rule) -> err {
     e.rules[e.nrules] = r
     e.nrules += 1usize
     let (root, root_error) = new_token(e, rule_index, NONE)
-    if root_error != ok { ret root_error }
+    if root_error != ok {
+        e.nrules = rules_before
+        e.nnodes = nodes_before
+        e.nalphas = alphas_before
+        e.nentries = entries_before
+        ret root_error
+    }
     ret propagate(e, root)
 }
 
@@ -493,6 +517,50 @@ fn right_activate(e: *Engine, ri: usize, ci: usize, fid: u32) -> err {
     ret ok
 }
 
+// Undoes a just-appended fact and the activation attempt it started: unlinks
+// its alpha entries, kills tokens that reference it, and drops the negative
+// blocks it raised. `Full` must not leave a visible half-activated fact.
+fn drop_fact(e: *Engine, fid: u32, nfacts_before: usize, entries_before: usize) {
+    var ai = 0usize
+    while ai < e.nalphas {
+        let head = e.alphas[ai].head
+        if head != NONE && e.entries[usize(head)].fact == fid { e.alphas[ai].head = e.entries[usize(head)].next }
+        ai += 1usize
+    }
+    e.nentries = entries_before
+    let f = e.facts[usize(fid)]
+    var ri = 0usize
+    while ri < e.nrules {
+        var ci = 0usize
+        while ci < usize(e.rules[ri].nconds) {
+            let c = e.rules[ri].conds[ci]
+            if c.neg && alpha_pass(e.alphas[usize(c.alpha)], f) {
+                var it = e.nodes[usize(e.rules[ri].node0) + ci + 1usize].head
+                while it != NONE {
+                    let nxt = e.tokens[usize(it)].next
+                    if e.tokens[usize(it)].alive && e.tokens[usize(it)].blocked > 0u32 {
+                        var vars = e.tokens[usize(it)].vars
+                        if match_cond(c, f, vars[0..]) { e.tokens[usize(it)].blocked -= 1u32 }
+                    }
+                    it = nxt
+                }
+            }
+            ci += 1usize
+        }
+        ri += 1usize
+    }
+    var ti = 0usize
+    while ti < e.ntokens {
+        var j = 0usize
+        while j < MAX_ARGS {
+            if e.tokens[ti].facts[j] == fid { e.tokens[ti].alive = false }
+            j += 1usize
+        }
+        ti += 1usize
+    }
+    e.nfacts = nfacts_before
+}
+
 // Asserts a fact; the answer is its id and whether it is new.
 fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err) {
     if args.len > MAX_ARGS { ret (NONE, false, TooMany) }
@@ -507,13 +575,18 @@ fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err) 
     let existing = find_fact(e, f)
     if existing != NONE { ret (existing, false, ok) }
     if e.nfacts >= e.facts.len { ret (NONE, false, Full) }
+    let nfacts_before = e.nfacts
+    let entries_before = e.nentries
     let id = u32(e.nfacts)
     e.facts[e.nfacts] = f
     e.nfacts += 1usize
     var ai = 0usize
     while ai < e.nalphas {
         if alpha_pass(e.alphas[ai], f) {
-            if e.nentries >= e.entries.len { ret (id, true, Full) }
+            if e.nentries >= e.entries.len {
+                drop_fact(e, id, nfacts_before, entries_before)
+                ret (NONE, false, Full)
+            }
             e.entries[e.nentries] = Entry { fact: id, next: e.alphas[ai].head }
             e.alphas[ai].head = u32(e.nentries)
             e.nentries += 1usize
@@ -528,7 +601,10 @@ fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err) 
             let al = e.alphas[usize(e.rules[ri].conds[ci].alpha)]
             if alpha_pass(al, f) {
                 let ra_error = right_activate(e, ri, ci, id)
-                if ra_error != ok { ret (id, true, ra_error) }
+                if ra_error != ok {
+                    drop_fact(e, id, nfacts_before, entries_before)
+                    ret (NONE, false, ra_error)
+                }
             }
         }
         ri += 1usize
@@ -538,6 +614,9 @@ fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err) 
 
 fn retract(e: *Engine, fid: u32) -> err {
     if usize(fid) >= e.nfacts || !e.facts[usize(fid)].alive { ret NotFound }
+    // Tokens created while unblocking (below) never counted the fact as a blocker;
+    // unblocking them again would corrupt their counts.
+    let limit = e.ntokens
     e.facts[usize(fid)].alive = false
     var i = 0usize
     while i < e.ntokens {
@@ -561,11 +640,16 @@ fn retract(e: *Engine, fid: u32) -> err {
                 while it != NONE {
                     let tid = it
                     it = e.tokens[usize(tid)].next
-                    if e.tokens[usize(tid)].alive && e.tokens[usize(tid)].blocked > 0u32 {
+                    if usize(tid) < limit && e.tokens[usize(tid)].alive && e.tokens[usize(tid)].blocked > 0u32 {
                         var vars = e.tokens[usize(tid)].vars
                         if match_cond(c, fact, vars[0..]) {
                             e.tokens[usize(tid)].blocked -= 1u32
                             if e.tokens[usize(tid)].blocked == 0u32 {
+                                // A terminal not has no deeper token to rebuild,
+                                // so the re-made match must be able to fire again.
+                                if e.tokens[usize(tid)].level == e.rules[usize(e.tokens[usize(tid)].rule)].nconds {
+                                    e.tokens[usize(tid)].fired = false
+                                }
                                 let pr_error = propagate(e, tid)
                                 if pr_error != ok { ret pr_error }
                             }
@@ -753,6 +837,11 @@ fn add_table(e: *Engine, t: Table) -> err {
         if seen[fld] > pats { pats = seen[fld] }
         ci += 1usize
     }
+    // The marker rides in the condition slot after the patterns: refuse before
+    // writing rows, when that slot would be past the 6-entry array.
+    var needed = usize(pats)
+    if t.first_hit { needed += 1usize }
+    if needed > MAX_CONDS { ret BadRule }
     var row = 0usize
     while row < t.rows {
         var r: Rule = zero

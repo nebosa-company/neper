@@ -304,6 +304,77 @@ fn s8(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// S10: #232 regression checks (guards are direct-call level).
+fn s10(a: *mem.Arena) -> i32 {
+    // Retract must not unblock tokens created while it unblocks: p(1,2) still
+    // blocks the c(1) match after p(1,1) disappears.
+    let (e0, e0_error) = engine(a)
+    if e0_error != ok { ret 100i32 }
+    var e = e0
+    if rules.load(&e, "rule r when a(?x) not p(?x,1) not p(?x) then assert c(?x) end") != ok { ret 101i32 }
+    if !put(&e, "a", 1i64, 0i64, 0i64, 1usize) { ret 102i32 }
+    if !put(&e, "p", 1i64, 1i64, 0i64, 2usize) { ret 102i32 }
+    if !put(&e, "p", 1i64, 2i64, 0i64, 2usize) { ret 102i32 }
+    let (pk, pk_error) = rules.intern_kind(&e, "p")
+    if pk_error != ok { ret 103i32 }
+    var two: [2]i64 = zero
+    two[0usize] = 1i64
+    two[1usize] = 1i64
+    let (pid, pid_fresh, pid_error) = rules.assert_fact(&e, pk, two[0..])
+    if pid_error != ok || pid_fresh { ret 103i32 }
+    if rules.retract(&e, pid) != ok { ret 103i32 }
+    let (fired, fire_error) = rules.fire(&e, 10usize)
+    if fire_error != ok { ret 104i32 }
+    if holds(&e, "c", 1i64, 0i64, 0i64, 1usize) { ret 105i32 }
+
+    // A terminal `not` fires again after its match is broken and made again.
+    let (e1, e1_error) = engine(a)
+    if e1_error != ok { ret 106i32 }
+    var t = e1
+    if rules.load(&t, "rule s when a(?x) not b(?x) then assert d(?x) end") != ok { ret 106i32 }
+    if !put(&t, "a", 2i64, 0i64, 0i64, 1usize) { ret 107i32 }
+    let (first_fire, first_error) = rules.fire(&t, 10usize)
+    if first_error != ok || !holds(&t, "d", 2i64, 0i64, 0i64, 1usize) { ret 107i32 }
+    if !drop(&t, "d", 2i64, 1usize) { ret 108i32 }
+    if !put(&t, "b", 2i64, 0i64, 0i64, 1usize) { ret 108i32 }
+    if !drop(&t, "b", 2i64, 1usize) { ret 108i32 }
+    let (second_fire, second_error) = rules.fire(&t, 10usize)
+    if second_error != ok { ret 109i32 }
+    if !holds(&t, "d", 2i64, 0i64, 0i64, 1usize) { ret 110i32 }
+
+    // Seven columns on one field would write conds[7] past the 6-entry array:
+    // BadRule before any row is built.
+    var cols: [7]rules.Column = zero
+    var c = 0usize
+    while c < 7usize {
+        cols[c] = rules.Column { field: 0u32, op: rules.OP_GE }
+        c += 1usize
+    }
+    var cells: [7]i64 = zero
+    c = 0usize
+    let any = rules.any_cell()
+    while c < 7usize {
+        cells[c] = any
+        c += 1usize
+    }
+    var outs: [1]i64 = zero
+    let wide = rules.Table { name: "wide", in_kind: "a", out_kind: "z", in_arity: 1usize, out_arity: 1usize, cols: cols[..], rows: 1usize, cells: cells[..], outs: outs[..], first_hit: false, salience: 0i32 }
+    if rules.add_table(&e, wide) != rules.BadRule { ret 111i32 }
+
+    // Full must leave the engine unchanged: no half-loaded alpha is registered.
+    let tiny = rules.Limits { facts: 4usize, tokens: 32usize, rules: 2usize, alphas: 4usize, entries: 1usize, names: 8usize, log: 8usize }
+    let (te0, te_error) = rules.init(a, tiny)
+    if te_error != ok { ret 112i32 }
+    var te = te0
+    if rules.load(&te, "rule r1 when p(?x) then assert k(?x) end") != ok { ret 112i32 }
+    if !put(&te, "p", 9i64, 0i64, 0i64, 1usize) { ret 112i32 }
+    let alphas_before = te.nalphas
+    let rules_before = te.nrules
+    if rules.load(&te, "rule q when p(?x>5) then assert k(?x) end") != rules.Full { ret 113i32 }
+    if te.nalphas != alphas_before || te.nrules != rules_before { ret 114i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena) -> err {
     var code = s1(a)
     if code == 0i32 { code = s2(a) }
@@ -313,6 +384,7 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = s6(a) }
     if code == 0i32 { code = s7(a) }
     if code == 0i32 { code = s8(a) }
+    if code == 0i32 { code = s10(a) }
     if code != 0i32 { os.exit(code) }
     ret ok
 }
