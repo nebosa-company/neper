@@ -114,6 +114,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gpu.launch[fill](q, gpu.grid2(16usize, 8usize), 16u32, 8u32, frame.image.data) != ok { os.exit(15i32) }
     let (shown, present_error) = gpu.present(q, t, frame)
     if present_error != ok || shown.serial != 1u64 { os.exit(16i32) }
+    // #642: only a token naming a real submission is complete; 0 or a future
+    // serial names no work and is rejected by done and wait_for.
+    let zero_token = gpu.Token { owner: shown.owner, queue: shown.queue, serial: 0u64 }
+    if gpu.wait_for(q, zero_token) != gpu.InvalidHandle { os.exit(72i32) }
+    let (zero_done, zero_done_error) = gpu.done(zero_token)
+    if zero_done_error != gpu.InvalidHandle || zero_done { os.exit(72i32) }
+    let future_token = gpu.Token { owner: shown.owner, queue: shown.queue, serial: shown.serial + 1u64 }
+    if gpu.wait_for(q, future_token) != gpu.InvalidHandle { os.exit(73i32) }
+    let (real_done, real_done_error) = gpu.done(shown)
+    if real_done_error != ok || !real_done { os.exit(74i32) }
     // The presented image is the one filled; a stale frame cannot be presented again.
     let (snapshot, snapshot_error) = gpu.presented(t)
     if snapshot_error != ok { os.exit(17i32) }
@@ -155,6 +165,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if wrong_queue_retry_error != ok || wrong_queue_retry.serial != small.serial { os.exit(70i32) }
     let (_, wrong_queue_retry_present_error) = gpu.present(q, t, wrong_queue_retry)
     if wrong_queue_retry_present_error != ok { os.exit(71i32) }
+    // #641: a frame acquired for the target's queue cannot be presented through
+    // another queue of the same device (it would sync the wrong queue).
+    let (second_queue, second_queue_error) = gpu.queue(device)
+    if second_queue_error != ok { os.exit(75i32) }
+    let (own_queue_frame, own_queue_frame_error) = gpu.acquire(t)
+    if own_queue_frame_error != ok { os.exit(76i32) }
+    let (_, other_queue_owner_error) = gpu.present(second_queue, t, own_queue_frame)
+    if other_queue_owner_error != gpu.WrongDevice { os.exit(76i32) }
+    // The rejected frame is retired, so the target hands out a fresh acquisition.
+    let (same_queue_frame, same_queue_error) = gpu.acquire(t)
+    if same_queue_error != ok { os.exit(77i32) }
+    let (_, own_queue_present_error) = gpu.present(q, t, same_queue_frame)
+    if own_queue_present_error != ok { os.exit(77i32) }
     if gpu.close(other) != ok { os.exit(30i32) }
     // Closed: stale afterwards.
     if gpu.close_target(t) != ok || gpu.close_target(t) != gpu.InvalidHandle { os.exit(31i32) }

@@ -127,6 +127,13 @@ fn check_cuda(a: *mem.Arena) -> i32 {
         if absent_error != gpu.Unsupported { ret 2i32 }
         ret 0i32
     }
+    if found_error == gpu.Lost {
+        // The driver loads but cuInit answers neither success nor NO_DEVICE: a real driver
+        // fault, distinct from "no loader" (Unsupported) and from "no device" (NoDevice).
+        let (_, absent_error) = gpu.open_id(a, key_of(1u8, .Cuda))
+        if absent_error != gpu.Lost { ret 19i32 }
+        ret 0i32
+    }
     if found_error != ok { ret 1i32 }
     let (_, none_error) = gpu.open_id(a, key_of(7u8, .Cuda))
     if found.len > 0usize && none_error != gpu.NoDevice && none_error != gpu.Unsupported { ret 3i32 }

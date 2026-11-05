@@ -153,14 +153,16 @@ fn matmul_u64(m: u32, n: u32, k: u32, x: []const u64, y: []const u64, dst: []u64
     dst[usize(r) * usize(n) + usize(c)] = total
 }
 
-fn count_of(shape: []const usize) -> usize {
+// The element count of a shape; a product past `usize` is `Shape`, not a silent wrap.
+fn count_of(shape: []const usize) -> (usize, err) {
     var total = 1usize
     var d = 0usize
     while d < shape.len {
+        if shape[d] != 0usize && total > 18446744073709551615usize / shape[d] { ret (0usize, Shape) }
         total = total * shape[d]
         d += 1usize
     }
-    ret total
+    ret (total, ok)
 }
 
 fn same_shape(a: []const usize, b: []const usize) -> bool {
@@ -175,7 +177,8 @@ fn same_shape(a: []const usize, b: []const usize) -> bool {
 
 fn upload[T: type](a: *mem.Arena, queue: *gpu.Queue, src: linalg_tensor.ConstTensor[T]) -> (Tensor[T], err) {
     if src.shape.len == 0usize || src.shape.len > 8usize || src.stride.len != src.shape.len { ret (zero, Shape) }
-    let total = count_of(src.shape)
+    let (total, count_error) = count_of(src.shape)
+    if count_error != ok { ret (zero, count_error) }
     let (shape, shape_error) = mem.alloc[usize](a, src.shape.len)
     if shape_error != ok { ret (zero, shape_error) }
     let (stride, stride_error) = mem.alloc[usize](a, src.shape.len)
@@ -208,14 +211,16 @@ fn upload[T: type](a: *mem.Arena, queue: *gpu.Queue, src: linalg_tensor.ConstTen
 
 fn download[T: type](queue: *gpu.Queue, src: Tensor[T], dst: linalg_tensor.Tensor[T]) -> err {
     if !same_shape(src.shape, dst.shape) || !linalg_tensor.is_row_major[T](dst) { ret Shape }
-    let total = count_of(src.shape)
+    let (total, count_error) = count_of(src.shape)
+    if count_error != ok { ret count_error }
     if dst.data.len < total { ret Shape }
     ret gpu.download[T](queue, src.data, dst.data[..total])
 }
 
 fn add[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]) -> err {
     if !same_shape(dst.shape, x.shape) || !same_shape(dst.shape, y.shape) { ret Shape }
-    let total = count_of(dst.shape)
+    let (total, count_error) = count_of(dst.shape)
+    if count_error != ok { ret count_error }
     if total > 4294967295usize { ret gpu.TooLarge }
     let n = u32(total)
     let grid = gpu.grid1(total)

@@ -39,6 +39,16 @@ fn check(a: *mem.Arena, backend: gpu.Backend, index: u32) -> err {
     var result: [5]u32 = zero
     try gpu.download[u32](q, buf, result[0..])
     if result[0usize] != 2u32 || result[1usize] != 21u32 || result[2usize] != 31u32 || result[3usize] != 41u32 || result[4usize] != 6u32 { os.exit(4i32) }
+    // #645: a byte copy takes arbitrary slices. Writing from payload[1..] and downloading
+    // into read[1..] must not dereference either unaligned address as a u64.
+    var payload: [9]u8 = [9]u8 { 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8 }
+    let (bytes, bytes_error) = gpu.upload[u8](q, payload[0..])
+    if bytes_error != ok { ret bytes_error }
+    if gpu.write[u8](q, bytes, 0usize, payload[1..]) != ok { os.exit(5i32) }
+    var read: [10]u8 = zero
+    if gpu.download[u8](q, bytes, read[1..]) != ok { os.exit(6i32) }
+    if read[1usize] != 2u8 || read[9usize] != 9u8 { os.exit(7i32) }
+    if gpu.release(q, bytes) != ok { os.exit(8i32) }
     ret ok
 }
 

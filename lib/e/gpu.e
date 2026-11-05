@@ -79,7 +79,7 @@ type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
 type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
 type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
-type Frame = struct { image: Image, serial: u64, acquire_id: u64 }
+type Frame = struct { image: Image, serial: u64, acquire_id: u64, target: u64 }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
 error AmbiguousDevice
@@ -107,7 +107,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, lost: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize, lenient: bool }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, lost: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize, lenient: bool, target_ids: u64 }
 
 // A Metal device's buffers are carved from one shared heap (D5838): a kernel may not use a buffer's own address there, so an
 // address is a byte offset into the heap. Its first 64 bytes are the launch's fault block.
@@ -173,7 +173,7 @@ type QueueState = struct { device: *DeviceState, index: u32, staging_blocks: u32
 // newest one into the swapchain image. `stale[i]` is the box of the frame that swapchain image `i` lacks (it holds a frame from
 // up to `swap.count` presents ago, so a changed-box present copies the union of the boxes since it was last written).
 type Damage = struct { x0: u32, y0: u32, x1: u32, y1: u32 }
-type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, acquired: bool, closed: bool, native: bool, surface: usize, swap: vulkan.Swapchain, swap_mode: u32, swap_stale: bool, swap_empty: bool, stale: [8]Damage, damage: Damage, has_damage: bool, native_presents: u64, native_skips: u64 }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, identity: u64, acquired: bool, closed: bool, native: bool, surface: usize, swap: vulkan.Swapchain, swap_mode: u32, swap_stale: bool, swap_empty: bool, stale: [8]Damage, damage: Damage, has_damage: bool, native_presents: u64, native_skips: u64 }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -1141,7 +1141,10 @@ fn open_preferred(a: *mem.Arena, backend: Backend) -> (*Device, err) {
 fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Device, err) {
     if !physical.floor { ret (zero, Unsupported) }
     let (context, context_error) = vulkan.open(a, physical)
-    if context_error == vulkan.Unsupported { ret (zero, Unsupported) }
+    if context_error == vulkan.Unsupported {
+        vulkan.close(context)
+        ret (zero, Unsupported)
+    }
     if context_error != ok { ret (zero, Lost) }
     let (device, device_error) = open_state(a, .Vulkan)
     if device_error != ok {
@@ -1183,6 +1186,7 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
         stage_at += 1usize
     }
     state.arena = a
+    state.target_ids = 0u64
     state.lock = locks.mutex()
     state.lock_owner = atomic.init(0usize)
     state.lock_depth = 0usize
@@ -1652,7 +1656,9 @@ fn token_queue(token_value: Token) -> (*QueueState, err) {
         ret (zero, InvalidHandle)
     }
     let state = found.queue_states[usize(token_value.queue)]
-    if mem.address_of(state) == 0usize || token_value.serial > state.serial {
+    // A token must name a submission that happened: serials start at 1, so 0 or
+    // anything past the queue's latest serial names no work.
+    if mem.address_of(state) == 0usize || token_value.serial == 0u64 || token_value.serial > state.serial {
         unlock_state(found)
         ret (zero, InvalidHandle)
     }
@@ -1724,6 +1730,13 @@ fn copy_bytes(dst: []u8, src: []const u8) {
     var count = src.len
     if dst.len < count { count = dst.len }
     var at = 0usize
+    // A u64 dereference needs both addresses aligned. The byte loop takes the prefix
+    // that makes them so (and a tail a multiple of eight leaves); callers pass arbitrary
+    // slices, such as write[u8] with a source starting at byte 1 (#645).
+    while at < count && (mem.address_of(&dst[at]) % 8usize != 0usize || mem.address_of(&src[at]) % 8usize != 0usize) {
+        dst[at] = src[at]
+        at += 1usize
+    }
     while at + 8usize <= count {
         let to = mem.cast[*u64](&dst[at])
         let from = mem.cast[*const u64](&src[at])
@@ -1927,7 +1940,9 @@ fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: For
         mem.reset(state.device.arena, target_mark)
         ret (zero, states_error)
     }
-    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, acquired: false, closed: false, native: false, surface: 0usize, swap: zero, swap_mode: 4294967295u32, swap_stale: false, swap_empty: false, stale: zero, damage: zero, has_damage: false, native_presents: 0u64, native_skips: 0u64 }
+    state.device.target_ids += 1u64
+    let identity = state.device.target_ids
+    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquire_id: 0u64, identity: identity, acquired: false, closed: false, native: false, surface: 0usize, swap: zero, swap_mode: 4294967295u32, swap_stale: false, swap_empty: false, stale: zero, damage: zero, has_damage: false, native_presents: 0u64, native_skips: 0u64 }
     let images_error = target_images(&states[0usize], width, height)
     if images_error != ok {
         mem.reset(state.device.arena, target_mark)
@@ -2203,12 +2218,12 @@ fn acquire(t: *Target) -> (Frame, err) {
     if state.acquired { ret (zero, InvalidHandle) }
     state.acquire_id += 1u64
     state.acquired = true
-    ret (Frame { image: state.images[1usize - state.front], serial: state.serial, acquire_id: state.acquire_id }, ok)
+    ret (Frame { image: state.images[1usize - state.front], serial: state.serial, acquire_id: state.acquire_id, target: state.identity }, ok)
 }
 
 fn frame_matches(state: *TargetState, frame: Frame) -> bool {
     let expected = state.images[1usize - state.front]
-    ret state.acquired && frame.serial == state.serial && frame.acquire_id == state.acquire_id && frame.image.data.owner == expected.data.owner && frame.image.data.slot == expected.data.slot && frame.image.data.generation == expected.data.generation
+    ret state.acquired && frame.target == state.identity && frame.serial == state.serial && frame.acquire_id == state.acquire_id && frame.image.data.owner == expected.data.owner && frame.image.data.slot == expected.data.slot && frame.image.data.generation == expected.data.generation
 }
 
 // Retires a valid frame without changing the last presented image or serial.
@@ -2245,6 +2260,12 @@ fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     }
     defer unlock_state(presenter.device)
     if presenter.device.owner != state.queue.device.owner {
+        state.acquired = false
+        ret (zero, WrongDevice)
+    }
+    // The frame belongs to the target's own queue; presenting through another
+    // queue would sync that queue instead of the one the frame was acquired from.
+    if mem.address_of(presenter) != mem.address_of(state.queue) {
         state.acquired = false
         ret (zero, WrongDevice)
     }
@@ -3412,6 +3433,11 @@ fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], v
     if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_LAUNCH_INVOCATIONS { ret (0usize, TooLarge) }
     let total = n * d
     if query.len < total || key.len < total || value.len < total || out.len < total { ret (0usize, TooLarge) }
+    // Invocations write their own `out` row as they finish, so an `out` that is one of
+    // the input buffers (same slot and generation) would overwrite rows later ones still
+    // read. The buffers are the same allocation when both fields agree (owner is equal
+    // above); refuse it rather than return a silently wrong result (#643).
+    if (out.slot == query.slot && out.generation == query.generation) || (out.slot == key.slot && out.generation == key.generation) || (out.slot == value.slot && out.generation == value.generation) { ret (0usize, InvalidHandle) }
     let tiles = (n + tile - 1usize) / tile
     if n == 0usize { ret (0usize, ok) }
     let (query_view, query_error) = device_slice[f32](state, query)

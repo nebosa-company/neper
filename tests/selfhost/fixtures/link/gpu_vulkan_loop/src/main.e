@@ -1,6 +1,7 @@
 // SPIR-V structured loops (D1612): CPU and Vulkan run the same `while`, `continue`,
 // `break` and `for` kernel, then every result is compared bit for bit.
 use e.gpu
+use e.gpu.vulkan as vulkan
 use e.io
 use e.mem
 use e.os
@@ -52,6 +53,10 @@ fn run(a: *mem.Arena, backend: gpu.Backend, index: u32, out: []u32) -> err {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // The suite's injected cache-rebuild failure: this fixture opts in on its behalf;
+    // the runtime only offers the seam.
+    let (failure, failure_error) = os.env(a, "NEPER_GPU_CACHE_FAIL_REBUILD")
+    if failure_error == ok && failure.len == 1usize && failure[0usize] == 49u8 { vulkan.fail_cache_rebuild() }
     var cpu: [64]u32 = zero
     try run(a, .Cpu, 0u32, cpu[0..])
     var checksum = 0u32

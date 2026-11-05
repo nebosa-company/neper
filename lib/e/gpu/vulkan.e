@@ -154,6 +154,11 @@ var instance: usize = zero
 var surface_ready: bool = zero
 // Device enumeration can be called by several application threads.
 var loader_locks: [1]sync.Mutex = zero
+// A test-only fault injection, enabled by the cache fixture through `fail_cache_rebuild`:
+// the shipped runtime never reads the environment for this.
+var cache_fail_rebuild: bool = zero
+
+fn fail_cache_rebuild() { cache_fail_rebuild = true }
 
 fn library_name() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "vulkan-1.dll" }
@@ -287,7 +292,7 @@ fn load(a: *mem.Arena) -> err {
     }
     if created != 0i32 {
         let closed = os.dlclose(library)
-        ret NoLoader
+        ret Failed
     }
     loader = library
     instance = made
@@ -610,8 +615,7 @@ fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str, cache
     }
     // The cache fixture's one injected driver failure: the valid entry must stay on
     // disk because `e.gpu` publishes only the refreshed bytes returned after success.
-    let (failure, failure_error) = os.env(a, "NEPER_GPU_CACHE_FAIL_REBUILD")
-    if cached.len != 0usize && failure_error == ok && failure.len == 1usize && failure[0usize] == 49u8 {
+    if cached.len != 0usize && cache_fail_rebuild {
         if cache != 0usize { api.destroy_pipeline_cache(context.device, cache, 0usize) }
         var failed: Pipeline = zero
         ret (failed, none, Failed)
@@ -702,14 +706,20 @@ fn pipeline_with_cache(a: *mem.Arena, context: Context, code: []const u8, entry:
     made.layout = layout
     // The entry point's name as C reads it: its bytes and a NUL.
     let (name, name_error) = record(a, entry.len + 1usize)
-    if name_error != ok { ret (made, name_error) }
+    if name_error != ok {
+        destroy(context, made)
+        ret (made, name_error)
+    }
     var at = 0usize
     while at < entry.len {
         name[at] = entry[at]
         at += 1usize
     }
     let (pipeline_create, pipeline_create_error) = record(a, 96usize)
-    if pipeline_create_error != ok { ret (made, pipeline_create_error) }
+    if pipeline_create_error != ok {
+        destroy(context, made)
+        ret (made, pipeline_create_error)
+    }
     put32(pipeline_create, 0usize, 29usize)
     // The stage, inline at 24: compute, the module, the entry's name.
     put32(pipeline_create, 24usize, 18usize)

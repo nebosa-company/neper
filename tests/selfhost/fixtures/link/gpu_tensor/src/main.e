@@ -129,6 +129,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(2i32) }
 
+    // 387: a shape whose element count overflows usize is refused before allocation.
+    let huge_shape: [2]usize = [2]usize{ 9223372036854775808usize, 2usize }
+    let huge_stride: [2]usize = [2]usize{ 2usize, 1usize }
+    var one_value: [1]u32 = [1]u32{ 1u32 }
+    let huge_view = linalg_tensor.ConstTensor[u32] { data: one_value[0..], shape: huge_shape[0..], stride: huge_stride[0..] }
+    let (_, huge_error) = tensor.upload[u32](a, q, huge_view)
+    if huge_error != tensor.Shape { os.exit(61i32) }
+
     // x: a 2x3 view over a 3x2 row-major buffer transposed by its strides.
     var x_storage: [6]f32 = [6]f32{ 1.0, 4.0, 2.0, 5.0, 3.0, 6.0 }
     let shape_2x3: [2]usize = [2]usize{ 2usize, 3usize }

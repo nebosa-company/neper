@@ -76,7 +76,9 @@ fn prepare(a: *mem.Arena) -> err {
         loaded = true
     }
     if !initialised {
-        if api.init(0u32) != CUDA_SUCCESS { ret NoLoader }
+        let status = api.init(0u32)
+        if status == CUDA_ERROR_NO_DEVICE { ret NoDevice }
+        if status != CUDA_SUCCESS { ret Failed }
         initialised = true
     }
     ret ok

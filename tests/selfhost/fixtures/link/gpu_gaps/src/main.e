@@ -187,6 +187,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     past_attention_grid.len = 16776961usize
     let (_, attention_grid_error) = gpu.attention_flash(device, q, past_attention_grid, past_attention_grid, past_attention_grid, past_attention_grid, 16776961usize, 1usize, 1usize, scale)
     if attention_grid_error != gpu.TooLarge { os.exit(43i32) }
+    // #643: `out` aliasing an input would overwrite rows later invocations still read,
+    // so the call is refused before any row is written.
+    let (_, alias_key) = gpu.attention_flash(device, q, dq, dkeys, dv, dkeys, 64usize, 8usize, 16usize, scale)
+    if alias_key != gpu.InvalidHandle { os.exit(44i32) }
+    let (_, alias_value) = gpu.attention_flash(device, q, dq, dkeys, dv, dv, 64usize, 8usize, 16usize, scale)
+    if alias_value != gpu.InvalidHandle { os.exit(45i32) }
     try io.print("gpu gaps ok\n")
     ret ok
 }
