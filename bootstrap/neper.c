@@ -113,6 +113,7 @@ typedef enum TokenKind {
     TK_ARROW,
     TK_ASSIGN,
     TK_ADD_ASSIGN,
+    TK_SUB_ASSIGN,
     TK_PLUS,
     TK_ADD_WRAP,
     TK_MINUS,
@@ -885,6 +886,7 @@ static void lex(Compiler *c) {
                 else if (a == '|' && b == '|') { kind = TK_OR; width = 2; }
                 else if (a == '.' && b == '.') { kind = TK_RANGE; width = 2; }
                 else if (a == '+' && b == '=') { kind = TK_ADD_ASSIGN; width = 2; }
+                else if (a == '-' && b == '=') { kind = TK_SUB_ASSIGN; width = 2; }
                 else if (a == '+' && b == '%') { kind = TK_ADD_WRAP; width = 2; }
                 else if (a == '-' && b == '%') { kind = TK_SUB_WRAP; width = 2; }
                 else if (a == '*' && b == '%') { kind = TK_MUL_WRAP; width = 2; }
@@ -1858,6 +1860,24 @@ static Expr *parse_expression(Compiler *c) {
 
 static Stmt *parse_block(Compiler *c);
 static Stmt *parse_statement(Compiler *c);
+
+/* Whether the `(` at the cursor starts a multiple-value return: a comma at depth 0
+   before the matching `)`. A lone parenthesized expression is not tuple sugar, so
+   `ret (a & b) != 0` keeps its binary operator. */
+static int ret_tuple_follows(Compiler *c) {
+    int depth = 0;
+    int i;
+    for (i = c->current + 1; i < c->token_count; ++i) {
+        TokenKind kind = c->tokens[i].kind;
+        if (kind == TK_LPAREN) depth++;
+        else if (kind == TK_RPAREN) {
+            if (depth == 0) return 0;
+            depth--;
+        } else if (kind == TK_COMMA && depth == 0) return 1;
+        else if (kind == TK_NEWLINE || kind == TK_EOF) return 0;
+    }
+    return 0;
+}
 static Stmt *parse_switch_statement(Compiler *c, Token token);
 
 static Stmt *parse_statement_inner(Compiler *c) {
@@ -1901,7 +1921,8 @@ static Stmt *parse_statement_inner(Compiler *c) {
     if (match(c, TK_RET)) {
         Stmt *s = new_stmt(ST_RETURN, *token);
         if (!check(c, TK_NEWLINE) && !check(c, TK_RBRACE)) {
-            if (match(c, TK_LPAREN)) {
+            if (check(c, TK_LPAREN) && ret_tuple_follows(c)) {
+                match(c, TK_LPAREN);
                 do {
                     if (s->as.ret.value_count >= MAX_ARGS) {
                         diagnostic_at(c, peek(c), "E-TOOL-9999", "return value limit exceeded");
@@ -1922,7 +1943,12 @@ static Stmt *parse_statement_inner(Compiler *c) {
         Stmt *s = new_stmt(ST_IF, *token);
         s->as.if_stmt.condition = parse_expression(c);
         s->as.if_stmt.then_body = parse_block(c);
-        if (match(c, TK_ELSE)) s->as.if_stmt.else_body = parse_block(c);
+        if (match(c, TK_ELSE)) {
+            /* `else if` is the same as `else { if ... }`: a body is a statement list,
+               so the nested statement is the whole else body. */
+            if (check(c, TK_IF)) s->as.if_stmt.else_body = parse_statement(c);
+            else s->as.if_stmt.else_body = parse_block(c);
+        }
         return s;
     }
     if (match(c, TK_WHILE)) {
@@ -2024,7 +2050,7 @@ static Stmt *parse_statement_inner(Compiler *c) {
     }
     {
         Expr *left = parse_expression(c);
-        if (check(c, TK_ASSIGN) || check(c, TK_ADD_ASSIGN)) {
+        if (check(c, TK_ASSIGN) || check(c, TK_ADD_ASSIGN) || check(c, TK_SUB_ASSIGN)) {
             TokenKind op = peek(c)->kind;
             Expr *value;
             c->current++;
@@ -4152,9 +4178,9 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     if (!s->as.assign.target->place_mutable || s->as.assign.target->is_len)
                         diagnostic_at(c, &s->token, "E-TYPE-9999", "assignment target is immutable");
                     if (!type_assignable(actual, target)) diagnostic_at(c, &s->token, "E-TYPE-0002", "assignment type mismatch");
-                    if (s->as.assign.op == TK_ADD_ASSIGN &&
+                    if ((s->as.assign.op == TK_ADD_ASSIGN || s->as.assign.op == TK_SUB_ASSIGN) &&
                         (target.kind != TY_INT || actual.kind != TY_INT))
-                        diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "compound assignment requires integer operands");
                 }
                 break;
             }
@@ -4227,9 +4253,9 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     diagnostic_at(c, &s->token, "E-TYPE-9999",
                                   "dereference assignment requires a mutable pointer");
                 }
-                if (s->as.index_assign.op == TK_ADD_ASSIGN &&
+                if ((s->as.index_assign.op == TK_ADD_ASSIGN || s->as.index_assign.op == TK_SUB_ASSIGN) &&
                     (target.kind != TY_INT || actual.kind != TY_INT))
-                    diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "compound assignment requires integer operands");
                 break;
             }
             case ST_EXPR: {
@@ -5511,6 +5537,11 @@ static void emit_address_store(Emitter *e, Type type, TokenKind op) {
         else if (size == 2) fputs("    add WORD PTR [r10], ax\n", e->out);
         else if (size == 4) fputs("    add DWORD PTR [r10], eax\n", e->out);
         else fputs("    add QWORD PTR [r10], rax\n", e->out);
+    } else if (op == TK_SUB_ASSIGN) {
+        if (size == 1) fputs("    sub BYTE PTR [r10], al\n", e->out);
+        else if (size == 2) fputs("    sub WORD PTR [r10], ax\n", e->out);
+        else if (size == 4) fputs("    sub DWORD PTR [r10], eax\n", e->out);
+        else fputs("    sub QWORD PTR [r10], rax\n", e->out);
     } else if (size == 1) fputs("    mov BYTE PTR [r10], al\n", e->out);
     else if (size == 2) fputs("    mov WORD PTR [r10], ax\n", e->out);
     else if (size == 4) fputs("    mov DWORD PTR [r10], eax\n", e->out);
