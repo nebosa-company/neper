@@ -20481,6 +20481,7 @@ fn index_of(s: str, needle: str) -> i64
 fn last_index_of_byte(s: str, byte: u8) -> i64
 fn is_digit(c: u8) -> bool
 fn round_half_away(x: f64) -> f64
+fn round_nearest(x: f64) -> f64
 fn clamp255(x: f64) -> i64
 fn clamp_f(x: f64, lo: f64, hi: f64) -> f64
 fn try_parse(a: *mem.Arena, input: str) -> (f64, bool)
@@ -21208,7 +21209,7 @@ fn public(v: Version) -> Version
 fn cmp(a: Version, b: Version) -> i32
 fn format(v: Version, out: []u8) -> (usize, err)
 fn parse_specifier(text: str) -> (Specifier, err)
-fn matches(s: Specifier, v: Version) -> bool
+fn matches(s: Specifier, v: Version, raw: str) -> bool
 fn contains(version: str, specifiers: str, prereleases: bool) -> (bool, err)
 fn parse_requirement(text: str) -> (Requirement, err)
 ```
