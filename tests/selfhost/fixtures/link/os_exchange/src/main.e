@@ -20,6 +20,15 @@ fn same(a: str, b: str) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #190.4: the e.os clipboard is owned by a hidden message-only window, so a
+    // text write followed by a read round-trips on a host that has one.
+    let clip_write = os.set_clipboard_text("neper clipboard")
+    if clip_write == ok {
+        let (clip_text, clip_error) = os.clipboard_text(a)
+        if clip_error != ok || !same(clip_text, "neper clipboard") { os.exit(90i32) }
+    } else if clip_write != os.Unsupported {
+        os.exit(91i32)
+    }
     let caps = shell.capabilities()
     if caps.clipboard_typed && !caps.clipboard_text { os.exit(1i32) }
     // #91 item 9: `*` is the wildcard class key under Classes, never a program name this

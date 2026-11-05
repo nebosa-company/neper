@@ -3970,10 +3970,46 @@ fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
 // The clipboard is one lock for the whole desktop, and another process holds it for
 // the instant of its own read or write; a refusal is retried over a bounded wait
 // before it is answered, as every clipboard client does.
+// A cached message-only window owns the clipboard on the calling thread, so
+// EmptyClipboard and SetClipboardData have a real owner rather than NULL.
+var clipboard_owner_window: usize = 0usize
+var clipboard_owner_thread: u32 = 0u32
+
+fn clipboard_owner() -> (usize, err) {
+    let thread = raw_current_thread()
+    if clipboard_owner_window != 0usize && clipboard_owner_thread == thread { ret (clipboard_owner_window, ok) }
+    if clipboard_owner_window != 0usize {
+        // Created on another thread: destroy it there is impossible, so drop it
+        // and create a new one for this thread.
+        let destroyed = raw_destroy_window(clipboard_owner_window)
+    }
+    clipboard_owner_window = 0usize
+    let register_error = window_register()
+    if register_error != ok { ret (0usize, register_error) }
+    // HWND_MESSAGE is (HWND)-3.
+    var no_title: *const u16 = zero
+    let handle = raw_create_window(0u32, &window_class_name[0usize], no_title, 0u32, 0i32, 0i32, 0i32, 0i32, 18446744073709551613usize, 0usize, raw_module_handle(0usize), 0usize)
+    if handle == 0usize { ret (0usize, from_last_error()) }
+    clipboard_owner_window = handle
+    clipboard_owner_thread = thread
+    ret (handle, ok)
+}
+
+fn clipboard_shutdown() -> err {
+    if clipboard_owner_window == 0usize { ret ok }
+    let destroyed = raw_destroy_window(clipboard_owner_window)
+    clipboard_owner_window = 0usize
+    clipboard_owner_thread = 0u32
+    if destroyed == 0i32 { ret from_last_error_cleanup() }
+    ret ok
+}
+
 fn clipboard_open() -> err {
+    let (owner, owner_error) = clipboard_owner()
+    if owner_error != ok { ret owner_error }
     var attempt = 0usize
     while true {
-        if raw_open_clipboard(0usize) != 0i32 { ret ok }
+        if raw_open_clipboard(owner) != 0i32 { ret ok }
         let failure = from_last_error()
         if attempt == 10usize { ret failure }
         raw_sleep(10u32)
@@ -4041,8 +4077,8 @@ fn set_clipboard_text(value: str) -> err {
         let freed = raw_global_free(handle)
         ret open_error
     }
-    // EmptyClipboard with a NULL owner clears ownership and makes
-    // SetClipboardData fail; replacing the text data is enough.
+    // The cached message-only window is the owner, so emptying is well-defined.
+    let emptied = raw_empty_clipboard()
     let set = raw_set_clipboard_data(CF_UNICODETEXT, handle)
     let closed = raw_close_clipboard()
     if set == 0usize {

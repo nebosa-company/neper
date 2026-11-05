@@ -1072,6 +1072,12 @@ var drag_arena: *mem.Arena = zero
 var descriptor_format: u32 = 0u32
 var contents_format: u32 = 0u32
 
+// GlobalSize may exceed the requested size; blocks this module allocates remember the
+// exact length so a paste does not pick up the allocator's slack as payload.
+var block_handles: [64]usize = zero
+var block_sizes: [64]usize = zero
+var block_next: usize = 0usize
+
 @import("user32.dll", "OpenClipboard")
 extern fn raw_open_clipboard(owner: usize) -> i32
 
@@ -1150,6 +1156,27 @@ fn put_u32(block: []u8, at: usize, value: u32) {
 
 fn get_u32(block: []const u8, at: usize) -> u32 {
     ret u32(block[at]) | (u32(block[at + 1usize]) << 8u32) | (u32(block[at + 2usize]) << 16u32) | (u32(block[at + 3usize]) << 24u32)
+}
+
+// One channel of a BI_BITFIELDS pixel: mask it, then scale its bits to 0..255 so a
+// 5-6-5 or 10-bit mask decodes like the 8-bit BGRA path.
+fn mask_channel(pixel: u32, mask: u32) -> u32 {
+    if mask == 0u32 { ret 0u32 }
+    var shift = 0u32
+    var remaining = mask
+    while (remaining & 1u32) == 0u32 {
+        remaining = remaining >> 1u32
+        shift += 1u32
+    }
+    var width = 0u32
+    var probe = remaining
+    while probe != 0u32 {
+        width += 1u32
+        probe = probe >> 1u32
+    }
+    let raw = u64((pixel & mask) >> shift)
+    let full = (1u64 << u64(width)) - 1u64
+    ret u32((raw * 255u64) / full)
 }
 
 // An HRESULT is a signed word whose failures have the top bit set; spelled as
@@ -1292,12 +1319,24 @@ fn global_bytes(handle: usize) -> ([]u8, bool) {
     var nothing: []u8 = zero
     let base = raw_global_lock(handle)
     if mem.address_of(base) == 0usize { ret (nothing, false) }
-    let size = raw_global_size(handle)
+    var size = raw_global_size(handle)
+    var at = 0usize
+    while at < block_handles.len {
+        if block_handles[at] == handle && block_sizes[at] < size { size = block_sizes[at] }
+        at += 1usize
+    }
     var region: mem.Arena = zero
     region.base = base
     region.cap = size
     region.off = 0usize
     ret (mem.view(&region, 0usize, size), true)
+}
+
+// Remember the exact size of a block this module allocated.
+fn remember_block(handle: usize, size: usize) {
+    block_handles[block_next] = handle
+    block_sizes[block_next] = size
+    block_next = (block_next + 1usize) % block_handles.len
 }
 
 // Exactly the bytes: a moveable block's size is what was asked, which is how a
@@ -1316,6 +1355,7 @@ fn global_from_bytes(bytes: []const u8) -> usize {
         at += 1usize
     }
     let unlocked = raw_global_unlock(handle)
+    remember_block(handle, bytes.len)
     ret handle
 }
 
@@ -1334,6 +1374,7 @@ fn global_from_units(units: []const u16) -> usize {
         at += 1usize
     }
     let unlocked = raw_global_unlock(handle)
+    remember_block(handle, units.len * 2usize)
     ret handle
 }
 
@@ -1559,6 +1600,23 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
         let unlocked = raw_global_unlock(handle)
         ret (item, Unsupported)
     }
+    // BI_BITFIELDS colors are described by masks, not by BGRA byte order: the three
+    // masks sit at offset 40 (after a BITMAPINFOHEADER or inside a V4/V5 header), and
+    // the alpha mask exists only on the 56-byte V3 and later headers.
+    var mask_r = 0u32
+    var mask_g = 0u32
+    var mask_b = 0u32
+    var mask_a = 0u32
+    if compression == 3u32 {
+        if block.len < 52usize {
+            let unlocked = raw_global_unlock(handle)
+            ret (item, Unsupported)
+        }
+        mask_r = get_u32(block, 40usize)
+        mask_g = get_u32(block, 44usize)
+        mask_b = get_u32(block, 48usize)
+        if header_size >= 56u32 && block.len >= 56usize { mask_a = get_u32(block, 52usize) }
+    }
     let (pixels, allocation_error) = mem.alloc[u32](a, width * rows)
     if allocation_error != ok {
         let unlocked = raw_global_unlock(handle)
@@ -1571,11 +1629,23 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
         var column = 0usize
         while column < width {
             let offset = pixel_start + source_row * stride + column * (bits / 8usize)
+            let raw_pixel = u32(block[offset]) | (u32(block[offset + 1usize]) << 8u32) | (u32(block[offset + 2usize]) << 16u32)
             var alpha = 255u32
+            var red = u32(block[offset + 2usize])
+            var green = u32(block[offset + 1usize])
+            var blue = u32(block[offset])
+            if compression == 3u32 {
+                red = mask_channel(raw_pixel, mask_r)
+                green = mask_channel(raw_pixel, mask_g)
+                blue = mask_channel(raw_pixel, mask_b)
+                if mask_a != 0u32 {
+                    let wide = raw_pixel | (u32(block[offset + 3usize]) << 24u32)
+                    alpha = mask_channel(wide, mask_a)
+                }
+            }
             // A 32-bit BI_RGB image has no alpha byte; its fourth byte is unused and often
             // zero, so reading it would decode the whole image transparent.
-            if bits == 32usize && compression != 0u32 { alpha = u32(block[offset + 3usize]) }
-            pixels[row * width + column] = (alpha << 24u32) | (u32(block[offset + 2usize]) << 16u32) | (u32(block[offset + 1usize]) << 8u32) | u32(block[offset])
+            pixels[row * width + column] = (alpha << 24u32) | (red << 16u32) | (green << 8u32) | blue
             column += 1usize
         }
         row += 1usize
