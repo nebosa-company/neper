@@ -5381,6 +5381,36 @@ $auditJsUppercaseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $auditJsUppercaseWritten -ne 'executable written') { throw 'audit_js_uppercase emission failed' }
 & $auditJsUppercasePath
 if ($LASTEXITCODE -ne 0) { throw "audit_js_uppercase answered wrongly: exit $LASTEXITCODE" }
+# e.js WebAssembly and BigInt (L168): detached buffer sources, custom-section payloads, BigInt->Number overflow.
+$auditJsWasmPath = Join-Path $testBuild 'audit-js-wasm-selfhost.exe'
+$auditJsWasmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_wasm\src\main.e') $repo 'x64' 'windows' $auditJsWasmPath
+if ($LASTEXITCODE -ne 0 -or $auditJsWasmWritten -ne 'executable written') { throw 'audit_js_wasm emission failed' }
+& $auditJsWasmPath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_wasm answered wrongly: exit $LASTEXITCODE" }
+# e.js numbers (L168): asinh/acosh overflow, 100-digit toFixed, negative-to-zero sign, toLocaleString.
+$auditJsNumberPath = Join-Path $testBuild 'audit-js-number-selfhost.exe'
+$auditJsNumberWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_number\src\main.e') $repo 'x64' 'windows' $auditJsNumberPath
+if ($LASTEXITCODE -ne 0 -or $auditJsNumberWritten -ne 'executable written') { throw 'audit_js_number emission failed' }
+$auditJsNumberOutput = & $auditJsNumberPath
+if ($LASTEXITCODE -ne 0 -or $auditJsNumberOutput -ne 'audit js number ok') { throw "audit_js_number answered wrongly: exit $LASTEXITCODE" }
+# e.js misc (L168): AggregateError without new, lone-surrogate JSON escapes, groupBy iterator order.
+$auditJsMiscPath = Join-Path $testBuild 'audit-js-misc-selfhost.exe'
+$auditJsMiscWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_misc\src\main.e') $repo 'x64' 'windows' $auditJsMiscPath
+if ($LASTEXITCODE -ne 0 -or $auditJsMiscWritten -ne 'executable written') { throw 'audit_js_misc emission failed' }
+& $auditJsMiscPath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_misc answered wrongly: exit $LASTEXITCODE" }
+# e.js control (L168): allSettled guard, collection rollback, Atomics lock.
+$auditJsControlPath = Join-Path $testBuild 'audit-js-control-selfhost.exe'
+$auditJsControlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_control\src\main.e') $repo 'x64' 'windows' $auditJsControlPath
+if ($LASTEXITCODE -ne 0 -or $auditJsControlWritten -ne 'executable written') { throw 'audit_js_control emission failed' }
+& $auditJsControlPath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_control answered wrongly: exit $LASTEXITCODE" }
+# e.js arrays and dates (L168): cyclic join, construction errors, callback slices, ISO offset bounds.
+$auditJsArrayPath = Join-Path $testBuild 'audit-js-array-selfhost.exe'
+$auditJsArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_array\src\main.e') $repo 'x64' 'windows' $auditJsArrayPath
+if ($LASTEXITCODE -ne 0 -or $auditJsArrayWritten -ne 'executable written') { throw 'audit_js_array emission failed' }
+& $auditJsArrayPath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_array answered wrongly: exit $LASTEXITCODE" }
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 $algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
 $algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath

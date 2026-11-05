@@ -4873,6 +4873,32 @@ audit_js_uppercase_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$audit_js_uppercase_written" = 'executable written' ]
 chmod +x "$test_build/audit-js-uppercase-selfhost"
 "$test_build/audit-js-uppercase-selfhost"
+# e.js WebAssembly and BigInt (L168): detached buffer sources, custom-section payloads, BigInt->Number overflow.
+audit_js_wasm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_wasm/src/main.e" "$repo" x64 linux "$test_build/audit-js-wasm-selfhost")
+[ "$audit_js_wasm_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-wasm-selfhost"
+"$test_build/audit-js-wasm-selfhost"
+# e.js numbers (L168): asinh/acosh overflow, 100-digit toFixed, negative-to-zero sign, toLocaleString.
+audit_js_number_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_number/src/main.e" "$repo" x64 linux "$test_build/audit-js-number-selfhost")
+[ "$audit_js_number_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-number-selfhost"
+audit_js_number_output=$("$test_build/audit-js-number-selfhost")
+[ "$audit_js_number_output" = 'audit js number ok' ]
+# e.js misc (L168): AggregateError without new, lone-surrogate JSON escapes, groupBy iterator order.
+audit_js_misc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_misc/src/main.e" "$repo" x64 linux "$test_build/audit-js-misc-selfhost")
+[ "$audit_js_misc_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-misc-selfhost"
+"$test_build/audit-js-misc-selfhost"
+# e.js control (L168): allSettled guard, collection rollback, Atomics lock.
+audit_js_control_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_control/src/main.e" "$repo" x64 linux "$test_build/audit-js-control-selfhost")
+[ "$audit_js_control_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-control-selfhost"
+"$test_build/audit-js-control-selfhost"
+# e.js arrays and dates (L168): cyclic join, construction errors, callback slices, ISO offset bounds.
+audit_js_array_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_array/src/main.e" "$repo" x64 linux "$test_build/audit-js-array-selfhost")
+[ "$audit_js_array_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-array-selfhost"
+"$test_build/audit-js-array-selfhost"
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
 [ "$algo_page_batch_written" = 'executable written' ]
