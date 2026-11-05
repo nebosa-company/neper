@@ -100,6 +100,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if div_zero != dec.Invalid { os.exit(22) }
     let (zero_value, _) = dec.parse("-0.000")
     if !text_equal(shown(a, zero_value), "0.000") || dec.compare(zero_value, dec_from("0")) != 0i32 { os.exit(23) }
+
+    // #137: a divisor coefficient above 32 bits is divided in full, not in 32-bit digits.
+    let (wide_dividend, wide_dividend_error) = dec.parse("472236648286964521369.5")
+    let (wide_divisor, wide_divisor_error) = dec.parse("1099511627776")
+    let (wide_quotient, wide_quotient_error) = dec.div(wide_dividend, wide_divisor, 0u8, .ToEven)
+    if wide_dividend_error != ok || wide_divisor_error != ok || wide_quotient_error != ok || !text_equal(shown(a, wide_quotient), "429496730") { os.exit(30) }
+    let (wide_part, wide_remainder) = dec.magnitude_divmod_small(dec.Magnitude { low: 18446744073709551615u64, high: 255u64 }, 1099511627776u64)
+    if wide_part.low != 4294967295u64 || wide_part.high != 0u64 || wide_remainder != 1099511627775u64 { os.exit(31) }
+    // #137: the sticky digit below the guard is not folded into the guard digit at scale 37.
+    let (guard_four, guard_four_error) = dec.div(dec_from("1"), dec_from("7"), 37u8, .ToEven)
+    let (guard_five, guard_five_error) = dec.div(dec_from("1"), dec_from("19"), 37u8, .ToEven)
+    if guard_four_error != ok || !text_equal(shown(a, guard_four), "0.1428571428571428571428571428571428571") { os.exit(32) }
+    if guard_five_error != ok || !text_equal(shown(a, guard_five), "0.0526315789473684210526315789473684211") { os.exit(33) }
+    // #137: an alignment overflow is ordered by the operand whose scale could not rise.
+    let (high, high_error) = dec.parse("1e38")
+    var high_small = high
+    high_small.scale = 38u8
+    let (low, low_error) = dec.parse("-1e38")
+    var low_small = low
+    low_small.scale = 38u8
+    if high_error != ok || low_error != ok { os.exit(35) }
+    if dec.compare(high, high_small) != 1i32 { os.exit(36) }
+    if dec.compare(low, low_small) != -1i32 { os.exit(37) }
+
     os.exit(0)
     ret ok
 }

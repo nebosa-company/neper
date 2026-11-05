@@ -137,24 +137,53 @@ fn magnitude_mul(a: Magnitude, b: Magnitude) -> (Magnitude, bool) {
 // `a / small` and the remainder.
 fn magnitude_divmod_small(a: Magnitude, small: u64) -> (Magnitude, u64) {
     var out: Magnitude = zero
-    // Long division in four 32-bit digits.
-    var remainder = 0u64
-    var digits: [4]u64 = zero
-    digits[0] = a.high >> 32u32
-    digits[1] = a.high & 4294967295u64
-    digits[2] = a.low >> 32u32
-    digits[3] = a.low & 4294967295u64
-    var quotient: [4]u64 = zero
-    var at = 0usize
-    while at < 4usize {
-        let current = (remainder << 32u32) | digits[at]
-        quotient[at] = current / small
-        remainder = current % small
-        at += 1usize
+    if small < 4294967296u64 {
+        // Long division in four 32-bit digits; the 32-bit shift is exact only here.
+        var remainder = 0u64
+        var digits: [4]u64 = zero
+        digits[0] = a.high >> 32u32
+        digits[1] = a.high & 4294967295u64
+        digits[2] = a.low >> 32u32
+        digits[3] = a.low & 4294967295u64
+        var quotient: [4]u64 = zero
+        var at = 0usize
+        while at < 4usize {
+            let current = (remainder << 32u32) | digits[at]
+            quotient[at] = current / small
+            remainder = current % small
+            at += 1usize
+        }
+        out.high = (quotient[0] << 32u32) | quotient[1]
+        out.low = (quotient[2] << 32u32) | quotient[3]
+        ret (out, remainder)
     }
-    out.high = (quotient[0] << 32u32) | quotient[1]
-    out.low = (quotient[2] << 32u32) | quotient[3]
-    ret (out, remainder)
+    // A divisor that does not fit a 32-bit digit: 128-bit restoring division one bit
+    // at a time, with the remainder in two limbs so a shift cannot lose a bit.
+    var remainder: Magnitude = zero
+    var bit = 128usize
+    while bit > 0usize {
+        bit -= 1usize
+        remainder.high = (remainder.high << 1u32) | (remainder.low >> 63u32)
+        remainder.low = remainder.low << 1u32
+        var source = a.low
+        var index = bit
+        if bit >= 64usize {
+            source = a.high
+            index = bit - 64usize
+        }
+        if ((source >> u32(index)) & 1u64) != 0u64 { remainder.low = remainder.low | 1u64 }
+        if remainder.high != 0u64 || remainder.low >= small {
+            let before = remainder.low
+            remainder.low = remainder.low -% small
+            if remainder.low > before { remainder.high -= 1u64 }
+            if bit >= 64usize {
+                out.high = out.high | (1u64 << u32(bit - 64usize))
+            } else {
+                out.low = out.low | (1u64 << u32(bit))
+            }
+        }
+    }
+    ret (out, remainder.low)
 }
 
 fn make(coefficient: Coefficient, scale: u8) -> (Decimal, err) {
@@ -209,7 +238,7 @@ fn aligned(a: Decimal, b: Decimal) -> (Magnitude, bool, Magnitude, bool, u8, err
     if b.scale > scale { scale = b.scale }
     let (ra, fits_a) = raise_scale(ma, a.scale, scale)
     let (rb, fits_b) = raise_scale(mb, b.scale, scale)
-    if !fits_a || !fits_b { ret (zero, false, zero, false, 0u8, Overflow) }
+    if !fits_a || !fits_b { ret (zero, na, zero, nb, 0u8, Overflow) }
     ret (ra, na, rb, nb, scale, ok)
 }
 
@@ -404,35 +433,37 @@ fn div(a: Decimal, b: Decimal, scale: u8, rounding: Rounding) -> (Decimal, err) 
         }
     }
     let (quotient, remainder) = magnitude_divmod(dividend, mb)
-    // Fold the division remainder into a sticky digit below the quotient.
+    // Everything the quotient discards below the guard digit is one sticky bit: the
+    // division remainder and any places dropped to stay at 38. It is kept beside the
+    // guard digit rather than folded into it, which would fake a tie; only the rounding
+    // below reads it.
     var raw = quotient
     var raw_scale = dividend_scale - usize(b.scale)
-    if !is_zero(remainder) {
-        let (raised, fits) = magnitude_mul_small(raw, 10u64)
-        if !fits { ret (zero, Overflow) }
-        let (with_sticky, _) = magnitude_add(raised, Magnitude { low: 1u64, high: 0u64 })
-        raw = with_sticky
-        raw_scale += 1usize
+    var sticky = !is_zero(remainder)
+    while raw_scale > usize(scale) + 1usize {
+        let (dropped, digit) = magnitude_divmod_small(raw, 10u64)
+        if digit != 0u64 { sticky = true }
+        raw = dropped
+        raw_scale -= 1usize
     }
-    if raw_scale > usize(MAX_SCALE) {
-        // Only when the guard digits pushed past the limit: quantize from what we have by
-        // dropping places arithmetically first.
-        while raw_scale > usize(MAX_SCALE) {
-            let (q, r) = magnitude_divmod_small(raw, 10u64)
-            raw = q
-            if r != 0u64 { raw.low = raw.low | 1u64 }
-            raw_scale -= 1usize
-        }
-    }
+    let (below_guard, guard) = magnitude_divmod_small(raw, 10u64)
+    var twice_guard = guard * 2u64
+    if sticky && guard == 5u64 { twice_guard += 1u64 }
+    if sticky && guard == 0u64 { twice_guard = 1u64 }
+    var magnitude = below_guard
     var negative = na != nb
-    if is_zero(raw) { negative = false }
-    let (coefficient, coefficient_error) = coefficient_of(raw, negative)
+    if rounds_up(rounding, twice_guard, 20u64, (below_guard.low & 1u64) != 0u64, negative) {
+        let (up, overflowed) = magnitude_add(magnitude, Magnitude { low: 1u64, high: 0u64 })
+        if overflowed { ret (zero, Overflow) }
+        magnitude = up
+    }
+    if is_zero(magnitude) { negative = false }
+    let (coefficient, coefficient_error) = coefficient_of(magnitude, negative)
     if coefficient_error != ok { ret (zero, coefficient_error) }
-    var wide: Decimal = zero
-    wide.coefficient = coefficient
-    wide.scale = u8(raw_scale)
-    let (result, quantize_error) = quantize(wide, scale, rounding)
-    ret (result, quantize_error)
+    var result: Decimal = zero
+    result.coefficient = coefficient
+    result.scale = scale
+    ret (result, ok)
 }
 
 // Binary long division of two magnitudes, 128 bits a time.
@@ -471,12 +502,19 @@ fn magnitude_divmod(a: Magnitude, b: Magnitude) -> (Magnitude, Magnitude) {
 fn compare(a: Decimal, b: Decimal) -> i32 {
     let (ma, na, mb, nb, _, align_error) = aligned(a, b)
     if align_error != ok {
-        // Past 128 bits at the common scale: the signs and the integer parts decide.
+        // Raising the smaller-scale operand past 128 bits means its magnitude at the
+        // common scale is strictly larger than the other's (which fit).
         if na != nb {
             if na { ret -1i32 }
             ret 1i32
         }
-        ret 0i32
+        if a.scale == b.scale { ret 0i32 }
+        if a.scale < b.scale {
+            if na { ret -1i32 }
+            ret 1i32
+        }
+        if nb { ret 1i32 }
+        ret -1i32
     }
     if is_zero(ma) && is_zero(mb) { ret 0i32 }
     if na != nb {

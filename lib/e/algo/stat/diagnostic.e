@@ -43,7 +43,9 @@ fn beta_quantile(p: f64, a: f64, b: f64) -> f64 {
     ret (lo + hi) / 2.0f64
 }
 
-// The eight metrics of the table; an empty denominator anywhere is `Invalid`.
+// The eight metrics of the table; an empty denominator anywhere is `Invalid`. A zero
+// cell leaves the ratios that need it unbounded: those are `+inf`, while the
+// proportions are exact.
 fn metrics(t: Table) -> (Metrics, err) {
     if t.false_neg > 18446744073709551615u64 - t.true_pos || t.true_neg > 18446744073709551615u64 - t.false_pos { ret (zero, Invalid) }
     if t.false_pos > 18446744073709551615u64 - t.true_pos || t.true_neg > 18446744073709551615u64 - t.false_neg { ret (zero, Invalid) }
@@ -56,23 +58,28 @@ fn metrics(t: Table) -> (Metrics, err) {
     if diseased == 0u64 || healthy == 0u64 || positive == 0u64 || negative == 0u64 || n == 0u64 { ret (zero, Invalid) }
     let sensitivity = f64(t.true_pos) / f64(diseased)
     let specificity = f64(t.true_neg) / f64(healthy)
-    if sensitivity >= 1.0f64 || specificity <= 0.0f64 || sensitivity <= 0.0f64 || specificity >= 1.0f64 { ret (zero, Invalid) }
-    if t.false_pos == 0u64 || t.false_neg == 0u64 { ret (zero, Invalid) }
+    var lr_positive = 0.0f64
+    if t.false_pos == 0u64 { lr_positive = special.infinity() } else { lr_positive = sensitivity / (1.0f64 - specificity) }
+    var lr_negative = 0.0f64
+    if t.true_neg == 0u64 { lr_negative = special.infinity() } else { lr_negative = (1.0f64 - sensitivity) / specificity }
+    var odds_ratio = 0.0f64
+    if t.false_pos == 0u64 || t.false_neg == 0u64 { odds_ratio = special.infinity() } else { odds_ratio = f64(t.true_pos) * f64(t.true_neg) / (f64(t.false_pos) * f64(t.false_neg)) }
     ret (Metrics {
         sensitivity: sensitivity,
         specificity: specificity,
         accuracy: f64(t.true_pos + t.true_neg) / f64(n),
         positive_predictive: f64(t.true_pos) / f64(positive),
         negative_predictive: f64(t.true_neg) / f64(negative),
-        lr_positive: sensitivity / (1.0f64 - specificity),
-        lr_negative: (1.0f64 - sensitivity) / specificity,
-        odds_ratio: f64(t.true_pos) * f64(t.true_neg) / (f64(t.false_pos) * f64(t.false_neg))
+        lr_positive: lr_positive,
+        lr_negative: lr_negative,
+        odds_ratio: odds_ratio
     }, ok)
 }
 
-// The matching intervals at `confidence`: exact for the five proportions,
-// log-method (1.96 standard errors) for the two likelihood ratios and the
-// odds ratio.
+// The matching intervals at `confidence`: exact for the five proportions, log-method
+// (`confidence`'s normal quantile standard errors) for the two likelihood ratios and
+// the odds ratio. A ratio whose zero cell makes its standard error infinite is left at
+// the zero interval: there is no finite log-method interval to report for it.
 fn metrics_ci(t: Table, confidence: f64) -> (Intervals, err) {
     if !(confidence > 0.0f64 && confidence < 1.0f64) { ret (zero, Invalid) }
     let (m, metrics_error) = metrics(t)
@@ -82,6 +89,7 @@ fn metrics_ci(t: Table, confidence: f64) -> (Intervals, err) {
     let positive = t.true_pos + t.false_pos
     let negative = t.false_neg + t.true_neg
     let n = diseased + healthy
+    let z = special.normal_quantile((1.0f64 + confidence) / 2.0f64)
     let (sens, sens_error) = exact_interval(t.true_pos, diseased, confidence)
     if sens_error != ok { ret (zero, sens_error) }
     let (spec, spec_error) = exact_interval(t.true_neg, healthy, confidence)
@@ -92,20 +100,32 @@ fn metrics_ci(t: Table, confidence: f64) -> (Intervals, err) {
     if ppv_error != ok { ret (zero, ppv_error) }
     let (npv, npv_error) = exact_interval(t.true_neg, negative, confidence)
     if npv_error != ok { ret (zero, npv_error) }
-    let se_pos = math.sqrt[f64](1.0f64 / f64(t.true_pos) - 1.0f64 / f64(diseased) + 1.0f64 / f64(t.false_pos) - 1.0f64 / f64(healthy))
-    let se_neg = math.sqrt[f64](1.0f64 / f64(t.false_neg) - 1.0f64 / f64(diseased) + 1.0f64 / f64(t.true_neg) - 1.0f64 / f64(healthy))
-    let se_or = math.sqrt[f64](1.0f64 / f64(t.true_pos) + 1.0f64 / f64(t.false_pos) + 1.0f64 / f64(t.false_neg) + 1.0f64 / f64(t.true_neg))
-    let middle_pos = math.log[f64](m.lr_positive)
-    let middle_neg = math.log[f64](m.lr_negative)
-    let middle_or = math.log[f64](m.odds_ratio)
+    var lr_positive_interval: Interval = zero
+    if t.true_pos > 0u64 && t.false_pos > 0u64 {
+        let se_pos = math.sqrt[f64](1.0f64 / f64(t.true_pos) - 1.0f64 / f64(diseased) + 1.0f64 / f64(t.false_pos) - 1.0f64 / f64(healthy))
+        let middle_pos = math.log[f64](m.lr_positive)
+        lr_positive_interval = Interval { low: math.exp[f64](middle_pos - z * se_pos), high: math.exp[f64](middle_pos + z * se_pos) }
+    }
+    var lr_negative_interval: Interval = zero
+    if t.false_neg > 0u64 && t.true_neg > 0u64 {
+        let se_neg = math.sqrt[f64](1.0f64 / f64(t.false_neg) - 1.0f64 / f64(diseased) + 1.0f64 / f64(t.true_neg) - 1.0f64 / f64(healthy))
+        let middle_neg = math.log[f64](m.lr_negative)
+        lr_negative_interval = Interval { low: math.exp[f64](middle_neg - z * se_neg), high: math.exp[f64](middle_neg + z * se_neg) }
+    }
+    var odds_ratio_interval: Interval = zero
+    if t.true_pos > 0u64 && t.false_pos > 0u64 && t.false_neg > 0u64 && t.true_neg > 0u64 {
+        let se_or = math.sqrt[f64](1.0f64 / f64(t.true_pos) + 1.0f64 / f64(t.false_pos) + 1.0f64 / f64(t.false_neg) + 1.0f64 / f64(t.true_neg))
+        let middle_or = math.log[f64](m.odds_ratio)
+        odds_ratio_interval = Interval { low: math.exp[f64](middle_or - z * se_or), high: math.exp[f64](middle_or + z * se_or) }
+    }
     ret (Intervals {
         sensitivity: sens,
         specificity: spec,
         accuracy: acc,
         positive_predictive: ppv,
         negative_predictive: npv,
-        lr_positive: Interval { low: math.exp[f64](middle_pos - 1.96f64 * se_pos), high: math.exp[f64](middle_pos + 1.96f64 * se_pos) },
-        lr_negative: Interval { low: math.exp[f64](middle_neg - 1.96f64 * se_neg), high: math.exp[f64](middle_neg + 1.96f64 * se_neg) },
-        odds_ratio: Interval { low: math.exp[f64](middle_or - 1.96f64 * se_or), high: math.exp[f64](middle_or + 1.96f64 * se_or) }
+        lr_positive: lr_positive_interval,
+        lr_negative: lr_negative_interval,
+        odds_ratio: odds_ratio_interval
     }, ok)
 }
