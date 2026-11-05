@@ -31853,6 +31853,7 @@ fn partition(x: []const f64, d: usize, rows: []usize, count: usize, feature: usi
 fn best_split(x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, features: []const usize, feature_count: usize, bins: []usize, order: []usize) -> (usize, f64, f64)
 fn grow(t: *Tree, x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, depth: usize, max_depth: usize, min_samples: usize, features: []usize, feature_count: usize, subset: usize, r: *rand.Pcg64, bins: []usize, order: []usize) -> (u32, err)
 fn grow_tree(a: *mem.Arena, x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, max_depth: usize, min_samples: usize, subset: usize, r: *rand.Pcg64) -> (Tree, err)
+fn labels_valid(y: []const f64, n: usize, classes: usize) -> bool
 fn cart(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, max_depth: usize, min_samples: usize) -> (Tree, err)
 fn predict(t: *const Tree, sample: []const f64) -> f64
 fn random_forest(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, trees: usize, subset: usize, max_depth: usize, min_samples: usize, r: *rand.Pcg64) -> (Forest, err)
@@ -31938,6 +31939,7 @@ fn softmax(logits: []const f64, temp: f64, out: []f64) -> err
 fn rank(probabilities: []const f64, order: []usize)
 fn draw(probabilities: []const f64, order: []const usize, count: usize, r: *rand.Pcg64) -> usize
 fn top_k(logits: []const f64, temp: f64, k: usize, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
+fn finite(v: f64) -> bool
 fn top_p(logits: []const f64, temp: f64, p: f64, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
 fn contrastive(expert: []const f64, amateur: []const f64, alpha: f64, scratch: []f64) -> (usize, err)
 fn beam_search[Ctx: type](ctx: *Ctx, score: fn(*Ctx, []const usize, []f64), n: usize, width: usize, length: usize, out: []usize, tokens: []usize, scores: []f64) -> (f64, err)
@@ -31962,6 +31964,8 @@ fn perceptron_predict(sample: []const f64, weights: []f64) -> f64
 fn tape(op: []Op, left: []usize, right: []usize, value: []f64, gradient: []f64) -> Tape
 fn record(t: *Tape, op: Op, left: usize, right: usize, value: f64) -> (usize, err)
 fn input(t: *Tape, value: f64) -> (usize, err)
+fn labels_ok(y: []const f64, n: usize) -> bool
+fn node_ok(t: *Tape, id: usize) -> bool
 fn add(t: *Tape, a: usize, b: usize) -> (usize, err)
 fn sub(t: *Tape, a: usize, b: usize) -> (usize, err)
 fn mul(t: *Tape, a: usize, b: usize) -> (usize, err)
