@@ -285,6 +285,17 @@ fn rename(a: *mem.Arena, rows: []const view.Row, from: []const str, to: []const 
         }
         i += 1usize
     }
+    // Two columns may not end up with the same name: the later one would be
+    // shadowed by `cell_value` and dropped by the next `column_names`.
+    i = 0usize
+    while i < names.len {
+        var other = i + 1usize
+        while other < names.len {
+            if str.eq(renamed[i], renamed[other]) { ret (zero, Duplicates) }
+            other += 1usize
+        }
+        i += 1usize
+    }
     let (out, oe) = mem.alloc[view.Row](a, rows.len + 1usize)
     if oe != ok { ret (zero, oe) }
     let (values, ve) = mem.alloc[f.Value](a, names.len + 1usize)
@@ -591,7 +602,7 @@ fn unmatched(a: *mem.Arena, from_ids: []const usize, against_ids: []const usize,
 // matched pairs in left order then unmatched right rows for full. A right-only
 // row takes its key values into the left's key columns.
 fn join(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left: []const str, by_right: []const str, kind: u8, suffix_left: str, suffix_right: str) -> ([]view.Row, err) {
-    if by_left.len == 0usize || by_left.len != by_right.len { ret (zero, Invalid) }
+    if by_left.len == 0usize || by_left.len != by_right.len || kind > JOIN_ANTI { ret (zero, Invalid) }
     let (left_names, lne) = column_names(a, left)
     if lne != ok { ret (zero, lne) }
     let (right_names, rne) = column_names(a, right)
@@ -665,10 +676,19 @@ fn join(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left:
         capacity += distinct_left[i] * distinct_right[i]
         i += 1usize
     }
-    let (matched, me) = mem.alloc[u64](a, capacity + 1usize)
-    if me != ok { ret (zero, me) }
-    let (total, jie) = join_pairs(a, left_ids[..nl], left_ids[nl..nl + nr], matched)
-    if jie != ok { ret (zero, jie) }
+    // Semi/anti need only the unmatched rows: building the quadratic
+    // cross-product of duplicate keys would allocate (and often fail) for
+    // nothing.
+    var total = 0usize
+    var matched: []u64 = zero
+    if kind != JOIN_SEMI && kind != JOIN_ANTI {
+        let (all_matched, me) = mem.alloc[u64](a, capacity + 1usize)
+        if me != ok { ret (zero, me) }
+        matched = all_matched
+        let (pair_count, jie) = join_pairs(a, left_ids[..nl], left_ids[nl..nl + nr], matched)
+        if jie != ok { ret (zero, jie) }
+        total = pair_count
+    }
     let (lonely_left, lle) = mem.alloc[usize](a, nl + 1usize)
     if lle != ok { ret (zero, lle) }
     let (lonely_right, lre) = mem.alloc[usize](a, nr + 1usize)
@@ -883,7 +903,7 @@ fn pivot_wider(a: *mem.Arena, rows: []const view.Row, id_cols: []const str, name
     let (names, ne) = column_names(a, rows)
     if ne != ok { ret (zero, ne) }
     if !has_column(names, names_from) || !has_column(names, values_from) { ret (zero, Missing) }
-    let (ids, ide) = mem.alloc[str](a, names.len + 1usize)
+    let (ids, ide) = mem.alloc[str](a, names.len + id_cols.len + 1usize)
     if ide != ok { ret (zero, ide) }
     var id_count = 0usize
     var i = 0usize

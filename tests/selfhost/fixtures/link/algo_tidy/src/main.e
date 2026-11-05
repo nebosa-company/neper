@@ -411,6 +411,35 @@ fn vectors_14() -> str {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var failed = 0u32
+
+    // #253: renaming a column onto an existing name would shadow the old column
+    // (and the next column_names would collapse the pair).
+    let dup_rows = parse_frame(a, "a,b;#1,#2")
+    var dup_from: [1]str = zero
+    var dup_to: [1]str = zero
+    dup_from[0usize] = "a"
+    dup_to[0usize] = "b"
+    let (_, dup_error) = tidy.rename(a, dup_rows, dup_from[..], dup_to[..])
+    if dup_error != tidy.Duplicates { os.exit(90i32) }
+
+    // #253: repeated id_cols may not write past the id slice.
+    let wide_rows = parse_frame(a, "k,v,n;#1,#1,x;#2,#2,y")
+    var five_ids: [5]str = zero
+    five_ids[0usize] = "k"
+    five_ids[1usize] = "k"
+    five_ids[2usize] = "k"
+    five_ids[3usize] = "k"
+    five_ids[4usize] = "k"
+    let (_, wide_error) = tidy.pivot_wider(a, wide_rows, five_ids[..], "n", "v", f.blank())
+    if wide_error != ok { os.exit(91i32) }
+
+    // #253: an unknown join kind is Invalid, not silently an inner join.
+    let left_rows = parse_frame(a, "k,x;#1,#2")
+    let right_rows = parse_frame(a, "k,y;#1,#3")
+    var key_name: [1]str = zero
+    key_name[0usize] = "k"
+    let (_, kind_error) = tidy.join(a, left_rows, right_rows, key_name[..], key_name[..], 9u8, "_l", "_r")
+    if kind_error != tidy.Invalid { os.exit(92i32) }
     failed += run_chunk(a, vectors_0())
     failed += run_chunk(a, vectors_1())
     failed += run_chunk(a, vectors_2())

@@ -942,6 +942,43 @@ fn run(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #251: a huge finite lag is clamped before the i64 cast (used to trap).
+    let (huge_dep, huge_ok) = p.dependency_of("A", "FS", 1.0e300f64)
+    if !huge_ok || huge_dep.lag != 1000000i64 { os.exit(90i32) }
+    let (tiny_dep, tiny_ok) = p.dependency_of("A", "FS", 0.0f64 - 1.0e300f64)
+    if !tiny_ok || tiny_dep.lag != 0i64 - 1000000i64 { os.exit(91i32) }
+
+    // #251: when critical_path cannot allocate its slots, gantt_layout answers
+    // an empty layout instead of reading slots[0].
+    var one_task: [1]p.Task = zero
+    one_task[0usize] = p.Task {
+        id: "A", name: "A", duration: 1i64, has_duration: true, milestone: false,
+        progress: 0.0f64, parent: "", has_parent: false, deps: zero,
+    }
+    let cal = p.Calendar { weekdays: 127u32, holidays: zero, continuous: true }
+    var tiny_storage: [16]u8 = zero
+    var tiny = mem.arena_from(tiny_storage[..])
+    let squeezed = p.gantt_layout(&tiny, one_task[..], cal, 0i64, false, zero)
+    if squeezed.bars.len != 0usize { os.exit(92i32) }
+
+    // #251: a cycle must be refused up front, not rescheduled with the guard
+    // tripping and a partial diff returned.
+    var dep_a: [1]p.Dependency = zero
+    var dep_b: [1]p.Dependency = zero
+    dep_a[0usize] = p.Dependency { id: "B", kind: p.FS, lag: 0i64 }
+    dep_b[0usize] = p.Dependency { id: "A", kind: p.FS, lag: 0i64 }
+    var cycle: [2]p.Task = zero
+    cycle[0usize] = p.Task {
+        id: "A", name: "A", duration: 1i64, has_duration: true, milestone: false,
+        progress: 0.0f64, parent: "", has_parent: false, deps: dep_a[..],
+    }
+    cycle[1usize] = p.Task {
+        id: "B", name: "B", duration: 1i64, has_duration: true, milestone: false,
+        progress: 0.0f64, parent: "", has_parent: false, deps: dep_b[..],
+    }
+    var no_windows: [1]p.Window = zero
+    let cycle_moves = p.cascade_reschedule(a, cycle[..], no_windows[0usize..0usize], "A", 5i64)
+    if cycle_moves.len != 0usize { os.exit(93i32) }
     if run(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run(a, vectors_2()) != 0u8 { os.exit(3i32) }

@@ -122,9 +122,24 @@ fn add_working_days(cal: Calendar, from: i64, count: i64) -> i64 {
     var d = next_working_day(cal, from)
     var remaining = count
     if remaining < 0i64 { remaining = 0i64 }
+    if cal.continuous { ret from + remaining }
+    var active = 0i64
+    var wd = 0u32
+    while wd < 7u32 {
+        if (cal.weekdays >> wd) & 1u32 == 1u32 { active += 1i64 }
+        wd += 1u32
+    }
+    if active == 0i64 { ret d }
     while remaining > 0i64 {
-        d += 1i64
-        if is_working_day(cal, d) { remaining -= 1i64 }
+        // Every whole week adds exactly `active` working days when no holiday
+        // can perturb the count, so a long lag skips in weeks, not days.
+        if remaining >= active && cal.holidays.len == 0usize {
+            d += 7i64
+            remaining -= active
+        } else {
+            d += 1i64
+            if is_working_day(cal, d) { remaining -= 1i64 }
+        }
     }
     ret d
 }
@@ -185,7 +200,14 @@ fn is_finite(x: f64) -> bool { ret x == x && x - x == 0.0f64 }
 // finish-to-start; a lag that is not a finite number is zero, and a fraction is truncated.
 fn dependency_of(id: str, kind_text: str, lag: f64) -> (Dependency, bool) {
     var out = Dependency { id: id, kind: kind_of(kind_text), lag: 0i64 }
-    if is_finite(lag) { out.lag = i64(math.trunc[f64](lag)) }
+    if is_finite(lag) {
+        // A lag is a working-day offset: keep it in a range the i64 arithmetic
+        // and the calendar walk can represent (a typo like 1e300 used to trap).
+        var days = lag
+        if days > 1000000.0f64 { days = 1000000.0f64 }
+        if days < -1000000.0f64 { days = -1000000.0f64 }
+        out.lag = i64(math.trunc[f64](days))
+    }
     ret (out, id.len != 0usize)
 }
 
@@ -432,6 +454,11 @@ fn gantt_layout(a: *mem.Arena, tasks: []const Task, cal: Calendar, project_start
     if has_start { origin_ms = project_start_ms }
     let origin = day_of_ms(origin_ms)
     let n = tasks.len
+    // A failed `critical_path` allocation answers no slots: refuse instead of
+    // reading `slots[0]` out of bounds.
+    if cpm.slots.len < n {
+        ret Layout { bars: none_bars, project_duration: 0i64, critical: none_ids, start_day: origin, end_day: origin, cycle: "", has_cycle: false }
+    }
     let (bars, e1) = mem.alloc[Bar](a, n + 1usize)
     let (critical, e2) = mem.alloc[usize](a, n + 1usize)
     if e1 != ok || e2 != ok {
@@ -725,6 +752,9 @@ fn workload(a: *mem.Arena, assignments: []const Assignment, capacity: f64, overr
                 if x.has_end { end_ms = x.end_ms }
                 var per_day = 8.0f64
                 if count_mode { per_day = 1.0f64 } else if x.has_hours && is_finite(x.hours) { per_day = x.hours }
+                // ponytail: appdor mirrors this rounding (`days_between_ms`), so
+                // the fixture expectations are built on it; switching to calendar
+                // days needs the reference vectors regenerated first.
                 let span = days_between_ms(x.start_ms, end_ms)
                 var d = 0i64
                 while d <= span {
@@ -804,6 +834,10 @@ fn cascade_duration(tasks: []const Task, schedule: []const Window, id: str) -> i
 // first, with zero shifts dropped.
 fn cascade_reschedule(a: *mem.Arena, tasks: []const Task, schedule: []const Window, change_id: str, change_start: i64) -> []const Move {
     var none: []const Move = zero
+    // The bare-task entry point cannot trust an earlier topological check: a
+    // cycle makes the queue ping-pong until the guard trips and returns a
+    // partial diff, so refuse it up front.
+    if critical_path(a, tasks).has_cycle { ret none }
     let (changed, known) = index_of(tasks, change_id)
     if !known { ret none }
     let n = schedule.len
