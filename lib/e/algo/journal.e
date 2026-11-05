@@ -411,7 +411,7 @@ fn timer_fired(run: json.Value, key: str) -> bool {
     ret found
 }
 
-// A clock or random entry for the key: the later of the two kinds wins, as in appdor's one Map.
+// The clock or random entry for the key: the later of the two kinds wins, as in appdor's one Map.
 fn last_recorded(run: json.Value, key: str) -> (json.Value, bool) {
     let entries = entries_of(run)
     var found = false
@@ -426,6 +426,23 @@ fn last_recorded(run: json.Value, key: str) -> (json.Value, bool) {
         at += 1usize
     }
     ret (out, found)
+}
+
+// The clock or random entry this commit has already buffered for the key: a second recording in
+// the same step must read the first call's value, not a new host reading. Answers the value,
+// whether an entry was found, and whether it carries a `value`.
+fn buffered_recorded(c: *const Commit, key: str) -> (json.Value, bool, bool) {
+    var at = c.entries.len
+    while at > 0usize {
+        at -= 1usize
+        let entry = c.entries.items[at]
+        let kind = entry_type(entry)
+        if (str.eq(kind, "clock") || str.eq(kind, "random")) && key_is(entry, key) {
+            let (value, has_value) = get(entry, "value")
+            ret (value, true, has_value)
+        }
+    }
+    ret (.Null, false, false)
 }
 
 fn has_recorded(run: json.Value, key: str) -> bool {
@@ -535,9 +552,10 @@ fn add(a: *mem.Arena, c: *Commit, kind: str, fields: json.Value) -> err {
     let (o, o_error) = new_obj(a)
     if o_error != ok { ret o_error }
     var entry = o
+    // `fields` first, so a `type` or `seq` in them cannot override the validated values.
+    try assign(&entry, fields)
     try put(&entry, "seq", seq_value)
     try put(&entry, "type", text(kind))
-    try assign(&entry, fields)
     try put(&entry, "rev", c.workflow_version)
     ret list.push[json.Value](&c.entries, obj_value(&entry))
 }
@@ -656,6 +674,8 @@ fn apply_commit(a: *mem.Arena, run: json.Value, commit: json.Value) -> (Applied,
 
 // Read a clock value that is the same on every replay: the recorded one, or the host's reading journaled now.
 fn record_clock(a: *mem.Arena, run: json.Value, c: *Commit, key: str, host_now: json.Value) -> (json.Value, bool, err) {
+    let (buffered, has_buffered, buffered_has_value) = buffered_recorded(c, key)
+    if has_buffered { ret (buffered, buffered_has_value, ok) }
     let (value, has_value) = recorded(run, key)
     if has_recorded(run, key) { ret (value, has_value, ok) }
     let (o, o_error) = new_obj(a)

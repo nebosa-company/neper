@@ -507,7 +507,8 @@ fn subscribe(t: *TopicAuth, topic: str, token: str, user_id: json.Value) -> json
     let expires = ir.value_of(tok, "expiresAt")
     if ir.truthy(expires) {
         let e = to_ms(expires)
-        if e <= f64(t.clock.now(t.clock.ctx)) {
+        // an unreadable expiry (NaN) fails closed for an authorization check
+        if !(e > f64(t.clock.now(t.clock.ctx))) {
             put(&out, "ok", flag(false))
             put(&out, "reason", text("token-expired"))
             ret ir.obj_value(&out)
@@ -793,7 +794,15 @@ fn export_telemetry(t: *const Telemetry, since: i64) -> json.Value {
     while at < t.metrics.len {
         var keep = since == 0i64
         if !keep {
-            let (stamp, have_stamp) = get(t.metrics.items[at], "at")
+            // a delivery metric is stamped `deliveredAt`, not `at`
+            let (first_stamp, first_found) = get(t.metrics.items[at], "at")
+            var stamp = first_stamp
+            var have_stamp = first_found
+            if !have_stamp {
+                let (delivered_stamp, delivered_found) = get(t.metrics.items[at], "deliveredAt")
+                stamp = delivered_stamp
+                have_stamp = delivered_found
+            }
             if have_stamp {
                 switch stamp {
                 case .Number as n:
