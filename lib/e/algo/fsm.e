@@ -459,7 +459,16 @@ fn count_rules(rules: []const Rule) -> usize {
 
 fn validate_workflow(a: *mem.Arena, wf: Workflow) -> Validation {
     var none: []const Finding = zero
-    let cap = wf.states.len * 2usize + wf.transitions.len * 8usize + 16usize
+    // A transition contributes one bad-from, one bad-to and one finding per configured
+    // rule (conditions flattened, validators and post-functions as written); the old
+    // `transitions * 8` bound let a legitimately bad definition trap the validator
+    // instead of being reported (#303).
+    var cap = 16usize + wf.states.len * 2usize
+    var ti = 0usize
+    while ti < wf.transitions.len {
+        cap += 2usize + count_rules(wf.transitions[ti].conditions) + wf.transitions[ti].validators.len + wf.transitions[ti].post_functions.len + 1usize
+        ti += 1usize
+    }
     let (errors, e1) = mem.alloc[Finding](a, cap)
     let (warnings, e2) = mem.alloc[Finding](a, cap)
     if e1 != ok || e2 != ok { ret Validation { valid: false, errors: none, warnings: none } }
@@ -1745,7 +1754,9 @@ fn simulate_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, tra
         posts[i] = compile_post_function(a, t.post_functions[i], wf.table_id, record)
         i += 1usize
     }
-    let from_ok = from_matches(a, t, current, present, env, env.has_legacy)
+    // Same legacy rule as `execute_transition`: the map applies only to a state the
+    // workflow no longer defines, so a dry run and the commit agree (#303).
+    let from_ok = from_matches(a, t, current, present, env, !is_known_state(wf, current, present) && env.has_legacy)
     let perm_ok = permits_actor(t, record, p)
     let missing = missing_screen_inputs(a, t, inputs)
     ret Report {

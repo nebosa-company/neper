@@ -1680,6 +1680,62 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_105(), &registry) != 0u8 { os.exit(106i32) }
     if run(a, vectors_106(), &registry) != 0u8 { os.exit(107i32) }
     if run(a, vectors_107(), &registry) != 0u8 { os.exit(108i32) }
+    // #303 (1): thirty unknown validators on one transition are findings, not a trap.
+    var report_states: [1]w.State = zero
+    report_states[0usize] = w.State { id: "a", label: "A", category: "todo" }
+    var junk_validators: [30]w.Rule = zero
+    var junk_at = 0usize
+    while junk_at < 30usize {
+        junk_validators[junk_at].kind = "unknown-validator"
+        junk_at += 1usize
+    }
+    var junk_transitions: [1]w.Transition = zero
+    junk_transitions[0usize].id = "t"
+    junk_transitions[0usize].name = "T"
+    junk_transitions[0usize].from = "a"
+    junk_transitions[0usize].to = "a"
+    junk_transitions[0usize].validators = junk_validators[0usize..30usize]
+    var junk_workflow: w.Workflow = zero
+    junk_workflow.initial_state = "a"
+    junk_workflow.has_initial = true
+    junk_workflow.states = report_states[0usize..1usize]
+    junk_workflow.transitions = junk_transitions[0usize..1usize]
+    let junk_validation = w.validate_workflow(a, junk_workflow)
+    var junk_errors = 0usize
+    var junk_scan = 0usize
+    while junk_scan < junk_validation.errors.len {
+        if str.eq(junk_validation.errors[junk_scan].code, "bad-rule-config") { junk_errors += 1usize }
+        junk_scan += 1usize
+    }
+    if junk_errors != 30usize { os.exit(120i32) }
+    // #303 (2): a legacy key naming a live state must not change the dry run alone.
+    var live_states: [2]w.State = zero
+    live_states[0usize] = w.State { id: "s0", label: "S0", category: "todo" }
+    live_states[1usize] = w.State { id: "s1", label: "S1", category: "done" }
+    var move_transition: [1]w.Transition = zero
+    move_transition[0usize].id = "move"
+    move_transition[0usize].name = "Move"
+    move_transition[0usize].from = "s0"
+    move_transition[0usize].to = "s1"
+    var live_workflow: w.Workflow = zero
+    live_workflow.status_field = "Status"
+    live_workflow.initial_state = "s0"
+    live_workflow.has_initial = true
+    live_workflow.states = live_states[0usize..2usize]
+    live_workflow.transitions = move_transition[0usize..1usize]
+    var legacy_pairs: [1]w.Pair = zero
+    legacy_pairs[0usize] = w.Pair { key: "s0", value: "s1" }
+    var legacy_env: w.Env = zero
+    legacy_env.reg = &registry
+    legacy_env.has_legacy = true
+    legacy_env.legacy = legacy_pairs[0usize..1usize]
+    var live_record: [1]f.Field = zero
+    live_record[0usize] = f.Field { name: "Status", value: f.Value { kind: .Text, n: 0.0f64, s: "s0", items: zero, code: 0u8 } }
+    var no_principal: w.Principal = zero
+    let dry = w.simulate_transition(a, live_workflow, live_record[0usize..1usize], "move", no_principal, &legacy_env, zero)
+    if !dry.from_state_ok { os.exit(121i32) }
+    let commit = w.execute_transition(a, live_workflow, live_record[0usize..1usize], "move", zero, &legacy_env)
+    if !commit.good { os.exit(122i32) }
     try io.print("algo fsm ok")
     ret ok
 }
