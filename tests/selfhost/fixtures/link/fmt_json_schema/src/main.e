@@ -104,6 +104,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tiny: [3]u8 = zero
     let (_, _, short) = schema.validate(a, "{\"properties\":{\"abcdef\":{\"type\":\"null\"}}}", "{\"abcdef\":1}", tiny[..])
     if short != schema.TooSmall { os.exit(67i32) }
+    // A number no `f64` can name still conforms to a schema with no numeric keyword, and a
+    // numeric keyword it cannot judge is a violation rather than a validation error.
+    if !expect(a, "{\"properties\":{\"a\":{}}}", "{\"a\":1e400}", true, "") { os.exit(80i32) }
+    if !expect(a, "{\"minimum\":0}", "1e400", false, "") { os.exit(81i32) }
+    // A `pattern` is compiled once per schema, not once per string: an arena that holds the two
+    // trees and one program cannot hold one program per element.
+    let (pool, pool_error) = mem.alloc[u8](a, 262144usize)
+    if pool_error != ok { os.exit(82i32) }
+    var limited = mem.arena_from(pool)
+    var many: [4096]u8 = zero
+    var at = 0usize
+    many[at] = 91u8
+    at += 1usize
+    var element = 0usize
+    while element < 512usize {
+        if element != 0usize {
+            many[at] = 44u8
+            at += 1usize
+        }
+        many[at] = 34u8
+        at += 1usize
+        many[at] = 97u8
+        at += 1usize
+        many[at] = 34u8
+        at += 1usize
+        element += 1usize
+    }
+    many[at] = 93u8
+    at += 1usize
+    var small_path: [64]u8 = zero
+    let (many_valid, _, many_error) = schema.validate(&limited, "{\"items\":{\"pattern\":\"^[a-z]+$\"}}", many[0..at], small_path[0..])
+    if many_error != ok || !many_valid { os.exit(83i32) }
     try io.print("fmt json schema ok\n")
     ret ok
 }

@@ -468,5 +468,13 @@ fn main(a: *mem.Arena) -> err {
     // not if the first patch had written through it.
     if !patch_gives(a, "{\"a\":1}", "[{\"op\":\"add\",\"path\":\"/b\",\"value\":2}]", "{\"a\":1,\"b\":2}") { os.exit(199i32) }
 
+    // A move onto the same location is the no-op RFC 6902 4.4 describes: only a proper prefix
+    // of `path` would move a subtree inside itself.
+    if !patch_gives(a, "{\"a\":1}", "[{\"op\":\"move\",\"from\":\"/a\",\"path\":\"/a\"}]", "{\"a\":1}") { os.exit(210i32) }
+    if !patch_gives(a, "[1,2]", "[{\"op\":\"move\",\"from\":\"\",\"path\":\"\"}]", "[1,2]") { os.exit(211i32) }
+    // Comparing numbers must not overflow on an exponent near `i64`'s limit: the pair below is
+    // judged unequal rather than trapping or wrapping to equal.
+    if !patch_fails(a, "{\"a\":100e9223372036854775807}", "[{\"op\":\"test\",\"path\":\"/a\",\"value\":1e9223372036854775807}]") { os.exit(212i32) }
+
     ret ok
 }

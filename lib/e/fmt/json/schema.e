@@ -31,7 +31,8 @@ const MAX_DEPTH: usize = 256usize
 const MAX_MULTIPLE_DIGITS: usize = 1024usize
 const MAX_MULTIPLE_POWER: usize = 1024usize
 
-type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8 }
+type CachedPattern = struct { source: str, program: regex.Regex }
+type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8, patterns: []CachedPattern, pattern_count: usize }
 
 // The index of `name` in `members`, so an absent member never needs a pointer to nothing.
 fn member(members: []const json.Member, name: str) -> (usize, bool) {
@@ -263,6 +264,17 @@ fn resolve_ref(c: *Checker, reference: str) -> (*const json.Value, err) {
     ret (found, ok)
 }
 
+// The keywords `check_number` reads; a schema with none of them never needs the instance
+// as an `f64`, so a valid JSON number beyond that range still validates.
+fn has_numeric_keyword(s: []const json.Member) -> bool {
+    let (_, minimum) = member(s, "minimum")
+    let (_, maximum) = member(s, "maximum")
+    let (_, exclusive_minimum) = member(s, "exclusiveMinimum")
+    let (_, exclusive_maximum) = member(s, "exclusiveMaximum")
+    let (_, multiple) = member(s, "multipleOf")
+    ret minimum || maximum || exclusive_minimum || exclusive_maximum || multiple
+}
+
 // The numeric keywords over `v`; answers false at the first violated one.
 fn check_number(c: *Checker, s: []const json.Member, v: f64, source_number: json.Number) -> (bool, err) {
     let (minimum_at, has_minimum) = member(s, "minimum")
@@ -308,6 +320,29 @@ fn check_number(c: *Checker, s: []const json.Member, v: f64, source_number: json
     ret (true, ok)
 }
 
+// `pattern` sources compiled once per validation: a schema reused over an array would
+// otherwise compile and retain a program for every string instance.
+fn pattern_program(c: *Checker, source: str) -> (regex.Regex, err) {
+    var at = 0usize
+    while at < c.pattern_count {
+        if str.eq(c.patterns[at].source, source) { ret (c.patterns[at].program, ok) }
+        at += 1usize
+    }
+    let (program, compile_error) = regex.compile(c.arena, source, zero)
+    if compile_error != ok { ret (zero, compile_error) }
+    if c.pattern_count == c.patterns.len {
+        var room = 8usize
+        if c.patterns.len != 0usize { room = c.patterns.len * 2usize }
+        let (grown, grow_error) = mem.alloc[CachedPattern](c.arena, room)
+        if grow_error != ok { ret (zero, grow_error) }
+        mem.copy[CachedPattern](grown, c.patterns)
+        c.patterns = grown
+    }
+    c.patterns[c.pattern_count] = CachedPattern { source: source, program: program }
+    c.pattern_count += 1usize
+    ret (program, ok)
+}
+
 fn check_string(c: *Checker, s: []const json.Member, v: str) -> (bool, err) {
     let (min_length_at, has_min_length) = member(s, "minLength")
     let (max_length_at, has_max_length) = member(s, "maxLength")
@@ -331,7 +366,7 @@ fn check_string(c: *Checker, s: []const json.Member, v: str) -> (bool, err) {
         let pattern = &s[pattern_at].value
         let (source, is_string) = json.string_of(*pattern)
         if !is_string { ret (false, Invalid) }
-        let (compiled, e) = regex.compile(c.arena, source, zero)
+        let (compiled, e) = pattern_program(c, source)
         if e != ok { ret (false, Invalid) }
         if !regex.is_match(&compiled, v) { ret (false, ok) }
     }
@@ -515,9 +550,11 @@ fn check(c: *Checker, schema: *const json.Value, v: *const json.Value, n: usize,
     if has_const && !json.values_equal(v, &s[constant_at].value) { ret (false, n, ok) }
 
     let (number, is_number) = json.number_of(*v)
-    if is_number {
+    if is_number && has_numeric_keyword(s) {
         let (value, e) = json.number_f64(number)
-        if e != ok { ret (false, n, e) }
+        // A number no `f64` can name cannot be judged by a numeric keyword, which is a
+        // violation of that keyword rather than an error in the document.
+        if e != ok { ret (false, n, ok) }
         let (valid, number_error) = check_number(c, s, value, number)
         if number_error != ok { ret (false, n, number_error) }
         if !valid { ret (false, n, ok) }
@@ -591,7 +628,7 @@ fn check(c: *Checker, schema: *const json.Value, v: *const json.Value, n: usize,
 // `doc` against `root` (both parsed trees); answers (valid, the length of the failing
 // pointer written into `path`, error). A valid document leaves `path` empty.
 fn validate_value(a: *mem.Arena, root: *const json.Value, doc: *const json.Value, path: []u8) -> (bool, usize, err) {
-    var c = Checker { arena: a, root: root, path: path }
+    var c = Checker { arena: a, root: root, path: path, patterns: zero, pattern_count: 0usize }
     let (valid, failed_at, e) = check(&c, root, doc, 0usize, 0usize)
     if e != ok { ret (false, 0usize, e) }
     if valid { ret (true, 0usize, ok) }

@@ -937,6 +937,12 @@ fn copy_value(a: *mem.Arena, value: *const Value, depth: u16, limit: u16) -> (Va
 // Exact mathematical equality over two validated lexemes. Each is reduced to a sign, a run of
 // significant digits and a power of ten, and the three are compared -- so `1.0`, `1` and `1e0`
 // agree and `0.1` and `0.1000000000000000055511151231257827` do not.
+//
+// An exponent past ±2^62 has no room left in an `i64` for the fraction length and the trailing
+// zeros that move into the power, so such a value is outside exact comparison: it is equal only
+// to a byte-identical spelling.
+const NUMBER_EXPONENT_LIMIT: i64 = 4611686018427387904i64
+
 fn number_parts(lexeme: str) -> (bool, str, i64, bool) {
     if lexeme.len == 0usize { ret (false, "", 0i64, false) }
     var at = 0usize
@@ -967,6 +973,7 @@ fn number_parts(lexeme: str) -> (bool, str, i64, bool) {
         while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
         let (magnitude, magnitude_error) = str.parse_i64(lexeme[exponent_start..at])
         if magnitude_error != ok { ret (false, "", 0i64, false) }
+        if magnitude > NUMBER_EXPONENT_LIMIT { ret (false, "", 0i64, false) }
         exponent = magnitude
         if exponent_negative { exponent = -exponent }
     }
@@ -1012,6 +1019,7 @@ fn digit_at(integer_part: str, fraction: str, index: usize) -> u8 {
 }
 
 fn numbers_equal(left: Number, right: Number) -> bool {
+    if str.eq(left.lexeme, right.lexeme) { ret true }
     let (left_negative, left_integer, left_scale, left_valid) = number_parts(left.lexeme)
     let (right_negative, right_integer, right_scale, right_valid) = number_parts(right.lexeme)
     if !left_valid || !right_valid { ret false }
@@ -1428,8 +1436,10 @@ fn patch(a: *mem.Arena, root: *const Value, operations: *const Value, max_operat
                 ret (out, from_error)
             }
             from_count = counted
-            // Moving a subtree into itself would build a tree that contains itself.
-            if action == OP_MOVE && is_prefix_of(from_store[..], from_count, path_store[..], path_count) {
+            // Moving a subtree into itself would build a tree that contains itself. Only a
+            // proper prefix of `path` does that: an equal list is the no-op RFC 6902 4.4
+            // describes, not a failure.
+            if action == OP_MOVE && from_count < path_count && is_prefix_of(from_store[..], from_count, path_store[..], path_count) {
                 mem.reset(a, start)
                 ret (out, PatchFailed)
             }
@@ -1444,11 +1454,7 @@ fn patch(a: *mem.Arena, root: *const Value, operations: *const Value, max_operat
                 ret (out, lifted_error)
             }
             payload = lifted
-            if action == OP_MOVE {
-                if from_count == 0usize {
-                    mem.reset(a, start)
-                    ret (out, PatchFailed)
-                }
+            if action == OP_MOVE && from_count != 0usize {
                 let (without, taken, remove_error) = edit_at(a, &current, from_store[0usize..from_count], 0usize, OP_REMOVE, &payload)
                 if remove_error != ok {
                     mem.reset(a, start)
