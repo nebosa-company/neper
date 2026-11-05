@@ -3503,7 +3503,8 @@ fn is_mac(a: *mem.Arena, value: str) -> bool
 fn is_upc(a: *mem.Arena, value: str) -> bool
 fn row(a: *mem.Arena, s: str, line: str) -> str
 fn join3(a: *mem.Arena, x: str, y: str, z: str) -> str
-fn nace_table(a: *mem.Arena) -> str
+fn nace_row(index: usize) -> str
+fn nace_count() -> usize
 
 type NaceCode = struct { level: str, section: str, division: str, code: str }
 
@@ -4784,7 +4785,7 @@ storage fills) and `extract`/`extract_write` by bottom-up cost.
 ### `e.algo.exact_cover`
 
 ```neper
-type Links = struct { left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, columns: usize, nodes: usize }
+type Links = struct { left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, columns: usize, nodes: usize, full: bool }
 error TooSmall
 error Invalid
 error Unsolvable
@@ -6660,6 +6661,7 @@ const FAIL: u8 = 3u8
 const STALE: u8 = 4u8
 const CANCEL: u8 = 5u8
 const ERROR: u8 = 6u8
+const FATAL: u8 = 7u8
 
 type Flow = struct { kind: u8, value: json.Value, has_value: bool, wait: json.Value, message: str, step_id: str, has_step_id: bool, reason: str, budget: usize, has_budget: bool }
 type Executor = struct { a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, workflow: json.Value, run: json.Value, commit: journal.Commit, vars: ir.Obj, outputs: ir.Obj, changes: list.List[json.Value], unchecked: list.List[str], step_budget: usize, steps_run: usize }
