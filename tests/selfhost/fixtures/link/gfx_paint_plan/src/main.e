@@ -84,7 +84,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if paint.fill_path(bevel, .NonZero, 14usize, 14usize, canvas[..]) != ok || !near_sum(total(canvas[..]), 31.5) { os.exit(6i32) }
     let (miter, miter_error) = geometry.stroke(geometry.finish(&elbow), 2.0, .Square, .Miter, 4.0, 0.1, outline_verbs[..], outline_points[..])
     if miter_error != ok || miter.verbs.len != 25usize || miter.points.len != 20usize { os.exit(7i32) }
-    if paint.fill_path(miter, .NonZero, 14usize, 14usize, canvas[..]) != ok || !near_sum(total(canvas[..]), 32.0) { os.exit(7i32) }
+    // A square cap extends outward past its endpoint: the start cap reaches x = 1 and the
+    // end cap y = 11, instead of collapsing back into the stroke (#709).
+    var cap_lo_x: f32 = miter.points[0usize].x
+    var cap_hi_y: f32 = miter.points[0usize].y
+    var pi = 1usize
+    while pi < miter.points.len {
+        if miter.points[pi].x < cap_lo_x { cap_lo_x = miter.points[pi].x }
+        if miter.points[pi].y > cap_hi_y { cap_hi_y = miter.points[pi].y }
+        pi += 1usize
+    }
+    if !near(cap_lo_x, 1.0) || !near(cap_hi_y, 11.0) { os.exit(7i32) }
+    if paint.fill_path(miter, .NonZero, 14usize, 14usize, canvas[..]) != ok || !near_sum(total(canvas[..]), 36.0) { os.exit(7i32) }
     if geometry.close_path(&elbow) != ok { os.exit(8i32) }
     let (round, round_error) = geometry.stroke(geometry.finish(&elbow), 2.0, .Round, .Round, 4.0, 0.1, outline_verbs[..], outline_points[..])
     if round_error != ok || round.verbs.len != 42usize || round.points.len != 36usize { os.exit(8i32) }

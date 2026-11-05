@@ -340,7 +340,9 @@ fn stroke_cap(s: *BuilderState, from: Point, p: Point, hw: f32, cap: Cap, tolera
     if cap == .Butt { ret ok }
     if cap == .Round { ret emit_circle(s, p, hw, tolerance) }
     let n = unit_normal(from, p)
-    let d = Point { x: 0.0 - n.y, y: n.x }
+    // `unit_normal` is the left normal, so the tangent `from -> p` is (n.y, -n.x): the
+    // square extends outward past `p` rather than back into the stroke (#709).
+    let d = Point { x: n.y, y: 0.0 - n.x }
     let far = offset(p, d, hw)
     let quad = [4]Point{ offset(p, n, hw), offset(far, n, hw), offset(far, n, 0.0 - hw), offset(p, n, 0.0 - hw) }
     ret emit_polygon(s, quad[..])
