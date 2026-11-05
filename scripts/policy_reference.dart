@@ -1,6 +1,11 @@
 // Reference results for `e.net.policy` (L046): the HTTP cache, cookie jar, CORS, CSP, private-network and filter-list code
 // of Vaper's engine over the inputs `policy_vectors.mjs` writes.
 // Usage: dart run scripts/policy_reference.dart IN.json OUT.json
+//
+// Divergences pending a reference update, do not regenerate the fixture vectors until this file mirrors them:
+// - RFC 850 two-digit years follow RFC 9110's 50-year rule against the reference time (#899);
+// - SameSite=Strict is sent only in a same-site context, and suppressed when that context is unknown (#904);
+// - stale-on-error is served only with an explicit stale-if-error allowance (#900, still open).
 import 'dart:convert';
 import 'dart:io';
 
