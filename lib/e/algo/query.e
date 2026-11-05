@@ -16,6 +16,30 @@ error Invalid
 type MoKey = struct { lefts: []const usize, rights: []const usize, block: usize }
 type HilbertKey = struct { lefts: []const usize, rights: []const usize, bits: u32 }
 
+// Every range is inclusive with `left <= right + 1` (the empty range is
+// `left == right + 1`) and both endpoints fit the signed pointers `mo_run` keeps.
+fn queries_valid(lefts: []const usize, rights: []const usize) -> bool {
+    if rights.len != lefts.len { ret false }
+    var i = 0usize
+    while i < lefts.len {
+        if lefts[i] > 9223372036854775807usize || rights[i] > 9223372036854775807usize { ret false }
+        if lefts[i] > rights[i] && lefts[i] - rights[i] > 1usize { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Every entry of `order` names a query.
+fn order_valid(order: []const usize, count: usize) -> bool {
+    if order.len != count { ret false }
+    var i = 0usize
+    while i < order.len {
+        if order[i] >= count { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // max(1, n / sqrt(q)).
 fn mo_block_size(n: usize, q: usize) -> usize {
     if q == 0usize || n == 0usize { ret 1usize }
@@ -44,7 +68,7 @@ fn mo_compare(k: *MoKey, a: usize, b: usize) -> i32 {
 
 // Fills `order` with every query index in Mo order (ties by index).
 fn mo_order(lefts: []const usize, rights: []const usize, block: usize, order: []usize) -> err {
-    if block == 0usize || rights.len != lefts.len || order.len != lefts.len { ret Invalid }
+    if block == 0usize || order.len != lefts.len || !queries_valid(lefts, rights) { ret Invalid }
     var i = 0usize
     while i < order.len {
         order[i] = i
@@ -68,7 +92,14 @@ fn hilbert_compare(k: *HilbertKey, a: usize, b: usize) -> i32 {
 // Fills `order` by the Hilbert index of (l, r) on the smallest 2^k x 2^k grid
 // holding positions below `n` (ties by index).
 fn mo_order_hilbert(lefts: []const usize, rights: []const usize, n: usize, order: []usize) -> err {
-    if rights.len != lefts.len || order.len != lefts.len { ret Invalid }
+    if order.len != lefts.len || !queries_valid(lefts, rights) { ret Invalid }
+    // The Hilbert index squares coordinates, so the grid must stay within 32 bits.
+    if n > 4294967296usize { ret Invalid }
+    var at = 0usize
+    while at < lefts.len {
+        if lefts[at] >= n || rights[at] >= n { ret Invalid }
+        at += 1usize
+    }
     var bits = 1u32
     while (1usize << bits) < n { bits += 1u32 }
     var i = 0usize
@@ -89,7 +120,7 @@ fn distance(a: i64, b: i64) -> usize {
 // Total |dl| + |dr| visiting the queries in `order` from the empty window
 // l = 0, r = -1; answers 0 on a length mismatch.
 fn mo_pointer_moves(lefts: []const usize, rights: []const usize, order: []const usize) -> usize {
-    if rights.len != lefts.len || order.len != lefts.len { ret 0usize }
+    if !queries_valid(lefts, rights) || !order_valid(order, lefts.len) { ret 0usize }
     var l = 0i64
     var r = 0i64 - 1i64
     var total = 0usize
@@ -107,7 +138,7 @@ fn mo_pointer_moves(lefts: []const usize, rights: []const usize, order: []const 
 // Walk the queries in `order`: the window grows first (left down, right up),
 // then shrinks (left up, right down); `answer(ctx, q)` once it matches query `q`.
 fn mo_run[Ctx: type](ctx: *Ctx, lefts: []const usize, rights: []const usize, order: []const usize, add: fn(*Ctx, usize), remove: fn(*Ctx, usize), answer: fn(*Ctx, usize)) -> err {
-    if rights.len != lefts.len || order.len != lefts.len { ret Invalid }
+    if !queries_valid(lefts, rights) || !order_valid(order, lefts.len) { ret Invalid }
     var l = 0i64
     var r = 0i64 - 1i64
     var i = 0usize

@@ -51,6 +51,8 @@ type Filter = struct {
     name: str,
     args: json.Value,
     has_args: bool,
+    program: regex.Regex,
+    compiled: bool,
 }
 
 fn same(left: str, right: str) -> bool {
@@ -226,6 +228,19 @@ fn parse(a: *mem.Arena, v: json.Value) -> (Filter, err) {
             let (args, has_args) = member(m, "args")
             f.args = args
             f.has_args = has_args
+            // The ports built-in takes a list of at most 64 integers; a malformed
+            // argument list is refused here rather than silently disabling the rule.
+            if same(name, "sg_world_open_ports") && has_args {
+                let (items, is_list) = json.array_of(args)
+                if !is_list { ret (f, NotList) }
+                if items.len > 64usize { ret (f, BadOp) }
+                var i = 0usize
+                while i < items.len {
+                    let (_, is_port) = integer_of(items[i])
+                    if !is_port { ret (f, BadOp) }
+                    i += 1usize
+                }
+            }
             ret (f, ok)
         }
     }
@@ -275,6 +290,21 @@ fn parse(a: *mem.Arena, v: json.Value) -> (Filter, err) {
     f.op = op
     let valueless = op == .Present || op == .Absent || op == .Any || op == .All
     if !valueless && !has_value { ret (f, MissingValue) }
+    if op == .In || op == .NotIn {
+        let (_, is_list) = json.array_of(value)
+        if !is_list { ret (f, NotList) }
+    }
+    if op == .Regex {
+        // Compile once here so evaluation of a large batch allocates nothing.
+        let (pattern, pattern_ok) = string_of(value)
+        if pattern_ok {
+            let (program, program_error) = regex.compile(a, pattern, regex.Options { case_insensitive: false, multiline: false, dot_matches_newline: false })
+            if program_error == ok {
+                f.program = program
+                f.compiled = true
+            }
+        }
+    }
     let (element_value, has_element) = member(m, "element")
     if has_element {
         let (element, element_error) = parse(a, element_value)
@@ -394,54 +424,54 @@ fn contains_text(s: str, needle: str) -> bool {
     ret false
 }
 
-// `*` and `?` over characters: the whole text must match.
+// `*` and `?` over Unicode scalars: the whole text must match. Allocation-free, so a
+// long batch of evaluations cannot exhaust the caller's arena.
 fn glob_match(a: *mem.Arena, pattern: str, text: str) -> bool {
-    let (p, p_error) = mem.alloc[u32](a, pattern.len + 1usize)
-    let (t, t_error) = mem.alloc[u32](a, text.len + 1usize)
-    if p_error != ok || t_error != ok { ret false }
-    var pn = 0usize
-    var it = utf8.iterator(pattern)
-    var more = true
-    while more {
-        let (scalar, got) = utf8.iterator_next(&it)
-        if !got { more = false } else {
-            p[pn] = scalar
-            pn += 1usize
-        }
-    }
-    var tn = 0usize
-    it = utf8.iterator(text)
-    more = true
-    while more {
-        let (scalar, got) = utf8.iterator_next(&it)
-        if !got { more = false } else {
-            t[tn] = scalar
-            tn += 1usize
-        }
-    }
-    // Iterative wildcard match with one star of backtracking.
     var pi = 0usize
     var ti = 0usize
-    var star = pn
+    var star = 18446744073709551615usize
+    var star_next = 0usize
     var mark = 0usize
-    while ti < tn {
-        if pi < pn && p[pi] == 42u32 {
-            star = pi
-            mark = ti
-            pi += 1usize
-        } else if pi < pn && (p[pi] == 63u32 || p[pi] == t[ti]) {
-            pi += 1usize
-            ti += 1usize
-        } else if star < pn {
-            pi = star + 1usize
-            mark += 1usize
-            ti = mark
-        } else {
-            ret false
+    while ti < text.len {
+        var have_p = pi < pattern.len
+        var pscalar = 0u32
+        var pwidth = 0u8
+        if have_p {
+            let (decoded, decode_error) = utf8.decode(pattern, pi)
+            if decode_error != ok { ret false }
+            pscalar = decoded.scalar
+            pwidth = decoded.width
         }
+        if have_p && pscalar == 42u32 {
+            star = pi
+            star_next = pi + usize(pwidth)
+            mark = ti
+            pi += usize(pwidth)
+            continue
+        }
+        var matched = false
+        let (tdecoded, text_error) = utf8.decode(text, ti)
+        if text_error != ok { ret false }
+        if have_p && (pscalar == 63u32 || pscalar == tdecoded.scalar) {
+            pi += usize(pwidth)
+            ti += usize(tdecoded.width)
+            matched = true
+        }
+        if matched { continue }
+        if star == 18446744073709551615usize || mark >= text.len { ret false }
+        let (advance, advance_error) = utf8.decode(text, mark)
+        if advance_error != ok { ret false }
+        mark += usize(advance.width)
+        ti = mark
+        pi = star_next
     }
-    while pi < pn && p[pi] == 42u32 { pi += 1usize }
-    ret pi == pn
+    while pi < pattern.len {
+        let (decoded, decode_error) = utf8.decode(pattern, pi)
+        if decode_error != ok { ret false }
+        if decoded.scalar != 42u32 { ret false }
+        pi += usize(decoded.width)
+    }
+    ret true
 }
 
 fn compare(a: *mem.Arena, op: Op, av: json.Value, want: json.Value) -> bool {
@@ -553,13 +583,25 @@ fn eval_leaf(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> boo
             }
             var op = Op.Eq
             if f.has_count_op { op = f.count_op }
-            let count_value = json.Value { Number: json.Number { lexeme: digits_of(a, n) } }
-            ret compare(a, op, count_value, f.value)
+            let (wanted_count, wanted_ok) = number_f64(f.value)
+            if !wanted_ok { ret false }
+            let actual = f64(n)
+            if op == .Eq { ret actual == wanted_count }
+            if op == .Ne { ret actual != wanted_count }
+            if op == .Gt { ret actual > wanted_count }
+            if op == .Lt { ret actual < wanted_count }
+            if op == .Ge { ret actual >= wanted_count }
+            ret actual <= wanted_count
         default:
             ret false
         }
     }
     if !found { ret false }
+    if f.op == .Regex {
+        let (text, text_ok) = string_of(resolved)
+        if !text_ok || !f.compiled { ret false }
+        ret regex.is_match(&f.program, text)
+    }
     ret compare(a, f.op, resolved, f.value)
 }
 
@@ -597,8 +639,16 @@ fn sg_world_open_ports(attrs: []const json.Member, ports: []const i64) -> bool {
         while r < rules.len {
             let (rule, is_rule) = object_of(rules[r])
             if is_rule && world_open(rule) {
-                let (from, has_from) = rule_port(rule, "from_port")
-                let (to, has_to) = rule_port(rule, "to_port")
+                let (from_value, has_from) = member(rule, "from_port")
+                let (from, from_ok) = integer_of(from_value)
+                let (to_value, has_to) = member(rule, "to_port")
+                let (to, to_ok) = integer_of(to_value)
+                // A bound that is present but not an integer cannot be trusted, so the
+                // rule is not proved world-open instead of being treated as unbounded.
+                if (has_from && !from_ok) || (has_to && !to_ok) {
+                    r += 1usize
+                    continue
+                }
                 if has_from && has_to {
                     var p = 0usize
                     while p < ports.len {

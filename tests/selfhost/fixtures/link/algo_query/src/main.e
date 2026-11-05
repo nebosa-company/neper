@@ -118,6 +118,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if h != 3395692039018239730u64 { os.exit(5i32) }
     if query.mo_pointer_moves(lefts[..], rights[..], order[..]) != 1536usize { os.exit(5i32) }
 
+    // 6: an inverted range is refused by every entry point.
+    var bad_lefts: [3]usize = zero
+    var bad_rights: [3]usize = zero
+    bad_lefts[0usize] = 5usize
+    bad_rights[0usize] = 3usize
+    bad_lefts[1usize] = 0usize
+    bad_rights[1usize] = 0usize
+    bad_lefts[2usize] = 1usize
+    bad_rights[2usize] = 1usize
+    var bad_order: [3]usize = zero
+    if query.mo_order(bad_lefts[..], bad_rights[..], 1usize, bad_order[..]) != query.Invalid { os.exit(6i32) }
+    if query.mo_order_hilbert(bad_lefts[..], bad_rights[..], 10usize, bad_order[..]) != query.Invalid { os.exit(6i32) }
+    if query.mo_pointer_moves(bad_lefts[..], bad_rights[..], bad_order[..]) != 0usize { os.exit(6i32) }
+    var bad_ctx = Distinct { values: values[..], seen: seen[..], distinct: 0usize, out: out[..] }
+    if query.mo_run[Distinct](&bad_ctx, bad_lefts[..], bad_rights[..], bad_order[..], add, remove, answer) != query.Invalid { os.exit(6i32) }
+
+    // 7: an order entry that names no query is refused rather than read.
+    var two_lefts: [2]usize = zero
+    var two_rights: [2]usize = zero
+    two_lefts[1usize] = 1usize
+    two_rights[1usize] = 1usize
+    var stray_order: [2]usize = zero
+    stray_order[0usize] = 2usize
+    stray_order[1usize] = 1usize
+    if query.mo_pointer_moves(two_lefts[..], two_rights[..], stray_order[..]) != 0usize { os.exit(7i32) }
+    var stray_ctx = Distinct { values: values[..], seen: seen[..], distinct: 0usize, out: out[..] }
+    if query.mo_run[Distinct](&stray_ctx, two_lefts[..], two_rights[..], stray_order[..], add, remove, answer) != query.Invalid { os.exit(7i32) }
+
+    // 8: the Hilbert grid and its endpoints stay inside 32 bits.
+    if query.mo_order_hilbert(lefts[..], rights[..], 4294967297usize, order[..]) != query.Invalid { os.exit(8i32) }
+    var edge_lefts: [1]usize = zero
+    var edge_rights: [1]usize = zero
+    edge_rights[0usize] = 4usize
+    var edge_order: [1]usize = zero
+    if query.mo_order_hilbert(edge_lefts[..], edge_rights[..], 4usize, edge_order[..]) != query.Invalid { os.exit(8i32) }
+    // An endpoint above i64's maximum is refused before the signed cast.
+    var huge: [1]usize = zero
+    huge[0usize] = 9223372036854775808usize
+    if query.mo_order(huge[..], huge[..], 1usize, edge_order[..]) != query.Invalid { os.exit(8i32) }
+    if query.mo_run[Distinct](&bad_ctx, huge[..], huge[..], edge_order[..], add, remove, answer) != query.Invalid { os.exit(8i32) }
+
     try io.print("algo query ok\n")
     ret ok
 }
