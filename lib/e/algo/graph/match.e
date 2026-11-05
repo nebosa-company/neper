@@ -173,12 +173,18 @@ fn hungarian(costs: []const f64, n: usize, assignment: []usize, scratch: []f64, 
         p[0usize] = i
         var j0 = 0usize
         var j = 0usize
+        var rounds = 0usize
         while j < m {
             minv[j] = infinity
             visited[j] = 0.0f64
             j += 1usize
         }
         while true {
+            // Each round visits one more column, so an n-column matrix needs at
+            // most n + 1; a round without progress is a cost outside the range
+            // where the duals stay finite, and is refused rather than spun on.
+            rounds += 1usize
+            if rounds > n + 2usize { ret (0.0f64, Invalid) }
             visited[j0] = 1.0f64
             let i0 = p[j0]
             var delta = infinity
@@ -434,12 +440,16 @@ fn mark_path(base: []u32, parent: []u32, mate: []u32, in_blossom: []u8, from: u3
 // `prices.len >= n` floats and `owner.len >= n` indices are scratch.
 // Answers the total benefit.
 fn auction(benefit: []const f64, n: usize, assignment: []usize, prices: []f64, owner: []usize, epsilon: f64) -> (f64, err) {
-    if n == 0usize || !(epsilon > 0.0f64) { ret (0.0f64, Invalid) }
+    if n == 0usize || !(epsilon > 0.0f64) || epsilon - epsilon != 0.0f64 { ret (0.0f64, Invalid) }
     if benefit.len < n * n || assignment.len < n || prices.len < n || owner.len < n { ret (0.0f64, TooSmall) }
     var biggest = 0.0f64
     var i = 0usize
     while i < n * n {
-        var b = benefit[i]
+        // A non-finite benefit makes every comparison false and the bids cycle
+        // forever (a NaN entry, or -infinity used for forbidden pairs).
+        let raw = benefit[i]
+        if raw != raw || raw - raw != 0.0f64 { ret (0.0f64, Invalid) }
+        var b = raw
         if b < 0.0f64 { b = 0.0f64 - b }
         if b > biggest { biggest = b }
         i += 1usize

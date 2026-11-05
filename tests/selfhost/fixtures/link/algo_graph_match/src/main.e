@@ -102,6 +102,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     large_cost[0usize] = 1.0f64 / 0.0f64
     let (_, infinite_cost_error) = match.hungarian(large_cost[..], 1usize, one_assignment[..], scratch[..], used[..])
     if infinite_cost_error != match.Invalid { os.exit(2i32) }
+    // #524: a 2x2 of large finite costs must terminate with a finite total.
+    var large2: [4]f64 = zero
+    large2[0usize] = 1.0e301f64
+    large2[1usize] = 1.0e301f64
+    large2[2usize] = 1.0e301f64
+    large2[3usize] = 1.0e301f64
+    var two_assignment: [2]usize = zero
+    let (large2_total, large2_error) = match.hungarian(large2[..], 2usize, two_assignment[..], scratch[..], used[..])
+    if large2_error != ok { os.exit(2i32) }
+    if large2_total - large2_total != 0.0f64 { os.exit(2i32) }
+    if large2_total < 1.0e301f64 { os.exit(2i32) }
+
+    // 5: the auction algorithm refuses non-finite benefits (#233, #525) instead
+    // of bidding forever, and still matches an ordinary matrix.
+    var benefit: [4]f64 = zero
+    var auction_assignment: [2]usize = zero
+    var prices: [2]f64 = zero
+    var owner: [2]usize = zero
+    benefit[0usize] = 5.0f64
+    benefit[1usize] = 1.0f64
+    benefit[2usize] = 1.0f64
+    benefit[3usize] = 5.0f64
+    let (best_total, best_error) = match.auction(benefit[..], 2usize, auction_assignment[..], prices[..], owner[..], 0.001f64)
+    if best_error != ok || best_total != 10.0f64 || auction_assignment[0usize] != 0usize || auction_assignment[1usize] != 1usize { os.exit(5i32) }
+    benefit[0usize] = 0.0f64 / 0.0f64
+    let (_, nan_bid_error) = match.auction(benefit[..], 2usize, auction_assignment[..], prices[..], owner[..], 0.001f64)
+    if nan_bid_error != match.Invalid { os.exit(5i32) }
+    benefit[0usize] = 1.0f64 / 0.0f64
+    let (_, infinite_bid_error) = match.auction(benefit[..], 2usize, auction_assignment[..], prices[..], owner[..], 0.001f64)
+    if infinite_bid_error != match.Invalid { os.exit(5i32) }
+    benefit[0usize] = 0.0f64 - (1.0f64 / 0.0f64)
+    let (_, negative_infinite_bid_error) = match.auction(benefit[..], 2usize, auction_assignment[..], prices[..], owner[..], 0.001f64)
+    if negative_infinite_bid_error != match.Invalid { os.exit(5i32) }
+    benefit[0usize] = 5.0f64
+    let (_, infinite_epsilon_error) = match.auction(benefit[..], 2usize, auction_assignment[..], prices[..], owner[..], 1.0f64 / 0.0f64)
+    if infinite_epsilon_error != match.Invalid { os.exit(5i32) }
 
     // 3: stable marriage: the textbook 3x3 instance.
     // Proposers: A: X Y Z; B: Y X Z; C: X Y Z. Receivers: X: B A C; Y: A B C; Z: A B C.
