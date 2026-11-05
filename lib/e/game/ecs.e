@@ -44,6 +44,7 @@ error Stale
 error Size
 
 fn init(s: *Store, columns: []Column, generations: []u32, free: []u32) -> err {
+    if free.len < generations.len { ret Size }
     var at = 0usize
     while at < generations.len {
         generations[at] = 0u32

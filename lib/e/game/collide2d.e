@@ -34,6 +34,7 @@ type Hit = struct {
 type Grid = struct {
     heads: []u32,
     next: []u32,
+    used: usize,
     width: u32,
     height: u32,
     cell: fixed.Fx,
@@ -158,9 +159,10 @@ fn ray_tiles(m: tilemap.Map, x: fixed.Fx, y: fixed.Fx, dx: fixed.Fx, dy: fixed.F
     let height = i64(m.tile_h) << 16u32
     var travelled = 0i64
     let ceiling = i64(limit)
-    var guard = 0usize
-    while travelled <= ceiling && guard < 4096usize {
-        guard += 1usize
+    // Run until the requested distance is passed, however many cells that takes: a fixed
+    // iteration cap would turn an unfinished traversal into a definitive miss (#395). The
+    // next boundary is always ahead, so `travelled` strictly increases and the loop ends.
+    while travelled <= ceiling {
         // Distance to the next boundary on each axis, as a time along the ray.
         var time_x = FOREVER
         if dx != 0i32 {
@@ -198,6 +200,7 @@ fn grid_init(g: *Grid, heads: []u32, next: []u32, width: u32, height: u32, cell:
     if heads.len < usize(width) * usize(height) { ret Size }
     g.heads = heads
     g.next = next
+    g.used = 0usize
     g.width = width
     g.height = height
     g.cell = cell
@@ -215,6 +218,7 @@ fn grid_clear(g: *Grid) -> err {
         g.next[at] = NONE
         at += 1usize
     }
+    g.used = 0usize
     ret ok
 }
 
@@ -233,16 +237,27 @@ fn clamp_cell(value: i64, limit: u32) -> i64 {
 // A body goes on every cell its box touches, so a query against one cell finds it whether
 // it is centred there or merely overlapping.
 fn grid_insert(g: *Grid, id: u32, box: Aabb) -> err {
-    if usize(id) >= g.next.len { ret Bounds }
     let first_x = clamp_cell(cell_of(*g, box.x - box.half_w), g.width)
     let last_x = clamp_cell(cell_of(*g, box.x + box.half_w), g.width)
     let first_y = clamp_cell(cell_of(*g, box.y - box.half_h), g.height)
     let last_y = clamp_cell(cell_of(*g, box.y + box.half_h), g.height)
-    // One thread per body, so a body spanning several cells is reachable from the first
-    // of them; a broadphase is allowed to answer a superset and does.
-    let index = usize(first_y) * usize(g.width) + usize(first_x)
-    g.next[usize(id)] = g.heads[index]
-    g.heads[index] = id
+    // One chain slot per touched cell: a body spanning several cells is reachable from
+    // each of them, which is what the module contract promises.
+    let columns = usize(last_x - first_x + 1i64)
+    let rows = usize(last_y - first_y + 1i64)
+    if g.used + columns * rows > g.next.len { ret Size }
+    var cy = first_y
+    while cy <= last_y {
+        var cx = first_x
+        while cx <= last_x {
+            let index = usize(cy) * usize(g.width) + usize(cx)
+            g.next[g.used] = g.heads[index]
+            g.heads[index] = id
+            g.used += 1usize
+            cx += 1i64
+        }
+        cy += 1i64
+    }
     ret ok
 }
 

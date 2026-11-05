@@ -113,6 +113,9 @@ fn begin(s: *State) -> err {
 // a held key that the device reports every tick does not refill the buffer.
 fn apply(s: *State, code: u16, down: bool) -> err {
     let index = usize(code)
+    // A code past the bitset cannot be tracked, and pretending it is always a fresh
+    // press would refill the buffer on every device repeat.
+    if index / 64usize >= s.held.len { ret Unknown }
     let was = bit_test(s.held, index)
     if was == down { ret ok }
     if down {
@@ -188,23 +191,30 @@ fn axis(s: State, x: Axis) -> fixed.Fx {
 fn combo(s: State, c: Combo, steps: []const u16) -> bool {
     if c.count == 0u16 { ret false }
     if usize(c.first) + usize(c.count) > steps.len { ret false }
-    var previous_age = 65535u16
-    var step = 0u16
-    while step < c.count {
+    // Resolve the last step first (the most recent press), then walk backwards choosing
+    // the youngest press older than the step already matched.
+    var older_of = 65535u16
+    var have_previous = false
+    var step = c.count
+    while step > 0u16 {
+        step -= 1u16
         let wanted = steps[usize(c.first) + usize(step)]
         var best = NONE
         var at = 0usize
         while at < s.buffer.len {
-            // The most recent press of this code that is still older than the last step.
-            if s.buffer[at] == wanted && s.ages[at] < previous_age {
-                if best == NONE || s.ages[at] > s.ages[usize(best)] { best = u16(at) }
+            if s.buffer[at] == wanted {
+                let age = s.ages[at]
+                if !have_previous || age > older_of {
+                    if best == NONE || age < s.ages[usize(best)] { best = u16(at) }
+                }
             }
             at += 1usize
         }
         if best == NONE { ret false }
-        if previous_age != 65535u16 && previous_age - s.ages[usize(best)] > c.window { ret false }
-        previous_age = s.ages[usize(best)]
-        step += 1u16
+        let age = s.ages[usize(best)]
+        if have_previous && age - older_of > c.window { ret false }
+        older_of = age
+        have_previous = true
     }
     ret true
 }

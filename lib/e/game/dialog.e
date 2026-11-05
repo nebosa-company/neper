@@ -154,13 +154,18 @@ fn choose(s: *State, t: Tree, choice: u16) -> err {
     if usize(choice) >= t.choices.len { ret Bounds }
     let taken = t.choices[usize(choice)]
     if !holds(*s, taken.show_if) { ret Invalid }
+    // Validate every effect target before the first mutation, so a malformed tree cannot
+    // leave flags bumped with the node unchanged (and retried).
+    let flag_ok = taken.set_flag == NONE || usize(taken.set_flag) / 64usize < s.flags.len
+    let var_ok = taken.add_key == NONE || usize(taken.add_key) < s.vars.len
+    if !flag_ok || !var_ok { ret Bounds }
+    if taken.target != END && usize(taken.target) >= t.nodes.len { ret Bounds }
     if taken.set_flag != NONE { try set_flag(s, taken.set_flag) }
     if taken.add_key != NONE { try add_value(s, taken.add_key, taken.delta) }
     if taken.target == END {
         s.finished = true
         ret ok
     }
-    if usize(taken.target) >= t.nodes.len { ret Bounds }
     s.at = taken.target
     ret ok
 }
@@ -171,7 +176,6 @@ fn advance(s: *State, t: Tree) -> err {
     if s.finished { ret Invalid }
     let (current, current_error) = node(*s, t)
     if current_error != ok { ret current_error }
-    var offered: [1]u16 = zero
     var live = 0usize
     var at = 0usize
     while at < usize(current.choice_count) {

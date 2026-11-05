@@ -114,6 +114,19 @@ fn main() -> i64 {
     if collide2d.grid_clear(&grid) != ok { ret 35i64 }
     let (empty_count, empty_error) = collide2d.grid_near(grid, collide2d.aabb(fx(16i32), fx(16i32), ONE, ONE), near[..])
     if empty_error != ok || empty_count != 0usize { ret 36i64 }
+    // #14: a body spanning several cells is threaded on every one of them, so a query
+    // touching only its far column still finds it.
+    if collide2d.grid_insert(&grid, 2u32, collide2d.aabb(fx(32i32), fx(16i32), fx(48i32), ONE)) != ok { ret 70i64 }
+    var wide_near: [8]u32 = zero
+    let (wide_count, wide_error) = collide2d.grid_near(grid, collide2d.aabb(fx(80i32), fx(16i32), fx(8i32), ONE), wide_near[..])
+    if wide_error != ok { ret 71i64 }
+    var found_wide = false
+    walk = 0usize
+    while walk < wide_count {
+        if wide_near[walk] == 2u32 { found_wide = true }
+        walk += 1usize
+    }
+    if !found_wide { ret 72i64 }
 
     // --- field of view ----------------------------------------------------------------
     var seen: [1]u64 = zero
@@ -163,5 +176,23 @@ fn main() -> i64 {
     if !vision.line_of_sight(map, 3i32, 3i32, 3i32, 2i32) { ret 63i64 }
     if !vision.line_of_sight(map, 3i32, 3i32, 3i32, 3i32) { ret 64i64 }
 
+    // #395: a ray is not a miss just because it crosses a lot of open cells. A 5000-cell
+    // strip, tiles of one unit, with a wall at 4500: the ray passes 4500 open cells before
+    // reaching it, well past the old 4096-step truncation.
+    var strip_tiles: [5000]u16 = zero
+    var strip_solid: [79]u64 = zero
+    var strip_opaque: [79]u64 = zero
+    var strip_elevation: [5000]u8 = zero
+    var strip_layers: [1]tilemap.Layer = zero
+    strip_layers[0usize] = tilemap.Layer { tiles: strip_tiles[..], width: 5000u32, height: 1u32 }
+    var strip: tilemap.Map = zero
+    if tilemap.init(&strip, strip_layers[..], 1u32, 1u32, strip_solid[..], strip_opaque[..], strip_elevation[..]) != ok { ret 66i64 }
+    if tilemap.set_solid(&strip, 4500i32, 0i32, true) != ok { ret 67i64 }
+    let far_wall = collide2d.ray_tiles(strip, 0i32, 0i32, fx(5000i32), 0i32, ONE)
+    if !far_wall.hit || far_wall.normal_x != -1i32 { ret 68i64 }
+    // A ray that really does end before the wall is still a miss.
+    if collide2d.ray_tiles(strip, 0i32, 0i32, fx(4000i32), 0i32, ONE).hit { ret 69i64 }
+
     ret 0i64
 }
+

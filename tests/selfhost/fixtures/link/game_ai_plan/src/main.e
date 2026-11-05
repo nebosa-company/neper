@@ -386,7 +386,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if code(ai.behavior_tick[BtCtx](tree[..], bt_state[..], 10u16, &bc, bt_leaf)) != 0u8 { os.exit(30i32) }
     if code(ai.behavior_tick[BtCtx](tree[..], bt_state[..], 10u16, &bc, bt_leaf)) != 0u8 { os.exit(31i32) }
     if calls[0usize] != 6usize || calls[1usize] != 7usize || calls[2usize] != 3usize || calls[3usize] != 2usize || calls[4usize] != 3usize { os.exit(32i32) }
-    if bt_state[1usize] != 1u16 || bt_state[10usize] != 2u16 || bt_state[0usize] != 0u16 { os.exit(33i32) }
+    if bt_state[1usize] != 1u16 || bt_state[10usize] != 0u16 || bt_state[0usize] != 0u16 { os.exit(33i32) }
     if ai.behavior_tick[BtCtx](tree[..], bt_state[..], 99u16, &bc, bt_leaf) != .Failure { os.exit(34i32) }
 
     // --- GOAP: the wood chopper ------------------------------------------------------------------

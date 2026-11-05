@@ -240,6 +240,7 @@ fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, ou
     let cells = usize(tilemap.width(m)) * usize(tilemap.height(m))
     if s.came_from.len < cells || s.cost.len < cells { ret (0usize, Size) }
     if s.seen.len < (cells + 63usize) / 64usize { ret (0usize, Size) }
+    if s.heap.len < cells || s.heap_f.len < cells { ret (0usize, Size) }
     if !tilemap.in_bounds(m, sx, sy) || !tilemap.in_bounds(m, gx, gy) { ret (0usize, Bounds) }
     if tilemap.is_solid(m, sx, sy) || tilemap.is_solid(m, gx, gy) { ret (0usize, Unreachable) }
     var at = 0usize
@@ -257,7 +258,8 @@ fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, ou
     let start = index_of(m, sx, sy)
     let goal = index_of(m, gx, gy)
     s.cost[usize(start)] = 0u32
-    try_push(s, start, heuristic(sx, sy, gx, gy))
+    let start_push = try_push(s, start, heuristic(sx, sy, gx, gy))
+    if start_push != ok { ret (0usize, start_push) }
     while true {
         let (current, more) = heap_pop(s)
         if !more { ret (0usize, Unreachable) }
@@ -285,7 +287,8 @@ fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, ou
             if stepped < s.cost[usize(next)] {
                 s.cost[usize(next)] = stepped
                 s.came_from[usize(next)] = current
-                try_push(s, next, stepped + heuristic(nx, ny, gx, gy))
+                let next_push = try_push(s, next, stepped + heuristic(nx, ny, gx, gy))
+                if next_push != ok { ret (0usize, next_push) }
             }
         }
     }
@@ -295,8 +298,8 @@ fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, ou
 // A push that cannot grow the heap drops the candidate rather than failing the search:
 // the path found is then possibly not the shortest, which is better than no path at all
 // when a caller has sized its scratch too small.
-fn try_push(s: *Scratch, node: u32, f: u32) {
-    let pushed = heap_push(s, node, f)
+fn try_push(s: *Scratch, node: u32, f: u32) -> err {
+    ret heap_push(s, node, f)
 }
 
 // Walk the parents back from the goal, then reverse in place, so the caller reads the
@@ -879,6 +882,7 @@ fn behavior_tick[Ctx: type](tree: []const BtNode, state: []u16, node: u16, ctx: 
     if slot >= tree.len || slot >= state.len { ret .Failure }
     let n = tree[slot]
     if n.kind == .Leaf { ret leaf(ctx, n.id) }
+    if (n.kind == .Inverter || n.kind == .Succeeder || n.kind == .Repeat) && n.child_count == 0u16 { ret .Failure }
     if n.kind == .Inverter {
         let inner = behavior_tick[Ctx](tree, state, n.first_child, ctx, leaf)
         if inner == .Success { ret .Failure }
@@ -898,8 +902,8 @@ fn behavior_tick[Ctx: type](tree: []const BtNode, state: []u16, node: u16, ctx: 
                 state[slot] = 0u16
                 ret .Failure
             }
-            state[slot] = state[slot] + 1u16
             if n.limit == 0u16 { ret .Running }
+            state[slot] = state[slot] + 1u16
             if state[slot] >= n.limit {
                 state[slot] = 0u16
                 ret .Success
@@ -1103,28 +1107,28 @@ fn boids(flock: []const Agent, which: usize, radius: fixed.Fx, w_separate: fixed
     weights[1usize] = w_align
     weights[2usize] = w_cohere
     var near = 0i32
-    var sum_vx = 0i32
-    var sum_vy = 0i32
-    var sum_x = 0i32
-    var sum_y = 0i32
+    var sum_vx = 0i64
+    var sum_vy = 0i64
+    var sum_x = 0i64
+    var sum_y = 0i64
     var i = 0usize
     while i < flock.len {
         if i != which {
             let o = flock[i]
             if fixed.length(a.x - o.x, a.y - o.y) < radius {
                 near += 1i32
-                sum_vx = sum_vx + o.vx
-                sum_vy = sum_vy + o.vy
-                sum_x = sum_x + o.x
-                sum_y = sum_y + o.y
+                sum_vx = sum_vx + i64(o.vx)
+                sum_vy = sum_vy + i64(o.vy)
+                sum_x = sum_x + i64(o.x)
+                sum_y = sum_y + i64(o.y)
             }
         }
         i += 1usize
     }
     if near > 0i32 {
-        let (unit_x, unit_y) = fixed.normalize(sum_vx / near, sum_vy / near)
+        let (unit_x, unit_y) = fixed.normalize(i32(sum_vx / i64(near)), i32(sum_vy / i64(near)))
         parts[1usize] = Steer { x: fixed.mul(unit_x, a.max_speed) - a.vx, y: fixed.mul(unit_y, a.max_speed) - a.vy }
-        parts[2usize] = seek(a, sum_x / near, sum_y / near)
+        parts[2usize] = seek(a, i32(sum_x / i64(near)), i32(sum_y / i64(near)))
     }
     ret combine(parts[..], weights[..])
 }

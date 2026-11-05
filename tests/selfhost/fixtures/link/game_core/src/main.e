@@ -77,6 +77,9 @@ fn main() -> i64 {
     var free: [4]u32 = zero
     var store: ecs.Store = zero
     if ecs.init(&store, columns[..], generations[..], free[..]) != ok { ret 25i64 }
+    // #14: a free list shorter than the generations cannot hold every despawned slot.
+    var short_store: ecs.Store = zero
+    if ecs.init(&short_store, columns[..], generations[..], free[..3usize]) != ecs.Size { ret 55i64 }
 
     let (first, first_error) = ecs.spawn(&store)
     if first_error != ok { ret 26i64 }
