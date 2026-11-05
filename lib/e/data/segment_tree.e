@@ -255,10 +255,34 @@ fn update_range(t: *Lazy, low: usize, high: usize, delta: i64) -> err { ret lazy
 // Path copying by its planned name: a new version whose element `index` is
 // `value`; the version at `root` stays as it was.
 fn persistent_update(t: *Persistent, root: u32, index: usize, value: i64) -> (u32, err) {
-    let (current, read_error) = persistent_sum(t, root, index, index + 1usize)
-    if read_error != ok { ret (root, read_error) }
-    let (fresh, add_error) = persistent_add(t, root, index, value - current)
-    ret (fresh, add_error)
+    if index >= t.count { ret (root, Invalid) }
+    var depth = 1usize
+    var span = 1usize
+    while span < t.count {
+        span = span * 2usize
+        depth += 1usize
+    }
+    if t.used + depth > t.left.len { ret (root, TooSmall) }
+    ret (persistent_update_node(t, root, 0usize, t.count - 1usize, index, value), ok)
+}
+
+fn persistent_update_node(t: *Persistent, old: u32, low: usize, high: usize, index: usize, value: i64) -> u32 {
+    let node = t.used
+    t.used += 1usize
+    t.left[node] = t.left[usize(old)]
+    t.right[node] = t.right[usize(old)]
+    if low == high {
+        t.sums[node] = value
+    } else {
+        let middle = low + (high - low) / 2usize
+        if index <= middle {
+            t.left[node] = persistent_update_node(t, t.left[usize(old)], low, middle, index, value)
+        } else {
+            t.right[node] = persistent_update_node(t, t.right[usize(old)], middle + 1usize, high, index, value)
+        }
+        t.sums[node] = t.sums[usize(t.left[node])] + t.sums[usize(t.right[node])]
+    }
+    ret u32(node)
 }
 
 // The sum over `low..high` of the version at `root`.

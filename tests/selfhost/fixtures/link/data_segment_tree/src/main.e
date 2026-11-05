@@ -178,6 +178,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, index_error) = segment_tree.persistent_add(&p, roots[7usize], 7usize, 1i64)
     if index_error != segment_tree.Invalid { os.exit(3i32) }
 
+    // 4: replacing the only element with the other extreme is representable even
+    // though the delta between them is not; the old version stays as it was.
+    var edge_left: [2]u32 = zero
+    var edge_right: [2]u32 = zero
+    var edge_sums: [2]i64 = zero
+    var lowest: [1]i64 = zero
+    lowest[0usize] = 0i64 - 9223372036854775807i64 - 1i64
+    let (edge, edge_root, edge_error) = segment_tree.persistent_build(edge_left[..], edge_right[..], edge_sums[..], lowest[..])
+    if edge_error != ok { os.exit(4i32) }
+    var edge_tree = edge
+    let (edge_next, replace_error) = segment_tree.persistent_update(&edge_tree, edge_root, 0usize, 9223372036854775807i64)
+    if replace_error != ok { os.exit(4i32) }
+    let (replaced, replaced_error) = segment_tree.persistent_sum(&edge_tree, edge_next, 0usize, 1usize)
+    if replaced_error != ok || replaced != 9223372036854775807i64 { os.exit(4i32) }
+    let (original, original_error) = segment_tree.persistent_sum(&edge_tree, edge_root, 0usize, 1usize)
+    if original_error != ok || original != 0i64 - 9223372036854775807i64 - 1i64 { os.exit(4i32) }
+
+    // 5: an index at usize::MAX is Invalid before any arithmetic on it.
+    let (_, max_index_error) = segment_tree.persistent_update(&edge_tree, edge_next, 18446744073709551615usize, 1i64)
+    if max_index_error != segment_tree.Invalid { os.exit(5i32) }
+
     try io.print("data segment tree ok\n")
     ret ok
 }
