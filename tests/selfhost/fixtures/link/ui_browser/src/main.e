@@ -3,6 +3,7 @@
 // load leaves the error page, the renderer is bound once to each page (a reload's new page included), the pump is
 // quiet on a static page, and a page tab hands out a canvas and a region.
 use e.fs
+use e.gfx.geometry as geo
 use e.gfx.scene as scene
 use e.gpu
 use e.mem
@@ -12,6 +13,10 @@ use e.str
 use e.text.fontset as fontset
 use e.ui.browser as browser
 use e.web.shell as shell
+
+const RED: u32 = 4294901760u32
+const BLUE: u32 = 4278190335u32
+const WHITE: u32 = 4294967295u32
 
 fn data_page(a: *mem.Arena, title: str) -> str {
     let (s, e) = str.concat(a, "data:text/html,<title>", title)
@@ -74,10 +79,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mem.address_of(c.ctx) == 0usize { os.exit(41i32) }
     let r = browser.region(&b)
     if !r.enabled { os.exit(42i32) }
+    // Media preferences reach the page's style: the colour scheme picks the rule, reduced motion the height. The page is
+    // loaded first (light, no preference), then the preference changes and the same page paints differently.
+    let styled = "data:text/html,<style>body{margin:0;background:white}div{width:40px;height:20px;background:red}@media (prefers-color-scheme:dark){div{background:blue}}@media (prefers-reduced-motion:reduce){div{height:40px}}</style><div></div>"
+    if browser.navigate(&b, styled) != ok { os.exit(50i32) }
+    let side = 64usize
+    let (frames, fre) = gpu.open_target(q, gpu.Surface { kind: gpu.SurfaceKind.Offscreen, handle: zero, context: zero }, u32(side), u32(side), gpu.Format.Bgra8)
+    if fre != ok { os.exit(51i32) }
+    let (canvas, cve) = scene.target_of(a, frames)
+    if cve != ok { os.exit(51i32) }
+    let (pixels, pxe) = mem.alloc[u32](a, side * side)
+    if pxe != ok { os.exit(52i32) }
+    // Light, no reduced motion: a 20 px red block over a white body.
+    let (bv, be) = scene.builder(a, 4096usize)
+    if be != ok { os.exit(53i32) }
+    var builder = bv
+    let c0 = browser.canvas(&b)
+    if c0.paint(c0.ctx, &builder, geo.rect(0.0, 0.0, 64.0, 64.0)) != ok { os.exit(53i32) }
+    let (id0, ce0) = scene.compile(&renderer, scene.finish(&builder))
+    if ce0 != ok { os.exit(53i32) }
+    if scene.render(&renderer, id0, canvas, geo.Size { width: 64.0, height: 64.0 }) != ok { os.exit(53i32) }
+    let (image0, im0) = gpu.presented(frames)
+    if im0 != ok { os.exit(53i32) }
+    if gpu.read_image(q, image0, pixels) != ok { os.exit(53i32) }
+    if pixels[10usize * side + 10usize] != RED { os.exit(54i32) }
+    if pixels[30usize * side + 10usize] != WHITE { os.exit(55i32) }
+    // Dark and reduced motion: the block is blue and 40 px tall.
+    browser.set_preferences(&b, true, true)
+    let (bv2, be2) = scene.builder(a, 4096usize)
+    if be2 != ok { os.exit(56i32) }
+    var builder2 = bv2
+    let c1 = browser.canvas(&b)
+    if c1.paint(c1.ctx, &builder2, geo.rect(0.0, 0.0, 64.0, 64.0)) != ok { os.exit(56i32) }
+    let (id1, ce1) = scene.compile(&renderer, scene.finish(&builder2))
+    if ce1 != ok { os.exit(56i32) }
+    if scene.render(&renderer, id1, canvas, geo.Size { width: 64.0, height: 64.0 }) != ok { os.exit(56i32) }
+    let (image1, im1) = gpu.presented(frames)
+    if im1 != ok { os.exit(56i32) }
+    if gpu.read_image(q, image1, pixels) != ok { os.exit(56i32) }
+    if pixels[10usize * side + 10usize] != BLUE { os.exit(57i32) }
+    if pixels[30usize * side + 10usize] != BLUE { os.exit(58i32) }
+    // A page loaded after the preference was set is laid out with it from the start.
+    if browser.navigate(&b, styled) != ok || !browser.state(&b).ready { os.exit(59i32) }
     // A load the engine cannot do leaves the error page, and the history keeps the attempt.
     if browser.navigate(&b, "ftp://nowhere.test/file") != ok { os.exit(43i32) }
     st = browser.state(&b)
     if !st.ready || st.error_text.len == 0usize { os.exit(44i32) }
-    if !browser.back(&b) || !str.eq(browser.state(&b).title, "one") { os.exit(45i32) }
+    if !browser.back(&b) || browser.state(&b).error_text.len != 0usize { os.exit(45i32) }
     ret ok
 }

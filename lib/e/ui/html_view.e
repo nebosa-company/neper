@@ -40,7 +40,7 @@ type View = struct {
     width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32,
     revision: u64, layout_mark: usize, frame_mark: usize,
     activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool,
-    tap_x: f32, tap_y: f32, has_tap: bool
+    tap_x: f32, tap_y: f32, has_tap: bool, dark: bool, reduced_motion: bool
 }
 
 error EmptyFontSet
@@ -63,6 +63,8 @@ fn parse_options() -> html.Options {
 fn do_layout(v: *View, width: f32, height: f32) -> err {
     mem.reset(v.arena, v.layout_mark)
     var ctx = style.new_context(v.arena, f64(width), f64(height))
+    ctx.dark = v.dark
+    ctx.reduced_motion = v.reduced_motion
     // `ch` and `ex` follow the default font: the advance of its `0` and its x-height.
     let m0 = measure.measure_of(&v.host)
     var probe = style.initial_style()
@@ -132,6 +134,8 @@ fn open_tree(a: *mem.Arena, tree: dom.Dom, source: str, sheets: []const str, com
     v.has_hover = false
     v.layout_mark = mem.mark(a)
     v.frame_mark = mem.mark(a)
+    v.dark = false
+    v.reduced_motion = false
     try do_layout(v, width, height)
     v.opened = true
     ret (v, ok)
@@ -142,6 +146,15 @@ fn resize(v: *View, width: f32, height: f32) -> err {
     try do_layout(v, width, height)
     clamp_scroll(v)
     ret ok
+}
+
+// Applies the host's media preferences and lays the document out again, so a `prefers-color-scheme` or
+// `prefers-reduced-motion` rule (and `light-dark()`) takes effect on the next paint. Unchanged preferences cost nothing.
+fn set_preferences(v: *View, dark: bool, reduced_motion: bool) -> err {
+    if v.dark == dark && v.reduced_motion == reduced_motion { ret ok }
+    v.dark = dark
+    v.reduced_motion = reduced_motion
+    ret resize(v, v.width, v.height)
 }
 
 fn scroll_to(v: *View, x: f32, y: f32) {

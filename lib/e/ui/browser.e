@@ -59,6 +59,13 @@ fn reload(b: *Browser) {
     shell.reload(b.sh, b.tab)
 }
 
+// The host's media preferences for every page of this browser: `dark` answers `prefers-color-scheme` (and
+// `light-dark()`), `reduced_motion` answers `prefers-reduced-motion`. A page whose answer changes is laid out again,
+// so the next frame paints it; a page loaded later is laid out with them from the start.
+fn set_preferences(b: *Browser, dark: bool, reduced_motion: bool) {
+    shell.set_preferences(b.sh, dark, reduced_motion)
+}
+
 // Binds the page's images and web fonts to the frame's renderer. Meant to be called every frame: a page loaded since
 // the last one (reload, back, forward, a link) has no renderer yet, and an unchanged one costs two field reads.
 fn ensure_renderer(b: *Browser, r: *scene.Renderer) {

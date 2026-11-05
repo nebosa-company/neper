@@ -24863,7 +24863,7 @@ const DECORATION_LINE_THROUGH: u8 = 4u8
 type Custom = struct { name: str, value: str }
 type Extra = struct { name: str, value: str }
 type Style = struct { display: Display, was_inline: bool, lanes: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing, overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility, width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len, inset: [4]Len, margin: [4]Len, padding: [4]Len, border_width: [4]f64, border_style: [4]BorderStyle, border_color: [4]u32, border_current: [4]bool, radius_h: [4]Len, radius_v: [4]Len, z_index_auto: bool, z_index: i64, opacity: f64, flex_direction: FlexDirection, flex_wrap: FlexWrap, flex_grow: f64, flex_shrink: f64, flex_basis: Len, order: i64, justify_content: Align, justify_items: Align, justify_self: Align, align_items: Align, align_self: Align, align_content: Align, row_gap: Len, column_gap: Len, color: u32, font_size: f64, font_weight: f64, font_style: FontStyle, font_family: str, line_height: Len, letter_spacing: f64, word_spacing: f64, text_indent: Len, text_align: TextAlign, text_transform: TextTransform, white_space: WhiteSpace, word_break: WordBreak, overflow_wrap: OverflowWrap, text_overflow: TextOverflow, direction: Direction, writing_mode: WritingMode, vertical_align: VAlign, vertical_align_length: Len, decoration_line: u8, decoration_color: u32, decoration_current: bool, decoration_style: DecorationStyle, cursor: str, tab_size: f64, list_style_type: str, list_style_position: ListPosition, list_style_image: str, background_color: u32, outline_width: f64, outline_style: BorderStyle, outline_color: u32, outline_current: bool, outline_offset: f64, border_collapse: BorderCollapse, border_spacing_h: f64, border_spacing_v: f64, table_layout: TableLayout, caption_side: CaptionSide, empty_cells: EmptyCells, custom: []const Custom, extras: []const Extra, // The styles of the element's pseudo-elements, by `selector.PseudoElement` (an address of 0: the element has none). pseudo: [8]*const Style }
-type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64 }
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, reduced_motion: bool, ch: f64, ex: f64, lh: f64 }
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context
 fn len_auto() -> Len
 fn len_px(px: f64) -> Len
@@ -25503,7 +25503,7 @@ fn paint_env_of(h: *Host) -> paint.PaintEnv
 
 ```neper
 type Images = struct { ctx: *void, intrinsic: fn(*void, html.NodeId, *const style.Style) -> layout.Intrinsic, image: fn(*void, html.NodeId) -> css_paint.ImageRef, url_image: fn(*void, str) -> css_paint.ImageRef }
-type View = struct { arena: *mem.Arena, fonts: *fontset.Set, source: str, sheets: []const str, complete_sheets: bool, tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host, width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32, revision: u64, layout_mark: usize, frame_mark: usize, activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool }
+type View = struct { arena: *mem.Arena, fonts: *fontset.Set, source: str, sheets: []const str, complete_sheets: bool, tree: dom.Dom, styles: []style.Style, lay: layout.Layout, host: measure.Host, width: f32, height: f32, scroll_x: f32, scroll_y: f32, origin_x: f32, origin_y: f32, revision: u64, layout_mark: usize, frame_mark: usize, activated: str, has_activated: bool, hover_link: str, has_hover: bool, opened: bool, tap_x: f32, tap_y: f32, has_tap: bool, dark: bool, reduced_motion: bool }
 error EmptyFontSet
 fn none_intrinsic(ctx: *void, node: html.NodeId, s: *const style.Style) -> layout.Intrinsic
 fn none_image(ctx: *void, node: html.NodeId) -> css_paint.ImageRef
@@ -25516,6 +25516,7 @@ fn clamp_scroll(v: *View)
 fn open(a: *mem.Arena, source: str, sheets: []const str, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err)
 fn open_tree(a: *mem.Arena, tree: dom.Dom, source: str, sheets: []const str, complete: bool, fonts: *fontset.Set, images: Images, width: f32, height: f32) -> (*View, err)
 fn resize(v: *View, width: f32, height: f32) -> err
+fn set_preferences(v: *View, dark: bool, reduced_motion: bool) -> err
 fn scroll_to(v: *View, x: f32, y: f32)
 fn scroll_by(v: *View, dx: f32, dy: f32)
 fn link_at(v: *View, x: f32, y: f32) -> (str, bool)
@@ -25541,6 +25542,7 @@ fn navigate(b: *Browser, input: str) -> err
 fn back(b: *Browser) -> bool
 fn forward(b: *Browser) -> bool
 fn reload(b: *Browser)
+fn set_preferences(b: *Browser, dark: bool, reduced_motion: bool)
 fn ensure_renderer(b: *Browser, r: *scene.Renderer)
 fn pump(b: *Browser, now_ms: f64) -> bool
 fn timer_due(b: *const Browser, now_ms: f64) -> bool
@@ -25865,6 +25867,7 @@ fn find_title(p: *Page) -> str
 fn collapse_space(a: *mem.Arena, s: str) -> str
 fn load(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, address: str, width: f32, height: f32, view_bytes: usize) -> (*Page, err)
 fn attach_renderer(p: *Page, r: *scene.Renderer)
+fn set_preferences(p: *Page, dark: bool, reduced_motion: bool) -> err
 fn box_of(p: *Page, node: html.NodeId) -> u32
 fn click(p: *Page, x: f32, y: f32) -> bool
 fn close(p: *Page)

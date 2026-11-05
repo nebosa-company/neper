@@ -1258,8 +1258,7 @@ fn release_fonts(p: *Page) {
 }
 
 // Lets the page upload decoded images to `r` the first time it paints them.
-fn attach_renderer(p: *Page, r: *scene.Renderer) {
-    p.renderer = r
+fn attach_renderer(p: *Page, r: *scene.Renderer) {    p.renderer = r
     p.has_renderer = true
     // Faces added since the renderer was set up (web fonts); a registered id is replaced, so this is idempotent.
     var i = 0usize
@@ -1267,6 +1266,12 @@ fn attach_renderer(p: *Page, r: *scene.Renderer) {
         let registered = scene.register_font(r, p.fonts.faces.items[i].font)
         i += 1usize
     }
+}
+
+// Applies the host's colour-scheme and reduced-motion preferences to the page's style resolution -- the document's
+// `prefers-color-scheme` and `prefers-reduced-motion` rules and `light-dark()` -- and lays the page out again.
+fn set_preferences(p: *Page, dark: bool, reduced_motion: bool) -> err {
+    ret view.set_preferences(p.view, dark, reduced_motion)
 }
 
 // How many requests the client's filter list has refused since this page began loading.

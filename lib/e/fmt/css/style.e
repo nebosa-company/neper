@@ -112,10 +112,12 @@ type Style = struct {
 }
 
 // `ch` and `ex` are the advance of `0` and the x-height as fractions of the font size for the element being styled.
-type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, ch: f64, ex: f64, lh: f64 }
+// `dark` and `reduced_motion` are the host's media preferences: `prefers-color-scheme` (and `light-dark()`) and
+// `prefers-reduced-motion` read them.
+type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, reduced_motion: bool, ch: f64, ex: f64, lh: f64 }
 
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context {
-    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false, ch: 0.5f64, ex: 0.5f64, lh: 0.0f64 }
+    ret Context { a: a, viewport_width: viewport_width, viewport_height: viewport_height, root_font_size: 16.0f64, dark: false, reduced_motion: false, ch: 0.5f64, ex: 0.5f64, lh: 0.0f64 }
 }
 
 // --- Small helpers.
@@ -1752,7 +1754,7 @@ fn compute_for(c: *const Context, m: *const cssm.Matcher, ua: *const Sheet, auth
     let (emade, eerror) = list.init[Extra](a, 8usize)
     if eerror != ok { ret (s, false, eerror) }
     // Font-relative `ch` and `ex` depend on the element's own font: Ahem (the test font) has a square `0` and an 0.8 em x-height.
-    var cc = Context { a: c.a, viewport_width: c.viewport_width, viewport_height: c.viewport_height, root_font_size: c.root_font_size, dark: c.dark, ch: c.ch, ex: c.ex, lh: 0.0f64 }
+    var cc = Context { a: c.a, viewport_width: c.viewport_width, viewport_height: c.viewport_height, root_font_size: c.root_font_size, dark: c.dark, reduced_motion: c.reduced_motion, ch: c.ch, ex: c.ex, lh: 0.0f64 }
     var fw = 0usize
     if str.contains(cv.lower(a, parent.font_family), "ahem") {
         cc.ch = 1.0f64
@@ -1897,6 +1899,7 @@ fn compute_tree(c: *Context, d: *const dom.Dom, ua: []const cascade.Rule, author
 fn media_env_of(c: *const Context) -> sheet.MediaEnv {
     var env = sheet.media_env(c.viewport_width, c.viewport_height)
     env.dark = c.dark
+    env.reduced_motion = c.reduced_motion
     ret env
 }
 

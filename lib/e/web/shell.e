@@ -42,7 +42,7 @@ type Tab = struct {
 type Shell = struct {
     a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, height: f32,
     tabs: list.List[*Tab], free_tabs: list.List[*Tab], active: usize, next_id: u32,
-    bookmarks: list.List[Entry], visits: list.List[Entry]
+    bookmarks: list.List[Entry], visits: list.List[Entry], dark: bool, reduced_motion: bool
 }
 
 fn new(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, height: f32) -> (*Shell, err) {
@@ -56,7 +56,7 @@ fn new(a: *mem.Arena, client: *fetch.Client, fonts: *fontset.Set, width: f32, he
     if be != ok { ret (zero, be) }
     let (vl, ve) = list.init[Entry](a, 64usize)
     if ve != ok { ret (zero, ve) }
-    cell[0usize] = Shell { a: a, client: client, fonts: fonts, width: width, height: height, tabs: tl, free_tabs: fl, active: 0usize, next_id: 1u32, bookmarks: bl, visits: vl }
+    cell[0usize] = Shell { a: a, client: client, fonts: fonts, width: width, height: height, tabs: tl, free_tabs: fl, active: 0usize, next_id: 1u32, bookmarks: bl, visits: vl, dark: false, reduced_motion: false }
     ret (&cell[0usize], ok)
 }
 
@@ -293,6 +293,24 @@ fn load_into(sh: *Shell, t: *Tab, logical: str) {
     }
     t.pg = pg
     t.loaded = true
+    if sh.dark || sh.reduced_motion {
+        let pe = page.set_preferences(pg, sh.dark, sh.reduced_motion)
+    }
+}
+
+// Applies the browser's media preferences (`prefers-color-scheme`, `prefers-reduced-motion`) to the pages already
+// loaded and to every page loaded later; a changed preference is laid out again, so the next paint shows it.
+fn set_preferences(sh: *Shell, dark: bool, reduced_motion: bool) {
+    sh.dark = dark
+    sh.reduced_motion = reduced_motion
+    var i = 0usize
+    while i < sh.tabs.len {
+        let t = sh.tabs.items[i]
+        if t.loaded {
+            let e = page.set_preferences(t.pg, dark, reduced_motion)
+        }
+        i += 1usize
+    }
 }
 
 const MAX_VISITS: usize = 5000usize
