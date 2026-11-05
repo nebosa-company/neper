@@ -61,8 +61,16 @@ fn hedges_g(m1: f64, sd1: f64, n1: u64, m2: f64, sd2: f64, n2: u64) -> (Effect, 
 // or fewer than four observations is `Invalid`.
 fn fisher_z(r: f64, n: u64) -> (Effect, err) {
     if !(r > 0.0f64 - 1.0f64) || !(r < 1.0f64) || n <= 3u64 { ret (zero, Invalid) }
+    var estimate = 0.0f64
+    if math.abs[f64](r) < 1.0e-3f64 {
+        // atanh's series: the ratio form rounds 1 + r and 1 - r against a small signal
+        let square = r * r
+        estimate = r * (1.0f64 + square / 3.0f64 + square * square / 5.0f64)
+    } else {
+        estimate = 0.5f64 * math.log[f64]((1.0f64 + r) / (1.0f64 - r))
+    }
     ret (Effect {
-        estimate: 0.5f64 * math.log[f64]((1.0f64 + r) / (1.0f64 - r)),
+        estimate: estimate,
         variance: 1.0f64 / (f64(n) - 3.0f64)
     }, ok)
 }
@@ -171,8 +179,19 @@ fn random_pool(estimates: []const f64, variances: []const f64, n: usize, tau2: f
 }
 
 // Solve the dense `p × p` system in place by Gauss-Jordan elimination with
-// partial pivoting; the answer replaces `rhs`. `Singular` below 1e-12 pivots.
+// partial pivoting; the answer replaces `rhs`. The pivot floor is relative to the
+// matrix's largest entry, since `X'WX` scales with the weights; `Singular` below
+// `1e-12 * largest`.
 fn meta_solve(matrix: []f64, rhs: []f64, p: usize) -> err {
+    var largest = 0.0f64
+    var entry = 0usize
+    while entry < p * p {
+        var magnitude = matrix[entry]
+        if magnitude < 0.0f64 { magnitude = 0.0f64 - magnitude }
+        if magnitude > largest { largest = magnitude }
+        entry += 1usize
+    }
+    if !(largest > 0.0f64) { ret Singular }
     var column = 0usize
     while column < p {
         var pivot = column
@@ -188,7 +207,7 @@ fn meta_solve(matrix: []f64, rhs: []f64, p: usize) -> err {
             }
             row += 1usize
         }
-        if best < 1.0e-12f64 { ret Singular }
+        if best < 1.0e-12f64 * largest { ret Singular }
         if pivot != column {
             var j = 0usize
             while j < p {

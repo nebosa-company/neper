@@ -19,6 +19,8 @@ use e.math.special
 
 error TooSmall
 error Invalid
+// A Newton iteration that exhausted its rounds without meeting its step test.
+error NotConverged
 
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
@@ -1369,7 +1371,7 @@ fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64
 
 // Startup limits use the exact geometric variance for independent observations.
 fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err {
-    if values.len == 0usize || center - center != 0.0f64 || sigma - sigma != 0.0f64 || lambda - lambda != 0.0f64 || width - width != 0.0f64 || sigma <= 0.0f64 || lambda <= 0.0f64 || width <= 0.0f64 { ret Invalid }
+    if values.len == 0usize || center - center != 0.0f64 || sigma - sigma != 0.0f64 || lambda - lambda != 0.0f64 || width - width != 0.0f64 || sigma <= 0.0f64 || lambda <= 0.0f64 || lambda > 1.0f64 || width <= 0.0f64 { ret Invalid }
     if out.len < values.len { ret TooSmall }
     var i = 0usize
     while i < values.len {
@@ -1433,8 +1435,16 @@ fn log_binomial(n: u64, k: u64) -> f64 {
 // draws - observed) / C(population, draws)` in log space. An inconsistent
 // population (`successes` or `draws` past `population`) is `Invalid`; an
 // `observed` outside the support answers `0`.
+// Large-population guard: the log-binomial difference is three `lgamma` values, each of order
+// n ln n, so above about 1e9 the rounding of their difference (~1e-5 in the log) is the limit
+// of the series; larger populations refuse rather than answer with fewer digits.
+const HYPERGEOMETRIC_MAX_POPULATION: u64 = 1000000000u64
+// Tails are summed term by term; a support wider than this would not answer promptly.
+const HYPERGEOMETRIC_MAX_TERMS: u64 = 1000000u64
+
 fn hypergeometric_pmf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
     if successes > population || draws > population { ret (0.0f64, Invalid) }
+    if population > HYPERGEOMETRIC_MAX_POPULATION { ret (0.0f64, Invalid) }
     var low = 0u64
     if draws > population - successes { low = draws - (population - successes) }
     var high = draws
@@ -1447,11 +1457,13 @@ fn hypergeometric_pmf(population: u64, successes: u64, draws: u64, observed: u64
 // exactly `1` (below it, `0`).
 fn hypergeometric_cdf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
     if successes > population || draws > population { ret (0.0f64, Invalid) }
+    if population > HYPERGEOMETRIC_MAX_POPULATION { ret (0.0f64, Invalid) }
     var low = 0u64
     if draws > population - successes { low = draws - (population - successes) }
     var high = draws
     if successes < high { high = successes }
     if observed >= high { ret (1.0f64, ok) }
+    if observed > low && observed - low >= HYPERGEOMETRIC_MAX_TERMS { ret (0.0f64, Invalid) }
     var total = 0.0f64
     var k = low
     while k <= observed {
@@ -1469,11 +1481,13 @@ fn hypergeometric_cdf(population: u64, successes: u64, draws: u64, observed: u64
 // `1` (past it, `0`).
 fn hypergeometric_sf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
     if successes > population || draws > population { ret (0.0f64, Invalid) }
+    if population > HYPERGEOMETRIC_MAX_POPULATION { ret (0.0f64, Invalid) }
     var low = 0u64
     if draws > population - successes { low = draws - (population - successes) }
     var high = draws
     if successes < high { high = successes }
     if observed <= low { ret (1.0f64, ok) }
+    if observed < high && high - observed >= HYPERGEOMETRIC_MAX_TERMS { ret (0.0f64, Invalid) }
     var total = 0.0f64
     var k = observed
     while k <= high {
@@ -2034,8 +2048,9 @@ fn jackknife[Ctx: type](values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []co
     if n < 2usize { ret (result, Invalid) }
     if scratch.len + 1usize < n { ret (result, TooSmall) }
     result.estimate = statistic(ctx, values)
+    // First pass: the mean of the leave-one-out statistics, Neumaier-compensated.
     var total = 0.0f64
-    var total_squares = 0.0f64
+    var compensation = 0.0f64
     var leave = 0usize
     while leave < n {
         var i = 0usize
@@ -2048,16 +2063,38 @@ fn jackknife[Ctx: type](values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []co
             i += 1usize
         }
         let theta = statistic(ctx, scratch[..n - 1usize])
-        total += theta
-        total_squares += theta * theta
+        let t = total + theta
+        if math.abs[f64](total) >= math.abs[f64](theta) {
+            compensation += (total - t) + theta
+        } else {
+            compensation += (theta - t) + total
+        }
+        total = t
         leave += 1usize
     }
     let nf = f64(n)
-    let mean_theta = total / nf
+    let mean_theta = (total + compensation) / nf
     result.bias = (nf - 1.0f64) * (mean_theta - result.estimate)
-    var spread = total_squares / nf - mean_theta * mean_theta
-    if spread < 0.0f64 { spread = 0.0f64 }
-    result.standard_error = math.sqrt[f64]((nf - 1.0f64) * spread)
+    // Second pass: the squared deviations from the mean, so a far-away location
+    // cannot cancel the spread of the leave-one-out statistics.
+    var spread = 0.0f64
+    leave = 0usize
+    while leave < n {
+        var i = 0usize
+        var j = 0usize
+        while i < n {
+            if i != leave {
+                scratch[j] = values[i]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let theta = statistic(ctx, scratch[..n - 1usize])
+        let deviation = theta - mean_theta
+        spread += deviation * deviation
+        leave += 1usize
+    }
+    result.standard_error = math.sqrt[f64]((nf - 1.0f64) * (spread / nf))
     ret (result, ok)
 }
 
@@ -2204,13 +2241,16 @@ fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err) {
         if !(s > 0.0f64) { ret (start, Invalid) }
         var k = (3.0f64 - s + math.sqrt[f64]((s - 3.0f64) * (s - 3.0f64) + 24.0f64 * s)) / (12.0f64 * s)
         var round = 0usize
+        var converged = false
         while round < 100usize {
             let step = (math.log[f64](k) - digamma(k) - s) / (1.0f64 / k - trigamma(k))
             k -= step
             if k <= 0.0f64 { k = 1.0e-8f64 }
             round += 1usize
-            if math.abs[f64](step) < 1.0e-13f64 * k { round = 100usize }
+            if math.abs[f64](step) < 1.0e-13f64 * k { converged = true
+                round = 100usize }
         }
+        if !converged { ret (start, NotConverged) }
         fit.a = k
         fit.b = mu / k
         ret (fit, ok)
@@ -2218,6 +2258,7 @@ fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err) {
     let l1 = log_sum / n
     let l2 = log_complement / n
     var round = 0usize
+    var converged = false
     while round < 100usize {
         let both = digamma(fit.a + fit.b)
         let g1 = both - digamma(fit.a) + l1
@@ -2236,8 +2277,10 @@ fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err) {
         fit.a -= step_a
         fit.b -= step_b
         round += 1usize
-        if math.abs[f64](step_a) < 1.0e-13f64 * fit.a && math.abs[f64](step_b) < 1.0e-13f64 * fit.b { round = 100usize }
+        if math.abs[f64](step_a) < 1.0e-13f64 * fit.a && math.abs[f64](step_b) < 1.0e-13f64 * fit.b { converged = true
+            round = 100usize }
     }
+    if !converged { ret (start, NotConverged) }
     ret (fit, ok)
 }
 
@@ -2590,6 +2633,13 @@ fn box_cox_llf(values: []const f64, lambda: f64) -> (f64, err) {
 }
 
 fn box_cox_transform(value: f64, lambda: f64) -> f64 {
-    if lambda == 0.0f64 { ret math.log[f64](value) }
+    let log_value = math.log[f64](value)
+    if lambda == 0.0f64 { ret log_value }
+    // `(v^lambda - 1)/lambda` cancels near zero; the series in x = lambda ln v is exact to
+    // fourth order there, so the profile is continuous at the log transform.
+    let x = lambda * log_value
+    if math.abs[f64](x) < 1.0e-5f64 {
+        ret log_value * (1.0f64 + x / 2.0f64 + x * x / 6.0f64 + x * x * x / 24.0f64)
+    }
     ret (math.pow[f64](value, lambda) - 1.0f64) / lambda
 }

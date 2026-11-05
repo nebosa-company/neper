@@ -108,6 +108,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if meta.meta_regression(my[..], mv[..], mx[..], 4usize, 2usize, 0.0f64, short_beta[..], mcov[..], mscratch[..]) != meta.TooSmall { os.exit(4i32) }
     if meta.meta_regression(my[..], mv[..], mx[..], 4usize, 2usize, 0.0f64 - 1.0f64, mbeta[..], mcov[..], mscratch[..]) != meta.Invalid { os.exit(4i32) }
 
+    // 5: the pivot test is relative to X'WX's scale: five studies with huge variances still
+    // solve an intercept-only regression.
+    var big_y: [5]f64 = zero
+    var big_v: [5]f64 = zero
+    var big_x: [5]f64 = zero
+    var s = 0usize
+    while s < 5usize {
+        big_y[s] = 1.0f64 + f64(s)
+        big_v[s] = 10000000000000.0f64
+        big_x[s] = 1.0f64
+        s += 1usize
+    }
+    var big_beta: [1]f64 = zero
+    var big_cov: [1]f64 = zero
+    var big_scratch: [4]f64 = zero
+    if meta.meta_regression(big_y[..], big_v[..], big_x[..], 5usize, 1usize, 0.0f64, big_beta[..], big_cov[..], big_scratch[..]) != ok { os.exit(5i32) }
+    if !near(big_beta[0usize], 3.0f64, 0.000000001f64) { os.exit(5i32) }
+    // 6: Fisher-z keeps the digits of a tiny correlation.
+    let (tiny_z, tiny_z_error) = meta.fisher_z(1.0e-9f64, 30u64)
+    if tiny_z_error != ok || !near(tiny_z.estimate, 1.0e-9f64, 1.0e-18f64) { os.exit(6i32) }
+
     try io.print("algo stat meta ok\n")
     ret ok
 }
