@@ -1,0 +1,36 @@
+name: docs-seo
+# The SEO gate for docs/ (issue #341): the generated sitemap must be fresh for the tree
+# being pushed, and scripts/seo_lint.py must pass. Both run only when a change can move
+# them, so a stale sitemap or an indexable preview/tracker page fails the pull request
+# instead of shipping.
+on:
+  push:
+    paths:
+      - 'docs/**'
+      - 'scripts/seo_lint.py'
+      - 'scripts/render_sitemap.mjs'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'scripts/seo_lint.py'
+      - 'scripts/render_sitemap.mjs'
+jobs:
+  seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The sitemap's lastmod comes from `git log -1 --format=%cs -- docs/<page>`, so the
+      # whole history is needed: a depth-1 checkout dates every page with the pushed
+      # commit and the freshness diff would never be empty.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Sitemap is fresh
+        run: |
+          node scripts/render_sitemap.mjs
+          git diff --exit-code -- docs/sitemap.xml
+      - name: SEO lint
+        run: python3 scripts/seo_lint.py

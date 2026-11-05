@@ -6,6 +6,7 @@
   <title>One SQL contract, five drivers — Neper blog</title>
   <meta name="description" content="e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL, ODBC and SQL Server drivers: what differs, and one measured workload.">
   <link rel="canonical" href="https://neper.dev/blog/e-db-drivers.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -127,6 +128,65 @@
       footer { flex-direction: column; }
     }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "One SQL contract, five drivers",
+  "description": "e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL, ODBC and SQL Server drivers: what differs, and one measured workload.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-09-27",
+  "dateModified": "2026-09-28",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/e-db-drivers.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "One SQL contract, five drivers",
+      "item": "https://neper.dev/blog/e-db-drivers.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -136,13 +196,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // engineering</div>
       <h1>One SQL contract, five drivers</h1>
-      <p class="meta">September 27, 2026 · updated September 28, 2026 · <code>lib/e/db.e</code>, <code>lib/x/</code>, <code>benchmarks/db</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-09-27">September 27, 2026</time> · updated September 28, 2026 · <code>lib/e/db.e</code>, <code>lib/x/</code>, <code>benchmarks/db</code></p>
       <img class="banner" src="img/e-db-drivers.svg" width="1200" height="630" alt="One SQL contract, five drivers. Median microseconds per primary-key lookup on Windows, Neper against C: SQLite 23.3 and 20.3, PostgreSQL 39.8 and 35.1, MySQL 102.6 and 90.2, ODBC 81.1 and 60.0, SQL Server 208.1 and 162.4.">
 
       <p class="lede">Neper's standard library has had a database contract, <code>e.db</code>, for a while, with nothing behind it. Today it has five drivers: SQLite, PostgreSQL, MySQL, ODBC and SQL Server. Four bind a C library the vendor or the operating system provides. The fifth speaks SQL Server's own protocol, TDS, inside TLS 1.3, in plain Neper. Each is tested against a live database on Windows and Linux. This post walks through the contract, shows how to write a driver, explains what differs between the five, and ends with numbers: the same workload in Neper, C, Go and Rust, and which one wins.</p>
@@ -457,6 +518,11 @@
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="sqlserver-openssl.html">Bring your OpenSSL: SQL Server scans 3x faster</a> · <a href="neper-vs-dart-llm-cost.html">Neper vs Dart: what an LLM pays to write it</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

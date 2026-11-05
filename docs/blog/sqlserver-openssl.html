@@ -6,6 +6,7 @@
   <title>Bring your OpenSSL: SQL Server scans 3x faster — Neper blog</title>
   <meta name="description" content="x.microsoft.tds hands TLS to the host's OpenSSL at run time: SQL Server scans 3.2-3.6x faster, and Neper's scan leads C, Go and Rust.">
   <link rel="canonical" href="https://neper.dev/blog/sqlserver-openssl.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -127,6 +128,65 @@
       footer { flex-direction: column; }
     }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Bring your OpenSSL: SQL Server scans 3x faster",
+  "description": "x.microsoft.tds hands TLS to the host's OpenSSL at run time: SQL Server scans 3.2-3.6x faster, and Neper's scan leads C, Go and Rust.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-09-29",
+  "dateModified": "2026-09-29",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/sqlserver-openssl.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Bring your OpenSSL: SQL Server scans 3x faster",
+      "item": "https://neper.dev/blog/sqlserver-openssl.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -136,13 +196,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // engineering</div>
       <h1>Bring your own OpenSSL: SQL Server scans, three times faster</h1>
-      <p class="meta">September 29, 2026 · <code>lib/x/openssl</code>, <code>lib/e/net/tls.e</code>, <code>lib/x/microsoft/tds.e</code>, <code>benchmarks/db</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-09-29">September 29, 2026</time> · <code>lib/x/openssl</code>, <code>lib/e/net/tls.e</code>, <code>lib/x/microsoft/tds.e</code>, <code>benchmarks/db</code></p>
       <img class="banner" src="img/sqlserver-openssl.svg" width="1200" height="630" alt="Bring your own OpenSSL. SQL Server scan on Windows, rows per second: Neper 707,389; Neper with OpenSSL 2,572,546; C 1,719,336; Go 987,118; Rust 1,942,502.">
 
       <p class="lede">Neper's SQL Server driver speaks TDS inside TLS 1.3, and every byte it reads is decrypted by Neper's own AES-GCM. That cipher is portable and constant-time, and it is slow: it held the driver's scans to 28–35% of the fastest language in <a href="e-db-drivers.html">the e.db benchmark</a>. A program can now hand record encryption to the host's OpenSSL, if the host has one. Scans get 3.2–3.6 times faster, and on Windows Neper's scan is now the fastest of the five. Neper still ships no OpenSSL, and a program that asks for it still runs where there is none.</p>
@@ -259,6 +320,11 @@
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="e-db-drivers.html">One SQL contract, five drivers</a> · <a href="compiler-memory.html">A 1 TiB ceiling that costs 3 MiB</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

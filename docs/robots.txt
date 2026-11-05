@@ -1,4 +1,16 @@
 User-agent: *
 Allow: /
 
+# AI crawlers are welcome; llms.txt and llms-full.txt are the curated agent entry points.
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://neper.dev/sitemap.xml

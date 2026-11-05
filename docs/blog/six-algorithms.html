@@ -6,6 +6,7 @@
   <title>Six algorithms we first skipped — Neper blog</title>
   <meta name="description" content="A backtracking regex, mixed-integer programming, model checking, crash-dump parsing, Windows and Kerberos sign-on, and AC-2001: one program each.">
   <link rel="canonical" href="https://neper.dev/blog/six-algorithms.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -127,6 +128,65 @@
       footer { flex-direction: column; }
     }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Six algorithms we first skipped",
+  "description": "A backtracking regex, mixed-integer programming, model checking, crash-dump parsing, Windows and Kerberos sign-on, and AC-2001: one program each.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-09-29",
+  "dateModified": "2026-09-29",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/six-algorithms.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Six algorithms we first skipped",
+      "item": "https://neper.dev/blog/six-algorithms.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -136,13 +196,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // library</div>
       <h1>Six algorithms we first skipped</h1>
-      <p class="meta">September 29, 2026 · <code>e.text.regex</code>, <code>e.math.opt.milp</code>, <code>e.algo.check</code>, <code>e.algo.csp</code>, <code>e.debug.dump</code>, <code>e.net.auth</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-09-29">September 29, 2026</time> · <code>e.text.regex</code>, <code>e.math.opt.milp</code>, <code>e.algo.check</code>, <code>e.algo.csp</code>, <code>e.debug.dump</code>, <code>e.net.auth</code></p>
       <img class="banner" src="img/six-algorithms.svg" width="1200" height="630" alt="Six algorithms we first skipped: backtracking regex, mixed-integer programming, model checking, AC-2001, crash dumps and integrated sign-on, each with its Neper module.">
 
       <p class="lede">Neper's standard library was planned from a list of 2,250 algorithms. Each got a verdict: implement it, point it at a duplicate, or skip it. By the time the list was done, every entry marked "implement" existed. So we went back through the skips and asked which ones people actually reach for. Six came back. This post says what each one is for, and shows a complete program for each.</p>
@@ -580,6 +641,11 @@ module 41b000 /tmp/blog-dump</code></pre>
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="charts-field-guide.html">234 charts, and when to use each</a> · <a href="sqlserver-openssl.html">Bring your OpenSSL: SQL Server scans 3x faster</a> · <a href="cleartype-text.html">ClearType text in Neper</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

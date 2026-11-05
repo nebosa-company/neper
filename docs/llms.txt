@@ -1,0 +1,53 @@
+# Neper
+
+> Neper is a general-purpose programming language optimized end to end for LLM-generated
+> software: a 100% self-hosted compiler, linker and standard library that build
+> deterministic native binaries for Windows, Linux and macOS, on CPU and GPU.
+
+Neper is MIT open source. The compiler and toolchain are written in Neper itself. The
+design targets are one million lines per second per core and a sub-second whole-project
+rebuild, with causal diagnostics, hermetic tests and a byte-identical self-hosting fixed
+point instead of a VM or a GC runtime in the image. A single language covers CPU and GPU
+kernels.
+
+## Start here
+
+- [Get started](https://neper.dev/get-started.html): install, first program, build and run commands.
+- [Website](https://neper.dev/): overview, demos and the capability catalogue.
+- [Showcase](https://neper.dev/ux/showcase.html): a native UI built with Neper's `e.ui`.
+- [GitHub repository](https://github.com/nebosa-company/neper): source, issues and release notes.
+- [Discord](https://discord.gg/AdRneEsbCu): questions and discussion.
+
+## Language reference
+
+- [Neper LLM editing card](https://neper.dev/llm-neper-card): the compact grammar and editing rules for agents.
+- [Grammar](https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf): the normative EBNF.
+- [Standard library module APIs](https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md): what `e.*` and `x.*` provide.
+- [Design decisions](https://github.com/nebosa-company/neper/blob/main/docs/decisions.md): why the language and toolchain look the way they do.
+- [Diagnostics](https://github.com/nebosa-company/neper/blob/main/docs/diagnostics.md): error identities and repair guidance.
+
+## Blog
+
+- [Why Neper is built for the agent loop](https://neper.dev/blog/why-neper-is-optimized-for-llms.html)
+- [Neper vs Dart: what an LLM pays to write it](https://neper.dev/blog/neper-vs-dart-llm-cost.html)
+- [A million lines, eight compilers](https://neper.dev/blog/sc1m-eight-compilers.html)
+- [Ten languages, one window: what you install](https://neper.dev/blog/desktop-toolchains.html)
+- [A 1 TiB ceiling that costs 3 MiB](https://neper.dev/blog/compiler-memory.html)
+- [Neper writes WebAssembly itself](https://neper.dev/blog/neper-webassembly.html)
+- [Six algorithms we first skipped](https://neper.dev/blog/six-algorithms.html)
+- [Bring your OpenSSL: SQL Server scans 3x faster](https://neper.dev/blog/sqlserver-openssl.html)
+- [One SQL contract, five drivers](https://neper.dev/blog/e-db-drivers.html)
+- [234 charts, and when to use each](https://neper.dev/blog/charts-field-guide.html)
+- [Faster charts, smaller SVG, and PNG size](https://neper.dev/blog/charts-speed-and-png-size.html)
+- [ClearType text in Neper](https://neper.dev/blog/cleartype-text.html)
+
+## Machine-readable
+
+- [llms-full.txt](https://neper.dev/llms-full.txt): the full version of this file.
+- [sitemap.xml](https://neper.dev/sitemap.xml): every indexable page.
+
+## Policy
+
+`robots.txt` allows all crawlers, including AI crawlers (GPTBot, OAI-SearchBot,
+ClaudeBot, PerplexityBot and Google-Extended). This file and `llms-full.txt` are the
+curated entry points for agents; the canonical page for each topic is linked above.

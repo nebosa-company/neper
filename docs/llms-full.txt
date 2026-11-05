@@ -1,0 +1,124 @@
+# Neper — full summary for agents
+
+Neper is a general-purpose programming language optimized end to end for software written
+by LLM agents. It is MIT open source, 100% self-hosted (compiler, linker and standard
+library are written in Neper), and it builds deterministic native binaries for Windows,
+Linux and macOS on CPU and GPU.
+
+The design targets, published and measured in the repository and blog, are one million
+lines per second per core and a sub-second whole-project rebuild. The toolchain aims to
+give an agent everything between prompt and binary as one system: causal diagnostics,
+hermetic tests, a byte-identical self-hosting fixed point, no VM and no GC runtime in the
+image. One language covers CPU and GPU kernels.
+
+Canonical URLs:
+
+- Website: https://neper.dev/
+- Get started: https://neper.dev/get-started.html
+- Showcase: https://neper.dev/ux/showcase.html
+- Repository: https://github.com/nebosa-company/neper
+- Discord: https://discord.gg/AdRneEsbCu
+- llms.txt: https://neper.dev/llms.txt
+- Sitemap: https://neper.dev/sitemap.xml
+
+## Language essentials
+
+Neper source is UTF-8, declarations start at column 0, blocks use braces and statements
+are newline-separated; comments are `//`.
+
+Every alphabetic terminal is a keyword and may not name a value, type, field or module:
+`as` `break` `case` `const` `continue` `default` `defer` `else` `enum` `error` `extern`
+`false` `fn` `for` `if` `in` `isize` `let` `nil` `nocheck` `ok` `own` `resource` `ret`
+`shared` `struct` `switch` `true` `try` `type` `undef` `union` `unreachable` `use`
+`usize` `var` `when` `while` `zero`.
+
+Naming: functions, values, fields and modules use `snake_case`; types use `PascalCase`;
+constants use `SCREAMING_SNAKE`. A local may not shadow a module-scope name or a builtin
+(E-NAME-0003).
+
+Types are explicit and literals are typed: `0u32`, `0usize`, `0.0f64`, `0u8`. Every
+numeric conversion is written out, never implicit. `zero` is the zero value of a type and
+`undef` is an uninitialised value. Errors are values: a function returning `err` reports
+success with `ret ok` and a named `error X` with `ret X`; `try` propagates. Strings are
+slices of `u8` but must hold UTF-8; raw strings are `r#"..."#`.
+
+Memory is arena-based. `mem.alloc[T](a, count)` returns a slice and an error;
+`mem.mark`/`mem.reset` frame a unit of work. Slices and pointers are explicit; there is no
+garbage collector.
+
+The standard library is imported by module: `use e.io`, `use e.os`, `use e.mem`,
+`use e.math`, `use e.data.list as list`, `use e.text.regex as regex`, `use e.ui`,
+`use e.gpu`, and so on. Platform modules live under `lib/e/os`, `lib/e/x` for external
+libraries, and `lib/e/gpu` for the CPU/GPU kernel model.
+
+Example:
+
+```neper
+use e.io
+
+fn main(args: []str) -> err {
+    try io.print("Hello, Neper")
+    ret ok
+}
+```
+
+Program entry points accept either `fn main(args: []str) -> err` or
+`fn main(a: *mem.Arena, args: []str) -> err`; an integer-returning `main() -> i64` is also
+accepted, where a non-zero result is a non-zero process status.
+
+## Toolchain
+
+- `neper run file.e`: compile and run in one step.
+- `neper build file.e -o out.exe`: build an executable.
+- `neper check file.e`: check only, with the same diagnostics.
+- `neper emit-executable <main.e> <repo-root> <arch> <os> <out> [--gpu glsl]`: emit an
+  executable directly (the form the self-host fixtures use).
+- `--release`, `--incremental`, `-j N` and `--arena SIZE` shape optimisation, reuse,
+  parallelism and the compiler's working arena.
+
+Diagnostics carry an identity such as `E-NAME-0003` or `E-TYPE-0003` with a span and the
+expected/found values, so a repair can be made from the message alone. The full list is in
+`docs/diagnostics.md`.
+
+## Reference documents
+
+- LLM editing card: https://neper.dev/llm-neper-card — compact grammar and editing rules.
+- Grammar (normative EBNF): https://github.com/nebosa-company/neper/blob/main/docs/grammar.ebnf
+- Standard library module APIs: https://github.com/nebosa-company/neper/blob/main/docs/module-apis.md
+- Diagnostics: https://github.com/nebosa-company/neper/blob/main/docs/diagnostics.md
+- Design decisions: https://github.com/nebosa-company/neper/blob/main/docs/decisions.md
+- Tooling: https://github.com/nebosa-company/neper/blob/main/docs/tooling.md
+
+## Blog — engineering notes
+
+- Why Neper is built for the agent loop:
+  https://neper.dev/blog/why-neper-is-optimized-for-llms.html
+- Neper vs Dart: what an LLM pays to write it:
+  https://neper.dev/blog/neper-vs-dart-llm-cost.html
+- A million lines, eight compilers:
+  https://neper.dev/blog/sc1m-eight-compilers.html
+- Ten languages, one window: what you install:
+  https://neper.dev/blog/desktop-toolchains.html
+- A 1 TiB ceiling that costs 3 MiB:
+  https://neper.dev/blog/compiler-memory.html
+- Neper writes WebAssembly itself:
+  https://neper.dev/blog/neper-webassembly.html
+- Six algorithms we first skipped:
+  https://neper.dev/blog/six-algorithms.html
+- Bring your OpenSSL: SQL Server scans 3x faster:
+  https://neper.dev/blog/sqlserver-openssl.html
+- One SQL contract, five drivers:
+  https://neper.dev/blog/e-db-drivers.html
+- 234 charts, and when to use each:
+  https://neper.dev/blog/charts-field-guide.html
+- Faster charts, smaller SVG, and PNG size:
+  https://neper.dev/blog/charts-speed-and-png-size.html
+- ClearType text in Neper:
+  https://neper.dev/blog/cleartype-text.html
+
+## Crawler policy
+
+`robots.txt` allows every crawler, including AI crawlers (GPTBot, OAI-SearchBot,
+ClaudeBot, PerplexityBot and Google-Extended). `llms.txt` is the short curated index for
+agents and `llms-full.txt` (this file) is the long one; both link the canonical page for
+each topic.

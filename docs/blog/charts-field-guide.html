@@ -6,6 +6,7 @@
   <title>234 charts, and when to use each — Neper blog</title>
   <meta name="description" content="A field guide to all 234 charts e.gfx.chart can draw: which question each answers, when to pick it, and speed against matplotlib.">
   <link rel="canonical" href="https://neper.dev/blog/charts-field-guide.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -137,6 +138,65 @@
     .count { color: var(--on-surface-variant); font: 400 14px/20px var(--font-sans); }
     @media (max-width: 599px) { .chart-grid { grid-template-columns: 1fr; } .toc { columns: 1; } }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "234 charts, and when to use each",
+  "description": "A field guide to all 234 charts e.gfx.chart can draw: which question each answers, when to pick it, and speed against matplotlib.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-10-04",
+  "dateModified": "2026-10-05",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/charts-field-guide.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "234 charts, and when to use each",
+      "item": "https://neper.dev/blog/charts-field-guide.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -146,13 +206,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // library</div>
       <h1>234 charts, and when to use each</h1>
-      <p class="meta">October 4, 2026 · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.pdf</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-10-04">October 4, 2026</time> · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.pdf</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
       <p class="meta">Updated October 5, 2026: PDF export, <a href="#speed">speed measured against matplotlib</a>, and SVG files a third smaller.</p>
       <img class="banner" src="img/charts-field-guide.svg" width="1200" height="630" alt="234 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper.">
       <p class="lede">Neper's chart library now draws 234 kinds of chart, from a bar chart to a Laney u′ control chart, a Kaplan-Meier curve, a Sankey diagram and a Nyquist plot. That is too many to pick from by scrolling. This post is the guide we wanted ourselves: each chart, the question it answers, and when to reach for something else instead.</p>
@@ -616,6 +677,11 @@ wrote revenue.svg: 836 bytes</code></pre>
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="charts-speed-and-png-size.html">Faster charts, smaller SVG, and PNG size</a> · <a href="six-algorithms.html">Six algorithms we first skipped</a> · <a href="compiler-memory.html">A 1 TiB ceiling that costs 3 MiB</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

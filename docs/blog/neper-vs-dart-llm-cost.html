@@ -6,6 +6,7 @@
   <title>Neper vs Dart: what an LLM pays to write it — Neper blog</title>
   <meta name="description" content="Seven days of Claude transcripts measured byte by byte: what Neper and Dart cost per KB, and where each wins on edits, context and repair.">
   <link rel="canonical" href="https://neper.dev/blog/neper-vs-dart-llm-cost.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -14,6 +15,7 @@
   <meta property="og:url" content="https://neper.dev/blog/neper-vs-dart-llm-cost.html">
   <meta property="og:image" content="https://neper.dev/blog/img/lang-stats-claude-7d.png">
   <meta property="article:published_time" content="2026-09-27">
+  <meta property="article:modified_time" content="2026-09-27">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
@@ -118,6 +120,65 @@
       footer { flex-direction: column; }
     }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Neper vs Dart: what an LLM pays to write it",
+  "description": "Seven days of Claude transcripts measured byte by byte: what Neper and Dart cost per KB, and where each wins on edits, context and repair.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-09-27",
+  "dateModified": "2026-09-27",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/neper-vs-dart-llm-cost.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Neper vs Dart: what an LLM pays to write it",
+      "item": "https://neper.dev/blog/neper-vs-dart-llm-cost.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -127,13 +188,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // measurement</div>
       <h1>Neper vs Dart: what it costs an LLM to write each one</h1>
-      <p class="meta">September 27, 2026 · measured with <code>scripts/lang-stats.py</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-09-27">September 27, 2026</time> · measured with <code>scripts/lang-stats.py</code></p>
       <img class="banner" src="img/neper-vs-dart-llm-cost.svg" width="1200" height="630" alt="Neper vs Dart. Code written directly cost $0.155 per KB in Neper and $0.272 in Dart; all-in, $0.407 and $0.397.">
 
       <p class="lede">Neper claims to be optimized for LLM-generated software, so we measure it the way we would measure a compiler: on real work. For the last seven days Claude wrote 12.7 MB of Neper and 9.3 MB of Dart in our repositories. Neper came out first on our scorecard, 62 to 59, at the same cost per kilobyte. It was not a clean sweep, and the losses are more useful than the win.</p>
@@ -225,6 +287,11 @@
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="why-neper-is-optimized-for-llms.html">Why Neper is built for the agent loop</a> · <a href="desktop-toolchains.html">Ten languages, one window: what you install</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

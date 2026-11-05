@@ -6,6 +6,7 @@
   <title>ClearType text in Neper | Neper blog</title>
   <meta name="description" content="What subpixel ClearType text costs: measured glyph rendering against native Windows captures, and the trade-offs.">
   <link rel="canonical" href="https://neper.dev/blog/cleartype-text.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -14,6 +15,7 @@
   <meta property="og:url" content="https://neper.dev/blog/cleartype-text.html">
   <meta property="og:image" content="https://neper.dev/gtm/blog-og.png">
   <meta property="article:published_time" content="2026-10-18">
+  <meta property="article:modified_time" content="2026-10-18">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
@@ -118,6 +120,65 @@
       footer { flex-direction: column; }
     }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ClearType text in Neper | Neper blog",
+  "description": "What subpixel ClearType text costs: measured glyph rendering against native Windows captures, and the trade-offs.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-10-18",
+  "dateModified": "2026-10-18",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/cleartype-text.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "ClearType text in Neper | Neper blog",
+      "item": "https://neper.dev/blog/cleartype-text.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -127,13 +188,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // engineering</div>
       <h1>Text the way Windows draws it: ClearType in Neper</h1>
-      <p class="meta">October 18, 2026 · <code>lib/e/text/tthint.e</code>, <code>lib/e/gfx/cleartype.e</code></p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-10-18">October 18, 2026</time> · <code>lib/e/text/tthint.e</code>, <code>lib/e/gfx/cleartype.e</code></p>
       <img class="banner" src="img/cleartype-text.svg" width="1200" height="630" alt="Text the way Windows draws it. Hinted ClearType, 77 captures checked, off pixels from 30,800 to 11,321.">
 
       <p class="lede">Neper's Windows look now draws its text as hinted ClearType, the way Windows itself does, instead of grey anti-aliasing. Against 77 native Windows dark captures the number of pixels that differ from Windows fell from 30,800 to 11,321. It is closer, not identical, and this post says how it works and where it still differs.</p>
@@ -222,6 +284,11 @@
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="neper-webassembly.html">Neper writes WebAssembly itself</a> · <a href="why-neper-is-optimized-for-llms.html">Why Neper is built for the agent loop</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

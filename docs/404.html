@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page not found — Neper</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#145db2">
+  <link rel="icon" href="/gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --surface: #f8f9ff; --surface-container: #eceef4; --surface-container-high: #e6e8ef;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", system-ui, sans-serif;
+      --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
+      --radius-lg: 16px; --radius-full: 9999px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --surface: #10131a; --surface-container: #1a1d25; --surface-container-high: #23262f;
+        --on-surface: #e3e2e9; --on-surface-variant: #c3c6d5; --outline: #8d919e; --outline-variant: #434653;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--surface); color: var(--on-surface);
+      font: 400 16px/26px var(--font-sans);
+    }
+    .wrap { width: min(100% - 2 * var(--space-6), 960px); margin: 0 auto; padding: var(--space-6) 0 var(--space-8); }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-3) 0 var(--space-6); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+    a { color: var(--primary); }
+    .nav-links a { color: var(--on-surface-variant); text-decoration: none; font-size: 14px; }
+    .nav-links a:hover { color: var(--primary); }
+    h1 { font: 600 clamp(30px, 5vw, 44px)/1.15 var(--font-display); margin: var(--space-6) 0 var(--space-4); }
+    .eyebrow { color: var(--on-surface-variant); font: 500 13px/18px var(--font-sans); letter-spacing: .02em; text-transform: uppercase; }
+    p { max-width: 62ch; }
+    ul.links { list-style: none; padding: 0; margin: var(--space-6) 0 0; display: grid; gap: var(--space-3); }
+    ul.links a { text-decoration: none; font-weight: 600; }
+    ul.links a:hover { text-decoration: underline; }
+    .hint { color: var(--on-surface-variant); font-size: 14px; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0 0; margin-top: var(--space-8); border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 14px; }
+    @media (max-width: 640px) { footer { flex-direction: column; } }
+  </style>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+</head>
+<body>
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="/" aria-label="Neper home"><img src="/gtm/logo/neper-icon.svg" alt="" width="40" height="40"><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="/get-started.html">get started</a>
+        <a href="/blog/">blog</a>
+        <a href="/charts.html">charts</a>
+        <a href="/feed.xml">rss ↗</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <main>
+      <div class="eyebrow">&gt; 404_</div>
+      <h1>This page does not exist.</h1>
+      <p>The URL may have moved, or a link may have a typo. Everything below is still where it should be.</p>
+      <ul class="links">
+        <li><a href="/">Neper home</a> — what the language is and the measured numbers behind it.</li>
+        <li><a href="/get-started.html">Get started</a> — clone the repository and build the compiler once.</li>
+        <li><a href="/blog/">Blog</a> — notes from measuring Neper, including the columns where it loses.</li>
+        <li><a href="/charts.html">Charts</a> — the 234 chart types in <code>e.gfx.chart</code>.</li>
+        <li><a href="/ux/showcase.html">UI showcase</a> and <a href="/progress.html">progress</a> — the widget work and readiness.</li>
+      </ul>
+      <p class="hint">Latest posts: <a href="/blog/compiler-memory.html">A 1 TiB ceiling that costs 3 MiB</a>, <a href="/blog/neper-webassembly.html">Neper writes WebAssembly itself</a>, <a href="/blog/desktop-toolchains.html">Ten languages, one window</a>.</p>
+    </main>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="/">← home</a>
+    </footer>
+  </div>
+</body>
+</html>

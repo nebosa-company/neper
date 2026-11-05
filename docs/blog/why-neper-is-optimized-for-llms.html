@@ -6,6 +6,7 @@
   <title>Why Neper is built for the agent loop — Neper blog</title>
   <meta name="description" content="Search, generate, edit, check, repair: what each step costs a model and the language rules, JSONL commands and diagnostics that make it cheap.">
   <link rel="canonical" href="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
+  <link rel="alternate" type="application/rss+xml" title="Neper blog" href="/feed.xml">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
@@ -14,6 +15,7 @@
   <meta property="og:url" content="https://neper.dev/blog/why-neper-is-optimized-for-llms.html">
   <meta property="og:image" content="https://neper.dev/gtm/blog-og.png">
   <meta property="article:published_time" content="2026-10-21">
+  <meta property="article:modified_time" content="2026-10-21">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
@@ -137,6 +139,65 @@
     @media (prefers-color-scheme: dark) { .bad { color: #ff7b86; } .good { color: #7ddf9a; } }
     @media (max-width: 599px) { th, td { padding: var(--space-2) var(--space-2); font-size: 13px; } }
   </style>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Why Neper is built for the agent loop",
+  "description": "Search, generate, edit, check, repair: what each step costs a model and the language rules, JSONL commands and diagnostics that make it cheap.",
+  "image": "https://neper.dev/gtm/blog-og.png",
+  "datePublished": "2026-10-21",
+  "dateModified": "2026-10-21",
+  "author": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Neper",
+    "url": "https://neper.dev/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://neper.dev/gtm/logo/neper-icon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://neper.dev/blog/why-neper-is-optimized-for-llms.html"
+  }
+}
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://neper.dev/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Blog",
+      "item": "https://neper.dev/blog/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Why Neper is built for the agent loop",
+      "item": "https://neper.dev/blog/why-neper-is-optimized-for-llms.html"
+    }
+  ]
+}
+  </script>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 </head>
 <body class="nu-page">
   <div class="wrap">
@@ -146,13 +207,14 @@
         <a href="../#llm">llm stack</a>
         <a href="./">blog</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
+        <a href="/feed.xml">rss ↗</a>
       </div>
     </nav>
 
     <article>
       <div class="eyebrow">&gt; blog // design</div>
       <h1>Why Neper is built for the agent loop</h1>
-      <p class="meta">October 21, 2026 · design notes · the outputs below are real runs of the compiler</p>
+      <p class="meta">By <a href="https://neper.dev/">Neper</a> · <time datetime="2026-10-21">October 21, 2026</time> · design notes · the outputs below are real runs of the compiler</p>
       <img class="banner" src="img/why-neper-is-optimized-for-llms.svg" width="1200" height="630" alt="Neper is built for the agent loop: search, generate, edit, check, repair.">
 
       <p class="lede">A model editing code does not browse it the way you do. It sees a window of text, guesses what lies outside it, and pays for every token it reads and writes. Neper's design goal is that a model should not be able to write a line whose meaning depends on context it cannot see. This post walks through the language rules, the compiler commands and the diagnostics that follow from that goal, runs each one on a small program, and says which of the claims we have not proved yet.</p>
@@ -300,6 +362,11 @@ postcondition: check-file passes; uses-file --symbol main.clamp_percent reports 
         <a class="button nu-btn lg" href="../">Try Neper →</a>
       </div>
     </article>
+
+      <div class="callout">
+        <strong>Related posts</strong>
+        <p><a href="neper-vs-dart-llm-cost.html">Neper vs Dart: what an LLM pays to write it</a> · <a href="desktop-toolchains.html">Ten languages, one window: what you install</a></p>
+      </div>
 
     <footer>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>

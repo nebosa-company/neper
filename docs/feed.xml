@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Neper blog</title>
+    <link>https://neper.dev/blog/</link>
+    <atom:link href="https://neper.dev/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>Notes from measuring Neper: memory, WebAssembly, desktop toolchains, text rendering, charts, databases and LLM cost, with the columns where it loses.</description>
+    <language>en</language>
+    <lastBuildDate>Fri, 30 Oct 2026 00:00:00 +0000</lastBuildDate>
+    <image>
+      <url>https://neper.dev/gtm/blog-og.png</url>
+      <title>Neper blog</title>
+      <link>https://neper.dev/blog/</link>
+    </image>
+    <item>
+      <title>A 1 TiB ceiling that costs 3 MiB</title>
+      <link>https://neper.dev/blog/compiler-memory.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/compiler-memory.html</guid>
+      <description>How a Neper program grows into memory with no flag: an arena reserved, not allocated, and the measured limits on Windows and Linux.</description>
+      <pubDate>Fri, 30 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Neper writes WebAssembly itself</title>
+      <link>https://neper.dev/blog/neper-webassembly.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/neper-webassembly.html</guid>
+      <description>Neper's own compiler writes wasm32-wasi modules with no LLVM: an 18 KB hello world, a 1.7 MB window and the compiler running in a browser.</description>
+      <pubDate>Tue, 27 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Ten languages, one window: what you install</title>
+      <link>https://neper.dev/blog/desktop-toolchains.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/desktop-toolchains.html</guid>
+      <description>One compiler for Windows and Linux desktop programs, nothing to install, a 2.7 MiB window: compared with ten languages install guides.</description>
+      <pubDate>Fri, 23 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Why Neper is built for the agent loop</title>
+      <link>https://neper.dev/blog/why-neper-is-optimized-for-llms.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/why-neper-is-optimized-for-llms.html</guid>
+      <description>Search, generate, edit, check, repair: what each step costs a model and the language rules, JSONL commands and diagnostics that make it cheap.</description>
+      <pubDate>Wed, 21 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>ClearType text in Neper</title>
+      <link>https://neper.dev/blog/cleartype-text.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/cleartype-text.html</guid>
+      <description>What subpixel ClearType text costs: measured glyph rendering against native Windows captures, and the trade-offs.</description>
+      <pubDate>Sun, 18 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Faster charts, smaller SVG, and what we are doing about PNG size</title>
+      <link>https://neper.dev/blog/charts-speed-and-png-size.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/charts-speed-and-png-size.html</guid>
+      <description>How fast 234 chart types render, and why PNG size and render speed trade off: measured times and file sizes for every chart.</description>
+      <pubDate>Tue, 13 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>234 charts, and when to use each</title>
+      <link>https://neper.dev/blog/charts-field-guide.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/charts-field-guide.html</guid>
+      <description>A field guide to all 234 charts e.gfx.chart can draw: which question each answers, when to pick it, and speed against matplotlib.</description>
+      <pubDate>Sun, 04 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>A million lines, eight compilers</title>
+      <link>https://neper.dev/blog/sc1m-eight-compilers.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/sc1m-eight-compilers.html</guid>
+      <description>The sc1m program (1,000 modules, 920,554 lines) in eight compilers: compile and run times with verified output, and where each language lands.</description>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Six algorithms we first skipped</title>
+      <link>https://neper.dev/blog/six-algorithms.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/six-algorithms.html</guid>
+      <description>A backtracking regex, mixed-integer programming, model checking, crash-dump parsing, Windows and Kerberos sign-on, and AC-2001: one program each.</description>
+      <pubDate>Tue, 29 Sep 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Bring your own OpenSSL: SQL Server scans, three times faster</title>
+      <link>https://neper.dev/blog/sqlserver-openssl.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/sqlserver-openssl.html</guid>
+      <description>x.microsoft.tds hands TLS to the host's OpenSSL at run time: SQL Server scans 3.2-3.6x faster, and Neper's scan leads C, Go and Rust.</description>
+      <pubDate>Tue, 29 Sep 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>One SQL contract, five drivers</title>
+      <link>https://neper.dev/blog/e-db-drivers.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/e-db-drivers.html</guid>
+      <description>e.db, Neper's SQL contract, and its SQLite, PostgreSQL, MySQL, ODBC and SQL Server drivers: what differs, and one measured workload.</description>
+      <pubDate>Sun, 27 Sep 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Neper vs Dart: what it costs an LLM to write each one</title>
+      <link>https://neper.dev/blog/neper-vs-dart-llm-cost.html</link>
+      <guid isPermaLink="true">https://neper.dev/blog/neper-vs-dart-llm-cost.html</guid>
+      <description>Seven days of Claude transcripts measured byte by byte: what Neper and Dart cost per KB, and where each wins on edits, context and repair.</description>
+      <pubDate>Sun, 27 Sep 2026 00:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

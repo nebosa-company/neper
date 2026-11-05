@@ -15,7 +15,11 @@ h1{margin:18px 0 44px;font:400 84px/1.1 "Segoe UI Variable Display","Segoe UI",s
 .big{font:400 110px/1.1 "Segoe UI Variable Display","Segoe UI",sans-serif;color:#b3c5ff;margin-top:24px}
 #end{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center}
 #end img{width:200px;height:200px}
-</style></head><body><div id="stage"></div><script>
+</style><link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+</head><body><div id="stage"></div><script>
 const S=document.getElementById('stage');
 const clamp=(x)=>Math.max(0,Math.min(1,x));
 const typed=(s,p)=>s.slice(0,Math.floor(s.length*clamp(p)));

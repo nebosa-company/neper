@@ -1,0 +1,22 @@
+{
+  "name": "Neper",
+  "short_name": "Neper",
+  "icons": [
+    {
+      "src": "/gtm/logo/neper-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#145db2",
+  "background_color": "#ffffff",
+  "display": "browser",
+  "start_url": "/"
+}
