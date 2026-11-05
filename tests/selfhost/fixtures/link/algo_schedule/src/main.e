@@ -93,6 +93,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, t_invalid) = schedule.cooldown(tasks[..], 3usize, 2usize, counts[..])
     if t_invalid != schedule.Invalid { os.exit(4i32) }
 
+    // 5: a huge deadline is refused instead of wrapping the parent guard;
+    // non-positive profits are not scheduled; a gap that overflows is refused.
+    var huge_deadlines: [1]usize = zero
+    huge_deadlines[0usize] = 18446744073709551615usize
+    var huge_profits: [1]i64 = zero
+    huge_profits[0usize] = 5i64
+    let (_, _, huge_error) = schedule.jobs_with_deadlines(huge_deadlines[..], huge_profits[..], slots[..], parent[..], order[..])
+    if huge_error != schedule.TooSmall { os.exit(5i32) }
+    deadlines[0usize] = 1usize
+    profits[0usize] = 0i64 - 5i64
+    let (negative_profit, negative_placed, negative_error) = schedule.jobs_with_deadlines(deadlines[..1usize], profits[..1usize], slots[..], parent[..], order[..])
+    if negative_error != ok || negative_profit != 0i64 || negative_placed != 0usize { os.exit(5i32) }
+    var gap_counts: [1]usize = zero
+    let (_, gap_error) = schedule.cooldown(tasks[..2usize], 1usize, 18446744073709551615usize, gap_counts[..])
+    if gap_error != schedule.Invalid { os.exit(5i32) }
+    let (_, gap_edge) = schedule.cooldown(tasks[..2usize], 1usize, 18446744073709551614usize, gap_counts[..])
+    if gap_edge != schedule.Invalid { os.exit(5i32) }
+
     try io.print("algo schedule ok\n")
     ret ok
 }

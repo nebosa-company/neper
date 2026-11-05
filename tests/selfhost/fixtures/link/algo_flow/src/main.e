@@ -471,6 +471,12 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
     ret 0u8
 }
 
+fn own_case(a: *mem.Arena, source: str) -> str {
+    let (spec, spec_error) = json.parse(a, source, json.Options { allow_duplicate_keys: false, max_depth: 60u16 })
+    if spec_error != ok { os.exit(85i32) }
+    ret run_case(a, spec)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
@@ -522,6 +528,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_47()) != 0u8 { os.exit(48i32) }
     if run_chunk(a, vectors_48()) != 0u8 { os.exit(49i32) }
     if run_chunk(a, vectors_49()) != 0u8 { os.exit(50i32) }
+    // #279: an error branch that fails again ends failed without re-entering the
+    // branch; numeric ids key their outputs by their text; an overflowing array
+    // index is absent, not a trap.
+    let branch_out = own_case(a, "{\"flow\":{\"name\":\"F\",\"steps\":[{\"type\":\"notification\",\"id\":\"n1\"}]},\"trigger\":{\"record\":{}},\"options\":{\"errorBranch\":[{\"type\":\"notification\"}]},\"plan\":{\"notify\":{\"failFirst\":1000000}}}")
+    if !str.contains(branch_out, "\"status\":\"failed\"") || !str.contains(branch_out, "\"type\":\"notification\"") || branch_out.len > 2000usize { os.exit(51i32) }
+    let numeric_out = own_case(a, "{\"flow\":{\"name\":\"F\",\"steps\":[{\"type\":\"find\",\"id\":1,\"table\":\"tasks\"},{\"type\":\"find\",\"id\":2,\"table\":\"tasks\"},{\"type\":\"set\",\"name\":\"q\",\"value\":{\"binding\":\"steps.1.count\"}}]},\"trigger\":{\"record\":{}},\"options\":{\"dataset\":{\"tasks\":[{\"id\":\"a\"},{\"id\":\"b\"}]}},\"plan\":{\"findRecords\":{\"records\":[{\"id\":\"a\"},{\"id\":\"b\"}]}}}")
+    if !str.contains(numeric_out, "\"q\":2") { os.exit(52i32) }
+    let overflow_out = own_case(a, "{\"flow\":{\"name\":\"F\",\"steps\":[{\"type\":\"set\",\"name\":\"q\",\"value\":{\"binding\":\"trigger.rows.99999999999999999999\"}}]},\"trigger\":{\"record\":{\"rows\":[{\"x\":1}]}}}")
+    if str.contains(overflow_out, "\"q\":") || !str.contains(overflow_out, "\"status\":\"success\"") { os.exit(53i32) }
     try io.print("algo flow ok")
     ret ok
 }
+
+
+
+
+
+
+

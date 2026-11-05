@@ -109,7 +109,8 @@ fn jobs_with_deadlines(deadlines: []const usize, profits: []const i64, slots: []
         order[i] = i
         i += 1usize
     }
-    if slots.len < latest || parent.len < latest + 1usize { ret (0i64, 0usize, TooSmall) }
+    // `latest + 1` wraps for a huge deadline; test `latest` against the length.
+    if slots.len < latest || parent.len <= latest { ret (0i64, 0usize, TooSmall) }
     i = 0usize
     while i <= latest {
         parent[i] = i
@@ -129,6 +130,8 @@ fn jobs_with_deadlines(deadlines: []const usize, profits: []const i64, slots: []
     while i > 0usize {
         i -= 1usize
         let job = order[i]
+        // Falling profit: once a job is not profitable, none behind it is.
+        if profits[job] <= 0i64 { break }
         let slot = find_slot(parent, deadlines[job])
         if slot > 0usize {
             slots[slot - 1usize] = job

@@ -38,7 +38,7 @@ type Hooks = struct { ctx: *void, effect: fn(*void, str, json.Value) -> Effect, 
 // The outcome of a step list: "continue", "stopped", "failed", "terminated" or "cascade-exceeded", with a reason.
 type Control = struct { status: str, reason: str }
 
-type Runner = struct { a: *mem.Arena, hooks: *const Hooks, reg: *const f.Registry, steps: list.List[json.Value], vars: ir.Obj, step_outputs: ir.Obj, reason: str, has_reason: bool, budget: json.Value, has_budget: bool, step_budget: usize, max_depth: i64, depth: i64, dry_run: json.Value, on_failure: str, error_branch: json.Value, has_error_branch: bool, refs: json.Value, dataset: json.Value }
+type Runner = struct { a: *mem.Arena, hooks: *const Hooks, reg: *const f.Registry, steps: list.List[json.Value], vars: ir.Obj, step_outputs: ir.Obj, reason: str, has_reason: bool, budget: json.Value, has_budget: bool, step_budget: usize, max_depth: i64, depth: i64, dry_run: json.Value, on_failure: str, error_branch: json.Value, has_error_branch: bool, in_error_branch: bool, refs: json.Value, dataset: json.Value }
 
 // A loop frame: the current item and its index, `has` false at the top level.
 type Frame = struct { trigger: json.Value, trigger_meta: json.Value, current: json.Value, has_current: bool, index: usize }
@@ -278,7 +278,14 @@ fn get_path(root: json.Value, path: str) -> (json.Value, bool) {
                 var good = name.len > 0usize
                 var c = 0usize
                 while c < name.len {
-                    if name[c] < 48u8 || name[c] > 57u8 { good = false } else { index = index * 10usize + usize(name[c] - 48u8) }
+                    if name[c] < 48u8 || name[c] > 57u8 {
+                        good = false
+                    } else if good && index > 1844674407370955160usize {
+                        // The next multiply/add would overflow usize.
+                        good = false
+                    } else if good {
+                        index = index * 10usize + usize(name[c] - 48u8)
+                    }
                     c += 1usize
                 }
                 if !good || index >= elements.len { ret (.Null, false) }
@@ -451,6 +458,9 @@ fn summarize_output(a: *mem.Arena, v: json.Value) -> json.Value {
 fn log_step(r: *Runner, entry: ir.Obj) -> usize {
     var e = entry
     let pushed = list.push[json.Value](&r.steps, ir.obj_value(&e))
+    // A failed push has no position; answering len keeps the caller's amend
+    // bounds-checked instead of underflowing.
+    if pushed != ok { ret r.steps.len }
     ret r.steps.len - 1usize
 }
 
@@ -515,9 +525,12 @@ fn exec_steps(r: *Runner, frame: Frame, steps: json.Value) -> Control {
 
 fn handle_failure(r: *Runner, frame: Frame) -> Control {
     if str.eq(r.on_failure, "continue") { ret carry() }
-    if r.has_error_branch {
+    if r.has_error_branch && !r.in_error_branch {
+        // A failure inside the error branch must not run the branch again: that
+        // is the unbounded recursion (one log entry and several frames per cycle).
+        r.in_error_branch = true
         let ran = exec_steps(r, frame, r.error_branch)
-        ret ended("failed", "")
+        r.in_error_branch = false
     }
     ret ended("failed", "")
 }
@@ -533,9 +546,15 @@ fn fail_entry(r: *Runner, entry: ir.Obj, message: str, code: str, has_code: bool
 fn exec_step(r: *Runner, frame: Frame, step: json.Value) -> Control {
     let kind = member_text(step, "type")
     var entry = new_entry(r, step, "success")
-    let step_id = member_text(step, "id")
     let (id_value, have_id_value) = get(step, "id")
     var has_step_id = have_id_value && ir.truthy(id_value)
+    // Numeric and boolean ids need their scalar text; member_text only reads strings,
+    // so every numeric id would otherwise key the outputs under "".
+    var step_id = ""
+    if has_step_id {
+        step_id = member_text(step, "id")
+        if step_id.len == 0usize { step_id = scalar_text(id_value) }
+    }
     if str.eq(kind, "condition") {
         var cond = ir.value_of(step, "filter")
         var has = ir.truthy(cond)
@@ -957,7 +976,12 @@ fn exec_find(r: *Runner, frame: Frame, step: json.Value, entry: ir.Obj) -> Contr
     put(&output, "records", json.Value{ Array: records })
     put(&output, "count", number(r.a, i64(records.len)))
     let (id_value, have_id) = get(step, "id")
-    if have_id && ir.truthy(id_value) { put(&r.step_outputs, member_text(step, "id"), ir.obj_value(&output)) }
+    if have_id && ir.truthy(id_value) {
+        // Same scalar id text as exec_step: numeric ids would otherwise all key "".
+        var id_text = member_text(step, "id")
+        if id_text.len == 0usize { id_text = scalar_text(id_value) }
+        put(&r.step_outputs, id_text, ir.obj_value(&output))
+    }
     var summary = obj(r.a)
     put(&summary, "count", number(r.a, i64(records.len)))
     put(&e, "output", ir.obj_value(&summary))
@@ -998,7 +1022,7 @@ fn run_flow(a: *mem.Arena, hooks: *const Hooks, flow: json.Value, trigger: json.
         a: a, hooks: hooks, reg: &reg, steps: steps_list, vars: obj(a), step_outputs: obj(a), reason: "", has_reason: false,
         budget: .Null, has_budget: false, step_budget: budget, max_depth: max_depth, depth: depth,
         dry_run: ir.or_falsy(options, "dryRun", empty_object()), on_failure: member_text(options, "onFailure"),
-        error_branch: .Null, has_error_branch: false, refs: ir.or_falsy(options, "refs", empty_object()),
+        error_branch: .Null, has_error_branch: false, in_error_branch: false, refs: ir.or_falsy(options, "refs", empty_object()),
         dataset: ir.value_of(options, "dataset"),
     }
     let (branch, have_branch) = get(options, "errorBranch")
@@ -1097,3 +1121,4 @@ fn run_flow(a: *mem.Arena, hooks: *const Hooks, flow: json.Value, trigger: json.
     }
     ret (ir.obj_value(&out), ok)
 }
+
