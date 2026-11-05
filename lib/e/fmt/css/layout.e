@@ -2338,6 +2338,16 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
     if x.first_line { indent = resolve_or(cs.text_indent, x.cbw, 0.0f64) }
     out.line_x = lx + indent
     out.avail = rx - lx - indent
+    // A hanging first punctuation takes no room in the line, so the line has its advance more room for its text. This is
+    // what makes `hanging-punctuation: first` agree with a reference that spells the same hang as `text-indent: -1em`.
+    if x.first_line && (cs.hanging_punctuation & 1u8) != 0u8 {
+        var hi = i
+        while hi < x.bd.pieces.len && x.bd.pieces.items[hi].kind != .Text { hi += 1usize }
+        if hi < x.bd.pieces.len {
+            let (fw, hlen) = hanging_punct_w(l, x.bd.pieces.items[hi])
+            if hlen > 0usize { out.avail += fw }
+        }
+    }
     // Lines break at `lim`; `text-wrap: balance` narrows it while lines stay aligned within the full width.
     let lim = out.avail - x.shrink
     var pos = 0.0f64
@@ -2464,16 +2474,15 @@ fn shy_hyphen_w(l: *Layout, p: Piece) -> f64 {
     ret 0.0f64
 }
 
-// The advance of an opening punctuation that hangs at the start of a line (`hanging-punctuation: first`), 0 when the
-// piece does not start with one or when the box that holds it brings its own border or padding on that side (the
-// punctuation is then inside the box, not at the line's content edge). The set is css-text's: the ASCII openers, the
-// typographic quotes and U+3000 IDEOGRAPHIC SPACE.
-fn hanging_punct_w(l: *Layout, p: Piece) -> f64 {
-    if p.kind != .Text || p.clen == 0usize { ret 0.0f64 }
-    let pb = &l.boxes.items[usize(p.box)]
-    if pb.border[3usize] > 0.0f64 || pb.padding[3usize] > 0.0f64 { ret 0.0f64 }
+// The advance and byte length of an opening punctuation that hangs at the start of a line (`hanging-punctuation:
+// first`), both 0 when the piece does not start with one or when the box that holds it brings its own border or
+// padding on that side (the punctuation is then inside the box, not at the line's content edge). The set is
+// css-text's: the ASCII openers, the typographic quotes and U+3000 IDEOGRAPHIC SPACE.
+fn hanging_punct_w(l: *Layout, p: Piece) -> (f64, usize) {
+    if p.kind != .Text || p.clen == 0usize { ret (0.0f64, 0usize) }
+    if bstyle(l, p.box).border_width[3usize] > 0.0f64 { ret (0.0f64, 0usize) }
     let proc = l.boxes.items[usize(p.box)].proc
-    if p.start >= proc.len { ret 0.0f64 }
+    if p.start >= proc.len { ret (0.0f64, 0usize) }
     let c = proc[p.start]
     var n = 0usize
     if c == 40u8 || c == 91u8 || c == 123u8 {
@@ -2485,8 +2494,8 @@ fn hanging_punct_w(l: *Layout, p: Piece) -> f64 {
     } else if c == 227u8 && p.start + 2usize < proc.len {
         if proc[p.start + 1usize] == 128u8 && proc[p.start + 2usize] == 128u8 { n = 3usize }
     }
-    if n == 0usize { ret 0.0f64 }
-    ret text_advance(l, bstyle(l, p.box), proc[p.start..p.start + n])
+    if n == 0usize { ret (0.0f64, 0usize) }
+    ret (text_advance(l, bstyle(l, p.box), proc[p.start..p.start + n]), n)
 }
 
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64) {
@@ -3554,20 +3563,34 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                     this_w += text_advance(l, bstyle(l, p.box), hang_text)
                 }
             }
-            if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 && !tail_keep {
+            var hang_hw = 0.0f64
+            var hang_hn = 0usize
+            if x.first_line && !line_hung && (bstyle(l, p.box).hanging_punctuation & 1u8) != 0u8 {
+                let (hw, hn) = hanging_punct_w(l, p)
+                hang_hw = hw
+                hang_hn = hn
+            }
+            if hang_hw > 0.0f64 {
+                // `hanging-punctuation: first`: the opener alone is drawn left of the content edge and takes no room in
+                // the line, while the rest of the piece still starts at the edge and the cursor advances by the whole
+                // piece width.
+                if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
+                flush_text_frag(l, p.box, cx - hang_hw, l.boxes.items[usize(p.box)].proc[p.start..p.start + hang_hn], hang_hw, cur_shift, baseline)
+                line_hung = true
+                if p.start + hang_hn < this_to {
+                    tf_box = p.box
+                    tf_start = cx
+                    tf_from = p.start + hang_hn
+                    tf_to = this_to
+                    tf_w = this_w - hang_hw
+                    tf_shift = cur_shift
+                } else {
+                    tf_box = NONE
+                }
+            } else if tf_box == p.box && tf_to == p.start && cur_shift == tf_shift && spread == 0.0f64 && !tail_keep {
                 tf_to = this_to
                 tf_w += this_w
             } else {
-                // `hanging-punctuation: first` lets the line's opening punctuation hang left of the content edge and
-                // take no room in the line, so the rest of the text still starts at the edge.
-                if x.first_line && k == usize(lead) && !line_hung && (bstyle(l, p.box).hanging_punctuation & 1u8) != 0u8 {
-                    let hw = hanging_punct_w(l, p)
-                    if hw > 0.0f64 {
-                        cx -= hw
-                        this_w -= hw
-                        line_hung = true
-                    }
-                }
                 if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
                 tf_box = p.box
                 tf_start = cx
@@ -3576,7 +3599,9 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 tf_w = this_w
                 tf_shift = cur_shift
             }
-            cx += this_w
+            // A hanging opener takes no room in the line, so the rest of the text and everything after the piece start
+            // at the content edge.
+            if hang_hw > 0.0f64 { cx += this_w - hang_hw } else { cx += this_w }
         } else if p.kind == .Tab {
             if tf_box != NONE { flush_text_frag(l, tf_box, tf_start, l.boxes.items[usize(tf_box)].proc[tf_from..tf_to], tf_w, tf_shift, baseline) }
             tf_box = NONE
