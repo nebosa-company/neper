@@ -16,6 +16,7 @@ use e.js.interp as js
 use e.js.module as module
 use e.js.realm as realm
 use e.mem
+use e.net.idna
 use e.str
 use e.text.charset as charset
 use e.text.charset_cjk as charset_cjk
@@ -1039,6 +1040,19 @@ fn n_realm_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     ret (js.obj_value(o.realm.global), ok)
 }
 
+// toAsciiDomain(text): the IDNA ASCII form of a domain name, or null when it is not one.
+fn n_to_ascii_domain(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
+    let (t, te) = sarg(it, args, 0usize)
+    if te != ok { ret (js.undefv(), te) }
+    let (out, oe) = mem.alloc[u8](it.a, 320usize)
+    if oe != ok { ret (js.undefv(), oe) }
+    let (scratch, se) = mem.alloc[u32](it.a, t.len + 8usize)
+    if se != ok { ret (js.undefv(), se) }
+    let (n, de) = idna.to_ascii(t, out, scratch)
+    if de != ok || n == 0usize { ret (js.null_value(), ok) }
+    ret (js.str_value(out[0usize..n]), ok)
+}
+
 // parseColor(text): the CSS colour as "#rrggbb" (alpha dropped), or null when it is not one.
 fn n_parse_color(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (t, te) = sarg(it, args, 0usize)
@@ -1250,6 +1264,7 @@ fn install_natives(it: *js.Interp) {
     js.add_method(it, n, "frameCount", 0u32, n_frame_count)
     js.add_method(it, n, "realmOf", 1u32, n_realm_of)
     js.add_method(it, n, "parseColor", 1u32, n_parse_color)
+    js.add_method(it, n, "toAsciiDomain", 1u32, n_to_ascii_domain)
     js.add_method(it, n, "flags", 1u32, n_flags)
     js.add_method(it, n, "setFlags", 3u32, n_set_flags)
     js.add_method(it, n, "utf8Encode", 1u32, n_utf8_encode)
