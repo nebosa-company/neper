@@ -12,6 +12,7 @@ use e.mem
 use e.str
 use e.ui.accessibility
 use e.ui.html_view as view
+use e.ui.input
 use e.ui.widget
 use e.web.page as page
 use e.web.shell as shell
@@ -41,10 +42,10 @@ fn state(b: *const Browser) -> State {
     }
 }
 
-// Navigates to what the omnibox makes of `input` (an address, a host name, or a search for the text). A load that
-// fails leaves the error page, so `state().error` says why while `ready` stays true.
-fn navigate(b: *Browser, input: str) -> err {
-    ret shell.navigate(b.sh, b.tab, input)
+// Navigates to what the omnibox makes of `address` (an address, a host name, or a search for the text). A load that
+// fails leaves the error page, so `state().error_text` says why while `ready` stays true.
+fn navigate(b: *Browser, address: str) -> err {
+    ret shell.navigate(b.sh, b.tab, address)
 }
 
 // Moves through the tab's session history; false when there is no entry in that direction.
@@ -116,6 +117,13 @@ fn canvas(b: *Browser) -> widget.Custom {
 fn region(b: *Browser) -> widget.Region {
     if !b.tab.loaded { ret zero }
     ret view.region(b.tab.pg.view)
+}
+
+// The page's scroll keys, for a `widget.scope` around the region: a tap inside the region focuses it, so arrows,
+// PageUp/PageDown, Home/End and Space scroll the document.
+fn keys(b: *Browser) -> widget.Change[input.KeyEvent] {
+    if !b.tab.loaded { ret zero }
+    ret view.keys(b.tab.pg.view)
 }
 
 // --- Accessibility -----------------------------------------------------------------------------------------------------

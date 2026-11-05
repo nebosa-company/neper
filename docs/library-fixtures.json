@@ -4082,6 +4082,7 @@
     "ui_actions",
     "ui_adaptive",
     "ui_audit",
+    "ui_browser",
     "ui_button",
     "ui_collection",
     "ui_collections2_v2",

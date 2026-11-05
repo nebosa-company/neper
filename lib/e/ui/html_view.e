@@ -25,6 +25,7 @@ use e.mem
 use e.str
 use e.text.fontset as fontset
 use e.ui.accessibility
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.widget
 
@@ -288,8 +289,41 @@ fn gesture_view(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // Wheel scrolling, taps (links) and hover over the canvas: wrap it in `widget.region(key, region(v), style, canvas)`.
+// The region is focusable, so a tap gives the document the keyboard: an ancestor `widget.scope` with `keys(v)` then
+// receives the keys and scrolls it.
 fn region(v: *View) -> widget.Region {
-    ret widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](v), invoke: gesture_view }, gestures: widget.GESTURE_TAP | widget.GESTURE_HOVER | widget.GESTURE_WHEEL, enabled: true, focusable: false }
+    ret widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](v), invoke: gesture_view }, gestures: widget.GESTURE_TAP | widget.GESTURE_HOVER | widget.GESTURE_WHEEL, enabled: true, focusable: true }
+}
+
+// Arrows scroll 40 px; PageDown/PageUp a viewport less a line; Home/End the top and bottom; Space pages down,
+// Shift+Space pages up.
+fn key_scroll(ctx: *void, k: input.KeyEvent) -> err {
+    let v = mem.cast[*View](ctx)
+    let code = k.key.physical
+    if code == 38u32 {
+        scroll_by(v, 0.0, 0.0 - 40.0)
+    } else if code == 40u32 {
+        scroll_by(v, 0.0, 40.0)
+    } else if code == 34u32 || (code == 32u32 && !k.modifiers.shift) {
+        scroll_by(v, 0.0, v.height - 40.0)
+    } else if code == 33u32 || (code == 32u32 && k.modifiers.shift) {
+        scroll_by(v, 0.0, 0.0 - (v.height - 40.0))
+    } else if code == 36u32 {
+        scroll_to(v, v.scroll_x, 0.0)
+    } else if code == 35u32 {
+        scroll_to(v, v.scroll_x, document_height(v))
+    } else if code == 37u32 {
+        scroll_by(v, 0.0 - 40.0, 0.0)
+    } else if code == 39u32 {
+        scroll_by(v, 40.0, 0.0)
+    }
+    ret ok
+}
+
+// The scroll keys as a scope's handler: wrap the region in
+// `widget.scope(key, widget.Scope { ..., keys: keys(v) }, style, [the region])`.
+fn keys(v: *View) -> widget.Change[input.KeyEvent] {
+    ret widget.Change[input.KeyEvent] { ctx: mem.cast[*void](v), invoke: key_scroll }
 }
 
 // The viewport position of the last tap (cleared by reading it), for the page's own click handlers.

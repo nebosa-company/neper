@@ -274,14 +274,18 @@ fn build(m: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     content_style.height = style.Length { Flex: 1.0 }
     var content: widget.Node = zero
     if tab.loaded {
-        // The canvas, wrapped in the semantics that publishes the page's document to assistive technology.
+        // The canvas in the semantics that publishes the page to assistive technology, in the focusable scroll region,
+        // in the scope that gives the page its keys: a tap focuses the region and the scope above it hears the keys.
         let (canvas, ce) = mem.alloc[widget.Node](f, 1usize)
         if ce != ok { ret (zero, ce) }
         canvas[0usize] = widget.Node { key: 22u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: content_style, children: zero }
         let (inner, ie) = mem.alloc[widget.Node](f, 1usize)
         if ie != ok { ret (zero, ie) }
         inner[0usize] = widget.semantics(21u64, browser.semantics(&b), content_style, canvas[0usize..1usize])
-        content = widget.region(20u64, browser.region(&b), content_style, inner[0usize..1usize])
+        let (scrolling, sre) = mem.alloc[widget.Node](f, 1usize)
+        if sre != ok { ret (zero, sre) }
+        scrolling[0usize] = widget.region(20u64, browser.region(&b), content_style, inner[0usize..1usize])
+        content = widget.scope(23u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: zero, keys: browser.keys(&b) }, content_style, scrolling[0usize..1usize])
     } else {
         content = widget.box(20u64, content_style, zero)
     }

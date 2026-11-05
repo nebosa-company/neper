@@ -13,6 +13,7 @@ use e.str
 use e.text.fontset as fontset
 use e.ui.accessibility as acc
 use e.ui.browser as browser
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -21,6 +22,14 @@ use e.web.shell as shell
 const RED: u32 = 4294901760u32
 const BLUE: u32 = 4278190335u32
 const WHITE: u32 = 4294967295u32
+
+fn pointer(x: f32, y: f32) -> input.Pointer {
+    ret input.Pointer { window: zero, device: 0u32, pointer: 0u32, kind: .Mouse, position: geo.Point { x: x, y: y }, buttons: 1u32, changed: .Primary }
+}
+
+fn key(code: u32) -> input.KeyEvent {
+    ret input.KeyEvent { window: zero, key: input.Key { physical: code, logical: code }, modifiers: zero, repeat: false }
+}
 
 fn data_page(a: *mem.Arena, title: str) -> str {
     let (s, e) = str.concat(a, "data:text/html,<title>", title)
@@ -190,6 +199,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if published.nodes[shown].bounds.width <= 0.0 || published.nodes[shown].bounds.height <= 0.0 { os.exit(77i32) }
     if !has_action(published.nodes[linked].actions, acc.Action.Press) { os.exit(78i32) }
     if widget.close(&runtime) != ok { os.exit(76i32) }
+    // Keyboard scrolling (7.3): a tap focuses the page's scroll region and PageDown reaches the scope above it, which
+    // scrolls the document.
+    let tall = "data:text/html,<div style=height:400px>text</div>"
+    if browser.navigate(&b, tall) != ok { os.exit(80i32) }
+    let (kt, kte) = widget.runtime(a, &renderer, widget.Limits { max_elements: 32usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 64usize })
+    if kte != ok { os.exit(81i32) }
+    var kruntime = kt
+    let (canvas_kids, cke) = mem.alloc[widget.Node](a, 1usize)
+    if cke != ok { os.exit(81i32) }
+    canvas_kids[0] = widget.Node { key: 4u64, kind: widget.Kind { Custom: browser.canvas(&b) }, style: sized(64.0, 64.0), children: zero }
+    let (sem_kids, sme) = mem.alloc[widget.Node](a, 1usize)
+    if sme != ok { os.exit(81i32) }
+    sem_kids[0] = widget.semantics(3u64, browser.semantics(&b), sized(64.0, 64.0), canvas_kids[0usize..1usize])
+    let (scroll_kids, ske) = mem.alloc[widget.Node](a, 1usize)
+    if ske != ok { os.exit(81i32) }
+    scroll_kids[0] = widget.region(2u64, browser.region(&b), sized(64.0, 64.0), sem_kids[0usize..1usize])
+    let kroot = widget.scope(1u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: zero, keys: browser.keys(&b) }, sized(64.0, 64.0), scroll_kids[0usize..1usize])
+    let (kframe_storage, kfe) = mem.alloc[u8](a, 262144usize)
+    if kfe != ok { os.exit(81i32) }
+    var kframe = mem.arena_from(kframe_storage)
+    let (kcompiled, kre) = widget.reconcile(&kruntime, &kframe, kroot, ui_layout.Constraints { min_width: 0.0, max_width: 64.0, min_height: 0.0, max_height: 64.0 })
+    if kre != ok { os.exit(82i32) }
+    if widget.dispatch(&kruntime, input.Event { PointerDown: pointer(10.0, 10.0) }) != ok { os.exit(83i32) }
+    if widget.dispatch(&kruntime, input.Event { PointerUp: pointer(10.0, 10.0) }) != ok { os.exit(83i32) }
+    if widget.dispatch(&kruntime, input.Event { KeyDown: key(34u32) }) != ok { os.exit(84i32) }
+    if b.tab.pg.view.scroll_y <= 0.0 { os.exit(85i32) }
+    if widget.close(&kruntime) != ok { os.exit(86i32) }
     // A load the engine cannot do leaves the error page, and the history keeps the attempt.
     if browser.navigate(&b, "ftp://nowhere.test/file") != ok { os.exit(43i32) }
     st = browser.state(&b)

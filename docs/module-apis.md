@@ -25531,6 +25531,8 @@ fn custom(v: *View) -> widget.Custom
 fn wheel_step() -> f32
 fn gesture_view(ctx: *void, g: widget.Gesture) -> err
 fn region(v: *View) -> widget.Region
+fn key_scroll(ctx: *void, k: input.KeyEvent) -> err
+fn keys(v: *View) -> widget.Change[input.KeyEvent]
 fn take_activated(v: *View) -> (str, bool)
 fn node_at(v: *View, x: f32, y: f32) -> html.NodeId
 const A11Y_SLOT_BASE: u32 = 2147483648u32
@@ -25551,7 +25553,7 @@ type Browser = struct { sh: *shell.Shell, tab: *shell.Tab }
 fn attach(sh: *shell.Shell, t: *shell.Tab) -> Browser
 fn has_page(b: *const Browser) -> bool
 fn state(b: *const Browser) -> State
-fn navigate(b: *Browser, input: str) -> err
+fn navigate(b: *Browser, address: str) -> err
 fn back(b: *Browser) -> bool
 fn forward(b: *Browser) -> bool
 fn reload(b: *Browser)
@@ -25561,6 +25563,7 @@ fn pump(b: *Browser, now_ms: f64) -> bool
 fn timer_due(b: *const Browser, now_ms: f64) -> bool
 fn canvas(b: *Browser) -> widget.Custom
 fn region(b: *Browser) -> widget.Region
+fn keys(b: *Browser) -> widget.Change[input.KeyEvent]
 fn a11y_tree(b: *Browser, a: *mem.Arena) -> (accessibility.Tree, err)
 fn semantics(b: *Browser) -> widget.Semantics
 ```
