@@ -21,6 +21,12 @@ fn same(a: []const u8, b: []const u8) -> bool {
     ret true
 }
 
+// Appends one LSB-first stream bit and returns the new bit position.
+fn stream_bit(buf: []u8, at: usize, bit: u32) -> usize {
+    if bit != 0u32 { buf[at / 8usize] = buf[at / 8usize] | (1u8 << u8(at % 8usize)) }
+    ret at + 1usize
+}
+
 // Decodes `source` whole into `out`; the byte count, or 0 on any refusal.
 fn inflate(storage: []u8, source: []const u8, out: []u8, window: usize) -> (usize, err) {
     let (d0, d_error) = deflate.decoder(storage, window)
@@ -92,6 +98,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n1, e1) = inflate(dec_storage, dyn, out, 32768usize)
     if e1 != ok { os.exit(6) }
     if !same(out[..n1], text) { os.exit(7) }
+    // #481: a dynamic block may declare 32 distance codes (HDIST = 31). The
+    // two reserved symbols are unused, so this header is legal RFC 1951.
+    var raw: [64]u8 = zero
+    var bits = 0usize
+    bits = stream_bit(raw[..], bits, 1u32)  // BFINAL
+    bits = stream_bit(raw[..], bits, 0u32)  // BTYPE = 2 (dynamic), LSB first
+    bits = stream_bit(raw[..], bits, 1u32)
+    var bi = 0usize
+    while bi < 5usize {
+        bits = stream_bit(raw[..], bits, 0u32)
+        bi += 1usize
+    }
+    bi = 0usize
+    while bi < 5usize {
+        bits = stream_bit(raw[..], bits, 1u32)
+        bi += 1usize
+    }
+    // HCLEN = 14 (18 code-length code lengths, value+4).
+    bits = stream_bit(raw[..], bits, 0u32)
+    bits = stream_bit(raw[..], bits, 1u32)
+    bits = stream_bit(raw[..], bits, 1u32)
+    bits = stream_bit(raw[..], bits, 1u32)
+    // Order 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1: only 0 and 1 get a
+    // length of 1 (three LSB-first bits each, value 1).
+    bi = 0usize
+    while bi < 18usize {
+        let one = bi == 3usize || bi == 17usize
+        var nb = 0usize
+        while nb < 3usize {
+            var b = 0u32
+            if one && nb == 0usize { b = 1u32 }
+            bits = stream_bit(raw[..], bits, b)
+            nb += 1usize
+        }
+        bi += 1usize
+    }
+    // 289 code lengths: literal 0 = 1, literals 1..255 = 0, end-of-block 256 = 1,
+    // then the 32 distance lengths (all zero, unused).
+    bits = stream_bit(raw[..], bits, 1u32)
+    bi = 0usize
+    while bi < 255usize {
+        bits = stream_bit(raw[..], bits, 0u32)
+        bi += 1usize
+    }
+    bits = stream_bit(raw[..], bits, 1u32)
+    bi = 0usize
+    while bi < 32usize {
+        bits = stream_bit(raw[..], bits, 0u32)
+        bi += 1usize
+    }
+    // End of block (literal-256 code is the one-bit code 1).
+    bits = stream_bit(raw[..], bits, 1u32)
+    let raw_len = (bits + 7usize) / 8usize
+    let (n32, e32) = inflate(dec_storage, raw[0usize..raw_len], out, 32768usize)
+    if e32 != ok || n32 != 0usize { os.exit(90i32) }
     // In steps: seven bytes of input, thirteen of output.
     let (d0, e2) = deflate.decoder(dec_storage, 32768usize)
     if e2 != ok { os.exit(8) }

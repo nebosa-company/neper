@@ -302,9 +302,22 @@ fn garch_objective(fit: *GarchFit, p: []const f64) -> f64 {
 fn garch_fit(returns: []const f64, p: []f64, iterations: u32, scratch: []f64) -> (f64, err) {
     if p.len < 3usize || scratch.len < 32usize { ret (0.0f64, TooSmall) }
     if returns.len < 2usize { ret (0.0f64, Invalid) }
+    // A zero (or non-finite) sample variance has no likelihood: reject rather
+    // than fitting NaN, and reject a start outside the feasible region.
+    var sample = 0.0f64
+    var i = 0usize
+    while i < returns.len {
+        if !(returns[i] - returns[i] == 0.0f64) { ret (0.0f64, Invalid) }
+        sample += returns[i] * returns[i] / f64(returns.len)
+        i += 1usize
+    }
+    if !(sample > 0.0f64) { ret (0.0f64, Invalid) }
+    if !(p[0usize] > 0.0f64) || !(p[1usize] >= 0.0f64) || !(p[2usize] >= 0.0f64) || !(p[1usize] + p[2usize] < 1.0f64) { ret (0.0f64, Invalid) }
     var fit = GarchFit { returns: returns }
     let (result, run_error) = opt.nelder_mead[GarchFit](&fit, garch_objective, p[..3usize], 0.05f64, 1.0e-12f64, iterations, scratch)
     if run_error != ok { ret (0.0f64, run_error) }
+    // Every simplex vertex was the penalty: the start was degenerate.
+    if result.value >= 1.0e300f64 { ret (0.0f64, Invalid) }
     ret (0.0f64 - result.value, ok)
 }
 
@@ -568,6 +581,8 @@ fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, 
     if coefs.len < p * k * k || intercept.len < k { ret TooSmall }
     if history.len < p * k { ret Invalid }
     if out.len < horizon * k { ret TooSmall }
+    // Seed from the newest `p` rows, not the first ones.
+    let base = history.len / k
     var s = 0usize
     while s < horizon {
         var i = 0usize
@@ -581,7 +596,7 @@ fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, 
                     if s > lag {
                         prior = out[(s - 1usize - lag) * k + j]
                     } else {
-                        prior = history[(p - 1usize - lag + s) * k + j]
+                        prior = history[(base - 1usize - lag + s) * k + j]
                     }
                     total += coefs[(lag * k + i) * k + j] * prior
                     j += 1usize

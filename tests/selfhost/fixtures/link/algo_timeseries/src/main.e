@@ -118,6 +118,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(ahead[0usize], 1.95f64, 0.000000001f64) || !near(ahead[1usize], 1.855f64, 0.000000001f64) || !near(ahead[2usize], 1.7695f64, 0.000000001f64) { os.exit(4i32) }
     if timeseries.garch_forecast(0.1f64, 0.2f64, 0.7f64, 2.0f64, 1.5f64, 3usize, ahead[..2usize]) != timeseries.TooSmall { os.exit(4i32) }
 
+    // #255: the forecast seeds from the newest rows, not the oldest.
+    var var_coefs: [1]f64 = zero
+    var_coefs[0usize] = 1.0f64
+    var var_intercept: [1]f64 = zero
+    var var_history: [3]f64 = zero
+    var_history[0usize] = 1.0f64
+    var_history[1usize] = 2.0f64
+    var_history[2usize] = 3.0f64
+    var var_out: [1]f64 = zero
+    if timeseries.var_forecast(var_coefs[..], var_intercept[..], 1usize, 1usize, var_history[..], 1usize, var_out[..]) != ok { os.exit(90i32) }
+    if var_out[0usize] != 3.0f64 { os.exit(90i32) }
+
+    // #255: all-zero returns have no likelihood: Invalid, not (NaN, ok).
+    var zero_returns: [4]f64 = zero
+    var garch_p: [3]f64 = zero
+    garch_p[0usize] = 0.1f64
+    garch_p[1usize] = 0.1f64
+    garch_p[2usize] = 0.1f64
+    let (_, zero_error) = timeseries.garch_fit(zero_returns[..], garch_p[..], 50u32, scratch[..])
+    if zero_error != timeseries.Invalid { os.exit(91i32) }
+
+    // #255: a start outside alpha + beta < 1 is Invalid, not a -1e300 no-op.
+    garch_p[0usize] = 0.1f64
+    garch_p[1usize] = 0.6f64
+    garch_p[2usize] = 0.6f64
+    let (_, infeasible_error) = timeseries.garch_fit(returns, garch_p[..], 50u32, scratch[..])
+    if infeasible_error != timeseries.Invalid { os.exit(92i32) }
+
     // 5: Hawkes with mu 1, alpha 0.5, beta 1 (mean rate 2) over 500 units.
     let (events, events_error) = mem.alloc[f64](a, 3000usize)
     if events_error != ok { ret events_error }

@@ -376,7 +376,10 @@ fn decode(d: *Decoder, input: []const u8, output: []u8, finish: bool) -> (usize,
             s.hlit = usize(take_bits(s, 5u32)) + 257usize
             s.hdist = usize(take_bits(s, 5u32)) + 1usize
             s.hclen = usize(take_bits(s, 4u32)) + 4usize
-            if s.hlit > 286usize || s.hdist > 30usize { ret (s.in_at, written, .NeedInput, Invalid) }
+            // RFC 1951 allows 1..32 distance codes; symbols 30 and 31 are
+            // reserved but their lengths may legally appear in the alphabet
+            // (rejected later only if a stream actually uses them).
+            if s.hlit > 286usize || s.hdist > 32usize { ret (s.in_at, written, .NeedInput, Invalid) }
             var i = 0usize
             while i < 19usize {
                 s.lengths[i] = 0u8
