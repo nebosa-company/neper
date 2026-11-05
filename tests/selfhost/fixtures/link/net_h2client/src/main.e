@@ -118,5 +118,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var stream_overflow: Cap = zero
     frame(&stream_overflow, h2.WINDOW_UPDATE, 0u8, 1u32, max_inc[0usize..4usize])
     if !expect_protocol(a, stream_overflow.data[0usize..stream_overflow.len]) { os.exit(19i32) }
+    // #399: between HEADERS and END_HEADERS the only legal frame is CONTINUATION on the
+    // same stream; an interleaved DATA frame is a connection protocol error.
+    var interleaved: Cap = zero
+    frame(&interleaved, h2.SETTINGS, 0u8, 0u32, "")
+    let (split_n, split_e) = h2.encode_block(&enc, blk[0usize..256usize], final[0usize..2usize], none_s[0usize..0usize], false)
+    if split_e != ok { os.exit(20i32) }
+    let half = split_n / 2usize
+    frame(&interleaved, h2.HEADERS, 0u8, 1u32, blk[0usize..half])
+    frame(&interleaved, h2.DATA, 0u8, 1u32, "x")
+    frame(&interleaved, h2.CONTINUATION, h2.FLAG_END_HEADERS, 1u32, blk[half..split_n])
+    if !expect_protocol(a, interleaved.data[0usize..interleaved.len]) { os.exit(20i32) }
     ret ok
 }

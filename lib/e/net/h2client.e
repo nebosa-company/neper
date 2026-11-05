@@ -282,6 +282,12 @@ fn exchange(a: *mem.Arena, src: io.Reader, sink: io.Writer, method: str, authori
         }
         let (f, fe) = next_frame(&c)
         if fe != ok { ret (out, fe) }
+        if in_headers {
+            // RFC 9113 6.10: until END_HEADERS the only legal frame is CONTINUATION on the
+            // header block's stream; a DATA/SETTINGS/PING frame here would desynchronise
+            // the response (#399).
+            if f.kind != h2.CONTINUATION || f.stream != 1u32 { ret (out, Protocol) }
+        }
         let plen = f.payload.len
         if f.kind == h2.SETTINGS {
             if (f.flags & h2.FLAG_ACK) == 0u8 {

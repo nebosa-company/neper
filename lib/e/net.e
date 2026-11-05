@@ -809,22 +809,31 @@ fn in_range(address: Address, text: str) -> bool {
     ret cidr_contains(c, address)
 }
 
-// The ranges a request to a user-supplied host must not reach: RFC 1918,
-// loopback and link-local for v4; loopback, link-local and unique-local for
-// v6, plus a v4-mapped v6 address judged as the v4 address it carries.
+// Judge the IPv4 address embedded at byte `at` of a v6 literal as that address: the
+// NAT64, 6to4 and IPv4-compatible forms reach the same host.
+fn embedded_private(six: Ip6, at: usize) -> bool {
+    var four: Ip4 = zero
+    four.bytes[0usize] = six.bytes[at]
+    four.bytes[1usize] = six.bytes[at + 1usize]
+    four.bytes[2usize] = six.bytes[at + 2usize]
+    four.bytes[3usize] = six.bytes[at + 3usize]
+    ret is_private(Address{ Ip4: four })
+}
+
+// The ranges a request to a user-supplied host must not reach (the SSRF guard's scope):
+// RFC 1918, loopback, link-local, "this network", carrier-grade NAT, IETF protocol
+// assignments, benchmarking and multicast/reserved v4 blocks; loopback, link-local and
+// unique-local v6; and the v6 forms that embed a v4 address (v4-mapped, NAT64, 6to4,
+// IPv4-compatible) judged as that v4 address.
 fn is_private(address: Address) -> bool {
     switch address {
     case .Ip4 as four:
-        ret in_range(address, "10.0.0.0/8") || in_range(address, "172.16.0.0/12") || in_range(address, "192.168.0.0/16") || in_range(address, "127.0.0.0/8") || in_range(address, "169.254.0.0/16")
+        ret in_range(address, "10.0.0.0/8") || in_range(address, "172.16.0.0/12") || in_range(address, "192.168.0.0/16") || in_range(address, "127.0.0.0/8") || in_range(address, "169.254.0.0/16") || in_range(address, "0.0.0.0/8") || in_range(address, "100.64.0.0/10") || in_range(address, "192.0.0.0/24") || in_range(address, "198.18.0.0/15") || in_range(address, "224.0.0.0/3")
     case .Ip6 as six:
-        if in_range(address, "::ffff:0:0/96") {
-            var mapped: Ip4 = zero
-            mapped.bytes[0usize] = six.bytes[12usize]
-            mapped.bytes[1usize] = six.bytes[13usize]
-            mapped.bytes[2usize] = six.bytes[14usize]
-            mapped.bytes[3usize] = six.bytes[15usize]
-            ret is_private(Address{ Ip4: mapped })
-        }
+        if in_range(address, "::ffff:0:0/96") { ret embedded_private(six, 12usize) }
+        if in_range(address, "64:ff9b::/96") { ret embedded_private(six, 12usize) }
+        if in_range(address, "2002::/16") { ret embedded_private(six, 2usize) }
+        if in_range(address, "::/96") { ret embedded_private(six, 12usize) }
         ret in_range(address, "::1/128") || in_range(address, "fe80::/10") || in_range(address, "fc00::/7")
     }
     ret false

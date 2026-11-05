@@ -521,6 +521,25 @@ fn check_cidr() -> i32 {
     if net.is_private(ip("2001:db8::1")) != false { ret 15i32 }
     if net.is_private(ip("::ffff:10.0.0.1")) != true { ret 15i32 }
     if net.is_private(ip("::ffff:8.8.8.8")) != false { ret 15i32 }
+    // #105: the rest of the guard's scope -- unspecified, CGNAT, IETF/benchmarking and
+    // multicast/reserved v4 blocks, plus v6 spellings that embed an IPv4 address.
+    if net.is_private(ip("0.0.0.0")) != true { ret 15i32 }
+    if net.is_private(ip("0.1.2.3")) != true { ret 15i32 }
+    if net.is_private(ip("100.64.0.1")) != true { ret 15i32 }
+    if net.is_private(ip("100.127.255.255")) != true { ret 15i32 }
+    if net.is_private(ip("100.128.0.1")) != false { ret 15i32 }
+    if net.is_private(ip("192.0.0.1")) != true { ret 15i32 }
+    if net.is_private(ip("198.18.0.1")) != true { ret 15i32 }
+    if net.is_private(ip("198.19.255.255")) != true { ret 15i32 }
+    if net.is_private(ip("224.0.0.1")) != true { ret 15i32 }
+    if net.is_private(ip("255.255.255.255")) != true { ret 15i32 }
+    if net.is_private(ip("::")) != true { ret 15i32 }
+    if net.is_private(ip("64:ff9b::a01:203")) != true { ret 15i32 }
+    if net.is_private(ip("64:ff9b::808:808")) != false { ret 15i32 }
+    if net.is_private(ip("2002:a01:203::")) != true { ret 15i32 }
+    if net.is_private(ip("2002:808:808::")) != false { ret 15i32 }
+    if net.is_private(ip("::a01:203")) != true { ret 15i32 }
+    if net.is_private(ip("::808:808")) != false { ret 15i32 }
     ret 0i32
 }
 

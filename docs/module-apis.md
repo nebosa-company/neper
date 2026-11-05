@@ -15350,6 +15350,7 @@ fn cidr_parse(text: str) -> (Cidr, err)
 fn cidr_contains(c: Cidr, address: Address) -> bool
 fn in_range(address: Address, text: str) -> bool
 fn is_private(address: Address) -> bool
+fn embedded_private(six: Ip6, at: usize) -> bool
 ```
 
 `parse_ip` accepts strict dotted-decimal IPv4 and RFC 4291 IPv6 literals, including
