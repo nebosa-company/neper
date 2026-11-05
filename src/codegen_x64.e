@@ -2777,7 +2777,7 @@ fn function_placed_end(builder: *nir.Builder, function_offsets: []usize, index: 
     ret (end, ok)
 }
 
-fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
+fn max_call_arguments(builder: *nir.Builder, current: nir.Function, calls: *bool) -> usize {
     var maximum = 0usize
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
@@ -2786,6 +2786,7 @@ fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
         let opcode = builder.instructions[at].opcode
         // An indirect call also parks its callee in the outgoing area.
         if opcode == .Call || opcode == .IndirectCall {
+            *calls = true
             let operand_count = builder.instructions[at].operand_count
             if operand_count > maximum { maximum = operand_count }
         }
@@ -4055,7 +4056,8 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     if parameters_error != ok { ret parameters_error }
     let local_count = stack_object_count(builder, current)
     let local_base = stack_slots + parameters
-    let outgoing = max_call_arguments(builder, current)
+    var calls = false
+    let outgoing = max_call_arguments(builder, current, &calls)
     let outgoing_base = local_base + local_count
     let preserve_base = outgoing_base + outgoing
     var preserve_count = 0usize
@@ -4063,7 +4065,9 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     if outgoing != 0usize || needs_fixed_registers(builder, current) {
         preserve_count = 5usize
     }
-    if outgoing != 0usize {
+    // Win64 owes the 32-byte home area to every callee, including one a call with no
+    // operands reaches, so the callee cannot spill into the caller's saved registers.
+    if outgoing != 0usize || (abi == .Windows && calls) {
         let register_count = parameter_register_count(abi)
         if abi == .Windows { call_area_count = 4usize }
         if outgoing > register_count { call_area_count += outgoing - register_count }
