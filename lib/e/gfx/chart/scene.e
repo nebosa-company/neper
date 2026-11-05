@@ -75,7 +75,8 @@ fn straight_channel(premultiplied: u32, alpha: u32) -> u8 {
     ret u8(value)
 }
 
-// Rasterize a finished chart display list into caller-owned straight RGBA.
+// Rasterize a finished chart display list into caller-owned straight RGBA,
+// converting from the target's channel order (Bgra8 targets included).
 // Create any arena-backed output writer only after this returns.
 fn rasterize(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, builder: *scene.Builder, width: u32, height: u32) -> (image.ConstImage, err) {
     if width == 0u32 || height == 0u32 { ret (zero, chart.Invalid) }
@@ -96,13 +97,21 @@ fn rasterize(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: s
     if read_error != ok { ret (zero, read_error) }
     let (rgba, rgba_error) = mem.alloc[u8](a, count * 4usize)
     if rgba_error != ok { ret (zero, rgba_error) }
+    // A Bgra8 target holds blue in the low byte; the answer is always Rgba8.
+    let bgra = shown.format == .Bgra8
     var i = 0usize
     while i < count {
         let pixel = pixels[i]
         let alpha = (pixel >> 24u32) & 255u32
-        rgba[4usize * i] = straight_channel(pixel & 255u32, alpha)
+        var red = pixel & 255u32
+        var blue = (pixel >> 16u32) & 255u32
+        if bgra {
+            red = (pixel >> 16u32) & 255u32
+            blue = pixel & 255u32
+        }
+        rgba[4usize * i] = straight_channel(red, alpha)
         rgba[4usize * i + 1usize] = straight_channel((pixel >> 8u32) & 255u32, alpha)
-        rgba[4usize * i + 2usize] = straight_channel((pixel >> 16u32) & 255u32, alpha)
+        rgba[4usize * i + 2usize] = straight_channel(blue, alpha)
         rgba[4usize * i + 3usize] = u8(alpha)
         i += 1usize
     }

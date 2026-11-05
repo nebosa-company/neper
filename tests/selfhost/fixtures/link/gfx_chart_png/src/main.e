@@ -44,6 +44,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (decoded, decode_error) = png.decode(a, io.slice_reader(&source), png.DecodeOptions { max_width: 4u32, max_height: 4u32, max_pixels: 16u64, verify_crc: true })
     if decode_error != ok { ret decode_error }
     if decoded.width != 4u32 || decoded.height != 4u32 || decoded.pixels[0usize] < 250u8 || decoded.pixels[1usize] != 0u8 || decoded.pixels[2usize] != 0u8 || decoded.pixels[3usize] < 126u8 || decoded.pixels[3usize] > 129u8 { ret chart.Invalid }
+    // 795: a Bgra8 target is converted by channel, not read blue-first.
+    let (bgra_target, bgra_target_error) = gpu.open_target(q, gpu.Surface { kind: .Offscreen, handle: zero, context: zero }, 4u32, 4u32, .Bgra8)
+    if bgra_target_error != ok { ret bgra_target_error }
+    defer let _ = gpu.close_target(bgra_target)
+    let (bgra_canvas, bgra_canvas_error) = scene.target_of(a, bgra_target)
+    if bgra_canvas_error != ok { ret bgra_canvas_error }
+    let (made_bgra_renderer, bgra_renderer_error) = scene.renderer(a, device, q, 2u32, 1u32)
+    if bgra_renderer_error != ok { ret bgra_renderer_error }
+    var renderer_bgra = made_bgra_renderer
+    defer let _ = scene.close(&renderer_bgra)
+    let (made_bgra, bgra_builder_error) = scene.builder(a, 1usize)
+    if bgra_builder_error != ok { ret bgra_builder_error }
+    var builder_bgra = made_bgra
+    try scene.push(&builder_bgra, scene.Command { FillRect: scene.FillRect {
+        rect: geometry.rect(0.0, 0.0, 4.0, 4.0),
+        brush: paint.Brush { Solid: paint.rgba(1.0, 0.0, 0.0, 0.5) },
+    } })
+    let (bgra_view, bgra_render_error) = chart_scene.rasterize(a, q, bgra_target, bgra_canvas, &renderer_bgra, &builder_bgra, 4u32, 4u32)
+    if bgra_render_error != ok { ret bgra_render_error }
+    if bgra_view.format != .Rgba8 || bgra_view.pixels[0usize] < 250u8 || bgra_view.pixels[1usize] != 0u8 || bgra_view.pixels[2usize] != 0u8 || bgra_view.pixels[3usize] < 126u8 || bgra_view.pixels[3usize] > 129u8 { ret chart.Invalid }
     try io.print("gfx chart png ok\n")
     ret ok
 }

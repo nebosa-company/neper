@@ -19,7 +19,7 @@ use e.ui.layout as ui_layout
 use e.ui.widget
 
 // `marks` and `plot` hold the most recent paint, for hit testing a pointer
-// against what is on screen (`chart.hit_scatter`). `window` is the part of the
+// against what is on screen. `window` is the part of the
 // whole plot on screen, as fractions of it from the top left, (0, 0, 1, 1) for
 // all of it, and no side smaller than `min_window` (in (0, 1]). The marks are laid
 // out over all the data and mapped through the window, so a zoom changes no
@@ -199,18 +199,28 @@ fn zoom_about(v: *View, p: geometry.Point, factor: f32) {
 }
 
 // The nearest painted point within `hover_radius` that is on the plot, if any.
+// Points the zoom clips off the plot are skipped before the nearest is chosen,
+// so one of them cannot mask a visible point that is also within reach.
 fn hover_at(v: *View, p: geometry.Point) -> err {
     var found = false
     var index = 0usize
     if v.marks.coords.len > 0usize && geometry.contains(v.plot, p) {
-        var points = v.marks
-        points.kind = .Scatter
-        let (hit, has_hit, hit_error) = chart.hit_scatter(&points, zero, chart.Coord { x: p.x, y: p.y }, v.hover_radius)
-        if hit_error != ok { ret hit_error }
-        if has_hit {
-            let c = points.coords[hit.mark_index]
-            found = geometry.contains(v.plot, geometry.Point { x: c.x, y: c.y })
-            index = hit.mark_index
+        var best = 0.0f64
+        let limit = f64(v.hover_radius) * f64(v.hover_radius)
+        var i = 0usize
+        while i < v.marks.coords.len {
+            let c = v.marks.coords[i]
+            if geometry.contains(v.plot, geometry.Point { x: c.x, y: c.y }) {
+                let dx = f64(p.x) - f64(c.x)
+                let dy = f64(p.y) - f64(c.y)
+                let distance_squared = dx * dx + dy * dy
+                if distance_squared <= limit && (!found || distance_squared < best) {
+                    best = distance_squared
+                    index = i
+                    found = true
+                }
+            }
+            i += 1usize
         }
     }
     if found != v.has_hovered || (found && index != v.hovered) {

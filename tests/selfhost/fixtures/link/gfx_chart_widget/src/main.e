@@ -148,6 +148,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(v.window.width, 1.0 / 64.0) || !(v.window.x >= 0.0) || !(v.window.y >= 0.0) { os.exit(40i32) }
     now = time.instant_add(now, time.millis(16i64))
     if testing.pump(&harness, root, now) != ok { os.exit(41i32) }
+    // 796: a clipped point nearer the pointer must not mask a visible one. At window
+    // (0, 0, 0.5, 1) the points at 218 and 226 screen pixels are 2x their stored x; the
+    // pointer at 223 is nearer the clipped 226 but the visible 218 is within the radius.
+    let x_hover = [4]f32{ 0.0, 0.9711538461538461, 1.0096153846153846, 2.0 }
+    let y_hover = [4]f32{ 0.5, 0.5, 0.5, 0.5 }
+    var coords_hover: [4]chart.Coord = zero
+    let hover_spec = chart.spec(.Scatter, geometry.rect(0.0, 0.0, 1.0, 1.0), x_hover[..], y_hover[..])
+    var hover_view = chart_widget.view(a, hover_spec, paint.Brush { Solid: blue }, coords_hover[..], zero, zero)
+    let hover_custom = chart_widget.custom(&hover_view)
+    let (made_hover, hover_builder_error) = scene.builder(a, 32usize)
+    if hover_builder_error != ok { os.exit(53i32) }
+    var hover_builder = made_hover
+    if hover_custom.paint(hover_custom.ctx, &hover_builder, geometry.rect(0.0, 0.0, 240.0, 160.0)) != ok { os.exit(53i32) }
+    chart_widget.set_window(&hover_view, geometry.rect(0.0, 0.0, 0.5, 1.0))
+    if hover_custom.paint(hover_custom.ctx, &hover_builder, geometry.rect(0.0, 0.0, 240.0, 160.0)) != ok { os.exit(54i32) }
+    if chart_widget.hover_at(&hover_view, geometry.Point { x: 223.0, y: 80.0 }) != ok || !hover_view.has_hovered || hover_view.hovered != 1usize { os.exit(55i32) }
     // A 3-D camera orbits (D2116): the azimuth wraps, the elevation is held.
     let (wrapped_turn, wrap_error) = chart.orbit(chart.Camera3d { azimuth_degrees: 170.0f64, elevation_degrees: 30.0f64, distance: 6.0f64 }, 20.0f64, 0.0f64, 5.0f64, 85.0f64)
     if wrap_error != ok || !near64(wrapped_turn.azimuth_degrees, -170.0f64) || !near64(wrapped_turn.distance, 6.0f64) { os.exit(42i32) }
