@@ -222,12 +222,19 @@ fn host_call(ctx: *void, args: []const u64, results: []u64) -> err {
 fn source_bytes(it: *js.Interp, v: js.Value) -> ([]const u8, err) {
     if js.is_object(v) {
         let o = js.as_object(v)
-        if o.class == js.C_ARRAYBUFFER { ret (js.buf_of(o).bytes, ok) }
+        if o.class == js.C_ARRAYBUFFER {
+            let b = js.buf_of(o)
+            // A detached buffer is not an empty module: it is an invalid BufferSource.
+            if b.detached { ret (zero, js.throw_type(it, "WebAssembly: detached ArrayBuffer")) }
+            ret (b.bytes, ok)
+        }
         if o.class == js.C_TYPEDARRAY {
+            // A detached view, or one whose buffer shrank below its end, is invalid too
+            // (#818); it used to be handed to the decoder as zero bytes.
+            if js.ta_out_of_bounds(o) { ret (zero, js.throw_type(it, "WebAssembly: detached or out-of-bounds view")) }
             let t = js.ta_of(o)
             let b = js.buf_of(t.buffer)
             let n = js.ta_length(o) * js.ta_elem_size(t.kind)
-            if t.offset + n > b.bytes.len { ret (b.bytes[0usize..0usize], ok) }
             ret (b.bytes[t.offset..t.offset + n], ok)
         }
     }
@@ -320,10 +327,72 @@ fn module_imports(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     ret (js.obj_value(arr), ok)
 }
 
+// A ULEB128 at `at`; `at` past the end when the encoding is cut off.
+fn uleb_at(bytes: []const u8, at: usize) -> (u64, usize) {
+    var v = 0u64
+    var shift = 0u32
+    var p = at
+    while p < bytes.len && shift < 64u32 {
+        let b = bytes[p]
+        v = v | (u64(b & 127u8) << shift)
+        p += 1usize
+        if (b & 128u8) == 0u8 { ret (v, p) }
+        shift += 7u32
+    }
+    ret (v, bytes.len + 1usize)
+}
+
+// A fresh ArrayBuffer holding a copy of `src` (customSections answers copies).
+fn array_buffer_copy(it: *js.Interp, src: []const u8) -> (js.Value, err) {
+    let (cell, ce) = mem.alloc[js.Buf](it.a, 1usize)
+    if ce != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    let (own, oe) = mem.alloc[u8](it.a, src.len + 1usize)
+    if oe != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    var i = 0usize
+    while i < src.len {
+        own[i] = src[i]
+        i += 1usize
+    }
+    cell[0usize] = js.Buf { bytes: own[0usize..src.len], detached: false, store: own[0usize..src.len], max: src.len, resizable: false, is_shared: false, immutable: false }
+    let ab = js.new_obj(it, js.C_ARRAYBUFFER, it.protos.array_buffer)
+    ab.data = mem.cast[*void](&cell[0usize])
+    ret (js.obj_value(ab), ok)
+}
+
 fn module_custom_sections(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     let (d, de) = this_of(it, arg(args, 0usize), js.C_WMODULE, "WebAssembly.Module.customSections()")
     if de != ok { ret (js.undefv(), de) }
-    ret (js.obj_value(js.new_array(it)), ok)
+    let m = mem.cast[*wasm.Module](d)
+    let (name, ne) = js.to_string(it, arg(args, 1usize))
+    if ne != ok { ret (js.undefv(), ne) }
+    let arr = js.new_array(it)
+    // Walk the section table of the decoded bytes; a custom section (id 0) is a name and
+    // its payload, and the payloads with a matching name are what the API answers (#817).
+    let bytes = m.bytes
+    var at = 8usize
+    while at < bytes.len {
+        let id = bytes[at]
+        let (len, body_at) = uleb_at(bytes, at + 1usize)
+        if body_at > bytes.len { break }
+        if len > u64(bytes.len - body_at) { break }
+        let end = body_at + usize(len)
+        if id == 0u8 {
+            let (nlen, name_at) = uleb_at(bytes, body_at)
+            if name_at <= end {
+                if nlen <= u64(end - name_at) {
+                    let section_name = bytes[name_at..name_at + usize(nlen)]
+                    if str.eq(section_name, name) {
+                        let (payload, pe) = array_buffer_copy(it, bytes[name_at + usize(nlen)..end])
+                        if pe != ok { ret (js.undefv(), pe) }
+                        let pushed = js.array_push(it, arr, payload)
+                        if pushed != ok { ret (js.undefv(), pushed) }
+                    }
+                }
+            }
+        }
+        at = end
+    }
+    ret (js.obj_value(arr), ok)
 }
 
 // ---- Memory, Table, Global ---------------------------------------------------------------------------------------------

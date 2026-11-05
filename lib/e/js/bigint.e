@@ -570,7 +570,10 @@ fn pow2_f64(e: i64) -> f64 {
             r = r * 2.0f64
             n -= 1i64
         }
-        if r > 1.0e308f64 * 10.0f64 { ret r }
+        // 1.0e308 * 10.0 is already infinity, so the old bound could never trip; stop as
+        // soon as the result leaves the finite range instead of walking every 64-bit chunk
+        // of a huge exponent (#819).
+        if r > 1.0e308f64 { ret r }
     }
     ret r
 }
