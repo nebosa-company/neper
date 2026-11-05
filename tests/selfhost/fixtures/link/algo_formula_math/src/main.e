@@ -267,6 +267,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let product_source = sumproduct_source(a, 17usize)
     let product = f.evaluate(a, product_source, &ctx, &group)
     if product.kind != .Number || product.n != 131072.0f64 { os.exit(80i32) }
+    // #484: a blank in values at one position and in weights at another excludes those
+    // pairs, not a value and a weight from different rows (10*? + 30*3 -> 30, not 22).
+    let weighted = f.evaluate(a, "AVGW([10,\"\",30],[\"\",2,3])", &ctx, &group)
+    if weighted.kind != .Number || weighted.n != 30.0f64 { os.exit(81i32) }
+    // #140 (6): C(n,k) = C(n,n-k) keeps the short side; the long side overflowed.
+    let combin = f.evaluate(a, "COMBIN(2000,1999)", &ctx, &group)
+    if combin.kind != .Number || combin.n != 2000.0f64 { os.exit(82i32) }
     try io.print("algo formula math ok")
     ret ok
 }

@@ -507,6 +507,9 @@ fn parse_iso(s: str) -> (f64, bool) {
             if zp < s.len && s[zp] == 58u8 { zp += 1usize }
             let (zm, zm_ok) = digits_value(s, zp, 2usize)
             if !zm_ok { ret (0.0f64, false) }
+            // ISO 8601 offsets are ±(00-23)h(00-59)m; +99:99 reads as "Invalid Date" in
+            // Date, so an unparsable date must not silently shift by four days (#140).
+            if zh > 23i64 || zm > 59i64 { ret (0.0f64, false) }
             at = zp + 2usize
             var offset = f64(zh * 60i64 + zm) * 60000.0f64
             if sign { offset = 0.0f64 - offset }
@@ -2251,13 +2254,27 @@ fn formula_edges(a: *mem.Arena, formulas: []const Formula) -> ([]const []const u
             list = storage
             var r = 0usize
             while r < refs.len {
+                // Exact name first, then the folded lookup the evaluator uses, so a
+                // reference that resolves at run time is also an edge (#140).
                 var k = 0usize
+                var matched = false
                 while k < formulas.len {
                     if str.eq(formulas[k].name, refs[r]) {
                         list[n] = k
                         n += 1usize
-                        k = formulas.len
-                    } else {
+                        matched = true
+                        break
+                    }
+                    k += 1usize
+                }
+                if !matched {
+                    k = 0usize
+                    while k < formulas.len {
+                        if str.compare_ascii_fold(formulas[k].name, refs[r]) == 0i32 {
+                            list[n] = k
+                            n += 1usize
+                            break
+                        }
                         k += 1usize
                     }
                 }

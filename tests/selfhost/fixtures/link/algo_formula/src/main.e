@@ -594,6 +594,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     cctx.formulas = chain[0..]
     let cyc = f.evaluate(a, "{F0}", &cctx, &full)
     if !f.is_error(cyc) { os.exit(99i32) }
+    // #140 (4): an hour/minute offset past its range is not a date, while a normal one is.
+    let (iso_bad_offset, iso_bad_offset_ok) = f.parse_iso("2026-01-01T00:00:00+99:99")
+    if iso_bad_offset_ok { os.exit(100i32) }
+    let (iso_bad_minute, iso_bad_minute_ok) = f.parse_iso("2026-01-01T00:00:00+02:60")
+    if iso_bad_minute_ok { os.exit(100i32) }
+    let (iso_good_offset, iso_good_offset_ok) = f.parse_iso("2026-01-01T00:00:00+02:30")
+    if !iso_good_offset_ok { os.exit(100i32) }
+    // #140 (5): a reference matched case-insensitively at run time is an edge for cycles.
+    var case_formulas: [2]f.Formula = zero
+    case_formulas[0usize] = f.Formula { name: "Total", source: "{net}" }
+    case_formulas[1usize] = f.Formula { name: "Net", source: "{total}" }
+    let (case_cycle, case_found) = f.detect_cycle(a, case_formulas[0usize..2usize])
+    if !case_found || case_cycle.len == 0usize { os.exit(101i32) }
     try io.print("algo formula ok")
     ret ok
 }

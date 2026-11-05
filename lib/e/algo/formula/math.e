@@ -948,7 +948,10 @@ fn h_combin(c: *f.Call) -> f.Value {
     if n.kind == .Blank || k.kind == .Blank { ret f.blank() }
     if k.n < 0.0f64 || n.n < 0.0f64 || k.n > n.n { ret f.num_error(msg1(c.a, "invalidArguments", "COMBIN")) }
     let nn = math.trunc[f64](n.n)
-    let kk = math.trunc[f64](k.n)
+    // C(n,k) = C(n,n-k): the short side keeps COMBIN(2000,1999) from walking through the
+    // huge middle term and overflowing to infinity (#140).
+    var kk = math.trunc[f64](k.n)
+    if nn - kk < kk { kk = nn - kk }
     var r = 1.0f64
     var i = 0.0f64
     while i < kk && r - r == 0.0f64 {
@@ -1110,24 +1113,33 @@ fn h_avgw(c: *f.Call) -> f.Value {
     first[0usize] = c.args[0usize]
     var second: [1]f.Value = zero
     second[0usize] = c.args[1usize]
-    let (values, f1) = numbers(c, first[0..])
-    if f.is_error(f1) { ret f1 }
-    let (weights, f2) = numbers(c, second[0..])
-    if f.is_error(f2) { ret f2 }
-    if values.len != weights.len { ret f.num_error(msg0(c.a, "avgwWeightCount")) }
+    // Flatten both sides but keep positions: dropping blanks and unconvertible text
+    // independently would zip a value with another row's weight (#484). A pair joins the
+    // average only when both of its cells are numbers.
+    let value_count = flat_count(first[0..])
+    let (values_raw, e1) = mem.alloc[f.Value](c.a, value_count + 1usize)
+    if e1 != ok { ret f.generic_error("Out of memory") }
+    let values_len = f.flatten_values(first[0..], values_raw, 0usize)
+    let weight_count = flat_count(second[0..])
+    let (weights_raw, e2) = mem.alloc[f.Value](c.a, weight_count + 1usize)
+    if e2 != ok { ret f.generic_error("Out of memory") }
+    let weights_len = f.flatten_values(second[0..], weights_raw, 0usize)
+    if values_len != weights_len { ret f.num_error(msg0(c.a, "avgwWeightCount")) }
     var total = 0.0f64
+    var weighted = 0.0f64
     var i = 0usize
-    while i < weights.len {
-        total += weights[i]
+    while i < values_len {
+        if values_raw[i].kind == .Error { ret values_raw[i] }
+        if weights_raw[i].kind == .Error { ret weights_raw[i] }
+        let value = f.to_number(c.a, values_raw[i])
+        let weight = f.to_number(c.a, weights_raw[i])
+        if value.kind == .Number && weight.kind == .Number {
+            total += weight.n
+            weighted += value.n * weight.n
+        }
         i += 1usize
     }
     if total == 0.0f64 { ret f.div_zero_message(msg0(c.a, "avgwZeroWeights")) }
-    var weighted = 0.0f64
-    i = 0usize
-    while i < values.len {
-        weighted += values[i] * weights[i]
-        i += 1usize
-    }
     ret f.number(weighted / total)
 }
 
