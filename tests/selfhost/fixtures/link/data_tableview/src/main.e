@@ -336,6 +336,47 @@ fn check_edit(t: *table.Table, v: *view.View, a: *mem.Arena) {
     if view.row_at(v, 0usize) != 9usize { os.exit(294) }
 }
 
+// Larger rows first, with i32.min as the valid less-than answer. A descending key
+// negates it, and the merge calls it with the larger row first.
+fn high_first(ctx: *void, x: u32, y: u32) -> i32 {
+    if x > y { ret 0i32 - 2147483647i32 - 1i32 }
+    if x < y { ret 1i32 }
+    ret 0i32
+}
+
+// The order is the live rows ascending; `high_first` descending asks for exactly that.
+fn ascending_rows(t: *table.Table, v: *view.View, code: i32) {
+    if view.len(v) != table.live_count(t) { os.exit(code) }
+    var at = 0usize
+    while at < view.len(v) {
+        let row = view.row_at(v, at)
+        if !table.is_live(t, row) { os.exit(code) }
+        if at > 0usize && view.row_at(v, at - 1usize) >= row { os.exit(code) }
+        at += 1usize
+    }
+}
+
+fn check_compare_extremes(t: *table.Table, v: *view.View, a: *mem.Arena) {
+    let ctx = mem.cast[*void](t)
+    var keys: [1]view.Key = zero
+    keys[0usize] = view.compare_key(high_first, ctx, true)
+    // a descending sort whose less-than answer is i32.min
+    if view.apply_sort(v, keys[0..], a) != ok { os.exit(520) }
+    ascending_rows(t, v, 521)
+    // and a descending reposition under the same comparer
+    if view.reposition(v, keys[0..], 1000usize, a) != ok { os.exit(523) }
+    ascending_rows(t, v, 524)
+}
+
+// A child run whose first + count wraps usize: compile must refuse it, not eval it.
+fn check_wrapped_group(t: *table.Table, v: *view.View, a: *mem.Arena) {
+    var nodes: [2]view.Node = zero
+    nodes[0usize] = view.group_node(view.NodeKind.And, 18446744073709551615usize, 2usize)
+    nodes[1usize] = view.leaf_node(C_ID, view.Op.Null, view.int_operand(0i64))
+    if view.apply_filter(v, nodes[0..], false, a) != view.BadFilter { os.exit(530) }
+    if view.is_filtered(v) { os.exit(531) }
+}
+
 fn check_empty(a: *mem.Arena) {
     var spec: [1]table.Spec = zero
     spec[0usize] = table.Spec { name: "n", kind: table.Kind.I32, heap_bytes: 0usize, dict_cap: 0usize }
@@ -363,6 +404,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     check_multi(&t, &v, a)
     check_custom(&t, &v, a)
     check_edit(&t, &v, a)
+    check_compare_extremes(&t, &v, a)
+    check_wrapped_group(&t, &v, a)
     check_empty(a)
     os.exit(0)
     ret ok

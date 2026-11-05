@@ -398,7 +398,7 @@ fn partition_nulls(v: *View, col: usize, nulls_first: bool) {
 type CompareCtx = struct { f: fn(*void, u32, u32) -> i32, ctx: *void, descending: bool }
 
 fn call_compare(c: *CompareCtx, x: u32, y: u32) -> i32 {
-    let answer = c.f(c.ctx, x, y)
+    let answer = three_way_int(i64(c.f(c.ctx, x, y)), 0i64)
     if c.descending { ret 0i32 - answer }
     ret answer
 }
@@ -753,7 +753,7 @@ fn compile(v: *const View, nodes: []const Node, scratch: *mem.Arena) -> (Compile
         if nodes[at].kind == NodeKind.Leaf {
             let leaf_error = compile_leaf(v, &nodes[at].leaf, &accept[at], scratch)
             if leaf_error != ok { ret (c, leaf_error) }
-        } else if nodes[at].first + nodes[at].count > nodes.len || nodes[at].first <= at {
+        } else if nodes[at].first > nodes.len || nodes[at].count > nodes.len - nodes[at].first || nodes[at].first <= at {
             // children come after their group: a cycle or an out-of-range run is refused
             ret (c, BadFilter)
         }
@@ -935,7 +935,7 @@ fn compare_by_keys(v: *const View, keys: []const Key, preps: []const KeyPrep, x:
         let key = keys[at]
         var c = 0i32
         if key.mode == KeyMode.Compare {
-            c = key.compare(key.ctx, u32(x), u32(y))
+            c = three_way_int(i64(key.compare(key.ctx, u32(x), u32(y))), 0i64)
             if key.descending { c = 0i32 - c }
         } else if key.mode == KeyMode.KeyFn {
             c = compare_u64(key.key_fn(key.ctx, x), key.key_fn(key.ctx, y))
