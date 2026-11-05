@@ -622,6 +622,9 @@ fn mont_enter(a: *mem.Arena, value: []const u32, m: []const u32) -> ([]u32, err)
 // 2048-bit RSA signature in well under a second.
 fn int_mod_pow(a: *mem.Arena, base: Int, exponent: Int, modulus: Int) -> (Int, err) {
     if modulus.sign == .Zero { ret (zero, DivideByZero) }
+    // A negative modulus has no coherent residue here: the truncated remainder and the
+    // Montgomery path both keep a magnitude, so the sign cannot be represented.
+    if modulus.sign == .Negative { ret (zero, Invalid) }
     if exponent.sign == .Negative { ret (zero, Invalid) }
     let (_, reduced, reduce_error) = int_divmod(a, base, modulus)
     if reduce_error != ok { ret (zero, reduce_error) }

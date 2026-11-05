@@ -112,6 +112,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if exhausted_error != mem.Exhausted { os.exit(19) }
     let (_, r6) = big.rat_make(a, one, z)
     if r6 != big.DivideByZero { os.exit(18) }
+    // A negative modulus is rejected instead of normalized into an incoherent
+    // residue: (-1)^3 mod -7 used to drop the sign and answer 1.
+    let (minus_one, _) = big.int_from_i64(a, -1i64)
+    let (cube, _) = big.int_from_i64(a, 3i64)
+    let (minus_seven, _) = big.int_from_i64(a, -7i64)
+    let (_, negative_modulus) = big.int_mod_pow(a, minus_one, cube, minus_seven)
+    if negative_modulus != big.Invalid { os.exit(20) }
     os.exit(0)
     ret ok
 }
