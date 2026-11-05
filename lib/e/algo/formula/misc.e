@@ -380,29 +380,34 @@ fn h_generatepassword(c: *f.Call) -> f.Value {
     }
     let (out, e) = mem.alloc[u8](c.a, count * 4usize + 1usize)
     if e != ok { ret f.generic_error("Out of memory") }
+    // Decode the alphabet once and index it: re-walking a UTF-8 iterator for every
+    // character costs alphabet x length instead of length.
+    let (alphabet_scalars, se) = mem.alloc[u32](c.a, scalars)
+    if se != ok { ret f.generic_error("Out of memory") }
+    it = utf8.iterator(alphabet)
+    more = true
+    var picked = 0usize
+    while more {
+        let (scalar, got) = utf8.iterator_next(&it)
+        if got && picked < scalars {
+            alphabet_scalars[picked] = scalar
+            picked += 1usize
+        } else {
+            more = false
+        }
+    }
     var w = 0usize
     var k = 0usize
     while k < count {
-        let pick = usize(math.trunc[f64](f.random(c.ev) * f64(scalars)))
-        var walk = utf8.iterator(alphabet)
-        var j = 0usize
-        var found = false
-        while !found {
-            let (scalar, got) = utf8.iterator_next(&walk)
-            if !got {
-                found = true
-            } else if j == pick {
-                var piece: [4]u8 = zero
-                let (width, we) = utf8.encode(scalar, piece[0..])
-                var q = 0usize
-                while q < usize(width) {
-                    out[w] = piece[q]
-                    w += 1usize
-                    q += 1usize
-                }
-                found = true
-            }
-            j += 1usize
+        var pick = usize(math.trunc[f64](f.random(c.ev) * f64(scalars)))
+        if pick >= scalars { pick = scalars - 1usize }
+        var piece: [4]u8 = zero
+        let (width, we) = utf8.encode(alphabet_scalars[pick], piece[0..])
+        var q = 0usize
+        while q < usize(width) {
+            out[w] = piece[q]
+            w += 1usize
+            q += 1usize
         }
         k += 1usize
     }
@@ -412,19 +417,28 @@ fn h_generatepassword(c: *f.Call) -> f.Value {
 // --- arrays ------------------------------------------------------------------------------------------------------
 
 // A scope with `current`, `value` and `index` bound for one element (and `accumulator`/`acc` when given).
-fn element_scope(c: *f.Call, element: f.Value, index: usize, with_acc: bool, acc: f.Value) -> *const f.Scope {
-    var s = f.bind(c.a, c.scope, c.has_scope, "current", element)
-    s = f.bind(c.a, s, true, "value", element)
-    s = f.bind(c.a, s, true, "index", f.number(f64(index)))
+fn element_scope(c: *f.Call, element: f.Value, index: usize, with_acc: bool, acc: f.Value) -> (*const f.Scope, err) {
+    let (current, current_error) = f.bind(c.a, c.scope, c.has_scope, "current", element)
+    if current_error != ok { ret (current, current_error) }
+    let (value, value_error) = f.bind(c.a, current, true, "value", element)
+    if value_error != ok { ret (value, value_error) }
+    let (at_index, index_error) = f.bind(c.a, value, true, "index", f.number(f64(index)))
+    if index_error != ok { ret (at_index, index_error) }
+    var s = at_index
     if with_acc {
-        s = f.bind(c.a, s, true, "accumulator", acc)
-        s = f.bind(c.a, s, true, "acc", acc)
+        let (accumulator, accumulator_error) = f.bind(c.a, s, true, "accumulator", acc)
+        if accumulator_error != ok { ret (accumulator, accumulator_error) }
+        let (both, both_error) = f.bind(c.a, accumulator, true, "acc", acc)
+        if both_error != ok { ret (both, both_error) }
+        s = both
     }
-    ret s
+    ret (s, ok)
 }
 
 fn eval_element(c: *f.Call, node: f.Node, element: f.Value, index: usize) -> f.Value {
-    ret f.eval(c.ev, node, element_scope(c, element, index, false, f.blank()), true)
+    let (scope, scope_error) = element_scope(c, element, index, false, f.blank())
+    if scope_error != ok { ret out_of_memory() }
+    ret f.eval(c.ev, node, scope, true)
 }
 
 fn h_map(c: *f.Call) -> f.Value {
@@ -482,7 +496,9 @@ fn h_reduce(c: *f.Call) -> f.Value {
     }
     var i = start
     while i < items.len {
-        acc = f.eval(c.ev, c.nodes[1usize], element_scope(c, items[i], i, true, acc), true)
+        let (scope, scope_error) = element_scope(c, items[i], i, true, acc)
+        if scope_error != ok { ret out_of_memory() }
+        acc = f.eval(c.ev, c.nodes[1usize], scope, true)
         if f.is_error(acc) { ret acc }
         i += 1usize
     }
@@ -1419,8 +1435,25 @@ fn xml_node(x: *Xml, parent: usize, has_parent: bool) -> usize {
         } else if x.src[x.at] == 60u8 {
             if run_open { xml_push_run(x, me, run_from, x.at) }
             run_open = false
-            let child = xml_node(x, me, true)
-            if x.failed { done = true }
+            // Comments, CDATA and processing instructions are content, not elements: letting
+            // `xml_node` skip them would parse the parent's end tag as an empty-named element.
+            if xml_starts(x, "<!--") {
+                xml_past(x, "-->")
+            } else if xml_starts(x, "<![CDATA[") {
+                let text_from = x.at + 9usize
+                let (text_to, closed) = str.find_from(x.src, "]]>", text_from)
+                if closed {
+                    xml_push_run(x, me, text_from, text_to)
+                    x.at = text_to + 3usize
+                } else {
+                    x.at = x.src.len
+                }
+            } else if xml_starts(x, "<?") || xml_starts(x, "<!") {
+                xml_past(x, ">")
+            } else {
+                let child = xml_node(x, me, true)
+                if x.failed { done = true }
+            }
         } else {
             if !run_open {
                 run_open = true

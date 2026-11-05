@@ -225,11 +225,37 @@ fn ordering(c: *Comp, op: str, left: Part, right: Part) -> str {
     ret j5(c, "COALESCE((", left_row, j3(c, " ", op, " "), right_row, j3(c, "), ", equal_answer, ")"))
 }
 
-// `POWER`, which raises on a negative base with a fractional exponent: the guard answers NULL as the engine's
-// `#VALUE!` reconciles to.
+// `POWER`, whose PostgreSQL form raises where the engine answers an infinity or a NaN guard: a negative
+// base with a fractional exponent, zero to a negative power, and a result past the f64 range all answer
+// NULL, as the engine's `#VALUE!` reconciles to.
 fn power(c: *Comp, base: str, exponent: str) -> str {
-    let head = j5(c, "CASE WHEN ", base, " < 0 AND ", exponent, " <> TRUNC(")
-    ret j5(c, head, exponent, ") THEN NULL ELSE POWER(", base, j3(c, ", ", exponent, ") END"))
+    var head = j(c, "CASE WHEN (", base)
+    head = j(c, head, ") < 0 AND (")
+    head = j(c, head, exponent)
+    head = j(c, head, ")::numeric <> TRUNC((")
+    head = j(c, head, exponent)
+    head = j(c, head, ")::numeric) THEN NULL")
+    var zero_case = j(c, " WHEN (", base)
+    zero_case = j(c, zero_case, ") = 0 AND (")
+    zero_case = j(c, zero_case, exponent)
+    zero_case = j(c, zero_case, ") < 0 THEN NULL")
+    head = j(c, head, zero_case)
+    var overflow = j(c, " WHEN (", exponent)
+    overflow = j(c, overflow, ") > 0 AND ABS(")
+    overflow = j(c, overflow, base)
+    overflow = j(c, overflow, ") > 1 AND (")
+    overflow = j(c, overflow, exponent)
+    overflow = j(c, overflow, ") * LN(ABS(")
+    overflow = j(c, overflow, base)
+    overflow = j(c, overflow, ")) > ")
+    overflow = j(c, overflow, exp_max())
+    overflow = j(c, overflow, " THEN NULL")
+    var out = j(c, head, overflow)
+    out = j(c, out, " ELSE POWER(")
+    out = j(c, out, base)
+    out = j(c, out, ", ")
+    out = j(c, out, exponent)
+    ret j(c, out, ") END")
 }
 
 // --- nodes --------------------------------------------------------------------------------------------------------
@@ -315,8 +341,10 @@ fn compile_unary(c: *Comp, node: f.Node) -> Part {
     if str.eq(node.op, "+") { ret typed(j3(c, "(+", operand.sql, ")"), operand.pushdown, "number") }
     if str.eq(node.op, "!") {
         let (test, good) = bool_arg(c, operand)
-        if !good { ret none() }
-        ret typed(j3(c, "(NOT ", test, ")"), operand.pushdown, "boolean")
+        // `NOT` of an approximation is not a superset: only a fully pushable operand keeps
+        // the negation safe.
+        if !good || !str.eq(operand.pushdown, "full") { ret none() }
+        ret typed(j3(c, "(NOT ", test, ")"), "full", "boolean")
     }
     ret none()
 }
@@ -326,18 +354,23 @@ fn compile_binary(c: *Comp, node: f.Node) -> Part {
     if str.eq(op, "||") || str.eq(op, "&&") {
         let left = compile(c, node.kids[0usize])
         let right = compile(c, node.kids[1usize])
-        if str.eq(left.pushdown, "none") && str.eq(right.pushdown, "none") { ret none() }
+        let has_left = !str.eq(left.pushdown, "none")
+        let has_right = !str.eq(right.pushdown, "none")
+        if !has_left && !has_right { ret none() }
+        // `&&` may keep the pushable conjunct (a superset filter), but `||` may not drop a
+        // side: rows only that side accepts would be lost.
+        if str.eq(op, "||") && (!has_left || !has_right) { ret none() }
         var word = " AND "
         if str.eq(op, "||") { word = " OR " }
         var combined = ""
         var count = 0usize
-        if !str.eq(left.pushdown, "none") {
+        if has_left {
             let (t, good) = bool_arg(c, left)
             if !good { ret none() }
             combined = j3(c, "(", t, ")")
             count += 1usize
         }
-        if !str.eq(right.pushdown, "none") {
+        if has_right {
             let (t, good) = bool_arg(c, right)
             if !good { ret none() }
             if count > 0usize { combined = j(c, combined, word) }
@@ -351,22 +384,24 @@ fn compile_binary(c: *Comp, node: f.Node) -> Part {
     let left = compile(c, node.kids[0usize])
     let right = compile(c, node.kids[1usize])
     if str.eq(left.pushdown, "none") || str.eq(right.pushdown, "none") { ret none() }
+    var push = "full"
+    if !str.eq(left.pushdown, "full") || !str.eq(right.pushdown, "full") { push = "partial" }
     if str.eq(op, "+") || str.eq(op, "-") || str.eq(op, "*") {
-        ret typed(j5(c, "(", left.sql, j3(c, " ", op, " "), right.sql, ")"), "full", "number")
+        ret typed(j5(c, "(", left.sql, j3(c, " ", op, " "), right.sql, ")"), push, "number")
     }
-    if str.eq(op, "/") { ret typed(j5(c, "(", left.sql, " / NULLIF(", right.sql, ", 0))"), "full", "number") }
+    if str.eq(op, "/") { ret typed(j5(c, "(", left.sql, " / NULLIF(", right.sql, ", 0))"), push, "number") }
     if str.eq(op, "%") {
         let l = j3(c, "MOD((", left.sql, ")::numeric, ")
-        ret typed(j5(c, l, "NULLIF((", right.sql, ")::numeric, 0))::double precision", ""), "full", "number")
+        ret typed(j5(c, l, "NULLIF((", right.sql, ")::numeric, 0))::double precision", ""), push, "number")
     }
-    if str.eq(op, "^") { ret typed(power(c, left.sql, right.sql), "full", "number") }
+    if str.eq(op, "^") { ret typed(power(c, left.sql, right.sql), push, "number") }
     if str.eq(op, "&") {
-        ret typed(j5(c, "CONCAT(", text_arg(c, left.sql), ", ", text_arg(c, right.sql), ")"), "full", "text")
+        ret typed(j5(c, "CONCAT(", text_arg(c, left.sql), ", ", text_arg(c, right.sql), ")"), push, "text")
     }
-    if str.eq(op, "=") || str.eq(op, "==") { ret typed(equality(c, left, right, false), "full", "boolean") }
-    if str.eq(op, "!=") || str.eq(op, "<>") { ret typed(equality(c, left, right, true), "full", "boolean") }
+    if str.eq(op, "=") || str.eq(op, "==") { ret typed(equality(c, left, right, false), push, "boolean") }
+    if str.eq(op, "!=") || str.eq(op, "<>") { ret typed(equality(c, left, right, true), push, "boolean") }
     if str.eq(op, "<") || str.eq(op, "<=") || str.eq(op, ">") || str.eq(op, ">=") {
-        ret typed(ordering(c, op, left, right), "full", "boolean")
+        ret typed(ordering(c, op, left, right), push, "boolean")
     }
     ret none()
 }
@@ -380,27 +415,32 @@ fn compile_ternary(c: *Comp, node: f.Node) -> Part {
     if !good { ret none() }
     var vtype = "unknown"
     if str.eq(then_branch.vtype, alt_branch.vtype) { vtype = then_branch.vtype }
-    ret typed(j5(c, "CASE WHEN ", test, " THEN ", then_branch.sql, j3(c, " ELSE ", alt_branch.sql, " END")), "full", vtype)
+    var push = "full"
+    if !str.eq(cond.pushdown, "full") || !str.eq(then_branch.pushdown, "full") || !str.eq(alt_branch.pushdown, "full") { push = "partial" }
+    ret typed(j5(c, "CASE WHEN ", test, " THEN ", then_branch.sql, j3(c, " ELSE ", alt_branch.sql, " END")), push, vtype)
 }
 
 // The unit of DATEADD or DATEDIF is syntax, not a value: it is read from the tree against an allow-list.
-fn interval_unit(unit: str) -> (str, bool) {
-    if str.eq(unit, "ms") || str.eq(unit, "millisecond") || str.eq(unit, "milliseconds") { ret ("millisecond", true) }
-    if str.eq(unit, "s") || str.eq(unit, "sec") || str.eq(unit, "second") || str.eq(unit, "seconds") { ret ("second", true) }
-    if str.eq(unit, "m") || str.eq(unit, "min") || str.eq(unit, "minute") || str.eq(unit, "minutes") { ret ("minute", true) }
-    if str.eq(unit, "h") || str.eq(unit, "hour") || str.eq(unit, "hours") { ret ("hour", true) }
-    if str.eq(unit, "d") || str.eq(unit, "day") || str.eq(unit, "days") { ret ("day", true) }
-    if str.eq(unit, "w") || str.eq(unit, "week") || str.eq(unit, "weeks") { ret ("week", true) }
-    if str.eq(unit, "mo") || str.eq(unit, "month") || str.eq(unit, "months") { ret ("month", true) }
-    if str.eq(unit, "q") || str.eq(unit, "quarter") || str.eq(unit, "quarters") { ret ("quarter", true) }
-    if str.eq(unit, "y") || str.eq(unit, "year") || str.eq(unit, "years") { ret ("year", true) }
+// The evaluator keeps the case of `M` (month) against `m` (minute); every other unit folds case.
+fn interval_unit(c: *Comp, unit: str) -> (str, bool) {
+    if str.eq(unit, "M") { ret ("month", true) }
+    let u = f.lower_text(c.a, unit)
+    if str.eq(u, "ms") || str.eq(u, "millisecond") || str.eq(u, "milliseconds") { ret ("millisecond", true) }
+    if str.eq(u, "s") || str.eq(u, "sec") || str.eq(u, "second") || str.eq(u, "seconds") { ret ("second", true) }
+    if str.eq(u, "m") || str.eq(u, "min") || str.eq(u, "minute") || str.eq(u, "minutes") { ret ("minute", true) }
+    if str.eq(u, "h") || str.eq(u, "hour") || str.eq(u, "hours") { ret ("hour", true) }
+    if str.eq(u, "d") || str.eq(u, "day") || str.eq(u, "days") { ret ("day", true) }
+    if str.eq(u, "w") || str.eq(u, "week") || str.eq(u, "weeks") { ret ("week", true) }
+    if str.eq(u, "mo") || str.eq(u, "month") || str.eq(u, "months") { ret ("month", true) }
+    if str.eq(u, "q") || str.eq(u, "quarter") || str.eq(u, "quarters") { ret ("quarter", true) }
+    if str.eq(u, "y") || str.eq(u, "year") || str.eq(u, "years") { ret ("year", true) }
     ret ("", false)
 }
 
-// A string literal's text, trimmed and lower-cased as JavaScript's `trim().toLowerCase()` does for ASCII.
+// A string literal's text, trimmed; the caller folds case where the unit allows it.
 fn unit_text(c: *Comp, node: f.Node) -> (str, bool) {
     if node.kind != .String { ret ("", false) }
-    ret (f.lower_text(c.a, f.trim_text(node.s)), true)
+    ret (f.trim_text(node.s), true)
 }
 
 fn try_date_add(c: *Comp, node: f.Node) -> (Part, bool) {
@@ -410,16 +450,23 @@ fn try_date_add(c: *Comp, node: f.Node) -> (Part, bool) {
     var unit = ""
     var known = false
     if is_text_node {
-        let (u, k) = interval_unit(text)
+        let (u, k) = interval_unit(c, text)
         unit = u
         known = k
     }
     if !known { ret (none(), true) }
+    // Month, quarter and year overflow the evaluator's day across the month end where
+    // PostgreSQL clamps `+ INTERVAL`, so those units stay in the evaluator.
+    if str.eq(unit, "month") || str.eq(unit, "quarter") || str.eq(unit, "year") { ret (none(), true) }
     let subject_part = compile(c, node.kids[0usize])
     if !str.eq(subject_part.pushdown, "full") { ret (none(), true) }
     let amount = compile(c, node.kids[1usize])
     if !str.eq(amount.pushdown, "full") { ret (none(), true) }
-    let inner = j5(c, "(", amount.sql, " * INTERVAL '1 ", unit, "')")
+    // The evaluator truncates the amount toward zero; SQL would keep the fraction.
+    var inner = j(c, "(TRUNC((", amount.sql)
+    inner = j(c, inner, ")::double precision) * INTERVAL '1 ")
+    inner = j(c, inner, unit)
+    inner = j(c, inner, "')")
     ret (typed(j5(c, "(", subject_part.sql, " + ", inner, ")"), "full", ""), true)
 }
 
@@ -427,7 +474,7 @@ fn try_date_dif(c: *Comp, node: f.Node) -> (Part, bool) {
     if !str.eq(match_name(c, node.s), "DATEDIF") { ret (none(), false) }
     if node.kids.len < 3usize { ret (none(), true) }
     let (text, is_text_node) = unit_text(c, node.kids[2usize])
-    if !is_text_node || !str.eq(text, "d") { ret (none(), true) }
+    if !is_text_node || !str.eq(f.lower_text(c.a, text), "d") { ret (none(), true) }
     let from = compile(c, node.kids[0usize])
     if !str.eq(from.pushdown, "full") { ret (none(), true) }
     let to = compile(c, node.kids[1usize])
@@ -436,6 +483,14 @@ fn try_date_dif(c: *Comp, node: f.Node) -> (Part, bool) {
     let days = j3(c, "TRUNC(EXTRACT(EPOCH FROM ", diff, ") / 86400)")
     let test = j5(c, "CASE WHEN (", to.sql, ") < (", from.sql, ") THEN NULL ELSE ")
     ret (typed(j3(c, test, days, " END"), "full", "number"), true)
+}
+
+// A call's result narrowed by its arguments' pushdown: `full` only when every one of them is.
+fn narrowed(part: Part, children: str) -> Part {
+    var out = part
+    if str.eq(out.pushdown, "none") { ret out }
+    if !str.eq(out.pushdown, "full") || !str.eq(children, "full") { out.pushdown = "partial" }
+    ret out
 }
 
 fn compile_call(c: *Comp, node: f.Node) -> Part {
@@ -449,21 +504,23 @@ fn compile_call(c: *Comp, node: f.Node) -> Part {
         ret none()
     }
     var any_none = false
+    var children = "full"
     var i = 0usize
     while i < node.kids.len {
         args[i] = compile(c, node.kids[i])
         if str.eq(args[i].pushdown, "none") { any_none = true }
+        if !str.eq(args[i].pushdown, "full") { children = "partial" }
         i += 1usize
     }
     if any_none { ret none() }
     let list = args[0usize..node.kids.len]
     let (hard, is_hard) = try_hardcoded(c, node.s, list)
-    if is_hard { ret hard }
+    if is_hard { ret narrowed(hard, children) }
     let (index, known) = f.resolve(c.a, c.reg, node.s)
     if !known { ret none() }
     let entry = f.entry_at(c.reg, index)
     if entry.volatile_fn { ret none() }
-    ret compile_function(c, entry, list)
+    ret narrowed(compile_function(c, entry, list), children)
 }
 
 // Functions with a fixed SQL mapping whether or not the registry has them.
@@ -496,7 +553,10 @@ fn try_hardcoded(c: *Comp, raw: str, args: []const Part) -> (Part, bool) {
         if args.len < 2usize { ret (none(), false) }
         ret (typed(j5(c, "NULLIF(", args[0usize].sql, ", ", args[1usize].sql, ")"), "full", args[0usize].vtype), true)
     }
-    if str.eq(name, "CEIL") { ret (typed(j3(c, "CEIL(", at(args, 0usize), ")"), "full", "number"), true) }
+    if str.eq(name, "CEIL") {
+        if args.len > 1usize { ret (none(), true) }
+        ret (typed(j3(c, "CEIL(", at(args, 0usize), ")"), "full", "number"), true)
+    }
     ret (none(), false)
 }
 
@@ -628,14 +688,23 @@ fn compile_function(c: *Comp, entry: *const f.Entry, args: []const Part) -> Part
         ret typed(j5(c, "(FLOOR((", at(args, 0usize), ") * ", scale, j3(c, " + 0.5) / ", scale, ")")), "full", "number")
     }
     if str.eq(name, "ROUNDUP") {
+        if args.len > 1usize { ret none() }
         let a0 = at(args, 0usize)
         ret typed(j5(c, "(SIGN(", a0, ") * CEIL(ABS(", a0, ")))"), "full", "number")
     }
-    if str.eq(name, "ROUNDDOWN") { ret fn1(c, "TRUNC", args, "number") }
-    if str.eq(name, "CEILING") { ret fn1(c, "CEIL", args, "number") }
-    if str.eq(name, "FLOOR") { ret fn1(c, "FLOOR", args, "number") }
+    if str.eq(name, "ROUNDDOWN") || str.eq(name, "TRUNC") {
+        if args.len > 1usize { ret none() }
+        ret fn1(c, "TRUNC", args, "number")
+    }
+    if str.eq(name, "CEILING") {
+        if args.len > 1usize { ret none() }
+        ret fn1(c, "CEIL", args, "number")
+    }
+    if str.eq(name, "FLOOR") {
+        if args.len > 1usize { ret none() }
+        ret fn1(c, "FLOOR", args, "number")
+    }
     if str.eq(name, "INT") { ret fn1(c, "FLOOR", args, "number") }
-    if str.eq(name, "TRUNC") { ret fn1(c, "TRUNC", args, "number") }
     if str.eq(name, "SQRT") {
         let a0 = at(args, 0usize)
         ret typed(j5(c, "CASE WHEN (", a0, ") < 0 THEN NULL ELSE SQRT(", a0, ") END"), "full", "number")
@@ -661,6 +730,7 @@ fn compile_function(c: *Comp, entry: *const f.Entry, args: []const Part) -> Part
         ret typed(j5(c, "CASE WHEN (", a0, ") <= 0 THEN NULL ELSE LN(", a0, ") END"), "full", "number")
     }
     if str.eq(name, "LOG") || str.eq(name, "LOG10") {
+        if args.len > 1usize && str.eq(name, "LOG") { ret none() }
         let a0 = at(args, 0usize)
         ret typed(j5(c, "CASE WHEN (", a0, ") <= 0 THEN NULL ELSE LOG(", a0, ") END"), "full", "number")
     }

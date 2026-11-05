@@ -4,6 +4,8 @@
 // and records each outcome as `N|number`, `T|hex`, `B|1`, `_`, `D|iso`, `[..]` or `E|code|hex`. The fixture
 // evaluates the same source with the Neper registry. A line is `{"src": ..., "expect": ...}`.
 use e.algo.formula as f
+use e.algo.formula.misc as fmmisc
+use e.algo.formula.text as fmtext
 //__USES__
 use e.fmt.json as json
 use e.io
@@ -134,6 +136,8 @@ fn build_registry(a: *mem.Arena) -> f.Registry {
     let (r, e) = f.registry(a, 600usize)
     var reg = r
     if f.register_core(&reg, a) != ok { os.exit(90i32) }
+    if fmmisc.register(&reg, a) != ok { os.exit(91i32) }
+    if fmtext.register(&reg, a) != ok { os.exit(92i32) }
     //__REGISTERS__
     ret reg
 }
@@ -215,8 +219,31 @@ fn run(a: *mem.Arena, body: str, reg: *f.Registry) -> u8 {
 }
 
 //__VECTOR_FUNCTIONS__
+fn password_chars_ok(s: str) -> bool {
+    var i = 0usize
+    while i < s.len {
+        if s[i] != 97u8 && s[i] != 98u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var registry = build_registry(a)
+    // 274: comments, CDATA and processing instructions before a closing tag are content, not
+    // an element, and the password picker indexes a decoded alphabet.
+    var ctx = make_context(a)
+    let hello = f.evaluate(a, "XMLQUERY(\"<a>hello<!-- c --></a>\", \"a\")", &ctx, &registry)
+    let cdata = f.evaluate(a, "XMLQUERY(\"<a><![CDATA[x]]></a>\", \"a\")", &ctx, &registry)
+    let instruction = f.evaluate(a, "XMLQUERY(\"<a>x<?pi?></a>\", \"a\")", &ctx, &registry)
+    if hello.kind != .Text || !str.eq(hello.s, "hello") { os.exit(95i32) }
+    if cdata.kind != .Text || !str.eq(cdata.s, "x") { os.exit(96i32) }
+    if instruction.kind != .Text || !str.eq(instruction.s, "x") { os.exit(97i32) }
+    let sibling = f.evaluate(a, "XMLQUERY(\"<r><a><b>1</b><!-- z --></a><c>2</c></r>\", \"r/c\")", &ctx, &registry)
+    let masked = f.evaluate(a, "XMLQUERY(\"<r><a><b>1</b><!-- z --></a><c>2</c></r>\", \"r/a/c\")", &ctx, &registry)
+    if sibling.kind != .Text || !str.eq(sibling.s, "2") || !f.is_blank(masked) { os.exit(96i32) }
+    let password = f.evaluate(a, "GENERATEPASSWORD(20000, REPT(\"ab\", 20000))", &ctx, &registry)
+    if password.kind != .Text || password.s.len != 20000usize || !password_chars_ok(password.s) { os.exit(97i32) }
     //__VECTOR_CALLS__
     try io.print("algo formula misc ok")
     ret ok
