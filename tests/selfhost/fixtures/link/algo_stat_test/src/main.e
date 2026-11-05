@@ -127,6 +127,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // D = 0.6 as SciPy; the p-value is the Numerical Recipes asymptotic form with its
     // small-sample correction (0.0310), a shade above SciPy's exact 0.0301.
     if ks_error != ok || !near(ks.statistic, 0.6f64, eps) || !near(ks.p_value, 0.031046781145641363f64, 0.000001f64) { os.exit(4i32) }
+    // 489: a non-finite sample is refused instead of spinning the merge.
+    var nan_sample: [2]f64 = zero
+    var inf_sample: [2]f64 = zero
+    nan_sample[0usize] = mem.bitcast[f64](9221120237041090560u64)
+    nan_sample[1usize] = 1.0f64
+    inf_sample[0usize] = mem.bitcast[f64](9218868437227405312u64)
+    inf_sample[1usize] = 2.0f64
+    let (_, ks_nan) = test.kolmogorov_smirnov(nan_sample[..], ys[..])
+    let (_, ks_inf) = test.kolmogorov_smirnov(xs[..], inf_sample[..])
+    if ks_nan != test.Invalid || ks_inf != test.Invalid { os.exit(4i32) }
     var groups: [25]f64 = zero
     mem.copy[f64](groups[..10usize], x[..])
     mem.copy[f64](groups[10usize..20usize], y[..])

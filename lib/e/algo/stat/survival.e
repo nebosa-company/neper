@@ -19,6 +19,12 @@ type Rmst = struct { mean: f64, se: f64 }
 error TooSmall
 error Invalid
 
+// True for a value with a total order: not NaN and not either infinity.
+fn finite(x: f64) -> bool {
+    if x != x { ret false }
+    ret x >= 0.0f64 - 1.7976931348623157e308f64 && x <= 1.7976931348623157e308f64
+}
+
 // The Nelson-Aalen cumulative hazard with Aalen's variance: at each event
 // time `H += deaths / risk`, `V += deaths / risk^2`. Answers the event-time
 // count with parallel `out_times`, `out_hazard`, `out_variance` and
@@ -29,6 +35,7 @@ fn nelson_aalen(times: []const f64, events: []const u8, n: usize, out_times: []f
     var i = 0usize
     while i < n {
         if events[i] != 0u8 && events[i] != 1u8 { ret (0usize, Invalid) }
+        if !finite(times[i]) { ret (0usize, Invalid) }
         order[i] = i
         i += 1usize
     }
@@ -80,6 +87,7 @@ fn cumulative_incidence(times: []const f64, causes: []const u8, n: usize, cause:
     if n == 0usize || cause == 0u8 { ret (0usize, Invalid) }
     var i = 0usize
     while i < n {
+        if !finite(times[i]) { ret (0usize, Invalid) }
         order[i] = i
         i += 1usize
     }
@@ -133,6 +141,7 @@ fn rmst(times: []const f64, events: []const u8, n: usize, tau: f64, order: []usi
     var i = 0usize
     while i < n {
         if events[i] != 0u8 && events[i] != 1u8 { ret (zero, Invalid) }
+        if !finite(times[i]) { ret (zero, Invalid) }
         order[i] = i
         i += 1usize
     }
@@ -208,11 +217,13 @@ fn wlw_sweep(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []
     var i = 0usize
     while i < na {
         if ea[i] != 0u8 && ea[i] != 1u8 { ret (zero, Invalid) }
+        if !finite(ta[i]) { ret (zero, Invalid) }
         i += 1usize
     }
     i = 0usize
     while i < nb {
         if eb[i] != 0u8 && eb[i] != 1u8 { ret (zero, Invalid) }
+        if !finite(tb[i]) { ret (zero, Invalid) }
         i += 1usize
     }
     var score = 0.0f64

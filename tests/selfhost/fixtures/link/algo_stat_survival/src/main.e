@@ -48,6 +48,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if hbad != survival.Invalid { os.exit(1i32) }
     let (_, hshort) = survival.nelson_aalen(times[..], events[..], 6usize, ht[..5usize], hh[..], hv[..], hr[..], horder[..])
     if hshort != survival.TooSmall { os.exit(1i32) }
+    // 284: a non-finite time is refused instead of spinning the tie scan.
+    var bad_times: [6]f64 = zero
+    mem.copy[f64](bad_times[..], times[..])
+    bad_times[1usize] = mem.bitcast[f64](9221120237041090560u64)
+    let (_, hnan) = survival.nelson_aalen(bad_times[..], events[..], 6usize, ht[..], hh[..], hv[..], hr[..], horder[..])
+    bad_times[1usize] = mem.bitcast[f64](9218868437227405312u64)
+    let (_, hinf) = survival.nelson_aalen(bad_times[..], events[..], 6usize, ht[..], hh[..], hv[..], hr[..], horder[..])
+    if hnan != survival.Invalid || hinf != survival.Invalid { os.exit(1i32) }
 
     // 2: competing risks [1, 2, 3, 4, 5] with causes [1, 0, 2, 1, 2].
     var ctimes: [5]f64 = zero
@@ -71,6 +79,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if czero != survival.Invalid { os.exit(2i32) }
     let (_, cshort) = survival.cumulative_incidence(ctimes[..], causes[..], 5usize, 1u8, ct[..4usize], cf[..], corder[..])
     if cshort != survival.TooSmall { os.exit(2i32) }
+    mem.copy[f64](bad_times[..5usize], ctimes[..])
+    bad_times[2usize] = mem.bitcast[f64](9221120237041090560u64)
+    let (_, cnan) = survival.cumulative_incidence(bad_times[..5usize], causes[..], 5usize, 1u8, ct[..], cf[..], corder[..])
+    if cnan != survival.Invalid { os.exit(2i32) }
 
     // 3: RMST of the check-1 data to tau 4 and 10.
     var rorder: [6]usize = zero
@@ -84,6 +96,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if rtau != survival.Invalid { os.exit(3i32) }
     let (_, rempty) = survival.rmst(times[..], events[..], 0usize, 4.0f64, rorder[..])
     if rempty != survival.Invalid { os.exit(3i32) }
+    mem.copy[f64](bad_times[..], times[..])
+    bad_times[1usize] = mem.bitcast[f64](9221120237041090560u64)
+    let (_, rnan) = survival.rmst(bad_times[..], events[..], 6usize, 4.0f64, rorder[..])
+    if rnan != survival.Invalid { os.exit(3i32) }
 
     // 4: separated groups [1, 2, 3] against [4, 5, 6] are significant under
     // every weight, and the plain weight equals Mantel-Cox.
@@ -135,6 +151,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_error != survival.Invalid { os.exit(5i32) }
     let (_, empty_error) = survival.weighted_log_rank(ta[..], ea[..], 0usize, tb[..], eb[..], 3usize, .LogRank)
     if empty_error != survival.Invalid { os.exit(5i32) }
+    var wnan: [3]f64 = zero
+    mem.copy[f64](wnan[..], ta[..])
+    wnan[1usize] = mem.bitcast[f64](9221120237041090560u64)
+    let (_, wnan_error) = survival.weighted_log_rank(wnan[..], ea[..], 3usize, tb[..], eb[..], 3usize, .LogRank)
+    if wnan_error != survival.Invalid { os.exit(5i32) }
 
     try io.print("algo stat survival ok\n")
     ret ok

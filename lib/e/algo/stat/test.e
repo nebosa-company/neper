@@ -268,6 +268,17 @@ fn sort_floats(values: []f64) {
 // p-value; `a` and `b` are sorted in place.
 fn kolmogorov_smirnov(a: []f64, b: []f64) -> (Result, err) {
     if a.len == 0usize || b.len == 0usize { ret (zero, Invalid) }
+    // A non-finite sample has no total order: the merge below would never advance.
+    var at = 0usize
+    while at < a.len {
+        if !finite(a[at]) { ret (zero, Invalid) }
+        at += 1usize
+    }
+    at = 0usize
+    while at < b.len {
+        if !finite(b[at]) { ret (zero, Invalid) }
+        at += 1usize
+    }
     sort_floats(a)
     sort_floats(b)
     var i = 0usize
