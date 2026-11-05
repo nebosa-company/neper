@@ -1,7 +1,8 @@
 // Subgraph and graph isomorphism over `e.data.graph` by VF2-style
 // backtracking in caller storage: pattern nodes are matched in order, each
-// candidate host node checked for degree and for every edge to an
-// already matched pattern node (and, for `isomorphic`, every non-edge).
+// candidate host node checked for degree, for its self-loop, and for every
+// directed edge (and, for `isomorphic`, every non-edge) to an already matched
+// pattern node, in both directions.
 // `subgraph_vf2` finds a monomorphism of the pattern into the host graph,
 // `isomorphic` an isomorphism between two graphs of one size; both write
 // the mapping and answer whether one exists. Exponential in the worst
@@ -28,18 +29,31 @@ fn feasible[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E]
     if used[t] != 0u8 { ret false }
     if degree[E](host, t) < degree[E](pattern, p) { ret false }
     if induced && degree[E](host, t) != degree[E](pattern, p) { ret false }
-    // Every matched pattern neighbour of p must be a host neighbour of t.
+    // A self-loop must map to a self-loop (and, for an induced embedding, only then).
+    let pattern_loop = adjacent[E](pattern, p, p)
+    let host_loop = adjacent[E](host, t, t)
+    if pattern_loop && !host_loop { ret false }
+    if induced && pattern_loop != host_loop { ret false }
+    // Every matched pattern neighbour of p must be a host neighbour of t, in both
+    // directions: directed inputs check p -> q and q -> p.
     var e = pattern.offsets[p]
     while e < pattern.offsets[p + 1usize] {
         let q = usize(pattern.edges[e].to)
         if mapping[q] != graph.NONE && !adjacent[E](host, t, usize(mapping[q])) { ret false }
         e += 1usize
     }
+    var q = 0usize
+    while q < graph.node_count[E](pattern) {
+        if q != p && mapping[q] != graph.NONE && adjacent[E](pattern, q, p) && !adjacent[E](host, usize(mapping[q]), t) { ret false }
+        q += 1usize
+    }
     if induced {
-        // And every matched pattern non-neighbour must be a host non-neighbour.
-        var q = 0usize
+        // And every matched pattern non-neighbour must be a host non-neighbour, in both
+        // directions.
+        q = 0usize
         while q < graph.node_count[E](pattern) {
             if q != p && mapping[q] != graph.NONE && !adjacent[E](pattern, p, q) && adjacent[E](host, t, usize(mapping[q])) { ret false }
+            if q != p && mapping[q] != graph.NONE && !adjacent[E](pattern, q, p) && adjacent[E](host, usize(mapping[q]), t) { ret false }
             q += 1usize
         }
     }

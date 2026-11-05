@@ -25,6 +25,18 @@ fn congruence_closure(symbols: []const u32, args: []const u32, arg_starts: []con
     let n = symbols.len
     if arg_starts.len < n + 1usize || eq_lhs.len != eq_rhs.len { ret (zero, Invalid) }
     if arg_starts[n] > args.len { ret (zero, Invalid) }
+    // A non-monotonic table underflows `congruent`, and an argument term past `n`
+    // would index the partition: validate both once, before the sweep.
+    var start = 0usize
+    while start < n {
+        if arg_starts[start] > arg_starts[start + 1usize] { ret (zero, Invalid) }
+        start += 1usize
+    }
+    var k = 0usize
+    while k < arg_starts[n] {
+        if usize(args[k]) >= n { ret (zero, Invalid) }
+        k += 1usize
+    }
     let (s0, e) = dsu.init(parent, rank, n)
     if e != ok { ret (zero, TooSmall) }
     var s = s0
@@ -388,10 +400,26 @@ fn bit_blast(f: *sat.Cnf, ops: []const u8, lhs: []const u32, rhs: []const u32, c
                     let (lit, cmp_error) = bv_eq(f, a, b)
                     e = cmp_error
                     out[0usize] = lit
+                    // The consumers read all `width` bits; the rest of a comparison's
+                    // vector is the false constant.
+                    let (true_lit, t_error) = bv_true(f)
+                    if e == ok && t_error != ok { e = t_error }
+                    var pad = 1usize
+                    while e == ok && pad < out.len {
+                        out[pad] = 0i32 - true_lit
+                        pad += 1usize
+                    }
                 } else if op == OP_ULT {
                     let (lit, cmp_error) = bv_ult(f, a, b)
                     e = cmp_error
                     out[0usize] = lit
+                    let (true_lit2, t_error2) = bv_true(f)
+                    if e == ok && t_error2 != ok { e = t_error2 }
+                    var pad2 = 1usize
+                    while e == ok && pad2 < out.len {
+                        out[pad2] = 0i32 - true_lit2
+                        pad2 += 1usize
+                    }
                 } else {
                     ret Invalid
                 }

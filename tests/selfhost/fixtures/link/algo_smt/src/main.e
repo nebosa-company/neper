@@ -233,6 +233,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
     lhs[6usize] = 6u32
     if smt.bit_blast(&r, ops[..], lhs[..], rhs[..], consts[..], 8usize, bits[..], scratch[..]) != smt.Invalid { os.exit(7i32) }
 
+    // 8: a comparison used as an operand carries false padding bits (#228.1); before the
+    // fix the zeroed tail was read as literal 0 and the gate refused it.
+    var ops8: [5]u8 = zero
+    var lhs8: [5]u32 = zero
+    var rhs8: [5]u32 = zero
+    var consts8: [5]u64 = zero
+    ops8[0usize] = smt.OP_VAR
+    ops8[1usize] = smt.OP_VAR
+    ops8[2usize] = smt.OP_EQ
+    lhs8[2usize] = 0u32
+    rhs8[2usize] = 1u32
+    ops8[3usize] = smt.OP_VAR
+    ops8[4usize] = smt.OP_AND
+    lhs8[4usize] = 2u32
+    rhs8[4usize] = 3u32
+    var bits8: [20]i32 = zero
+    let (f8, make8) = sat.cnf(literals[..], cstarts[..], 0usize)
+    if make8 != ok { os.exit(8i32) }
+    var f8v = f8
+    if smt.bit_blast(&f8v, ops8[..], lhs8[..], rhs8[..], consts8[..], 4usize, bits8[..], scratch[..]) != ok { os.exit(8i32) }
+
+    // 9: congruence_closure validates the argument table before using it (#228.2).
+    var sym9: [2]u32 = zero
+    var args9: [2]u32 = zero
+    var starts9: [3]usize = zero
+    var eq9: [1]u32 = zero
+    var par9: [8]u32 = zero
+    var rnk9: [8]u8 = zero
+    starts9[0usize] = 0usize
+    starts9[1usize] = 2usize
+    starts9[2usize] = 1usize
+    let (_, non_monotonic) = smt.congruence_closure(sym9[..], args9[..], starts9[..], eq9[..0usize], eq9[..0usize], par9[..], rnk9[..])
+    if non_monotonic != smt.Invalid { os.exit(9i32) }
+    starts9[1usize] = 1usize
+    starts9[2usize] = 1usize
+    args9[0usize] = 5u32
+    let (_, bad_arg) = smt.congruence_closure(sym9[..], args9[..], starts9[..], eq9[..0usize], eq9[..0usize], par9[..], rnk9[..])
+    if bad_arg != smt.Invalid { os.exit(9i32) }
+
     try io.print("algo smt ok\n")
     ret ok
 }

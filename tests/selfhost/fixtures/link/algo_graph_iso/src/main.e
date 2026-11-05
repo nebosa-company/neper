@@ -148,6 +148,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (inside, inside_error) = iso.subgraph_vf2[i64](&cycle, &petersen, mapping[..], used[..])
     if inside_error != ok || inside { os.exit(2i32) }
 
+    // #231: a pattern self-loop must find a host self-loop, and a directed edge into an
+    // already matched node must be checked in that direction too.
+    let (lb0, lb_error) = graph.builder[i64](a, 1usize, 1usize)
+    if lb_error != ok { os.exit(30i32) }
+    var lb = lb0
+    if graph.add_directed[i64](&lb, 0u32, 0u32, 1i64) != ok { os.exit(30i32) }
+    let (loop_pattern, loop_pattern_error) = graph.finish[i64](a, &lb)
+    if loop_pattern_error != ok { os.exit(30i32) }
+    let (hb0, hb_error) = graph.builder[i64](a, 2usize, 2usize)
+    if hb_error != ok { os.exit(30i32) }
+    var hb = hb0
+    if graph.add_undirected[i64](&hb, 0u32, 1u32, 1i64) != ok { os.exit(30i32) }
+    let (loop_host, loop_host_error) = graph.finish[i64](a, &hb)
+    if loop_host_error != ok { os.exit(30i32) }
+    let (loop_found, loop_found_error) = iso.subgraph_vf2[i64](&loop_pattern, &loop_host, mapping[..], used[..])
+    if loop_found_error != ok || loop_found { os.exit(30i32) }
+
+    let (rb0, rb_error) = graph.builder[i64](a, 2usize, 1usize)
+    if rb_error != ok { os.exit(31i32) }
+    var rb = rb0
+    if graph.add_directed[i64](&rb, 0u32, 1u32, 1i64) != ok { os.exit(31i32) }
+    let (reverse_pattern, reverse_pattern_error) = graph.finish[i64](a, &rb)
+    if reverse_pattern_error != ok { os.exit(31i32) }
+    let (rhost0, rhost_error) = graph.builder[i64](a, 2usize, 2usize)
+    if rhost_error != ok { os.exit(31i32) }
+    var rhost = rhost0
+    if graph.add_directed[i64](&rhost, 0u32, 0u32, 1i64) != ok { os.exit(31i32) }
+    if graph.add_directed[i64](&rhost, 0u32, 0u32, 1i64) != ok { os.exit(31i32) }
+    let (reverse_host, reverse_host_error) = graph.finish[i64](a, &rhost)
+    if reverse_host_error != ok { os.exit(31i32) }
+    let (reverse_found, reverse_found_error) = iso.subgraph_vf2[i64](&reverse_pattern, &reverse_host, mapping[..], used[..])
+    if reverse_found_error != ok || reverse_found { os.exit(31i32) }
+
     try io.print("algo graph iso ok\n")
     ret ok
 }
