@@ -13545,8 +13545,8 @@ type Channel[T: type] = struct { state: *void }
 error Closed
 
 fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err)
-fn send[T: type](c: *Channel[T], value: own T) -> err
-fn try_send[T: type](c: *Channel[T], value: own T) -> (bool, err)
+fn send[T: type](c: *Channel[T], value: own T) -> (T, err)
+fn try_send[T: type](c: *Channel[T], value: own T) -> (T, bool, err)
 fn receive[T: type](c: *Channel[T]) -> (T, err)
 fn try_receive[T: type](c: *Channel[T]) -> (T, bool, err)
 fn close[T: type](c: *Channel[T]) -> err

@@ -23,7 +23,7 @@ type Traffic = struct {
 fn produce(t: *Traffic) {
     var at = 0i64
     while at < 500i64 {
-        let send_error = channel.send[i64](&t.pipe, at + 1i64)
+        let (_, send_error) = channel.send[i64](&t.pipe, at + 1i64)
         if send_error != ok { let bad = atomic.add(&t.failures, 1u32, .Release) }
         let counted = atomic.add(&t.sent, 1u32, .Release)
         at += 1i64
@@ -90,3 +90,4 @@ fn main(a: *mem.Arena) -> err {
     if channel.len[i64](&t.pipe) != 0usize { ret Failed }
     ret ok
 }
+

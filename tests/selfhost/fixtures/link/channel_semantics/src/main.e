@@ -34,13 +34,13 @@ fn main(a: *mem.Arena) -> err {
     // Fill it, and the fourth send finds it full.
     var at = 0i64
     while at < 3i64 {
-        let (sent, send_error) = channel.try_send[i64](&c, at)
+        let (_, sent, send_error) = channel.try_send[i64](&c, at)
         if !sent || send_error != ok { ret Failed }
         at += 1i64
     }
     if channel.len[i64](&c) != 3usize { ret Failed }
-    let (overflowed, full_error) = channel.try_send[i64](&c, 99i64)
-    if overflowed || full_error != ok { ret Failed }
+    let (full_value, overflowed, full_error) = channel.try_send[i64](&c, 99i64)
+    if overflowed || full_error != ok || full_value != 99i64 { ret Failed }
 
     // First in, first out.
     let (first, first_error) = channel.receive[i64](&c)
@@ -48,7 +48,7 @@ fn main(a: *mem.Arena) -> err {
     if channel.len[i64](&c) != 2usize { ret Failed }
 
     // The ring wraps: a send after a receive reuses the slot that was freed.
-    let (wrapped, wrap_error) = channel.try_send[i64](&c, 3i64)
+    let (_, wrapped, wrap_error) = channel.try_send[i64](&c, 3i64)
     if !wrapped || wrap_error != ok { ret Failed }
     var expected = 1i64
     while expected < 4i64 {
@@ -59,7 +59,7 @@ fn main(a: *mem.Arena) -> err {
     if channel.len[i64](&c) != 0usize { ret Failed }
 
     // What is buffered stays receivable after a close; `Closed` comes only once drained.
-    let (kept, kept_error) = channel.try_send[i64](&c, 42i64)
+    let (_, kept, kept_error) = channel.try_send[i64](&c, 42i64)
     if !kept || kept_error != ok { ret Failed }
     if channel.close[i64](&c) != ok { ret Failed }
     if channel.close[i64](&c) != channel.Closed { ret Failed }
@@ -71,8 +71,9 @@ fn main(a: *mem.Arena) -> err {
     if drained_took || drained_error != channel.Closed { ret Failed }
 
     // A closed channel refuses sends.
-    if channel.send[i64](&c, 1i64) != channel.Closed { ret Failed }
-    let (refused, refused_error) = channel.try_send[i64](&c, 1i64)
+    let (returned, send_error) = channel.send[i64](&c, 1i64)
+    if returned != 1i64 || send_error != channel.Closed { ret Failed }
+    let (_, refused, refused_error) = channel.try_send[i64](&c, 1i64)
     if refused || refused_error != channel.Closed { ret Failed }
 
     // A second instantiation is a second channel, with its own state and element type.
@@ -80,9 +81,11 @@ fn main(a: *mem.Arena) -> err {
     if bytes_error != ok { ret bytes_error }
     var b = made_bytes
     if channel.capacity[u8](&b) != 2usize { ret Failed }
-    let (byte_sent, byte_error) = channel.try_send[u8](&b, 7u8)
+    let (_, byte_sent, byte_error) = channel.try_send[u8](&b, 7u8)
     if !byte_sent || byte_error != ok { ret Failed }
     let (byte_value, byte_took, byte_receive_error) = channel.try_receive[u8](&b)
     if !byte_took || byte_receive_error != ok || byte_value != 7u8 { ret Failed }
     ret ok
 }
+
+

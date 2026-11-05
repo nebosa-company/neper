@@ -50,7 +50,8 @@ fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err) {
     ret (Channel[T] { state: mem.cast[*void](&storage[0usize]) }, ok)
 }
 
-fn send[T: type](c: *Channel[T], value: own T) -> err {
+fn send[T: type](c: *Channel[T], value: own T) -> (T, err) {
+    var unaccepted: T = zero
     let s = mem.cast[*ChannelState[T]](c.state)
     sync.mutex_lock(&s.lock)
     while s.count == s.buffer.len && !s.closed {
@@ -58,33 +59,35 @@ fn send[T: type](c: *Channel[T], value: own T) -> err {
     }
     if s.closed {
         sync.mutex_unlock(&s.lock)
-        ret Closed
+        // The value was never enqueued: hand ownership back.
+        ret (value, Closed)
     }
     let at = slot_of[T](s, s.count)
     s.buffer[at] = value
     s.count += 1usize
     sync.condition_signal(&s.not_empty)
     sync.mutex_unlock(&s.lock)
-    ret ok
+    ret (unaccepted, ok)
 }
 
-fn try_send[T: type](c: *Channel[T], value: own T) -> (bool, err) {
+fn try_send[T: type](c: *Channel[T], value: own T) -> (T, bool, err) {
+    var unaccepted: T = zero
     let s = mem.cast[*ChannelState[T]](c.state)
     sync.mutex_lock(&s.lock)
     if s.closed {
         sync.mutex_unlock(&s.lock)
-        ret (false, Closed)
+        ret (value, false, Closed)
     }
     if s.count == s.buffer.len {
         sync.mutex_unlock(&s.lock)
-        ret (false, ok)
+        ret (value, false, ok)
     }
     let at = slot_of[T](s, s.count)
     s.buffer[at] = value
     s.count += 1usize
     sync.condition_signal(&s.not_empty)
     sync.mutex_unlock(&s.lock)
-    ret (true, ok)
+    ret (unaccepted, true, ok)
 }
 
 // A closed channel still hands back what it holds: `Closed` is returned only once the
@@ -165,3 +168,5 @@ fn wrap_of[T: type](s: *ChannelState[T], at: usize) -> usize {
 fn slot_of[T: type](s: *ChannelState[T], offset: usize) -> usize {
     ret wrap_of[T](s, s.head + offset)
 }
+
+
