@@ -21,6 +21,17 @@ type SimonDesign = struct { n1: usize, r1: usize, n: usize, r: usize }
 // Solve the dense `n × n` system in place by Gaussian elimination with
 // partial pivoting; the answer replaces `rhs`. `Singular` below 1e-12 pivots.
 fn survival_solve(matrix: []f64, rhs: []f64, n: usize) -> err {
+    // The pivot floor is relative to the matrix scale, so covariates in small
+    // units (x ~ 1e-6) are not mistaken for a singular system.
+    var scale = 0.0f64
+    var sd = 0usize
+    while sd < n {
+        let d = math.abs[f64](matrix[sd * n + sd])
+        if d > scale { scale = d }
+        sd += 1usize
+    }
+    if !(scale > 0.0f64) { ret Singular }
+    let floor = 1.0e-12f64 * scale
     var column = 0usize
     while column < n {
         var pivot = column
@@ -29,7 +40,7 @@ fn survival_solve(matrix: []f64, rhs: []f64, n: usize) -> err {
             if math.abs[f64](matrix[row * n + column]) > math.abs[f64](matrix[pivot * n + column]) { pivot = row }
             row += 1usize
         }
-        if math.abs[f64](matrix[pivot * n + column]) < 1.0e-12f64 { ret Singular }
+        if math.abs[f64](matrix[pivot * n + column]) < floor { ret Singular }
         if pivot != column {
             var c = 0usize
             while c < n {
@@ -258,6 +269,13 @@ fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: u
             hazards[i] = math.exp[f64](s)
             i += 1usize
         }
+        // An overflowed exp makes every risk-set ratio NaN; refuse it rather
+        // than returning ok with NaN coefficients.
+        i = 0usize
+        while i < n {
+            if hazards[i] - hazards[i] != 0.0f64 { ret (iteration, Singular) }
+            i += 1usize
+        }
         b = 0usize
         while b < p {
             score[b] = 0.0f64
@@ -332,6 +350,16 @@ fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: u
             idx = start
         }
         e = 0usize
+        while e < p {
+            if score[e] - score[e] != 0.0f64 { ret (iteration, Singular) }
+            e += 1usize
+        }
+        e = 0usize
+        while e < p * p {
+            if info[e] - info[e] != 0.0f64 { ret (iteration, Singular) }
+            e += 1usize
+        }
+        e = 0usize
         while e < p * p {
             work[e] = info[e]
             e += 1usize
@@ -343,6 +371,11 @@ fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: u
         }
         let step_error = survival_solve(work, step, p)
         if step_error != ok { ret (iteration, step_error) }
+        b = 0usize
+        while b < p {
+            if step[b] - step[b] != 0.0f64 { ret (iteration, Singular) }
+            b += 1usize
+        }
         var largest = 0.0f64
         b = 0usize
         while b < p {
@@ -407,12 +440,16 @@ fn binom_sf(n: usize, k: usize, p: f64) -> (f64, err) {
     if k > n { ret (0.0f64, ok) }
     if p <= 0.0f64 { ret (0.0f64, ok) }
     if p >= 1.0f64 { ret (1.0f64, ok) }
-    var term = math.pow[f64](1.0f64 - p, f64(n))
+    // Sum the upper tail in log space: the forward recurrence starts at
+    // (1 - p)^n, which underflows to zero for large n (0.5^1100 = 0).
+    let log_p = math.log[f64](p)
+    let log_q = math.log[f64](1.0f64 - p)
+    let log_n_factorial = special.lgamma(f64(n) + 1.0f64)
     var total = 0.0f64
-    var j = 0usize
+    var j = k
     while j <= n {
-        if j >= k { total += term }
-        term = term * f64(n - j) / f64(j + 1usize) * p / (1.0f64 - p)
+        let log_term = log_n_factorial - special.lgamma(f64(j) + 1.0f64) - special.lgamma(f64(n - j) + 1.0f64) + f64(j) * log_p + f64(n - j) * log_q
+        total += math.exp[f64](log_term)
         j += 1usize
     }
     ret (total, ok)

@@ -149,7 +149,7 @@ fn mask_seen(masks: []const u64, count: usize, mask: u64) -> bool {
 // past the caller capacity is `TooSmall`.
 fn apriori(masks: []const u64, min_support: usize, itemsets: []u64, supports: []usize) -> (usize, err) {
     let n = masks.len
-    if n == 0usize || min_support == 0usize { ret (0usize, Invalid) }
+    if n == 0usize || min_support == 0usize || min_support > n { ret (0usize, Invalid) }
     if supports.len < itemsets.len { ret (0usize, TooSmall) }
     let cap = itemsets.len
     var found = 0usize

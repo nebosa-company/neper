@@ -157,6 +157,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, wnan_error) = survival.weighted_log_rank(wnan[..], ea[..], 3usize, tb[..], eb[..], 3usize, .LogRank)
     if wnan_error != survival.Invalid { os.exit(5i32) }
 
+    // #214: the upper tail is summed in log space: 0.5^1100 underflows.
+    let (large_tail, large_error) = survival_trial.binom_sf(1100usize, 1usize, 0.5f64)
+    if large_error != ok || large_tail < 0.999f64 { os.exit(90i32) }
+    let (mid_tail, mid_error) = survival_trial.binom_sf(2000usize, 900usize, 0.5f64)
+    if mid_error != ok || mid_tail < 0.999f64 { os.exit(91i32) }
+
+    // #214: unscaled covariates overflow exp(x*beta) before the likelihood is
+    // monotone: Singular, never ok with NaN coefficients.
+    var ct_times: [2]f64 = zero
+    ct_times[0usize] = 1.0f64
+    ct_times[1usize] = 2.0f64
+    var ct_events: [2]u8 = zero
+    ct_events[0usize] = 1u8
+    ct_events[1usize] = 1u8
+    var ct_x: [2]f64 = zero
+    ct_x[0usize] = 1.0e300f64
+    ct_x[1usize] = 1.0f64
+    var ct_beta: [1]f64 = zero
+    var ct_cov: [1]f64 = zero
+    var ct_scratch: [16]f64 = zero
+    var ct_order: [2]usize = zero
+    let (_, ct_error) = survival_trial.cox_ph(ct_times[..], ct_events[..], ct_x[..], 2usize, 1usize, ct_beta[..], ct_cov[..], ct_scratch[..], ct_order[..])
+    if ct_error != survival_trial.Singular { os.exit(92i32) }
+
     try io.print("algo stat survival ok\n")
     ret ok
 }

@@ -106,6 +106,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var spare: [1]u64 = zero
     let (_, empty_tx) = safety.apriori(spare[..0usize], 1usize, found[..], held[..])
     if empty_tx != safety.Invalid { os.exit(6i32) }
+    // #216: a support bar above the transaction count is unreachable, Invalid.
+    let (_, unreachable_support) = safety.apriori(masks[..], masks.len + 1usize, found[..], held[..])
+    if unreachable_support != safety.Invalid { os.exit(6i32) }
     var tight_sets: [2]u64 = zero
     var tight_held: [2]usize = zero
     let (partial, tight_error) = safety.apriori(masks[..], 3usize, tight_sets[..], tight_held[..])
