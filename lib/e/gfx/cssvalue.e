@@ -97,6 +97,16 @@ fn round_half_away(x: f64) -> f64 {
     ret t
 }
 
+// CSS round() `nearest`: a tie goes to positive infinity (-1.5 -> -1), unlike
+// Dart's round() that `round_half_away` keeps for the colour channels.
+fn round_nearest(x: f64) -> f64 {
+    if !(math.abs[f64](x) < 4503599627370496.0f64) { ret x }
+    let base = math.floor[f64](x)
+    let frac = x - base
+    if frac < 0.5f64 { ret base }
+    ret base + 1.0f64
+}
+
 // Dart's `double.round().clamp(0, 255)`.
 fn clamp255(x: f64) -> i64 {
     if is_nan(x) { ret 0i64 }
@@ -607,7 +617,7 @@ fn num_round(a: *mem.Arena, args: []const str) -> (f64, bool) {
     let (y, y_ok) = num_add(a, trim_ws(args[start + 1usize]))
     if !x_ok || !y_ok || y == 0.0f64 { ret (0.0f64, false) }
     let q = x / y
-    var r = round_half_away(q)
+    var r = round_nearest(q)
     if str.eq(strat, "up") { r = math.ceil[f64](q) }
     if str.eq(strat, "down") { r = math.floor[f64](q) }
     if str.eq(strat, "to-zero") { r = math.trunc[f64](q) }
@@ -873,7 +883,7 @@ fn to_px(l: CssLength, b: Bases) -> (f64, bool) {
             ret (r[0] - r[1] * math.trunc[f64](r[0] / r[1]), true)
         case .RoundNearest:
             if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
-            ret (round_half_away(r[0] / r[1]) * r[1], true)
+            ret (round_nearest(r[0] / r[1]) * r[1], true)
         case .RoundUp:
             if n < 2usize || r[1] == 0.0f64 { ret (0.0f64, false) }
             ret (math.ceil[f64](r[0] / r[1]) * r[1], true)
@@ -1247,7 +1257,14 @@ fn parse_alpha(a: *mem.Arena, p: str) -> f64 {
     ret clamp_f(parse_or(a, p, 1.0f64), 0.0f64, 1.0f64)
 }
 
+// A hue in degrees; a `calc()` is evaluated with its angle units before the
+// result is normalised. The unit suffixes keep their old exact arithmetic.
 fn parse_hue(a: *mem.Arena, p: str) -> f64 {
+    if p.len > 0usize && str.starts_with(lower(a, p), "calc(") && p[p.len - 1usize] == 41u8 {
+        let (radians, good) = parse_css_angle_radians(a, p)
+        if !good { ret 0.0f64 }
+        ret radians * 180.0f64 / pi()
+    }
     if str.ends_with(p, "grad") { ret parse_or(a, p[0usize..p.len - 4usize], 0.0f64) * 0.9f64 }
     if str.ends_with(p, "turn") { ret parse_or(a, p[0usize..p.len - 4usize], 0.0f64) * 360.0f64 }
     if str.ends_with(p, "rad") { ret parse_or(a, p[0usize..p.len - 3usize], 0.0f64) * 180.0f64 / 3.141592653589793f64 }
@@ -1379,12 +1396,13 @@ fn strip_percent(a: *mem.Arena, s: str) -> str {
 
 fn parse_hsl(a: *mem.Arena, s: str) -> (u32, bool) {
     let open = index_of(s, "(")
-    let close = index_of(s, ")")
+    let close = last_index_of_byte(s, 41u8)
     if open == -1i64 || close == -1i64 || close < open { ret (0u32, false) }
     let parts = split_on_mode(a, s[usize(open) + 1usize..usize(close)], 1u8)
     if parts.len < 3usize { ret (0u32, false) }
     let h = parse_hue(a, parts[0])
-    let sp = parse_or(a, strip_percent(a, parts[1]), 0.0f64) / 100.0f64
+    var sp = parse_or(a, strip_percent(a, parts[1]), 0.0f64) / 100.0f64
+    if sp < 0.0f64 { sp = 0.0f64 }
     let l = parse_or(a, strip_percent(a, parts[2]), 0.0f64) / 100.0f64
     var al = 1.0f64
     if parts.len >= 4usize { al = parse_alpha(a, parts[3]) }
@@ -1403,7 +1421,7 @@ fn hwb_to_argb(h: f64, w: f64, bl: f64, ai: i64) -> u32 {
 
 fn parse_hwb(a: *mem.Arena, s: str) -> (u32, bool) {
     let open = index_of(s, "(")
-    let close = index_of(s, ")")
+    let close = last_index_of_byte(s, 41u8)
     if open == -1i64 || close == -1i64 || close < open { ret (0u32, false) }
     let parts = split_on_mode(a, s[usize(open) + 1usize..usize(close)], 1u8)
     if parts.len < 3usize { ret (0u32, false) }

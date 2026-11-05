@@ -365,5 +365,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_c15, pc15) = paint_page(a, p15, &counter, view)
     // env_text sees the ellipsis once to measure it and once to paint it.
     if !pc15 || counter.ellipses != 2usize { os.exit(35) }
+    // 16. CSS round() nearest (-1.5 -> -1, so -3px to 2px is -2px) reaches
+    // layout, and a calc() hue reaches the painted colour (120deg is green).
+    let (p16, ok16) = build(a, "<div id=rp style=\"margin-left:round(nearest, -3px, 2px);width:10px;height:10px;background:#f00\"></div><div id=hp style=\"width:10px;height:10px;background-color:hsl(calc(120deg) 100% 50%)\"></div>", "")
+    if !ok16 { os.exit(36) }
+    let (c16, pc16) = paint_page(a, p16, &counter, view)
+    if !pc16 || fill_count(c16) != 2usize { os.exit(37) }
+    let (r16, red16, green16, has16) = nth_fill(c16, 0usize)
+    if !has16 || !rect_is(r16, -2.0, 0.0, 10.0, 10.0) || red16 < 0.99 || green16 > 0.01 { os.exit(38) }
+    let (rc16, redc16, greenc16, hasc16) = nth_fill(c16, 1usize)
+    if !hasc16 || !rect_is(rc16, 0.0, 10.0, 10.0, 10.0) || greenc16 < 0.99 || redc16 > 0.01 { os.exit(39) }
     ret ok
 }

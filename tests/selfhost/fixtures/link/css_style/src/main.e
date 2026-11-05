@@ -146,5 +146,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let wm_style = logical_table[usize(wm_node)]
     if dir_style.direction != .Rtl || !near(dir_style.margin[1usize].px, 7.0f64) || !near(dir_style.margin[3usize].px, 0.0f64) { os.exit(38) }
     if wm_style.writing_mode != .VerticalRl || !near(wm_style.margin[0usize].px, 8.0f64) || !near(wm_style.margin[3usize].px, 0.0f64) { os.exit(39) }
+
+    // #722: CSS round() nearest sends a tie to positive infinity (-1.5 -> -1)
+    // in both the number and the length path. #721: a calc() hue is evaluated
+    // for hsl()/hwb() and for the LCH family. #720: negative saturation is 0.
+    let values_source = "<html><head></head><body><div id=rn style=\"margin-left: calc(round(nearest, -3, 2) * 1px)\"></div><div id=rl style=\"margin-left: round(nearest, -3px, 2px)\"></div><div id=rp style=\"margin-top: round(nearest, 3px, 2px)\"></div><div id=hc style=\"color: hsl(calc(120deg) 100% 50%)\"></div><div id=hw style=\"background-color: hwb(calc(120deg) 0% 0%)\"></div><div id=lc style=\"color: lch(50% 50 calc(120deg))\"></div><div id=ld style=\"color: lch(50% 50 120deg)\"></div><div id=hs style=\"color: hsl(120 -50% 50%)\"></div></body></html>"
+    let (values_dom, values_parse) = dom.parse(a, values_source, options(), 16usize)
+    if values_parse != ok { os.exit(40) }
+    var values_tree = values_dom
+    let (values_styles, values_alloc) = mem.alloc[style.Style](a, values_tree.used)
+    if values_alloc != ok { os.exit(41) }
+    var values_table = values_styles
+    var values_ctx = style.new_context(a, 800.0f64, 600.0f64)
+    if style.compute_tree(&values_ctx, &values_tree, none, none, values_table) != ok { os.exit(42) }
+    let rn = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "rn"))]
+    let rl = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "rl"))]
+    let rp = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "rp"))]
+    if !near(rn.margin[3usize].px, -2.0f64) { os.exit(43) }
+    if !near(rl.margin[3usize].px, -2.0f64) { os.exit(44) }
+    if !near(rp.margin[0usize].px, 4.0f64) { os.exit(45) }
+    let hc = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "hc"))]
+    let hw = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "hw"))]
+    if hc.color != 4278255360u32 || hw.background_color != 4278255360u32 { os.exit(46) }
+    let lc = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "lc"))]
+    let ld = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "ld"))]
+    if lc.color != ld.color { os.exit(47) }
+    let hs = values_table[usize(dom.get_element_by_id(&values_tree, values_tree.root, "hs"))]
+    if hs.color != 4286611584u32 { os.exit(48) }
     ret ok
 }
