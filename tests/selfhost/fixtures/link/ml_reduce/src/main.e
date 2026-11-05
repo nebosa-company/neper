@@ -166,6 +166,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if reduce.tsne(groups[..], 12usize, 2usize, 12.0f64, 10u32, 10.0f64, 0.5f64, y[..], big) != reduce.Invalid { os.exit(4i32) }
     if reduce.tsne(groups[..], 12usize, 2usize, 3.0f64, 10u32, 10.0f64, 0.5f64, y[..], big[..10usize]) != reduce.TooSmall { os.exit(4i32) }
 
+    // 5: a large coordinate scale must not underflow the perplexity search to NaN.
+    var huge: [24]f64 = zero
+    i = 0usize
+    while i < 24usize {
+        huge[i] = groups[i] * 1000000000000000.0f64
+        i += 1usize
+    }
+    var huge_y: [24]f64 = zero
+    i = 0usize
+    while i < 24usize {
+        huge_y[i] = 0.01f64 * (rand.pcg64_f64(&r) - 0.5f64)
+        i += 1usize
+    }
+    if reduce.tsne(huge[..], 12usize, 2usize, 3.0f64, 50u32, 10.0f64, 0.5f64, huge_y[..], big) != ok { os.exit(5i32) }
+    i = 0usize
+    while i < 24usize {
+        if huge_y[i] != huge_y[i] || huge_y[i] - huge_y[i] != 0.0f64 { os.exit(5i32) }
+        i += 1usize
+    }
+
     try io.print("ml reduce ok\n")
     ret ok
 }

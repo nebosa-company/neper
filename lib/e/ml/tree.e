@@ -7,6 +7,7 @@
 // Every split is exhaustive over the samples at the node.
 
 use e.algo.rand
+use e.math
 use e.mem
 
 type Node = struct { feature: usize, threshold: f64, left: u32, right: u32, value: f64 }
@@ -17,6 +18,21 @@ error TooSmall
 error Invalid
 
 const LEAF: u32 = 4294967295u32
+
+// A class target is usable as a histogram index when it is finite, integral and in
+// `0..classes`; regression targets (`classes == 0`) are not class indices.
+fn labels_valid(y: []const f64, n: usize, classes: usize) -> bool {
+    if classes == 0usize { ret true }
+    var i = 0usize
+    while i < n {
+        let v = y[i]
+        if v != v || v - v != 0.0f64 { ret false }
+        if v < 0.0f64 || v >= f64(classes) { ret false }
+        if v != math.trunc[f64](v) { ret false }
+        i += 1usize
+    }
+    ret true
+}
 
 // The impurity of the samples `rows[..count]`: Gini over `classes` labels, or
 // the squared error about the mean when `classes == 0`. `bins.len >= classes`.
@@ -211,7 +227,7 @@ fn grow_tree(a: *mem.Arena, x: []const f64, y: []const f64, d: usize, rows: []us
 // CART on all `n` samples; `classes` labels in `y` (`0` for regression).
 fn cart(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, max_depth: usize, min_samples: usize) -> (Tree, err) {
     if x.len < n * d || y.len < n { ret (zero, TooSmall) }
-    if n == 0usize || d == 0usize || min_samples == 0usize { ret (zero, Invalid) }
+    if n == 0usize || d == 0usize || min_samples == 0usize || !labels_valid(y, n, classes) { ret (zero, Invalid) }
     let (rows, rows_error) = mem.alloc[usize](a, n)
     if rows_error != ok { ret (zero, rows_error) }
     var i = 0usize
@@ -242,6 +258,7 @@ fn predict(t: *const Tree, sample: []const f64) -> f64 {
 fn random_forest(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, trees: usize, subset: usize, max_depth: usize, min_samples: usize, r: *rand.Pcg64) -> (Forest, err) {
     if x.len < n * d || y.len < n { ret (zero, TooSmall) }
     if n == 0usize || d == 0usize || trees == 0usize || subset == 0usize || min_samples == 0usize { ret (zero, Invalid) }
+    if !labels_valid(y, n, classes) { ret (zero, Invalid) }
     let (list, list_error) = mem.alloc[Tree](a, trees)
     if list_error != ok { ret (zero, list_error) }
     let (rows, rows_error) = mem.alloc[usize](a, n)

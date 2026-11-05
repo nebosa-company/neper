@@ -10,11 +10,14 @@ use e.math
 error TooSmall
 error Invalid
 
+// A NaN fails both order comparisons, so every threshold is tested with this first.
+fn finite(v: f64) -> bool { ret v == v && v - v == 0.0f64 }
+
 // `out[i] = exp(logits[i] / temp) / sum`.
 fn softmax(logits: []const f64, temp: f64, out: []f64) -> err {
     let n = logits.len
     if out.len < n { ret TooSmall }
-    if n == 0usize || temp <= 0.0f64 { ret Invalid }
+    if n == 0usize || !finite(temp) || temp <= 0.0f64 { ret Invalid }
     var largest = logits[0usize]
     var i = 1usize
     while i < n {
@@ -51,6 +54,7 @@ fn rank(probabilities: []const f64, order: []usize) {
 }
 
 fn draw(probabilities: []const f64, order: []const usize, count: usize, r: *rand.Pcg64) -> usize {
+    if count == 0usize { ret 0usize }
     var total = 0.0f64
     var i = 0usize
     while i < count {
@@ -84,7 +88,7 @@ fn top_k(logits: []const f64, temp: f64, k: usize, r: *rand.Pcg64, probabilities
 fn top_p(logits: []const f64, temp: f64, p: f64, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err) {
     let n = logits.len
     if order.len < n { ret (0usize, TooSmall) }
-    if p <= 0.0f64 || p > 1.0f64 { ret (0usize, Invalid) }
+    if !finite(p) || p <= 0.0f64 || p > 1.0f64 { ret (0usize, Invalid) }
     let soft_error = softmax(logits, temp, probabilities)
     if soft_error != ok { ret (0usize, soft_error) }
     rank(probabilities, order[..n])
@@ -209,7 +213,7 @@ fn beam_search[Ctx: type](ctx: *Ctx, score: fn(*Ctx, []const usize, []f64), n: u
 // Temperature scaling: `out[i] = logits[i] / t`.
 fn temperature(logits: []const f64, t: f64, out: []f64) -> err {
     if out.len < logits.len { ret TooSmall }
-    if t <= 0.0f64 { ret Invalid }
+    if !finite(t) || t <= 0.0f64 { ret Invalid }
     var i = 0usize
     while i < logits.len {
         out[i] = logits[i] / t

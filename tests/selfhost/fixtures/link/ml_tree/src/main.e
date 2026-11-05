@@ -7,6 +7,7 @@
 
 use e.algo.rand
 use e.io
+use e.math
 use e.mem
 use e.ml.tree
 use e.os
@@ -139,6 +140,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if short_total <= total { os.exit(4i32) }
     let (_, boost_room) = tree.gradient_boost(a, x1[..], y1[..], 8usize, 1usize, 3usize, 0.3f64, 1usize, 1usize, residuals[..4usize])
     if boost_room != tree.TooSmall { os.exit(4i32) }
+
+    // 5: a classification target must be a finite class index before any histogram is
+    // indexed.
+    var bad_targets: [12]f64 = zero
+    i = 0usize
+    while i < 12usize {
+        bad_targets[i] = y2[i]
+        i += 1usize
+    }
+    bad_targets[0usize] = 3.0f64
+    let (_, class_range) = tree.cart(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 3usize, 1usize)
+    if class_range != tree.Invalid { os.exit(5i32) }
+    bad_targets[0usize] = 0.5f64
+    let (_, class_fraction) = tree.cart(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 3usize, 1usize)
+    if class_fraction != tree.Invalid { os.exit(5i32) }
+    bad_targets[0usize] = 0.0f64 - 1.0f64
+    let (_, class_negative) = tree.cart(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 3usize, 1usize)
+    if class_negative != tree.Invalid { os.exit(5i32) }
+    bad_targets[0usize] = math.sqrt[f64](0.0f64 - 1.0f64)
+    let (_, class_nan) = tree.cart(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 3usize, 1usize)
+    if class_nan != tree.Invalid { os.exit(5i32) }
+    bad_targets[0usize] = 5.0f64
+    let (_, forest_labels) = tree.random_forest(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 5usize, 1usize, 4usize, 1usize, &r)
+    if forest_labels != tree.Invalid { os.exit(5i32) }
 
     try io.print("ml tree ok\n")
     ret ok

@@ -88,6 +88,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, p_invalid) = sample.top_p(logits[..], 1.0f64, 1.5f64, &r, probabilities[..], order[..])
     if p_invalid != sample.Invalid { os.exit(2i32) }
 
+    // A nucleus threshold or temperature that is not finite is refused rather than
+    // leaving the truncated set empty and drawing from it.
+    let nan_value = math.sqrt[f64](0.0f64 - 1.0f64)
+    let (_, p_nan) = sample.top_p(logits[..], 1.0f64, nan_value, &r, probabilities[..], order[..])
+    if p_nan != sample.Invalid { os.exit(5i32) }
+    if sample.softmax(logits[..], nan_value, probabilities[..]) != sample.Invalid { os.exit(5i32) }
+    if sample.temperature(logits[..], nan_value, probabilities[..]) != sample.Invalid { os.exit(5i32) }
+
     // 3: contrastive decoding.
     var amateur: [4]f64 = zero
     amateur[0usize] = 2.5f64

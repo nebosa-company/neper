@@ -292,6 +292,19 @@ fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, ra
             distances[j] = s
             j += 1usize
         }
+        // Shift the weights by the nearest distance so a large coordinate scale cannot
+        // underflow every non-self exp() to zero; the shift cancels from the normalized
+        // probabilities and leaves log(total) + beta * weighted / total unchanged.
+        var nearest = 0.0f64
+        var have_nearest = false
+        j = 0usize
+        while j < n {
+            if j != i && (!have_nearest || distances[j] < nearest) {
+                nearest = distances[j]
+                have_nearest = true
+            }
+            j += 1usize
+        }
         var beta = 1.0f64
         var low = 0.0f64
         var high = 0.0f64
@@ -303,10 +316,13 @@ fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, ra
             j = 0usize
             while j < n {
                 if j != i {
-                    let w = math.exp[f64](0.0f64 - beta * distances[j])
+                    var gap = distances[j] - nearest
+                    // Both distances infinite is an equal gap, not a NaN one.
+                    if gap != gap { gap = 0.0f64 }
+                    let w = math.exp[f64](0.0f64 - beta * gap)
                     p[i * n + j] = w
                     total += w
-                    weighted += w * distances[j]
+                    weighted += w * gap
                 } else {
                     p[i * n + j] = 0.0f64
                 }

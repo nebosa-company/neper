@@ -11,11 +11,22 @@ type Tape = struct { op: []Op, left: []usize, right: []usize, value: []f64, grad
 error TooSmall
 error Invalid
 
+// True when every one of the first `n` labels is exactly -1 or +1.
+fn labels_ok(y: []const f64, n: usize) -> bool {
+    var i = 0usize
+    while i < n {
+        if y[i] != 1.0f64 && y[i] != 0.0f64 - 1.0f64 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // One perceptron epoch over `x` (`n × d`) with labels `y` in {-1, +1}:
 // `weights` (`d + 1`, bias last) move by `rate y x` on each mistake.
 // Answers the mistakes made.
 fn perceptron_epoch(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, rate: f64) -> (usize, err) {
     if x.len < n * d || y.len < n || weights.len < d + 1usize { ret (0usize, TooSmall) }
+    if !labels_ok(y, n) { ret (0usize, Invalid) }
     var mistakes = 0usize
     var i = 0usize
     while i < n {
@@ -51,6 +62,12 @@ fn tape(op: []Op, left: []usize, right: []usize, value: []f64, gradient: []f64) 
     ret Tape { op: op, left: left, right: right, value: value, gradient: gradient, count: 0usize }
 }
 
+// True when `id` names a node already recorded on `t`; a helper checks its
+// operands with this before reading their values or recording them.
+fn node_ok(t: *Tape, id: usize) -> bool {
+    ret id < t.count
+}
+
 fn record(t: *Tape, op: Op, left: usize, right: usize, value: f64) -> (usize, err) {
     if t.count >= t.op.len || t.count >= t.left.len || t.count >= t.right.len || t.count >= t.value.len || t.count >= t.gradient.len { ret (0usize, TooSmall) }
     let id = t.count
@@ -68,34 +85,42 @@ fn input(t: *Tape, value: f64) -> (usize, err) {
     ret (id, record_error)
 }
 fn add(t: *Tape, a: usize, b: usize) -> (usize, err) {
+    if !node_ok(t, a) || !node_ok(t, b) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Add, a, b, t.value[a] + t.value[b])
     ret (id, record_error)
 }
 fn sub(t: *Tape, a: usize, b: usize) -> (usize, err) {
+    if !node_ok(t, a) || !node_ok(t, b) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Sub, a, b, t.value[a] - t.value[b])
     ret (id, record_error)
 }
 fn mul(t: *Tape, a: usize, b: usize) -> (usize, err) {
+    if !node_ok(t, a) || !node_ok(t, b) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Mul, a, b, t.value[a] * t.value[b])
     ret (id, record_error)
 }
 fn div(t: *Tape, a: usize, b: usize) -> (usize, err) {
+    if !node_ok(t, a) || !node_ok(t, b) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Div, a, b, t.value[a] / t.value[b])
     ret (id, record_error)
 }
 fn neg(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Neg, a, 0usize, 0.0f64 - t.value[a])
     ret (id, record_error)
 }
 fn exp(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Exp, a, 0usize, math.exp[f64](t.value[a]))
     ret (id, record_error)
 }
 fn log(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Log, a, 0usize, math.log[f64](t.value[a]))
     ret (id, record_error)
 }
 fn tanh(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     let x = t.value[a]
     var value = x
     if x > 0.0f64 {
@@ -109,12 +134,14 @@ fn tanh(t: *Tape, a: usize) -> (usize, err) {
     ret (id, record_error)
 }
 fn relu(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     var v = t.value[a]
     if v < 0.0f64 { v = 0.0f64 }
     let (id, record_error) = record(t, .Relu, a, 0usize, v)
     ret (id, record_error)
 }
 fn sigmoid(t: *Tape, a: usize) -> (usize, err) {
+    if !node_ok(t, a) { ret (0usize, Invalid) }
     let (id, record_error) = record(t, .Sigmoid, a, 0usize, 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t.value[a])))
     ret (id, record_error)
 }
@@ -135,6 +162,7 @@ fn backward(t: *Tape, root: usize) -> err {
         let a = t.left[i]
         let b = t.right[i]
         let op = t.op[i]
+        if op != .Input && (!node_ok(t, a) || !node_ok(t, b)) { ret Invalid }
         if op == .Add {
             t.gradient[a] += g
             t.gradient[b] += g
@@ -317,6 +345,7 @@ fn perceptron_score(sample: []const f64, weights: []const f64) -> f64 {
 // Answers the passes taken.
 fn perceptron(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err) {
     if x.len < n * d || y.len < n || weights.len < d + 1usize { ret (0usize, TooSmall) }
+    if !labels_ok(y, n) { ret (0usize, Invalid) }
     var epoch = 0usize
     var dirty = true
     while epoch < epochs && dirty {
@@ -344,6 +373,7 @@ fn perceptron(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64
 // (Freund and Schapire's voted perceptron in its averaged form).
 fn perceptron_averaged(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, averaged: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err) {
     if x.len < n * d || y.len < n || weights.len < d + 1usize || averaged.len < d + 1usize { ret (0usize, TooSmall) }
+    if !labels_ok(y, n) { ret (0usize, Invalid) }
     var j = 0usize
     while j <= d {
         averaged[j] = 0.0f64

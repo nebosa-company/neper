@@ -101,6 +101,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if large_tape.value[large_positive_tanh] != 1.0f64 || large_tape.value[large_positive_tanh] != large_tape.value[large_positive_tanh] { os.exit(2i32) }
     if large_tape.value[large_negative_tanh] != -1.0f64 || large_tape.value[large_negative_tanh] != large_tape.value[large_negative_tanh] { os.exit(2i32) }
 
+    // 5: tape operands and perceptron labels are validated (issue #853): a node id
+    // never recorded answers Invalid instead of trapping, and a label outside {-1, +1}
+    // is refused before any update.
+    let (_, bad_add) = nn.add(&t, 99usize, ib)
+    let (_, bad_mul) = nn.mul(&t, ia, 99usize)
+    let (_, bad_div) = nn.div(&t, 99usize, 99usize)
+    let (_, bad_tanh) = nn.tanh(&t, 99usize)
+    if bad_add != nn.Invalid || bad_mul != nn.Invalid || bad_div != nn.Invalid || bad_tanh != nn.Invalid { os.exit(5i32) }
+    let (bad_node, bad_node_error) = nn.add(&t, ia, ib)
+    if bad_node_error != ok { os.exit(5i32) }
+    t.left[bad_node] = 99usize
+    if nn.backward(&t, bad_node) != nn.Invalid { os.exit(5i32) }
+    var bad_y: [4]f64 = zero
+    var j = 0usize
+    while j < 4usize {
+        bad_y[j] = y[j]
+        j += 1usize
+    }
+    bad_y[0usize] = 0.0f64
+    let (_, bad_label) = nn.perceptron_epoch(x[..], bad_y[..], 4usize, 2usize, w[..], 0.5f64)
+    if bad_label != nn.Invalid { os.exit(5i32) }
+
     // 3: attention.
     var q: [4]f64 = zero
     q[0usize] = 1.0f64

@@ -9,6 +9,7 @@
 
 use e.algo.rand
 use e.io
+use e.math
 use e.mem
 use e.ml.ann
 use e.ml.bayes
@@ -396,6 +397,17 @@ fn check_perceptron() {
     if right != 19usize { os.exit(10i32) }
     let (_, small_error) = nn.perceptron(x[..], y[..], 20usize, 2usize, w[..2usize], 0.5f64, 0.1f64, 100usize)
     if small_error != nn.TooSmall { os.exit(10i32) }
+    // A label outside {-1, +1} is refused before the update (issue #853).
+    var bad_labels: [20]f64 = zero
+    i = 0usize
+    while i < 20usize {
+        bad_labels[i] = y[i]
+        i += 1usize
+    }
+    bad_labels[3usize] = 0.0f64
+    let (_, bad_margin) = nn.perceptron(x[..], bad_labels[..], 20usize, 2usize, w[..], 0.5f64, 0.1f64, 100usize)
+    let (_, bad_averaged) = nn.perceptron_averaged(x[..], bad_labels[..], 20usize, 2usize, w2[..], averaged[..], 0.5f64, 0.1f64, 100usize)
+    if bad_margin != nn.Invalid || bad_averaged != nn.Invalid { os.exit(10i32) }
 }
 
 // `tanh(a b + exp c) / (a + ln b) - relu(a - c) b` on a fresh tape; answers the root.
@@ -576,6 +588,8 @@ fn check_temperature() {
         i += 1usize
     }
     if sample.temperature(logits[..], 0.0f64, scaled[..]) != sample.Invalid || sample.temperature(logits[..], 0.7f64, scaled[..3usize]) != sample.TooSmall { os.exit(14i32) }
+    let nan_value = math.sqrt[f64](0.0f64 - 1.0f64)
+    if sample.temperature(logits[..], nan_value, scaled[..]) != sample.Invalid { os.exit(14i32) }
     var r = rand.pcg64(3u64, 3u64)
     var probabilities: [6]f64 = zero
     let want = [8]usize{ 1usize, 1usize, 4usize, 5usize, 4usize, 4usize, 4usize, 4usize }
