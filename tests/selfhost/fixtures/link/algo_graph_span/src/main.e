@@ -202,6 +202,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if reach[0usize * 4usize + 3usize] != 1u8 || reach[2usize * 4usize + 1usize] != 1u8 || reach[3usize * 4usize + 0usize] != 0u8 || reach[3usize * 4usize + 3usize] != 1u8 { os.exit(4i32) }
     if span.transitive_closure[i64](&path_graph, reach[..9usize]) != span.TooSmall { os.exit(4i32) }
 
+    // 5: parallel edges keep their pairing, and Prim reports the from < to copy.
+    let (x0, x_error) = graph.builder[i64](a, 3usize, 6usize)
+    if x_error != ok { os.exit(5i32) }
+    var xb = x0
+    if graph.add_undirected[i64](&xb, 0u32, 2u32, 1i64) != ok { os.exit(5i32) }
+    if graph.add_undirected[i64](&xb, 0u32, 1u32, 5i64) != ok { os.exit(5i32) }
+    if graph.add_undirected[i64](&xb, 0u32, 1u32, 3i64) != ok { os.exit(5i32) }
+    let (xg, xg_error) = graph.finish[i64](a, &xb)
+    if xg_error != ok { os.exit(5i32) }
+    let (xb_forest, xb_error) = span.boruvka[i64, Nothing](a, &xg, &nothing, weight_of)
+    if xb_error != ok || xb_forest.weight != 4.0f64 || xb_forest.edges.len != 2usize || xb_forest.trees != 1usize { os.exit(5i32) }
+    var reported = 0.0f64
+    i = 0usize
+    while i < xb_forest.edges.len {
+        let held = xg.edges[xb_forest.edges[i]]
+        if held.from >= held.to { os.exit(5i32) }
+        reported += f64(held.value)
+        i += 1usize
+    }
+    if reported != xb_forest.weight { os.exit(5i32) }
+    let (xp_forest, xp_error) = span.prim[i64, Nothing](a, &xg, 1u32, &nothing, weight_of)
+    if xp_error != ok || xp_forest.weight != 4.0f64 || xp_forest.edges.len != 2usize || xp_forest.trees != 1usize { os.exit(6i32) }
+    reported = 0.0f64
+    i = 0usize
+    while i < xp_forest.edges.len {
+        let held_prim = xg.edges[xp_forest.edges[i]]
+        if held_prim.from >= held_prim.to { os.exit(6i32) }
+        reported += f64(held_prim.value)
+        i += 1usize
+    }
+    if reported != xp_forest.weight { os.exit(6i32) }
+
     try io.print("algo graph span ok\n")
     ret ok
 }

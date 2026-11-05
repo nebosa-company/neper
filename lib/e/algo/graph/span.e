@@ -144,7 +144,10 @@ fn prim[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
             let w = weight(ctx, e)
             if done[usize(e.to)] == 0u8 && w < best[usize(e.to)] {
                 best[usize(e.to)] = w
-                via[usize(e.to)] = k
+                // Report the from < to copy, as Kruskal and Borůvka do.
+                var index = k
+                if e.from > e.to { index = twin[E](g, k) }
+                via[usize(e.to)] = index
             }
             k += 1usize
         }
@@ -208,13 +211,23 @@ fn boruvka[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ct
     ret (Forest { edges: chosen[..count], weight: total, trees: dsu.set_count(&sets) }, ok)
 }
 
-// The index of the reverse copy of undirected edge `k`.
+// The index of the reverse copy of undirected edge `k`: parallel copies pair by
+// occurrence, the n-th edge from `from` to `to` with the n-th one back.
 fn twin[E: type](g: *const graph.Graph[E], k: usize) -> usize {
     let e = g.edges[k]
-    var j = g.offsets[usize(e.to)]
-    while j < g.offsets[usize(e.to) + 1usize] {
-        if g.edges[j].to == e.from { ret j }
+    var rank = 0usize
+    var j = g.offsets[usize(e.from)]
+    while j < k {
+        if g.edges[j].to == e.to { rank += 1usize }
         j += 1usize
+    }
+    var m = g.offsets[usize(e.to)]
+    while m < g.offsets[usize(e.to) + 1usize] {
+        if g.edges[m].to == e.from {
+            if rank == 0usize { ret m }
+            rank -= 1usize
+        }
+        m += 1usize
     }
     ret k
 }

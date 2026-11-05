@@ -86,6 +86,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (c3, c3_error) = color.dsatur[i64](&complete, colors[..], order[..], used[..])
     if c3_error != ok || c3 != 5usize || !color.is_proper[i64](&complete, colors[..]) { os.exit(2i32) }
 
+    // 3: DSATUR's saturation update counts the freshly coloured neighbour: the path
+    // 0-3-6-4-1-5 plus an isolated node takes two colours in this order. Dropping the
+    // `u != pick` guard (pick is the neighbour that just gained the colour) would leave
+    // every saturation at zero and take three.
+    let (q0, q_error) = graph.builder[i64](a, 7usize, 10usize)
+    if q_error != ok { os.exit(8i32) }
+    var qb = q0
+    if graph.add_undirected[i64](&qb, 0u32, 3u32, 1i64) != ok { os.exit(8i32) }
+    if graph.add_undirected[i64](&qb, 1u32, 4u32, 1i64) != ok { os.exit(8i32) }
+    if graph.add_undirected[i64](&qb, 1u32, 5u32, 1i64) != ok { os.exit(8i32) }
+    if graph.add_undirected[i64](&qb, 3u32, 6u32, 1i64) != ok { os.exit(8i32) }
+    if graph.add_undirected[i64](&qb, 4u32, 6u32, 1i64) != ok { os.exit(8i32) }
+    let (qg, qg_error) = graph.finish[i64](a, &qb)
+    if qg_error != ok { os.exit(8i32) }
+    let (qcount, qcount_error) = color.dsatur[i64](&qg, colors[..7usize], order[..7usize], used[..8usize])
+    if qcount_error != ok || qcount != 2usize || !color.is_proper[i64](&qg, colors[..7usize]) { os.exit(8i32) }
+    let want_colors = [7]u32{ 0u32, 0u32, 0u32, 1u32, 1u32, 1u32, 0u32 }
+    i = 0usize
+    while i < 7usize {
+        if colors[i] != want_colors[i] { os.exit(8i32) }
+        i += 1usize
+    }
+
+    // 4: a colours array shorter than the graph is refused, not indexed.
+    let (t0, t_error) = graph.builder[i64](a, 2usize, 2usize)
+    if t_error != ok { os.exit(7i32) }
+    var tb = t0
+    if graph.add_undirected[i64](&tb, 0u32, 1u32, 1i64) != ok { os.exit(7i32) }
+    let (tg, tg_error) = graph.finish[i64](a, &tb)
+    if tg_error != ok { os.exit(7i32) }
+    if color.is_proper[i64](&tg, colors[..1usize]) { os.exit(7i32) }
+
     try io.print("algo graph color ok\n")
     ret ok
 }

@@ -96,6 +96,8 @@ fn dsatur[E: type](g: *const graph.Graph[E], colors: []u32, saturation: []usize,
             if colors[w] == graph.NONE {
                 var seen = false
                 var f = g.offsets[w]
+                // `pick` is the neighbour that just gained `c`, so it is skipped: the
+                // colour is new to `w` only when no other neighbour already has it.
                 while f < g.offsets[w + 1usize] && !seen {
                     let u = usize(g.edges[f].to)
                     if u != pick && colors[u] == c { seen = true }
@@ -110,9 +112,11 @@ fn dsatur[E: type](g: *const graph.Graph[E], colors: []u32, saturation: []usize,
     ret (count, ok)
 }
 
-// Does no edge join two nodes of one colour?
+// Does no edge join two nodes of one colour? A colour list shorter than the graph
+// cannot be a colouring, so it is refused rather than indexed.
 fn is_proper[E: type](g: *const graph.Graph[E], colors: []const u32) -> bool {
     let n = graph.node_count[E](g)
+    if colors.len < n { ret false }
     var v = 0usize
     while v < n {
         var e = g.offsets[v]
