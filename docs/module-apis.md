@@ -13948,12 +13948,12 @@ type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
 type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
 type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
-type Frame = struct { image: Image, serial: u64 }
+type Frame = struct { image: Image, serial: u64, acquire_id: u64, target: u64 }
 type Scope = enum u8 { Workgroup, Device }
 type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool, device: vulkan.Buffer }
-type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, lost: bool, buffers: []Buffer, queues: u32, queue_states: [MAX_QUEUES]*QueueState, staging: [MAX_QUEUES][]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize, mock: DeviceInfo, has_mock: bool, metal: mtl.Context, heap: mtl.Buffer, heap_ends: usize, metal_pipelines: [16]mtl.Pipeline, pending_commands: [4]usize, pending_blocks: [4]mtl.Buffer, pending_queues: [4]*QueueState, pending_checks: [4]bool, pending_count: usize, more_heaps: [3]mtl.Buffer, heap_count: usize, lenient: bool, target_ids: u64 }
 type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
-type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquire_id: u64, identity: u64, acquired: bool, closed: bool, native: bool, surface: usize, swap: vulkan.Swapchain, swap_mode: u32, swap_stale: bool, swap_empty: bool, stale: [8]Damage, damage: Damage, has_damage: bool, native_presents: u64, native_skips: u64 }
 var gid: Id = zero
 var lid: Id = zero
 var wgid: Id = zero
@@ -14197,6 +14197,7 @@ fn open(a: *mem.Arena, physical: Physical) -> (Context, err)
 fn close(context: Context)
 fn buffer(a: *mem.Arena, context: Context, size: usize) -> (Buffer, err)
 fn free(context: Context, made: Buffer)
+fn fail_cache_rebuild()
 fn pipeline(a: *mem.Arena, context: Context, code: []const u8, entry: str, cached: []const u8) -> (Pipeline, []u8, err)
 fn destroy(context: Context, made: Pipeline)
 fn dispatch(a: *mem.Arena, context: Context, made: Pipeline, block: u64, x: u32, y: u32, z: u32) -> err
