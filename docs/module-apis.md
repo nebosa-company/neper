@@ -3047,7 +3047,7 @@ fn h_padleft(c: *f.Call) -> f.Value
 fn h_padright(c: *f.Call) -> f.Value
 fn h_pad(c: *f.Call) -> f.Value
 fn h_part(c: *f.Call) -> f.Value
-fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) -> usize
+fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) -> (usize, err)
 fn extract_with(c: *f.Call, pattern: str, ignore_case: bool, kind: u8) -> f.Value
 fn h_extractemails(c: *f.Call) -> f.Value
 fn h_extractnumbers(c: *f.Call) -> f.Value
@@ -3826,6 +3826,7 @@ type Kpi = struct { value: Cell, row_count: usize, has_comparison: bool, compari
 
 fn build_kpi(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, config: ChartConfig, fields: []const view.FieldDef, ctx: *const view.Context) -> Kpi
 fn empty_mark() -> str
+fn escape_separator(a: *mem.Arena, s: str) -> str
 fn key_of(a: *mem.Arena, row: view.Row, names: []const str) -> str
 fn sort_keys(a: *mem.Arena, keys: []str)
 
@@ -4012,8 +4013,8 @@ fn summarize_bulk_outcome(a: *mem.Arena, catalog: []const Message, result: BulkR
 type Change = struct { record_id: f.Value, field: str, before: f.Value, after: f.Value }
 type Entry = struct { serial: usize, label: str, has_label: bool, changes: []const Change }
 type Stack = struct { key: str, epoch: usize, undo: []Entry, undo_n: usize, redo: []Entry, redo_n: usize }
-type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool }
-type UndoStore = struct { a: *mem.Arena, depth: usize, scope: str, owner: str, has_owner: bool, epoch: usize, stacks: []Stack, stack_n: usize, serial: usize, pending: []Pending, pending_n: usize }
+type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool, token: usize }
+type UndoStore = struct { a: *mem.Arena, depth: usize, scope: str, owner: str, has_owner: bool, epoch: usize, stacks: []Stack, stack_n: usize, serial: usize, next_token: usize, pending: []Pending, pending_n: usize }
 
 fn default_depth() -> usize
 fn new_undo_store(a: *mem.Arena, depth: usize, max_stacks: usize, max_pending: usize) -> UndoStore
@@ -5885,6 +5886,9 @@ type Jackknife = struct { estimate: f64, bias: f64, standard_error: f64 }
 type RankKey = struct { values: []const f64 }
 error TooSmall
 error Invalid
+error NotConverged
+const HYPERGEOMETRIC_MAX_POPULATION: u64 = 1000000000u64
+const HYPERGEOMETRIC_MAX_TERMS: u64 = 1000000u64
 
 fn moments() -> Moments
 fn moments_add(s: *Moments, x: f64)
