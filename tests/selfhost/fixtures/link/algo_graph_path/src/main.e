@@ -134,6 +134,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, dial_small) = path.dial[i64, Weights](a, &g, 0u32, 5usize, &w, integer_weight)
     if dial_small != path.TooSmall { os.exit(3i32) }
 
+    // 20: a node relaxed again before it is popped keeps both queue entries (issue #237);
+    // it used to overwrite the other node's link and never drain `remaining`.
+    let (dial_b0, dial_b_error) = graph.builder[i64](a, 5usize, 5usize)
+    if dial_b_error != ok { os.exit(20i32) }
+    var db = dial_b0
+    if graph.add_directed[i64](&db, 0u32, 1u32, 3i64) != ok { os.exit(20i32) }
+    if graph.add_directed[i64](&db, 0u32, 2u32, 3i64) != ok { os.exit(20i32) }
+    if graph.add_directed[i64](&db, 0u32, 3u32, 1i64) != ok { os.exit(20i32) }
+    if graph.add_directed[i64](&db, 3u32, 2u32, 1i64) != ok { os.exit(20i32) }
+    if graph.add_directed[i64](&db, 1u32, 4u32, 1i64) != ok { os.exit(20i32) }
+    let (dial_g, dial_g_error) = graph.finish[i64](a, &db)
+    if dial_g_error != ok { os.exit(20i32) }
+    let (reinsert, reinsert_error) = path.dial[i64, Weights](a, &dial_g, 0u32, 3usize, &w, integer_weight)
+    if reinsert_error != ok { os.exit(20i32) }
+    if reinsert[0usize] != 0usize || reinsert[1usize] != 3usize || reinsert[2usize] != 2usize || reinsert[3usize] != 1usize || reinsert[4usize] != 4usize { os.exit(20i32) }
+
+    // 21: more than 1000 IDA* bound rounds still find the route (issue #237): a chain of
+    // 1200 edges of 0.001 raises the bound once per distinct f value.
+    let (chain_b0, chain_builder_error) = graph.builder[f64](a, 1201usize, 1200usize)
+    if chain_builder_error != ok { os.exit(21i32) }
+    var chain_builder = chain_b0
+    var link = 0usize
+    while link < 1200usize {
+        if graph.add_directed[f64](&chain_builder, u32(link), u32(link + 1usize), 0.0f64) != ok { os.exit(21i32) }
+        link += 1usize
+    }
+    let (chain, chain_finish_error) = graph.finish[f64](a, &chain_builder)
+    if chain_finish_error != ok { os.exit(21i32) }
+    var small_step = FixedWeights { value: 0.001f64 }
+    let (long_ida, long_ida_error) = path.ida_star[f64, FixedWeights](a, &chain, 0u32, 1200u32, 1200usize, &small_step, fixed_weight, fixed_no_heuristic)
+    if long_ida_error != ok || !near(long_ida.cost, 1.2f64) || long_ida.nodes.len != 1201usize { os.exit(21i32) }
+
+
     // 4: A* and IDA* find the cheapest route 0 -> 2 -> 1 -> 3 -> 4 -> 5 (13).
     let (star, star_error) = path.astar[i64, Weights](a, &g, 0u32, 5u32, &w, weight_of, hops_to_five)
     if star_error != ok || !near(star.cost, 13.0f64) || star.nodes.len != 6usize { os.exit(4i32) }

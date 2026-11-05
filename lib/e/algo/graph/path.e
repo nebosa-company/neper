@@ -147,11 +147,17 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
     let (distance, distance_error) = mem.alloc[usize](a, n)
     if distance_error != ok { ret (zero, distance_error) }
     let buckets = max_weight + 1usize
-    // Each bucket is a singly linked list through `next`; `head` per bucket.
+    // Each queue entry is its own cell (node and link), so a node relaxed again before
+    // it is popped is pushed twice instead of overwriting another node's link; a lost
+    // entry would never drain `remaining`. One cell per successful relaxation plus the
+    // start, and each edge relaxes once, so `g.edges.len + 1` cells suffice.
     let (head, head_error) = mem.alloc[u32](a, buckets)
     if head_error != ok { ret (zero, head_error) }
-    let (next, next_error) = mem.alloc[u32](a, n)
-    if next_error != ok { ret (zero, next_error) }
+    let cells = g.edges.len + 1usize
+    let (cell_node, cell_node_error) = mem.alloc[u32](a, cells)
+    if cell_node_error != ok { ret (zero, cell_node_error) }
+    let (cell_next, cell_next_error) = mem.alloc[u32](a, cells)
+    if cell_next_error != ok { ret (zero, cell_next_error) }
     let none = 18446744073709551615usize
     var i = 0usize
     while i < n {
@@ -164,16 +170,19 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
         i += 1usize
     }
     distance[usize(start)] = 0usize
-    next[usize(start)] = graph.NONE
-    head[0usize] = start
+    cell_node[0usize] = start
+    cell_next[0usize] = graph.NONE
+    head[0usize] = 0u32
+    var used = 1usize
     var current = 0usize
     var remaining = 1usize
     while remaining > 0usize {
         let bucket = current % buckets
         while head[bucket] != graph.NONE {
-            let u = head[bucket]
-            head[bucket] = next[usize(u)]
+            let cell = head[bucket]
+            head[bucket] = cell_next[usize(cell)]
             remaining -= 1usize
+            let u = cell_node[usize(cell)]
             if distance[usize(u)] != current { continue }
             var k = g.offsets[usize(u)]
             while k < g.offsets[usize(u) + 1usize] {
@@ -184,8 +193,10 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
                 if candidate < distance[usize(e.to)] {
                     distance[usize(e.to)] = candidate
                     let slot = candidate % buckets
-                    next[usize(e.to)] = head[slot]
-                    head[slot] = e.to
+                    cell_node[used] = e.to
+                    cell_next[used] = head[slot]
+                    head[slot] = u32(used)
+                    used += 1usize
                     remaining += 1usize
                 }
                 k += 1usize
@@ -501,8 +512,9 @@ fn ida_star[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: 
     let (cost, cost_error) = mem.alloc[f64](a, max_depth + 2usize)
     if cost_error != ok { ret (zero, cost_error) }
     var bound = heuristic(ctx, start)
-    var rounds = 0usize
-    while rounds < 1000usize {
+    // No round cap: `next_bound` strictly grows to the next f value above `bound`, and
+    // `NoPath` means the last round raised it to infinity (a real no-path).
+    while true {
         var next_bound = infinity()
         var depth = 0usize
         stack[0usize] = start
@@ -552,7 +564,6 @@ fn ida_star[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: 
         }
         if next_bound >= infinity() { ret (zero, NoPath) }
         bound = next_bound
-        rounds += 1usize
     }
     ret (zero, NoPath)
 }
