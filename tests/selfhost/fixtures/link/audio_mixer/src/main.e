@@ -94,5 +94,38 @@ fn main(a: *mem.Arena) -> err {
     let (overflow_source, overflow_source_error) = audio.view(overflow_bytes, overflow_format)
     let (_, overflow_error) = mixer.resample(&overflow_arena, overflow_source, 65538u32)
     if overflow_alloc_error != ok || overflow_source_error != ok || overflow_error != mem.Exhausted { os.exit(19i32) }
+
+    // #392: the mix accumulates wide and clips once, so the same voices in a
+    // different slot order give the same sample.
+    var big_bytes: [2]u8 = [2]u8{ 255, 127 }
+    let (big_source, big_error) = audio.view(big_bytes[0..], format)
+    var order_slots: [4]mixer.Voice = zero
+    var order_a: mixer.Mixer = zero
+    if big_error != ok || mixer.init(&order_a, format, order_slots[0..]) != ok { os.exit(20i32) }
+    let max_gain = 2147483647i32
+    let (_o1, e1) = mixer.play(&order_a, big_source, max_gain, false)
+    let (_o2, e2) = mixer.play(&order_a, big_source, max_gain, false)
+    let (_o3, e3) = mixer.play(&order_a, big_source, max_gain, false)
+    let (_o4, e4) = mixer.play(&order_a, big_source, 0i32 - max_gain, false)
+    var order_out_bytes: [2]u8 = zero
+    let (order_view, order_view_error) = audio.view(order_out_bytes[0..], format)
+    var order_out = order_view
+    let (order_written, order_mix_error) = mixer.mix_into(&order_a, &order_out)
+    let (order_sample, order_sample_error) = audio.sample_i32(order_out, 0usize, 0u8)
+    var rev_slots: [4]mixer.Voice = zero
+    var order_b: mixer.Mixer = zero
+    if mixer.init(&order_b, format, rev_slots[0..]) != ok { os.exit(21i32) }
+    let (_r1, r1) = mixer.play(&order_b, big_source, 0i32 - max_gain, false)
+    let (_r2, r2) = mixer.play(&order_b, big_source, max_gain, false)
+    let (_r3, r3) = mixer.play(&order_b, big_source, max_gain, false)
+    let (_r4, r4) = mixer.play(&order_b, big_source, max_gain, false)
+    var rev_out_bytes: [2]u8 = zero
+    let (rev_view, rev_view_error) = audio.view(rev_out_bytes[0..], format)
+    var rev_out = rev_view
+    let (rev_written, rev_mix_error) = mixer.mix_into(&order_b, &rev_out)
+    let (rev_sample, rev_sample_error) = audio.sample_i32(rev_out, 0usize, 0u8)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || order_view_error != ok || order_mix_error != ok || order_written != 1usize || order_sample_error != ok { os.exit(22i32) }
+    if r1 != ok || r2 != ok || r3 != ok || r4 != ok || rev_view_error != ok || rev_mix_error != ok || rev_written != 1usize || rev_sample_error != ok { os.exit(23i32) }
+    if order_sample != rev_sample || order_sample != 2147418112i32 { os.exit(24i32) }
     ret ok
 }

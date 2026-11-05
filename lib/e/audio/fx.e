@@ -224,6 +224,8 @@ fn reverb_fdn(x: []const f64, delays: []const usize, feedback: f64, out: []f64, 
     var i = 0usize
     while i < 4usize {
         if delays[i] == 0usize { ret Invalid }
+        // A wrapped total would pass the scratch check with a shorter buffer.
+        if delays[i] > 18446744073709551615usize - total { ret Invalid }
         total += delays[i]
         i += 1usize
     }

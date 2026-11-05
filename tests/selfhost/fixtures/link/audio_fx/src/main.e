@@ -162,6 +162,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fx.reverb_schroeder(impulse[..], 1.0f64, 0.2f64, big, scratch) != fx.Invalid { os.exit(5i32) }
     if fx.reverb_schroeder(impulse[..], nan, 0.2f64, big, scratch) != fx.Invalid { os.exit(5i32) }
     if fx.reverb_fdn(impulse[..], delays[..], nan, big, scratch) != fx.Invalid { os.exit(5i32) }
+    // #390: a total that would wrap past usize must be refused before indexing.
+    var huge_delays: [4]usize = zero
+    huge_delays[0usize] = 1usize
+    huge_delays[1usize] = 1usize
+    huge_delays[2usize] = 1usize
+    huge_delays[3usize] = 18446744073709551615usize
+    if fx.reverb_fdn(impulse[..], huge_delays[..], 0.7f64, big, scratch) != fx.Invalid { os.exit(5i32) }
 
     // 6: phase vocoder time stretch and pitch shift of a 440 Hz tone.
     var tone: [4096]f64 = zero

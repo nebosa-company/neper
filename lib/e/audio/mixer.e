@@ -89,11 +89,15 @@ fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err) {
                 if m.voices[voice].playing {
                     let (sample, sample_error) = audio.sample_i32(m.voices[voice].source, m.voices[voice].position, channel)
                     if sample_error != ok { ret (frame, sample_error) }
-                    let scaled = clip_i32((i64(sample) * i64(m.voices[voice].gain)) / 65536i64)
-                    sum = i64(clip_i32(sum + i64(scaled)))
+                    // Accumulate unclipped: clipping a partial mix would make
+                    // the result depend on voice slot order and prevent a later
+                    // voice from cancelling an over-range one.
+                    let scaled = (i64(sample) * i64(m.voices[voice].gain)) / 65536i64
+                    sum += scaled
                 }
                 voice += 1usize
             }
+            // One saturation, at the output boundary after master gain.
             let mastered = clip_i32((sum * i64(m.master)) / 65536i64)
             let write_error = audio.set_sample_i32(out, frame, channel, mastered)
             if write_error != ok { ret (frame, write_error) }
