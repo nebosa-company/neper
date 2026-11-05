@@ -6,8 +6,28 @@ use e.js.lex
 use e.js.realm as realm
 use e.mem
 use e.os
+use e.str
+
+// The reported line of the first token spelled `want_text`, or 0 when it never appears.
+fn token_line(a: *mem.Arena, src: str, want_text: str) -> u32 {
+    var lx = lex.new_lexer(a, src)
+    while true {
+        let (t, e) = lex.next_token(&lx)
+        if e != ok { ret 0u32 }
+        if t.kind == lex.T_EOF { ret 0u32 }
+        if str.eq(t.text, want_text) { ret t.line }
+    }
+    ret 0u32
+}
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // 836: CRLF inside a block comment is one line terminator; the token after it is line 3.
+    let crlf_comment = "/* a\r\nb */\nzzz"
+    if token_line(a, crlf_comment, "zzz") != 3u32 { os.exit(8i32) }
+    // 837: CR, LS and PS in a substitution, plus a nested template holding LF: the token after
+    // the template is line 6.
+    let template = "`x${a\rb\xe2\x80\xa8c\xe2\x80\xa9d`y\nz`e}f`\nafter"
+    if token_line(a, template, "after") != 6u32 { os.exit(9i32) }
     // U+0378 is unassigned, while nearby U+0377 is an assigned Greek letter.
     if lex.id_start_cp(888u32) || lex.id_part_cp(888u32) || !lex.id_start_cp(887u32) || !lex.id_part_cp(887u32) { os.exit(4i32) }
     let base = mem.mark(a)
