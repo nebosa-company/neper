@@ -529,6 +529,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (made, clock_error) = trigger.new_clock(a)
     if clock_error != ok { os.exit(94i32) }
     var clock = made
+    // 238: exponent-only zeros are falsy; allocation failures are errors, not empty paths
+    // or colliding loop keys.
+    let (zero_exp, zero_exp_error) = json.parse(a, "0e5", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (neg_zero_exp, neg_zero_exp_error) = json.parse(a, "-0e1", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    let (one_exp, one_exp_error) = json.parse(a, "1e0", json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if zero_exp_error != ok || neg_zero_exp_error != ok || one_exp_error != ok { os.exit(95i32) }
+    if ir.truthy(zero_exp) || ir.truthy(neg_zero_exp) || !ir.truthy(one_exp) { os.exit(96i32) }
+    var tiny_buf: [512]u8 = zero
+    var tiny = mem.arena_from(tiny_buf[0usize..512usize])
+    let (made_plugins, plugins_error) = ir.new_plugins(a)
+    if plugins_error != ok { os.exit(97i32) }
+    var tiny_plugins = made_plugins
+    let (_, report_error) = ir.validate_workflow(&tiny, &clock, &tiny_plugins, routing_stub, .Null)
+    if report_error != ir.Exhausted { os.exit(98i32) }
+    var key_bufs: [64][96]u8 = zero
+    var capacity = 1usize
+    while capacity <= 64usize {
+        var key_arena = mem.arena_from(key_bufs[capacity - 1usize][0usize..capacity])
+        let (frame, frame_error) = ir.loop_frame(&key_arena, "s", 7usize)
+        if frame_error == ok && !str.eq(frame, "loop:s:7") { os.exit(99i32) }
+        capacity += 1usize
+    }
     if run_chunk(a, vectors_0(), &clock) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1(), &clock) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2(), &clock) != 0u8 { os.exit(3i32) }

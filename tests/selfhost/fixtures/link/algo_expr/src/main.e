@@ -596,9 +596,66 @@ fn run_null_safe_regression(a: *mem.Arena) -> u8 {
     ret 0u8
 }
 
+fn chain(a: *mem.Arena, term: str, op: str, count: usize) -> str {
+    let (out, e) = mem.alloc[u8](a, count * term.len + (count - 1usize) * op.len + 1usize)
+    if e != ok { os.exit(120i32) }
+    var w = 0usize
+    var i = 0usize
+    while i < count {
+        if i > 0usize {
+            var k = 0usize
+            while k < op.len {
+                out[w] = op[k]
+                w += 1usize
+                k += 1usize
+            }
+        }
+        var k = 0usize
+        while k < term.len {
+            out[w] = term[k]
+            w += 1usize
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret out[0usize..w]
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // compile once, run against two scopes
     var limits = expr.default_limits()
+    // 139: numeric map keys, guarded float casts, bounded ternary parsing, flat chains.
+    var no_scope: [0]expr.Binding = zero
+    let (map_value, map_error) = expr.evaluate(a, "{1: 'a', 2: 'b'}", no_scope[0..], world_host(), limits)
+    if map_error != ok { os.exit(109i32) }
+    switch map_value {
+    case .Map as m:
+        if m.len != 2usize || !text_is(m[0usize].key, "1") || !text_is(m[1usize].key, "2") { os.exit(110i32) }
+    default:
+        os.exit(111i32)
+    }
+    let (mod_value, mod_error) = expr.evaluate(a, "1e300 % 3", no_scope[0..], world_host(), limits)
+    if mod_error != expr.Overflow { os.exit(112i32) }
+    let (wide_value, wide_error) = expr.evaluate(a, "str(1e300)", no_scope[0..], world_host(), limits)
+    if wide_error != ok { os.exit(113i32) }
+    switch wide_value {
+    case .Str as s:
+        if s.len == 0usize { os.exit(114i32) }
+    default:
+        os.exit(115i32)
+    }
+    let deep_source = chain(a, "1", "??", 20000usize)
+    let (_, deep_error) = expr.compile(a, deep_source, limits)
+    if deep_error != expr.Limit { os.exit(116i32) }
+    let flat_source = chain(a, "1", "+", 200usize)
+    let (flat_value, flat_error) = expr.evaluate(a, flat_source, no_scope[0..], world_host(), limits)
+    if flat_error != ok { os.exit(117i32) }
+    switch flat_value {
+    case .Int as i:
+        if i != 200i64 { os.exit(118i32) }
+    default:
+        os.exit(119i32)
+    }
     let (prog, compile_error) = expr.compile(a, "x * 2 + y", limits)
     if compile_error != ok { os.exit(101i32) }
     var scope: [2]expr.Binding = zero

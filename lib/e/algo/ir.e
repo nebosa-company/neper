@@ -257,6 +257,8 @@ fn truthy(v: json.Value) -> bool {
         var at = 0usize
         while at < n.lexeme.len {
             let c = n.lexeme[at]
+            // only the mantissa matters: 0e5 and -0.0E+3 are zero
+            if c == 101u8 || c == 69u8 { break }
             if c >= 49u8 && c <= 57u8 { nonzero = true }
             at += 1usize
         }
@@ -745,19 +747,27 @@ fn problem(e: *Errors, path: str, message: str) {
     if pushed != ok { e.failed = true }
 }
 
-fn join_dots(a: *mem.Arena, parts: []const str) -> str {
+// A path fragment; an arena failure marks the report failed instead of naming the wrong step.
+fn join_dots(a: *mem.Arena, errors: *Errors, parts: []const str) -> str {
     let (joined, joined_error) = str.join(a, parts, ".")
-    if joined_error != ok { ret "" }
+    if joined_error != ok {
+        errors.failed = true
+        ret ""
+    }
     ret joined
 }
 
-fn cat(a: *mem.Arena, x: str, y: str) -> str {
+fn cat(a: *mem.Arena, errors: *Errors, x: str, y: str) -> str {
     let (out, out_error) = str.concat(a, x, y)
-    if out_error != ok { ret "" }
+    if out_error != ok {
+        errors.failed = true
+        ret ""
+    }
     ret out
 }
 
-fn index_text(a: *mem.Arena, n: usize) -> str {
+// `index_text` as the path builder needs it: the text or the allocation failure.
+fn index_text_result(a: *mem.Arena, n: usize) -> (str, err) {
     var digits: [20]u8 = zero
     var count = 0usize
     var rest = n
@@ -771,13 +781,29 @@ fn index_text(a: *mem.Arena, n: usize) -> str {
         rest = rest / 10usize
     }
     let (out, out_error) = mem.alloc[u8](a, count)
-    if out_error != ok { ret "" }
+    if out_error != ok { ret ("", out_error) }
     var at = 0usize
     while at < count {
         out[at] = digits[count - 1usize - at]
         at += 1usize
     }
-    ret out[0usize..count]
+    ret (out[0usize..count], ok)
+}
+
+fn index_text(a: *mem.Arena, n: usize) -> str {
+    let (shown, shown_error) = index_text_result(a, n)
+    if shown_error != ok { ret "" }
+    ret shown
+}
+
+// `index_text` for a report path: a failure fails the report instead of dropping the index.
+fn index_path(errors: *Errors, a: *mem.Arena, n: usize) -> str {
+    let (shown, shown_error) = index_text_result(a, n)
+    if shown_error != ok {
+        errors.failed = true
+        ret ""
+    }
+    ret shown
 }
 
 // Whether a record step's `values` carries at least one mapping.
@@ -818,7 +844,8 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
     let (members, is_object) = members_of(definition)
     if !is_object {
         problem(&errors, "", "Not object")
-        ret (render(a, &errors), ok)
+        let (report, render_error) = render_report(a, &errors)
+        ret (report, render_error)
     }
     if !truthy(value_of(definition, "name")) { problem(&errors, "name", "Required") }
     let trigger_value = value_of(definition, "trigger")
@@ -860,7 +887,7 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
                         let (parsed, parsed_ok) = trigger.parse_cron(spec.cron)
                         if !parsed_ok { field = "cron" }
                     }
-                    problem(&errors, cat(a, "trigger.config.", field), schedule.reason)
+                    problem(&errors, cat(a, &errors, "trigger.config.", field), schedule.reason)
                 }
             }
         } else if str.eq(type_name, "metadata-change") {
@@ -926,7 +953,7 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
         } else {
             parts[path.len] = "?"
         }
-        let where = join_dots(a, parts[0usize..path.len + 1usize])
+        let where = join_dots(a, &errors, parts[0usize..path.len + 1usize])
         if !id_truthy {
             problem(&errors, where, "Step needs id")
         } else {
@@ -953,33 +980,33 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
             continue
         }
         let config = or_falsy(step, "config", empty_object())
-        let config_path = cat(a, where, ".config")
+        let config_path = cat(a, &errors, where, ".config")
         if str.eq(type_name, "if") {
-            if !truthy(value_of(config, "condition")) { problem(&errors, cat(a, config_path, ".condition"), "If needs condition") }
+            if !truthy(value_of(config, "condition")) { problem(&errors, cat(a, &errors, config_path, ".condition"), "If needs condition") }
         } else if str.eq(type_name, "case") {
             let cases = value_of(step, "cases")
             let (case_items, cases_are_array) = items_of(cases)
             if !cases_are_array || case_items.len == 0usize {
-                problem(&errors, cat(a, where, ".cases"), "Case needs case")
+                problem(&errors, cat(a, &errors, where, ".cases"), "Case needs case")
             } else {
                 var c = 0usize
                 while c < case_items.len {
                     if !truthy(value_of(case_items[c], "when")) {
-                        problem(&errors, cat(a, cat(a, cat(a, where, ".cases["), index_text(a, c)), "].when"), "Case needs when")
+                        problem(&errors, cat(a, &errors, cat(a, &errors, cat(a, &errors, where, ".cases["), index_path(&errors, a, c)), "].when"), "Case needs when")
                     }
                     c += 1usize
                 }
             }
         } else if str.eq(type_name, "foreach") {
-            if !truthy(value_of(config, "items")) { problem(&errors, cat(a, config_path, ".items"), "Foreach needs items") }
+            if !truthy(value_of(config, "items")) { problem(&errors, cat(a, &errors, config_path, ".items"), "Foreach needs items") }
         } else if str.eq(type_name, "fork") {
             let branches = value_of(step, "branches")
-            if !array_has(branches) || array_len(branches) < 2usize { problem(&errors, cat(a, where, ".branches"), "Fork needs branches") }
+            if !array_has(branches) || array_len(branches) < 2usize { problem(&errors, cat(a, &errors, where, ".branches"), "Fork needs branches") }
             let join_value = value_of(config, "join")
             if truthy(join_value) {
                 let (join_text, join_is_text) = string_of(join_value)
                 if !join_is_text || !(str.eq(join_text, "all") || str.eq(join_text, "any") || str.eq(join_text, "race")) {
-                    problem(&errors, cat(a, config_path, ".join"), "Fork join values")
+                    problem(&errors, cat(a, &errors, config_path, ".join"), "Fork join values")
                 }
             }
         } else if str.eq(type_name, "delay") {
@@ -988,7 +1015,7 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
                 problem(&errors, config_path, "Delay needs when")
             }
         } else if str.eq(type_name, "wait-signal") {
-            if !truthy(value_of(config, "signal")) { problem(&errors, cat(a, config_path, ".signal"), "Wait signal needs name") }
+            if !truthy(value_of(config, "signal")) { problem(&errors, cat(a, &errors, config_path, ".signal"), "Wait signal needs name") }
         } else if str.eq(type_name, "approval") {
             let (evidence, have_evidence) = get(config, "evidenceFields")
             if have_evidence {
@@ -1007,7 +1034,7 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
                         f += 1usize
                     }
                 }
-                if bad { problem(&errors, cat(a, config_path, ".evidenceFields"), "Select fields") }
+                if bad { problem(&errors, cat(a, &errors, config_path, ".evidenceFields"), "Select fields") }
             }
             let approvers = value_of(config, "approvers")
             let (approver_items, approvers_are_array) = items_of(approvers)
@@ -1019,7 +1046,7 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
                     q += 1usize
                 }
             }
-            if !approvers_are_array || !any_approver { problem(&errors, cat(a, config_path, ".approvers"), "Approval needs approver") }
+            if !approvers_are_array || !any_approver { problem(&errors, cat(a, &errors, config_path, ".approvers"), "Approval needs approver") }
             if approvers_are_array {
                 var q = 0usize
                 while q < approver_items.len {
@@ -1030,17 +1057,17 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
                     } else if !is_null(approver_items[q]) {
                         shown = "?"
                     }
-                    if !uuid_shape(shown) { problem(&errors, cat(a, config_path, ".approvers"), "Approver not user") }
+                    if !uuid_shape(shown) { problem(&errors, cat(a, &errors, config_path, ".approvers"), "Approver not user") }
                     q += 1usize
                 }
             }
-            if !truthy(value_of(config, "table")) { problem(&errors, cat(a, config_path, ".table"), "Approval needs table") }
-            if !truthy(value_of(config, "record")) { problem(&errors, cat(a, config_path, ".record"), "Approval needs record") }
+            if !truthy(value_of(config, "table")) { problem(&errors, cat(a, &errors, config_path, ".table"), "Approval needs table") }
+            if !truthy(value_of(config, "record")) { problem(&errors, cat(a, &errors, config_path, ".record"), "Approval needs record") }
             let (rule, have_rule) = get(config, "rule")
             if have_rule {
                 let (rule_text, rule_is_text) = string_of(rule)
                 if !rule_is_text || !(str.eq(rule_text, "any") || str.eq(rule_text, "all")) {
-                    problem(&errors, cat(a, config_path, ".rule"), "Approval rule values")
+                    problem(&errors, cat(a, &errors, config_path, ".rule"), "Approval rule values")
                 }
             }
             let (routing_value, have_routing) = get(config, "routing")
@@ -1050,53 +1077,54 @@ fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const
             if routing_present {
                 let (rules, rules_are_array) = items_of(routing_value)
                 if !rules_are_array {
-                    problem(&errors, cat(a, config_path, ".routing"), "Routing not list")
+                    problem(&errors, cat(a, &errors, config_path, ".routing"), "Routing not list")
                 } else {
                     var r = 0usize
                     while r < rules.len {
                         let verdict = routing(rules[r])
                         if verdict.len > 0usize {
-                            problem(&errors, cat(a, cat(a, cat(a, config_path, ".routing["), index_text(a, r)), "]"), "Routing rule unusable")
+                            problem(&errors, cat(a, &errors, cat(a, &errors, cat(a, &errors, config_path, ".routing["), index_path(&errors, a, r)), "]"), "Routing rule unusable")
                         }
                         r += 1usize
                     }
                 }
             }
         } else if str.eq(type_name, "webhook") {
-            if !truthy(value_of(config, "url")) { problem(&errors, cat(a, config_path, ".url"), "Webhook needs url") }
+            if !truthy(value_of(config, "url")) { problem(&errors, cat(a, &errors, config_path, ".url"), "Webhook needs url") }
         } else if str.eq(type_name, "emit-event") {
             let event_type = value_of(config, "eventType")
             if !truthy(event_type) {
-                problem(&errors, cat(a, config_path, ".eventType"), "Required")
+                problem(&errors, cat(a, &errors, config_path, ".eventType"), "Required")
             } else {
                 let (event_text, event_is_text) = string_of(event_type)
-                if !event_is_text || !event_type_pattern(event_text) { problem(&errors, cat(a, config_path, ".eventType"), "Invalid chars") }
+                if !event_is_text || !event_type_pattern(event_text) { problem(&errors, cat(a, &errors, config_path, ".eventType"), "Invalid chars") }
             }
             let schema_version = value_of(config, "schemaVersion")
-            if !is_integer(schema_version) || value_number(schema_version) < 1.0f64 { problem(&errors, cat(a, config_path, ".schemaVersion"), "Min") }
+            if !is_integer(schema_version) || value_number(schema_version) < 1.0f64 { problem(&errors, cat(a, &errors, config_path, ".schemaVersion"), "Min") }
             let payload = value_of(config, "payload")
             let (payload_members, payload_is_object) = members_of(payload)
-            if !truthy(payload) || !payload_is_object { problem(&errors, cat(a, config_path, ".payload"), "Payload not object") }
+            if !truthy(payload) || !payload_is_object { problem(&errors, cat(a, &errors, config_path, ".payload"), "Payload not object") }
             let (retain, have_retain) = get(config, "retainDays")
             if have_retain {
                 let days = value_number(retain)
-                if !is_integer(retain) || days < 1.0f64 || days > 3650.0f64 { problem(&errors, cat(a, config_path, ".retainDays"), "One of") }
+                if !is_integer(retain) || days < 1.0f64 || days > 3650.0f64 { problem(&errors, cat(a, &errors, config_path, ".retainDays"), "One of") }
             }
         } else if str.eq(type_name, "connector") {
-            if !truthy(value_of(config, "channel")) { problem(&errors, cat(a, config_path, ".channel"), "Connector needs channel") }
-            if !truthy(value_of(config, "action")) { problem(&errors, cat(a, config_path, ".action"), "Connector needs action") }
+            if !truthy(value_of(config, "channel")) { problem(&errors, cat(a, &errors, config_path, ".channel"), "Connector needs channel") }
+            if !truthy(value_of(config, "action")) { problem(&errors, cat(a, &errors, config_path, ".action"), "Connector needs action") }
         } else if str.eq(type_name, "python") {
-            if !truthy(value_of(config, "source")) { problem(&errors, cat(a, config_path, ".source"), "Python needs source") }
+            if !truthy(value_of(config, "source")) { problem(&errors, cat(a, &errors, config_path, ".source"), "Python needs source") }
         } else if str.eq(type_name, "create-record") || str.eq(type_name, "update-record") || str.eq(type_name, "delete-record") {
-            if !truthy(value_of(config, "table")) { problem(&errors, cat(a, config_path, ".table"), "Record step needs table") }
-            if !str.eq(type_name, "delete-record") && !record_values_present(config) { problem(&errors, cat(a, config_path, ".values"), "Record step needs values") }
+            if !truthy(value_of(config, "table")) { problem(&errors, cat(a, &errors, config_path, ".table"), "Record step needs table") }
+            if !str.eq(type_name, "delete-record") && !record_values_present(config) { problem(&errors, cat(a, &errors, config_path, ".values"), "Record step needs values") }
         } else if str.eq(type_name, "run-workflow") {
-            if !truthy(value_of(config, "workflowId")) { problem(&errors, cat(a, config_path, ".workflowId"), "Run workflow needs id") }
+            if !truthy(value_of(config, "workflowId")) { problem(&errors, cat(a, &errors, config_path, ".workflowId"), "Run workflow needs id") }
         }
         v += 1usize
     }
     if errors.failed { ret (.Null, Exhausted) }
-    ret (render(a, &errors), ok)
+    let (report, render_error) = render_report(a, &errors)
+    ret (report, render_error)
 }
 
 fn same_scalar(x: json.Value, y: json.Value) -> bool {
@@ -1131,29 +1159,39 @@ fn same_scalar(x: json.Value, y: json.Value) -> bool {
     ret same
 }
 
-// `{ok, errors: [{path, message}]}`.
-fn render(a: *mem.Arena, e: *const Errors) -> json.Value {
+// `{ok, errors: [{path, message}]}`; an arena failure is answered, not a null report.
+fn render(a: *mem.Arena, e: *const Errors) -> (json.Value, err) {
     let (o, o_error) = new_obj(a)
-    if o_error != ok { ret .Null }
+    if o_error != ok { ret (.Null, o_error) }
     var out = o
     let (list_out, list_error) = list.init[json.Value](a, e.items.len + 1usize)
-    if list_error != ok { ret .Null }
+    if list_error != ok { ret (.Null, list_error) }
     var rendered = list_out
     var at = 0usize
     while at < e.items.len {
         let (po, po_error) = new_obj(a)
-        if po_error != ok { ret .Null }
+        if po_error != ok { ret (.Null, po_error) }
         var one = po
         let p1 = put(&one, "path", text(e.items.items[at].path))
+        if p1 != ok { ret (.Null, p1) }
         let p2 = put(&one, "message", text(e.items.items[at].message))
+        if p2 != ok { ret (.Null, p2) }
         let pushed = list.push[json.Value](&rendered, obj_value(&one))
-        if p1 != ok || p2 != ok || pushed != ok { ret .Null }
+        if pushed != ok { ret (.Null, pushed) }
         at += 1usize
     }
     let ok_put = put(&out, "ok", json.Value{ Bool: e.items.len == 0usize })
+    if ok_put != ok { ret (.Null, ok_put) }
     let errors_put = put(&out, "errors", json.Value{ Array: list.slice_const[json.Value](&rendered) })
-    if ok_put != ok || errors_put != ok { ret .Null }
-    ret obj_value(&out)
+    if errors_put != ok { ret (.Null, errors_put) }
+    ret (obj_value(&out), ok)
+}
+
+// A null report never stands in for an allocation failure.
+fn render_report(a: *mem.Arena, errors: *Errors) -> (json.Value, err) {
+    let (report, render_error) = render(a, errors)
+    if render_error != ok { ret (.Null, Exhausted) }
+    ret (report, ok)
 }
 
 // --- execution keys -------------------------------------------------------------------------------------------------
@@ -1176,7 +1214,10 @@ fn loop_frame(a: *mem.Arena, step_id: str, index: usize) -> (str, err) {
     if head_error != ok { ret ("", head_error) }
     let (colon, colon_error) = str.concat(a, head, ":")
     if colon_error != ok { ret ("", colon_error) }
-    let (frame, frame_error) = str.concat(a, colon, index_text(a, index))
+    // an index that cannot be rendered must not collapse every iteration onto one key
+    let (digits, digits_error) = index_text_result(a, index)
+    if digits_error != ok { ret ("", digits_error) }
+    let (frame, frame_error) = str.concat(a, colon, digits)
     ret (frame, frame_error)
 }
 

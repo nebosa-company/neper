@@ -232,6 +232,8 @@ fn lex(a: *mem.Arena, src: str, limits: Limits, out: []Token) -> (usize, err) {
                 if v_error != ok { ret (0usize, Overflow) }
                 t.kind = T_INT
                 t.int_value = v
+                // map keys are the token's decimal text
+                t.text = text
             }
             // JEXL's numeric suffixes L l D d F f H h are accepted and ignored
             if j < src.len && (src[j] == 76u8 || src[j] == 108u8) && !(j + 1usize < src.len && is_name(src[j + 1usize])) { j += 1usize }
@@ -348,12 +350,22 @@ const OP_SIZE: u8 = 24u8
 fn parse_expr(p: *Parser) -> (u32, err) {
     if p.depth >= p.max_depth { ret (0u32, Limit) }
     p.depth += 1u32
-    let (r, e) = parse_ternary(p)
+    let (r, e) = parse_ternary_body(p)
     p.depth -= 1u32
     ret (r, e)
 }
 
 fn parse_ternary(p: *Parser) -> (u32, err) {
+    if p.depth >= p.max_depth { ret (0u32, Limit) }
+    p.depth += 1u32
+    let (r, e) = parse_ternary_body(p)
+    p.depth -= 1u32
+    ret (r, e)
+}
+
+// The expression's outermost ternary is entered by `parse_expr`, which already counts its
+// frame; the right-recursive calls below come back through the counted wrapper.
+fn parse_ternary_body(p: *Parser) -> (u32, err) {
     let (cond, e1) = parse_or(p)
     if e1 != ok { ret (0u32, e1) }
     if punct_is(p, "?:") {
@@ -991,7 +1003,8 @@ fn push_value(b: *str.Builder, v: Value, depth: u32) -> err {
     case .Int as i:
         ret str.push_i64(b, i)
     case .Float as f:
-        if f == f && f - f == 0.0f64 && f == f64(i64(f)) && f < 1000000000000000.0f64 && f > -1000000000000000.0f64 {
+        // the range guards come before the narrowing cast, which traps outside i64
+        if f == f && f - f == 0.0f64 && f < 1000000000000000.0f64 && f > -1000000000000000.0f64 && f == f64(i64(f)) {
             try str.push_i64(b, i64(f))
             ret str.push(b, ".0")
         }
@@ -1176,8 +1189,9 @@ fn arith(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err) {
         if fy == 0.0f64 { ret (no_value(), DivideByZero) }
         // Java's truncated remainder: x - trunc(x / y) * y
         let q = fx / fy
-        var t = f64(i64(q))
-        if q > 9.0e15f64 || q < -9.0e15f64 { ret (no_value(), Overflow) }
+        // guard NaN and the range before the narrowing cast
+        if q != q || q > 9.0e15f64 || q < -9.0e15f64 { ret (no_value(), Overflow) }
+        let t = f64(i64(q))
         ret (Value { Float: fx - t * fy }, ok)
     }
     ret (no_value(), Type)
@@ -1295,6 +1309,48 @@ fn eval(it: *Interp, id: u32) -> (Value, err) {
     ret (v, e)
 }
 
+// One binary operator applied to two evaluated operands.
+fn binary_op(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err) {
+    if op == OP_EQ { ret (Value { Bool: equals(x, y) }, ok) }
+    if op == OP_NE { ret (Value { Bool: !equals(x, y) }, ok) }
+    if op == OP_IN || op == OP_NIN {
+        let (found, ce) = contains(y, x)
+        if ce != ok { ret (no_value(), ce) }
+        if op == OP_NIN { ret (Value { Bool: !found }, ok) }
+        ret (Value { Bool: found }, ok)
+    }
+    if op == OP_STARTS || op == OP_ENDS {
+        var s: str = ""
+        var t: str = ""
+        switch x {
+        case .Str as v:
+            s = v
+        default:
+            ret (no_value(), Type)
+        }
+        switch y {
+        case .Str as v:
+            t = v
+        default:
+            ret (no_value(), Type)
+        }
+        if t.len > s.len { ret (Value { Bool: false }, ok) }
+        if op == OP_STARTS { ret (Value { Bool: same(s[0usize..t.len], t) }, ok) }
+        ret (Value { Bool: same(s[s.len - t.len..s.len], t) }, ok)
+    }
+    if op == OP_LT || op == OP_LE || op == OP_GT || op == OP_GE {
+        let (c, ce) = compare(x, y)
+        if ce != ok { ret (no_value(), ce) }
+        if c == 2i32 { ret (Value { Bool: false }, ok) }
+        if op == OP_LT { ret (Value { Bool: c < 0i32 }, ok) }
+        if op == OP_LE { ret (Value { Bool: c <= 0i32 }, ok) }
+        if op == OP_GT { ret (Value { Bool: c > 0i32 }, ok) }
+        ret (Value { Bool: c >= 0i32 }, ok)
+    }
+    let (v, e) = arith(it, op, x, y)
+    ret (v, e)
+}
+
 fn eval_args(it: *Interp, first: u32, count: u32, out: []Value) -> err {
     var i = 0usize
     while i < usize(count) {
@@ -1342,20 +1398,66 @@ fn eval_node(it: *Interp, id: u32) -> (Value, err) {
         ret (Value { Map: pairs[0usize..usize(n.c)] }, ok)
     }
     if n.kind == N_AND {
-        let (l, le) = eval(it, n.a)
-        if le != ok { ret (no_value(), le) }
-        if !truthy(l) { ret (Value { Bool: false }, ok) }
-        let (r, re) = eval(it, n.b)
-        if re != ok { ret (no_value(), re) }
-        ret (Value { Bool: truthy(r) }, ok)
+        // Fold the left-associative spine bottom-up: a flat `a && a && ...` chain is not
+        // nesting and must not recurse once per operator.
+        var count = 0usize
+        var at = id
+        while it.program.nodes[usize(at)].kind == N_AND {
+            count += 1usize
+            at = it.program.nodes[usize(at)].a
+        }
+        let (spine, spine_error) = mem.alloc[u32](it.arena, count)
+        if spine_error != ok { ret (no_value(), spine_error) }
+        at = id
+        var w = 0usize
+        while it.program.nodes[usize(at)].kind == N_AND {
+            spine[w] = at
+            w += 1usize
+            at = it.program.nodes[usize(at)].a
+        }
+        let (first, first_error) = eval(it, at)
+        if first_error != ok { ret (no_value(), first_error) }
+        var value = first
+        var k = count
+        while k > 0usize {
+            k -= 1usize
+            if !truthy(value) { ret (Value { Bool: false }, ok) }
+            let node = it.program.nodes[usize(spine[k])]
+            let (r, re) = eval(it, node.b)
+            if re != ok { ret (no_value(), re) }
+            value = Value { Bool: truthy(r) }
+        }
+        ret (value, ok)
     }
     if n.kind == N_OR {
-        let (l, le) = eval(it, n.a)
-        if le != ok { ret (no_value(), le) }
-        if truthy(l) { ret (Value { Bool: true }, ok) }
-        let (r, re) = eval(it, n.b)
-        if re != ok { ret (no_value(), re) }
-        ret (Value { Bool: truthy(r) }, ok)
+        var count = 0usize
+        var at = id
+        while it.program.nodes[usize(at)].kind == N_OR {
+            count += 1usize
+            at = it.program.nodes[usize(at)].a
+        }
+        let (spine, spine_error) = mem.alloc[u32](it.arena, count)
+        if spine_error != ok { ret (no_value(), spine_error) }
+        at = id
+        var w = 0usize
+        while it.program.nodes[usize(at)].kind == N_OR {
+            spine[w] = at
+            w += 1usize
+            at = it.program.nodes[usize(at)].a
+        }
+        let (first, first_error) = eval(it, at)
+        if first_error != ok { ret (no_value(), first_error) }
+        var value = first
+        var k = count
+        while k > 0usize {
+            k -= 1usize
+            if truthy(value) { ret (Value { Bool: true }, ok) }
+            let node = it.program.nodes[usize(spine[k])]
+            let (r, re) = eval(it, node.b)
+            if re != ok { ret (no_value(), re) }
+            value = Value { Bool: truthy(r) }
+        }
+        ret (value, ok)
     }
     if n.kind == N_TERNARY {
         let (c, ce) = eval(it, n.a)
@@ -1446,48 +1548,37 @@ fn eval_node(it: *Interp, id: u32) -> (Value, err) {
         ret (no_value(), Type)
     }
     if n.kind == N_BINARY {
-        let (x, xe) = eval(it, n.a)
-        if xe != ok { ret (no_value(), xe) }
-        let (y, ye) = eval(it, n.b)
-        if ye != ok { ret (no_value(), ye) }
-        if n.op == OP_EQ { ret (Value { Bool: equals(x, y) }, ok) }
-        if n.op == OP_NE { ret (Value { Bool: !equals(x, y) }, ok) }
-        if n.op == OP_IN || n.op == OP_NIN {
-            let (found, ce) = contains(y, x)
-            if ce != ok { ret (no_value(), ce) }
-            if n.op == OP_NIN { ret (Value { Bool: !found }, ok) }
-            ret (Value { Bool: found }, ok)
+        // Fold the left-associative spine bottom-up: `1 + 1 + ...` is flat syntax, and a
+        // long chain must not recurse once per operator.
+        var count = 0usize
+        var at = id
+        while it.program.nodes[usize(at)].kind == N_BINARY {
+            count += 1usize
+            at = it.program.nodes[usize(at)].a
         }
-        if n.op == OP_STARTS || n.op == OP_ENDS {
-            var s: str = ""
-            var t: str = ""
-            switch x {
-            case .Str as v:
-                s = v
-            default:
-                ret (no_value(), Type)
-            }
-            switch y {
-            case .Str as v:
-                t = v
-            default:
-                ret (no_value(), Type)
-            }
-            if t.len > s.len { ret (Value { Bool: false }, ok) }
-            if n.op == OP_STARTS { ret (Value { Bool: same(s[0usize..t.len], t) }, ok) }
-            ret (Value { Bool: same(s[s.len - t.len..s.len], t) }, ok)
+        let (spine, spine_error) = mem.alloc[u32](it.arena, count)
+        if spine_error != ok { ret (no_value(), spine_error) }
+        at = id
+        var w = 0usize
+        while it.program.nodes[usize(at)].kind == N_BINARY {
+            spine[w] = at
+            w += 1usize
+            at = it.program.nodes[usize(at)].a
         }
-        if n.op == OP_LT || n.op == OP_LE || n.op == OP_GT || n.op == OP_GE {
-            let (c, ce) = compare(x, y)
-            if ce != ok { ret (no_value(), ce) }
-            if c == 2i32 { ret (Value { Bool: false }, ok) }
-            if n.op == OP_LT { ret (Value { Bool: c < 0i32 }, ok) }
-            if n.op == OP_LE { ret (Value { Bool: c <= 0i32 }, ok) }
-            if n.op == OP_GT { ret (Value { Bool: c > 0i32 }, ok) }
-            ret (Value { Bool: c >= 0i32 }, ok)
+        let (first, first_error) = eval(it, at)
+        if first_error != ok { ret (no_value(), first_error) }
+        var value = first
+        var k = count
+        while k > 0usize {
+            k -= 1usize
+            let node = it.program.nodes[usize(spine[k])]
+            let (y, ye) = eval(it, node.b)
+            if ye != ok { ret (no_value(), ye) }
+            let (next, next_error) = binary_op(it, node.op, value, y)
+            if next_error != ok { ret (no_value(), next_error) }
+            value = next
         }
-        let (v, e) = arith(it, n.op, x, y)
-        ret (v, e)
+        ret (value, ok)
     }
     if n.kind == N_PROP {
         let (base, be) = eval(it, n.a)
