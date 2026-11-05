@@ -507,6 +507,8 @@ fn vectors_28() -> str {
     ret "{\"k\":\"G\",\"graph\":{\"A\":\"{A}\",\"B\":\"1\"},\"expect\":\"41,41|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{B}\",\"B\":\"{B}\",\"C\":\"{D}\",\"D\":\"1\"},\"expect\":\"42,42|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{B}\"},\"expect\":\"42,42|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{A}\",\"B\":\"{C} + {D}\",\"C\":\"{A} + {C}\",\"D\":\"{D}\"},\"expect\":\"41,41|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"1\",\"C\":\"{A}\"},\"expect\":\"-|41,42,43\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{A} + {B} + {D} + {E}\",\"C\":\"{A}\",\"D\":\"{F}\",\"E\":\"{E}\",\"F\":\"{E}\"},\"expect\":\"42,42|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"1\",\"C\":\"{C}\"},\"expect\":\"43,43|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{B} + {C}\",\"B\":\"{B}\",\"C\":\"{C}\"},\"expect\":\"42,42|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{B}\"},\"expect\":\"42,42|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{A}\",\"B\":\"1\",\"C\":\"{B}\"},\"expect\":\"41,41|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{A}\",\"C\":\"1\",\"D\":\"1\"},\"expect\":\"-|41,42,43,44\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{A} + {B} + {C}\",\"B\":\"{B}\",\"C\":\"1\"},\"expect\":\"41,41|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{A}\",\"C\":\"1\",\"D\":\"1\"},\"expect\":\"-|41,42,43,44\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{D}\",\"B\":\"1\",\"C\":\"{A} + {E}\",\"D\":\"{C}\",\"E\":\"{A}\"},\"expect\":\"41,44,43,41|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"1\",\"C\":\"{C} + {D}\",\"D\":\"{E} + {F}\",\"E\":\"{B} + {E}\",\"F\":\"{B}\"},\"expect\":\"43,43|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{E}\",\"B\":\"{A}\",\"C\":\"{A} + {C} + {E}\",\"D\":\"{E}\",\"E\":\"{E}\"},\"expect\":\"45,45|-\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"1\",\"B\":\"{D}\",\"C\":\"1\",\"D\":\"1\",\"E\":\"1\",\"F\":\"1\"},\"expect\":\"-|41,44,42,43,45,46\"}\n{\"k\":\"G\",\"graph\":{\"A\":\"{D}\",\"B\":\"{B}\",\"C\":\"{A}\",\"D\":\"{A} + {D}\",\"E\":\"{C}\"},\"expect\":\"41,44,41|-\"}\n"
 }
 
+fn name_of(a: *mem.Arena, i: usize) -> str { ret f.join(a, "F", f.number_text(a, f64(i))) }
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // #728 and #727: malformed XML and repeated-colon UTC offsets are rejected.
     let (full, full_error) = flib.build(a)
@@ -554,6 +556,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_26(), &registry) != 0u8 { os.exit(27i32) }
     if run(a, vectors_27(), &registry) != 0u8 { os.exit(28i32) }
     if run(a, vectors_28(), &registry) != 0u8 { os.exit(29i32) }
+    // #140: nesting past the parser's depth limit is a complexity refusal, not a stack overflow.
+    let (deepb, deepbe) = str.builder(a, 200002usize)
+    if deepbe != ok { os.exit(97i32) }
+    var deep = deepb
+    var di = 0usize
+    while di < 100000usize {
+        try str.push_byte(&deep, 40u8)
+        di += 1usize
+    }
+    try str.push_byte(&deep, 49u8)
+    let (_, deep_diag) = f.parse(a, str.done(&deep), 0usize)
+    if deep_diag.good || !deep_diag.complexity { os.exit(97i32) }
+    // #140: a numeric literal longer than the old 70-byte buffer is still a number.
+    let (longb, longbe) = str.builder(a, 80usize)
+    if longbe != ok { os.exit(98i32) }
+    var lb = longb
+    var li = 0usize
+    while li < 75usize {
+        try str.push_byte(&lb, 57u8)
+        li += 1usize
+    }
+    let longv = f.evaluate(a, str.done(&lb), &ctx, &full)
+    if f.is_error(longv) { os.exit(98i32) }
+    // #140: a chain deeper than the 64-name resolving stack answers an error, not a runaway.
+    let (chain, chain_error) = mem.alloc[f.Formula](a, 70usize)
+    if chain_error != ok { os.exit(99i32) }
+    var ci = 0usize
+    while ci < 70usize {
+        let cname = f.join(a, "F", f.number_text(a, f64(ci)))
+        var csource = "{F68}"
+        if ci + 1usize < 70usize { csource = f.join(a, f.join(a, "{", name_of(a, ci + 1usize)), "}") }
+        chain[ci] = f.Formula { name: cname, source: csource }
+        ci += 1usize
+    }
+    var cctx: f.Context = zero
+    cctx.formulas = chain[0..]
+    let cyc = f.evaluate(a, "{F0}", &cctx, &full)
+    if !f.is_error(cyc) { os.exit(99i32) }
     try io.print("algo formula ok")
     ret ok
 }

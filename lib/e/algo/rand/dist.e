@@ -74,16 +74,15 @@ fn poisson(r: *rand.Pcg64, mean: f64) -> u64 {
 fn binomial(r: *rand.Pcg64, n: u64, p: f64) -> u64 {
     if n == 0u64 || p <= 0.0f64 { ret 0u64 }
     if p >= 1.0f64 { ret n }
+    // Sample the small tail always: with p > 1/2 the inversion branch (taken when
+    // n*(1-p) < 30) would start from an underflowed q^n and return n every time.
+    if p > 0.5f64 { ret n - binomial(r, n, 1.0f64 - p) }
     let mean = f64(n) * p
     if mean < 30.0f64 || f64(n) * (1.0f64 - p) < 30.0f64 {
         // Inversion over the CDF.
         let q = 1.0f64 - p
-        var probability = 1.0f64
-        var i = 0u64
-        while i < n {
-            probability = probability * q
-            i += 1u64
-        }
+        // q^n in one step: the repeated product was O(n) and underflowed to 0 for large n.
+        var probability = math.pow[f64](q, f64(n))
         var u = rand.pcg64_f64(r)
         var k = 0u64
         var cumulative = probability
@@ -409,6 +408,9 @@ fn halton(index: u64, out: []f64) -> err {
 // Corput in base 2).
 fn sobol(index: u64, out: []f64) -> err {
     if out.len > 4usize { ret Invalid }
+    // Only the low 32 gray-code bits are folded, so a larger index would alias one below
+    // 2^32; reject it instead of returning the same point (quasi.sobol does the same).
+    if index >= 4294967296u64 { ret Invalid }
     // Gray-code form: the point differs from its predecessor in one direction.
     let gray = index ^ (index >> 1u64)
     var d = 0usize

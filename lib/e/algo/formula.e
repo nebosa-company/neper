@@ -1037,8 +1037,12 @@ fn is_ws(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 13u8 || c == 10u8 }
 // The text of a number literal as JavaScript's `Number()` reads it: a literal with an exponent marker and no digits
 // is NaN.
 fn literal_value(a: *mem.Arena, s: str) -> f64 {
-    var buffer: [80]u8 = zero
-    if s.len == 0usize || s.len > 70usize { ret nan() }
+    // Sized from the token, not a fixed 70: a longer literal is still a number.
+    var buffer: []u8 = zero
+    if s.len == 0usize { ret nan() }
+    let (allocated, allocated_error) = mem.alloc[u8](a, s.len + 2usize)
+    if allocated_error != ok { ret nan() }
+    buffer = allocated
     var n = 0usize
     var i = 0usize
     if s[0usize] == 46u8 {
@@ -1203,7 +1207,12 @@ fn zero_nodes() -> []const Node {
     ret none
 }
 
-type Parser = struct { a: *mem.Arena, src: str, tokens: []const Token, at: usize, failed: bool, message: str, pos: usize }
+// `depth` counts live recursive-descent frames and `too_deep` records a refusal so
+// `parse` can report it with `complexity` set; both keep a pathological formula from
+// exhausting the native stack before the node cap is reachable.
+type Parser = struct { a: *mem.Arena, src: str, tokens: []const Token, at: usize, failed: bool, message: str, pos: usize, depth: usize, too_deep: bool }
+
+const MAX_PARSE_DEPTH: usize = 256usize
 
 fn fail(p: *Parser, message: str, pos: usize) {
     if !p.failed {
@@ -1222,6 +1231,22 @@ fn describe(p: *Parser, t: Token) -> str {
         ret "false"
     }
     ret t.s
+}
+
+// Count a recursive-descent frame; a formula nested past MAX_PARSE_DEPTH is refused as
+// a complexity limit instead of recursing into the native stack.
+fn enter_parse(p: *Parser) -> bool {
+    p.depth += 1usize
+    if p.depth > MAX_PARSE_DEPTH {
+        p.too_deep = true
+        fail(p, "Formula exceeds maximum complexity", 0usize)
+        ret false
+    }
+    ret true
+}
+
+fn leave_parse(p: *Parser) {
+    if p.depth > 0usize { p.depth -= 1usize }
 }
 
 fn peek(p: *Parser) -> Token { ret p.tokens[p.at] }
@@ -1257,6 +1282,8 @@ fn node2(p: *Parser, kind: NodeKind, op: str, left: Node, right: Node) -> Node {
 }
 
 fn parse_ternary(p: *Parser) -> Node {
+    if !enter_parse(p) { ret leaf(.Null) }
+    defer leave_parse(p)
     let cond = parse_or(p)
     if p.failed { ret cond }
     if is_punct(p, "?") {
@@ -1357,6 +1384,8 @@ fn parse_multiplicative(p: *Parser) -> Node {
 }
 
 fn parse_exponent(p: *Parser) -> Node {
+    if !enter_parse(p) { ret leaf(.Null) }
+    defer leave_parse(p)
     let left = parse_unary(p)
     if p.failed { ret left }
     if is_op(p, "^") {
@@ -1369,6 +1398,8 @@ fn parse_exponent(p: *Parser) -> Node {
 }
 
 fn parse_unary(p: *Parser) -> Node {
+    if !enter_parse(p) { ret leaf(.Null) }
+    defer leave_parse(p)
     if is_op(p, "-") || is_op(p, "+") || is_op(p, "!") {
         let op = peek(p).s
         p.at += 1usize
@@ -1387,6 +1418,11 @@ fn parse_unary(p: *Parser) -> Node {
 
 // The arguments between `open` and `close`; a trailing comma is tolerated.
 fn parse_arg_list(p: *Parser, open: str, close: str) -> []const Node {
+    if !enter_parse(p) {
+        var empty: []const Node = zero
+        ret empty
+    }
+    defer leave_parse(p)
     expect_punct(p, open)
     if p.failed { ret zero_nodes() }
     // Collected into a growing buffer, then trimmed.
@@ -1444,6 +1480,8 @@ fn parse_arg_list(p: *Parser, open: str, close: str) -> []const Node {
 }
 
 fn parse_primary(p: *Parser) -> Node {
+    if !enter_parse(p) { ret leaf(.Null) }
+    defer leave_parse(p)
     let t = peek(p)
     if t.kind == T_NUMBER {
         p.at += 1usize
@@ -1515,13 +1553,23 @@ fn count_nodes(node: Node) -> usize {
 
 // Parse formula source into a tree. `max_nodes` caps the node count (0 is the default, 10,000); a longer formula
 // is refused with `complexity` set.
+fn max_nodes_or_default(max_nodes: usize) -> usize {
+    if max_nodes == 0usize { ret 10000usize }
+    ret max_nodes
+}
+
 fn parse(a: *mem.Arena, source: str, max_nodes: usize) -> (Node, Diag) {
     let (tokens, tokenize_diag) = tokenize(a, source)
     if !tokenize_diag.good { ret (leaf(.Null), tokenize_diag) }
-    var p = Parser { a: a, src: source, tokens: tokens, at: 0usize, failed: false, message: "", pos: 0usize }
+    var p = Parser { a: a, src: source, tokens: tokens, at: 0usize, failed: false, message: "", pos: 0usize, depth: 0usize, too_deep: false }
     if tokens[0usize].kind == T_EOF { ret (leaf(.Null), Diag { good: false, message: "Empty formula", offset: 0usize, complexity: false }) }
+    // A token stream far past the node cap cannot parse into an acceptable tree; refusing
+    // it before the descent keeps the recursion bound regardless of token shape.
+    if tokens.len > (max_nodes_or_default(max_nodes) * 16usize) {
+        ret (leaf(.Null), Diag { good: false, message: "Formula exceeds maximum complexity", offset: 0usize, complexity: true })
+    }
     let node = parse_ternary(&p)
-    if p.failed { ret (node, Diag { good: false, message: p.message, offset: utf16_offset(source, p.pos), complexity: false }) }
+    if p.failed { ret (node, Diag { good: false, message: p.message, offset: utf16_offset(source, p.pos), complexity: p.too_deep }) }
     if tokens[p.at].kind != T_EOF {
         let t = tokens[p.at]
         let message = join3(a, "Unexpected '", describe(&p, t), "' after expression")
@@ -1890,11 +1938,12 @@ fn circular_error(ev: *Evaluator, from: usize, name: str) -> Value {
     ret ref_error(join(ev.a, "Circular reference: ", path))
 }
 
-fn push_name(ev: *Evaluator, name: str) {
-    if ev.resolving_count < ev.resolving.len {
-        ev.resolving[ev.resolving_count] = name
-        ev.resolving_count += 1usize
-    }
+fn push_name(ev: *Evaluator, name: str) -> bool {
+    // A full stack must refuse: continuing would pop frames that belong to callers.
+    if ev.resolving_count >= ev.resolving.len { ret false }
+    ev.resolving[ev.resolving_count] = name
+    ev.resolving_count += 1usize
+    ret true
 }
 
 fn pop_name(ev: *Evaluator) {
@@ -1916,12 +1965,12 @@ fn eval_formula(ev: *Evaluator, name: str, source: str) -> Value {
             ev.cache[ev.cache_count] = Cached { name: name, node: node, parsed: true }
             ev.cache_count += 1usize
         }
-        push_name(ev, name)
+        if !push_name(ev, name) { ret limit_error("Circular reference chain exceeds the resolving limit") }
         let result = eval(ev, node, &ev.empty, false)
         pop_name(ev)
         ret result
     }
-    push_name(ev, ev.cache[cached].name)
+    if !push_name(ev, ev.cache[cached].name) { ret limit_error("Circular reference chain exceeds the resolving limit") }
     let result = eval(ev, ev.cache[cached].node, &ev.empty, false)
     pop_name(ev)
     ret result

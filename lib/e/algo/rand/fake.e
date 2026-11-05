@@ -10,6 +10,7 @@
 // `word`) answers a borrowed string with the lifetime of the static table.
 
 use e.algo.rand
+use e.mem
 use e.str
 
 type Locale = enum u8 { En, De, Fr, Es }
@@ -28,8 +29,13 @@ fn below(f: *Faker, n: usize) -> usize {
 // An integer in [lo, hi] inclusive; `lo > hi` answers `lo`.
 fn int_between(f: *Faker, lo: i64, hi: i64) -> i64 {
     if hi <= lo { ret lo }
-    let span = u64(hi - lo) + 1u64
-    ret lo + i64(rand.pcg64_bounded(&f.rng, span))
+    // Wrapping arithmetic covers ranges wider than i64: hi - lo may be 2^64 - 1.
+    let span = mem.bitcast[u64](hi) -% mem.bitcast[u64](lo) +% 1u64
+    if span == 0u64 {
+        // The full i64 range: no bounded draw to make; add the raw 64-bit value.
+        ret mem.bitcast[i64](mem.bitcast[u64](lo) +% rand.pcg64_next(&f.rng))
+    }
+    ret mem.bitcast[i64](mem.bitcast[u64](lo) +% rand.pcg64_bounded(&f.rng, span))
 }
 
 // True `percent` times in a hundred.
@@ -329,6 +335,9 @@ fn luhn_check_digit(s: str) -> u8 {
     var i = 0usize
     while i < s.len {
         let pos = s.len - 1usize - i
+        // A digit byte only: the public form is unchecked by callers, so reject the rest
+        // the way luhn_valid does (byte below '0' would underflow the u8 subtraction).
+        if s[pos] < 48u8 || s[pos] > 57u8 { ret 0u8 }
         var d = u32(s[pos] - 48u8)
         if i % 2usize == 0usize {
             d = d * 2u32
@@ -384,7 +393,14 @@ fn civil(days: i64) -> (i64, i64, i64) {
 fn push_padded(b: *str.Builder, v: i64, width: usize) -> err {
     var digits: [20]u8 = zero
     var n = 0usize
-    var rest = u64(v)
+    var negative = false
+    if v < 0i64 {
+        negative = true
+        // A year below 0 is ISO-8601 "-YYYY"; take the magnitude without negating i64::MIN.
+        try str.push_byte(b, 45u8)
+    }
+    var rest = mem.bitcast[u64](v)
+    if negative { rest = 0u64 -% rest }
     while rest > 0u64 {
         digits[n] = 48u8 + u8(rest % 10u64)
         rest = rest / 10u64

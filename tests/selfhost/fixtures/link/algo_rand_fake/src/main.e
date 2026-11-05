@@ -223,6 +223,8 @@ fn check_luhn() -> i32 {
     if !fake.luhn_valid("79927398713") { ret 71i32 }
     if fake.luhn_valid("79927398710") { ret 72i32 }
     if fake.luhn_valid("") || fake.luhn_valid("4") || fake.luhn_valid("12a4") { ret 73i32 }
+    // #247: the public check digit refuses non-digits instead of underflowing.
+    if fake.luhn_check_digit("12-3") != 0u8 || fake.luhn_check_digit("12a3") != 0u8 { ret 74i32 }
     ret 0i32
 }
 
@@ -255,6 +257,18 @@ fn check_streams(a: *mem.Arena) -> i32 {
         k += 1usize
     }
     if fake.int_between(&f, 9i64, 2i64) != 9i64 { ret 84i32 }
+    // #247: ranges wider than i64 no longer trap, and a negative year is ISO-8601.
+    let wide = fake.int_between(&f, -1i64, 9223372036854775807i64)
+    if wide < -1i64 { ret 85i32 }
+    let full = fake.int_between(&f, -9223372036854775807i64 - 1i64, 9223372036854775807i64)
+    if full == 1i64 && wide == 2i64 { ret 85i32 }
+    let (nb, ne) = str.builder(a, 128usize)
+    if ne != ok { ret 86i32 }
+    var nbv = nb
+    var nf = fake.faker(2u64, fake.Locale.En)
+    if fake.date(&nf, &nbv, -800000i64, -800000i64) != ok { ret 87i32 }
+    let neg = str.done(&nbv)
+    if neg.len < 2usize || neg[0] != 45u8 || neg.len > 12usize { ret 87i32 }
     ret 0i32
 }
 

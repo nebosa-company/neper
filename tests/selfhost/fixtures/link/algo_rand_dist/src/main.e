@@ -410,6 +410,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dist.sobol(7u64, sobol_point[..]) != ok || sobol_point[0usize] != 0.125f64 || sobol_point[1usize] != 0.625f64 || sobol_point[2usize] != 0.375f64 || sobol_point[3usize] != 0.125f64 { os.exit(6i32) }
     var five: [5]f64 = zero
     if dist.sobol(1u64, five[..]) != dist.Invalid { os.exit(6i32) }
+    // #11: an index at or past 2^32 would alias onto a lower point; refuse it.
+    if dist.sobol(4294967296u64, sobol_point[..]) != dist.Invalid { os.exit(7i32) }
+    // #11: p near 1 must not return n every draw (the inverted tail underflowed).
+    var stuck = 0usize
+    var bd = 0usize
+    while bd < 200usize {
+        if dist.binomial(&r, 1000u64, 0.98f64) >= 1000u64 { stuck += 1usize }
+        bd += 1usize
+    }
+    if stuck > 0usize { os.exit(8i32) }
 
     try io.print("algo rand dist ok\n")
     ret ok
