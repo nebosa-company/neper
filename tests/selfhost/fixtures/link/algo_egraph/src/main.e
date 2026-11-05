@@ -51,6 +51,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let _ = eg.merge(&g, la, lb)
     eg.rebuild(&g)
     if eg.find(&g, fa) != eg.find(&g, fb) || eg.node_count(&g) != 3usize || eg.class_count(&g) != 2usize { os.exit(2i32) }
+    // the extraction scratch is `nodes` slots, not `node_count`: the retired duplicate is still addressed
+    var short_costs: [3]u32 = zero
+    var short_nodes: [3]u32 = zero
+    var no_costs: [0]u32 = zero
+    let (_, short_error) = eg.extract(&g, fa, no_costs[..], short_costs[..], short_nodes[..])
+    if short_error != eg.TooSmall { os.exit(2i32) }
 
     // 3: the egg README example.
     var rules: [4]eg.Rule = zero
@@ -166,6 +172,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     max_costs[0usize] = 4294967295u32
     let (max_cost, max_extract_error) = eg.extract(&g, max_leaf, max_costs[..], best_cost[..], best_node[..])
     if max_extract_error != ok || max_cost != 4294967295u32 || best_node[usize(eg.find(&g, max_leaf))] != max_leaf { os.exit(6i32) }
+
+    // 7: a shared-term doubling chain saturates instead of wrapping, and stays reachable.
+    let (g8, e8) = eg.egraph(op[..], ca[..], cb[..], parent[..], rank[..], table[..])
+    if e8 != ok { os.exit(7i32) }
+    g = g8
+    let (dbl_leaf, dbl_leaf_error) = eg.add_leaf(&g, sym(0u32))
+    if dbl_leaf_error != ok { os.exit(7i32) }
+    var doubled = dbl_leaf
+    var level = 0usize
+    while level < 33usize {
+        let (next_double, double_error) = eg.add(&g, add_op(), doubled, doubled)
+        if double_error != ok { os.exit(7i32) }
+        doubled = next_double
+        level += 1usize
+    }
+    let (saturated_cost, saturated_error) = eg.extract(&g, doubled, costs[..], best_cost[..], best_node[..])
+    if saturated_error != ok || saturated_cost != none || best_node[usize(eg.find(&g, doubled))] == none { os.exit(7i32) }
 
     try io.print("algo egraph ok\n")
     ret ok

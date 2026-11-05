@@ -303,8 +303,9 @@ fn saturate(g: *EGraph, rules: []const Rule, max_iterations: usize, matches: []u
 // The cheapest term cost of `root`'s class: a node costs `cost_of_op[op]` (1
 // when `op` is past the slice, so an empty slice is egg's AstSize) plus its
 // children's best. `best_node` marks reachability, so `best_cost` may hold the
-// greatest valid cost; both arrays (`node_count` long, indexed by class) hold
-// the fixpoint for `extract_write`.
+// greatest valid cost (an overflowed sum saturates to `none()`, which is a valid
+// cost); both arrays hold `g.nodes` slots, indexed by class after `find`, because
+// retired duplicate slots stay addressable until the next rebuild.
 fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, best_node: []u32) -> (u32, err) {
     if best_cost.len < g.nodes || best_node.len < g.nodes { ret (0u32, TooSmall) }
     if usize(root) >= g.nodes { ret (0u32, Invalid) }
