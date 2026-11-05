@@ -57,7 +57,7 @@ type Overflow = enum u8 { Visible, Hidden, Scroll, Auto, Clip }
 type Visibility = enum u8 { Visible, Hidden, Collapse }
 type BorderStyle = enum u8 { None, Hidden, Dotted, Dashed, Solid, Double, Groove, Ridge, Inset, Outset }
 type FontStyle = enum u8 { Normal, Italic, Oblique }
-type TextAlign = enum u8 { Start, End, Left, Right, Center, Justify, MatchParent }
+type TextAlign = enum u8 { Start, End, Left, Right, Center, Justify, JustifyAll, MatchParent }
 type TextTransform = enum u8 { None, Capitalize, Uppercase, Lowercase, FullWidth }
 type WhiteSpace = enum u8 { Normal, Pre, Nowrap, PreWrap, PreLine, BreakSpaces }
 type WordBreak = enum u8 { Normal, BreakAll, KeepAll, BreakWord }
@@ -709,7 +709,7 @@ fn apply_text(ap: *Ap, prop: str, v: str) -> bool {
     let s = ap.s
     let low = cv.lower(ap.a, v)
     if str.eq(prop, "text-align") {
-        s.text_align = kw[TextAlign](low, ",start,end,left,right,center,justify,match-parent,", s.text_align)
+        s.text_align = kw[TextAlign](low, ",start,end,left,right,center,justify,justify-all,match-parent,", s.text_align)
         if str.eq(low, "-webkit-center") || str.eq(low, "-moz-center") { s.text_align = .Center }
         ret true
     }

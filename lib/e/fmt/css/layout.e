@@ -2194,6 +2194,8 @@ fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style,
 
 // The alignment in force on a line: `text-align`, or on the last line (and lines ended by a break) `text-align-last`.
 fn line_align_of(l: *Layout, s: *const style.Style, last_line: bool) -> style.TextAlign {
+    // `justify-all` justifies every line, the last one included.
+    if s.text_align == .JustifyAll { ret .Justify }
     var align = s.text_align
     if align == .MatchParent { align = .Start }
     if !last_line { ret align }
