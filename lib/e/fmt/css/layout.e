@@ -2408,10 +2408,15 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             continue
         }
         if p.kind == .Text && !has_content && p.w == 0.0f64 && !p.ink {
-            j += 1usize
-            out.lead = j
-            out.end = j
-            continue
+            // A leading U+3000 that hangs is not trimmed: `hanging-punctuation: first` keeps it and draws it past the
+            // content edge, so it has to reach the fragment loop.
+            let hang_lead = (bstyle(l, p.box).hanging_punctuation & 1u8) != 0u8 && p.text.len == 3usize && p.text[0usize] == 227u8 && p.text[1usize] == 128u8 && p.text[2usize] == 128u8
+            if !hang_lead {
+                j += 1usize
+                out.lead = j
+                out.end = j
+                continue
+            }
         }
         var needed = p.w
         if p.kind == .Marker {
@@ -2497,6 +2502,12 @@ fn shy_hyphen_w(l: *Layout, p: Piece) -> f64 {
 // padding on that side (the punctuation is then inside the box, not at the line's content edge). The set is
 // css-text's: the ASCII openers, the typographic quotes and U+3000 IDEOGRAPHIC SPACE.
 fn hanging_punct_w(l: *Layout, p: Piece) -> (f64, usize) {
+    // An ideographic space is carried as a piece with no content and its advance in `trail` (the white-space pass treats
+    // it as a space), so it is matched on the piece's text before the `clen == 0` early return.
+    if p.kind == .Text && p.text.len == 3usize && p.text[0usize] == 227u8 && p.text[1usize] == 128u8 && p.text[2usize] == 128u8 {
+        if bstyle(l, p.box).border_width[3usize] > 0.0f64 { ret (0.0f64, 0usize) }
+        ret (p.w + p.trail, 3usize)
+    }
     if p.kind != .Text || p.clen == 0usize { ret (0.0f64, 0usize) }
     if bstyle(l, p.box).border_width[3usize] > 0.0f64 { ret (0.0f64, 0usize) }
     let proc = l.boxes.items[usize(p.box)].proc

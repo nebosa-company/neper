@@ -201,3 +201,4 @@ dir-auto-first-strong-rtl.html | dir-auto-first-strong-rtl-ref.html | match
 overflow-wrap-inline-anywhere-001.html | overflow-wrap-inline-anywhere-001-ref.html | match
 hanging-punct-first-001.html | hanging-punct-first-001-ref.html | match
 hanging-punct-first-span-002.html | hanging-punct-first-span-002-ref.html | match
+hanging-punct-first-u3000-003.html | hanging-punct-first-u3000-003-ref.html | match
