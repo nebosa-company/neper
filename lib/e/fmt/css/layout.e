@@ -2452,6 +2452,14 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                     needed = 0.0f64
                 }
             }
+
+            if !hangs {
+                let (cw2, cn2) = hanging_close_w(l, p)
+                if cn2 > 0usize && pos + p.w - cw2 <= lim + 0.01f64 && pos + p.w > lim + 0.01f64 {
+                    hangs = true
+                    needed = p.w - cw2
+                }
+            }
         }
         // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
         if pos + needed > lim + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
@@ -2543,7 +2551,7 @@ fn hanging_close_w(l: *Layout, p: Piece) -> (f64, usize) {
     var found = false
     if len == 1usize && (c == 41u8 || c == 93u8 || c == 125u8 || c == 34u8 || c == 39u8) { found = true }
     if len == 3usize && c == 226u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 153u8 || proc[at + 2usize] == 157u8) { found = true }
-    if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 137u8 || proc[at + 2usize] == 139u8 || proc[at + 2usize] == 149u8 || proc[at + 2usize] == 155u8 || proc[at + 2usize] == 157u8 || proc[at + 2usize] == 159u8 || proc[at + 2usize] == 161u8) { found = true }
+    if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && proc[at + 2usize] >= 137u8 && proc[at + 2usize] <= 161u8 && (proc[at + 2usize] & 1u8) == 1u8 { found = true }
     if !found { ret (0.0f64, 0usize) }
     ret (text_advance(l, bstyle(l, p.box), proc[at..end]), len)
 }
