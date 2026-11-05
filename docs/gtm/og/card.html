@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8"><style>
+<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><style>
 html,body{margin:0;width:1200px;height:630px;background:#121318;color:#e1e2e9;font:400 28px/1.35 "Segoe UI",sans-serif;overflow:hidden}
 .c{box-sizing:border-box;width:1200px;height:630px;padding:48px 72px;display:flex;flex-direction:column;justify-content:space-between;gap:20px;background:linear-gradient(135deg,#121318 55%,#00468b)}
 .b{display:flex;align-items:center;gap:16px;font-weight:600;font-size:30px}.b img{width:56px;height:56px}
@@ -15,3 +15,4 @@ const cards={
 const k=new URLSearchParams(location.search).get('card'), d=cards[k]
 document.getElementById('c').innerHTML='<div class="b"><img src="../logo/neper-icon.svg"><span>Neper</span></div><div><h1>'+d.h+'</h1><p>'+d.p+'</p></div>'+(d.x||'<div></div>')+'<div class="u">neper.dev</div>'
 </script>
+
