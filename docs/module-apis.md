@@ -13651,7 +13651,7 @@ error Invalid
 
 fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (Queue[T], err)
 fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err)
-fn push[T: type](q: *Queue[T], value: own T) -> err
+fn push[T: type](q: *Queue[T], value: own T) -> (T, err)
 fn push_for[T: type](q: *Queue[T], value: T, timeout: time.Duration) -> (bool, err)
 fn try_pop[T: type](q: *Queue[T]) -> (T, bool, err)
 fn pop[T: type](q: *Queue[T]) -> (T, err)
@@ -31118,6 +31118,7 @@ fn pow_mod(base: u64, exponent: u64, m: u64) -> u64
 fn inverse_mod(a: u64, m: u64) -> (u64, bool)
 fn is_prime(n: u64) -> bool
 fn sieve(limit: usize, flags: []u8) -> err
+fn floor_root(high: u64) -> u64
 fn sieve_segmented(low: u64, high: u64, flags: []u8, scratch: []u8) -> err
 fn sieve_linear(limit: usize, spf: []u32, primes: []u32) -> (usize, err)
 fn factor_trial(n: u64, factors: []u64, exponents: []u32) -> (usize, err)
@@ -31496,7 +31497,7 @@ error Invalid
 fn estimate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err)
 fn antithetic[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err)
 fn control_variate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, g: fn(*Ctx, f64) -> f64, g_mean: f64, r: *rand.Pcg64, count: usize, samples: []f64) -> (Estimate, err)
-fn finish(sum: f64, sum2: f64, count: usize) -> Estimate
+fn finish(mean: f64, m2: f64, count: usize) -> Estimate
 ```
 
 `estimate`, `antithetic` and `control_variate` estimate `E[f(Z)]` over a standard
@@ -31527,6 +31528,7 @@ fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *ran
 fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err)
 fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err
 fn has_nuts_scratch(len: usize, n: usize, max_depth: usize) -> bool
+fn finite(v: f64) -> bool
 fn has_rows(len: usize, rows: usize, width: usize) -> bool
 ```
 
