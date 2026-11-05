@@ -1664,6 +1664,8 @@ fn infer_column(a: *mem.Arena, raw: []const str, pinned: str, max_select: usize)
         if !seen {
             dist_buf[distinct] = values[i]
             distinct += 1usize
+            // Past max_select the select test cannot pass; stop the O(n^2) scan.
+            if distinct > max_select { break }
         }
         i += 1usize
     }

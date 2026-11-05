@@ -351,6 +351,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_32()) != 0u8 { os.exit(33i32) }
     if run_chunk(a, vectors_33()) != 0u8 { os.exit(34i32) }
     if run_chunk(a, vectors_34()) != 0u8 { os.exit(35i32) }
+    // #219: an instant past the Date range is Invalid, not an overflow trap.
+    let (huge, huge_error) = syncjob.iso_ms(a, 6.0e13f64)
+    if huge_error != syncjob.Invalid { os.exit(90i32) }
+    let (edge, edge_error) = syncjob.iso_ms(a, 9000000000000.0f64)
+    if edge_error != ok { os.exit(91i32) }
     try io.print("algo syncjob ok")
     ret ok
 }

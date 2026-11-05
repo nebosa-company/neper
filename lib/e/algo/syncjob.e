@@ -127,7 +127,8 @@ fn to_ms(v: json.Value) -> f64 {
 
 // `new Date(ms).toISOString()`: `YYYY-MM-DDTHH:MM:SS.mmmZ`; an unrepresentable instant is an error, as appdor throws.
 fn iso_ms(a: *mem.Arena, ms: f64) -> (str, err) {
-    if !is_finite(ms) { ret ("", Invalid) }
+    // `Timestamp.nanos` is i64: past ~9.22e12 ms (year 2262) `whole * 1000000` overflows.
+    if !is_finite(ms) || ms < -9223372036854.0f64 || ms > 9223372036854.0f64 { ret ("", Invalid) }
     let whole = i64(ms)
     let (buf, buf_error) = mem.alloc[u8](a, 32usize)
     if buf_error != ok { ret ("", buf_error) }
@@ -1056,3 +1057,4 @@ fn accept_drift(a: *mem.Arena, stored: []const json.Value, report: json.Value, a
     put(&o, "addedColumns", json.Value{ Array: list.slice_const[json.Value](&added_columns) })
     ret ir.obj_value(&o)
 }
+
