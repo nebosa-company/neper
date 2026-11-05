@@ -817,7 +817,20 @@ fn ml_kem_keygen(d: [32]u8, z: [32]u8, ek: []u8, dk: []u8) -> err {
 // ML-KEM.Encaps_internal(ek, m): the ciphertext (1088 bytes) and the shared key.
 fn ml_kem_encaps(ek: []const u8, m: [32]u8, c: []u8) -> ([32]u8, err) {
     var key: [32]u8 = zero
-    if ek.len < 1184usize || c.len < 1088usize { ret (key, TooSmall) }
+    if ek.len != 1184usize || c.len < 1088usize { ret (key, TooSmall) }
+    // FIPS 203 7.2: every 12-bit coefficient of ek[0:1152] must be below q = 3329.
+    var coefficient = 0usize
+    while coefficient < 768usize {
+        var a = 0u32
+        var j = 0usize
+        while j < 12usize {
+            let bit = coefficient * 12usize + j
+            a = a | (((u32(ek[bit / 8usize]) >> u32(bit % 8usize)) & 1u32) << u32(j))
+            j += 1usize
+        }
+        if a >= 3329u32 { ret (key, InvalidKey) }
+        coefficient += 1usize
+    }
     var input: [64]u8 = zero
     let h = hash.sha3_256(ek[0..1184])
     var i = 0usize
@@ -839,7 +852,10 @@ fn ml_kem_encaps(ek: []const u8, m: [32]u8, c: []u8) -> ([32]u8, err) {
 // ML-KEM.Decaps_internal(dk, c): the shared key, or J(z || c) when c fails to re-encrypt.
 fn ml_kem_decaps(dk: []const u8, c: []const u8) -> ([32]u8, err) {
     var key: [32]u8 = zero
-    if dk.len < 2400usize || c.len < 1088usize { ret (key, TooSmall) }
+    if dk.len != 2400usize || c.len != 1088usize { ret (key, TooSmall) }
+    // FIPS 203 7.3: dk[2336:2368] must be H(dk[1152:2336]).
+    let expected = hash.sha3_256(dk[1152usize..2336usize])
+    if !hash.equal_constant_time(expected[0..], dk[2336usize..2368usize]) { ret (key, InvalidKey) }
     let m = kem_pke_decrypt(dk[0..1152], c)
     var input: [64]u8 = zero
     var i = 0usize

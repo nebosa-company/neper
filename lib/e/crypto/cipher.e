@@ -244,17 +244,18 @@ fn pad_pkcs7(dst: []u8, src: []const u8) -> (usize, err) {
 fn unpad_pkcs7(data: []const u8) -> (usize, err) {
     if data.len == 0usize || data.len % 16usize != 0usize { ret (0usize, Invalid) }
     let pad = usize(data[data.len - 1usize])
-    var valid = 1u8
-    if pad == 0usize || pad > 16usize { valid = 0u8 }
-    // Clamp the scan start so `data.len - pad` cannot underflow when pad > data.len.
-    var scan_pad = pad
-    if scan_pad > data.len { scan_pad = data.len }
-    var i = data.len - scan_pad
-    while i < data.len {
-        if usize(data[i]) != pad { valid = 0u8 }
+    var bad = 0u8
+    if pad == 0usize || pad > 16usize { bad = 1u8 }
+    // Always scan the whole final block; each byte is masked by whether it lies in the
+    // padding, and `position + pad >= 16` is the same test without a branch on `pad`.
+    let start = data.len - 16usize
+    var i = 0usize
+    while i < 16usize {
+        let mask = 0u8 -% u8((i + pad) / 16usize)
+        bad = bad | ((data[start + i] ^ u8(pad)) & mask)
         i += 1usize
     }
-    if valid == 0u8 { ret (0usize, Invalid) }
+    if bad != 0u8 { ret (0usize, Invalid) }
     ret (data.len - pad, ok)
 }
 

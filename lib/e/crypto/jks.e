@@ -126,7 +126,7 @@ fn parse(a: *mem.Arena, data: []const u8, password: str) -> (Keystore, err) {
     let body_len = data.len - 20usize
     let (digest, digest_error) = integrity_digest(a, password, data[0usize..body_len])
     if digest_error != ok { ret (ks, digest_error) }
-    if !same(digest[0usize..20usize], data[body_len..data.len]) { ret (ks, BadPassword) }
+    if !hash.equal_constant_time(digest[0usize..20usize], data[body_len..data.len]) { ret (ks, BadPassword) }
     let count = be32(data, 8usize)
     if count > 100000usize { ret (ks, Invalid) }
     let (entries, entries_error) = mem.alloc[Entry](a, count + 1usize)
@@ -252,7 +252,7 @@ fn decrypt_key(a: *mem.Arena, protected: []const u8, password: str, out: []u8) -
     mem.copy[u8](buf[0usize..pn], pw[0usize..pn])
     mem.copy[u8](buf[pn..pn + key_len], out[0usize..key_len])
     let check = hash.legacy_sha1(buf[0usize..pn + key_len])
-    if !same(check[0usize..20usize], blob[20usize + key_len..blob.len]) { ret (0usize, BadPassword) }
+    if !hash.equal_constant_time(check[0usize..20usize], blob[20usize + key_len..blob.len]) { ret (0usize, BadPassword) }
     ret (key_len, ok)
 }
 

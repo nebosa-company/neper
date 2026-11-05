@@ -48,7 +48,8 @@ fn hkdf_sha256_expand(dst: []u8, prk: [32]u8, info: []const u8) -> err {
             written += 1usize
             at += 1usize
         }
-        counter += 1u8
+        // The 255th block is the last allowed one: do not step the counter past it.
+        if written < dst.len { counter += 1u8 }
     }
     ret ok
 }
@@ -82,7 +83,8 @@ fn hkdf_sha512_expand(dst: []u8, prk: [64]u8, info: []const u8) -> err {
             written += 1usize
             at += 1usize
         }
-        counter += 1u8
+        // The 255th block is the last allowed one: do not step the counter past it.
+        if written < dst.len { counter += 1u8 }
     }
     ret ok
 }

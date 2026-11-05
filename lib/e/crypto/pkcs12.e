@@ -533,12 +533,18 @@ fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err) {
         if bits == 0u16 { ret (store, Unsupported) }
         let mark = mem.mark(a)
         let (bmp, bmp_error) = bmp_password(a, password)
-        if bmp_error != ok { ret (store, bmp_error) }
+        if bmp_error != ok {
+            mem.reset(a, mark)
+            ret (store, bmp_error)
+        }
         var key: [64]u8 = zero
         var out_len = 32usize
         if bits == 512u16 { out_len = 64usize }
         let kdf_error = pkcs12_kdf(a, bits, 3u8, bmp, mac_salt.content, iterations, key[0usize..out_len])
-        if kdf_error != ok { ret (store, kdf_error) }
+        if kdf_error != ok {
+            mem.reset(a, mark)
+            ret (store, kdf_error)
+        }
         var computed: [64]u8 = zero
         if bits == 256u16 {
             let m = mac.hmac_sha256(key[0usize..32usize], safe)
@@ -548,7 +554,8 @@ fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err) {
             mem.copy[u8](computed[0usize..64usize], m[0usize..64usize])
         }
         mem.reset(a, mark)
-        if !same(computed[0usize..out_len], digest.content) { ret (store, BadPassword) }
+        // An integrity MAC is secret-adjacent: compare without an early exit.
+        if !hash.equal_constant_time(computed[0usize..out_len], digest.content) { ret (store, BadPassword) }
     }
     // AuthenticatedSafe
     var safe_top = asn1.reader(safe, DEPTH)
