@@ -2787,7 +2787,7 @@ fn pair_of(value: str, fallback: f32) -> (f32, f32) {
 // A filter element's primitives as a program over `w` x `h` pixels whose origin is device pixel (px0, py0).
 // `region` is the filter region and `box` the element's bounding box, both in user space, `device` the
 // user-to-device transform, `prim_obb` whether primitive units are the bounding box's fractions.
-fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, prim_obb: bool, device: geometry.Transform, current: paint.Color, px0: i64, py0: i64, w: usize, h: usize, out: []sf.Prim) -> usize {
+fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, prim_obb: bool, device: geometry.Transform, current: paint.Color, px0: i64, py0: i64, w: usize, h: usize, out: []sf.Prim) -> (usize, err) {
     let text = doc.text
     var names: [16]str = zero
     var n = 0usize
@@ -2797,7 +2797,7 @@ fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, p
     let (own_space, has_space) = prop(f.tag, "color-interpolation-filters")
     if has_space && (same(trim(own_space), "sRGB") || same(trim(own_space), "auto")) { linear = false }
     var i = f.body_start
-    while i < f.body_end && n < sf.MAX_PRIMS {
+    while i < f.body_end {
         if text[i] != 60u8 {
             i += 1usize
             continue
@@ -2817,6 +2817,9 @@ fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, p
         var next = end + 1usize
         if !self_closing { next = element_end(text, end, name, false) }
         if begins(name, 0usize, "fe") && !same(name, "feMergeNode") {
+            // A seventeenth effect cannot be dropped silently: the filter would
+            // render an image the document does not specify.
+            if n >= sf.MAX_PRIMS { ret (0usize, TooComplex) }
             var p: sf.Prim = zero
             p.x0 = 0i32
             p.y0 = 0i32
@@ -2979,7 +2982,7 @@ fn filter_prims(doc: Doc, f: Found, region: geometry.Rect, box: geometry.Rect, p
         }
         i = next
     }
-    ret n
+    ret (n, ok)
 }
 
 // The element at `source`'s geometry box in the user space it establishes (the space inside its own
@@ -3119,7 +3122,8 @@ fn draw_filtered_element(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Fra
     let (prim_units, has_prim_units) = attr(f.tag, "primitiveUnits")
     if has_prim_units && same(trim(prim_units), "objectBoundingBox") { prim_obb = true }
     var prims: [16]sf.Prim = zero
-    let count = filter_prims(doc, f, region, box, prim_obb, device, frame.style.current, px0, py0, w, h, prims[0usize..16usize])
+    let (count, prims_error) = filter_prims(doc, f, region, box, prim_obb, device, frame.style.current, px0, py0, w, h, prims[0usize..16usize])
+    if prims_error != ok { ret (true, prims_error) }
     let (result, result_error) = mem.alloc[f32](a, w * h * 4usize)
     if result_error != ok { ret (false, result_error) }
     try sf.run(a, prims[0usize..count], pixels, w, h, result)

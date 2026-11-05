@@ -4,12 +4,14 @@
 // `style=` declarations, and the document's own size. Each check exits with its own code.
 
 use e.gfx.svg
+use e.gfx.svg_filter
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.gpu
 use e.mem
 use e.os
+use e.text.shape as fonts
 
 const SIDE: usize = 64usize
 const RED: u32 = 4294901760u32
@@ -68,6 +70,23 @@ fn render(a: *mem.Arena, text: str) -> ([]u32, err) {
 
 fn probe(pixels: []u32, x: usize, y: usize) -> u32 {
     ret pixels[y * SIDE + x]
+}
+
+// The error `svg.draw_filtered` answers for `text`, drawn through a real host.
+fn filter_error(a: *mem.Arena, text: str) -> err {
+    let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
+    if open_error != ok { ret open_error }
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    let (renderer_value, renderer_error) = scene.renderer(a, device, q, 1u32, 1u32)
+    if renderer_error != ok { ret renderer_error }
+    var renderer = renderer_value
+    var host = svg_filter.host(&renderer, u32(SIDE), u32(SIDE), SIDE * SIDE)
+    let (builder_value, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = builder_value
+    var nofont: fonts.Font = zero
+    ret svg.draw_filtered(a, &builder, text, geometry.rect(0.0, 0.0, 64.0, 64.0), paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0 }, nofont, false, &host)
 }
 
 fn is(pixels: []u32, x: usize, y: usize, want: u32) -> bool {
@@ -143,5 +162,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 12: no <svg> at all is refused.
     let (nothing, nothing_error) = render(a, "<rect width=\"10\" height=\"10\"/>")
     if nothing_error == ok { os.exit(12i32) }
+    // 13: more filter primitives than the program holds is refused, not silently
+    // truncated to its first sixteen effects.
+    let too_many = filter_error(a, "<svg viewBox=\"0 0 100 100\"><defs><filter id=\"f\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"100\" height=\"100\"><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/><feOffset dx=\"1\"/></filter></defs><rect width=\"100\" height=\"100\" fill=\"red\" filter=\"url(#f)\"/></svg>")
+    if too_many != svg.TooComplex { os.exit(13i32) }
     ret ok
 }

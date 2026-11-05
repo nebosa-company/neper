@@ -721,6 +721,7 @@ fn run(a: *mem.Arena, prims: []const Prim, source: []const f32, w: usize, h: usi
 // renderer.
 fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: usize, h: usize, registered: []const fonts.Font, out: []f32) -> err {
     if w == 0usize || h == 0usize || w * h > hst.max_pixels || out.len < w * h * 4usize { ret TooComplex }
+    let entry = mem.mark(a)
     let (pixels, pixels_error) = mem.alloc[u32](a, w * h)
     if pixels_error != ok { ret pixels_error }
     let (state, state_error) = scene.renderer_state(hst.renderer)
@@ -729,6 +730,15 @@ fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: us
     let (made, made_error) = scene.renderer(a, state.device, queue, 1u32, 1u32)
     if made_error != ok { ret made_error }
     var scratch = made
+    var finished = false
+    // The scratch renderer and its working memory end with this call; an early
+    // error must release them too, and the success path reports the close error.
+    defer {
+        if !finished {
+            let ignored = scene.close(&scratch)
+            mem.reset(a, entry)
+        }
+    }
     var f = 0usize
     while f < registered.len {
         try scene.register_font(&scratch, registered[f])
@@ -756,6 +766,7 @@ fn render_pixels(a: *mem.Arena, hst: *const Host, list: scene.DisplayList, w: us
         i += 1usize
     }
     try scene.close(&scratch)
+    finished = true
     ret ok
 }
 
