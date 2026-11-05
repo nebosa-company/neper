@@ -4852,6 +4852,27 @@ algo_pivot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/algo-pivot-selfhost"
 algo_pivot_output=$("$test_build/algo-pivot-selfhost")
 [ "$algo_pivot_output" = 'algo pivot ok' ]
+# e.js Intl locale tags (L168): 4-letter languages and extlangs, duplicate u-extension keys, grandfathered tags.
+audit_js_bigint_locale_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_bigint_locale/src/main.e" "$repo" x64 linux "$test_build/audit-js-bigint-locale-selfhost")
+[ "$audit_js_bigint_locale_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-bigint-locale-selfhost"
+"$test_build/audit-js-bigint-locale-selfhost"
+# e.js early errors (L168): escaped use-strict, shorthand properties, mixed nullish coalescing.
+audit_js_parse_depth_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_parse_depth/src/main.e" "$repo" x64 linux "$test_build/audit-js-parse-depth-selfhost")
+[ "$audit_js_parse_depth_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-parse-depth-selfhost"
+audit_js_parse_depth_output=$("$test_build/audit-js-parse-depth-selfhost")
+[ "$audit_js_parse_depth_output" = 'audit js parse depth ok' ]
+# e.js typed arrays (L168): ToIndex lengths, options values, toLocaleString arguments, subarray validity.
+audit_js_invalid_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_invalid_utf8/src/main.e" "$repo" x64 linux "$test_build/audit-js-invalid-utf8-selfhost")
+[ "$audit_js_invalid_utf8_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-invalid-utf8-selfhost"
+"$test_build/audit-js-invalid-utf8-selfhost"
+# e.js strings (L168): named-capture markers, UTF-16 substring search, fromCharCode argument count.
+audit_js_uppercase_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_uppercase/src/main.e" "$repo" x64 linux "$test_build/audit-js-uppercase-selfhost")
+[ "$audit_js_uppercase_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-uppercase-selfhost"
+"$test_build/audit-js-uppercase-selfhost"
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
 [ "$algo_page_batch_written" = 'executable written' ]

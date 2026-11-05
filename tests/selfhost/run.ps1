@@ -5357,6 +5357,30 @@ $algoPivotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoPivotWritten -ne 'executable written') { throw 'algo_pivot emission failed' }
 $algoPivotOutput = & $algoPivotPath
 if ($LASTEXITCODE -ne 0 -or $algoPivotOutput -ne 'algo pivot ok') { throw "algo_pivot answered wrongly: exit $LASTEXITCODE" }
+# e.js Intl locale tags (L168): 4-letter languages and extlangs, duplicate u-extension keys, grandfathered tags.
+$auditJsBigintLocalePath = Join-Path $testBuild 'audit-js-bigint-locale-selfhost.exe'
+$auditJsBigintLocaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_bigint_locale\src\main.e') $repo 'x64' 'windows' $auditJsBigintLocalePath
+if ($LASTEXITCODE -ne 0 -or $auditJsBigintLocaleWritten -ne 'executable written') { throw 'audit_js_bigint_locale emission failed' }
+& $auditJsBigintLocalePath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_bigint_locale answered wrongly: exit $LASTEXITCODE" }
+# e.js early errors (L168): escaped use-strict, shorthand properties, mixed nullish coalescing.
+$auditJsParseDepthPath = Join-Path $testBuild 'audit-js-parse-depth-selfhost.exe'
+$auditJsParseDepthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_parse_depth\src\main.e') $repo 'x64' 'windows' $auditJsParseDepthPath
+if ($LASTEXITCODE -ne 0 -or $auditJsParseDepthWritten -ne 'executable written') { throw 'audit_js_parse_depth emission failed' }
+$auditJsParseDepthOutput = & $auditJsParseDepthPath
+if ($LASTEXITCODE -ne 0 -or $auditJsParseDepthOutput -ne 'audit js parse depth ok') { throw "audit_js_parse_depth answered wrongly: exit $LASTEXITCODE" }
+# e.js typed arrays (L168): ToIndex lengths, options values, toLocaleString arguments, subarray validity.
+$auditJsInvalidUtf8Path = Join-Path $testBuild 'audit-js-invalid-utf8-selfhost.exe'
+$auditJsInvalidUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_invalid_utf8\src\main.e') $repo 'x64' 'windows' $auditJsInvalidUtf8Path
+if ($LASTEXITCODE -ne 0 -or $auditJsInvalidUtf8Written -ne 'executable written') { throw 'audit_js_invalid_utf8 emission failed' }
+& $auditJsInvalidUtf8Path
+if ($LASTEXITCODE -ne 0) { throw "audit_js_invalid_utf8 answered wrongly: exit $LASTEXITCODE" }
+# e.js strings (L168): named-capture markers, UTF-16 substring search, fromCharCode argument count.
+$auditJsUppercasePath = Join-Path $testBuild 'audit-js-uppercase-selfhost.exe'
+$auditJsUppercaseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_uppercase\src\main.e') $repo 'x64' 'windows' $auditJsUppercasePath
+if ($LASTEXITCODE -ne 0 -or $auditJsUppercaseWritten -ne 'executable written') { throw 'audit_js_uppercase emission failed' }
+& $auditJsUppercasePath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_uppercase answered wrongly: exit $LASTEXITCODE" }
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 $algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
 $algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath
