@@ -5,24 +5,26 @@
 //
 //   node scripts/run-browser-wasm.mjs [build/app-wasi.wasm]
 //
-// The fonts are seeded under the Windows paths the app asks for, using the test font as a stand-in for every face:
-// the point is the startup path, not the glyph shapes.
+// The app asks for Windows, Debian and bundled (`/jost-*.ttf`) faces; a wasm deployment supplies the bundled ones, so
+// this seeds those with the real Jost files and stands the test font in for the rest. The point is the startup path,
+// not the glyph shapes.
 import fs from 'node:fs'
 import { run } from '../lib/wasm/neper-host.js'
 
 const modulePath = process.argv[2] || 'build/app-wasi.wasm'
-const fontFiles = [
-  'C:/Windows/Fonts/segoeui.ttf',
-  'C:/Windows/Fonts/seguiemj.ttf',
-  'C:/Windows/Fonts/segoeuib.ttf',
-  'C:/Windows/Fonts/arial.ttf',
-  'C:/Windows/Fonts/arialbd.ttf',
-  'C:/Windows/Fonts/times.ttf',
-  'C:/Windows/Fonts/cour.ttf',
+const bundled = {
+  '/jost-regular.ttf': fs.readFileSync('neperos/assets/fonts/jost-regular.ttf'),
+  '/jost-bold.ttf': fs.readFileSync('neperos/assets/fonts/jost-bold.ttf'),
+}
+const fallback = fs.readFileSync('tests/browser/assets/ahem.ttf')
+const systemFaces = [
+  'C:/Windows/Fonts/segoeui.ttf', 'C:/Windows/Fonts/segoeuib.ttf', 'C:/Windows/Fonts/arial.ttf',
+  'C:/Windows/Fonts/arialbd.ttf', 'C:/Windows/Fonts/ariali.ttf', 'C:/Windows/Fonts/times.ttf',
+  'C:/Windows/Fonts/timesbd.ttf', 'C:/Windows/Fonts/timesi.ttf', 'C:/Windows/Fonts/cour.ttf',
+  'C:/Windows/Fonts/verdana.ttf', 'C:/Windows/Fonts/calibri.ttf', 'C:/Windows/Fonts/segoeuisl.ttf',
 ]
-const font = fs.readFileSync('tests/browser/assets/ahem.ttf')
-const files = {}
-for (const f of fontFiles) files[f] = font
+const files = { ...bundled }
+for (const f of systemFaces) files[f] = fallback
 
 const result = await run(fs.readFileSync(modulePath), {
   args: ['browser', 'about:blank'],
