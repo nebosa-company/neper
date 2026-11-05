@@ -212,5 +212,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if too_wide_error != ok || cookie.store(&tight, too_wide, 102i64) != cookie.JarFull { os.exit(255) }
     let (preserved_header, preserved_header_error) = cookie.header(a, &tight, "example.com", "/", false, 102i64)
     if preserved_header_error != ok || !str.eq(preserved_header, "a=2") || tight.count != 1usize || tight.used != 14usize { os.exit(255) }
+
+    // #623: the header carries every matching cookie, not the first 64 the jar happens
+    // to hold. Seventy distinct cookies, all matching, must all appear.
+    var many_storage: [80]cookie.Cookie = zero
+    var many_text: [8192]u8 = zero
+    var many = cookie.jar_new(many_storage[..], many_text[..])
+    var k = 0usize
+    while k < 70usize {
+        var set_cookie: [8]u8 = zero
+        set_cookie[0usize] = 99u8
+        set_cookie[1usize] = u8(48usize + k / 10usize)
+        set_cookie[2usize] = u8(48usize + k % 10usize)
+        set_cookie[3usize] = 61u8
+        set_cookie[4usize] = 120u8
+        let (many_cookie, many_error) = cookie.parse(a, set_cookie[0usize..5usize], "example.com", "/", false, 100i64)
+        if many_error != ok { os.exit(260) }
+        if cookie.store(&many, many_cookie, 100i64) != ok { os.exit(261) }
+        k += 1usize
+    }
+    let (many_header, many_header_error) = cookie.header(a, &many, "example.com", "/", false, 100i64)
+    if many_header_error != ok { os.exit(262) }
+    if !str.contains(many_header, "c68=x") || !str.contains(many_header, "c69=x") { os.exit(263) }
+    var pairs_seen = 1usize
+    var hpos = 0usize
+    while hpos < many_header.len {
+        if many_header[hpos] == 59u8 { pairs_seen += 1usize }
+        hpos += 1usize
+    }
+    if pairs_seen != 70usize { os.exit(264) }
     ret ok
 }

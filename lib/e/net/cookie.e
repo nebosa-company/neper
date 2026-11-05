@@ -404,10 +404,13 @@ fn store(jar: *Jar, c: Cookie, now: i64) -> err {
 // The `Cookie` request header for a request to `host` and `path` (`secure`: https): "a=1; b=2", empty when no cookie
 // applies. Ordered by path length, longest first, then by creation time.
 fn header(a: *mem.Arena, jar: *Jar, host: str, path: str, secure: bool, now: i64) -> (str, err) {
-    var chosen: [64]usize = zero
+    // The selection is sized from the jar: a fixed cap would silently drop the tail of a
+    // large matching set (#623).
+    let (chosen, chosen_error) = mem.alloc[usize](a, jar.count + 1usize)
+    if chosen_error != ok { ret ("", chosen_error) }
     var n = 0usize
     var i = 0usize
-    while i < jar.count && n < 64usize {
+    while i < jar.count {
         let c = jar.cookies[i]
         var domain_ok = false
         if c.host_only { domain_ok = eq_fold(host, c.domain) } else { domain_ok = domain_match(host, c.domain) }

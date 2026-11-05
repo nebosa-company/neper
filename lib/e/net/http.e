@@ -452,6 +452,10 @@ fn read_response_meta(a: *mem.Arena, r: *Reader) -> (ResponseMeta, err) {
     if version_error != ok { ret (out, version_error) }
     if line[9usize] < 48u8 || line[9usize] > 57u8 || line[10usize] < 48u8 || line[10usize] > 57u8 || line[11usize] < 48u8 || line[11usize] > 57u8 { ret (out, Invalid) }
     let status = u16(line[9usize] - 48u8) * 100u16 + u16(line[10usize] - 48u8) * 10u16 + u16(line[11usize] - 48u8)
+    // Three digits are not enough: HTTP defines 100..599 (#258).
+    if status < 100u16 || status > 599u16 { ret (out, Invalid) }
+    // The reason phrase is a status-line field too: no NUL/C0 controls (tab aside) or DEL.
+    if !valid_header_value(line[13usize..]) { ret (out, Invalid) }
     let (reason_text, reason_error) = copy_text(a, line[13usize..])
     if reason_error != ok {
         mem.reset(a, mark)
@@ -976,7 +980,7 @@ fn write_request(w: *Writer, req: *const Request) -> err {
 }
 
 fn write_response(w: *Writer, response: *const Response) -> err {
-    if response.status < 100u16 || response.status > 999u16 { ret Invalid }
+    if response.status < 100u16 || response.status > 599u16 { ret Invalid }
     if no_response_body(response.status) && response.body.len != 0usize { ret Invalid }
     if !valid_header_value(response.reason) { ret Invalid }
     try io.write_all(&w.sink, version_text(response.version))

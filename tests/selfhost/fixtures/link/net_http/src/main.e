@@ -135,6 +135,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var informational_reader = informational_handle
     let (informational_response, informational_response_error) = http.read_response(a, &informational_reader)
     if informational_response_error != ok || informational_response.status != 200u16 || !str.eq(informational_response.body, "ok") { ret Failed }
+    // #259: a reason phrase with a control byte (SOH, DEL) is malformed.
+    var ctl_source: OneByte = zero
+    let ctl_input = "HTTP/1.1 200 O\x01K\r\nContent-Length: 0\r\n\r\n"
+    let (ctl_handle, ctl_reader_error) = http.reader(a, one_reader(&ctl_source, ctl_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if ctl_reader_error != ok { ret ctl_reader_error }
+    var ctl_reader = ctl_handle
+    let (_, ctl_error) = http.read_response(a, &ctl_reader)
+    if ctl_error != http.Invalid { ret Failed }
+    var del_source: OneByte = zero
+    let del_input = "HTTP/1.1 200 O\x7FK\r\nContent-Length: 0\r\n\r\n"
+    let (del_handle, del_reader_error) = http.reader(a, one_reader(&del_source, del_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if del_reader_error != ok { ret del_reader_error }
+    var del_reader = del_handle
+    let (_, del_error) = http.read_response(a, &del_reader)
+    if del_error != http.Invalid { ret Failed }
     // A close-delimited HTTP/1.0 response remains bounded by body_bytes.
     var close_source: OneByte = zero
     let (close_handle, close_reader_error) = http.reader(a, one_reader(&close_source, "HTTP/1.0 404 Missing\r\n\r\nnope"), message_limits(64usize, 64usize, 4usize, 4usize))
@@ -227,6 +242,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let response_write_error = http.write_response(&response_writer, &outgoing_response)
     if response_write_error != ok || !str.eq(io.memory_bytes(&response_capture), "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") { ret Failed }
     if !str.eq(http.reason(503u16), "Service Unavailable") || http.reason(799u16).len != 0usize { ret Failed }
+
+    // #258: the HTTP status range is 100..599; the parser and the writer refuse the rest.
+    var status_099_source: OneByte = zero
+    let (status_099_handle, status_099_reader_error) = http.reader(a, one_reader(&status_099_source, "HTTP/1.1 099 Nope\r\nContent-Length: 0\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if status_099_reader_error != ok { ret status_099_reader_error }
+    var status_099_reader = status_099_handle
+    let (_, status_099_error) = http.read_response(a, &status_099_reader)
+    if status_099_error != http.Invalid { ret Failed }
+
+    var status_600_source: OneByte = zero
+    let (status_600_handle, status_600_reader_error) = http.reader(a, one_reader(&status_600_source, "HTTP/1.1 600 Nope\r\nContent-Length: 0\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if status_600_reader_error != ok { ret status_600_reader_error }
+    var status_600_reader = status_600_handle
+    let (_, status_600_error) = http.read_response(a, &status_600_reader)
+    if status_600_error != http.Invalid { ret Failed }
+
+    var status_599_source: OneByte = zero
+    let (status_599_handle, status_599_reader_error) = http.reader(a, one_reader(&status_599_source, "HTTP/1.1 599 Odd\r\nContent-Length: 0\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if status_599_reader_error != ok { ret status_599_reader_error }
+    var status_599_reader = status_599_handle
+    let (status_599_response, status_599_response_error) = http.read_response(a, &status_599_reader)
+    if status_599_response_error != ok || status_599_response.status != 599u16 { ret Failed }
+
+    var status_100_source: OneByte = zero
+    let (status_100_handle, status_100_reader_error) = http.reader(a, one_reader(&status_100_source, "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"), message_limits(64usize, 128usize, 4usize, 0usize))
+    if status_100_reader_error != ok { ret status_100_reader_error }
+    var status_100_reader = status_100_handle
+    let (status_100_response, status_100_response_error) = http.read_response(a, &status_100_reader)
+    if status_100_response_error != ok || status_100_response.status != 200u16 { ret Failed }
+
+    var empty_headers: [0]http.Header = zero
+    let (status_memory, unused_status_sink, status_memory_error) = io.memory_writer(a, 256usize)
+    if status_memory_error != ok { ret status_memory_error }
+    var status_capture = status_memory
+    let status_sink = io.writer(mem.cast[*void](&status_capture), io.memory_write)
+    var status_writer = http.writer(status_sink)
+    var status_response = http.Response { version: .Http11, status: 99u16, reason: "", headers: empty_headers[0usize..0usize], body: "" }
+    if http.write_response(&status_writer, &status_response) != http.Invalid { ret Failed }
+    status_response.status = 600u16
+    if http.write_response(&status_writer, &status_response) != http.Invalid { ret Failed }
+    status_response.status = 100u16
+    if http.write_response(&status_writer, &status_response) != ok { ret Failed }
+    status_response.status = 599u16
+    if http.write_response(&status_writer, &status_response) != ok { ret Failed }
 
     // The plain-client exchange needs a host loopback socket, and a failed host
     // exchange can otherwise leave its worker blocked in accept. Keep it as an
