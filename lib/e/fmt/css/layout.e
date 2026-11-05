@@ -2429,15 +2429,20 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 ret out
             }
         }
+        // `overflow-wrap` applies to the inline box the text belongs to, not only to the block container.
+        var pws = cs
+        if p.kind == .Text {
+            pws = bstyle(l, p.box)
+        }
         if pos + needed > lim + 0.01f64 && has_content {
             if last_soft != NONE {
                 out.end = usize(last_soft) + 1usize
                 ret out
             }
-            if p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
+            if p.kind == .Text && (pws.overflow_wrap != .Normal || pws.word_break == .BreakWord) {
                 if split_piece(x, j, lim - pos) { continue }
             }
-        } else if pos + needed > lim + 0.01f64 && !has_content && p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord) {
+        } else if pos + needed > lim + 0.01f64 && !has_content && p.kind == .Text && (pws.overflow_wrap != .Normal || pws.word_break == .BreakWord) {
             if split_piece(x, j, lim) { continue }
         }
         has_content = has_content || p.ink || p.kind == .Atomic || p.kind == .Marker || p.kind == .Tab
