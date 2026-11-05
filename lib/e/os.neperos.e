@@ -113,8 +113,9 @@ fn fs_recv_word() -> usize {
     ret recv(FS_REP, FS_NO_SLOT)
 }
 
-// Receive a reply's length-prefixed byte string into handle `slot`'s buffer; the stored count (at
-// most FS_BLOCK) comes back, every word consumed so the stream stays in step.
+// Receive a reply's length-prefixed byte string into handle `slot`'s buffer, consuming every
+// word so the stream stays in step. Answers the server's full length; a value past FS_BLOCK means
+// the client buffer cannot hold the file (the caller reports TooLarge instead of truncating).
 fn fs_recv_handle_data(slot: usize) -> usize {
     let len = recv(FS_REP, FS_NO_SLOT)
     var i = 0usize
@@ -123,8 +124,7 @@ fn fs_recv_handle_data(slot: usize) -> usize {
         if i < FS_BLOCK { fs_handles[slot].data[i] = u8(b) }
         i += 1usize
     }
-    if len < FS_BLOCK { ret len }
-    ret FS_BLOCK
+    ret len
 }
 
 fn fs_name_str(slot: usize) -> str {
@@ -138,6 +138,9 @@ fn fs_load(slot: usize) -> err {
     let result = fs_recv_word()
     let count = fs_recv_handle_data(slot)
     if result != FS_RESULT_OK { ret NotFound }
+    // The whole-file protocol cannot stream: a file past the client buffer is
+    // refused rather than silently truncated.
+    if count > FS_BLOCK { ret Failed }
     fs_handles[slot].size = count
     fs_handles[slot].loaded = true
     ret ok
@@ -152,10 +155,12 @@ fn write(f: File, buf: str) -> (usize, err) {
     if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
     var start = fs_handles[slot].offset
     if fs_handles[slot].append { start = fs_handles[slot].size }
-    var n = 0usize
-    while n < buf.len && start + n < FS_BLOCK {
-        fs_handles[slot].data[start + n] = buf[n]
-        n += 1usize
+    let n = buf.len
+    if start + n > FS_BLOCK { ret (0usize, Failed) }
+    var k = 0usize
+    while k < n {
+        fs_handles[slot].data[start + k] = buf[k]
+        k += 1usize
     }
     fs_handles[slot].offset = start + n
     if fs_handles[slot].offset > fs_handles[slot].size { fs_handles[slot].size = fs_handles[slot].offset }
@@ -221,6 +226,13 @@ fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err) {
     fs_handles[slot].loaded = false
     fs_handles[slot].dirty = false
     fs_handles[slot].append = flags.append
+    if !flags.write {
+        let read_load = fs_load(slot)
+        if read_load != ok {
+            fs_handles[slot].used = false
+            ret (File { raw: 0usize }, read_load)
+        }
+    }
     if flags.write {
         let load_error = fs_load(slot)
         if load_error != ok {
@@ -281,6 +293,7 @@ fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err) {
         if off > i64(FS_BLOCK - pos) { ret (0u64, Failed) }
         pos = pos + usize(off)
     }
+    if pos > fs_handles[slot].size { ret (0u64, Failed) }
     fs_handles[slot].offset = pos
     ret (u64(pos), ok)
 }
