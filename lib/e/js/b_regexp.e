@@ -23,14 +23,11 @@ fn zero_ptr() -> *void {
     ret p
 }
 
-// The UTF-16 units of `s`.
-fn to_units(a: *mem.Arena, s: str) -> []const u16 {
+// The UTF-16 units of `s`; an allocation failure is reported, not hidden as an empty pattern.
+fn to_units(a: *mem.Arena, s: str) -> ([]const u16, err) {
     let n = js.units(s)
     let (cell, ce) = mem.alloc[u16](a, n + 1usize)
-    if ce != ok {
-        var none: []const u16 = zero
-        ret none
-    }
+    if ce != ok { ret (zero, ce) }
     var i = 0usize
     var k = 0usize
     while i < s.len {
@@ -52,7 +49,7 @@ fn to_units(a: *mem.Arena, s: str) -> []const u16 {
             i += l
         }
     }
-    ret cell[0usize..k]
+    ret (cell[0usize..k], ok)
 }
 
 // The UTF-8 string for UTF-16 `units[from..to]`.
@@ -153,12 +150,16 @@ fn escape_source(it: *js.Interp, src: str) -> str {
 
 // The UTF-16 units of a long subject, kept for the next match: scanning a big string with a global regexp would otherwise convert it
 // once per match.
-fn subject_units(it: *js.Interp, s: str) -> []const u16 {
-    if s.len < 128usize { ret to_units(it.a, s) }
-    if it.ux_src.len == s.len && str.eq(it.ux_src, s) { ret it.ux_units }
-    let units = to_units(it.a, s)
+fn subject_units(it: *js.Interp, s: str) -> ([]const u16, err) {
+    if s.len < 128usize {
+        let (short, short_error) = to_units(it.a, s)
+        ret (short, short_error)
+    }
+    if it.ux_src.len == s.len && str.eq(it.ux_src, s) { ret (it.ux_units, ok) }
+    let (units, ue) = to_units(it.a, s)
+    if ue != ok { ret (zero, ue) }
     let (copy, ce) = mem.alloc[u8](it.a, s.len)
-    if ce != ok { ret units }
+    if ce != ok { ret (zero, ce) }
     var i = 0usize
     while i < s.len {
         copy[i] = s[i]
@@ -166,12 +167,13 @@ fn subject_units(it: *js.Interp, s: str) -> []const u16 {
     }
     it.ux_src = copy[0usize..s.len]
     it.ux_units = units
-    ret units
+    ret (units, ok)
 }
 
 // Builds a RegExp object for `source`/`flags` with the given prototype.
 fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str, legacy: bool) -> (js.Value, err) {
-    let units = to_units(it.a, source)
+    let (units, ue) = to_units(it.a, source)
+    if ue != ok { ret (js.undefv(), ue) }
     let (re, msg, ce) = rx.compile(it.a, units, flags)
     if ce != ok { ret (js.undefv(), js.throw_syntax(it, js.str_concat3(it, "Invalid regular expression: /", source, js.str_concat(it, "/: ", msg)))) }
     let o = js.new_obj(it, js.C_REGEXP, proto)
@@ -271,7 +273,8 @@ fn builtin_exec(it: *js.Interp, r: *js.Obj, s: str) -> (js.Value, err) {
     let global = c.re.global
     let sticky = c.re.sticky
     if !global && !sticky { last_index = 0.0f64 }
-    let units = subject_units(it, s)
+    let (units, ue) = subject_units(it, s)
+    if ue != ok { ret (js.undefv(), ue) }
     if last_index > f64(units.len) {
         if global || sticky {
             let pe = js.put(it, js.obj_value(r), js.key_of("lastIndex"), js.num_value(0.0f64), true)
@@ -656,6 +659,7 @@ fn get_substitution(it: *js.Interp, matched: str, s: str, position: usize, captu
     var out = b
     var i = 0usize
     var pending_named: [64]str = zero
+    var marker_pos: [64]usize = zero
     var pending_count = 0usize
     while i < replacement.len {
         let c = replacement[i]
@@ -706,6 +710,7 @@ fn get_substitution(it: *js.Interp, matched: str, s: str, position: usize, captu
                     let name = replacement[i + 2usize..j]
                     if pending_count < 64usize {
                         pending_named[pending_count] = name
+                        marker_pos[pending_count] = out.len
                         pending_count += 1usize
                     }
                     let marker = "\x01"
@@ -723,22 +728,21 @@ fn get_substitution(it: *js.Interp, matched: str, s: str, position: usize, captu
     // Substitute the markers with the named capture values.
     var acc = ""
     var seg = 0usize
-    var at = 0usize
     var used_named = 0usize
-    while at < result.len {
-        if result[at] == 1u8 && used_named < pending_count {
-            acc = js.str_concat(it, acc, result[seg..at])
-            let (cv2, cve) = js.get_value(it, named, js.key_of(pending_named[used_named]))
-            if cve != ok { ret ("", cve) }
-            if !js.is_undefined(cv2) {
-                let (cs, cse) = js.to_string(it, cv2)
-                if cse != ok { ret ("", cse) }
-                acc = js.str_concat(it, acc, cs)
-            }
-            used_named += 1usize
-            seg = at + 1usize
+    // Marker byte positions are kept out of band, so a literal U+0001 in the input
+    // cannot be mistaken for an expansion slot.
+    while used_named < pending_count {
+        let at = marker_pos[used_named]
+        acc = js.str_concat(it, acc, result[seg..at])
+        let (cv2, cve) = js.get_value(it, named, js.key_of(pending_named[used_named]))
+        if cve != ok { ret ("", cve) }
+        if !js.is_undefined(cv2) {
+            let (cs, cse) = js.to_string(it, cv2)
+            if cse != ok { ret ("", cse) }
+            acc = js.str_concat(it, acc, cs)
         }
-        at += 1usize
+        used_named += 1usize
+        seg = at + 1usize
     }
     acc = js.str_concat(it, acc, result[seg..])
     ret (acc, ok)
@@ -982,7 +986,8 @@ fn regexp_compile(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
             flags = fs
         }
     }
-    let units = to_units(it.a, source)
+    let (units, ue) = to_units(it.a, source)
+    if ue != ok { ret (js.undefv(), ue) }
     let (re, msg, ce) = rx.compile(it.a, units, flags)
     if ce != ok { ret (js.undefv(), js.throw_syntax(it, js.str_concat(it, "Invalid regular expression: ", msg))) }
     let c2 = compiled_of(js.as_object(this_val))

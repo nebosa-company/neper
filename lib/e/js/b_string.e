@@ -68,26 +68,28 @@ fn string_to_string(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
 fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
     var i = 0usize
     // Units are collected first (a builder must stay on top of the arena, and the coercions run script), then paired up.
-    var units_buf: [64]u32 = zero
-    var n = 0usize
-    var pending: u32 = 0u32
-    var has_pending = false
-    while i < args.len && n < 64usize {
+    var units_l: list.List[u32] = zero
+    if args.len > 0usize {
+        let (l0, le) = list.init[u32](it.a, args.len)
+        if le != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+        units_l = l0
+    }
+    while i < args.len {
         let (u, ue) = js.to_uint32(it, args[i])
         if ue != ok { ret (js.undefv(), ue) }
-        units_buf[n] = u & 65535u32
-        n += 1usize
+        try list.push[u32](&units_l, u & 65535u32)
         i += 1usize
     }
+    let n = units_l.len
     let (b, be) = str.builder(it.a, args.len * 3usize + 4usize)
     if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
     var out = b
     var k = 0usize
     while k < n {
-        let u2 = units_buf[k]
+        let u2 = units_l.items[k]
         k += 1usize
-        if u2 >= 55296u32 && u2 <= 56319u32 && k < n && units_buf[k] >= 56320u32 && units_buf[k] <= 57343u32 {
-            js.put_cp(&out, 65536u32 + ((u2 - 55296u32) << 10u32) + (units_buf[k] - 56320u32))
+        if u2 >= 55296u32 && u2 <= 56319u32 && k < n && units_l.items[k] >= 56320u32 && units_l.items[k] <= 57343u32 {
+            js.put_cp(&out, 65536u32 + ((u2 - 55296u32) << 10u32) + (units_l.items[k] - 56320u32))
             k += 1usize
         } else {
             js.put_cp(&out, u2)
@@ -97,23 +99,26 @@ fn from_char_code(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
 }
 
 fn from_code_point(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
-    let (b, be) = str.builder(it.a, args.len * 4usize + 4usize)
-    if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
-    var out = b
-    var cps: [64]u32 = zero
-    var n = 0usize
+    var cps: list.List[u32] = zero
+    if args.len > 0usize {
+        let (l0, le) = list.init[u32](it.a, args.len)
+        if le != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+        cps = l0
+    }
     var i = 0usize
-    while i < args.len && n < 64usize {
+    while i < args.len {
         let (num, ne) = js.to_number(it, args[i])
         if ne != ok { ret (js.undefv(), ne) }
         if num != js.to_integer(num) || num < 0.0f64 || num > 1114111.0f64 || js.is_nan(num) { ret (js.undefv(), js.throw_range(it, "Invalid code point")) }
-        cps[n] = u32(i64(num))
-        n += 1usize
+        try list.push[u32](&cps, u32(i64(num)))
         i += 1usize
     }
+    let (b, be) = str.builder(it.a, args.len * 4usize + 4usize)
+    if be != ok { ret (js.undefv(), js.throw_range(it, "out of memory")) }
+    var out = b
     var k = 0usize
-    while k < n {
-        js.put_cp(&out, cps[k])
+    while k < cps.len {
+        js.put_cp(&out, cps.items[k])
         k += 1usize
     }
     ret (js.str_value(str.done(&out)), ok)
@@ -209,13 +214,29 @@ fn string_at(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.
     ret (js.str_value(js.substring_units(it.a, s, usize(k), usize(k) + 1usize)), ok)
 }
 
-// Unit index of `needle` in `s` at or after unit `from` (-1 when absent).
+// Unit index of `needle` in `s` at or after unit `from` (-1 when absent), compared as
+// UTF-16 code units so a lone surrogate matches one half of a surrogate pair.
 fn index_of_units(it: *js.Interp, s: str, needle: str, from: usize) -> f64 {
-    let start = js.byte_of_unit(s, from)
-    if start > s.len { ret -1.0f64 }
-    let (at, found) = str.find_from(s, needle, start)
-    if !found { ret -1.0f64 }
-    ret f64(js.units(s[0usize..at]))
+    let n = js.units(s)
+    let m = js.units(needle)
+    if from > n { ret -1.0f64 }
+    var start = from
+    while start + m <= n {
+        var j = 0usize
+        var same_units = true
+        while j < m {
+            let (a, has_a) = js.unit_at(s, start + j)
+            let (b, has_b) = js.unit_at(needle, j)
+            if !has_a || !has_b || a != b {
+                same_units = false
+                break
+            }
+            j += 1usize
+        }
+        if same_units { ret f64(start) }
+        start += 1usize
+    }
+    ret -1.0f64
 }
 
 fn string_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -294,8 +315,17 @@ fn string_starts_with(it: *js.Interp, this_val: js.Value, args: []const js.Value
     let len = f64(js.units(s))
     if pos < 0.0f64 { pos = 0.0f64 }
     if pos > len { pos = len }
-    let start = js.byte_of_unit(s, usize(pos))
-    ret (js.bool_value(str.starts_with(s[start..], needle)), ok)
+    let at = usize(pos)
+    let m = js.units(needle)
+    var matched = at + m <= usize(len)
+    var j = 0usize
+    while matched && j < m {
+        let (a, has_a) = js.unit_at(s, at + j)
+        let (b, has_b) = js.unit_at(needle, j)
+        if !has_a || !has_b || a != b { matched = false }
+        j += 1usize
+    }
+    ret (js.bool_value(matched), ok)
 }
 
 fn string_ends_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err) {
@@ -315,8 +345,17 @@ fn string_ends_with(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
     }
     if end < 0.0f64 { end = 0.0f64 }
     if end > len { end = len }
-    let end_byte = js.byte_of_unit(s, usize(end))
-    ret (js.bool_value(str.ends_with(s[0usize..end_byte], needle)), ok)
+    let m = js.units(needle)
+    let at = usize(end)
+    var matched = at >= m
+    var j = 0usize
+    while matched && j < m {
+        let (a, has_a) = js.unit_at(s, at - m + j)
+        let (b, has_b) = js.unit_at(needle, j)
+        if !has_a || !has_b || a != b { matched = false }
+        j += 1usize
+    }
+    ret (js.bool_value(matched), ok)
 }
 
 fn clamp_index(it: *js.Interp, v: js.Value, len: f64, default_value: f64) -> (f64, err) {
@@ -625,15 +664,21 @@ fn string_split(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (
         }
         ret (js.obj_value(out), ok)
     }
-    var pos = 0usize
+    var pos_unit = 0usize
+    let sep_units = js.units(r_str)
     while true {
-        let (at, found) = str.find_from(s, r_str, pos)
-        if !found { break }
-        try js.array_push(it, out, js.str_value(s[pos..at]))
+        let found_unit = index_of_units(it, s, r_str, pos_unit)
+        if found_unit < 0.0f64 { break }
+        let at_unit = usize(found_unit)
+        let at = js.byte_of_unit(s, at_unit)
+        let next_unit = at_unit + sep_units
+        let next_byte = js.byte_of_unit(s, next_unit)
+        let from_byte = js.byte_of_unit(s, pos_unit)
+        try js.array_push(it, out, js.str_value(s[from_byte..at]))
         if u32(out.elems.len) >= lim { ret (js.obj_value(out), ok) }
-        pos = at + r_str.len
+        pos_unit = next_unit
     }
-    try js.array_push(it, out, js.str_value(s[pos..]))
+    try js.array_push(it, out, js.str_value(s[js.byte_of_unit(s, pos_unit)..]))
     ret (js.obj_value(out), ok)
 }
 
