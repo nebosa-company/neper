@@ -16126,7 +16126,7 @@ fn scan_expect(d: *DateScan, c: u8)
 fn scan_maybe(d: *DateScan, c: u8) -> bool
 fn scan_month(d: *DateScan) -> i64
 fn scan_num(d: *DateScan, max_len: usize) -> i64
-fn parse_http_date(s: str) -> (i64, bool)
+fn parse_http_date(s: str, now_ms: i64) -> (i64, bool)
 
 type Url = struct { valid: bool, scheme: str, userinfo: str, has_authority: bool, host: str, has_port: bool, port: i64, path: str, has_query: bool, query: str, has_fragment: bool, fragment: str }
 

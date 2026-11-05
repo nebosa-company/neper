@@ -194,7 +194,7 @@ fn scan_num(d: *DateScan, max_len: usize) -> i64 {
 }
 
 // `HttpDate.parse` of the three formats (RFC 1123, RFC 850, asctime); false for anything else.
-fn parse_http_date(s: str) -> (i64, bool) {
+fn parse_http_date(s: str, now_ms: i64) -> (i64, bool) {
     if s.len == 0usize { ret (0i64, false) }
     var d = DateScan { s: s, at: 0usize, bad: false }
     // 0 asctime, 1 rfc1123 (separator ' '), 2 rfc850 (separator '-')
@@ -268,6 +268,16 @@ fn parse_http_date(s: str) -> (i64, bool) {
         }
     }
     if d.bad || d.at != s.len { ret (0i64, false) }
+    // RFC 9110 5.6.7: a two-digit RFC 850 year more than 50 years ahead of the reference time is the most recent past
+    // year with the same last two digits.
+    if format == 2i32 && year < 100i64 {
+        let ref_day = now_ms / 86400000i64
+        var now_year = 1970i64 + ref_day / 366i64
+        while days_from_civil(now_year, 1i64, 1i64) > ref_day { now_year -= 1i64 }
+        while days_from_civil(now_year + 1i64, 1i64, 1i64) <= ref_day { now_year += 1i64 }
+        year += (now_year / 100i64) * 100i64
+        if year > now_year + 50i64 { year -= 100i64 }
+    }
     ret (utc_ms(year, month + 1i64, day, hours, minutes, seconds), true)
 }
 
@@ -554,12 +564,12 @@ fn freshness_lifetime(a: *mem.Arena, h: Headers, now_ms: i64) -> (i64, bool) {
     }
     let (expires, has_expires) = header_get(h, "expires")
     if has_expires {
-        let (exp, ok_e) = parse_http_date(expires)
+        let (exp, ok_e) = parse_http_date(expires, now_ms)
         if ok_e {
             var date = now_ms
             let (date_text, has_date) = header_get(h, "date")
             if has_date {
-                let (d, ok_d) = parse_http_date(date_text)
+                let (d, ok_d) = parse_http_date(date_text, now_ms)
                 if ok_d { date = d }
             }
             let secs = seconds_between(exp, date)
@@ -574,12 +584,12 @@ fn freshness_lifetime(a: *mem.Arena, h: Headers, now_ms: i64) -> (i64, bool) {
 fn heuristic_lifetime(h: Headers, now_ms: i64) -> (i64, bool) {
     let (lm_text, has_lm) = header_get(h, "last-modified")
     if !has_lm { ret (0i64, false) }
-    let (lm, ok_lm) = parse_http_date(lm_text)
+    let (lm, ok_lm) = parse_http_date(lm_text, now_ms)
     if !ok_lm { ret (0i64, false) }
     var date = now_ms
     let (date_text, has_date) = header_get(h, "date")
     if has_date {
-        let (d, ok_d) = parse_http_date(date_text)
+        let (d, ok_d) = parse_http_date(date_text, now_ms)
         if ok_d { date = d }
     }
     let interval = seconds_between(date, lm)
