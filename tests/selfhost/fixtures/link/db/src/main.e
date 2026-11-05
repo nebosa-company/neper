@@ -9,9 +9,17 @@ use e.mem
 use e.str
 use e.time
 use e.db
+use e.db.orm as orm
 
 // One open row set at a time: the cursor and its columns live in the store.
-type Store = struct { ids: [8]i64, names: [8]str, count: usize, committed: usize, tx_open: bool, closed: bool, cursor: usize, cols: [2]db.Column, statements_closed: u32, rows_closed: u32, fail_close: bool, fail_statement_close: bool, fail_rows_close: bool, fail_commit: bool, fail_rollback: bool }
+type Store = struct { ids: [8]i64, names: [8]str, count: usize, committed: usize, tx_open: bool, closed: bool, cursor: usize, cols: [2]db.Column, statements_closed: u32, rows_closed: u32, fail_close: bool, fail_statement_close: bool, fail_rows_close: bool, fail_commit: bool, fail_rollback: bool, returning_row: bool, served: bool }
+
+// A row the driver hands back for `INSERT ... RETURNING id` (#69 item 5).
+type PgRow = struct { id: i64, user_id: i64, title: str, views: u32 }
+
+fn pg_quiet() -> orm.Hooks[PgRow] {
+    ret orm.Hooks[PgRow] { before_save: orm.hook_ok[PgRow], after_save: orm.hook_ok[PgRow], before_create: orm.hook_ok[PgRow], after_create: orm.hook_ok[PgRow], before_update: orm.hook_ok[PgRow], after_update: orm.hook_ok[PgRow], before_delete: orm.hook_ok[PgRow], after_delete: orm.hook_ok[PgRow] }
+}
 
 fn store_of(ctx: *void) -> *Store { ret mem.cast[*Store](ctx) }
 
@@ -53,14 +61,30 @@ fn open_rows(s: *Store) -> (db.Rows, err) {
 }
 
 fn d_execute(ctx: *void, sql: str, params: []const db.Parameter) -> (u64, err) {
+    if str.starts_with(sql, "INSERT INTO pg_rows") {
+        // A Postgres-like server accepts the INSERT and (unlike SQLite) offers no
+        // last_insert_rowid(); only the RETURNING query can name the key.
+        let s = store_of(ctx)
+        s.returning_row = str.contains(sql, "RETURNING id")
+        ret (1u64, ok)
+    }
     if !str.eq(sql, "insert") { ret (0u64, db.InvalidQuery) }
     let (affected, insert_error) = insert(store_of(ctx), params)
     ret (affected, insert_error)
 }
 
 fn d_query(ctx: *void, sql: str, params: []const db.Parameter) -> (db.Rows, err) {
+    if str.contains(sql, "RETURNING id") {
+        let s = store_of(ctx)
+        s.returning_row = true
+        s.served = false
+        let (rows, rows_error) = open_rows(s)
+        ret (rows, rows_error)
+    }
     if !str.eq(sql, "select") { ret (zero, db.InvalidQuery) }
-    let (rows, rows_error) = open_rows(store_of(ctx))
+    let s = store_of(ctx)
+    s.returning_row = false
+    let (rows, rows_error) = open_rows(s)
     ret (rows, rows_error)
 }
 
@@ -108,6 +132,13 @@ fn d_rows_columns(ctx: *void) -> []const db.Column {
 // Only committed rows are visible outside a transaction; inside one, all of them.
 fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
     let s = store_of(ctx)
+    if s.returning_row {
+        // One integer, the key the INSERT generated.
+        if s.served || dst.len < 1usize { ret (false, ok) }
+        dst[0] = db.Value{ I64: 7i64 }
+        s.served = true
+        ret (true, ok)
+    }
     if dst.len < 2usize { ret (false, db.InvalidQuery) }
     var visible = s.committed
     if s.tx_open { visible = s.count }
@@ -278,6 +309,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var rows_e = rows4
     let (c5, e23) = drain(&rows_e, ids[0..], names[0..])
     if e23 != ok || c5 != 3usize || !str.eq(names[2], "three") { os.exit(31) }
+    // #69 item 5: a Postgres insert with an auto key comes back as INSERT ... RETURNING
+    // id; the driver above refuses last_insert_rowid(), so the old path would fail here.
+    var pg_session = orm.session(&connection, a, .Postgres)
+    let pg_hooks = pg_quiet()
+    var pg_row = PgRow { id: 0i64, user_id: 3i64, title: "pg", views: 4u32 }
+    if orm.insert[PgRow](&pg_session, "pg_rows", &pg_row, &pg_hooks) != ok { os.exit(38) }
+    if !store.returning_row { os.exit(39) }
+    if pg_row.id != 7i64 { os.exit(40) }
     // The connection closed.
     store.fail_close = true
     if db.close(&connection) != db.Busy || connection.ctx == nil || store.closed { os.exit(32) }

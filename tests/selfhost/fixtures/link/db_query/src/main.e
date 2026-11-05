@@ -266,6 +266,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (n11, e11v) = query.vectorized(plan[..p11.count], 6u32, tables[..3usize], 16usize, state[..], buf[..], out[..])
     if e11v != ok || n11 != 170usize || fold(out[..], 3usize, n11) != 4825550860999645306u64 { os.exit(11i32) }
 
+    // 11b: a Filter above a Project refers to the Project's output. Reordering the joins
+    // must remap the Project's columns and leave the Filter's column alone (#69 item 11).
+    var cols11b: [2]u32 = [2]u32{ 0u32, 5u32 }
+    plan[0usize] = query.scan(0u32)
+    plan[1usize] = query.scan(1u32)
+    plan[2usize] = query.scan(2u32)
+    plan[3usize] = query.join(0u32, 1u32, 1u32, 0u32)
+    plan[4usize] = query.join(3u32, 2u32, 5u32, 0u32)
+    plan[5usize] = query.project(4u32, cols11b[..])
+    plan[6usize] = query.filter(5u32, 1u32, query.GT, 500i64)
+    var p11b = query.planner(plan[..], 7usize, tables[..3usize], cols_scratch[..])
+    let (r11b, e11b) = query.optimize(&p11b, 6u32, sel3[..], cost[..], best[..])
+    if e11b != ok || r11b != 6u32 { os.exit(14i32) }
+    if p11b.plan[6usize].kind != query.FILTER || p11b.plan[6usize].column != 1u32 { os.exit(14i32) }
+
     // 12: cyclic plans are refused before column calculation or cursor recursion.
     var self_cycle: [1]query.Op = zero
     self_cycle[0usize] = query.filter(0u32, 0u32, query.EQ, 0i64)

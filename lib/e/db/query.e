@@ -1121,7 +1121,13 @@ fn connecting_edge(order: []const u32, k: usize, edge_leaf: []const usize, edge_
 }
 
 fn remap_above(p: *Planner, root: u32, top: u32, old_off: []const usize, widths: []const usize, new_off: []const usize) -> err {
+    // A Filter above a Project refers to the Project's output, not the join chain, so it
+    // must not be remapped with join coordinates (#69 item 11). Start at the first
+    // Project from the root; Filters above it stay as they are.
     var node = root
+    while node != top && p.plan[usize(node)].kind != PROJECT {
+        node = p.plan[usize(node)].input_a
+    }
     while node != top {
         let op = p.plan[usize(node)]
         if op.kind == FILTER {
