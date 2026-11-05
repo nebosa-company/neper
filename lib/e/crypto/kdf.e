@@ -595,14 +595,21 @@ fn bcrypt_hash_text(password: []const u8, salt: [16]u8, cost: u32) -> ([60]u8, e
     ret (out, ok)
 }
 
+// A stored string is verified at most at this cost: 12 is the highest work factor in
+// common use, and each step above it doubles the CPU a hostile string can demand.
+const BCRYPT_VERIFY_MAX_COST: u32 = 12u32
+
 // True when `hash_text` (a `$2a$`, `$2b$` or `$2y$` string) is `password`'s; the
-// comparison of the hash characters takes the same time whatever they are.
+// comparison of the hash characters takes the same time whatever they are. A cost above
+// the verification ceiling is refused before any rounds run; `bcrypt` still computes
+// higher costs for a caller that bounds that work itself.
 fn bcrypt_verify(password: []const u8, hash_text: []const u8) -> bool {
     if hash_text.len != 60usize { ret false }
     if hash_text[0] != 36u8 || hash_text[1] != 50u8 || hash_text[3] != 36u8 || hash_text[6] != 36u8 { ret false }
     if hash_text[2] != 97u8 && hash_text[2] != 98u8 && hash_text[2] != 121u8 { ret false }
     if hash_text[4] < 48u8 || hash_text[4] > 57u8 || hash_text[5] < 48u8 || hash_text[5] > 57u8 { ret false }
     let cost = u32(hash_text[4] - 48u8) * 10u32 + u32(hash_text[5] - 48u8)
+    if cost > BCRYPT_VERIFY_MAX_COST { ret false }
     let (salt, salt_ok) = bcrypt_decode_salt(hash_text[7..29])
     if !salt_ok { ret false }
     let (raw, bcrypt_error) = bcrypt(password, salt, cost)

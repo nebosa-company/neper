@@ -11631,6 +11631,7 @@ fn blowfish_f(bf: *Blowfish, x: u32) -> u32
 fn blowfish_encrypt(bf: *Blowfish, left: u32, right: u32) -> (u32, u32)
 fn stream_word(data: []const u8, at: usize) -> (u32, usize)
 fn blowfish_expand(bf: *Blowfish, salt: []const u8, key: []const u8)
+const BCRYPT_VERIFY_MAX_COST: u32 = 12u32
 fn bcrypt(password: []const u8, salt: [16]u8, cost: u32) -> ([23]u8, err)
 fn bcrypt_alphabet(value: u8) -> u8
 fn bcrypt_digit(c: u8) -> u8
@@ -11672,7 +11673,7 @@ fn scratch_maximum() -> usize
 fn scrypt_scratch_checked(n: usize, r: usize, p: usize) -> (usize, bool)
 ```
 
-Password hashing (L117, D2520): `argon2` runs Argon2d, Argon2i or Argon2id (`Argon2Kind`) at version 0x13 over the caller's `memory` of `m_kib` kibibytes, and `argon2_run` also takes a version (16 or 19) and the optional secret and associated data. `argon2_encode`/`scrypt_encode` write the PHC strings `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag` (unpadded standard Base64); `argon2_verify`/`scrypt_verify` parse one (a missing `v=` is version 16, a non-canonical Base64 tail, a padding character, a leading zero or an extra segment is `Invalid`), recompute the tag and compare it with `e.crypto.hash.equal_constant_time`. A hostile string is bounded: `t` over one million, an scrypt exponent over 32, `r` or `p` over 1024, and a salt or tag over 64 bytes answer `TooLarge`, and a memory demand beyond the caller's buffer answers `TooSmall` before any work. bcrypt's `bcrypt_verify` accepts `$2a$`, `$2b$` and `$2y$`; bcrypt, scrypt and Argon2 cost is the caller's to cap before accepting a stored string.
+Password hashing (L117, D2520): `argon2` runs Argon2d, Argon2i or Argon2id (`Argon2Kind`) at version 0x13 over the caller's `memory` of `m_kib` kibibytes, and `argon2_run` also takes a version (16 or 19) and the optional secret and associated data. `argon2_encode`/`scrypt_encode` write the PHC strings `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag` (unpadded standard Base64); `argon2_verify`/`scrypt_verify` parse one (a missing `v=` is version 16, a non-canonical Base64 tail, a padding character, a leading zero or an extra segment is `Invalid`), recompute the tag and compare it with `e.crypto.hash.equal_constant_time`. A hostile string is bounded: `t` over one million, an scrypt exponent over 32, `r` or `p` over 1024, and a salt or tag over 64 bytes answer `TooLarge`, and a memory demand beyond the caller's buffer answers `TooSmall` before any work. bcrypt's `bcrypt_verify` accepts `$2a$`, `$2b$` and `$2y$`; bcrypt, scrypt and Argon2 cost is the caller's to cap before accepting a stored string, and `bcrypt_verify` itself refuses a cost above `BCRYPT_VERIFY_MAX_COST` (12) before any round runs, so a hostile stored string cannot demand unbounded work; `bcrypt` still computes higher costs for a caller that bounds that work itself.
 
 HKDF follows RFC 5869. Expand rejects output longer than 255 hash blocks before
 writing dst; salt omission has the RFC-defined zero-salt behavior. Output aliases

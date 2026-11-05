@@ -313,7 +313,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !(argon_err("password", "$argon2id$v=19$m=8,t=1,p=1$$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.Invalid)) { os.exit(130i32) }
     if !(argon_err("password", "$argon2id$v=19$m=8,t=4294967296,p=1$c2FsdHNhbHQ$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.Invalid)) { os.exit(131i32) }
     if !(argon_err("password", "$argon2id$v=19$m=8,t=1000001,p=1$c2FsdHNhbHQ$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.TooLarge)) { os.exit(132i32) }
-    if !(argon_err("password", "$argon2id$v=19$m=999999999,t=1,p=1$c2FsdHNhbHQ$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.TooSmall)) { os.exit(133i32) }
+    if !(argon_err("password", "$argon2id$v=19$m=999999999,t=1,p=1$c2FsdHNhbHQ$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.TooLarge)) { os.exit(133i32) }
     if !(argon_err("password", "$argon2id$v=19$m=8,t=1,p=1$MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.TooLarge)) { os.exit(134i32) }
     if !(argon_err("password", "$argon2id$v=19$m=8,t=1,p=1$c2FsdHNhbHQ$MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA", memory, kdf.TooLarge)) { os.exit(135i32) }
     if !(argon_err("password", "$argon2id$v=19$m=8,t=1,p=16777216$c2FsdHNhbHQ$+oMPEIU1KxM8sbBZuz4VsA", memory, kdf.Invalid)) { os.exit(136i32) }
@@ -342,7 +342,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !(scrypt_err("password", "$scrypt$ln=32,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(159i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=1025,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(160i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=8,p=1025$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(161i32) }
-    if !(scrypt_err("password", "$scrypt$ln=30,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooSmall)) { os.exit(162i32) }
+    if !(scrypt_err("password", "$scrypt$ln=30,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.TooLarge)) { os.exit(162i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=8,p=1$7bQGMA", scratch, kdf.Invalid)) { os.exit(163i32) }
     if !(scrypt_err("password", "$scrypt$ln=4,r=8,p=1$7bQGMA$", scratch, kdf.Invalid)) { os.exit(164i32) }
     if !(scrypt_err("password", "$scrypt$n=4,r=8,p=1$7bQGMA$cFwBl4ptn1uCrMZLNhFtrA", scratch, kdf.Invalid)) { os.exit(165i32) }
@@ -386,6 +386,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !(!kdf.bcrypt_verify("hunter2", "")) { os.exit(203i32) }
     if !(!kdf.bcrypt_verify("hunter2", "$2b$04$")) { os.exit(204i32) }
     if !(kdf.bcrypt_verify("hunter2", "$2b$04$mpoBJ5/GTW2s3k64XSmr2uurJWyy/8CqVV1H1qEI0Q8ptt3wOM0qG")) { os.exit(205i32) }
+    // A layout whose checked arithmetic would overflow saturates at the KDF scratch
+    // limit, and the derivation refuses it instead of writing past a small buffer.
+    if kdf.scrypt_scratch_required(1usize << 63usize, 1usize, 1usize) != 4294967295usize { os.exit(206i32) }
+    var huge: [64]u8 = zero
+    if kdf.scrypt("password", "NaCl", 1usize << 63usize, 1usize, 1usize, huge[0..], scratch) != kdf.TooLarge { os.exit(207i32) }
+    if kdf.argon2_memory_required(4294967295u32) != 4294967295usize { os.exit(208i32) }
+    if kdf.argon2id("password", "saltsalt", 1u32, 4294967295u32, 1u32, huge[0..], memory) != kdf.TooLarge { os.exit(209i32) }
+    // A stored bcrypt string is verified only up to cost 12, the highest work factor in
+    // common use; 13 and 31 are refused before any rounds run.
+    if !(bcrypt_ok("hunter2", "$2b$12$......................21jzCB1r6pN6rp5O2Ev0ejjTAboskKm")) { os.exit(210i32) }
+    if !(bcrypt_false("hunter2", "$2b$13$......................NA3zMa17w5BVQRSrnORU/VnWgIVWU/.")) { os.exit(211i32) }
+    if !(bcrypt_false("hunter2", "$2b$31$......................21jzCB1r6pN6rp5O2Ev0ejjTAboskKm")) { os.exit(212i32) }
     try io.print("crypto kdf phc ok\n")
     ret ok
 }
