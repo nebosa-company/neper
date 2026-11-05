@@ -3218,7 +3218,7 @@ fn upper_digit(v: u8) -> u8
 fn encode_component(a: *mem.Arena, s: str) -> str
 fn h_urlencode(c: *f.Call) -> f.Value
 fn h_generatepassword(c: *f.Call) -> f.Value
-fn element_scope(c: *f.Call, element: f.Value, index: usize, with_acc: bool, acc: f.Value) -> *const f.Scope
+fn element_scope(c: *f.Call, element: f.Value, index: usize, with_acc: bool, acc: f.Value) -> (*const f.Scope, err)
 fn eval_element(c: *f.Call, node: f.Node, element: f.Value, index: usize) -> f.Value
 fn h_map(c: *f.Call) -> f.Value
 fn h_filter(c: *f.Call) -> f.Value
@@ -3423,10 +3423,11 @@ fn compile_name(c: *Comp, node: f.Node) -> Part
 fn compile_unary(c: *Comp, node: f.Node) -> Part
 fn compile_binary(c: *Comp, node: f.Node) -> Part
 fn compile_ternary(c: *Comp, node: f.Node) -> Part
-fn interval_unit(unit: str) -> (str, bool)
+fn interval_unit(c: *Comp, unit: str) -> (str, bool)
 fn unit_text(c: *Comp, node: f.Node) -> (str, bool)
 fn try_date_add(c: *Comp, node: f.Node) -> (Part, bool)
 fn try_date_dif(c: *Comp, node: f.Node) -> (Part, bool)
+fn narrowed(part: Part, children: str) -> Part
 fn compile_call(c: *Comp, node: f.Node) -> Part
 fn try_hardcoded(c: *Comp, raw: str, args: []const Part) -> (Part, bool)
 fn count_of(c: *Comp, args: []const Part, i: usize) -> str
@@ -5595,6 +5596,7 @@ one `Pair` per group pair in `out`.
 error TooSmall
 error Singular
 error Invalid
+error NotConverged
 type Corr = enum u8 { Independence, Exchangeable, Ar1 }
 type MmrmCtx = struct { y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, lbuf: []f64, vbuf: []f64, xvx: []f64, xvy: []f64, ybuf: []f64, xcol: []f64 }
 type RiCtx = struct { y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64 }
@@ -5829,6 +5831,7 @@ fn negbin_profile(x: []const f64, y: []const f64, exposure: []const f64, n: usiz
 fn negbin(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, tolerance: f64, max_iterations: u32, max_outer: u32, theta: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
 fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize, d: usize, tolerance: f64, max_iterations: u32, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
 fn ordinal_objective(ctx: *OrdinalCtx, params: []const f64) -> f64
+fn ordinal_jac(u: usize, row: usize, gap_count: usize, params: []const f64) -> f64
 fn ordinal_logistic(x: []const f64, y: []const u8, n: usize, d: usize, levels: usize, tolerance: f64, max_iterations: u32, thresholds: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
 ```
 
