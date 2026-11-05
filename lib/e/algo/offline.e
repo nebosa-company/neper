@@ -220,10 +220,48 @@ fn new_read_cache(a: *mem.Arena, fresh_ms: i64) -> ReadCache {
     ret ReadCache { a: a, fresh_ms: fresh_ms, tables: tables }
 }
 
+// Scalar ids compare by their JavaScript string form, the convention `cache_scopes`
+// already uses: a numeric id `5` and the text `"5"` name the same record.
+fn same_js_id(x: json.Value, y: json.Value) -> bool { ret str.eq(js_string(x, true), js_string(y, true)) }
+
+// Overlay ids compare with `===` semantics but without the arena serialisation
+// `same_json` performs for every slot.
+fn same_overlay_id(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool {
+    if !has_x && !has_y { ret true }
+    if has_x != has_y { ret false }
+    switch x {
+    case .String as xs:
+        switch y {
+        case .String as ys:
+            ret str.eq(xs, ys)
+        default:
+            ret false
+        }
+    case .Number as xn:
+        switch y {
+        case .Number as yn:
+            let (xf, xe) = json.number_f64(xn)
+            let (yf, ye) = json.number_f64(yn)
+            ret xe == ok && ye == ok && xf == yf
+        default:
+            ret false
+        }
+    case .Bool as xb:
+        switch y {
+        case .Bool as yb:
+            ret xb == yb
+        default:
+            ret false
+        }
+    default:
+        ret same_member(a, x, has_x, y, has_y)
+    }
+}
+
 fn snapshot_index(c: *const ReadCache, table_id: json.Value) -> i64 {
     var at = 0usize
     while at < c.tables.len {
-        if sync.same_json(c.a, c.tables.items[at].table_id, table_id) { ret i64(at) }
+        if same_js_id(c.tables.items[at].table_id, table_id) { ret i64(at) }
         at += 1usize
     }
     ret -1i64
@@ -275,7 +313,7 @@ fn cache_read(c: *const ReadCache, table_id: json.Value, now_ms: i64, online: bo
 fn id_slot(ids: []const json.Value, present: []const bool, live: []const bool, id: json.Value, has_id: bool, a: *mem.Arena) -> i64 {
     var at = 0usize
     while at < ids.len {
-        if live[at] && same_member(a, ids[at], present[at], id, has_id) { ret i64(at) }
+        if live[at] && same_overlay_id(a, ids[at], present[at], id, has_id) { ret i64(at) }
         at += 1usize
     }
     ret -1i64
@@ -465,15 +503,12 @@ fn plan_replay(a: *mem.Arena, queue: []const json.Value, versions: json.Value) -
         var server_version: json.Value = .Null
         let (rid, has_rid) = sync.get(w, "recordId")
         if has_rid {
-            switch rid {
-            case .String as key:
-                let (v, found) = sync.get(versions, key)
-                if found {
-                    have_version = true
-                    server_version = v
-                }
-            default:
-                have_version = false
+            // The versions object is keyed by the id's string form, as `cache_scopes`
+            // writes ids and as JavaScript object indexing works.
+            let (v, found) = sync.get(versions, js_string(rid, true))
+            if found {
+                have_version = true
+                server_version = v
             }
         }
         if !have_version {
@@ -493,6 +528,14 @@ fn plan_replay(a: *mem.Arena, queue: []const json.Value, versions: json.Value) -
                     let (x, ex) = json.number_f64(sv)
                     let (y, ey) = json.number_f64(bv)
                     behind = ex == ok && ey == ok && x > y
+                default:
+                    behind = false
+                }
+            case .String as sv:
+                // ISO stamps and etags order as text when both sides are text.
+                switch base {
+                case .String as bv:
+                    behind = str.compare(sv, bv) > 0i32
                 default:
                     behind = false
                 }
@@ -812,8 +855,7 @@ fn conflict_count(review: json.Value) -> i64 {
 fn string_in(values: []const json.Value, s: str) -> bool {
     var at = 0usize
     while at < values.len {
-        let (t, is_text) = ir.string_of(values[at])
-        if is_text && str.eq(t, s) { ret true }
+        if str.eq(js_string(values[at], true), s) { ret true }
         at += 1usize
     }
     ret false
@@ -897,8 +939,7 @@ fn apply_cache_purge(a: *mem.Arena, c: *ReadCache, plan: json.Value, has_plan: b
     let tables = sync.items(ir.value_of(plan, "tables"))
     var t = 0usize
     while t < tables.len {
-        let was_there = cache_evict(c, tables[t])
-        evicted += 1i64
+        if cache_evict(c, tables[t]) { evicted += 1i64 }
         t += 1usize
     }
     let (members, is_object) = ir.members_of(ir.value_of(plan, "records"))
