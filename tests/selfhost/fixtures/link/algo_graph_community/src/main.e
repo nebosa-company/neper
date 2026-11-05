@@ -123,6 +123,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
+    // #227: scratch shorter than the graph must answer TooSmall before `components` writes
+    // into it, and a short labels slice must not be indexed by modularity.
+    let (short_removals, short_error) = community.girvan_newman[i64](&g, removed[..], scores[..], labels[..], order[..1usize], distance[..], sigma[..], delta[..])
+    if short_error != community.TooSmall { os.exit(70i32) }
+    if community.modularity[i64](&g, labels[..1usize]) != 0.0f64 { os.exit(71i32) }
+
     try io.print("algo graph community ok\n")
     ret ok
 }

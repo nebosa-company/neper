@@ -4,10 +4,15 @@
 // exits with its own code.
 
 use e.algo.graph.centrality as centrality
+use e.algo.graph.path as path
 use e.data.graph as graph
 use e.io
 use e.mem
 use e.os
+
+type Weights = struct { unused: u8 }
+
+fn integer_weight(ctx: *Weights, e: graph.Edge[i64]) -> usize { ret usize(e.value) }
 
 fn near(x: f64, want: f64, eps: f64) -> bool {
     var d = x - want
@@ -111,6 +116,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (hits_rounds, star_hits) = centrality.hits[i64](&sg, 0.000000000001f64, 1000u32, star_scores[..], star_hub[..])
     if star_hits != ok || hits_rounds >= 1000u32 { os.exit(4i32) }
     if !near(centrality.sqrt(1.0e-300f64) / 1.0e-150f64, 1.0f64, 0.000000001f64) { os.exit(4i32) }
+
+    // #198: W relaxes X into bucket 2 while X still sits in bucket 5; one entry per push
+    // keeps Y behind X from being lost, which used to hang Dial.
+    let (db0, db_error) = graph.builder[i64](a, 4usize, 4usize)
+    if db_error != ok { os.exit(60i32) }
+    var db = db0
+    if graph.add_directed[i64](&db, 0u32, 1u32, 5i64) != ok { os.exit(60i32) }
+    if graph.add_directed[i64](&db, 0u32, 2u32, 5i64) != ok { os.exit(60i32) }
+    if graph.add_directed[i64](&db, 0u32, 3u32, 1i64) != ok { os.exit(60i32) }
+    if graph.add_directed[i64](&db, 3u32, 2u32, 1i64) != ok { os.exit(60i32) }
+    let (dg, dg_error) = graph.finish[i64](a, &db)
+    if dg_error != ok { os.exit(60i32) }
+    var dw = Weights { unused: 0u8 }
+    let (dd, dd_error) = path.dial[i64, Weights](a, &dg, 0u32, 5usize, &dw, integer_weight)
+    if dd_error != ok || dd[0usize] != 0usize || dd[1usize] != 5usize || dd[2usize] != 2usize || dd[3usize] != 1usize { os.exit(60i32) }
 
     try io.print("algo graph centrality ok\n")
     ret ok

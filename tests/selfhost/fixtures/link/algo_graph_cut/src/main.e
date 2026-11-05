@@ -3,6 +3,7 @@
 // weighted graph, Karger runs reach the same minimum over enough tries,
 // and the argument checks answer. Each check exits with its own code.
 
+use e.algo.graph as algo
 use e.algo.graph.cut as cut
 use e.algo.rand
 use e.data.graph as graph
@@ -142,6 +143,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
         disconnected_i += 1usize
     }
     if disconnected_ones == 0usize || disconnected_ones == 4usize { os.exit(3i32) }
+
+    // #198: a 100,000-node path is deeper than the call stack; the low-link walk is
+    // iterative, so every edge but none of the endpoints is a bridge.
+    let path_nodes = 100000usize
+    let path_edges = 99999usize
+    let (pb0, pb_error) = graph.builder[i64](a, path_nodes, path_edges * 2usize + 4usize)
+    if pb_error != ok { os.exit(90i32) }
+    var pb = pb0
+    var pe = 0usize
+    while pe < path_edges {
+        if graph.add_undirected[i64](&pb, u32(pe), u32(pe + 1usize), 1i64) != ok { os.exit(90i32) }
+        pe += 1usize
+    }
+    let (pg, pg_error) = graph.finish[i64](a, &pb)
+    if pg_error != ok { os.exit(90i32) }
+    let (deep_bridges, deep_error) = algo.bridges[i64](a, &pg)
+    if deep_error != ok || deep_bridges.len != path_edges { os.exit(90i32) }
+    let (deep_cuts, deep_cut_error) = algo.articulation_points[i64](a, &pg)
+    if deep_cut_error != ok { os.exit(91i32) }
+    if deep_cuts.len < path_edges - 1usize { os.exit(92i32) }
+    if deep_cuts.len > path_edges - 1usize { os.exit(93i32) }
 
     try io.print("algo graph cut ok\n")
     ret ok

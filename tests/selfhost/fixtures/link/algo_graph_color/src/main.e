@@ -3,11 +3,16 @@
 // and the complete graph on five nodes with five. Each check exits with
 // its own code.
 
+use e.algo.graph as algo
 use e.algo.graph.color as color
 use e.data.graph as graph
 use e.io
 use e.mem
 use e.os
+
+type Weights = struct { unused: u8 }
+
+fn weight_of(ctx: *Weights, e: graph.Edge[i64]) -> f64 { ret f64(e.value) }
 
 // Zachary's karate club: 34 nodes, 78 undirected edges, as NetworkX lists them.
 fn karate(a: *mem.Arena) -> (graph.Graph[i64], err) {
@@ -117,6 +122,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tg, tg_error) = graph.finish[i64](a, &tb)
     if tg_error != ok { os.exit(7i32) }
     if color.is_proper[i64](&tg, colors[..1usize]) { os.exit(7i32) }
+
+    // #198: two disjoint triangles are two forests, not "1 + every unreached node" (4).
+    let (fb0, fb_error) = graph.builder[i64](a, 6usize, 12usize)
+    if fb_error != ok { os.exit(80i32) }
+    var fb = fb0
+    var tri = 0usize
+    while tri < 2usize {
+        let base = u32(tri * 3usize)
+        if graph.add_undirected[i64](&fb, base, base + 1u32, 1i64) != ok { os.exit(80i32) }
+        if graph.add_undirected[i64](&fb, base + 1u32, base + 2u32, 1i64) != ok { os.exit(80i32) }
+        if graph.add_undirected[i64](&fb, base + 2u32, base, 1i64) != ok { os.exit(80i32) }
+        tri += 1usize
+    }
+    let (fg, fg_error) = graph.finish[i64](a, &fb)
+    if fg_error != ok { os.exit(80i32) }
+    var fw = Weights { unused: 0u8 }
+    var chosen: [6]usize = zero
+    let (forest, forest_error) = algo.mst_prim[i64, Weights](a, &fg, 0u32, &fw, weight_of, chosen[..])
+    if forest_error != ok { os.exit(80i32) }
+    if forest.trees != 2usize || forest.edges.len != 2usize { os.exit(81i32) }
 
     try io.print("algo graph color ok\n")
     ret ok

@@ -20,6 +20,7 @@ fn degree[E: type](g: *const graph.Graph[E], v: usize) -> usize { ret g.offsets[
 // Modularity of `labels` (`m` = undirected edge count = edges / 2).
 fn modularity[E: type](g: *const graph.Graph[E], labels: []const u32) -> f64 {
     let n = graph.node_count[E](g)
+    if labels.len < n { ret 0.0f64 }
     let two_m = f64(g.edges.len)
     if two_m == 0.0f64 { ret 0.0f64 }
     // Σ over pairs of one community of A_vw - k_v k_w / 2m, all over 2m.
@@ -338,11 +339,21 @@ fn edge_betweenness[E: type](g: *const graph.Graph[E], removed: []const u8, scor
         while e < g.offsets[v + 1usize] {
             let w = usize(g.edges[e].to)
             if v < w {
-                // Find the twin w -> v.
+                // The k-th live copy v -> w pairs with the k-th live copy w -> v; with
+                // parallel edges, "the first twin" would give every copy the same one.
+                var rank = 0usize
+                var g1 = g.offsets[v]
+                while g1 < e {
+                    if removed[g1] == 0u8 && usize(g.edges[g1].to) == w { rank += 1usize }
+                    g1 += 1usize
+                }
                 var f = g.offsets[w]
+                var seen_twins = 0usize
                 var twin = m
                 while f < g.offsets[w + 1usize] && twin == m {
-                    if usize(g.edges[f].to) == v && removed[f] == 0u8 { twin = f }
+                    if removed[f] == 0u8 && usize(g.edges[f].to) == v {
+                        if seen_twins == rank { twin = f } else { seen_twins += 1usize }
+                    }
                     f += 1usize
                 }
                 if twin != m {
@@ -404,7 +415,7 @@ fn components[E: type](g: *const graph.Graph[E], removed: []const u8, labels: []
 fn girvan_newman[E: type](g: *const graph.Graph[E], removed: []u8, scores: []f64, labels: []u32, order: []u32, distance: []u32, sigma: []f64, delta: []f64) -> (usize, err) {
     let n = graph.node_count[E](g)
     let m = g.edges.len
-    if removed.len < m || labels.len < n { ret (0usize, TooSmall) }
+    if removed.len < m || scores.len < m || labels.len < n || order.len < n || distance.len < n || sigma.len < n || delta.len < n { ret (0usize, TooSmall) }
     var i = 0usize
     while i < m {
         removed[i] = 0u8

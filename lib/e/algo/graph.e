@@ -449,6 +449,11 @@ fn dijkstra[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: 
 type Forest = struct { edges: []const usize, weight: f64, trees: usize }
 type WeightedEdge = struct { weight: f64, index: usize }
 type LowLinks = struct { disc: []u32, low: []u32, is_bridge: []u8, is_cut: []u8, time: u32 }
+
+// One frame of the iterative low-link walk: like the recursion it replaces, `k` is the
+// adjacency cursor, `edge` the copy the walk descended along, and `skipped` the one
+// parallel copy back to `from` already ignored.
+type LowFrame = struct { u: graph.NodeId, from: graph.NodeId, edge: usize, k: usize, children: usize, skipped: bool }
 error NegativeCycle
 error NoPath
 error NoArborescence
@@ -681,7 +686,14 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
     let buckets = max_weight + 1usize
     let (head, head_error) = mem.alloc[u32](a, buckets)
     if head_error != ok { ret (zero, head_error) }
-    let (link, link_error) = mem.alloc[u32](a, n)
+    // One entry per push: a node improved to a smaller distance appears again instead of
+    // moving its single link slot out of the bucket that still points at it.
+    let entries = g.edges.len + 1usize
+    let (entry_node, node_error) = mem.alloc[u32](a, entries)
+    if node_error != ok { ret (zero, node_error) }
+    let (entry_key, key_error) = mem.alloc[usize](a, entries)
+    if key_error != ok { ret (zero, key_error) }
+    let (entry_link, link_error) = mem.alloc[u32](a, entries)
     if link_error != ok { ret (zero, link_error) }
     let none = 18446744073709551615usize
     var i = 0usize
@@ -695,17 +707,21 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
         i += 1usize
     }
     distance[usize(start)] = 0usize
-    link[usize(start)] = graph.NONE
-    head[0usize] = start
+    entry_node[0usize] = start
+    entry_key[0usize] = 0usize
+    entry_link[0usize] = graph.NONE
+    head[0usize] = 0u32
+    var next = 1usize
     var current = 0usize
     var remaining = 1usize
     while remaining > 0usize {
         let bucket = current % buckets
         while head[bucket] != graph.NONE {
-            let u = head[bucket]
-            head[bucket] = link[usize(u)]
+            let entry = head[bucket]
+            head[bucket] = entry_link[usize(entry)]
             remaining -= 1usize
-            if distance[usize(u)] != current { continue }
+            let u = entry_node[usize(entry)]
+            if distance[usize(u)] != entry_key[usize(entry)] { continue }
             var k = g.offsets[usize(u)]
             while k < g.offsets[usize(u) + 1usize] {
                 let e = g.edges[k]
@@ -715,8 +731,12 @@ fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: grap
                 if candidate < distance[usize(e.to)] {
                     distance[usize(e.to)] = candidate
                     let slot = candidate % buckets
-                    link[usize(e.to)] = head[slot]
-                    head[slot] = e.to
+                    if next >= entries { ret (zero, graph.TooLarge) }
+                    entry_node[next] = e.to
+                    entry_key[next] = candidate
+                    entry_link[next] = head[slot]
+                    head[slot] = u32(next)
+                    next += 1usize
                     remaining += 1usize
                 }
                 k += 1usize
@@ -1439,35 +1459,49 @@ fn arborescence[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], roo
     ret (Forest { edges: chosen[..placed], weight: total, trees: 1usize }, ok)
 }
 
-// Tarjan's low-link walk from `u`, entered from `from` (`graph.NONE` at a root). One
-// edge back to `from` is the tree edge and is skipped; a second is a parallel edge and
-// counts. A bridge is marked on the copy the walk descended along.
-fn low_visit[E: type](g: *const graph.Graph[E], s: *LowLinks, u: graph.NodeId, from: graph.NodeId) {
-    s.disc[usize(u)] = s.time
-    s.low[usize(u)] = s.time
+// Tarjan's low-link walk from `start`, with an explicit frame stack so a long path or cycle
+// cannot overflow the call stack. A bridge is marked on the copy the walk descended along.
+fn low_walk[E: type](g: *const graph.Graph[E], s: *LowLinks, start: graph.NodeId, frames: []LowFrame) {
+    s.disc[usize(start)] = s.time
+    s.low[usize(start)] = s.time
     s.time += 1u32
-    var children = 0usize
-    var skipped = false
-    var k = g.offsets[usize(u)]
-    while k < g.offsets[usize(u) + 1usize] {
-        let v = g.edges[k].to
-        if v == from && !skipped {
-            skipped = true
-            k += 1usize
-            continue
+    frames[0usize] = LowFrame { u: start, from: graph.NONE, edge: usize(graph.NONE), k: g.offsets[usize(start)], children: 0usize, skipped: false }
+    var top = 1usize
+    while top > 0usize {
+        let f = &frames[top - 1usize]
+        let u = f.u
+        if f.k < g.offsets[usize(u) + 1usize] {
+            let k = f.k
+            let v = g.edges[k].to
+            f.k = k + 1usize
+            if v == f.from && !f.skipped {
+                f.skipped = true
+                continue
+            }
+            if s.disc[usize(v)] == graph.NONE {
+                f.children += 1usize
+                s.disc[usize(v)] = s.time
+                s.low[usize(v)] = s.time
+                s.time += 1u32
+                frames[top] = LowFrame { u: v, from: u, edge: k, k: g.offsets[usize(v)], children: 0usize, skipped: false }
+                top += 1usize
+            } else if s.disc[usize(v)] < s.low[usize(u)] {
+                s.low[usize(u)] = s.disc[usize(v)]
+            }
+        } else {
+            top -= 1usize
+            let from = f.from
+            if from == graph.NONE {
+                if f.children > 1usize { s.is_cut[usize(u)] = 1u8 }
+            } else {
+                if s.low[usize(u)] < s.low[usize(from)] { s.low[usize(from)] = s.low[usize(u)] }
+                if s.low[usize(u)] > s.disc[usize(from)] { s.is_bridge[f.edge] = 1u8 }
+                // The root is a cut only through its child count, never this rule.
+                let parent = &frames[top - 1usize]
+                if parent.from != graph.NONE && s.low[usize(u)] >= s.disc[usize(from)] { s.is_cut[usize(from)] = 1u8 }
+            }
         }
-        if s.disc[usize(v)] == graph.NONE {
-            children += 1usize
-            low_visit[E](g, s, v, u)
-            if s.low[usize(v)] < s.low[usize(u)] { s.low[usize(u)] = s.low[usize(v)] }
-            if s.low[usize(v)] > s.disc[usize(u)] { s.is_bridge[k] = 1u8 }
-            if from != graph.NONE && s.low[usize(v)] >= s.disc[usize(u)] { s.is_cut[usize(u)] = 1u8 }
-        } else if s.disc[usize(v)] < s.low[usize(u)] {
-            s.low[usize(u)] = s.disc[usize(v)]
-        }
-        k += 1usize
     }
-    if from == graph.NONE && children > 1usize { s.is_cut[usize(u)] = 1u8 }
 }
 
 // Discovery times, low links, bridge and cut marks over the whole graph.
@@ -1481,6 +1515,8 @@ fn low_links[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (LowLinks, err
     if is_bridge_error != ok { ret (zero, is_bridge_error) }
     let (is_cut, is_cut_error) = mem.alloc[u8](a, n)
     if is_cut_error != ok { ret (zero, is_cut_error) }
+    let (frames, frames_error) = mem.alloc[LowFrame](a, n)
+    if frames_error != ok { ret (zero, frames_error) }
     var i = 0usize
     while i < n {
         disc[i] = graph.NONE
@@ -1495,7 +1531,7 @@ fn low_links[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (LowLinks, err
     var s = LowLinks { disc: disc, low: low, is_bridge: is_bridge, is_cut: is_cut, time: 0u32 }
     i = 0usize
     while i < n {
-        if disc[i] == graph.NONE { low_visit[E](g, &s, u32(i), graph.NONE) }
+        if disc[i] == graph.NONE { low_walk[E](g, &s, u32(i), frames) }
         i += 1usize
     }
     ret (s, ok)
@@ -1799,7 +1835,11 @@ fn mst_prim[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: 
             k += 1usize
         }
     }
-    ret (Forest { edges: chosen[..placed], weight: total, trees: n - reached + 1usize }, ok)
+    // `trees` is the graph's component count, like Kruskal's and Boruvka's, not
+    // "1 + every unreached node".
+    let (parts, parts_error) = weak_components[E](a, g)
+    if parts_error != ok { ret (zero, parts_error) }
+    ret (Forest { edges: chosen[..placed], weight: total, trees: usize(parts.count) }, ok)
 }
 
 // Borůvka: every set picks its cheapest outgoing edge per round, ties broken by the
