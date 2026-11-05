@@ -26814,7 +26814,7 @@ fn array_last_index_of(it: *js.Interp, this_val: js.Value, args: []const js.Valu
 fn array_includes(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn iterate_with(it: *js.Interp, this_val: js.Value, args: []const js.Value, kind: u8) -> (js.Value, err)
 fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const js.Value
-fn four_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value, w: js.Value) -> []const js.Value
+fn join_body(it: *js.Interp, o: *js.Obj, args: []const js.Value) -> (js.Value, err)
 fn array_for_each(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn array_filter(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -26931,6 +26931,8 @@ fn number_to_locale_string(it: *js.Interp, this_val: js.Value, args: []const js.
 fn sig_digits(it: *js.Interp, x: f64, sig: usize) -> (str, i64)
 fn number_to_fixed(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn sig_digits_fixed(it: *js.Interp, x: f64, frac: usize) -> (str, i64)
+fn exact_small_text(it: *js.Interp, ax: f64) -> str
+fn tiny_fixed_text(it: *js.Interp, ax: f64, want: usize) -> str
 fn number_to_exponential(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn shortest_digits(it: *js.Interp, x: f64) -> (str, i64)
 fn number_to_precision(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
@@ -27012,6 +27014,7 @@ fn three_args(it: *js.Interp, x: js.Value, y: js.Value, z: js.Value) -> []const 
 ### `e.js.b_control`
 
 ```neper
+type Called = struct { ag: *js.Obj, idx: f64, called: bool }
 fn arg(args: []const js.Value, i: usize) -> js.Value
 fn iter_result(it: *js.Interp, v: js.Value, done: bool) -> js.Value
 fn this_generator(it: *js.Interp, v: js.Value) -> (*js.GenState, err)
@@ -27468,6 +27471,8 @@ fn time_clip(t: f64) -> f64
 fn now_ms() -> f64
 fn this_time(it: *js.Interp, v: js.Value) -> (*js.Obj, err)
 fn digits(s: str, at: usize, n: usize) -> (f64, bool)
+fn digits_upto(s: str, at: usize, max: usize) -> (f64, usize, bool)
+fn parse_loose(s: str) -> f64
 fn parse_iso(s: str) -> f64
 fn month_index(s: str) -> i32
 fn parse_text(s: str) -> f64
