@@ -9,6 +9,7 @@ use e.algo.ir as ir
 use e.algo.sync as sync
 use e.data.list as list
 use e.fmt.json as json
+use e.fmt.protodesc as protodesc
 use e.io
 use e.mem
 use e.os
@@ -471,6 +472,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !twice_found || twice_list.len != 1usize { os.exit(62i32) }
     let (mine, mine_found) = sync.get(twice_list[0usize], "v")
     if !mine_found || !str.eq(sync.as_text(mine), "mine") { os.exit(62i32) }
+    // #283: a bounded arena must never produce ok with a truncated descriptor.
+    var dbytes: [5]u8 = zero
+    dbytes[0usize] = 10u8
+    dbytes[1usize] = 3u8
+    dbytes[2usize] = 10u8
+    dbytes[3usize] = 1u8
+    dbytes[4usize] = 120u8
+    var size = 600usize
+    while size <= 6000usize {
+        var small_buf: [7000]u8 = zero
+        var small = mem.arena_from(small_buf[0usize..size])
+        let (doc, doc_error) = protodesc.parse_set(&small, dbytes[..])
+        if doc_error == ok {
+            let (files, files_found) = ir.get(doc, "file")
+            let (file_items, is_array) = ir.items_of(files)
+            if !files_found || !is_array || file_items.len != 1usize { os.exit(97i32) }
+            let (name, name_found) = ir.get(file_items[0usize], "name")
+            let (name_text, name_is_text) = ir.string_of(name)
+            if !name_found || !name_is_text || !str.eq(name_text, "x") { os.exit(97i32) }
+        }
+        size += 8usize
+    }
     try io.print("algo sync ok")
     ret ok
 }

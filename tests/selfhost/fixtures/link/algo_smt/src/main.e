@@ -271,6 +271,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     args9[0usize] = 5u32
     let (_, bad_arg) = smt.congruence_closure(sym9[..], args9[..], starts9[..], eq9[..0usize], eq9[..0usize], par9[..], rnk9[..])
     if bad_arg != smt.Invalid { os.exit(9i32) }
+    // #228.3: malformed literals are rejected before any formula is extended.
+    var bad_vector: [2]i32 = zero
+    bad_vector[0usize] = 1i32
+    bad_vector[1usize] = 0i32
+    var bad_out: [2]i32 = zero
+    let vars_before = f.variables
+    if smt.bv_and(&f, bad_vector[..], bad_vector[..], bad_out[..]) != smt.Invalid { os.exit(10i32) }
+    if f.variables != vars_before { os.exit(10i32) }
+    if smt.bv_not(bad_vector[..], bad_out[..]) != smt.Invalid { os.exit(10i32) }
 
     try io.print("algo smt ok\n")
     ret ok

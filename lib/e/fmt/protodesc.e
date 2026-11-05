@@ -25,6 +25,7 @@ use e.mem
 use e.str
 
 error Invalid
+error OutOfMemory
 
 fn max_depth() -> u32 { ret 32u32 }
 
@@ -88,6 +89,13 @@ fn array_of(l: list.List[json.Value]) -> json.Value { ret json.Value{ Array: lis
 
 fn finished(o: *ir.Obj) -> json.Value { ret ir.obj_value(o) }
 
+// A document is accepted only when every JSON write fit: `sync` latches allocation
+// failures, so a parse can never answer ok with a truncated schema.
+fn finish(o: *ir.Obj) -> (json.Value, err) {
+    if sync.writes_failed() { ret (.Null, OutOfMemory) }
+    ret (finished(o), ok)
+}
+
 // `{start, end}` of an extension or reserved range (extension ranges may carry options, which are skipped).
 fn parse_range(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
     var r = pb.reader(source)
@@ -108,7 +116,8 @@ fn parse_range(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 // An option message reduced to the flags a generator reads: `numbers` are `(field number, name)` pairs of bool fields.
@@ -131,7 +140,8 @@ fn parse_flags(a: *mem.Arena, source: []const u8, first: u32, first_name: str, s
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_oneof(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -149,7 +159,8 @@ fn parse_oneof(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_field(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -194,7 +205,8 @@ fn parse_field(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_enum_value(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -216,7 +228,8 @@ fn parse_enum_value(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_enum(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -262,7 +275,8 @@ fn parse_enum(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
     if values.len > 0usize { sync.put(&o, "value", array_of(values)) }
     if ranges.len > 0usize { sync.put(&o, "reservedRange", array_of(ranges)) }
     if names.len > 0usize { sync.put(&o, "reservedName", array_of(names)) }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_method(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -294,7 +308,8 @@ fn parse_method(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
             if pb.skip(&r, key.wire) != ok { ret (.Null, Invalid) }
         }
     }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 fn parse_service(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
@@ -324,7 +339,8 @@ fn parse_service(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
         }
     }
     if methods.len > 0usize { sync.put(&o, "method", array_of(methods)) }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 // One `DescriptorProto`; `depth` counts the messages around it.
@@ -398,7 +414,8 @@ fn parse_message(a: *mem.Arena, source: []const u8, depth: u32) -> (json.Value, 
     if oneofs.len > 0usize { sync.put(&o, "oneofDecl", array_of(oneofs)) }
     if ranges.len > 0usize { sync.put(&o, "reservedRange", array_of(ranges)) }
     if names.len > 0usize { sync.put(&o, "reservedName", array_of(names)) }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 // An int32 list member that may arrive one per key or packed in one length-delimited field.
@@ -423,6 +440,7 @@ fn read_int_list(a: *mem.Arena, r: *pb.Reader, key: pb.Key, out: *list.List[json
 
 // One `FileDescriptorProto`.
 fn parse_file(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
+    sync.begin_writes()
     var r = pb.reader(source)
     var o = sync.obj(a)
     var dependencies = sync.empty_list(a)
@@ -492,11 +510,13 @@ fn parse_file(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
     if extensions.len > 0usize { sync.put(&o, "extension", array_of(extensions)) }
     if publics.len > 0usize { sync.put(&o, "publicDependency", array_of(publics)) }
     if weaks.len > 0usize { sync.put(&o, "weakDependency", array_of(weaks)) }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
 
 // `{file: [FileDescriptorProto ...]}` from the bytes of a `FileDescriptorSet`.
 fn parse_set(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
+    sync.begin_writes()
     var r = pb.reader(source)
     var files = sync.empty_list(a)
     while true {
@@ -515,5 +535,8 @@ fn parse_set(a: *mem.Arena, source: []const u8) -> (json.Value, err) {
     }
     var o = sync.obj(a)
     if files.len > 0usize { sync.put(&o, "file", array_of(files)) }
-    ret (finished(&o), ok)
+    let (finish_value, finish_error) = finish(&o)
+    ret (finish_value, finish_error)
 }
+
+

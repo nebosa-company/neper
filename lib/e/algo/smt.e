@@ -137,8 +137,20 @@ fn bv_fresh(f: *sat.Cnf, out: []i32) -> err {
 
 fn widths_match(a: []const i32, b: []const i32, out: []const i32) -> bool { ret a.len == b.len && a.len == out.len }
 
+// Every literal must be a real variable reference; otherwise the tseitin helpers would
+// fail mid-way (TooSmall after partially extending the formula).
+fn vector_valid(f: *sat.Cnf, v: []const i32) -> bool {
+    var i = 0usize
+    while i < v.len {
+        if !sat.valid_lit(f, v[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn bv_and(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     var i = 0usize
     while i < out.len {
         let (o, e) = sat.tseitin_and(f, a[i], b[i])
@@ -151,6 +163,7 @@ fn bv_and(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
 
 fn bv_or(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     var i = 0usize
     while i < out.len {
         let (o, e) = sat.tseitin_or(f, a[i], b[i])
@@ -163,6 +176,7 @@ fn bv_or(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
 
 fn bv_xor(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     var i = 0usize
     while i < out.len {
         let (o, e) = sat.tseitin_xor(f, a[i], b[i])
@@ -176,6 +190,11 @@ fn bv_xor(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
 // Bitwise complement needs no gates.
 fn bv_not(a: []const i32, out: []i32) -> err {
     if a.len != out.len { ret Invalid }
+    var v = 0usize
+    while v < a.len {
+        if a[v] == 0i32 { ret Invalid }
+        v += 1usize
+    }
     var i = 0usize
     while i < out.len {
         out[i] = 0i32 - a[i]
@@ -187,12 +206,14 @@ fn bv_not(a: []const i32, out: []i32) -> err {
 // `out = a + b` modulo 2^w by a ripple-carry adder; `out` may alias `a` or `b`.
 fn bv_add(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     ret ripple(f, a, b, out, false, 0i32)
 }
 
 // `out = a - b` modulo 2^w (`a + ~b + 1`).
 fn bv_sub(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     let (t, e) = bv_true(f)
     if e != ok { ret e }
     ret ripple(f, a, b, out, true, t)
@@ -201,6 +222,8 @@ fn bv_sub(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err {
 // Ripple-carry `a + (invert_b ? ~b : b) + carry` (`carry` 0 means none);
 // reads bit `i` of both inputs before writing `out[i]`, so aliasing is safe.
 fn ripple(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, invert_b: bool, carry: i32) -> err {
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
+    if carry != 0i32 && !sat.valid_lit(f, carry) { ret Invalid }
     var c = carry
     var i = 0usize
     while i < out.len {
@@ -233,6 +256,7 @@ fn ripple(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, invert_b: boo
 // must not alias `a` or `b`.
 fn bv_mul(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, scratch: []i32) -> err {
     if !widths_match(a, b, out) { ret Invalid }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret Invalid }
     let w = out.len
     if scratch.len < w { ret TooSmall }
     var j = 0usize
@@ -262,6 +286,7 @@ fn bv_mul(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, scratch: []i3
 // A literal true exactly when `a == b`.
 fn bv_eq(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err) {
     if a.len != b.len || a.len == 0usize { ret (0i32, Invalid) }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret (0i32, Invalid) }
     var differ = 0i32
     var i = 0usize
     while i < a.len {
@@ -282,6 +307,7 @@ fn bv_eq(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err) {
 // A literal true exactly when `a < b` as unsigned integers.
 fn bv_ult(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err) {
     if a.len != b.len || a.len == 0usize { ret (0i32, Invalid) }
+    if !vector_valid(f, a) || !vector_valid(f, b) { ret (0i32, Invalid) }
     var less = 0i32
     var i = 0usize
     while i < a.len {
@@ -307,6 +333,7 @@ fn bv_ult(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err) {
 // `out = a << k`, the vacated low bits false.
 fn bv_shl_const(f: *sat.Cnf, a: []const i32, k: usize, out: []i32) -> err {
     if a.len != out.len { ret Invalid }
+    if !vector_valid(f, a) { ret Invalid }
     let (t, e) = bv_true(f)
     if e != ok { ret e }
     var i = out.len
@@ -321,6 +348,7 @@ fn bv_shl_const(f: *sat.Cnf, a: []const i32, k: usize, out: []i32) -> err {
 // `out = a >> k` (logical), the vacated high bits false.
 fn bv_lshr_const(f: *sat.Cnf, a: []const i32, k: usize, out: []i32) -> err {
     if a.len != out.len { ret Invalid }
+    if !vector_valid(f, a) { ret Invalid }
     let (t, e) = bv_true(f)
     if e != ok { ret e }
     var i = 0usize
@@ -430,3 +458,5 @@ fn bit_blast(f: *sat.Cnf, ops: []const u8, lhs: []const u32, rhs: []const u32, c
     }
     ret ok
 }
+
+

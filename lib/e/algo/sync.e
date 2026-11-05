@@ -27,30 +27,51 @@ type Remote = struct { ctx: *void, now: fn(*void) -> i64, fetch_page: fn(*void, 
 
 type Outbox = struct { a: *mem.Arena, store: *const StoreHooks, now: fn(*void) -> i64, now_ctx: *void, queue: list.List[json.Value], dead: list.List[json.Value], sequence: i64, loaded: bool, healthy: bool, last_error: str, has_error: bool, evicted: i64, max_attempts: i64, base_delay: i64 }
 
+// A JSON writer allocation failure is latched for the current parse: the helpers keep
+// their signatures (hundreds of callers), and the parser checks this before accepting.
+// ponytail: process-global latch, not per-call; a parse entry clears it with begin_writes.
+var write_failure: bool = false
+
+fn begin_writes() { write_failure = false }
+
+fn writes_failed() -> bool { ret write_failure }
+
+fn mark_write_failure() { write_failure = true }
+
 fn text(s: str) -> json.Value { ret json.Value{ String: s } }
 
 fn flag(b: bool) -> json.Value { ret json.Value{ Bool: b } }
 
 fn number(a: *mem.Arena, n: i64) -> json.Value {
     let (v, e) = json.number_from_i64(a, n)
-    if e != ok { ret json.Value{ Number: json.Number{ lexeme: "0" } } }
+    if e != ok {
+        mark_write_failure()
+        ret json.Value{ Number: json.Number{ lexeme: "0" } }
+    }
     ret json.Value{ Number: v }
 }
 
 fn cat(a: *mem.Arena, x: str, y: str) -> str {
     let (out, e) = str.concat(a, x, y)
-    if e != ok { ret "" }
+    if e != ok {
+        mark_write_failure()
+        ret ""
+    }
     ret out
 }
 
 fn obj(a: *mem.Arena) -> ir.Obj {
     let (o, e) = ir.new_obj(a)
-    if e != ok { ret ir.Obj { items: zero, len: 0usize, arena: a } }
+    if e != ok {
+        mark_write_failure()
+        ret ir.Obj { items: zero, len: 0usize, arena: a }
+    }
     ret o
 }
 
 fn put(o: *ir.Obj, key: str, v: json.Value) {
     let e = ir.put(o, key, v)
+    if e != ok { mark_write_failure() }
 }
 
 fn get(v: json.Value, key: str) -> (json.Value, bool) {
@@ -89,11 +110,15 @@ fn unset(o: *ir.Obj, key: str) {
 
 fn push_value(l: *list.List[json.Value], v: json.Value) {
     let e = list.push[json.Value](l, v)
+    if e != ok { mark_write_failure() }
 }
 
 fn empty_list(a: *mem.Arena) -> list.List[json.Value] {
     let (l, e) = list.init[json.Value](a, 8usize)
-    if e != ok { ret list.List[json.Value] { items: zero, len: 0usize, arena: a } }
+    if e != ok {
+        mark_write_failure()
+        ret list.List[json.Value] { items: zero, len: 0usize, arena: a }
+    }
     ret l
 }
 
