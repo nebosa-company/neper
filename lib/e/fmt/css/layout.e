@@ -9710,7 +9710,24 @@ fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> 
             q = qb.next
         }
         let total = maxf(0.0f64, run_end - base)
+        // A single line box cannot be split across columns: a run that is exactly one line tall would otherwise balance
+        // to a fraction of it (16 / 3 columns), and the segments after it would start inside that line.
+        var min_h = 0.0f64
+        var tk = run_first
+        while tk != run_stop && tk != NONE {
+            let tb = &l.boxes.items[usize(tk)]
+            if !tb.positioned_out && tb.inner != .Marker && tb.line_count > 0u32 {
+                var lk = 0usize
+                while lk < usize(tb.line_count) {
+                    let ln2 = l.lines.items[usize(tb.line_first) + lk]
+                    if ln2.h > min_h { min_h = ln2.h }
+                    lk += 1usize
+                }
+            }
+            tk = tb.next
+        }
         var colh = total / f64(cols.count)
+        if min_h > 0.0f64 && total <= min_h + 0.01f64 && colh < min_h { colh = min_h }
         if total > 0.0f64 {
             var step = maxf(1.0f64, total / 64.0f64)
             var iter = 0usize
