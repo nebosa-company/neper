@@ -156,6 +156,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, negative) = flow.build[i64, Nothing](a, &neg, 0u32, 1u32, &nothing, cap_of)
     if negative != flow.InvalidCapacity { os.exit(5i32) }
 
+    // 6: the sum of the source's capacities must fit i64, so two "infinite" arcs are
+    // refused at build instead of overflowing the total flow; one infinite arc still
+    // works against a finite bottleneck (#229).
+    let (e0, e_error) = graph.builder[i64](a, 4usize, 4usize)
+    if e_error != ok { os.exit(6i32) }
+    var e = e0
+    let big = 9223372036854775807i64
+    if graph.add_directed[i64](&e, 0u32, 1u32, big) != ok { os.exit(6i32) }
+    if graph.add_directed[i64](&e, 0u32, 2u32, big) != ok { os.exit(6i32) }
+    if graph.add_directed[i64](&e, 1u32, 3u32, big) != ok { os.exit(6i32) }
+    if graph.add_directed[i64](&e, 2u32, 3u32, big) != ok { os.exit(6i32) }
+    let (wide, wide_error) = graph.finish[i64](a, &e)
+    if wide_error != ok { os.exit(6i32) }
+    let (_, too_much) = flow.build[i64, Nothing](a, &wide, 0u32, 3u32, &nothing, cap_of)
+    if too_much != flow.InvalidCapacity { os.exit(6i32) }
+    let (o0, o_error) = graph.builder[i64](a, 3usize, 2usize)
+    if o_error != ok { os.exit(6i32) }
+    var o = o0
+    if graph.add_directed[i64](&o, 0u32, 1u32, big) != ok { os.exit(6i32) }
+    if graph.add_directed[i64](&o, 1u32, 2u32, 5i64) != ok { os.exit(6i32) }
+    let (infinite, infinite_error) = graph.finish[i64](a, &o)
+    if infinite_error != ok { os.exit(6i32) }
+    let (q, q_error) = flow.build[i64, Nothing](a, &infinite, 0u32, 2u32, &nothing, cap_of)
+    if q_error != ok { os.exit(6i32) }
+    var netq = q
+    let (fq, fq_error) = flow.edmonds_karp(a, &netq)
+    if fq_error != ok || fq != 5i64 { os.exit(6i32) }
+
     try io.print("algo graph flow ok\n")
     ret ok
 }

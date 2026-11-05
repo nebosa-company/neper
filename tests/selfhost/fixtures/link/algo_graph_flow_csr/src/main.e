@@ -3,6 +3,7 @@
 use e.algo.graph.flow
 use e.mem
 use e.os
+use e.str
 
 fn unchanged(rate: []const f64, first: f64, second: f64) -> bool {
     if rate.len > 0usize && rate[0usize] != first { ret false }
@@ -48,5 +49,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     links[0usize] = 1u32
     let (_, link_error) = flow.max_min_fair(a, capacity[..], valid[..], links[..], one_rate[..])
     if link_error != flow.InvalidNode || !unchanged(one_rate[..], 17.0f64, 0.0f64) { os.exit(5) }
+
+    // 6: a negative capacity is refused before any rate moves (#415); 7: a NaN one is
+    // refused rather than becoming a NaN pace (#523). "negative"/"nan" select one.
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    links[0usize] = 0u32
+    if !str.eq(mode, "nan") {
+        capacity[0usize] = 0.0f64 - 1.0f64
+        var negative_rate: [1]f64 = zero
+        negative_rate[0usize] = 7.0f64
+        let (_, negative_error) = flow.max_min_fair(a, capacity[..], valid[..], links[..], negative_rate[..])
+        if negative_error != flow.InvalidCapacity || !unchanged(negative_rate[..], 7.0f64, 0.0f64) { os.exit(6) }
+    }
+    if !str.eq(mode, "negative") {
+        capacity[0usize] = mem.bitcast[f64](9221120237041090560u64)
+        var nan_rate: [1]f64 = zero
+        nan_rate[0usize] = 9.0f64
+        let (_, nan_error) = flow.max_min_fair(a, capacity[..], valid[..], links[..], nan_rate[..])
+        if nan_error != flow.InvalidCapacity || !unchanged(nan_rate[..], 9.0f64, 0.0f64) { os.exit(7) }
+    }
     ret ok
 }

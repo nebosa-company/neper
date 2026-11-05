@@ -18,7 +18,9 @@ error InvalidFlow
 
 const NONE: u32 = 4294967295u32
 
-// Builds the residual network; `capacity(ctx, edge)` must be non-negative.
+// Builds the residual network; `capacity(ctx, edge)` must be non-negative and the
+// sum of the capacities leaving `source` must fit `i64` (one `i64` maximum is the
+// "infinite capacity" idiom; two would overflow every algorithm's total).
 fn build[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], source: graph.NodeId, sink: graph.NodeId, ctx: *Ctx, capacity: fn(*Ctx, graph.Edge[E]) -> i64) -> (Network, err) {
     let n = graph.node_count[E](g)
     if usize(source) >= n || usize(sink) >= n || source == sink { ret (zero, InvalidNode) }
@@ -51,6 +53,18 @@ fn build[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], source: gr
             if c < 0i64 { ret (zero, InvalidCapacity) }
             add_arc(&net, edge.from, edge.to, c)
         }
+    }
+    // The total flow cannot exceed the capacities leaving the source; refusing a sum
+    // that does not fit i64 keeps `flow += bottleneck` and the excess counters exact.
+    var source_capacity = 0i64
+    var arc = net.head[usize(source)]
+    while arc != NONE {
+        let c = net.capacity[usize(arc)]
+        if c > 0i64 && net.to[usize(arc)] != source {
+            if source_capacity > 9223372036854775807i64 - c { ret (zero, InvalidCapacity) }
+            source_capacity += c
+        }
+        arc = net.next[usize(arc)]
     }
     ret (net, ok)
 }
@@ -373,6 +387,16 @@ fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usiz
     while link_at < flow_links.len {
         if usize(flow_links[link_at]) >= links { ret (0usize, InvalidNode) }
         link_at += 1usize
+    }
+    // Progressive filling only moves finite, non-negative numbers: a negative capacity
+    // is not a resource, and a NaN or infinite one never reaches a stopping bound.
+    // Checked before any filling state exists and before a caller's rate is touched.
+    var check_at = 0usize
+    while check_at < links {
+        let c = capacity[check_at]
+        let finite = c == c && c - c == 0.0f64
+        if !finite || c < 0.0f64 { ret (0usize, InvalidCapacity) }
+        check_at += 1usize
     }
     let (used, used_error) = mem.alloc[f64](a, links)
     if used_error != ok { ret (0usize, used_error) }
