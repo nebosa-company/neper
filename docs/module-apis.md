@@ -7436,6 +7436,7 @@ fn type_maps(a: *mem.Arena) -> json.Value
 fn has_member(v: json.Value, key: str) -> bool
 fn includes_text(values: json.Value, s: str) -> bool
 fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value
+fn map_external_type_from(a: *mem.Arena, maps: json.Value, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value
 fn map_lc8_to_native(a: *mem.Arena, connector: str, lc8: str) -> json.Value
 fn list_native_types(a: *mem.Arena, connector: str) -> json.Value
 fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value
@@ -7450,6 +7451,10 @@ fn pluck_path(a: *mem.Arena, body: json.Value, path: str) -> json.Value
 fn all_digits(s: str) -> bool
 fn digits_at(s: str) -> i64
 fn is_space(c: u8) -> bool
+fn lower_byte(c: u8) -> u8
+fn text_eq_ignore_case(a: str, b: str) -> bool
+fn trim_space(s: str) -> str
+fn rel_has_next(rel: str) -> bool
 fn next_link(link: str) -> (str, bool)
 fn cursor_value(a: *mem.Arena, style: str, value: json.Value) -> json.Value
 fn pull_cursor(a: *mem.Arena, body: json.Value, pagination: json.Value, headers: json.Value) -> json.Value
