@@ -22,6 +22,10 @@ fn same(a: str, b: str) -> bool {
 fn main(a: *mem.Arena, args: []str) -> err {
     let caps = shell.capabilities()
     if caps.clipboard_typed && !caps.clipboard_text { os.exit(1i32) }
+    // #91 item 9: `*` is the wildcard class key under Classes, never a program name this
+    // module may claim or delete; ordinary ids stay valid.
+    if shell.valid_name("*") { os.exit(30i32) }
+    if !shell.valid_name("neper.test-id") { os.exit(31i32) }
     var nothing: [1]shell.Content = zero
     if shell.clipboard_write(a, nothing[0usize..0usize]) != shell.Invalid { os.exit(2i32) }
     let (nowhere, drag_error) = shell.drag_start(a, nothing[0usize..0usize], false)

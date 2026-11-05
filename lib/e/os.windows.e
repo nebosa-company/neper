@@ -2713,6 +2713,16 @@ fn shutdown_value(how: SocketShutdown) -> i32 {
 //
 // The service is not named -- a port is a number the caller already has, and asking this to
 // look one up would mean a second string to build and a table to disagree with.
+fn same_address(a: SocketAddress, b: SocketAddress) -> bool {
+    if a.family != b.family || a.scope != b.scope { ret false }
+    var i = 0usize
+    while i < 16usize {
+        if a.bytes[i] != b.bytes[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
     var nothing: []SocketAddress = zero
     if host.len == 0usize { ret (nothing, NotFound) }
@@ -2722,6 +2732,10 @@ fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> 
     if wide_host_error != ok { ret (nothing, wide_host_error) }
     var hints: AddressInfo = zero
     hints.family = i32(family_value(family))
+    // Without a socktype GetAddrInfoW answers each address once per kind (stream, datagram,
+    // raw), which fills the result array with duplicates of the first few addresses (#190
+    // item 8). Ask for the kind a socket of this family uses.
+    hints.kind = SOCK_STREAM
     var head: AddressInfoHead = zero
     let code = raw_address_info(&wide_host[0usize], 0usize, &hints, &head)
     if code != 0i32 {
@@ -2756,11 +2770,25 @@ fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> 
                 raw.bytes[at] = bytes[at]
                 at += 1usize
             }
-            results[found] = decode_address(raw)
-            // The port comes from the caller, not from a service lookup that was never asked
-            // for, so whatever the resolver left in the sockaddr is overwritten.
-            results[found].port = port
-            found += 1usize
+            let candidate = decode_address(raw)
+            // A host can be listed more than once (the literal in hosts and the DNS answer,
+            // say); answer each address once.
+            var duplicate = false
+            var seen = 0usize
+            while seen < found {
+                if same_address(results[seen], candidate) {
+                    duplicate = true
+                    break
+                }
+                seen += 1usize
+            }
+            if !duplicate {
+                results[found] = candidate
+                // The port comes from the caller, not from a service lookup that was never
+                // asked for, so whatever the resolver left in the sockaddr is overwritten.
+                results[found].port = port
+                found += 1usize
+            }
         }
         entry = mem.cast[*AddressInfo](entry.next)
     }

@@ -495,7 +495,10 @@ fn reveal(a: *mem.Arena, path: str) -> err {
     ret ok
 }
 
-// To the recycle bin, quietly: no confirmation and no progress, but with undo.
+// To the recycle bin, quietly: no confirmation and no progress, but with undo. The path is
+// made absolute first and the delete runs through IFileOperation with
+// FOFX_RECYCLEONDELETE, so an item the bin cannot take fails rather than being deleted
+// permanently (#91 item 6).
 fn trash(a: *mem.Arena, path: str) -> err {
     if path.len == 0usize { ret Invalid }
     // The operation's own codes for a missing item are the shell's old table, so the
@@ -503,15 +506,7 @@ fn trash(a: *mem.Arena, path: str) -> err {
     let (info, stat_error) = os.stat(a, path)
     if stat_error == os.NotFound { ret NotFound }
     if stat_error != ok { ret Failed }
-    let (wide, widen_error) = widen(a, path)
-    if widen_error != ok { ret widen_error }
-    var operation: FileOperation = zero
-    operation.func = FO_DELETE
-    operation.from = &wide[0usize]
-    operation.flags = FOF_RECYCLE_QUIETLY
-    let result = raw_file_operation(&operation)
-    if result != 0i32 || operation.aborted != 0i32 { ret Failed }
-    ret ok
+    ret recycle_item(a, path)
 }
 
 // ------------------------------------------------------------ taskbar and jump list
@@ -638,6 +633,84 @@ fn call_object(object: *ComObject, slot: usize, argument: usize) -> i32 {
     var pun: ObjectArgPun = zero
     pun.bits = object.vtable.slots[slot]
     ret pun.function(mem.address_of(object), argument)
+}
+
+@cc(c)
+type ComDeleteItem = extern fn(usize, usize, usize) -> i32
+@cc(c)
+type ComAborted = extern fn(usize, *i32) -> i32
+type DeleteItemPun = union { function: ComDeleteItem, bits: usize }
+type AbortedPun = union { function: ComAborted, bits: usize }
+
+const FOF_ALLOWUNDO: u32 = 64u32
+const FOF_NOCONFIRMATION: u32 = 16u32
+const FOF_SILENT: u32 = 4u32
+const FOFX_RECYCLEONDELETE: u32 = 524288u32
+const CLSCTX_ALL: u32 = 23u32
+const FILEOP_SET_OPERATION_FLAGS: usize = 5usize
+const FILEOP_DELETE_ITEM: usize = 18usize
+const FILEOP_PERFORM_OPERATIONS: usize = 21usize
+const FILEOP_GET_ANY_ABORTED: usize = 22usize
+
+@import("kernel32.dll", "GetFullPathNameW")
+extern fn raw_full_path(name: *const u16, capacity: u32, buffer: *u16, file_part: *usize) -> u32
+
+@import("shell32.dll", "SHCreateItemFromParsingName")
+extern fn raw_item_from_path(path: *const u16, bind: usize, iid: *const u8, out: **ComObject) -> i32
+
+// Recycle one item through IFileOperation: the item is named by an absolute path (the bin
+// ignores a relative one) and deleted with FOFX_RECYCLEONDELETE, so a drive without a bin
+// answers an error instead of permanently deleting it.
+fn recycle_item(a: *mem.Arena, path: str) -> err {
+    let (relative, relative_error) = widen(a, path)
+    if relative_error != ok { ret relative_error }
+    let (absolute, absolute_error) = mem.alloc[u16](a, 32768usize)
+    if absolute_error != ok { ret Failed }
+    var part: usize = 0usize
+    let units = raw_full_path(&relative[0usize], 32768u32, &absolute[0usize], &part)
+    if units == 0u32 || usize(units) >= 32768usize { ret Failed }
+    let initialised = raw_co_initialize(0usize, COINIT_APARTMENT)
+    var item_iid: [16]u8 = zero
+    guid(item_iid[..], 1132621086u32, 59160u16, 17134u16, 3159728610u32, 1640201214u32)
+    var item: *ComObject = zero
+    let item_result = raw_item_from_path(&absolute[0usize], 0usize, &item_iid[0usize], &item)
+    if item_result < 0i32 || mem.address_of(item) == 0usize { ret Failed }
+    var clsid: [16]u8 = zero
+    var iid: [16]u8 = zero
+    guid(clsid[..], 986731893u32, 34903u16, 18512u16, 2457276856u32, 1541115401u32)
+    guid(iid[..], 2491067231u32, 2652u16, 19475u16, 3033943031u32, 2205141496u32)
+    var operation: *ComObject = zero
+    let created = raw_co_create(&clsid[0usize], 0usize, CLSCTX_ALL, &iid[0usize], &operation)
+    if created < 0i32 || mem.address_of(operation) == 0usize {
+        com_release(item)
+        ret Failed
+    }
+    var flags_pun: ObjectArgPun = zero
+    flags_pun.bits = operation.vtable.slots[FILEOP_SET_OPERATION_FLAGS]
+    let flags = u32(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOFX_RECYCLEONDELETE)
+    let set_flags = flags_pun.function(mem.address_of(operation), usize(flags))
+    if set_flags < 0i32 {
+        com_release(item)
+        com_release(operation)
+        ret Failed
+    }
+    var delete_pun: DeleteItemPun = zero
+    delete_pun.bits = operation.vtable.slots[FILEOP_DELETE_ITEM]
+    let deleted = delete_pun.function(mem.address_of(operation), mem.address_of(item), 0usize)
+    if deleted < 0i32 {
+        com_release(item)
+        com_release(operation)
+        ret Failed
+    }
+    let performed = call_this(operation, FILEOP_PERFORM_OPERATIONS)
+    var aborted: i32 = 0
+    var aborted_pun: AbortedPun = zero
+    aborted_pun.bits = operation.vtable.slots[FILEOP_GET_ANY_ABORTED]
+    let aborted_result = aborted_pun.function(mem.address_of(operation), &aborted)
+    com_release(item)
+    com_release(operation)
+    if performed < 0i32 || aborted_result < 0i32 || aborted != 0i32 { ret Failed }
+    ret ok
 }
 
 // The taskbar list, once, initialised; COM is initialised with the hidden window.
@@ -2540,7 +2613,9 @@ fn valid_name(text: str) -> bool {
     var at = 0usize
     while at < text.len {
         let c = text[at]
-        if c == 92u8 || c == 47u8 || c == 34u8 || c < 32u8 { ret false }
+        // `*` is the wildcard class, a real key under Classes, not a name this module may
+        // claim or delete (#91 item 9).
+        if c == 92u8 || c == 47u8 || c == 34u8 || c == 42u8 || c < 32u8 { ret false }
         at += 1usize
     }
     ret true
@@ -2579,15 +2654,76 @@ fn delete_user_tree(a: *mem.Arena, subkey: str) -> err {
     ret ok
 }
 
-// `.ext` opens with this executable under `program_id`, for this user.
+// Whether the user value exists, and whether it equals `expected`. (present, equals).
+fn user_value_matches(a: *mem.Arena, subkey: str, name: str, expected: str) -> (bool, bool) {
+    let (subkey_wide, subkey_error) = widen(a, subkey)
+    if subkey_error != ok { ret (false, false) }
+    let (name_wide, name_error) = widen(a, name)
+    if name_error != ok { ret (false, false) }
+    var key: KeyHandle = zero
+    if raw_reg_open(HKEY_CURRENT_USER, &subkey_wide[0usize], 0u32, KEY_READ, &key) != 0i32 { ret (false, false) }
+    var size: ValueSize = zero
+    var buffer: [2048]u16 = zero
+    let queried = raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, mem.address_of(&buffer[0usize]), &size)
+    let closed = raw_reg_close(key.value)
+    if queried != 0i32 { ret (false, false) }
+    let (expected_wide, expected_error) = widen(a, expected)
+    if expected_error != ok { ret (true, false) }
+    var at = 0usize
+    while at < expected.len {
+        if expected_wide[at] == 0u16 { break }
+        if buffer[at] != expected_wide[at] { ret (true, false) }
+        at += 1usize
+    }
+    ret (true, size.value == u32((at + 1usize) * 2usize))
+}
+
+fn delete_user_value(a: *mem.Arena, subkey: str, name: str) -> err {
+    let (subkey_wide, subkey_error) = widen(a, subkey)
+    if subkey_error != ok { ret subkey_error }
+    let (name_wide, name_error) = widen(a, name)
+    if name_error != ok { ret name_error }
+    var key: KeyHandle = zero
+    if raw_reg_open(HKEY_CURRENT_USER, &subkey_wide[0usize], 0u32, KEY_SET_VALUE, &key) != 0i32 { ret NotFound }
+    let deleted = raw_reg_delete_value(key.value, &name_wide[0usize])
+    let closed = raw_reg_close(key.value)
+    if deleted == ERROR_FILE_NOT_FOUND_STATUS { ret NotFound }
+    if deleted != 0i32 { ret Failed }
+    ret ok
+}
+
+// Whether the program key's open command still names this executable: the only condition
+// under which the module may delete the key it wrote (#91 item 9).
+fn program_command_is_ours(a: *mem.Arena, program_key: str) -> bool {
+    let (exe, exe_error) = executable_text(a)
+    if exe_error != ok { ret false }
+    var parts: [3]str = zero
+    parts[0usize] = "\""
+    parts[1usize] = exe
+    parts[2usize] = "\" \"%1\""
+    let (command, command_error) = concat_text(a, parts[..])
+    if command_error != ok { ret false }
+    var key_parts: [2]str = zero
+    key_parts[0usize] = program_key
+    key_parts[1usize] = "\\shell\\open\\command"
+    let (command_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret false }
+    let (present, matches) = user_value_matches(a, command_key, "", command)
+    ret present && matches
+}
+
+// `.ext` opens with this executable under `program_id`, for this user. An association that
+// already names another program is refused rather than overwritten (#91 item 9).
 fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
     if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
-    try register_program(a, program_id, description)
     var key_parts: [2]str = zero
     key_parts[0usize] = "Software\\Classes\\"
     key_parts[1usize] = extension
     let (extension_key, key_error) = concat_text(a, key_parts[..])
     if key_error != ok { ret key_error }
+    let (present, matches) = user_value_matches(a, extension_key, "", program_id)
+    if present && !matches { ret Failed }
+    try register_program(a, program_id, description)
     ret set_user_value(a, extension_key, "", program_id)
 }
 
@@ -2598,26 +2734,34 @@ fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
     key_parts[1usize] = extension
     let (extension_key, key_error) = concat_text(a, key_parts[..])
     if key_error != ok { ret key_error }
-    let extension_gone = delete_user_tree(a, extension_key)
+    // Only the default value this module wrote is removed; the key can also hold other
+    // programs' values and OpenWithProgids entries, which are not this module's to delete.
+    var extension_gone: err = NotFound
+    let (extension_owned, extension_matches) = user_value_matches(a, extension_key, "", program_id)
+    if extension_owned && extension_matches { extension_gone = delete_user_value(a, extension_key, "") }
     key_parts[1usize] = program_id
     let (program_key, program_key_error) = concat_text(a, key_parts[..])
     if program_key_error != ok { ret program_key_error }
-    let program_gone = delete_user_tree(a, program_key)
-    if extension_gone == NotFound && program_gone == NotFound { ret NotFound }
+    var program_gone: err = NotFound
+    if program_command_is_ours(a, program_key) { program_gone = delete_user_tree(a, program_key) }
+    if extension_gone == NotFound && program_gone == NotFound { ret Failed }
     if extension_gone != ok && extension_gone != NotFound { ret extension_gone }
     if program_gone != ok && program_gone != NotFound { ret program_gone }
     ret ok
 }
 
-// `scheme:` URLs open with this executable, for this user.
+// `scheme:` URLs open with this executable, for this user. A scheme another program already
+// registered is refused rather than overwritten (#91 item 9).
 fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
     if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
-    try register_program(a, scheme, description)
     var key_parts: [2]str = zero
     key_parts[0usize] = "Software\\Classes\\"
     key_parts[1usize] = scheme
     let (scheme_key, key_error) = concat_text(a, key_parts[..])
     if key_error != ok { ret key_error }
+    let (registered, protocol_value) = user_value_matches(a, scheme_key, "URL Protocol", "")
+    if registered && !program_command_is_ours(a, scheme_key) { ret Failed }
+    try register_program(a, scheme, description)
     ret set_user_value(a, scheme_key, "URL Protocol", "")
 }
 
@@ -2628,6 +2772,7 @@ fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
     key_parts[1usize] = scheme
     let (scheme_key, key_error) = concat_text(a, key_parts[..])
     if key_error != ok { ret key_error }
+    if !program_command_is_ours(a, scheme_key) { ret Failed }
     ret delete_user_tree(a, scheme_key)
 }
 

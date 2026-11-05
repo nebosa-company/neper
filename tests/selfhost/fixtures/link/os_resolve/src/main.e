@@ -65,6 +65,23 @@ fn main(a: *mem.Arena) -> err {
     if local[0usize].family != .Ip4 { os.exit(42i32) }
     if local[0usize].port != 80u16 { os.exit(43i32) }
     if local[0usize].bytes[0usize] != 127u8 { os.exit(44i32) }
+    // #190 item 8: each address once, not once per socket kind. Without a socktype hint
+    // the resolver answers stream, datagram and raw entries for the same address.
+    var first = 0usize
+    while first < local.len {
+        var next = first + 1usize
+        while next < local.len {
+            var equal = local[first].family == local[next].family && local[first].scope == local[next].scope
+            var b = 0usize
+            while equal && b < 16usize {
+                if local[first].bytes[b] != local[next].bytes[b] { equal = false }
+                b += 1usize
+            }
+            if equal { os.exit(46i32) }
+            next += 1usize
+        }
+        first += 1usize
+    }
 
     // --- An empty name is not a name.
     let (empty, empty_error) = os.socket_resolve(a, "", 80u16, .Ip4)
