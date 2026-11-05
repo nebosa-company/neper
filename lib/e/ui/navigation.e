@@ -6088,7 +6088,10 @@ fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control
             keys[3usize] = widget.Shortcut { key: 84u32, modifiers: ctrl_shift, action: *reopen }
             keys[4usize] = widget.Shortcut { key: 220u32, modifiers: ctrl, action: *split }
             bound = 5usize
-            if group.recent.len > 1usize {
+            // A stale MRU list can name documents that no longer exist; the single-group path
+            // guards the same way, so a Pick never carries an index the caller cannot use
+            // (#127 item 7).
+            if group.recent.len > 1usize && group.recent[1usize] < docs && group.recent[group.recent.len - 1usize] < docs {
                 let (mru, mru_error) = relay_submit(a, .Pick, g, group.recent[1usize], change)
                 let (lru, lru_error) = relay_submit(a, .Pick, g, group.recent[group.recent.len - 1usize], change)
                 if mru_error != ok || lru_error != ok { ret (zero, TooLarge) }

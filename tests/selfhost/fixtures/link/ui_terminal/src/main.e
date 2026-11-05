@@ -99,6 +99,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if term.line_cell(&t3, 0usize, 2usize).fg != term.rgb(66051u32) { os.exit(3i32) }
     if term.line_cell(&t3, 0usize, 3usize).fg != term.indexed(200u32) { os.exit(3i32) }
     if term.line_cell(&t3, 0usize, 4usize).attr != (term.UNDERLINE | term.REVERSE | term.STRIKE) { os.exit(3i32) }
+    // Colon sub-parameters: 4:3 is one attribute (underline, not underline+italic) and
+    // 38:2::R:G:B is one true colour (the empty colourspace is not the red component).
+    var tc = fresh(a, 20usize, 2usize, 0usize)
+    term.feed(&tc, "\x1b[4:3mU\x1b[0m\x1b[38:2::1:2:3mV")
+    if term.line_cell(&tc, 0usize, 0usize).attr != term.UNDERLINE { os.exit(30i32) }
+    let ccolon = term.line_cell(&tc, 0usize, 1usize)
+    if ccolon.attr != 0u32 || ccolon.fg != term.rgb(66051u32) || ccolon.ch != 86u32 { os.exit(31i32) }
+    term.feed(&tc, "\x1b[4:3mQ\x1b[4:0mW")
+    if term.line_cell(&tc, 0usize, 2usize).attr != term.UNDERLINE { os.exit(32i32) }
+    if term.line_cell(&tc, 0usize, 3usize).attr != 0u32 { os.exit(33i32) }
+    term.feed(&tc, "\x1b[1;4:3;31mX")
+    let cmix = term.line_cell(&tc, 0usize, 4usize)
+    if cmix.attr != (term.BOLD | term.UNDERLINE) || cmix.fg != term.indexed(1u32) { os.exit(34i32) }
 
     // 4: cursor movement and erase (erase takes the current background).
     var t4 = fresh(a, 10usize, 3usize, 0usize)

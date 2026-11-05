@@ -21,7 +21,7 @@ type Term = struct {
     pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool,
     saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool,
     autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool,
-    state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32,
+    state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, sep: [16]u8,
     utf_cp: u32, utf_need: u32, last_ch: u32,
     osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize,
     out: [256]u8, out_len: usize, bells: u32,
@@ -448,6 +448,7 @@ fn clear_params(t: *Term) {
     var i = 0usize
     while i < 16usize {
         t.params[i] = 0u32
+        t.sep[i] = 0u8
         i += 1usize
     }
     t.np = 0usize
@@ -642,6 +643,14 @@ fn set_mode(t: *Term, private: bool, mode: u32, on: bool) {
     }
 }
 
+fn sgr_one(t: *Term, p: u32) {
+    if p == 0u32 {
+        t.pen_fg = 0u32
+        t.pen_bg = 0u32
+        t.pen_attr = 0u32
+    } else if p == 1u32 { t.pen_attr = t.pen_attr | BOLD } else if p == 2u32 { t.pen_attr = t.pen_attr | DIM } else if p == 3u32 { t.pen_attr = t.pen_attr | ITALIC } else if p == 4u32 || p == 21u32 { t.pen_attr = t.pen_attr | UNDERLINE } else if p == 5u32 || p == 6u32 { t.pen_attr = t.pen_attr | BLINK } else if p == 7u32 { t.pen_attr = t.pen_attr | REVERSE } else if p == 8u32 { t.pen_attr = t.pen_attr | HIDDEN } else if p == 9u32 { t.pen_attr = t.pen_attr | STRIKE } else if p == 22u32 { t.pen_attr = t.pen_attr & (4294967295u32 - BOLD - DIM) } else if p == 23u32 { t.pen_attr = t.pen_attr & (4294967295u32 - ITALIC) } else if p == 24u32 { t.pen_attr = t.pen_attr & (4294967295u32 - UNDERLINE) } else if p == 25u32 { t.pen_attr = t.pen_attr & (4294967295u32 - BLINK) } else if p == 27u32 { t.pen_attr = t.pen_attr & (4294967295u32 - REVERSE) } else if p == 28u32 { t.pen_attr = t.pen_attr & (4294967295u32 - HIDDEN) } else if p == 29u32 { t.pen_attr = t.pen_attr & (4294967295u32 - STRIKE) } else if p >= 30u32 && p <= 37u32 { t.pen_fg = indexed(p - 30u32) } else if p == 39u32 { t.pen_fg = 0u32 } else if p >= 40u32 && p <= 47u32 { t.pen_bg = indexed(p - 40u32) } else if p == 49u32 { t.pen_bg = 0u32 } else if p >= 90u32 && p <= 97u32 { t.pen_fg = indexed(p - 90u32 + 8u32) } else if p >= 100u32 && p <= 107u32 { t.pen_bg = indexed(p - 100u32 + 8u32) }
+}
+
 fn apply_sgr(t: *Term) {
     let n = param_count(t)
     if n == 0usize {
@@ -652,15 +661,29 @@ fn apply_sgr(t: *Term) {
     }
     var i = 0usize
     while i < n {
+        // A colon joins sub-parameters to the parameter they belong to: `4:3` is one
+        // attribute (curly underline) and `38:2::R:G:B` is one colour, not six SGR
+        // codes. The head decides the attribute; colours read their components from
+        // the joined group (#127 item 4).
+        var end = i + 1usize
+        while end < n && t.sep[end] == 1u8 { end += 1usize }
         let p = t.params[i]
-        if p == 0u32 {
-            t.pen_fg = 0u32
-            t.pen_bg = 0u32
-            t.pen_attr = 0u32
-        } else if p == 1u32 { t.pen_attr = t.pen_attr | BOLD } else if p == 2u32 { t.pen_attr = t.pen_attr | DIM } else if p == 3u32 { t.pen_attr = t.pen_attr | ITALIC } else if p == 4u32 || p == 21u32 { t.pen_attr = t.pen_attr | UNDERLINE } else if p == 5u32 || p == 6u32 { t.pen_attr = t.pen_attr | BLINK } else if p == 7u32 { t.pen_attr = t.pen_attr | REVERSE } else if p == 8u32 { t.pen_attr = t.pen_attr | HIDDEN } else if p == 9u32 { t.pen_attr = t.pen_attr | STRIKE } else if p == 22u32 { t.pen_attr = t.pen_attr & (4294967295u32 - BOLD - DIM) } else if p == 23u32 { t.pen_attr = t.pen_attr & (4294967295u32 - ITALIC) } else if p == 24u32 { t.pen_attr = t.pen_attr & (4294967295u32 - UNDERLINE) } else if p == 25u32 { t.pen_attr = t.pen_attr & (4294967295u32 - BLINK) } else if p == 27u32 { t.pen_attr = t.pen_attr & (4294967295u32 - REVERSE) } else if p == 28u32 { t.pen_attr = t.pen_attr & (4294967295u32 - HIDDEN) } else if p == 29u32 { t.pen_attr = t.pen_attr & (4294967295u32 - STRIKE) } else if p >= 30u32 && p <= 37u32 { t.pen_fg = indexed(p - 30u32) } else if p == 39u32 { t.pen_fg = 0u32 } else if p >= 40u32 && p <= 47u32 { t.pen_bg = indexed(p - 40u32) } else if p == 49u32 { t.pen_bg = 0u32 } else if p >= 90u32 && p <= 97u32 { t.pen_fg = indexed(p - 90u32 + 8u32) } else if p >= 100u32 && p <= 107u32 { t.pen_bg = indexed(p - 100u32 + 8u32) } else if p == 38u32 || p == 48u32 {
+        if p == 38u32 || p == 48u32 {
             var col = 0u32
             var used = 0usize
-            if i + 2usize < n && t.params[i + 1usize] == 5u32 {
+            if end > i + 1usize {
+                // 38:5:n, or 38:2:colorspace:R:G:B with an optional (possibly empty) colorspace.
+                if end - i >= 3usize && t.params[i + 1usize] == 5u32 {
+                    col = indexed(t.params[i + 2usize] & 255u32)
+                    used = 2usize
+                } else if end - i >= 6usize && t.params[i + 1usize] == 2u32 {
+                    let rv = t.params[i + 3usize] & 255u32
+                    let gv = t.params[i + 4usize] & 255u32
+                    let bv = t.params[i + 5usize] & 255u32
+                    col = rgb((rv << 16u32) | (gv << 8u32) | bv)
+                    used = 5usize
+                }
+            } else if i + 2usize < n && t.params[i + 1usize] == 5u32 {
                 col = indexed(t.params[i + 2usize] & 255u32)
                 used = 2usize
             } else if i + 4usize < n && t.params[i + 1usize] == 2u32 {
@@ -672,12 +695,20 @@ fn apply_sgr(t: *Term) {
             }
             if used > 0usize {
                 if p == 38u32 { t.pen_fg = col } else { t.pen_bg = col }
-                i += used
-            } else {
-                i = n
             }
+            if end > i + 1usize || used == 0usize { i = end } else { i += used + 1usize }
+            continue
+        } else if p == 4u32 && end > i + 1usize {
+            // The sub-parameter selects the underline style; 0 is off, anything else on.
+            if t.params[i + 1usize] == 0u32 {
+                t.pen_attr = t.pen_attr & (4294967295u32 - UNDERLINE)
+            } else {
+                t.pen_attr = t.pen_attr | UNDERLINE
+            }
+        } else {
+            sgr_one(t, p)
         }
-        i += 1usize
+        i = end
     }
 }
 
@@ -1065,7 +1096,10 @@ fn feed_byte(t: *Term, b: u32) {
             if cur > 65535u32 { t.params[t.np] = 65535u32 } else { t.params[t.np] = cur }
         } else if b == 59u32 || b == 58u32 {
             t.pseen = true
-            if t.np < 15usize { t.np += 1usize }
+            if t.np < 15usize {
+                t.np += 1usize
+                if b == 58u32 { t.sep[t.np] = 1u8 } else { t.sep[t.np] = 0u8 }
+            }
         } else if b >= 60u32 && b <= 63u32 {
             if t.private == 0u32 { t.private = b }
         } else if b >= 32u32 && b <= 47u32 {
