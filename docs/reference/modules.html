@@ -1,0 +1,1412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Standard library modules — Neper</title>
+  <meta name="description" content="Every public module of Neper's standard library with its declaration summary, grouped by dependency layer from docs/module-apis.md.">
+  <link rel="canonical" href="https://neper.dev/reference/modules.html">
+  <meta name="theme-color" content="#145db2">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/gtm/logo/neper-icon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="Standard library module catalogue">
+  <meta property="og:description" content="Every public module of Neper's standard library with its declaration summary, grouped by dependency layer from docs/module-apis.md.">
+  <meta property="og:url" content="https://neper.dev/reference/modules.html">
+  <meta property="og:image" content="https://neper.dev/gtm/blog-og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="/ux/components/bundle.css">
+  <style>
+    :root { color-scheme: light dark; --primary: #145db2; --on-primary: #fff; --surface: #f8f9ff; --on-surface: #1a1b20;
+      --on-surface-variant: #434653; --outline-variant: #c3c6d5;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, "SF Pro Display", Roboto, "Noto Sans", system-ui, sans-serif;
+      --font-mono: "Cascadia Code", ui-monospace, Menlo, "JetBrains Mono", Consolas, monospace; }
+    @media (prefers-color-scheme: dark) { :root { --primary: #b3c5ff; --surface: #10131a; --on-surface: #e3e2e9; --on-surface-variant: #c3c6d5; --outline-variant: #434653; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); }
+    .wrap { width: min(100% - 48px, 960px); margin: 0 auto; padding: 24px 0 32px; }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0 24px; }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; } .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 16px; }
+    .nav-links a { color: var(--on-surface-variant); text-decoration: none; font-size: 14px; }
+    .nav-links a:hover, a { color: var(--primary); }
+    h1 { font: 600 clamp(30px, 5vw, 44px)/1.15 var(--font-display); margin: 24px 0 16px; }
+    h2 { font: 600 24px/32px var(--font-display); margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--outline-variant); }
+    h3 { font: 600 17px/24px var(--font-mono); margin: 18px 0 4px; }
+    h3 a, .src a { text-decoration: none; }
+    .eyebrow { color: var(--on-surface-variant); font: 500 13px/18px var(--font-sans); letter-spacing: .02em; text-transform: uppercase; }
+    p { max-width: 72ch; margin: 0 0 8px; } .lede { font-size: 18px; line-height: 28px; }
+    .summary { color: var(--on-surface-variant); }
+    dl { margin: 0; } dt { margin: 14px 0 2px; font-weight: 600; }
+    dd { margin: 0 0 4px 0; color: var(--on-surface-variant); }
+    .id { display: inline-block; min-width: 52px; color: var(--on-surface-variant); font: 400 14px/22px var(--font-mono); }
+    code { font-family: var(--font-mono); }
+    footer { display: flex; justify-content: space-between; gap: 20px; padding: 24px 0 0; margin-top: 40px; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 14px; }
+    @media (max-width: 640px) { footer { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="/" aria-label="Neper home"><img src="/gtm/logo/neper-icon.svg" alt="" width="40" height="40"><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="/get-started.html">get started</a>
+        <a href="/blog/">blog</a>
+        <a href="/charts.html">charts</a>
+        <a href="/reference/modules.html">modules</a>
+        <a href="/reference/algorithms.html">algorithms</a>
+      </div>
+    </nav>
+    <main>
+      <div class="eyebrow">&gt; reference_</div>
+      <h1>Standard library module catalogue</h1>
+      <p class="lede">662 public modules from <a href="https://github.com/nebosa-company/neper/blob/master/docs/module-apis.md"><code>docs/module-apis.md</code></a>, in dependency-layer order; each name is an anchor and the summary counts the public declarations in that module.</p>
+      <h2>1. Language foundations</h2>
+      <h3 id="e.mem"><a href="#e.mem"><code>e.mem</code></a></h3>
+      <p class="summary">34 functions, 4 types, 3 constants, 2 error names: arena_from, copy, eq, …</p>
+      <h3 id="e.meta"><a href="#e.meta"><code>e.meta</code></a></h3>
+      <p class="summary">10 functions, 3 types: fields, members, type_name, …</p>
+      <h3 id="e.math"><a href="#e.math"><code>e.math</code></a></h3>
+      <p class="summary">91 functions, 4 types, 116 constants: sign_bit_f32, sign_bit_f64, rsqrt, …</p>
+      <h3 id="e.math.sym"><a href="#e.math.sym"><code>e.math.sym</code></a></h3>
+      <p class="summary">65 functions, 5 types, 13 constants, 3 error names: pool, mk, abs64, …</p>
+      <h3 id="e.simd"><a href="#e.simd"><code>e.simd</code></a></h3>
+      <p class="summary">27 functions: splat, load, store, …</p>
+      <h3 id="e.atomic"><a href="#e.atomic"><code>e.atomic</code></a></h3>
+      <p class="summary">13 functions, 1 type: init, load, store, …</p>
+      <h2>2. Pure foundations</h2>
+      <h3 id="e.bytes"><a href="#e.bytes"><code>e.bytes</code></a></h3>
+      <p class="summary">57 functions, 8 types, 1 constant, 3 error names: reader, writer, remaining_reader, …</p>
+      <h3 id="e.str"><a href="#e.str"><code>e.str</code></a></h3>
+      <p class="summary">66 functions, 4 types, 3 error names: builder, builder_to, done, …</p>
+      <h3 id="e.path"><a href="#e.path"><code>e.path</code></a></h3>
+      <p class="summary">13 functions, 4 types, 2 error names: separator, is_absolute, split, …</p>
+      <h3 id="e.path.dirs"><a href="#e.path.dirs"><code>e.path.dirs</code></a></h3>
+      <p class="summary">4 functions, 4 types, 2 error names: app_named, platform_of, dir, …</p>
+      <h2>3. Containers and traversal</h2>
+      <h3 id="e.data.list"><a href="#e.data.list"><code>e.data.list</code></a></h3>
+      <p class="summary">22 functions, 4 types: init, from_slice, slice, …</p>
+      <h3 id="e.data.deque"><a href="#e.data.deque"><code>e.data.deque</code></a></h3>
+      <p class="summary">11 functions, 2 types: init, len, reserve, …</p>
+      <h3 id="e.data.stack"><a href="#e.data.stack"><code>e.data.stack</code></a></h3>
+      <p class="summary">9 functions, 2 types: init, len, reserve, …</p>
+      <h3 id="e.data.queue"><a href="#e.data.queue"><code>e.data.queue</code></a></h3>
+      <p class="summary">12 functions, 4 types, 1 error name: init, len, reserve, …</p>
+      <h3 id="e.data.linked"><a href="#e.data.linked"><code>e.data.linked</code></a></h3>
+      <p class="summary">18 functions, 4 types, 1 constant, 2 error names: init, len, first, …</p>
+      <h3 id="e.data.ring"><a href="#e.data.ring"><code>e.data.ring</code></a></h3>
+      <p class="summary">10 functions, 2 types: init, len, capacity, …</p>
+      <h3 id="e.data.map"><a href="#e.data.map"><code>e.data.map</code></a></h3>
+      <p class="summary">16 functions, 4 types: init, len, reserve, …</p>
+      <h3 id="e.data.heap"><a href="#e.data.heap"><code>e.data.heap</code></a></h3>
+      <p class="summary">50 functions, 5 types, 1 error name: init, from_slice, len, …</p>
+      <h3 id="e.data.fenwick"><a href="#e.data.fenwick"><code>e.data.fenwick</code></a></h3>
+      <p class="summary">9 functions, 1 type, 1 error name: init, from_values, len, …</p>
+      <h3 id="e.data.sparse_table"><a href="#e.data.sparse_table"><code>e.data.sparse_table</code></a></h3>
+      <p class="summary">5 functions, 2 types, 2 error names: levels_for, build, query, …</p>
+      <h3 id="e.data.segment_tree"><a href="#e.data.segment_tree"><code>e.data.segment_tree</code></a></h3>
+      <p class="summary">25 functions, 3 types, 2 error names: build, build_node, update, …</p>
+      <h3 id="e.data.spatial"><a href="#e.data.spatial"><code>e.data.spatial</code></a></h3>
+      <p class="summary">56 functions, 10 types, 1 constant, 2 error names: coordinate, build_range, kd_build, …</p>
+      <h3 id="e.data.succinct"><a href="#e.data.succinct"><code>e.data.succinct</code></a></h3>
+      <p class="summary">35 functions, 4 types, 1 constant, 2 error names: popcount, words_for, bit_vector, …</p>
+      <h3 id="e.data.rope"><a href="#e.data.rope"><code>e.data.rope</code></a></h3>
+      <p class="summary">15 functions, 1 type, 2 constants, 2 error names: rope, has_nodes, new_node, …</p>
+      <h3 id="e.data.cartesian_tree"><a href="#e.data.cartesian_tree"><code>e.data.cartesian_tree</code></a></h3>
+      <p class="summary">6 functions, 1 type, 1 constant, 2 error names: build, depth, lca, …</p>
+      <h3 id="e.data.bitmap"><a href="#e.data.bitmap"><code>e.data.bitmap</code></a></h3>
+      <p class="summary">35 functions, 2 types, 7 constants, 2 error names: roaring, find_key, chunk_of, …</p>
+      <h3 id="e.data.validate"><a href="#e.data.validate"><code>e.data.validate</code></a></h3>
+      <p class="summary">77 functions, 21 types: js_space, is_digit, is_hex, …</p>
+      <h3 id="e.data.hamt"><a href="#e.data.hamt"><code>e.data.hamt</code></a></h3>
+      <p class="summary">14 functions, 1 type, 1 constant, 2 error names: hamt, mix, lane, …</p>
+      <h3 id="e.data.link_cut"><a href="#e.data.link_cut"><code>e.data.link_cut</code></a></h3>
+      <p class="summary">24 functions, 2 types, 2 error names: link_cut, valid, is_root, …</p>
+      <h3 id="e.data.stream"><a href="#e.data.stream"><code>e.data.stream</code></a></h3>
+      <p class="summary">12 functions, 4 types, 2 error names: watermark, watermark_is_late, watermark_observe, …</p>
+      <h3 id="e.data.treap"><a href="#e.data.treap"><code>e.data.treap</code></a></h3>
+      <p class="summary">20 functions, 2 types, 2 error names: treap, new_node, split, …</p>
+      <h3 id="e.data.skip_list"><a href="#e.data.skip_list"><code>e.data.skip_list</code></a></h3>
+      <p class="summary">9 functions, 1 type, 1 constant, 2 error names: skip_list, link, insert, …</p>
+      <h3 id="e.data.splay"><a href="#e.data.splay"><code>e.data.splay</code></a></h3>
+      <p class="summary">11 functions, 1 type, 2 error names: splay_tree, build, build_range, …</p>
+      <h3 id="e.data.window"><a href="#e.data.window"><code>e.data.window</code></a></h3>
+      <p class="summary">22 functions, 4 types, 2 error names: monotonic_queue, dominated, monotonic_push, …</p>
+      <h3 id="e.data.btree"><a href="#e.data.btree"><code>e.data.btree</code></a></h3>
+      <p class="summary">18 functions, 1 type, 1 constant, 2 error names: btree, key_at, set_key, …</p>
+      <h3 id="e.data.bk_tree"><a href="#e.data.bk_tree"><code>e.data.bk_tree</code></a></h3>
+      <p class="summary">3 functions, 1 type, 1 constant, 1 error name: bk_tree, insert, search</p>
+      <h3 id="e.data.cache"><a href="#e.data.cache"><code>e.data.cache</code></a></h3>
+      <p class="summary">61 functions, 7 types, 1 constant, 2 error names: lru_init, lru_len, lru_hash, …</p>
+      <h3 id="e.data.trie"><a href="#e.data.trie"><code>e.data.trie</code></a></h3>
+      <p class="summary">16 functions, 2 types, 1 constant, 2 error names: init, len, child, …</p>
+      <h3 id="e.data.tree"><a href="#e.data.tree"><code>e.data.tree</code></a></h3>
+      <p class="summary">31 functions, 6 types: init, len, priority_of, …</p>
+      <h3 id="e.data.graph"><a href="#e.data.graph"><code>e.data.graph</code></a></h3>
+      <p class="summary">10 functions, 6 types, 1 constant, 2 error names: builder, add_directed, add_undirected, …</p>
+      <h3 id="e.data.objpool"><a href="#e.data.objpool"><code>e.data.objpool</code></a></h3>
+      <p class="summary">14 functions, 5 types, 5 constants, 2 error names: pool, pool_in, count, …</p>
+      <h3 id="e.data.table"><a href="#e.data.table"><code>e.data.table</code></a></h3>
+      <p class="summary">44 functions, 4 types, 2 error names: create, column_count, row_count, …</p>
+      <h3 id="e.data.tableview"><a href="#e.data.tableview"><code>e.data.tableview</code></a></h3>
+      <p class="summary">23 functions, 10 types, 3 error names: column_key, fn_key, compare_key, …</p>
+      <h3 id="e.data.tablegroup"><a href="#e.data.tablegroup"><code>e.data.tablegroup</code></a></h3>
+      <p class="summary">23 functions, 6 types, 4 constants, 3 error names: create, group_by, refresh, …</p>
+      <h3 id="e.data.tablesearch"><a href="#e.data.tablesearch"><code>e.data.tablesearch</code></a></h3>
+      <p class="summary">2 functions, 2 types, 2 error names: find, value_list</p>
+      <h3 id="e.ui.datagrid"><a href="#e.ui.datagrid"><code>e.ui.datagrid</code></a></h3>
+      <p class="summary">39 functions, 6 types, 5 constants, 4 error names: no_events, create, show_sort, …</p>
+      <h3 id="e.ui.gridlook"><a href="#e.ui.gridlook"><code>e.ui.gridlook</code></a></h3>
+      <p class="summary">8 functions, 2 types, 1 error name: rgb, v3, theme, …</p>
+      <h3 id="e.ui.looks"><a href="#e.ui.looks"><code>e.ui.looks</code></a></h3>
+      <p class="summary">8 functions, 6 types, 1 error name: theme_for, open, set_look, …</p>
+      <h3 id="e.ui.winbutton"><a href="#e.ui.winbutton"><code>e.ui.winbutton</code></a></h3>
+      <p class="summary">3 functions, 1 type: ring_node, mnemonic, focus_node</p>
+      <h3 id="e.ui.winchrome"><a href="#e.ui.winchrome"><code>e.ui.winchrome</code></a></h3>
+      <p class="summary">2 functions, 1 type: icon_node, glyph_node</p>
+      <h3 id="e.ui.winedit"><a href="#e.ui.winedit"><code>e.ui.winedit</code></a></h3>
+      <p class="summary">1 function, 1 type: chrome</p>
+      <h3 id="e.ui.winmark"><a href="#e.ui.winmark"><code>e.ui.winmark</code></a></h3>
+      <p class="summary">1 function, 1 type: mark_node</p>
+      <h3 id="e.ui.vgridlook"><a href="#e.ui.vgridlook"><code>e.ui.vgridlook</code></a></h3>
+      <p class="summary">1 function, 1 type: node</p>
+      <h3 id="e.ui.gridrules"><a href="#e.ui.gridrules"><code>e.ui.gridrules</code></a></h3>
+      <p class="summary">7 functions, 7 types, 3 error names: rule, create, count, …</p>
+      <h3 id="e.data.slot_map"><a href="#e.data.slot_map"><code>e.data.slot_map</code></a></h3>
+      <p class="summary">10 functions, 3 types, 2 error names: init, len, capacity, …</p>
+      <h3 id="e.data.iter"><a href="#e.data.iter"><code>e.data.iter</code></a></h3>
+      <p class="summary">35 functions, 11 types: map, map_next, map_ctx, …</p>
+      <h2>4. Pure algorithms, text and cryptography</h2>
+      <h3 id="e.algo.collect"><a href="#e.algo.collect"><code>e.algo.collect</code></a></h3>
+      <p class="summary">25 functions, 2 constants, 11 error names: same, flatten_count, flatten_into, …</p>
+      <h3 id="e.algo.combin"><a href="#e.algo.combin"><code>e.algo.combin</code></a></h3>
+      <p class="summary">15 functions, 2 error names: binomial, gcd, factorial, …</p>
+      <h3 id="e.algo.dp"><a href="#e.algo.dp"><code>e.algo.dp</code></a></h3>
+      <p class="summary">27 functions, 2 types, 2 error names: knapsack, knapsack_unbounded, knapsack_fractional, …</p>
+      <h3 id="e.algo.findings"><a href="#e.algo.findings"><code>e.algo.findings</code></a></h3>
+      <p class="summary">15 functions, 5 types, 1 error name: some, none, tool_key, …</p>
+      <h3 id="e.algo.formula"><a href="#e.algo.formula"><code>e.algo.formula</code></a></h3>
+      <p class="summary">134 functions, 19 types, 17 constants, 2 error names: code_text, blank, zero_items, …</p>
+      <h3 id="e.algo.formula.basic"><a href="#e.algo.formula.basic"><code>e.algo.formula.basic</code></a></h3>
+      <p class="summary">53 functions: trunc_of, finance_numbers, min_usize, …</p>
+      <h3 id="e.algo.formula.math"><a href="#e.algo.formula.math"><code>e.algo.formula.math</code></a></h3>
+      <p class="summary">106 functions, 1 type: msg0, msg1, msg2, …</p>
+      <h3 id="e.algo.formula.text"><a href="#e.algo.formula.text"><code>e.algo.formula.text</code></a></h3>
+      <p class="summary">88 functions: max_regex_input, utf16_len, units_of, …</p>
+      <h3 id="e.algo.formula.datetime"><a href="#e.algo.formula.datetime"><code>e.algo.formula.datetime</code></a></h3>
+      <p class="summary">102 functions, 1 type: day_ms, finite, integer_of, …</p>
+      <h3 id="e.algo.formula.convert"><a href="#e.algo.formula.convert"><code>e.algo.formula.convert</code></a></h3>
+      <p class="summary">10 functions: to_fixed, h_totext, h_tonumber, …</p>
+      <h3 id="e.algo.formula.misc"><a href="#e.algo.formula.misc"><code>e.algo.formula.misc</code></a></h3>
+      <p class="summary">96 functions, 3 types: items_of, values_of, array_of, …</p>
+      <h3 id="e.algo.formula.library"><a href="#e.algo.formula.library"><code>e.algo.formula.library</code></a></h3>
+      <p class="summary">1 function: build</p>
+      <h3 id="e.algo.transpile"><a href="#e.algo.transpile"><code>e.algo.transpile</code></a></h3>
+      <p class="summary">46 functions, 6 types: snapshot, unknown_function, unsupported_feature, …</p>
+      <h3 id="e.algo.formula.sql"><a href="#e.algo.formula.sql"><code>e.algo.formula.sql</code></a></h3>
+      <p class="summary">55 functions, 7 types: text_index_max, fragment_max, max_regex_input, …</p>
+      <h3 id="e.algo.checksum"><a href="#e.algo.checksum"><code>e.algo.checksum</code></a></h3>
+      <p class="summary">75 functions, 4 types: js_space, is_digit, is_upper, …</p>
+      <h3 id="e.algo.view"><a href="#e.algo.view"><code>e.algo.view</code></a></h3>
+      <p class="summary">90 functions, 21 types: day_ms, cell_of, value_at, …</p>
+      <h3 id="e.algo.tidy"><a href="#e.algo.tidy"><code>e.algo.tidy</code></a></h3>
+      <p class="summary">43 functions, 2 types, 27 constants, 3 error names: by_name, by_range, starts_with, …</p>
+      <h3 id="e.algo.pivot"><a href="#e.algo.pivot"><code>e.algo.pivot</code></a></h3>
+      <p class="summary">42 functions, 24 types: is_nan, cell, no_cell, …</p>
+      <h3 id="e.algo.page"><a href="#e.algo.page"><code>e.algo.page</code></a></h3>
+      <p class="summary">49 functions, 12 types, 2 error names: new_minter, counter_of, set_counter, …</p>
+      <h3 id="e.algo.batch"><a href="#e.algo.batch"><code>e.algo.batch</code></a></h3>
+      <p class="summary">32 functions, 27 types: humanize_key, fill, message, …</p>
+      <h3 id="e.algo.geo"><a href="#e.algo.geo"><code>e.algo.geo</code></a></h3>
+      <p class="summary">35 functions, 2 types, 1 error name: pi, max_level, max_size, …</p>
+      <h3 id="e.algo.geom"><a href="#e.algo.geom"><code>e.algo.geom</code></a></h3>
+      <p class="summary">73 functions, 4 types, 2 error names: point, orient, distance_squared, …</p>
+      <h3 id="e.algo.geom.clip"><a href="#e.algo.geom.clip"><code>e.algo.geom.clip</code></a></h3>
+      <p class="summary">9 functions, 1 type, 2 error names: clip_convex, line_intersection, outcode, …</p>
+      <h3 id="e.algo.predicate"><a href="#e.algo.predicate"><code>e.algo.predicate</code></a></h3>
+      <p class="summary">34 functions, 3 types, 10 error names: same, lower_byte, is_space, …</p>
+      <h3 id="e.algo.privacy"><a href="#e.algo.privacy"><code>e.algo.privacy</code></a></h3>
+      <p class="summary">28 functions, 1 error name: clip, random_u64, random_uniform, …</p>
+      <h3 id="e.algo.query"><a href="#e.algo.query"><code>e.algo.query</code></a></h3>
+      <p class="summary">10 functions, 2 types, 1 error name: queries_valid, order_valid, mo_block_size, …</p>
+      <h3 id="e.algo.query.jmespath"><a href="#e.algo.query.jmespath"><code>e.algo.query.jmespath</code></a></h3>
+      <p class="summary">8 functions, 1 type, 6 error names: kind_of, as_array, as_object, …</p>
+      <h3 id="e.algo.rand"><a href="#e.algo.rand"><code>e.algo.rand</code></a></h3>
+      <p class="summary">33 functions, 8 types, 2 error names: pcg64, pcg64_next, pcg64_bounded, …</p>
+      <h3 id="e.algo.uuid"><a href="#e.algo.uuid"><code>e.algo.uuid</code></a></h3>
+      <p class="summary">20 functions, 2 types, 1 error name: v4, v7, parse, …</p>
+      <h3 id="e.algo.consistent_hash"><a href="#e.algo.consistent_hash"><code>e.algo.consistent_hash</code></a></h3>
+      <p class="summary">11 functions, 1 type, 2 error names: mix, ring_position, ring_build, …</p>
+      <h3 id="e.algo.graph.flow"><a href="#e.algo.graph.flow"><code>e.algo.graph.flow</code></a></h3>
+      <p class="summary">8 functions, 1 type, 1 constant, 4 error names: build, add_arc, edmonds_karp, …</p>
+      <h3 id="e.algo.graph.match"><a href="#e.algo.graph.match"><code>e.algo.graph.match</code></a></h3>
+      <p class="summary">7 functions, 2 constants, 2 error names: hopcroft_karp, hungarian, stable_marriage, …</p>
+      <h3 id="e.algo.graph.path"><a href="#e.algo.graph.path"><code>e.algo.graph.path</code></a></h3>
+      <p class="summary">17 functions, 3 types, 4 error names: infinity, path_to, bellman_ford, …</p>
+      <h3 id="e.algo.graph.tree"><a href="#e.algo.graph.tree"><code>e.algo.graph.tree</code></a></h3>
+      <p class="summary">18 functions, 5 types, 3 error names: root_at, lifting, ancestor, …</p>
+      <h3 id="e.algo.graph.span"><a href="#e.algo.graph.span"><code>e.algo.graph.span</code></a></h3>
+      <p class="summary">10 functions, 1 type, 3 error names: kruskal, sort_by_weight, lighter, …</p>
+      <h3 id="e.algo.align"><a href="#e.algo.align"><code>e.algo.align</code></a></h3>
+      <p class="summary">8 functions, 2 types, 1 error name: score_pair, max3, global, …</p>
+      <h3 id="e.algo.schedule"><a href="#e.algo.schedule"><code>e.algo.schedule</code></a></h3>
+      <p class="summary">10 functions, 2 types, 1 constant, 5 error names: sort_by, activity_selection, interval_cover, …</p>
+      <h3 id="e.algo.timeseries"><a href="#e.algo.timeseries"><code>e.algo.timeseries</code></a></h3>
+      <p class="summary">37 functions, 5 types, 2 error names: holt_winters, loess, stl, …</p>
+      <h3 id="e.algo.egraph"><a href="#e.algo.egraph"><code>e.algo.egraph</code></a></h3>
+      <p class="summary">24 functions, 3 types, 2 error names: none, dead, variable, …</p>
+      <h3 id="e.algo.exact_cover"><a href="#e.algo.exact_cover"><code>e.algo.exact_cover</code></a></h3>
+      <p class="summary">6 functions, 1 type, 3 error names: links, cover, uncover, …</p>
+      <h3 id="e.algo.graph.centrality"><a href="#e.algo.graph.centrality"><code>e.algo.graph.centrality</code></a></h3>
+      <p class="summary">8 functions, 2 error names: out_degree, pagerank, normalise, …</p>
+      <h3 id="e.algo.graph.color"><a href="#e.algo.graph.color"><code>e.algo.graph.color</code></a></h3>
+      <p class="summary">5 functions, 1 error name: degree, smallest_free, greedy, …</p>
+      <h3 id="e.algo.graph.community"><a href="#e.algo.graph.community"><code>e.algo.graph.community</code></a></h3>
+      <p class="summary">11 functions, 2 error names: degree, modularity, label_propagation, …</p>
+      <h3 id="e.algo.graph.cut"><a href="#e.algo.graph.cut"><code>e.algo.graph.cut</code></a></h3>
+      <p class="summary">5 functions, 2 error names: stoer_wagner, find, karger, …</p>
+      <h3 id="e.algo.graph.iso"><a href="#e.algo.graph.iso"><code>e.algo.graph.iso</code></a></h3>
+      <p class="summary">17 functions, 1 type, 1 error name: degree, adjacent, feasible, …</p>
+      <h3 id="e.algo.combopt"><a href="#e.algo.combopt"><code>e.algo.combopt</code></a></h3>
+      <p class="summary">26 functions, 2 error names: at, tour_length, tsp_nearest_neighbor, …</p>
+      <h3 id="e.algo.sat"><a href="#e.algo.sat"><code>e.algo.sat</code></a></h3>
+      <p class="summary">25 functions, 2 types, 3 error names: cnf, fresh, add_clause, …</p>
+      <h3 id="e.algo.check"><a href="#e.algo.check"><code>e.algo.check</code></a></h3>
+      <p class="summary">10 functions, 3 types, 1 constant, 3 error names: hash_state, same_state, visit, …</p>
+      <h3 id="e.algo.csp"><a href="#e.algo.csp"><code>e.algo.csp</code></a></h3>
+      <p class="summary">17 functions, 3 error names: count, revise, ac3, …</p>
+      <h3 id="e.algo.logic"><a href="#e.algo.logic"><code>e.algo.logic</code></a></h3>
+      <p class="summary">6 functions, 1 type, 2 error names: popcount, prime_implicants, covers, …</p>
+      <h3 id="e.algo.bdd"><a href="#e.algo.bdd"><code>e.algo.bdd</code></a></h3>
+      <p class="summary">10 functions, 3 types, 2 error names: bdd, make, var_node, …</p>
+      <h3 id="e.algo.ecc"><a href="#e.algo.ecc"><code>e.algo.ecc</code></a></h3>
+      <p class="summary">27 functions, 1 type, 2 error names: field, field16, mul, …</p>
+      <h3 id="e.algo.geom3"><a href="#e.algo.geom3"><code>e.algo.geom3</code></a></h3>
+      <p class="summary">46 functions, 2 types, 1 constant, 2 error names: vec3, add, sub, …</p>
+      <h3 id="e.algo.hash"><a href="#e.algo.hash"><code>e.algo.hash</code></a></h3>
+      <p class="summary">28 functions, 3 types: fnv1a32, fnv1a64, xxhash64, …</p>
+      <h3 id="e.algo.deflate"><a href="#e.algo.deflate"><code>e.algo.deflate</code></a></h3>
+      <p class="summary">6 functions, 4 types, 2 error names: encoder, decoder, encode, …</p>
+      <h3 id="e.algo.graph"><a href="#e.algo.graph"><code>e.algo.graph</code></a></h3>
+      <p class="summary">43 functions, 7 types, 9 error names: fresh_parents, bfs, dfs, …</p>
+      <h3 id="e.algo.disjoint_set"><a href="#e.algo.disjoint_set"><code>e.algo.disjoint_set</code></a></h3>
+      <p class="summary">14 functions, 2 types, 2 error names: init, len, set_count, …</p>
+      <h3 id="e.algo.rand.quasi"><a href="#e.algo.rand.quasi"><code>e.algo.rand.quasi</code></a></h3>
+      <p class="summary">8 functions, 1 type, 2 error names: direction, sobol, sobol_start, …</p>
+      <h3 id="e.algo.rand.dist"><a href="#e.algo.rand.dist"><code>e.algo.rand.dist</code></a></h3>
+      <p class="summary">28 functions, 2 types, 2 error names: uniform_open, normal, normal_box_muller, …</p>
+      <h3 id="e.algo.rand.fake"><a href="#e.algo.rand.fake"><code>e.algo.rand.fake</code></a></h3>
+      <p class="summary">42 functions, 2 types: faker, below, int_between, …</p>
+      <h3 id="e.algo.stat.test"><a href="#e.algo.stat.test"><code>e.algo.stat.test</code></a></h3>
+      <p class="summary">26 functions, 1 type, 2 error names: mean, sample_variance, two_sided_t, …</p>
+      <h3 id="e.algo.stat.infer"><a href="#e.algo.stat.infer"><code>e.algo.stat.infer</code></a></h3>
+      <p class="summary">29 functions, 4 types, 2 error names: two_sided_normal, chi_squared_sf, sample_mean, …</p>
+      <h3 id="e.algo.stat.mixed"><a href="#e.algo.stat.mixed"><code>e.algo.stat.mixed</code></a></h3>
+      <p class="summary">22 functions, 5 types, 4 error names: mixed_solve, mixed_chol, mixed_chol_solve, …</p>
+      <h3 id="e.algo.stat.survival_trial"><a href="#e.algo.stat.survival_trial"><code>e.algo.stat.survival_trial</code></a></h3>
+      <p class="summary">19 functions, 2 types, 3 error names: survival_solve, kaplan_meier, log_rank, …</p>
+      <h3 id="e.algo.stat.survival"><a href="#e.algo.stat.survival"><code>e.algo.stat.survival</code></a></h3>
+      <p class="summary">7 functions, 3 types, 2 error names: finite, nelson_aalen, cumulative_incidence, …</p>
+      <h3 id="e.algo.stat.causal"><a href="#e.algo.stat.causal"><code>e.algo.stat.causal</code></a></h3>
+      <p class="summary">10 functions, 3 error names: causal_solve, causal_chol, causal_chol_solve, …</p>
+      <h3 id="e.algo.stat.safety"><a href="#e.algo.stat.safety"><code>e.algo.stat.safety</code></a></h3>
+      <p class="summary">12 functions, 3 types, 2 error names: chi_square_2x2, ror, prr, …</p>
+      <h3 id="e.algo.stat.diagnostic"><a href="#e.algo.stat.diagnostic"><code>e.algo.stat.diagnostic</code></a></h3>
+      <p class="summary">4 functions, 4 types, 1 error name: exact_interval, beta_quantile, metrics, …</p>
+      <h3 id="e.algo.stat.meta"><a href="#e.algo.stat.meta"><code>e.algo.stat.meta</code></a></h3>
+      <p class="summary">13 functions, 2 types, 3 error names: log_odds_ratio, log_risk_ratio, cohen_d, …</p>
+      <h3 id="e.algo.stat.regression"><a href="#e.algo.stat.regression"><code>e.algo.stat.regression</code></a></h3>
+      <p class="summary">11 functions, 1 type, 3 error names: reg_solve, reg_at, reg_covariance, …</p>
+      <h3 id="e.algo.stat"><a href="#e.algo.stat"><code>e.algo.stat</code></a></h3>
+      <p class="summary">94 functions, 38 types, 2 constants, 3 error names: moments, moments_add, moments_merge, …</p>
+      <h3 id="e.algo.bitset"><a href="#e.algo.bitset"><code>e.algo.bitset</code></a></h3>
+      <p class="summary">20 functions, 1 type, 1 error name: init, len, clear_all, …</p>
+      <h3 id="e.algo.smt"><a href="#e.algo.smt"><code>e.algo.smt</code></a></h3>
+      <p class="summary">23 functions, 11 constants, 2 error names: congruence_closure, congruent, euf_same, …</p>
+      <h3 id="e.algo.sort"><a href="#e.algo.sort"><code>e.algo.sort</code></a></h3>
+      <p class="summary">20 functions, 2 error names: in_place, in_place_by, stable_in_place, …</p>
+      <h3 id="e.algo.project"><a href="#e.algo.project"><code>e.algo.project</code></a></h3>
+      <p class="summary">38 functions, 21 types, 6 constants: floor_div, day_of_ms, weekday_of, …</p>
+      <h3 id="e.algo.trigger"><a href="#e.algo.trigger"><code>e.algo.trigger</code></a></h3>
+      <p class="summary">55 functions, 23 types, 5 constants: floor_div, is_finite, civil_days, …</p>
+      <h3 id="e.algo.fsm"><a href="#e.algo.fsm"><code>e.algo.fsm</code></a></h3>
+      <p class="summary">88 functions, 36 types: err_unknown_transition, err_wrong_state, err_permission_denied, …</p>
+      <h3 id="e.algo.ir"><a href="#e.algo.ir"><code>e.algo.ir</code></a></h3>
+      <p class="summary">65 functions, 10 types, 1 error name: output_types, info, not_found, …</p>
+      <h3 id="e.algo.journal"><a href="#e.algo.journal"><code>e.algo.journal</code></a></h3>
+      <p class="summary">68 functions, 4 types, 3 error names: entry_type_known, is_terminal, text, …</p>
+      <h3 id="e.algo.workflow"><a href="#e.algo.workflow"><code>e.algo.workflow</code></a></h3>
+      <p class="summary">70 functions, 5 types, 8 constants, 1 error name: done, nothing, signal, …</p>
+      <h3 id="e.algo.flow"><a href="#e.algo.flow"><code>e.algo.flow</code></a></h3>
+      <p class="summary">48 functions, 6 types: carry, ended, text, …</p>
+      <h3 id="e.algo.chain"><a href="#e.algo.chain"><code>e.algo.chain</code></a></h3>
+      <p class="summary">37 functions, 1 error name: text, hex_digit, write_string, …</p>
+      <h3 id="e.algo.sync"><a href="#e.algo.sync"><code>e.algo.sync</code></a></h3>
+      <p class="summary">63 functions, 5 types: text, flag, number, …</p>
+      <h3 id="e.algo.realtime"><a href="#e.algo.realtime"><code>e.algo.realtime</code></a></h3>
+      <p class="summary">65 functions, 4 types: text, flag, number, …</p>
+      <h3 id="e.algo.syncjob"><a href="#e.algo.syncjob"><code>e.algo.syncjob</code></a></h3>
+      <p class="summary">60 functions, 1 type, 1 error name: sync_lease_ms, min_interval_minutes, max_backoff_minutes, …</p>
+      <h3 id="e.algo.offline"><a href="#e.algo.offline"><code>e.algo.offline</code></a></h3>
+      <p class="summary">40 functions, 3 types, 1 constant: js_string, truthy_member, object_or_empty, …</p>
+      <h3 id="e.algo.syncsource"><a href="#e.algo.syncsource"><code>e.algo.syncsource</code></a></h3>
+      <p class="summary">23 functions, 1 constant: stream_prefix, is_word_byte, looks_like_stream_token, …</p>
+      <h3 id="e.algo.writeback"><a href="#e.algo.writeback"><code>e.algo.writeback</code></a></h3>
+      <p class="summary">55 functions, 3 types: rejected_key, default_max_attempts, js_string, …</p>
+      <h3 id="e.algo.sqlsource"><a href="#e.algo.sqlsource"><code>e.algo.sqlsource</code></a></h3>
+      <p class="summary">66 functions: max_sql_rows, max_entities, statement_timeout_ms, …</p>
+      <h3 id="e.algo.syncinfer"><a href="#e.algo.syncinfer"><code>e.algo.syncinfer</code></a></h3>
+      <p class="summary">89 functions, 11 types, 13 constants: cps_of, is_digit, is_word, …</p>
+      <h3 id="e.algo.syncpull"><a href="#e.algo.syncpull"><code>e.algo.syncpull</code></a></h3>
+      <p class="summary">54 functions, 2 types: max_pull_pages, max_pull_records, min_interval_minutes, …</p>
+      <h3 id="e.algo.conflictview"><a href="#e.algo.conflictview"><code>e.algo.conflictview</code></a></h3>
+      <p class="summary">10 functions: escape_html, cut_units, units_over, …</p>
+      <h3 id="e.fmt.protodesc"><a href="#e.fmt.protodesc"><code>e.fmt.protodesc</code></a></h3>
+      <p class="summary">22 functions, 1 error name: max_depth, type_name, label_name, …</p>
+      <h3 id="e.net.grpcstub"><a href="#e.net.grpcstub"><code>e.net.grpcstub</code></a></h3>
+      <p class="summary">45 functions, 3 types, 1 error name: presence_text, oneof_clears, oneof_later, …</p>
+      <h3 id="e.fmt.protomsg"><a href="#e.fmt.protomsg"><code>e.fmt.protomsg</code></a></h3>
+      <p class="summary">32 functions, 1 type, 2 error names: out_new, out_bytes, reserve, …</p>
+      <h3 id="e.net.grpcretry"><a href="#e.net.grpcretry"><code>e.net.grpcretry</code></a></h3>
+      <p class="summary">15 functions, 3 types, 1 error name: attempts_cap, code_from_name, parse_duration, …</p>
+      <h3 id="e.net.grpccall"><a href="#e.net.grpccall"><code>e.net.grpccall</code></a></h3>
+      <p class="summary">19 functions, 4 types, 11 constants: max_hedges, empty_slot, new_call, …</p>
+      <h3 id="e.net.sftp"><a href="#e.net.sftp"><code>e.net.sftp</code></a></h3>
+      <p class="summary">26 functions, 3 types, 48 constants, 4 error names: no_attrs, put32, put64, …</p>
+      <h3 id="e.net.grpctls"><a href="#e.net.grpctls"><code>e.net.grpctls</code></a></h3>
+      <p class="summary">6 functions, 1 type, 1 error name: client_config, establish, dial, …</p>
+      <h3 id="e.algo.fulltext"><a href="#e.algo.fulltext"><code>e.algo.fulltext</code></a></h3>
+      <p class="summary">71 functions, 41 types: is_alnum, tokenize, has_token, …</p>
+      <h3 id="e.algo.search"><a href="#e.algo.search"><code>e.algo.search</code></a></h3>
+      <p class="summary">18 functions: binary, binary_by, lower_bound, …</p>
+      <h3 id="e.algo.sketch"><a href="#e.algo.sketch"><code>e.algo.sketch</code></a></h3>
+      <p class="summary">137 functions, 22 types, 3 error names: bloom_size, bloom_init, bloom_insert, …</p>
+      <h3 id="e.algo.coding"><a href="#e.algo.coding"><code>e.algo.coding</code></a></h3>
+      <p class="summary">57 functions, 3 types, 2 error names: rle_encode, rle_decode, varint_encode, …</p>
+      <h3 id="e.algo.complex"><a href="#e.algo.complex"><code>e.algo.complex</code></a></h3>
+      <p class="summary">16 functions, 1 type: make, add, sub, …</p>
+      <h3 id="e.algo.decimal"><a href="#e.algo.decimal"><code>e.algo.decimal</code></a></h3>
+      <p class="summary">12 functions, 3 types, 3 error names: make, normalize, add, …</p>
+      <h3 id="e.algo.bignum"><a href="#e.algo.bignum"><code>e.algo.bignum</code></a></h3>
+      <p class="summary">46 functions, 3 types, 2 constants, 3 error names: int_zero, make_int, int_from_i64, …</p>
+      <h3 id="e.algo.linalg.matrix"><a href="#e.algo.linalg.matrix"><code>e.algo.linalg.matrix</code></a></h3>
+      <p class="summary">47 functions, 2 types, 6 error names: extent, view, view_const, …</p>
+      <h3 id="e.algo.linalg.tensor"><a href="#e.algo.linalg.tensor"><code>e.algo.linalg.tensor</code></a></h3>
+      <p class="summary">9 functions, 2 types, 1 error name: view, contiguous, as_const, …</p>
+      <h3 id="e.text.edit"><a href="#e.text.edit"><code>e.text.edit</code></a></h3>
+      <p class="summary">9 functions, 3 error names: substr, chomp, trim_prefix, …</p>
+      <h3 id="e.text.encoding"><a href="#e.text.encoding"><code>e.text.encoding</code></a></h3>
+      <p class="summary">25 functions, 6 types, 2 constants, 3 error names: detect_bom, decoder, encoder, …</p>
+      <h3 id="e.text.utf8"><a href="#e.text.utf8"><code>e.text.utf8</code></a></h3>
+      <p class="summary">12 functions, 2 types, 2 error names: decode, encode, validate, …</p>
+      <h3 id="e.text.math"><a href="#e.text.math"><code>e.text.math</code></a></h3>
+      <p class="summary">100 functions, 11 types, 21 constants, 4 error names: maxf, minf, be16, …</p>
+      <h3 id="e.text.sig"><a href="#e.text.sig"><code>e.text.sig</code></a></h3>
+      <p class="summary">38 functions, 7 types, 16 constants, 4 error names: is_space, is_ident_start, is_ident, …</p>
+      <h3 id="e.text.termkit"><a href="#e.text.termkit"><code>e.text.termkit</code></a></h3>
+      <p class="summary">33 functions, 4 types, 9 constants, 3 error names: display_width, push_spaces, push_two_digits, …</p>
+      <h3 id="e.text.search"><a href="#e.text.search"><code>e.text.search</code></a></h3>
+      <p class="summary">15 functions, 1 type, 3 error names: kmp_table, kmp, horspool, …</p>
+      <h3 id="e.text.distance"><a href="#e.text.distance"><code>e.text.distance</code></a></h3>
+      <p class="summary">7 functions, 2 error names: levenshtein, damerau_levenshtein, hamming, …</p>
+      <h3 id="e.text.casing"><a href="#e.text.casing"><code>e.text.casing</code></a></h3>
+      <p class="summary">12 functions, 1 type, 1 error name: is_upper, is_lower, is_digit, …</p>
+      <h3 id="e.text.phonetic"><a href="#e.text.phonetic"><code>e.text.phonetic</code></a></h3>
+      <p class="summary">14 functions, 1 error name: upper, lower, is_vowel, …</p>
+      <h3 id="e.text.stem"><a href="#e.text.stem"><code>e.text.stem</code></a></h3>
+      <p class="summary">27 functions, 1 error name: lower, is_vowel_letter, is_consonant, …</p>
+      <h3 id="e.text.wrap"><a href="#e.text.wrap"><code>e.text.wrap</code></a></h3>
+      <p class="summary">6 functions, 2 error names: words, greedy, optimal, …</p>
+      <h3 id="e.text.mask"><a href="#e.text.mask"><code>e.text.mask</code></a></h3>
+      <p class="summary">8 functions, 1 type, 4 constants, 1 error name: decode, fold, item, …</p>
+      <h3 id="e.text.metric"><a href="#e.text.metric"><code>e.text.metric</code></a></h3>
+      <p class="summary">11 functions, 2 types, 2 error names: split, word_equal, gram_equal, …</p>
+      <h3 id="e.text.suffix"><a href="#e.text.suffix"><code>e.text.suffix</code></a></h3>
+      <p class="summary">14 functions, 2 types, 1 constant, 2 error names: array_build, lcp_array, compare_at, …</p>
+      <h3 id="e.text.diff"><a href="#e.text.diff"><code>e.text.diff</code></a></h3>
+      <p class="summary">14 functions, 3 types, 2 error names: same, myers_scratch, myers, …</p>
+      <h3 id="e.text.rank"><a href="#e.text.rank"><code>e.text.rank</code></a></h3>
+      <p class="summary">8 functions, 2 error names: same, word_count, term_frequency, …</p>
+      <h3 id="e.text.index"><a href="#e.text.index"><code>e.text.index</code></a></h3>
+      <p class="summary">20 functions, 2 types, 2 error names: compare, count_words, sort_pairs, …</p>
+      <h3 id="e.text.tokenize"><a href="#e.text.tokenize"><code>e.text.tokenize</code></a></h3>
+      <p class="summary">18 functions, 1 type, 3 error names: same, shingles, word_shingles, …</p>
+      <h3 id="e.text.hyphen"><a href="#e.text.hyphen"><code>e.text.hyphen</code></a></h3>
+      <p class="summary">7 functions, 1 constant, 3 error names: english, fold, is_digit, …</p>
+      <h3 id="e.text.collab"><a href="#e.text.collab"><code>e.text.collab</code></a></h3>
+      <p class="summary">20 functions, 5 types, 2 error names: digits, insert, delete, …</p>
+      <h3 id="e.text.unicode"><a href="#e.text.unicode"><code>e.text.unicode</code></a></h3>
+      <p class="summary">36 functions, 2 types: scalar_at, read_u32, run_value, …</p>
+      <h3 id="e.text.normalize"><a href="#e.text.normalize"><code>e.text.normalize</code></a></h3>
+      <p class="summary">2 functions, 1 type, 1 error name: is_normalized, normalize</p>
+      <h3 id="e.text.collate"><a href="#e.text.collate"><code>e.text.collate</code></a></h3>
+      <p class="summary">4 functions, 1 type: codepoint_cmp, natural_cmp, compare, …</p>
+      <h3 id="e.text.locale"><a href="#e.text.locale"><code>e.text.locale</code></a></h3>
+      <p class="summary">14 functions, 5 types, 3 error names: load, builtin, version, …</p>
+      <h3 id="e.text.template"><a href="#e.text.template"><code>e.text.template</code></a></h3>
+      <p class="summary">6 functions, 4 types, 4 error names: parse, execute, execute_with_limits, …</p>
+      <h3 id="e.text.report"><a href="#e.text.report"><code>e.text.report</code></a></h3>
+      <p class="summary">30 functions, 7 types, 2 error names: options_default, is_continuation, decode_at, …</p>
+      <h3 id="e.text.regex"><a href="#e.text.regex"><code>e.text.regex</code></a></h3>
+      <p class="summary">69 functions, 14 types, 14 constants, 7 error names: node, add_range, peek, …</p>
+      <h3 id="e.gfx.geometry"><a href="#e.gfx.geometry"><code>e.gfx.geometry</code></a></h3>
+      <p class="summary">31 functions, 13 types, 2 error names: rect, contains, intersect, …</p>
+      <h3 id="e.gfx.paint"><a href="#e.gfx.paint"><code>e.gfx.paint</code></a></h3>
+      <p class="summary">23 functions, 12 types, 2 error names: rgba, srgb_to_linear, linear_of, …</p>
+      <h3 id="e.gfx.image"><a href="#e.gfx.image"><code>e.gfx.image</code></a></h3>
+      <p class="summary">23 functions, 5 types, 1 constant, 2 error names: bytes_per_pixel, required_bytes, make, …</p>
+      <h3 id="e.text.bidi"><a href="#e.text.bidi"><code>e.text.bidi</code></a></h3>
+      <p class="summary">30 functions, 1 type, 27 constants, 2 error names: version, scalar_at, read_u32, …</p>
+      <h3 id="e.text.segment"><a href="#e.text.segment"><code>e.text.segment</code></a></h3>
+      <p class="summary">33 functions, 2 types, 68 constants, 1 error name: version, scalar_at, run_value, …</p>
+      <h3 id="e.text.shape"><a href="#e.text.shape"><code>e.text.shape</code></a></h3>
+      <p class="summary">30 functions, 11 types, 19 constants, 4 error names: u16_at, i16_at, u32_at, …</p>
+      <h3 id="e.text.layout"><a href="#e.text.layout"><code>e.text.layout</code></a></h3>
+      <p class="summary">36 functions, 12 types, 3 constants, 4 error names: is_rtl, is_neutral, read16, …</p>
+      <h3 id="e.ui.report"><a href="#e.ui.report"><code>e.ui.report</code></a></h3>
+      <p class="summary">32 functions, 17 types, 2 constants, 2 error names: fixed_wrap, emit_line, wrap_paragraph, …</p>
+      <h3 id="e.ui.sheet"><a href="#e.ui.sheet"><code>e.ui.sheet</code></a></h3>
+      <p class="summary">46 functions, 24 types, 2 error names: axis, overrides_before, axis_start, …</p>
+      <h3 id="e.ui.flow"><a href="#e.ui.flow"><code>e.ui.flow</code></a></h3>
+      <p class="summary">57 functions, 24 types, 2 error names: node_width, header_height, port_row, …</p>
+      <h3 id="e.ui.state"><a href="#e.ui.state"><code>e.ui.state</code></a></h3>
+      <p class="summary">24 functions, 1 type, 2 error names: kind_signal, kind_memo, kind_effect, …</p>
+      <h3 id="e.ui.ink"><a href="#e.ui.ink"><code>e.ui.ink</code></a></h3>
+      <p class="summary">20 functions, 3 types, 2 error names: canvas, clamp_pressure, is_number, …</p>
+      <h3 id="e.ui.markdown_view"><a href="#e.ui.markdown_view"><code>e.ui.markdown_view</code></a></h3>
+      <p class="summary">50 functions, 15 types, 11 constants, 3 error names: utf8_cols, text_px, space_px, …</p>
+      <h3 id="e.ui.tree_adapter"><a href="#e.ui.tree_adapter"><code>e.ui.tree_adapter</code></a></h3>
+      <p class="summary">42 functions, 10 types, 2 constants, 5 error names: default_hash, policy, policy_unicode, …</p>
+      <h3 id="e.ui.schedule"><a href="#e.ui.schedule"><code>e.ui.schedule</code></a></h3>
+      <p class="summary">70 functions, 27 types, 2 error names: english, abs_minutes, datetime_of, …</p>
+      <h3 id="e.ui.undo"><a href="#e.ui.undo"><code>e.ui.undo</code></a></h3>
+      <p class="summary">19 functions, 2 types, 2 error names: stack, stamp, push, …</p>
+      <h3 id="e.ui.code_editor"><a href="#e.ui.code_editor"><code>e.ui.code_editor</code></a></h3>
+      <p class="summary">212 functions, 16 types, 50 constants, 8 error names: min_of, max_of, lang_plain, …</p>
+      <h3 id="e.ui.terminal"><a href="#e.ui.terminal"><code>e.ui.terminal</code></a></h3>
+      <p class="summary">101 functions, 3 types, 83 constants, 1 error name: min_usize, max_usize, indexed, …</p>
+      <h3 id="e.ui.terminal_view"><a href="#e.ui.terminal_view"><code>e.ui.terminal_view</code></a></h3>
+      <p class="summary">15 functions, 1 type, 1 constant: viewport, base_line, line_total, …</p>
+      <h3 id="e.ui.style"><a href="#e.ui.style"><code>e.ui.style</code></a></h3>
+      <p class="summary">10 functions, 26 types, 1 error name: defaults, validate, color, …</p>
+      <h3 id="e.ui.layout"><a href="#e.ui.layout"><code>e.ui.layout</code></a></h3>
+      <p class="summary">6 functions, 13 types, 2 error names: constrain, flex, wrap, …</p>
+      <h3 id="e.crypto.cipher"><a href="#e.crypto.cipher"><code>e.crypto.cipher</code></a></h3>
+      <p class="summary">21 functions, 1 type, 2 error names: inverse_sbox, gf_mul, aes_key, …</p>
+      <h3 id="e.crypto.classic"><a href="#e.crypto.classic"><code>e.crypto.classic</code></a></h3>
+      <p class="summary">27 functions, 2 error names: is_upper, is_lower, is_letter, …</p>
+      <h3 id="e.crypto.hash"><a href="#e.crypto.hash"><code>e.crypto.hash</code></a></h3>
+      <p class="summary">84 functions, 8 types: rotr32, rotr64, rotl64, …</p>
+      <h3 id="e.crypto.mac"><a href="#e.crypto.mac"><code>e.crypto.mac</code></a></h3>
+      <p class="summary">16 functions, 3 types: sha256_init, sha256_update, sha256_done, …</p>
+      <h3 id="e.crypto.otp"><a href="#e.crypto.otp"><code>e.crypto.otp</code></a></h3>
+      <p class="summary">14 functions, 2 types, 2 constants, 1 error name: pow10, digest, hotp, …</p>
+      <h3 id="e.crypto.kdf"><a href="#e.crypto.kdf"><code>e.crypto.kdf</code></a></h3>
+      <p class="summary">64 functions, 3 types, 1 constant, 3 error names: hkdf_sha256_extract, hkdf_sha256_expand, hkdf_sha512_extract, …</p>
+      <h3 id="e.crypto.aead"><a href="#e.crypto.aead"><code>e.crypto.aead</code></a></h3>
+      <p class="summary">44 functions, 4 types, 5 error names: sbox, xtime, expand_key, …</p>
+      <h3 id="e.crypto.ristretto"><a href="#e.crypto.ristretto"><code>e.crypto.ristretto</code></a></h3>
+      <p class="summary">20 functions, 1 type, 1 error name: sqrt_ad_minus_one, invsqrt_a_minus_d, one_minus_d_sq, …</p>
+      <h3 id="e.crypto.secret"><a href="#e.crypto.secret"><code>e.crypto.secret</code></a></h3>
+      <p class="summary">7 functions, 2 error names: gf_mul, gf_inv, share_size, …</p>
+      <h3 id="e.crypto.sign"><a href="#e.crypto.sign"><code>e.crypto.sign</code></a></h3>
+      <p class="summary">206 functions, 18 types, 4 error names: fe_zero, fe_one, load24, …</p>
+      <h3 id="e.crypto.kx"><a href="#e.crypto.kx"><code>e.crypto.kx</code></a></h3>
+      <p class="summary">51 functions, 4 types, 2 error names: fe_zero, fe_one, load24, …</p>
+      <h3 id="e.crypto.merkle"><a href="#e.crypto.merkle"><code>e.crypto.merkle</code></a></h3>
+      <p class="summary">15 functions, 1 type, 2 error names: nodes_required, leaf_hash, inner_hash, …</p>
+      <h3 id="e.crypto.noise"><a href="#e.crypto.noise"><code>e.crypto.noise</code></a></h3>
+      <p class="summary">38 functions, 6 types, 3 error names: iv, sigma, load_le32, …</p>
+      <h3 id="e.crypto.random"><a href="#e.crypto.random"><code>e.crypto.random</code></a></h3>
+      <p class="summary">4 functions, 1 type, 1 error name: chacha20_init, chacha20_fill, chacha20_next_u64, …</p>
+      <h3 id="e.crypto.x509"><a href="#e.crypto.x509"><code>e.crypto.x509</code></a></h3>
+      <p class="summary">28 functions, 9 types, 1 constant, 8 error names: next, expect, inside, …</p>
+      <h2>5. Platform and host services</h2>
+      <h3 id="e.os"><a href="#e.os"><code>e.os</code></a></h3>
+      <p class="summary">139 functions, 44 types, 9 error names: open, create_new, create_new_with_mode, …</p>
+      <h3 id="e.os.shell"><a href="#e.os.shell"><code>e.os.shell</code></a></h3>
+      <p class="summary">62 functions, 26 types, 5 error names: capabilities, tray_add, tray_update, …</p>
+      <h3 id="e.cancel"><a href="#e.cancel"><code>e.cancel</code></a></h3>
+      <p class="summary">4 functions, 2 types, 2 error names: token, request, requested, …</p>
+      <h3 id="e.io"><a href="#e.io"><code>e.io</code></a></h3>
+      <p class="summary">70 functions, 17 types, 3 error names: reader, detail_reader, writer, …</p>
+      <h3 id="e.text.io"><a href="#e.text.io"><code>e.text.io</code></a></h3>
+      <p class="summary">8 functions, 3 types, 3 error names: reader, reader_bom, read_line, …</p>
+      <h3 id="e.fs"><a href="#e.fs"><code>e.fs</code></a></h3>
+      <p class="summary">43 functions, 8 types, 5 error names: exists, stat, metadata, …</p>
+      <h3 id="e.fs.mmap"><a href="#e.fs.mmap"><code>e.fs.mmap</code></a></h3>
+      <p class="summary">7 functions, 1 type, 2 error names: open, bytes, flush, …</p>
+      <h3 id="e.fs.watch"><a href="#e.fs.watch"><code>e.fs.watch</code></a></h3>
+      <p class="summary">3 functions, 3 types, 2 error names: open, read, close</p>
+      <h3 id="e.fs.vfs"><a href="#e.fs.vfs"><code>e.fs.vfs</code></a></h3>
+      <p class="summary">84 functions, 8 types, 4 error names: same_text, is_root, clean, …</p>
+      <h3 id="e.proc"><a href="#e.proc"><code>e.proc</code></a></h3>
+      <p class="summary">9 functions, 7 types, 1 error name: spawn, spawn_piped, wait, …</p>
+      <h3 id="e.proc.sys.format"><a href="#e.proc.sys.format"><code>e.proc.sys.format</code></a></h3>
+      <p class="summary">9 functions, 3 types, 1 error name: is_digit, read_number, line_end, …</p>
+      <h3 id="e.proc.sys"><a href="#e.proc.sys"><code>e.proc.sys</code></a></h3>
+      <p class="summary">9 functions, 4 types: cpu_count, cpu_times, memory, …</p>
+      <h3 id="e.proc.sys.host"><a href="#e.proc.sys.host"><code>e.proc.sys.host</code></a></h3>
+      <p class="summary">8 functions: cpu_count, cpu_times, memory, …</p>
+      <h3 id="e.thread.pool"><a href="#e.thread.pool"><code>e.thread.pool</code></a></h3>
+      <p class="summary">21 functions, 6 types, 3 error names: state_of, worker_main, finish_one, …</p>
+      <h3 id="e.thread"><a href="#e.thread"><code>e.thread</code></a></h3>
+      <p class="summary">23 functions, 6 types, 2 constants, 2 error names: spawn, join, detach, …</p>
+      <h3 id="e.sync"><a href="#e.sync"><code>e.sync</code></a></h3>
+      <p class="summary">59 functions, 14 types, 5 constants, 1 error name: deadline_for, remaining_for, mutex, …</p>
+      <h3 id="e.channel"><a href="#e.channel"><code>e.channel</code></a></h3>
+      <p class="summary">8 functions, 1 type, 1 error name: init, send, try_send, …</p>
+      <h3 id="e.concurrent.deque"><a href="#e.concurrent.deque"><code>e.concurrent.deque</code></a></h3>
+      <p class="summary">6 functions, 2 types, 2 error names: deque, push, pop, …</p>
+      <h3 id="e.concurrent.stack"><a href="#e.concurrent.stack"><code>e.concurrent.stack</code></a></h3>
+      <p class="summary">11 functions, 1 type, 1 constant, 2 error names: pack, index_of, version_of, …</p>
+      <h3 id="e.concurrent.reclaim"><a href="#e.concurrent.reclaim"><code>e.concurrent.reclaim</code></a></h3>
+      <p class="summary">26 functions, 4 types, 1 constant, 3 error names: sink_free, on_free, freed_count, …</p>
+      <h3 id="e.concurrent.queue"><a href="#e.concurrent.queue"><code>e.concurrent.queue</code></a></h3>
+      <p class="summary">10 functions, 1 type, 2 error names: init, try_push, push, …</p>
+      <h3 id="e.concurrent.map"><a href="#e.concurrent.map"><code>e.concurrent.map</code></a></h3>
+      <p class="summary">6 functions, 1 type, 3 error names: init, get, put, …</p>
+      <h3 id="e.task"><a href="#e.task"><code>e.task</code></a></h3>
+      <p class="summary">11 functions, 6 types, 3 error names: pool, submit, future, …</p>
+      <h3 id="e.mediator"><a href="#e.mediator"><code>e.mediator</code></a></h3>
+      <p class="summary">12 functions, 10 types, 4 error names: mediator, register, subscribe, …</p>
+      <h3 id="e.time"><a href="#e.time"><code>e.time</code></a></h3>
+      <p class="summary">49 functions, 7 types, 6 constants, 1 error name: now, monotonic, timer_start, …</p>
+      <h3 id="e.time.calendar"><a href="#e.time.calendar"><code>e.time.calendar</code></a></h3>
+      <p class="summary">29 functions, 4 types, 1 error name: is_leap_year, days_in_month, valid_date, …</p>
+      <h3 id="e.tz"><a href="#e.tz"><code>e.tz</code></a></h3>
+      <p class="summary">8 functions, 5 types, 3 error names: load, builtin, version, …</p>
+      <h2>6. Language-owned runtimes</h2>
+      <h3 id="e.asset"><a href="#e.asset"><code>e.asset</code></a></h3>
+      <p class="summary">4 functions, 2 types: count, at, get, …</p>
+      <h3 id="e.gpu"><a href="#e.gpu"><code>e.gpu</code></a></h3>
+      <p class="summary">120 functions, 27 types, 31 constants, 10 error names: capability_bit, capability_list, cpu_capabilities, …</p>
+      <h3 id="e.gpu.vulkan"><a href="#e.gpu.vulkan"><code>e.gpu.vulkan</code></a></h3>
+      <p class="summary">11 functions, 4 types, 5 error names: load, devices, describe, …</p>
+      <h3 id="e.gpu.cuda"><a href="#e.gpu.cuda"><code>e.gpu.cuda</code></a></h3>
+      <p class="summary">2 functions, 1 type, 3 error names: load, devices</p>
+      <h3 id="e.gpu.tensor"><a href="#e.gpu.tensor"><code>e.gpu.tensor</code></a></h3>
+      <p class="summary">5 functions, 1 type, 1 error name: upload, download, add, …</p>
+      <h3 id="e.test"><a href="#e.test"><code>e.test</code></a></h3>
+      <p class="summary">4 functions, 1 type, 1 constant, 1 error name: assert, eq, near, …</p>
+      <h3 id="e.test.support"><a href="#e.test.support"><code>e.test.support</code></a></h3>
+      <p class="summary">33 functions, 16 types: clock, advance, scripted_reader, …</p>
+      <h3 id="e.test.coverage"><a href="#e.test.coverage"><code>e.test.coverage</code></a></h3>
+      <p class="summary">11 functions, 6 types, 3 constants, 2 error names: hit, snapshot, reset, …</p>
+      <h3 id="e.test.fuzz"><a href="#e.test.fuzz"><code>e.test.fuzz</code></a></h3>
+      <p class="summary">21 functions, 9 types, 4 constants, 3 error names: interesting, mutate, past, …</p>
+      <h3 id="e.test.prop"><a href="#e.test.prop"><code>e.test.prop</code></a></h3>
+      <p class="summary">11 functions, 3 types, 1 error name: int_gen, bytes_gen, choice_gen, …</p>
+      <h3 id="e.test.sim"><a href="#e.test.sim"><code>e.test.sim</code></a></h3>
+      <p class="summary">8 functions, 2 types, 2 error names: mix, sim, enqueue, …</p>
+      <h3 id="e.test.linearize"><a href="#e.test.linearize"><code>e.test.linearize</code></a></h3>
+      <p class="summary">3 functions, 3 types, 2 error names: step, search, check</p>
+      <h3 id="e.test.snapshot"><a href="#e.test.snapshot"><code>e.test.snapshot</code></a></h3>
+      <p class="summary">19 functions, 2 types, 2 error names: valid_name, path_of, normalized, …</p>
+      <h3 id="e.test.bench"><a href="#e.test.bench"><code>e.test.bench</code></a></h3>
+      <p class="summary">16 functions, 5 types, 3 error names: config_default, sort, quantile, …</p>
+      <h3 id="e.test.match"><a href="#e.test.match"><code>e.test.match</code></a></h3>
+      <p class="summary">40 functions, 3 types: blank, anything, int_matcher, …</p>
+      <h3 id="e.test.mock"><a href="#e.test.mock"><code>e.test.mock</code></a></h3>
+      <p class="summary">21 functions, 3 types, 3 constants, 6 error names: mock, expect, allow, …</p>
+      <h3 id="e.test.bdd"><a href="#e.test.bdd"><code>e.test.bdd</code></a></h3>
+      <p class="summary">23 functions, 9 types, 3 constants, 4 error names: document, push_tag, push_step, …</p>
+      <h3 id="e.test.mutate"><a href="#e.test.mutate"><code>e.test.mutate</code></a></h3>
+      <p class="summary">14 functions, 4 types, 1 error name: add, is_word_byte, after_operand, …</p>
+      <h3 id="e.test.arch"><a href="#e.test.arch"><code>e.test.arch</code></a></h3>
+      <p class="summary">16 functions, 4 types, 1 constant, 3 error names: graph, add_module, index_of, …</p>
+      <h3 id="e.debug"><a href="#e.debug"><code>e.debug</code></a></h3>
+      <p class="summary">9 functions, 3 types, 3 error names: backtrace, symbolize, demangle_neper, …</p>
+      <h2>7. Application facilities and networking</h2>
+      <h3 id="e.debug.dump"><a href="#e.debug.dump"><code>e.debug.dump</code></a></h3>
+      <p class="summary">17 functions, 7 types, 8 constants, 5 error names: le, fits, c_string, …</p>
+      <h3 id="e.debug.dump.host"><a href="#e.debug.dump.host"><code>e.debug.dump.host</code></a></h3>
+      <p class="summary">4 functions, 3 error names: process_id, image_base, write_minidump, …</p>
+      <h3 id="e.metrics"><a href="#e.metrics"><code>e.metrics</code></a></h3>
+      <p class="summary">10 functions, 4 types, 1 error name: counter, counter_add, counter_get, …</p>
+      <h3 id="e.metrics.export"><a href="#e.metrics.export"><code>e.metrics.export</code></a></h3>
+      <p class="summary">27 functions, 6 types, 1 error name: counter_sample, gauge_sample, histogram_sample, …</p>
+      <h3 id="e.store"><a href="#e.store"><code>e.store</code></a></h3>
+      <p class="summary">34 functions, 4 types, 4 error names: valid_key, has_prefix, key_less, …</p>
+      <h3 id="e.store.http"><a href="#e.store.http"><code>e.store.http</code></a></h3>
+      <p class="summary">17 functions, 3 types: net_transport, net_send, http_store, …</p>
+      <h3 id="e.log"><a href="#e.log"><code>e.log</code></a></h3>
+      <p class="summary">6 functions, 6 types: logger, enabled, write, …</p>
+      <h3 id="e.cli"><a href="#e.cli"><code>e.cli</code></a></h3>
+      <p class="summary">5 functions, 6 types, 4 error names: validate, parse, parse_into, …</p>
+      <h3 id="e.cli.config"><a href="#e.cli.config"><code>e.cli.config</code></a></h3>
+      <p class="summary">28 functions, 4 types, 3 error names: config, layer_rank, set, …</p>
+      <h3 id="e.cli.line"><a href="#e.cli.line"><code>e.cli.line</code></a></h3>
+      <p class="summary">33 functions, 4 types, 1 error name: editor, text, is_continuation, …</p>
+      <h3 id="e.cli.complete"><a href="#e.cli.complete"><code>e.cli.complete</code></a></h3>
+      <p class="summary">17 functions, 1 type, 1 error name: valid_name, count_commands, joined, …</p>
+      <h3 id="e.async"><a href="#e.async"><code>e.async</code></a></h3>
+      <p class="summary">7 functions, 4 types, 2 error names: init, register, modify, …</p>
+      <h3 id="e.async.io"><a href="#e.async.io"><code>e.async.io</code></a></h3>
+      <p class="summary">11 functions, 4 types, 3 error names: read, write, accept, …</p>
+      <h3 id="e.net"><a href="#e.net"><code>e.net</code></a></h3>
+      <p class="summary">46 functions, 8 types, 1 constant, 7 error names: hex_value, parse_ip4, parse_scope, …</p>
+      <h3 id="e.net.idna"><a href="#e.net.idna"><code>e.net.idna</code></a></h3>
+      <p class="summary">43 functions, 3 error names: base, tmin, tmax, …</p>
+      <h3 id="e.net.auth"><a href="#e.net.auth"><code>e.net.auth</code></a></h3>
+      <p class="summary">8 functions, 1 type, 1 constant, 5 error names: client, server, step, …</p>
+      <h3 id="e.net.balance"><a href="#e.net.balance"><code>e.net.balance</code></a></h3>
+      <p class="summary">14 functions, 1 type, 2 error names: round_robin, wrr, weighted_round_robin, …</p>
+      <h3 id="e.net.reliable"><a href="#e.net.reliable"><code>e.net.reliable</code></a></h3>
+      <p class="summary">29 functions, 4 types, 3 error names: seq_mask, seq_wrap, seq_less, …</p>
+      <h3 id="e.net.cidr"><a href="#e.net.cidr"><code>e.net.cidr</code></a></h3>
+      <p class="summary">14 functions, 1 type, 10 error names: decimal, parse, mask_of, …</p>
+      <h3 id="e.net.coap"><a href="#e.net.coap"><code>e.net.coap</code></a></h3>
+      <p class="summary">52 functions, 4 types, 4 error names: kind_con, kind_non, kind_ack, …</p>
+      <h3 id="e.net.mqtt"><a href="#e.net.mqtt"><code>e.net.mqtt</code></a></h3>
+      <p class="summary">53 functions, 4 types, 19 constants, 4 error names: encode_remaining_length, decode_remaining_length, packet_type, …</p>
+      <h3 id="e.net.stun"><a href="#e.net.stun"><code>e.net.stun</code></a></h3>
+      <p class="summary">33 functions, 4 types, 26 constants, 3 error names: store16, store32, load16, …</p>
+      <h3 id="e.net.dns"><a href="#e.net.dns"><code>e.net.dns</code></a></h3>
+      <p class="summary">47 functions, 5 types, 23 constants, 7 error names: store16, store32, load16, …</p>
+      <h3 id="e.net.http3"><a href="#e.net.http3"><code>e.net.http3</code></a></h3>
+      <p class="summary">42 functions, 1 type, 5 error names: frame_data, frame_headers, frame_cancel_push, …</p>
+      <h3 id="e.net.quic"><a href="#e.net.quic"><code>e.net.quic</code></a></h3>
+      <p class="summary">39 functions, 7 types, 23 constants, 6 error names: varint_encode, varint_decode, put_varint, …</p>
+      <h3 id="e.net.tls"><a href="#e.net.tls"><code>e.net.tls</code></a></h3>
+      <p class="summary">10 functions, 5 types, 5 error names: client, server, use_aead, …</p>
+      <h3 id="e.net.http.auth"><a href="#e.net.http.auth"><code>e.net.http.auth</code></a></h3>
+      <p class="summary">8 functions, 2 types, 7 error names: unreserved, pkce_verifier, pkce_verifier_seeded, …</p>
+      <h3 id="e.net.policy"><a href="#e.net.policy"><code>e.net.policy</code></a></h3>
+      <p class="summary">112 functions, 15 types: join, lower, is_ws, …</p>
+      <h3 id="e.net.ssrf"><a href="#e.net.ssrf"><code>e.net.ssrf</code></a></h3>
+      <p class="summary">28 functions, 2 types: join, lower, is_ws, …</p>
+      <h3 id="e.net.tls.roots"><a href="#e.net.tls.roots"><code>e.net.tls.roots</code></a></h3>
+      <p class="summary">6 functions, 1 type, 2 error names: contains, count_der, from_pem, …</p>
+      <h3 id="e.net.tls.hoststore"><a href="#e.net.tls.hoststore"><code>e.net.tls.hoststore</code></a></h3>
+      <p class="summary">4 functions, 1 error name: path_count, path_at, from_paths, …</p>
+      <h3 id="e.net.tls.mozilla"><a href="#e.net.tls.mozilla"><code>e.net.tls.mozilla</code></a></h3>
+      <p class="summary">23 functions: source, certificate_count, sha256_hex, …</p>
+      <h3 id="e.net.nats"><a href="#e.net.nats"><code>e.net.nats</code></a></h3>
+      <p class="summary">47 functions, 9 types, 4 error names: is_space, lower, same_fold, …</p>
+      <h3 id="x.redis.resp"><a href="#x.redis.resp"><code>x.redis.resp</code></a></h3>
+      <p class="summary">25 functions, 9 types, 4 error names: limits, put_bytes, put_decimal, …</p>
+      <h3 id="x.mongodb.wire"><a href="#x.mongodb.wire"><code>x.mongodb.wire</code></a></h3>
+      <p class="summary">16 functions, 3 types, 6 constants, 7 error names: le32, put_le32, crc32c, …</p>
+      <h3 id="x.elastic.rest"><a href="#x.elastic.rest"><code>x.elastic.rest</code></a></h3>
+      <p class="summary">23 functions, 7 types, 2 error names: meta, put_text, put_byte, …</p>
+      <h3 id="e.net.grpcserver"><a href="#e.net.grpcserver"><code>e.net.grpcserver</code></a></h3>
+      <p class="summary">16 functions, 3 types, 5 constants: server_new, put_frame, u32_bytes, …</p>
+      <h3 id="e.net.grpccodec"><a href="#e.net.grpccodec"><code>e.net.grpccodec</code></a></h3>
+      <p class="summary">6 functions, 1 type, 1 error name: supported, aligned, inflate, …</p>
+      <h3 id="e.net.http2"><a href="#e.net.http2"><code>e.net.http2</code></a></h3>
+      <p class="summary">52 functions, 6 types, 17 constants, 6 error names: preface, be16, be32, …</p>
+      <h3 id="e.net.grpc"><a href="#e.net.grpc"><code>e.net.grpc</code></a></h3>
+      <p class="summary">30 functions, 4 types, 22 constants, 7 error names: status_name, http_to_grpc, message_encode, …</p>
+      <h3 id="x.modbus.wire"><a href="#x.modbus.wire"><code>x.modbus.wire</code></a></h3>
+      <p class="summary">33 functions, 4 types, 14 constants, 4 error names: be16, put16, crc16, …</p>
+      <h3 id="e.dbus"><a href="#e.dbus"><code>e.dbus</code></a></h3>
+      <p class="summary">49 functions, 7 types, 8 constants, 6 error names: is_basic, complete_len, valid_signature, …</p>
+      <h3 id="e.net.packet"><a href="#e.net.packet"><code>e.net.packet</code></a></h3>
+      <p class="summary">31 functions, 7 types, 2 error names: be16, be32, put16, …</p>
+      <h3 id="e.net.pcap"><a href="#e.net.pcap"><code>e.net.pcap</code></a></h3>
+      <p class="summary">9 functions, 2 types, 2 error names: u16_at, u32_at, open, …</p>
+      <h3 id="e.net.http"><a href="#e.net.http"><code>e.net.http</code></a></h3>
+      <p class="summary">89 functions, 24 types, 3 constants, 5 error names: network_read, network_write, network_flush, …</p>
+      <h3 id="e.net.smtp"><a href="#e.net.smtp"><code>e.net.smtp</code></a></h3>
+      <p class="summary">33 functions, 6 types, 3 constants, 6 error names: no_reply, no_capabilities, read_byte, …</p>
+      <h3 id="e.net.pop3"><a href="#e.net.pop3"><code>e.net.pop3</code></a></h3>
+      <p class="summary">26 functions, 3 types, 2 constants, 6 error names: next_byte, read_line, copy_text, …</p>
+      <h3 id="e.net.imap"><a href="#e.net.imap"><code>e.net.imap</code></a></h3>
+      <p class="summary">45 functions, 10 types, 8 constants, 8 error names: no_capabilities, is_digit, same_fold, …</p>
+      <h3 id="e.net.ftp"><a href="#e.net.ftp"><code>e.net.ftp</code></a></h3>
+      <p class="summary">44 functions, 3 types, 3 constants, 6 error names: no_reply, digit, put, …</p>
+      <h3 id="e.net.socks"><a href="#e.net.socks"><code>e.net.socks</code></a></h3>
+      <p class="summary">23 functions, 2 types, 10 constants, 7 error names: no_address, empty_reply, reply_text, …</p>
+      <h3 id="e.net.ldap"><a href="#e.net.ldap"><code>e.net.ldap</code></a></h3>
+      <p class="summary">42 functions, 7 types, 30 constants, 6 error names: w_byte, w_bytes, w_length, …</p>
+      <h3 id="e.net.mdns"><a href="#e.net.mdns"><code>e.net.mdns</code></a></h3>
+      <p class="summary">29 functions, 9 types, 12 constants, 4 error names: group_v4, wire_name, clear_flags, …</p>
+      <h3 id="e.net.ws"><a href="#e.net.ws"><code>e.net.ws</code></a></h3>
+      <p class="summary">7 functions, 3 types, 4 error names: client_key, client_upgrade, server_upgrade, …</p>
+      <h3 id="e.db.pool"><a href="#e.db.pool"><code>e.db.pool</code></a></h3>
+      <p class="summary">15 functions, 3 types, 5 constants, 3 error names: pool, count, close_slot, …</p>
+      <h3 id="e.db.query"><a href="#e.db.query"><code>e.db.query</code></a></h3>
+      <p class="summary">76 functions, 6 types, 13 constants, 2 error names: table, rows, cell, …</p>
+      <h3 id="e.db.storage"><a href="#e.db.storage"><code>e.db.storage</code></a></h3>
+      <p class="summary">81 functions, 13 types, 6 constants, 4 error names: mix, btree, kslot, …</p>
+      <h3 id="e.algo.rules"><a href="#e.algo.rules"><code>e.algo.rules</code></a></h3>
+      <p class="summary">47 functions, 15 types, 19 constants, 5 error names: any_cell, init, dup, …</p>
+      <h3 id="e.data.mapper"><a href="#e.data.mapper"><code>e.data.mapper</code></a></h3>
+      <p class="summary">24 functions, 5 types, 4 error names: lower_byte, eat, loose_eq, …</p>
+      <h3 id="e.task.jobs"><a href="#e.task.jobs"><code>e.task.jobs</code></a></h3>
+      <p class="summary">31 functions, 5 types, 13 constants, 5 error names: init, keep, retry_delay, …</p>
+      <h3 id="e.db.docstore"><a href="#e.db.docstore"><code>e.db.docstore</code></a></h3>
+      <p class="summary">41 functions, 8 types, 7 constants, 4 error names: magic, create, rd_u32, …</p>
+      <h3 id="e.dist.actor"><a href="#e.dist.actor"><code>e.dist.actor</code></a></h3>
+      <p class="summary">37 functions, 7 types, 2 constants, 5 error names: state_collection, reminder_collection, create, …</p>
+      <h3 id="e.debug.report"><a href="#e.debug.report"><code>e.debug.report</code></a></h3>
+      <p class="summary">37 functions, 9 types, 3 constants, 3 error names: find_byte, parse_port, parse_dsn, …</p>
+      <h3 id="e.db.migrate"><a href="#e.db.migrate"><code>e.db.migrate</code></a></h3>
+      <p class="summary">19 functions, 3 types, 7 error names: checksum, journal_ddl, lock_sql, …</p>
+      <h3 id="e.db.orm"><a href="#e.db.orm"><code>e.db.orm</code></a></h3>
+      <p class="summary">27 functions, 3 types, 4 error names: session, hook_ok, type_sql, …</p>
+      <h3 id="e.db"><a href="#e.db"><code>e.db</code></a></h3>
+      <p class="summary">16 functions, 9 types, 5 error names: close, prepare, execute, …</p>
+      <h2>8. Declarative GPU UI</h2>
+      <h3 id="e.gfx.svg"><a href="#e.gfx.svg"><code>e.gfx.svg</code></a></h3>
+      <p class="summary">6 functions, 1 type, 2 error names: size, draw, draw_with_font, …</p>
+      <h3 id="e.gfx.svg_filter"><a href="#e.gfx.svg_filter"><code>e.gfx.svg_filter</code></a></h3>
+      <p class="summary">6 functions, 3 types, 1 error name: host, release, run, …</p>
+      <h3 id="e.gfx.curve"><a href="#e.gfx.curve"><code>e.gfx.curve</code></a></h3>
+      <p class="summary">12 functions, 1 type, 1 constant, 2 error names: point, lerp, distance, …</p>
+      <h3 id="e.gfx.mesh"><a href="#e.gfx.mesh"><code>e.gfx.mesh</code></a></h3>
+      <p class="summary">62 functions, 4 types, 4 constants, 2 error names: infinity, csg_epsilon, point, …</p>
+      <h3 id="e.gfx.raster"><a href="#e.gfx.raster"><code>e.gfx.raster</code></a></h3>
+      <p class="summary">17 functions, 2 types, 1 error name: push, abs32, line, …</p>
+      <h3 id="e.gfx.shade"><a href="#e.gfx.shade"><code>e.gfx.shade</code></a></h3>
+      <p class="summary">23 functions, 2 types: pi, vec3, rgb, …</p>
+      <h3 id="e.gfx.trace"><a href="#e.gfx.trace"><code>e.gfx.trace</code></a></h3>
+      <p class="summary">29 functions, 8 types, 2 error names: epsilon, two_pi, sphere, …</p>
+      <h3 id="e.gfx.texture"><a href="#e.gfx.texture"><code>e.gfx.texture</code></a></h3>
+      <p class="summary">33 functions, 1 type, 3 error names: nearest_third, put4, expand565, …</p>
+      <h3 id="e.gfx.filter"><a href="#e.gfx.filter"><code>e.gfx.filter</code></a></h3>
+      <p class="summary">48 functions, 1 type, 3 error names: inf, reflect, conv_h, …</p>
+      <h3 id="e.gfx.vision"><a href="#e.gfx.vision"><code>e.gfx.vision</code></a></h3>
+      <p class="summary">67 functions, 6 types, 6 constants, 3 error names: pi, clamp_index, pixel, …</p>
+      <h3 id="e.gfx.scene"><a href="#e.gfx.scene"><code>e.gfx.scene</code></a></h3>
+      <p class="summary">111 functions, 24 types, 6 constants, 4 error names: builder, push, finish, …</p>
+      <h3 id="e.ui.asset"><a href="#e.ui.asset"><code>e.ui.asset</code></a></h3>
+      <p class="summary">7 functions, 4 types, 4 error names: select, font, cache, …</p>
+      <h3 id="e.ui.window"><a href="#e.ui.window"><code>e.ui.window</code></a></h3>
+      <p class="summary">23 functions, 12 types, 3 error names: set_default_presenter, open, metrics, …</p>
+      <h3 id="e.ui.input"><a href="#e.ui.input"><code>e.ui.input</code></a></h3>
+      <p class="summary">6 functions, 14 types, 2 error names: queue, poll, capture, …</p>
+      <h3 id="e.ui.widget"><a href="#e.ui.widget"><code>e.ui.widget</code></a></h3>
+      <p class="summary">75 functions, 43 types, 5 error names: runtime, box, flex, …</p>
+      <h3 id="e.ui.animation"><a href="#e.ui.animation"><code>e.ui.animation</code></a></h3>
+      <p class="summary">5 functions, 2 types: controller, value, finished, …</p>
+      <h3 id="e.ui.accessibility"><a href="#e.ui.accessibility"><code>e.ui.accessibility</code></a></h3>
+      <p class="summary">11 functions, 9 types, 26 constants, 2 error names: build, fill_content, content_tree, …</p>
+      <h3 id="e.ui.testing"><a href="#e.ui.testing"><code>e.ui.testing</code></a></h3>
+      <p class="summary">27 functions, 3 types, 3 error names: harness, pump, send, …</p>
+      <h3 id="e.ui.audit"><a href="#e.ui.audit"><code>e.ui.audit</code></a></h3>
+      <p class="summary">5 functions, 5 types, 1 error name: options, run, check_name, …</p>
+      <h3 id="e.ui.control"><a href="#e.ui.control"><code>e.ui.control</code></a></h3>
+      <p class="summary">76 functions, 14 types, 1 error name: text_options, text_style, text, …</p>
+      <h3 id="e.ui.overlay"><a href="#e.ui.overlay"><code>e.ui.overlay</code></a></h3>
+      <p class="summary">18 functions, 3 types, 1 error name: tooltip_wanted, tooltip, menu, …</p>
+      <h3 id="e.ui.navigation"><a href="#e.ui.navigation"><code>e.ui.navigation</code></a></h3>
+      <p class="summary">21 functions, 3 types, 1 error name: app_bar, toolbar, status_bar, …</p>
+      <h3 id="e.ui.collection"><a href="#e.ui.collection"><code>e.ui.collection</code></a></h3>
+      <p class="summary">18 functions, 11 types, 1 error name: list, virtual_list, grid_view, …</p>
+      <h3 id="e.ui.app"><a href="#e.ui.app"><code>e.ui.app</code></a></h3>
+      <p class="summary">120 functions, 17 types, 2 error names: init, step, run, …</p>
+      <h2>9. Interchange formats</h2>
+      <h3 id="e.fmt.json"><a href="#e.fmt.json"><code>e.fmt.json</code></a></h3>
+      <p class="summary">81 functions, 10 types, 17 constants, 6 error names: number, decompose, digits_u64, …</p>
+      <h3 id="e.fmt.json.schema"><a href="#e.fmt.json.schema"><code>e.fmt.json.schema</code></a></h3>
+      <p class="summary">23 functions, 2 types, 3 constants, 3 error names: member, append_byte, append_key, …</p>
+      <h3 id="e.fmt.css.syntax"><a href="#e.fmt.css.syntax"><code>e.fmt.css.syntax</code></a></h3>
+      <p class="summary">54 functions, 7 types, 1 error name: kind_name, is_space, is_newline_like, …</p>
+      <h3 id="e.fmt.css.selector"><a href="#e.fmt.css.selector"><code>e.fmt.css.selector</code></a></h3>
+      <p class="summary">39 functions, 11 types: kind_name, combinator_name, pseudo_element_name, …</p>
+      <h3 id="e.ui.interpolate"><a href="#e.ui.interpolate"><code>e.ui.interpolate</code></a></h3>
+      <p class="summary">9 functions, 1 type: pi, lerp, round_half_away, …</p>
+      <h3 id="e.gfx.cssvalue"><a href="#e.gfx.cssvalue"><code>e.gfx.cssvalue</code></a></h3>
+      <p class="summary">168 functions, 14 types: no_bases, pi, e_const, …</p>
+      <h3 id="e.fmt.css.container"><a href="#e.fmt.css.container"><code>e.fmt.css.container</code></a></h3>
+      <p class="summary">6 functions, 6 types: unknown_condition, compare, tri, …</p>
+      <h3 id="e.fmt.css.match"><a href="#e.fmt.css.match"><code>e.fmt.css.match</code></a></h3>
+      <p class="summary">53 functions, 2 types, 8 constants: no_state, new_matcher, node_of, …</p>
+      <h3 id="e.fmt.css.cascade"><a href="#e.fmt.css.cascade"><code>e.fmt.css.cascade</code></a></h3>
+      <p class="summary">32 functions, 10 types, 3 constants: beats, find_property, rank, …</p>
+      <h3 id="e.fmt.html.accessible"><a href="#e.fmt.html.accessible"><code>e.fmt.html.accessible</code></a></h3>
+      <p class="summary">43 functions, 3 types: role_name, blank_node, is_space, …</p>
+      <h3 id="e.fmt.html.sanitize"><a href="#e.fmt.html.sanitize"><code>e.fmt.html.sanitize</code></a></h3>
+      <p class="summary">13 functions, 2 types, 3 error names: default_policy, has_token, tag_attribute_allowed, …</p>
+      <h3 id="e.fmt.hcl"><a href="#e.fmt.hcl"><code>e.fmt.hcl</code></a></h3>
+      <p class="summary">41 functions, 10 types, 2 error names: blank, peek, peek_at, …</p>
+      <h3 id="e.fmt.mermaid"><a href="#e.fmt.mermaid"><code>e.fmt.mermaid</code></a></h3>
+      <p class="summary">5 functions, 1 type: push, push_label, push_index, …</p>
+      <h3 id="e.fmt.elf"><a href="#e.fmt.elf"><code>e.fmt.elf</code></a></h3>
+      <p class="summary">12 functions, 5 types, 2 error names: rd16, rd32, rd64, …</p>
+      <h3 id="e.fmt.pe"><a href="#e.fmt.pe"><code>e.fmt.pe</code></a></h3>
+      <p class="summary">13 functions, 5 types, 2 error names: rd16, rd32, rd64, …</p>
+      <h3 id="e.fmt.csv"><a href="#e.fmt.csv"><code>e.fmt.csv</code></a></h3>
+      <p class="summary">20 functions, 5 types, 11 constants, 2 error names: csv, tsv, usable, …</p>
+      <h3 id="e.fmt.dotenv"><a href="#e.fmt.dotenv"><code>e.fmt.dotenv</code></a></h3>
+      <p class="summary">3 functions, 1 type, 1 error name: parse, get, interpolate</p>
+      <h3 id="e.fmt.ini"><a href="#e.fmt.ini"><code>e.fmt.ini</code></a></h3>
+      <p class="summary">7 functions, 4 types, 3 error names: reader, reader_next_err, parse, …</p>
+      <h3 id="e.fmt.semver"><a href="#e.fmt.semver"><code>e.fmt.semver</code></a></h3>
+      <p class="summary">36 functions, 3 types, 24 constants, 2 error names: is_digit, is_ident_byte, is_numeric, …</p>
+      <h3 id="e.fmt.semver.pep440"><a href="#e.fmt.semver.pep440"><code>e.fmt.semver.pep440</code></a></h3>
+      <p class="summary">11 functions, 3 types, 2 error names: parse, is_prerelease, is_postrelease, …</p>
+      <h3 id="e.fmt.cbor"><a href="#e.fmt.cbor"><code>e.fmt.cbor</code></a></h3>
+      <p class="summary">54 functions, 6 types, 14 constants, 4 error names: encoder, encoded, put, …</p>
+      <h3 id="e.fmt.toml"><a href="#e.fmt.toml"><code>e.fmt.toml</code></a></h3>
+      <p class="summary">34 functions, 5 types, 13 constants, 3 error names: parser, peek, peek_at, …</p>
+      <h3 id="e.fmt.markdown"><a href="#e.fmt.markdown"><code>e.fmt.markdown</code></a></h3>
+      <p class="summary">30 functions, 7 types, 14 constants, 2 error names: emit, spaces_from, close_leaf, …</p>
+      <h3 id="e.fmt.pretty"><a href="#e.fmt.pretty"><code>e.fmt.pretty</code></a></h3>
+      <p class="summary">11 functions, 4 types, 2 error names: pool, add, text, …</p>
+      <h3 id="e.fmt.css"><a href="#e.fmt.css"><code>e.fmt.css</code></a></h3>
+      <p class="summary">24 functions, 6 types, 1 constant, 2 error names: is_ident, ident_end, is_combinator, …</p>
+      <h3 id="e.fmt.uri"><a href="#e.fmt.uri"><code>e.fmt.uri</code></a></h3>
+      <p class="summary">28 functions, 2 types, 2 error names: is_alpha, is_digit, is_hex, …</p>
+      <h3 id="e.fmt.mime"><a href="#e.fmt.mime"><code>e.fmt.mime</code></a></h3>
+      <p class="summary">5 functions, 3 types, 2 error names: parse_media_type, format_media_type, extension_type, …</p>
+      <h3 id="e.fmt.avro"><a href="#e.fmt.avro"><code>e.fmt.avro</code></a></h3>
+      <p class="summary">33 functions, 4 types, 3 error names: decoder, sink, decode_zigzag, …</p>
+      <h3 id="e.fmt.flatbuffers"><a href="#e.fmt.flatbuffers"><code>e.fmt.flatbuffers</code></a></h3>
+      <p class="summary">63 functions, 2 types, 3 constants, 2 error names: load, uoffset, root, …</p>
+      <h3 id="e.fmt.jwt"><a href="#e.fmt.jwt"><code>e.fmt.jwt</code></a></h3>
+      <p class="summary">25 functions, 2 types, 7 error names: split, decode_segment, header, …</p>
+      <h3 id="e.fmt.arrow"><a href="#e.fmt.arrow"><code>e.fmt.arrow</code></a></h3>
+      <p class="summary">20 functions, 3 types, 4 error names: is_valid, count_nulls, width, …</p>
+      <h3 id="e.fmt.parquet"><a href="#e.fmt.parquet"><code>e.fmt.parquet</code></a></h3>
+      <p class="summary">53 functions, 7 types, 4 error names: bits_at, bit_unpack, uleb, …</p>
+      <h3 id="e.fmt.asn1"><a href="#e.fmt.asn1"><code>e.fmt.asn1</code></a></h3>
+      <p class="summary">37 functions, 7 types, 4 error names: reader, class_of, reader_next_err, …</p>
+      <h3 id="e.fmt.pem"><a href="#e.fmt.pem"><code>e.fmt.pem</code></a></h3>
+      <p class="summary">2 functions, 1 type, 2 error names: decode, encode</p>
+      <h3 id="e.fmt.multipart"><a href="#e.fmt.multipart"><code>e.fmt.multipart</code></a></h3>
+      <p class="summary">5 functions, 3 types, 3 error names: reader, reader_next_err, writer, …</p>
+      <h3 id="e.fmt.quoted_printable"><a href="#e.fmt.quoted_printable"><code>e.fmt.quoted_printable</code></a></h3>
+      <p class="summary">12 functions, 4 types, 1 error name: is_hex_upper, hex_value, hex_digit, …</p>
+      <h3 id="e.fmt.mail"><a href="#e.fmt.mail"><code>e.fmt.mail</code></a></h3>
+      <p class="summary">6 functions, 3 types, 4 error names: parse_address, parse_address_list, format_address, …</p>
+      <h3 id="e.fmt.gzip"><a href="#e.fmt.gzip"><code>e.fmt.gzip</code></a></h3>
+      <p class="summary">6 functions, 2 types, 2 error names: reader, read, writer, …</p>
+      <h3 id="e.fmt.zstd"><a href="#e.fmt.zstd"><code>e.fmt.zstd</code></a></h3>
+      <p class="summary">66 functions, 13 types, 11 constants, 3 error names: rotl64, xxh_round, xxh_merge, …</p>
+      <h3 id="e.fmt.brotli"><a href="#e.fmt.brotli"><code>e.fmt.brotli</code></a></h3>
+      <p class="summary">61 functions, 1 type, 17 constants, 3 error names: decode_scratch_required, bits, peek4, …</p>
+      <h3 id="e.fmt.bzip2"><a href="#e.fmt.bzip2"><code>e.fmt.bzip2</code></a></h3>
+      <p class="summary">3 functions, 1 type, 3 error names: reader, read, storage_required</p>
+      <h3 id="e.fmt.lz4"><a href="#e.fmt.lz4"><code>e.fmt.lz4</code></a></h3>
+      <p class="summary">18 functions, 6 constants, 2 error names: table_required, bound, read32, …</p>
+      <h3 id="e.fmt.lzma"><a href="#e.fmt.lzma"><code>e.fmt.lzma</code></a></h3>
+      <p class="summary">27 functions, 3 types, 13 constants, 5 error names: probs_required, le32, le64, …</p>
+      <h3 id="e.fmt.lzw"><a href="#e.fmt.lzw"><code>e.fmt.lzw</code></a></h3>
+      <p class="summary">17 functions, 5 types, 3 constants, 2 error names: get16, set16, get32, …</p>
+      <h3 id="e.fmt.zlib"><a href="#e.fmt.zlib"><code>e.fmt.zlib</code></a></h3>
+      <p class="summary">6 functions, 2 types, 2 error names: reader, read, writer, …</p>
+      <h3 id="e.fmt.zip"><a href="#e.fmt.zip"><code>e.fmt.zip</code></a></h3>
+      <p class="summary">4 functions, 3 types, 4 error names: open, entries, entry_reader, …</p>
+      <h3 id="e.fmt.zip.write"><a href="#e.fmt.zip.write"><code>e.fmt.zip.write</code></a></h3>
+      <p class="summary">5 functions, 1 type, 2 constants, 2 error names: put16, put32, put_bytes, …</p>
+      <h3 id="e.fmt.sevenzip"><a href="#e.fmt.sevenzip"><code>e.fmt.sevenzip</code></a></h3>
+      <p class="summary">30 functions, 7 types, 5 error names: default_limits, rd_byte, rd_u32, …</p>
+      <h3 id="e.fmt.rar"><a href="#e.fmt.rar"><code>e.fmt.rar</code></a></h3>
+      <p class="summary">17 functions, 8 types, 5 constants, 5 error names: default_limits, rd_vint, rd_u32, …</p>
+      <h3 id="e.fmt.snappy"><a href="#e.fmt.snappy"><code>e.fmt.snappy</code></a></h3>
+      <p class="summary">21 functions, 3 error names: block_size, table_bits, table_required, …</p>
+      <h3 id="e.fmt.s2"><a href="#e.fmt.s2"><code>e.fmt.s2</code></a></h3>
+      <p class="summary">14 functions, 3 error names: block_size, max_chunk, table_required, …</p>
+      <h3 id="e.fmt.tar"><a href="#e.fmt.tar"><code>e.fmt.tar</code></a></h3>
+      <p class="summary">4 functions, 2 types, 3 error names: reader, next, content, …</p>
+      <h3 id="e.fmt.yaml"><a href="#e.fmt.yaml"><code>e.fmt.yaml</code></a></h3>
+      <p class="summary">4 functions, 3 types, 4 error names: parse, write, decode, …</p>
+      <h3 id="e.fmt.woff2"><a href="#e.fmt.woff2"><code>e.fmt.woff2</code></a></h3>
+      <p class="summary">24 functions, 4 types, 2 constants, 1 error name: tag_of, known_tag, get8, …</p>
+      <h3 id="e.fmt.woff"><a href="#e.fmt.woff"><code>e.fmt.woff</code></a></h3>
+      <p class="summary">6 functions, 2 types, 1 constant, 1 error name: be32, put32, put16, …</p>
+      <h3 id="x.migrate.typemaps"><a href="#x.migrate.typemaps"><code>x.migrate.typemaps</code></a></h3>
+      <p class="summary">5 functions: monday_type, airtable_type, quickbase_type, …</p>
+      <h3 id="e.fmt.xlsx"><a href="#e.fmt.xlsx"><code>e.fmt.xlsx</code></a></h3>
+      <p class="summary">21 functions, 10 types, 2 constants, 1 error name: empty_cell, text_cell, number_cell, …</p>
+      <h3 id="e.fmt.xlsx.book"><a href="#e.fmt.xlsx.book"><code>e.fmt.xlsx.book</code></a></h3>
+      <p class="summary">38 functions, 5 types, 8 constants, 7 error names: ns_main, no_layout, days_from_civil, …</p>
+      <h3 id="x.identity.jose"><a href="#x.identity.jose"><code>x.identity.jose</code></a></h3>
+      <p class="summary">11 functions, 1 type: b64_index, base64url_decode, base64url_encode, …</p>
+      <h3 id="x.identity.oidc"><a href="#x.identity.oidc"><code>x.identity.oidc</code></a></h3>
+      <p class="summary">31 functions, 12 types: default_skew_seconds, join, text_of, …</p>
+      <h3 id="x.identity.scim"><a href="#x.identity.scim"><code>x.identity.scim</code></a></h3>
+      <p class="summary">70 functions, 7 types: join, sv, is_sep, …</p>
+      <h3 id="x.identity.xml"><a href="#x.identity.xml"><code>x.identity.xml</code></a></h3>
+      <p class="summary">31 functions, 4 types: join, is_name_start, is_name_char, …</p>
+      <h3 id="x.identity.saml"><a href="#x.identity.saml"><code>x.identity.saml</code></a></h3>
+      <p class="summary">47 functions, 11 types: join, ns_protocol, ns_assertion, …</p>
+      <h3 id="x.cloud.rest"><a href="#x.cloud.rest"><code>x.cloud.rest</code></a></h3>
+      <p class="summary">60 functions, 9 types: join, sv, doc_error, …</p>
+      <h3 id="x.cloud.manifest"><a href="#x.cloud.manifest"><code>x.cloud.manifest</code></a></h3>
+      <p class="summary">27 functions, 5 types: join, shape_error, doc_error, …</p>
+      <h3 id="x.cloud.aws"><a href="#x.cloud.aws"><code>x.cloud.aws</code></a></h3>
+      <p class="summary">30 functions, 4 types: join, sv, managed_tag, …</p>
+      <h3 id="x.cloud.k8s"><a href="#x.cloud.k8s"><code>x.cloud.k8s</code></a></h3>
+      <p class="summary">20 functions, 2 types: join, managed_label, name_label, …</p>
+      <h3 id="x.cloud.awssig"><a href="#x.cloud.awssig"><code>x.cloud.awssig</code></a></h3>
+      <p class="summary">33 functions, 5 types: empty_hash, unsigned_payload, concat_all, …</p>
+      <h3 id="x.cloud.awsreq"><a href="#x.cloud.awsreq"><code>x.cloud.awsreq</code></a></h3>
+      <p class="summary">40 functions, 3 types: cat2, text_of, flag_of, …</p>
+      <h3 id="x.cloud.awssdk"><a href="#x.cloud.awssdk"><code>x.cloud.awssdk</code></a></h3>
+      <p class="summary">45 functions, 2 types: join, text, obj, …</p>
+      <h3 id="x.ssh.transport"><a href="#x.ssh.transport"><code>x.ssh.transport</code></a></h3>
+      <p class="summary">9 functions, 3 types: new_table, name, is_white, …</p>
+      <h3 id="x.ssh.args"><a href="#x.ssh.args"><code>x.ssh.args</code></a></h3>
+      <p class="summary">7 functions: join, trimmed_empty, host_str, …</p>
+      <h3 id="x.ssh.winrm"><a href="#x.ssh.winrm"><code>x.ssh.winrm</code></a></h3>
+      <p class="summary">7 functions: join, https_port, http_port, …</p>
+      <h3 id="x.ssh.exec"><a href="#x.ssh.exec"><code>x.ssh.exec</code></a></h3>
+      <p class="summary">12 functions, 4 types: join, resource_error, ssm_document, …</p>
+      <h3 id="x.net.webhook"><a href="#x.net.webhook"><code>x.net.webhook</code></a></h3>
+      <p class="summary">22 functions, 2 types: join, hex_of, hmac_sha256, …</p>
+      <h3 id="x.net.authscheme"><a href="#x.net.authscheme"><code>x.net.authscheme</code></a></h3>
+      <p class="summary">44 functions, 5 types: join, sv, skew_ms, …</p>
+      <h3 id="x.mcp.protocol"><a href="#x.mcp.protocol"><code>x.mcp.protocol</code></a></h3>
+      <p class="summary">29 functions, 6 types: join, sv, int_value, …</p>
+      <h3 id="x.api.openapi"><a href="#x.api.openapi"><code>x.api.openapi</code></a></h3>
+      <p class="summary">11 functions, 1 type: sv, put, new_obj, …</p>
+      <h3 id="x.ops.inventory"><a href="#x.ops.inventory"><code>x.ops.inventory</code></a></h3>
+      <p class="summary">22 functions, 4 types: join, sv, put, …</p>
+      <h3 id="e.fmt.xml"><a href="#e.fmt.xml"><code>e.fmt.xml</code></a></h3>
+      <p class="summary">34 functions, 14 types, 2 constants, 4 error names: slurp, slurp_with_limit, reader, …</p>
+      <h3 id="e.fmt.xsd"><a href="#e.fmt.xsd"><code>e.fmt.xsd</code></a></h3>
+      <p class="summary">43 functions, 2 types: type_named, whitespace, same, …</p>
+      <h3 id="e.fmt.xsd.schema"><a href="#e.fmt.xsd.schema"><code>e.fmt.xsd.schema</code></a></h3>
+      <p class="summary">102 functions, 15 types, 5 constants, 4 error names: xs_namespace, xsi_namespace, same, …</p>
+      <h3 id="e.fmt.xpath"><a href="#e.fmt.xpath"><code>e.fmt.xpath</code></a></h3>
+      <p class="summary">82 functions, 15 types, 73 constants, 7 error names: same, is_digit, is_space, …</p>
+      <h3 id="e.fmt.xslt"><a href="#e.fmt.xslt"><code>e.fmt.xslt</code></a></h3>
+      <p class="summary">71 functions, 17 types, 25 constants, 5 error names: xsl_namespace, same, node_of, …</p>
+      <h3 id="e.fmt.soap"><a href="#e.fmt.soap"><code>e.fmt.soap</code></a></h3>
+      <p class="summary">54 functions, 14 types, 9 error names: namespace, content_type, builder, …</p>
+      <h3 id="e.fmt.html"><a href="#e.fmt.html"><code>e.fmt.html</code></a></h3>
+      <p class="summary">37 functions, 11 types, 2 constants, 3 error names: is_void, is_raw_text, write_utf8, …</p>
+      <h3 id="e.fmt.graph"><a href="#e.fmt.graph"><code>e.fmt.graph</code></a></h3>
+      <p class="summary">55 functions, 13 types, 3 constants, 5 error names: local, attr_of, kind_from_name, …</p>
+      <h3 id="e.fmt.dom"><a href="#e.fmt.dom"><code>e.fmt.dom</code></a></h3>
+      <p class="summary">97 functions, 5 types, 10 constants, 5 error names: from_document, parse, new_document, …</p>
+      <h3 id="e.fmt.css.expand"><a href="#e.fmt.css.expand"><code>e.fmt.css.expand</code></a></h3>
+      <p class="summary">58 functions, 4 types, 1 constant: emit, lc, is_wide_keyword, …</p>
+      <h3 id="e.fmt.css.style"><a href="#e.fmt.css.style"><code>e.fmt.css.style</code></a></h3>
+      <p class="summary">69 functions, 36 types, 14 constants: new_context, len_auto, len_px, …</p>
+      <h3 id="e.fmt.css.sheet"><a href="#e.fmt.css.sheet"><code>e.fmt.css.sheet</code></a></h3>
+      <p class="summary">66 functions, 9 types, 1 constant, 1 error name: media_env, lower_trim, nm, …</p>
+      <h3 id="e.fmt.css.ua"><a href="#e.fmt.css.ua"><code>e.fmt.css.ua</code></a></h3>
+      <p class="summary">4 functions: source, rules, quirks_source, …</p>
+      <h3 id="e.fmt.css.layout"><a href="#e.fmt.css.layout"><code>e.fmt.css.layout</code></a></h3>
+      <p class="summary">250 functions, 39 types, 1 constant, 1 error name: st, bx, bstyle, …</p>
+      <h3 id="e.fmt.css.geom"><a href="#e.fmt.css.geom"><code>e.fmt.css.geom</code></a></h3>
+      <p class="summary">19 functions, 2 types: apply, invert, bounds_of, …</p>
+      <h3 id="e.fmt.css.paint"><a href="#e.fmt.css.paint"><code>e.fmt.css.paint</code></a></h3>
+      <p class="summary">90 functions, 6 types: emit, color_of, alpha_of, …</p>
+      <h3 id="e.text.fontset"><a href="#e.text.fontset"><code>e.text.fontset</code></a></h3>
+      <p class="summary">12 functions, 4 types, 3 constants, 1 error name: new, add, set_generic, …</p>
+      <h3 id="e.fmt.css.measure"><a href="#e.fmt.css.measure"><code>e.fmt.css.measure</code></a></h3>
+      <p class="summary">9 functions, 1 type: is_italic, text_width, font_metrics, …</p>
+      <h3 id="e.ui.html_view"><a href="#e.ui.html_view"><code>e.ui.html_view</code></a></h3>
+      <p class="summary">32 functions, 2 types, 1 constant, 1 error name: none_intrinsic, none_image, none_url_image, …</p>
+      <h3 id="e.ui.browser"><a href="#e.ui.browser"><code>e.ui.browser</code></a></h3>
+      <p class="summary">16 functions, 2 types: attach, has_page, state, …</p>
+      <h3 id="e.fmt.url"><a href="#e.fmt.url"><code>e.fmt.url</code></a></h3>
+      <p class="summary">76 functions, 5 types, 1 constant, 1 error name: buf_new, buf_byte, buf_str, …</p>
+      <h3 id="e.net.uts46"><a href="#e.net.uts46"><code>e.net.uts46</code></a></h3>
+      <p class="summary">8 functions, 1 type, 7 constants, 1 error name: rec_start, lookup, pool_at, …</p>
+      <h3 id="e.net.uts46_table"><a href="#e.net.uts46_table"><code>e.net.uts46_table</code></a></h3>
+      <p class="summary">3 functions: uts46_count, uts46_records, uts46_pool</p>
+      <h3 id="e.text.charset"><a href="#e.text.charset"><code>e.text.charset</code></a></h3>
+      <p class="summary">11 functions, 1 error name: lower_byte, is_ascii_space, label_to_name, …</p>
+      <h3 id="e.text.charset_table"><a href="#e.text.charset_table"><code>e.text.charset_table</code></a></h3>
+      <p class="summary">31 functions: single_count, single_table_0, single_table_1, …</p>
+      <h3 id="e.text.charset_cjk"><a href="#e.text.charset_cjk"><code>e.text.charset_cjk</code></a></h3>
+      <p class="summary">14 functions, 1 type, 1 constant: entry, out_new, emit, …</p>
+      <h3 id="e.text.charset_cjk_table"><a href="#e.text.charset_cjk_table"><code>e.text.charset_cjk_table</code></a></h3>
+      <p class="summary">12 functions: index_big5_len, index_big5, index_euc_kr_len, …</p>
+      <h3 id="e.fmt.html.encoding"><a href="#e.fmt.html.encoding"><code>e.fmt.html.encoding</code></a></h3>
+      <p class="summary">12 functions, 2 types: lower, is_space, is_letter, …</p>
+      <h3 id="e.net.fetch"><a href="#e.net.fetch"><code>e.net.fetch</code></a></h3>
+      <p class="summary">33 functions, 7 types, 9 error names: default_config, client, unix_seconds, …</p>
+      <h3 id="e.web.page"><a href="#e.web.page"><code>e.web.page</code></a></h3>
+      <p class="summary">56 functions, 2 types, 1 constant, 2 error names: lower_byte, eq_fold, starts_fold, …</p>
+      <h3 id="e.js.lex"><a href="#e.js.lex"><code>e.js.lex</code></a></h3>
+      <p class="summary">27 functions, 4 types, 8 constants, 1 error name: new_lexer, is_id_start, is_digit, …</p>
+      <h3 id="e.js.ast"><a href="#e.js.ast"><code>e.js.ast</code></a></h3>
+      <p class="summary">3 types, 134 constants: </p>
+      <h3 id="e.js.parser"><a href="#e.js.parser"><code>e.js.parser</code></a></h3>
+      <p class="summary">74 functions, 3 types, 1 error name: fail, adv, is_p, …</p>
+      <h3 id="e.js.interp"><a href="#e.js.interp"><code>e.js.interp</code></a></h3>
+      <p class="summary">405 functions, 32 types, 71 constants, 5 error names: null_interp, undefv, null_value, …</p>
+      <h3 id="e.js.b_array"><a href="#e.js.b_array"><code>e.js.b_array</code></a></h3>
+      <p class="summary">62 functions: arg, len_of, set_length, …</p>
+      <h3 id="e.js.b_string"><a href="#e.js.b_string"><code>e.js.b_string</code></a></h3>
+      <p class="summary">55 functions: arg, this_str, string_ctor, …</p>
+      <h3 id="e.js.b_number"><a href="#e.js.b_number"><code>e.js.b_number</code></a></h3>
+      <p class="summary">67 functions: arg, boolean_ctor, this_boolean, …</p>
+      <h3 id="e.js.b_json"><a href="#e.js.b_json"><code>e.js.b_json</code></a></h3>
+      <p class="summary">17 functions, 3 types, 1 constant: arg, skip_ws, syntax, …</p>
+      <h3 id="e.js.b_control"><a href="#e.js.b_control"><code>e.js.b_control</code></a></h3>
+      <p class="summary">57 functions, 2 types: arg, iter_result, this_generator, …</p>
+      <h3 id="e.js.realm"><a href="#e.js.realm"><code>e.js.realm</code></a></h3>
+      <p class="summary">125 functions, 3 types: arg, make_ctor, object_ctor, …</p>
+      <h3 id="e.js.regex"><a href="#e.js.regex"><code>e.js.regex</code></a></h3>
+      <p class="summary">83 functions, 9 types, 22 constants, 1 error name: fail, mk, nd, …</p>
+      <h3 id="e.js.b_regexp"><a href="#e.js.b_regexp"><code>e.js.b_regexp</code></a></h3>
+      <p class="summary">48 functions, 1 type: arg, compiled_of, is_regexp_obj, …</p>
+      <h3 id="e.js.b_collections"><a href="#e.js.b_collections"><code>e.js.b_collections</code></a></h3>
+      <p class="summary">52 functions, 2 types, 1 constant: arg, hash_value, store_of, …</p>
+      <h3 id="e.js.b_date"><a href="#e.js.b_date"><code>e.js.b_date</code></a></h3>
+      <p class="summary">74 functions: ms_per_day, arg, fmod, …</p>
+      <h3 id="e.js.b_typed"><a href="#e.js.b_typed"><code>e.js.b_typed</code></a></h3>
+      <p class="summary">128 functions, 1 type: arg, new_buffer, array_buffer_ctor, …</p>
+      <h3 id="e.js.early"><a href="#e.js.early"><code>e.js.early</code></a></h3>
+      <p class="summary">42 functions, 5 types, 1 error name: fail, node, kid, …</p>
+      <h3 id="e.js.b_misc"><a href="#e.js.b_misc"><code>e.js.b_misc</code></a></h3>
+      <p class="summary">36 functions: arg, hex_digit, in_set, …</p>
+      <h3 id="e.js.b_proxy"><a href="#e.js.b_proxy"><code>e.js.b_proxy</code></a></h3>
+      <p class="summary">30 functions: arg, args_of, revoked_error, …</p>
+      <h3 id="e.js.prelude"><a href="#e.js.prelude"><code>e.js.prelude</code></a></h3>
+      <p class="summary">1 function: source</p>
+      <h3 id="e.web.dom_js"><a href="#e.web.dom_js"><code>e.web.dom_js</code></a></h3>
+      <p class="summary">48 functions: part0, part1, part2, …</p>
+      <h3 id="e.web.script"><a href="#e.web.script"><code>e.web.script</code></a></h3>
+      <p class="summary">113 functions, 8 types: host_of, arg, nid, …</p>
+      <h3 id="e.fmt.html.template"><a href="#e.fmt.html.template"><code>e.fmt.html.template</code></a></h3>
+      <p class="summary">6 functions, 2 types, 4 error names: parse, execute, execute_with_limits, …</p>
+      <h3 id="e.fmt.opus"><a href="#e.fmt.opus"><code>e.fmt.opus</code></a></h3>
+      <p class="summary">244 functions, 11 types, 29 constants, 4 error names: packet_mode, packet_bandwidth, packet_frame_size_us, …</p>
+      <h3 id="e.fmt.png"><a href="#e.fmt.png"><code>e.fmt.png</code></a></h3>
+      <p class="summary">6 functions, 2 types, 4 error names: inspect, decode, encode, …</p>
+      <h3 id="e.fmt.jpeg"><a href="#e.fmt.jpeg"><code>e.fmt.jpeg</code></a></h3>
+      <p class="summary">3 functions, 2 types, 3 error names: inspect, decode, encode</p>
+      <h3 id="e.fmt.qoi"><a href="#e.fmt.qoi"><code>e.fmt.qoi</code></a></h3>
+      <p class="summary">5 functions, 1 type, 1 constant, 3 error names: be32, header, within, …</p>
+      <h3 id="e.fmt.bmp"><a href="#e.fmt.bmp"><code>e.fmt.bmp</code></a></h3>
+      <p class="summary">11 functions, 2 types, 1 constant, 3 error names: le16, le32, within, …</p>
+      <h3 id="e.fmt.gif"><a href="#e.fmt.gif"><code>e.fmt.gif</code></a></h3>
+      <p class="summary">11 functions, 2 types, 1 constant, 3 error names: le16, within, check_signature, …</p>
+      <h3 id="e.fmt.tiff"><a href="#e.fmt.tiff"><code>e.fmt.tiff</code></a></h3>
+      <p class="summary">13 functions, 3 types, 1 constant, 3 error names: u16_at, u32_at, within, …</p>
+      <h3 id="e.fmt.exif"><a href="#e.fmt.exif"><code>e.fmt.exif</code></a></h3>
+      <p class="summary">16 functions, 2 types, 5 constants, 3 error names: rd16, rd32, begins, …</p>
+      <h3 id="e.fmt.webp"><a href="#e.fmt.webp"><code>e.fmt.webp</code></a></h3>
+      <p class="summary">3 functions, 2 types, 3 error names: inspect, decode, encode</p>
+      <h3 id="e.fmt.bson"><a href="#e.fmt.bson"><code>e.fmt.bson</code></a></h3>
+      <p class="summary">5 functions, 3 types, 3 error names: parse, size, write, …</p>
+      <h3 id="e.fmt.msgpack"><a href="#e.fmt.msgpack"><code>e.fmt.msgpack</code></a></h3>
+      <p class="summary">5 functions, 4 types, 3 error names: reader, read_value, write, …</p>
+      <h3 id="e.fmt.protobuf"><a href="#e.fmt.protobuf"><code>e.fmt.protobuf</code></a></h3>
+      <p class="summary">27 functions, 4 types, 2 error names: reader, number_legal, wire_code, …</p>
+      <h2>10. External packages</h2>
+      <h3 id="e.time.sync"><a href="#e.time.sync"><code>e.time.sync</code></a></h3>
+      <p class="summary">21 functions, 1 type, 3 constants, 6 error names: marzullo, marzullo_estimate, berkeley, …</p>
+      <h3 id="e.time.cron"><a href="#e.time.cron"><code>e.time.cron</code></a></h3>
+      <p class="summary">3 functions, 1 type, 1 error name: parse, matches, next</p>
+      <h3 id="e.time.recur"><a href="#e.time.recur"><code>e.time.recur</code></a></h3>
+      <p class="summary">4 functions, 1 type, 1 error name: parse_stamp, parse_rule, expand_from, …</p>
+      <h3 id="e.time.calendars"><a href="#e.time.calendars"><code>e.time.calendars</code></a></h3>
+      <p class="summary">56 functions, 2 types, 12 constants, 1 error name: julian_to_days, julian_from_days, islamic_leap, …</p>
+      <h3 id="e.time.chinese"><a href="#e.time.chinese"><code>e.time.chinese</code></a></h3>
+      <p class="summary">22 functions, 1 type, 2 constants, 1 error name: sin_deg, cos_deg, delta_t, …</p>
+      <h3 id="e.time.names"><a href="#e.time.names"><code>e.time.names</code></a></h3>
+      <p class="summary">65 functions: lower, locale_count, row_count, …</p>
+      <h3 id="e.time.pattern"><a href="#e.time.pattern"><code>e.time.pattern</code></a></h3>
+      <p class="summary">27 functions, 2 types, 1 error name: lower, is_digit, month_name, …</p>
+      <h3 id="e.tz.winzones"><a href="#e.tz.winzones"><code>e.tz.winzones</code></a></h3>
+      <p class="summary">22 functions, 1 error name: fold, same_fold, find_row, …</p>
+      <h3 id="e.fmt.bincode"><a href="#e.fmt.bincode"><code>e.fmt.bincode</code></a></h3>
+      <p class="summary">50 functions, 3 types, 2 error names: legacy, standard, writer, …</p>
+      <h3 id="e.text.shlex"><a href="#e.text.shlex"><code>e.text.shlex</code></a></h3>
+      <p class="summary">5 functions, 2 error names: is_space, split, is_safe, …</p>
+      <h3 id="e.path.tilde"><a href="#e.path.tilde"><code>e.path.tilde</code></a></h3>
+      <p class="summary">6 functions, 1 type, 1 error name: is_sep, same, put, …</p>
+      <h3 id="e.text.bytesize"><a href="#e.text.bytesize"><code>e.text.bytesize</code></a></h3>
+      <p class="summary">11 functions, 3 error names: fold, is_digit, power, …</p>
+      <h3 id="e.fmt.magic"><a href="#e.fmt.magic"><code>e.fmt.magic</code></a></h3>
+      <p class="summary">6 functions, 1 type: hex_nibble, scan, sniff, …</p>
+      <h3 id="e.os.ident"><a href="#e.os.ident"><code>e.os.ident</code></a></h3>
+      <p class="summary">5 functions: hostname, user_name, locale_name, …</p>
+      <h3 id="e.mem.pages"><a href="#e.mem.pages"><code>e.mem.pages</code></a></h3>
+      <p class="summary">4 functions: discard, ensure, reserve, …</p>
+      <h3 id="e.mem.heap"><a href="#e.mem.heap"><code>e.mem.heap</code></a></h3>
+      <p class="summary">6 functions, 2 types: over, open, close, …</p>
+      <h3 id="e.fmt.json5"><a href="#e.fmt.json5"><code>e.fmt.json5</code></a></h3>
+      <p class="summary">23 functions, 1 type, 2 error names: put, put_text, hex_value, …</p>
+      <h3 id="e.sync.flight"><a href="#e.sync.flight"><code>e.sync.flight</code></a></h3>
+      <p class="summary">7 functions, 2 types, 1 error name: group, same, find, …</p>
+      <h3 id="e.log.rotate"><a href="#e.log.rotate"><code>e.log.rotate</code></a></h3>
+      <p class="summary">10 functions, 1 type, 1 error name: backup_name, open_current, open, …</p>
+      <h3 id="e.net.tftp"><a href="#e.net.tftp"><code>e.net.tftp</code></a></h3>
+      <p class="summary">26 functions, 3 types, 5 error names: op_rrq, op_wrq, op_data, …</p>
+      <h3 id="e.crypto.cms"><a href="#e.crypto.cms"><code>e.crypto.cms</code></a></h3>
+      <p class="summary">42 functions, 2 types, 3 constants, 6 error names: oid_signed_data, oid_data, oid_content_type, …</p>
+      <h3 id="e.net.robots"><a href="#e.net.robots"><code>e.net.robots</code></a></h3>
+      <p class="summary">23 functions, 3 types, 1 error name: lower, same_fold, is_space, …</p>
+      <h3 id="e.fmt.sitemap"><a href="#e.fmt.sitemap"><code>e.fmt.sitemap</code></a></h3>
+      <p class="summary">18 functions, 2 types, 2 constants, 2 error names: local, same, is_space, …</p>
+      <h3 id="e.test.poll"><a href="#e.test.poll"><code>e.test.poll</code></a></h3>
+      <p class="summary">6 functions, 4 types, 3 error names: real_now, real_sleep, real_clock, …</p>
+      <h3 id="e.fmt.fixedwidth"><a href="#e.fmt.fixedwidth"><code>e.fmt.fixedwidth</code></a></h3>
+      <p class="summary">4 functions, 4 types, 6 error names: record_width, trimmed, read, …</p>
+      <h3 id="e.crypto.jks"><a href="#e.crypto.jks"><code>e.crypto.jks</code></a></h3>
+      <p class="summary">18 functions, 2 types, 1 constant, 4 error names: password_bytes, be16, be32, …</p>
+      <h3 id="e.crypto.pkcs12"><a href="#e.crypto.pkcs12"><code>e.crypto.pkcs12</code></a></h3>
+      <p class="summary">38 functions, 6 types, 2 constants, 4 error names: same, oid_bag, oid_pkcs7, …</p>
+      <h3 id="e.algo.expr"><a href="#e.algo.expr"><code>e.algo.expr</code></a></h3>
+      <p class="summary">63 functions, 10 types, 42 constants, 8 error names: no_value, default_limits, is_digit, …</p>
+      <h3 id="e.net.zmtp"><a href="#e.net.zmtp"><code>e.net.zmtp</code></a></h3>
+      <p class="summary">34 functions, 6 types, 1 constant, 7 error names: type_name, same, type_of_name, …</p>
+      <h3 id="e.net.sp"><a href="#e.net.sp"><code>e.net.sp</code></a></h3>
+      <p class="summary">20 functions, 2 types, 7 error names: number_of, protocol_of, peer_of, …</p>
+      <h3 id="e.time.parse"><a href="#e.time.parse"><code>e.time.parse</code></a></h3>
+      <p class="summary">4 functions, 1 type, 1 error name: parse_iso, parse_lenient, parse_date, …</p>
+      <h3 id="e.ratelimit"><a href="#e.ratelimit"><code>e.ratelimit</code></a></h3>
+      <p class="summary">18 functions, 5 types, 1 error name: token_bucket, token_bucket_refill, token_bucket_allow, …</p>
+      <h3 id="e.resilience"><a href="#e.resilience"><code>e.resilience</code></a></h3>
+      <p class="summary">25 functions, 6 types, 2 error names: circuit_breaker, breaker_allow, breaker_success, …</p>
+      <h3 id="e.valid"><a href="#e.valid"><code>e.valid</code></a></h3>
+      <p class="summary">29 functions, 8 constants, 1 error name: is_digit, is_separator, digits, …</p>
+      <h3 id="e.control"><a href="#e.control"><code>e.control</code></a></h3>
+      <p class="summary">26 functions, 5 types, 4 error names: pid, pid_step, pid_anti_windup, …</p>
+      <h3 id="e.parse"><a href="#e.parse"><code>e.parse</code></a></h3>
+      <p class="summary">45 functions, 7 types, 25 constants, 2 error names: is_ident_start, is_digit, is_punct, …</p>
+      <h3 id="e.trace"><a href="#e.trace"><code>e.trace</code></a></h3>
+      <p class="summary">20 functions, 1 type, 5 constants, 2 error names: nibble, unhex, hex, …</p>
+      <h3 id="e.dist.clock"><a href="#e.dist.clock"><code>e.dist.clock</code></a></h3>
+      <p class="summary">13 functions, 3 types: lamport, lamport_tick, lamport_send, …</p>
+      <h3 id="e.dist.election"><a href="#e.dist.election"><code>e.dist.election</code></a></h3>
+      <p class="summary">4 functions, 3 types, 2 error names: push, highest_alive, bully, …</p>
+      <h3 id="e.dist.gossip"><a href="#e.dist.gossip"><code>e.dist.gossip</code></a></h3>
+      <p class="summary">16 functions, 4 types, 1 error name: gossip, informed, gossip_round, …</p>
+      <h3 id="e.dist.failure_detector"><a href="#e.dist.failure_detector"><code>e.dist.failure_detector</code></a></h3>
+      <p class="summary">6 functions, 1 type: detector, heartbeat, stats, …</p>
+      <h3 id="e.parse.ll"><a href="#e.parse.ll"><code>e.parse.ll</code></a></h3>
+      <p class="summary">10 functions, 7 constants, 2 error names: bit, max_symbol, symbol_count, …</p>
+      <h3 id="e.parse.lr"><a href="#e.parse.lr"><code>e.parse.lr</code></a></h3>
+      <p class="summary">20 functions, 2 types, 5 constants, 2 error names: collection, tag, value, …</p>
+      <h3 id="e.parse.comb"><a href="#e.parse.comb"><code>e.parse.comb</code></a></h3>
+      <p class="summary">33 functions, 2 types: context, reset, note, …</p>
+      <h3 id="e.dist.consensus"><a href="#e.dist.consensus"><code>e.dist.consensus</code></a></h3>
+      <p class="summary">52 functions, 15 types, 1 constant, 3 error names: pool, pool_push, pool_take, …</p>
+      <h3 id="e.dist.commit"><a href="#e.dist.commit"><code>e.dist.commit</code></a></h3>
+      <p class="summary">21 functions, 12 types, 1 constant, 3 error names: pool, pool_push, pool_pop, …</p>
+      <h3 id="e.dist.replica"><a href="#e.dist.replica"><code>e.dist.replica</code></a></h3>
+      <p class="summary">11 functions, 3 types, 3 error names: quorum, replica, store, …</p>
+      <h3 id="e.dist.collective"><a href="#e.dist.collective"><code>e.dist.collective</code></a></h3>
+      <p class="summary">8 functions, 2 types, 1 error name: collective, chunk_lo, move_chunk, …</p>
+      <h3 id="e.robot.kinematics"><a href="#e.robot.kinematics"><code>e.robot.kinematics</code></a></h3>
+      <p class="summary">16 functions, 2 types, 2 error names: pose, dh, wrap_angle, …</p>
+      <h3 id="e.robot.motion"><a href="#e.robot.motion"><code>e.robot.motion</code></a></h3>
+      <p class="summary">25 functions, 5 types, 2 error names: agent, sign_of, trapezoid_profile, …</p>
+      <h3 id="e.robot.plan"><a href="#e.robot.plan"><code>e.robot.plan</code></a></h3>
+      <p class="summary">60 functions, 7 types, 1 constant, 2 error names: two_pi, pool, pool_th, …</p>
+      <h3 id="e.robot.map"><a href="#e.robot.map"><code>e.robot.map</code></a></h3>
+      <p class="summary">29 functions, 6 types, 2 error names: two_pi, wrap_angle, abs_i64, …</p>
+      <h3 id="e.dsp"><a href="#e.dsp"><code>e.dsp</code></a></h3>
+      <p class="summary">61 functions, 1 type, 3 error names: ipow, coefficient, sinc, …</p>
+      <h3 id="e.dist.anti_entropy"><a href="#e.dist.anti_entropy"><code>e.dist.anti_entropy</code></a></h3>
+      <p class="summary">9 functions, 2 types, 2 error names: fnv_offset, fnv_word, leaves, …</p>
+      <h3 id="e.dist.crdt"><a href="#e.dist.crdt"><code>e.dist.crdt</code></a></h3>
+      <p class="summary">23 functions, 8 types, 2 error names: fill, max_into, sum, …</p>
+      <h3 id="e.dist.deadlock"><a href="#e.dist.deadlock"><code>e.dist.deadlock</code></a></h3>
+      <p class="summary">5 functions, 3 types, 1 constant, 2 error names: dfs, wait_for_graph_cycle, spread, …</p>
+      <h3 id="e.dist.dht"><a href="#e.dist.dht"><code>e.dist.dht</code></a></h3>
+      <p class="summary">10 functions, 2 error names: between, between_closed, chord_successor, …</p>
+      <h3 id="e.dist.lock"><a href="#e.dist.lock"><code>e.dist.lock</code></a></h3>
+      <p class="summary">15 functions, 2 types: time_add, instance, local_time_checked, …</p>
+      <h3 id="e.dist.mutex"><a href="#e.dist.mutex"><code>e.dist.mutex</code></a></h3>
+      <p class="summary">20 functions, 7 types, 1 constant, 2 error names: sent, push, ra, …</p>
+      <h3 id="e.dist.snapshot"><a href="#e.dist.snapshot"><code>e.dist.snapshot</code></a></h3>
+      <p class="summary">11 functions, 7 types, 2 error names: sent, push, snapshot, …</p>
+      <h3 id="e.grep"><a href="#e.grep"><code>e.grep</code></a></h3>
+      <p class="summary">3 functions, 2 types, 1 error name: build_index, search, search_index</p>
+      <h3 id="e.audio"><a href="#e.audio"><code>e.audio</code></a></h3>
+      <p class="summary">15 functions, 4 types, 2 error names: sample_bytes, frame_bytes, frames_in, …</p>
+      <h3 id="e.audio.mixer"><a href="#e.audio.mixer"><code>e.audio.mixer</code></a></h3>
+      <p class="summary">7 functions, 2 types, 2 error names: init, play, stop, …</p>
+      <h3 id="e.fmt.encode"><a href="#e.fmt.encode"><code>e.fmt.encode</code></a></h3>
+      <p class="summary">14 functions, 5 error names: base64_encode, base64_decode, is_utf8_name, …</p>
+      <h3 id="e.fmt.flac"><a href="#e.fmt.flac"><code>e.fmt.flac</code></a></h3>
+      <p class="summary">21 functions, 5 types, 4 error names: read, read_signed, unary, …</p>
+      <h3 id="e.fmt.wav"><a href="#e.fmt.wav"><code>e.fmt.wav</code></a></h3>
+      <p class="summary">6 functions, 1 type, 2 error names: open, format, frame_count, …</p>
+      <h3 id="e.fmt.mp3"><a href="#e.fmt.mp3"><code>e.fmt.mp3</code></a></h3>
+      <p class="summary">5 functions, 1 type, 2 error names: open, format, frame_count, …</p>
+      <h3 id="e.math.ntheory"><a href="#e.math.ntheory"><code>e.math.ntheory</code></a></h3>
+      <p class="summary">30 functions, 3 error names: gcd, lcm, extended_gcd, …</p>
+      <h3 id="e.math.units"><a href="#e.math.units"><code>e.math.units</code></a></h3>
+      <p class="summary">12 functions, 2 types, 8 constants, 5 error names: unit, builtin, builtin_count, …</p>
+      <h3 id="e.math.pkpd"><a href="#e.math.pkpd"><code>e.math.pkpd</code></a></h3>
+      <p class="summary">14 functions, 4 types, 2 error names: auc_linear, auc_log_linear, aumc_linear, …</p>
+      <h3 id="e.math.root"><a href="#e.math.root"><code>e.math.root</code></a></h3>
+      <p class="summary">11 functions, 1 type: bisect, newton, halley, …</p>
+      <h3 id="e.math.special"><a href="#e.math.special"><code>e.math.special</code></a></h3>
+      <p class="summary">18 functions: nan, iteration_cap, lgamma, …</p>
+      <h3 id="e.math.fft"><a href="#e.math.fft"><code>e.math.fft</code></a></h3>
+      <p class="summary">28 functions, 1 type, 2 constants, 2 error names: is_power_of_two, bit_reverse, fft, …</p>
+      <h3 id="e.math.ode"><a href="#e.math.ode"><code>e.math.ode</code></a></h3>
+      <p class="summary">10 functions, 2 error names: euler, rk4, rkf45, …</p>
+      <h3 id="e.math.filter"><a href="#e.math.filter"><code>e.math.filter</code></a></h3>
+      <p class="summary">19 functions, 2 error names: mat_mul, mat_transpose, mat_inverse, …</p>
+      <h3 id="e.math.opt"><a href="#e.math.opt"><code>e.math.opt</code></a></h3>
+      <p class="summary">12 functions, 1 type, 4 error names: dot, norm, line_search, …</p>
+      <h3 id="e.math.opt.meta"><a href="#e.math.opt.meta"><code>e.math.opt.meta</code></a></h3>
+      <p class="summary">14 functions, 1 type, 2 error names: copy, distance2, seed_population, …</p>
+      <h3 id="e.math.float"><a href="#e.math.float"><code>e.math.float</code></a></h3>
+      <p class="summary">12 functions, 1 type: unpack64, unpack32, pack64, …</p>
+      <h3 id="e.math.gf"><a href="#e.math.gf"><code>e.math.gf</code></a></h3>
+      <p class="summary">8 functions, 2 error names: add, mul, pow, …</p>
+      <h3 id="e.math.mc"><a href="#e.math.mc"><code>e.math.mc</code></a></h3>
+      <p class="summary">4 functions, 1 type, 1 error name: estimate, antithetic, control_variate, …</p>
+      <h3 id="e.math.mcmc"><a href="#e.math.mcmc"><code>e.math.mcmc</code></a></h3>
+      <p class="summary">17 functions, 2 types, 2 error names: copy, dot, metropolis_hastings, …</p>
+      <h3 id="e.math.opt.convex"><a href="#e.math.opt.convex"><code>e.math.opt.convex</code></a></h3>
+      <p class="summary">5 functions, 1 type, 4 error names: interior_point, quadratic_program, solve, …</p>
+      <h3 id="e.math.opt.milp"><a href="#e.math.opt.milp"><code>e.math.opt.milp</code></a></h3>
+      <p class="summary">25 functions, 5 types, 8 constants, 3 error names: feasibility, optimality, pivot_tolerance, …</p>
+      <h3 id="e.ml.linear"><a href="#e.ml.linear"><code>e.ml.linear</code></a></h3>
+      <p class="summary">21 functions, 3 error names: solve, at, normal_equations, …</p>
+      <h3 id="e.ml.cluster"><a href="#e.ml.cluster"><code>e.ml.cluster</code></a></h3>
+      <p class="summary">29 functions, 2 types, 2 error names: distance_squared, nearest, kmeans, …</p>
+      <h3 id="e.ml.cluster.density"><a href="#e.ml.cluster.density"><code>e.ml.cluster.density</code></a></h3>
+      <p class="summary">6 functions, 1 constant, 2 error names: distance, neighbour_count, dbscan, …</p>
+      <h3 id="e.ml.knn"><a href="#e.ml.knn"><code>e.ml.knn</code></a></h3>
+      <p class="summary">3 functions, 2 error names: neighbors, classify, regress</p>
+      <h3 id="e.ml.bayes"><a href="#e.ml.bayes"><code>e.ml.bayes</code></a></h3>
+      <p class="summary">6 functions, 2 error names: gaussian_fit, gaussian_log_posterior, gaussian_predict, …</p>
+      <h3 id="e.ml.hgb"><a href="#e.ml.hgb"><code>e.ml.hgb</code></a></h3>
+      <p class="summary">9 functions, 2 types, 1 error name: default_params, sigmoid, sort_values, …</p>
+      <h3 id="e.ml.select"><a href="#e.ml.select"><code>e.ml.select</code></a></h3>
+      <p class="summary">12 functions, 2 types, 5 constants, 2 error names: kfold_assign, kfold_shuffled, stratified_assign, …</p>
+      <h3 id="e.ml.calibrate"><a href="#e.ml.calibrate"><code>e.ml.calibrate</code></a></h3>
+      <p class="summary">11 functions, 1 type, 2 error names: expit, platt_apply, platt_loss, …</p>
+      <h3 id="e.ml.tree"><a href="#e.ml.tree"><code>e.ml.tree</code></a></h3>
+      <p class="summary">13 functions, 4 types, 1 constant, 2 error names: impurity, leaf_value, partition, …</p>
+      <h3 id="e.ml.svm"><a href="#e.ml.svm"><code>e.ml.svm</code></a></h3>
+      <p class="summary">3 functions, 3 types, 2 error names: kernel, decide, smo</p>
+      <h3 id="e.ml.optim"><a href="#e.ml.optim"><code>e.ml.optim</code></a></h3>
+      <p class="summary">7 functions, 2 error names: sgd, momentum, rmsprop, …</p>
+      <h3 id="e.ml.loss"><a href="#e.ml.loss"><code>e.ml.loss</code></a></h3>
+      <p class="summary">10 functions, 2 error names: dot, log_sum_exp, info_nce, …</p>
+      <h3 id="e.ml.sample"><a href="#e.ml.sample"><code>e.ml.sample</code></a></h3>
+      <p class="summary">10 functions, 2 error names: softmax, rank, draw, …</p>
+      <h3 id="e.ml.nn"><a href="#e.ml.nn"><code>e.ml.nn</code></a></h3>
+      <p class="summary">27 functions, 2 types, 2 error names: perceptron_epoch, perceptron_predict, tape, …</p>
+      <h3 id="e.ml.hmm"><a href="#e.ml.hmm"><code>e.ml.hmm</code></a></h3>
+      <p class="summary">3 functions, 2 error names: forward, viterbi, baum_welch</p>
+      <h3 id="e.ml.recurrent"><a href="#e.ml.recurrent"><code>e.ml.recurrent</code></a></h3>
+      <p class="summary">6 functions, 2 error names: sigmoid, tanh, lstm_step, …</p>
+      <h3 id="e.ml.gnn"><a href="#e.ml.gnn"><code>e.ml.gnn</code></a></h3>
+      <p class="summary">6 functions, 2 error names: relu, leaky_relu, gat_score, …</p>
+      <h3 id="e.ml.fingerprint"><a href="#e.ml.fingerprint"><code>e.ml.fingerprint</code></a></h3>
+      <p class="summary">12 functions, 1 type, 2 error names: splitmix64, mix, morgan_fingerprint, …</p>
+      <h3 id="e.ml.rl"><a href="#e.ml.rl"><code>e.ml.rl</code></a></h3>
+      <p class="summary">4 functions, 2 error names: greedy, epsilon_greedy, q_learning, …</p>
+      <h3 id="e.ml.multivariate"><a href="#e.ml.multivariate"><code>e.ml.multivariate</code></a></h3>
+      <p class="summary">15 functions, 4 types, 3 error names: cholesky_in_place, solve_lower, solve_lower_transpose, …</p>
+      <h3 id="e.ml.reduce"><a href="#e.ml.reduce"><code>e.ml.reduce</code></a></h3>
+      <p class="summary">10 functions, 2 error names: symmetric_eigen, pca, pca_project, …</p>
+      <h3 id="e.ml.ann"><a href="#e.ml.ann"><code>e.ml.ann</code></a></h3>
+      <p class="summary">19 functions, 4 types, 2 error names: minhash, jaccard_estimate, lsh_match, …</p>
+      <h3 id="e.math.fixed"><a href="#e.math.fixed"><code>e.math.fixed</code></a></h3>
+      <p class="summary">21 functions, 2 types, 4 constants, 2 error names: from_int, to_int, from_ratio, …</p>
+      <h3 id="e.net.snapshot"><a href="#e.net.snapshot"><code>e.net.snapshot</code></a></h3>
+      <p class="summary">14 functions, 4 types, 2 error names: writer, reader, bits_written, …</p>
+      <h3 id="e.game.ecs"><a href="#e.game.ecs"><code>e.game.ecs</code></a></h3>
+      <p class="summary">11 functions, 4 types, 4 error names: init, spawn, despawn, …</p>
+      <h3 id="e.game.loop"><a href="#e.game.loop"><code>e.game.loop</code></a></h3>
+      <p class="summary">12 functions, 2 types, 1 error name: init, advance, alpha, …</p>
+      <h3 id="e.game.sprite"><a href="#e.game.sprite"><code>e.game.sprite</code></a></h3>
+      <p class="summary">7 functions, 4 types, 1 constant, 2 error names: region, play, advance, …</p>
+      <h3 id="e.game.tilemap"><a href="#e.game.tilemap"><code>e.game.tilemap</code></a></h3>
+      <p class="summary">16 functions, 2 types, 2 error names: cells, width, height, …</p>
+      <h3 id="e.game.collide2d"><a href="#e.game.collide2d"><code>e.game.collide2d</code></a></h3>
+      <p class="summary">10 functions, 3 types, 2 error names: aabb, miss, overlaps, …</p>
+      <h3 id="e.game.vision"><a href="#e.game.vision"><code>e.game.vision</code></a></h3>
+      <p class="summary">9 functions, 2 types, 2 error names: init, clear_visible, cast, …</p>
+      <h3 id="e.game.ai"><a href="#e.game.ai"><code>e.game.ai</code></a></h3>
+      <p class="summary">51 functions, 20 types, 2 constants, 4 error names: steer, seek, flee, …</p>
+      <h3 id="e.game.nav"><a href="#e.game.nav"><code>e.game.nav</code></a></h3>
+      <p class="summary">26 functions, 4 types, 1 constant, 3 error names: min_u32, max_u32, neighbour, …</p>
+      <h3 id="e.game.procgen"><a href="#e.game.procgen"><code>e.game.procgen</code></a></h3>
+      <p class="summary">17 functions, 1 type, 2 error names: perm, look, fade, …</p>
+      <h3 id="e.game.physics"><a href="#e.game.physics"><code>e.game.physics</code></a></h3>
+      <p class="summary">19 functions, 7 types, 2 error names: pi, distance, predict, …</p>
+      <h3 id="e.game.anim"><a href="#e.game.anim"><code>e.game.anim</code></a></h3>
+      <p class="summary">36 functions, 3 types, 2 error names: vec3, add, sub, …</p>
+      <h3 id="e.game.dialog"><a href="#e.game.dialog"><code>e.game.dialog</code></a></h3>
+      <p class="summary">12 functions, 6 types, 2 constants, 2 error names: always, holds, set_flag, …</p>
+      <h3 id="e.game.particle"><a href="#e.game.particle"><code>e.game.particle</code></a></h3>
+      <p class="summary">8 functions, 3 types, 2 error names: init, emit, burst, …</p>
+      <h3 id="e.game.netsync"><a href="#e.game.netsync"><code>e.game.netsync</code></a></h3>
+      <p class="summary">12 functions, 3 types, 2 error names: init, init_peer, known, …</p>
+      <h3 id="e.game.camera"><a href="#e.game.camera"><code>e.game.camera</code></a></h3>
+      <p class="summary">15 functions, 3 types, 2 error names: init, set_deadzone, set_zoom, …</p>
+      <h3 id="e.game.grid"><a href="#e.game.grid"><code>e.game.grid</code></a></h3>
+      <p class="summary">31 functions, 2 types, 1 constant, 1 error name: coord, equal, hexed, …</p>
+      <h3 id="e.game.input"><a href="#e.game.input"><code>e.game.input</code></a></h3>
+      <p class="summary">12 functions, 4 types, 1 constant, 2 error names: init, bound, begin, …</p>
+      <h3 id="e.audio.analysis"><a href="#e.audio.analysis"><code>e.audio.analysis</code></a></h3>
+      <p class="summary">22 functions, 2 error names: abs, parabolic, magnitudes, …</p>
+      <h3 id="e.audio.fx"><a href="#e.audio.fx"><code>e.audio.fx</code></a></h3>
+      <p class="summary">22 functions, 2 error names: abs, db_to_gain, gain_to_db, …</p>
+      <h3 id="e.audio.synth"><a href="#e.audio.synth"><code>e.audio.synth</code></a></h3>
+      <p class="summary">13 functions, 4 types, 2 error names: fract, rate, duration_samples, …</p>
+      <h3 id="e.audio.spatial"><a href="#e.audio.spatial"><code>e.audio.spatial</code></a></h3>
+      <p class="summary">5 functions, 3 types, 1 error name: pan, attenuate, place, …</p>
+      <h3 id="e.gfx.chart"><a href="#e.gfx.chart"><code>e.gfx.chart</code></a></h3>
+      <p class="summary">171 functions, 134 types, 3 error names: spec, ticks, nice_ticks, …</p>
+      <h3 id="e.gfx.chart.scene"><a href="#e.gfx.chart.scene"><code>e.gfx.chart.scene</code></a></h3>
+      <p class="summary">9 functions: begin_clip, end_clip, append, …</p>
+      <h3 id="e.gfx.chart.svg"><a href="#e.gfx.chart.svg"><code>e.gfx.chart.svg</code></a></h3>
+      <p class="summary">16 functions, 1 error name: begin_clip, end_clip, begin, …</p>
+      <h3 id="e.gfx.chart.locale"><a href="#e.gfx.chart.locale"><code>e.gfx.chart.locale</code></a></h3>
+      <p class="summary">3 functions, 2 error names: tick_decimals, format_ticks_in, format_date_ticks_in</p>
+      <h3 id="e.gfx.chart.widget"><a href="#e.gfx.chart.widget"><code>e.gfx.chart.widget</code></a></h3>
+      <p class="summary">5 functions, 2 types: view, custom, region, …</p>
+      <h3 id="e.gfx.chart.geojson"><a href="#e.gfx.chart.geojson"><code>e.gfx.chart.geojson</code></a></h3>
+      <p class="summary">1 function, 1 type, 2 error names: read</p>
+      <h3 id="e.gfx.chart.pdf"><a href="#e.gfx.chart.pdf"><code>e.gfx.chart.pdf</code></a></h3>
+      <p class="summary">10 functions, 1 type, 2 error names: begin, real_text, rect, …</p>
+      <h3 id="e.fmt.ooxml"><a href="#e.fmt.ooxml"><code>e.fmt.ooxml</code></a></h3>
+      <p class="summary">27 functions, 9 types, 16 constants, 2 error names: source_read, source_seek, local, …</p>
+      <h3 id="e.fmt.docx"><a href="#e.fmt.docx"><code>e.fmt.docx</code></a></h3>
+      <p class="summary">24 functions, 13 types, 4 constants, 6 error names: run, bold_run, para, …</p>
+      <h3 id="e.fmt.extract"><a href="#e.fmt.extract"><code>e.fmt.extract</code></a></h3>
+      <p class="summary">73 functions, 3 types, 1 constant, 4 error names: empty_document, fold, starts_fold, …</p>
+      <h3 id="e.fmt.odf"><a href="#e.fmt.odf"><code>e.fmt.odf</code></a></h3>
+      <p class="summary">18 functions, 1 type, 4 constants, 1 error name: parent_of, collect, join, …</p>
+      <h3 id="e.net.dhcp"><a href="#e.net.dhcp"><code>e.net.dhcp</code></a></h3>
+      <p class="summary">10 functions, 1 type, 12 constants, 4 error names: put32, get32, copy4, …</p>
+      <h3 id="e.net.snmp"><a href="#e.net.snmp"><code>e.net.snmp</code></a></h3>
+      <p class="summary">15 functions, 1 type, 23 constants, 3 error names: put_length, length_size, integer_bytes, …</p>
+      <h3 id="e.net.retro"><a href="#e.net.retro"><code>e.net.retro</code></a></h3>
+      <p class="summary">10 functions, 2 types, 9 constants, 3 error names: put_text, gemini_request, gemini_response, …</p>
+      <h3 id="e.fmt.cap"><a href="#e.fmt.cap"><code>e.fmt.cap</code></a></h3>
+      <p class="summary">10 functions, 2 types, 1 constant, 2 error names: is_space, trim, text_under, …</p>
+      <h3 id="e.fmt.sse"><a href="#e.fmt.sse"><code>e.fmt.sse</code></a></h3>
+      <p class="summary">4 functions, 1 type, 2 constants, 1 error name: skip_bom, line_end, has_nul, …</p>
+      <h3 id="e.fmt.mvt"><a href="#e.fmt.mvt"><code>e.fmt.mvt</code></a></h3>
+      <p class="summary">9 functions, 5 types, 12 constants, 2 error names: packed, unzig, decode_geometry, …</p>
+      <h3 id="e.net.cookie"><a href="#e.net.cookie"><code>e.net.cookie</code></a></h3>
+      <p class="summary">16 functions, 3 types, 3 error names: fold, eq_fold, lower, …</p>
+      <h3 id="e.fmt.pdf"><a href="#e.fmt.pdf"><code>e.fmt.pdf</code></a></h3>
+      <p class="summary">81 functions, 10 types, 18 constants, 4 error names: is_space, is_delim, is_digit, …</p>
+      <h3 id="e.fmt.pdf.write"><a href="#e.fmt.pdf.write"><code>e.fmt.pdf.write</code></a></h3>
+      <p class="summary">31 functions, 3 types, 5 error names: black, rgb, winansi, …</p>
+      <h3 id="e.text.highlight"><a href="#e.text.highlight"><code>e.text.highlight</code></a></h3>
+      <p class="summary">17 functions, 8 constants: name, extensions, line_comment_1, …</p>
+      <h3 id="e.barcode"><a href="#e.barcode"><code>e.barcode</code></a></h3>
+      <p class="summary">48 functions, 5 types, 2 constants, 4 error names: blocks_table, block_field, raw_codewords, …</p>
+      <h3 id="e.text.terminal"><a href="#e.text.terminal"><code>e.text.terminal</code></a></h3>
+      <p class="summary">35 functions, 2 types, 14 constants: blank_cell, open, cells_of, …</p>
+      <h3 id="e.net.ssh"><a href="#e.net.ssh"><code>e.net.ssh</code></a></h3>
+      <p class="summary">50 functions, 3 types, 23 constants, 6 error names: put_u32, get_u32, w_byte, …</p>
+      <h3 id="e.fmt.vcard"><a href="#e.fmt.vcard"><code>e.fmt.vcard</code></a></h3>
+      <p class="summary">23 functions, 2 types, 2 error names: upper, lower, equals_fold, …</p>
+      <h3 id="e.algo.magnetic"><a href="#e.algo.magnetic"><code>e.algo.magnetic</code></a></h3>
+      <p class="summary">10 functions, 1 type, 1 constant: epoch, deg_to_rad, rad_to_deg, …</p>
+      <h3 id="e.algo.pedometer"><a href="#e.algo.pedometer"><code>e.algo.pedometer</code></a></h3>
+      <p class="summary">8 functions, 1 type, 1 constant: new, history_mean_deviation, feed, …</p>
+    </main>
+    <footer>
+      <span>Generated from the repository documentation; the source is authoritative.</span>
+      <a href="/">← home</a>
+    </footer>
+  </div>
+</body>
+</html>
