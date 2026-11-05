@@ -76,6 +76,28 @@ const I_XSL_TEXT: u8 = 19u8
 
 fn same(a: str, b: str) -> bool { ret str.eq(a, b) }
 
+fn is_name_start(c: u8) -> bool { ret (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8 }
+
+fn is_name_char(c: u8) -> bool { ret is_name_start(c) || (c >= 48u8 && c <= 57u8) || c == 45u8 || c == 46u8 }
+
+fn is_ncname(s: str) -> bool {
+    if s.len == 0usize || !is_name_start(s[0usize]) { ret false }
+    var i = 1usize
+    while i < s.len {
+        if !is_name_char(s[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// An element or attribute name computed by an AVT must be a QName: at most one colon between NCNames.
+fn is_qname(s: str) -> bool {
+    let (at, found) = str.find(s, ":")
+    if !found { ret is_ncname(s) }
+    if !is_ncname(s[0usize..at]) { ret false }
+    ret is_ncname(s[at + 1usize..])
+}
+
 // ---- stylesheet DOM helpers ----
 
 fn node_of(d: *const xml.Document, id: xml.NodeId) -> xml.Node { ret d.nodes[usize(id)] }
@@ -800,7 +822,7 @@ fn add_rule(c: *Compiler, id: xml.NodeId, match_text: str, priority_text: str, h
         if expr_error != ok { ret expr_error }
         var priority = default_priority(&c.s.exprs[usize(expr)])
         if has_priority {
-            let n = xp.text_number(priority_text)
+            let n = xp.text_number(c.a, priority_text)
             if n == n { priority = n }
         }
         c.s.rules[c.s.rule_count] = Rule { expr: expr, priority: priority, template: template, order: c.order, mode: mode }
@@ -1174,12 +1196,46 @@ fn prefix_of(name: str) -> str {
     ret prefix
 }
 
+// Comment text may not contain `--`; the recovery rule inserts a space.
+fn put_comment_text(sink: *Sink, text: str) -> err {
+    var i = 0usize
+    var from = 0usize
+    while i + 1usize < text.len {
+        if text[i] == 45u8 && text[i + 1usize] == 45u8 {
+            try put(sink, text[from..i + 1usize])
+            try put(sink, " ")
+            i += 2usize
+            from = i
+        } else {
+            i += 1usize
+        }
+    }
+    ret put(sink, text[from..])
+}
+
+// PI data may not contain `?>`; the recovery rule inserts a space.
+fn put_pi_text(sink: *Sink, text: str) -> err {
+    var i = 0usize
+    var from = 0usize
+    while i + 1usize < text.len {
+        if text[i] == 63u8 && text[i + 1usize] == 62u8 {
+            try put(sink, text[from..i + 1usize])
+            try put(sink, " ")
+            i += 2usize
+            from = i
+        } else {
+            i += 1usize
+        }
+    }
+    ret put(sink, text[from..])
+}
+
 fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope) -> err {
     let node = t.nodes[usize(id)]
     if node.kind == R_TEXT { ret put_escaped(sink, node.value, false) }
     if node.kind == R_COMMENT {
         try put(sink, "<!--")
-        try put(sink, node.value)
+        try put_comment_text(sink, node.value)
         ret put(sink, "-->")
     }
     if node.kind == R_PI {
@@ -1187,7 +1243,7 @@ fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope
         try put(sink, node.name)
         if node.value.len > 0usize {
             try put(sink, " ")
-            try put(sink, node.value)
+            try put_pi_text(sink, node.value)
         }
         ret put(sink, "?>")
     }
@@ -1198,18 +1254,22 @@ fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope
     var decl = node.first_decl
     while decl != NONE {
         let dd = t.decls[usize(decl)]
-        scope.prefixes[scope.count] = dd.prefix
-        scope.uris[scope.count] = dd.uri
-        scope.count += 1usize
-        if dd.prefix.len == 0usize {
-            try put(sink, " xmlns=\"")
-        } else {
-            try put(sink, " xmlns:")
-            try put(sink, dd.prefix)
-            try put(sink, "=\"")
+        // A declaration already bound to the same URI is not repeated.
+        let (known, has_known) = scope_lookup(scope, dd.prefix)
+        if !(has_known && same(known, dd.uri)) {
+            scope.prefixes[scope.count] = dd.prefix
+            scope.uris[scope.count] = dd.uri
+            scope.count += 1usize
+            if dd.prefix.len == 0usize {
+                try put(sink, " xmlns=\"")
+            } else {
+                try put(sink, " xmlns:")
+                try put(sink, dd.prefix)
+                try put(sink, "=\"")
+            }
+            try put_escaped(sink, dd.uri, true)
+            try put(sink, "\"")
         }
-        try put_escaped(sink, dd.uri, true)
-        try put(sink, "\"")
         decl = dd.next
     }
     // fixup for the element's own name
@@ -1286,9 +1346,10 @@ fn serialize(a: *mem.Arena, t: *const Tree, is_text: bool, omit_declaration: boo
         let declaration_error = put(&sink, "<?xml version=\"1.0\"?>\n")
         if declaration_error != ok { ret ("", declaration_error) }
     }
-    let (prefixes, prefixes_error) = mem.alloc[str](a, t.count * 4usize + 16usize)
+    let scope_capacity = t.decl_count + t.attr_count + t.count + 16usize
+    let (prefixes, prefixes_error) = mem.alloc[str](a, scope_capacity)
     if prefixes_error != ok { ret ("", prefixes_error) }
-    let (uris, uris_error) = mem.alloc[str](a, t.count * 4usize + 16usize)
+    let (uris, uris_error) = mem.alloc[str](a, scope_capacity)
     if uris_error != ok { ret ("", uris_error) }
     var scope = Scope { prefixes: prefixes, uris: uris, count: 0usize }
     var child = t.nodes[0usize].first_child
@@ -1374,15 +1435,9 @@ fn eval_avt(r: *Run, avt: Avt, ctx: xp.Context) -> (str, err) {
 
 fn add_text(r: *Run, text: str) -> err {
     if text.len == 0usize { ret ok }
-    let t = out_tree(r)
-    let last = t.nodes[usize(r.cur)].last_child
-    if last != NONE && t.nodes[usize(last)].kind == R_TEXT {
-        let (joined, join_error) = str.concat(r.a, t.nodes[usize(last)].value, text)
-        if join_error != ok { ret join_error }
-        t.nodes[usize(last)].value = joined
-        ret ok
-    }
-    let (_, add_error) = add_node(r.a, t, r.cur, R_TEXT, "", "", text)
+    // Adjacent text nodes serialize contiguously and `tree_text` joins them, so
+    // appending a node is linear; re-copying one accumulated value is quadratic.
+    let (_, add_error) = add_node(r.a, out_tree(r), r.cur, R_TEXT, "", "", text)
     ret add_error
 }
 
@@ -1608,7 +1663,7 @@ fn sort_nodes(r: *Run, nodes: []xp.XNode, sorts: []const Sort) -> ([]xp.XNode, e
             let (text, text_error) = eval_string(r, sorts[s].select, xp.Context { node: nodes[i], position: i + 1usize, size: n })
             if text_error != ok { ret (zero, text_error) }
             keys[i * sorts.len + s] = text
-            nums[i * sorts.len + s] = xp.text_number(text)
+            nums[i * sorts.len + s] = xp.text_number(r.a, text)
             s += 1usize
         }
         i += 1usize
@@ -1751,6 +1806,9 @@ fn exec_template(r: *Run, template: Template, n: xp.XNode, position: usize, size
         }
         given = values
     }
+    // XSLT 1.0 section 11: a called template sees the globals and its own frame,
+    // never the caller's local variables (`given` above was computed in the caller).
+    r.vars.count = r.ss.global_count
     var i = 0usize
     while i < template.params.len {
         let p = template.params[i]
@@ -1876,6 +1934,7 @@ fn exec_inner(r: *Run, index: u32, ctx: xp.Context) -> err {
             }
         }
         let t = out_tree(r)
+        if !is_qname(name) { ret Invalid }
         let (made, made_error) = add_node(r.a, t, r.cur, R_ELEMENT, name, uri, "")
         if made_error != ok { ret made_error }
         if ins.kind == I_LRE {
@@ -1906,6 +1965,7 @@ fn exec_inner(r: *Run, index: u32, ctx: xp.Context) -> err {
     if ins.kind == I_ATTRIBUTE {
         let (name, name_error) = eval_avt(r, ins.name_avt, ctx)
         if name_error != ok { ret name_error }
+        if !is_qname(name) { ret Invalid }
         var uri = ""
         if ins.has_mode {
             let (explicit, explicit_error) = eval_avt(r, ins.namespace_avt, ctx)
@@ -1927,6 +1987,7 @@ fn exec_inner(r: *Run, index: u32, ctx: xp.Context) -> err {
             let (computed, name_error) = eval_avt(r, ins.name_avt, ctx)
             if name_error != ok { ret name_error }
             name = computed
+            if !is_ncname(name) { ret Invalid }
         }
         let (tree_index, tree_error) = run_to_tree(r, ins.children, ctx)
         if tree_error != ok { ret tree_error }

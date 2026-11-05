@@ -395,6 +395,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (missing_ss, missing_load) = xs.load(a, missing_sheet)
     let (_, missing_error) = xs.transform(a, &missing_ss, &override_doc, zero)
     if missing_load != ok || missing_error != xs.NoRule { try report("call-missing", 0usize) }
+    // #133: comment text cannot close the comment and open an element.
+    let hard_comment_sheet = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:output method=\"xml\" omit-xml-declaration=\"yes\"/><xsl:template match=\"/\"><out><xsl:comment><xsl:value-of select=\"/r\"/></xsl:comment></out></xsl:template></xsl:stylesheet>"
+    let (hard_comment_ss, hard_comment_load) = xs.load(a, hard_comment_sheet)
+    let (hard_comment_doc, hard_comment_parse) = xml.parse(a, "<r>x--&gt;&lt;evil/&gt;&lt;!--</r>")
+    if hard_comment_load != ok || hard_comment_parse != ok { try report("comment-load", 0usize) }
+    let (hard_comment_out, hard_comment_error) = xs.transform(a, &hard_comment_ss, &hard_comment_doc, zero)
+    if hard_comment_error != ok || str.contains(hard_comment_out.text, "--><evil") { try report("comment-injection", 0usize) }
+    // #133: a called template sees globals, not the caller's local variables.
+    let hard_scope_sheet = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:output method=\"text\"/><xsl:variable name=\"title\" select=\"'G'\"/><xsl:template match=\"/\"><xsl:variable name=\"title\" select=\"'L'\"/><xsl:apply-templates select=\"r\"/></xsl:template><xsl:template match=\"r\"><xsl:value-of select=\"$title\"/></xsl:template></xsl:stylesheet>"
+    let (hard_scope_ss, hard_scope_load) = xs.load(a, hard_scope_sheet)
+    let (hard_scope_doc, hard_scope_parse) = xml.parse(a, "<r/>")
+    if hard_scope_load != ok || hard_scope_parse != ok { try report("template-scope-load", 0usize) }
+    let (hard_scope_out, hard_scope_error) = xs.transform(a, &hard_scope_ss, &hard_scope_doc, zero)
+    if hard_scope_error != ok || !str.contains(hard_scope_out.text, "G") || str.contains(hard_scope_out.text, "L") { try report("template-scope", 0usize) }
     try io.print("fmt xslt ok\n")
     ret ok
 }

@@ -371,6 +371,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if current_value_error != ok || current_value.kind != xp.Kind.String || !same(current_value.text, "a") { try report("current-value", 0usize) }
     let (no_current, no_current_error) = xp.run(a, &parsed[0usize], "current()", zero)
     if no_current_error != xp.UnknownFunction { try report("current-absent", 0usize) }
+    // #132: a unary-minus chain is capped instead of recursing natively.
+    let (hard_chain_builder, hard_chain_build) = str.builder(a, 256usize)
+    if hard_chain_build != ok { try report("unary-depth", 0usize) }
+    var hard_chain = hard_chain_builder
+    var hard_chain_at = 0usize
+    while hard_chain_at < 220usize {
+        try str.push(&hard_chain, "-")
+        hard_chain_at += 1usize
+    }
+    try str.push(&hard_chain, "1")
+    let (_, hard_chain_error) = xp.compile(a, str.done(&hard_chain), zero)
+    if hard_chain_error != xp.TooComplex { try report("unary-depth", 1usize) }
+    // #132: a value longer than the old 512-byte buffer still converts, to infinity.
+    let (hard_number_builder, hard_number_build) = str.builder(a, 700usize)
+    if hard_number_build != ok { try report("long-number", 0usize) }
+    var hard_number_expr = hard_number_builder
+    try str.push(&hard_number_expr, "number('1")
+    hard_chain_at = 0usize
+    while hard_chain_at < 600usize {
+        try str.push(&hard_number_expr, "0")
+        hard_chain_at += 1usize
+    }
+    try str.push(&hard_number_expr, "') > 0")
+    let (hard_number_compiled, hard_number_compile) = xp.compile(a, str.done(&hard_number_expr), zero)
+    if hard_number_compile != ok { try report("long-number", 1usize) }
+    let hard_number_vars = xp.no_variables()
+    let hard_number_ext = xp.no_extensions()
+    let (hard_number_value, hard_number_error) = xp.evaluate(a, &hard_number_compiled, &parsed[0usize], xp.Context { node: xp.XNode { id: parsed[0usize].root, attribute: 0u32 }, position: 1usize, size: 1usize }, &hard_number_vars, &hard_number_ext)
+    if hard_number_error != ok || hard_number_value.kind != xp.Kind.Boolean || !hard_number_value.flag { try report("long-number", 2usize) }
     try io.print("fmt xpath ok\n")
     ret ok
 }

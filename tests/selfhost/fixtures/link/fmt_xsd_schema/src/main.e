@@ -497,6 +497,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (missing_result, missing_run) = sx.validate(a, &paths_schema, &path_missing)
     let (missing_text, missing_text_error) = sx.node_path(a, &path_missing, missing_result.node)
     if path_missing_parse != ok || missing_run != ok || missing_text_error != ok || missing_result.code != sx.ErrorCode.MissingContent || !same(missing_text, "/r") { try report("node-path", 1usize) }
+    // #135: a derived type may be declared before its base.
+    let hard_order_xsd = "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" targetNamespace=\"urn:t\" xmlns:t=\"urn:t\" elementFormDefault=\"qualified\"><xs:complexType name=\"Derived\"><xs:complexContent><xs:extension base=\"t:Base\"><xs:sequence><xs:element name=\"b\" type=\"xs:string\"/></xs:sequence></xs:extension></xs:complexContent></xs:complexType><xs:complexType name=\"Base\"><xs:sequence><xs:element name=\"a\" type=\"xs:string\"/></xs:sequence></xs:complexType><xs:element name=\"Derived\" type=\"t:Derived\"/></xs:schema>"
+    let (hard_order_schema, hard_order_load) = sx.load(a, hard_order_xsd)
+    if hard_order_load != ok { try report("type-order", 0usize) }
+    let (hard_order_result, hard_order_error) = sx.validate_text(a, &hard_order_schema, "<Derived xmlns=\"urn:t\"><a>x</a><b>y</b></Derived>")
+    if hard_order_error != ok || !hard_order_result.valid { try report("type-order", 1usize) }
+    // #135: `-[` outside a character class is not class subtraction.
+    let hard_pattern_xsd = "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" targetNamespace=\"urn:t\" xmlns:t=\"urn:t\"><xs:simpleType name=\"Date\"><xs:restriction base=\"xs:string\"><xs:pattern value=\"[0-9]{4}-[0-9]{2}-[0-9]{2}\"/></xs:restriction></xs:simpleType><xs:element name=\"Date\" type=\"t:Date\"/></xs:schema>"
+    let (hard_pattern_schema, hard_pattern_load) = sx.load(a, hard_pattern_xsd)
+    if hard_pattern_load != ok { try report("pattern-dash", 0usize) }
+    let (hard_pattern_result, hard_pattern_error) = sx.validate_text(a, &hard_pattern_schema, "<Date xmlns=\"urn:t\">2001-02-03</Date>")
+    if hard_pattern_error != ok || !hard_pattern_result.valid { try report("pattern-dash", 1usize) }
     try io.print("fmt xsd schema ok\n")
     ret ok
 }

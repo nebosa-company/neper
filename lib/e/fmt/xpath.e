@@ -429,17 +429,26 @@ fn parse_multiplicative(p: *Parser) -> (u32, err) {
 }
 
 fn parse_unary(p: *Parser) -> (u32, err) {
-    if peek_kind(p) == K_MINUS {
+    // A chain of `-` is one UnaryExpr per sign; iterate instead of recursing,
+    // bounded so untrusted input cannot exhaust the native stack.
+    var negatives = 0usize
+    while peek_kind(p) == K_MINUS {
         p.at += 1usize
-        let (inner, inner_error) = parse_unary(p)
-        if inner_error != ok { ret (NONE, inner_error) }
+        negatives += 1usize
+        if negatives > 200usize { ret (NONE, TooComplex) }
+    }
+    let (base, base_error) = parse_union(p)
+    if base_error != ok { ret (NONE, base_error) }
+    var expr = base
+    var i = 0usize
+    while i < negatives {
         let (e, e_error) = new_expr(p, E_NEG)
         if e_error != ok { ret (NONE, e_error) }
-        p.exprs[usize(e)].left = inner
-        ret (e, ok)
+        p.exprs[usize(e)].left = expr
+        expr = e
+        i += 1usize
     }
-    let (union_expr, union_error) = parse_union(p)
-    ret (union_expr, union_error)
+    ret (expr, ok)
 }
 
 fn parse_union(p: *Parser) -> (u32, err) {
@@ -1282,7 +1291,7 @@ fn strip_integer_fraction(text: str) -> str {
 }
 
 // XPath's string to number: optional blanks, an optional minus, digits with an optional fraction, blanks.
-fn text_number(text: str) -> f64 {
+fn text_number(a: *mem.Arena, text: str) -> f64 {
     var start = 0usize
     var end = text.len
     while start < end && is_space(text[start]) { start += 1usize }
@@ -1311,9 +1320,11 @@ fn text_number(text: str) -> f64 {
         sign = -1.0f64
         body = t[1usize..]
     }
-    // parse_f64 wants digits on both sides of a point
-    var arena_buffer: [512]u8 = zero
-    if body.len + 2usize > 512usize { ret not_a_number() }
+    // parse_f64 wants digits on both sides of a point; the buffer comes from
+    // the arena so a long value is converted (to Infinity or a subnormal) rather
+    // than refused as NaN.
+    let (arena_buffer, buffer_error) = mem.alloc[u8](a, body.len + 2usize)
+    if buffer_error != ok { ret not_a_number() }
     var used = 0usize
     if body[0usize] == 46u8 {
         arena_buffer[0usize] = 48u8
@@ -1327,7 +1338,27 @@ fn text_number(text: str) -> f64 {
     }
     if body[body.len - 1usize] == 46u8 { used -= 1usize }
     let (value, value_error) = str.parse_f64(arena_buffer[..used])
-    if value_error != ok { ret not_a_number() }
+    if value_error != ok {
+        // parse_f64 represents exponents up to 400; a long integer part is
+        // Infinity and one below 1 underflows to zero, as IEEE conversion says.
+        var integer_digits = 0usize
+        var leading_zeros = 0usize
+        var started = false
+        var k = 0usize
+        while k < body.len {
+            if body[k] == 46u8 { break }
+            integer_digits += 1usize
+            if !started && body[k] == 48u8 {
+                leading_zeros += 1usize
+            } else {
+                started = true
+            }
+            k += 1usize
+        }
+        if integer_digits - leading_zeros >= 309usize { ret sign * infinity() }
+        if integer_digits == leading_zeros { ret sign * 0.0f64 }
+        ret not_a_number()
+    }
     ret sign * value
 }
 
@@ -1354,7 +1385,7 @@ fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value) -> (f64, err) {
     }
     let (text, text_error) = to_string(a, d, v)
     if text_error != ok { ret (0.0f64, text_error) }
-    ret (text_number(text), ok)
+    ret (text_number(a, text), ok)
 }
 
 fn to_boolean(v: Value) -> bool {
@@ -1384,16 +1415,26 @@ fn compare_strings(op: u8, x: str, y: str) -> bool {
 fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) -> (bool, err) {
     let relational = op == E_LT || op == E_LE || op == E_GT || op == E_GE
     if x.kind == Kind.NodeSet && y.kind == Kind.NodeSet {
+        // Materialize the right node-set's strings once: the inner loop would
+        // otherwise rebuild every one of them for every left node.
+        let (y_texts, y_texts_error) = mem.alloc[str](a, y.nodes.len)
+        if y_texts_error != ok { ret (false, y_texts_error) }
+        var k = 0usize
+        while k < y.nodes.len {
+            let (text, text_error) = string_of(a, d, y.nodes[k])
+            if text_error != ok { ret (false, text_error) }
+            y_texts[k] = text
+            k += 1usize
+        }
         var i = 0usize
         while i < x.nodes.len {
             let (xs, xe) = string_of(a, d, x.nodes[i])
             if xe != ok { ret (false, xe) }
             var j = 0usize
             while j < y.nodes.len {
-                let (ys, ye) = string_of(a, d, y.nodes[j])
-                if ye != ok { ret (false, ye) }
+                let ys = y_texts[j]
                 if relational {
-                    if compare_numbers(op, text_number(xs), text_number(ys)) { ret (true, ok) }
+                    if compare_numbers(op, text_number(a, xs), text_number(a, ys)) { ret (true, ok) }
                 } else if compare_strings(op, xs, ys) {
                     ret (true, ok)
                 }
@@ -1431,11 +1472,11 @@ fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) ->
             if text_error != ok { ret (false, text_error) }
             var result = false
             if other.kind == Kind.Number {
-                if flipped { result = compare_numbers(op, other.number, text_number(text)) } else { result = compare_numbers(op, text_number(text), other.number) }
+                if flipped { result = compare_numbers(op, other.number, text_number(a, text)) } else { result = compare_numbers(op, text_number(a, text), other.number) }
             } else if relational {
                 let (on, on_error) = to_number(a, d, other)
                 if on_error != ok { ret (false, on_error) }
-                if flipped { result = compare_numbers(op, on, text_number(text)) } else { result = compare_numbers(op, text_number(text), on) }
+                if flipped { result = compare_numbers(op, on, text_number(a, text)) } else { result = compare_numbers(op, text_number(a, text), on) }
             } else {
                 result = compare_strings(op, text, other.text)
             }
@@ -1988,7 +2029,7 @@ fn call_function(env: *Env, e: Expr, ctx: Context) -> (Value, err) {
         if n == 0usize {
             let (text, text_error) = string_of(env.a, env.d, ctx.node)
             if text_error != ok { ret (zero, text_error) }
-            ret (number_value(text_number(text)), ok)
+            ret (number_value(text_number(env.a, text)), ok)
         }
         let (x, x_error) = arg_number(env, e, 0usize, ctx)
         if x_error != ok { ret (zero, x_error) }
@@ -2004,7 +2045,7 @@ fn call_function(env: *Env, e: Expr, ctx: Context) -> (Value, err) {
         while i < v.nodes.len {
             let (text, text_error) = string_of(env.a, env.d, v.nodes[i])
             if text_error != ok { ret (zero, text_error) }
-            total += text_number(text)
+            total += text_number(env.a, text)
             i += 1usize
         }
         ret (number_value(total), ok)

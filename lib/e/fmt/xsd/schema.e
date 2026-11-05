@@ -180,7 +180,7 @@ type Named = struct { kind: u8, name: str, node: xml.NodeId, index: u32 }
 type Compiler = struct {
     a: *mem.Arena, d: *const xml.Document, s: Schema, tns: str, wildcard_rule: str,
     element_qualified: bool, attribute_qualified: bool,
-    named: []Named, named_count: usize, depth: u32,
+    named: []Named, named_count: usize, depth: u32, state: []u8,
 }
 
 fn new_type(c: *Compiler) -> (u32, err) {
@@ -323,7 +323,31 @@ fn type_ref(c: *Compiler, id: xml.NodeId, text: str) -> (u32, err) {
     if !same(uri, c.tns) { ret (NONE, Unresolved) }
     let (entry, present) = lookup(c, 1u8, local)
     if !present { ret (NONE, Unresolved) }
+    // A reference compiles its target on demand, so declaration order is free.
+    let ensure_error = ensure_type(c, entry.index)
+    if ensure_error != ok { ret (NONE, ensure_error) }
     ret (entry.index, ok)
+}
+
+// Compile the named type `index` once: 0 unseen, 1 in progress (a cycle is Invalid), 2 done.
+fn ensure_type(c: *Compiler, index: u32) -> err {
+    if index == NONE { ret Invalid }
+    let at = usize(index)
+    if c.state[at] == 2u8 { ret ok }
+    if c.state[at] == 1u8 { ret Invalid }
+    var type_node = NONE
+    var i = 0usize
+    while i < c.named_count {
+        if c.named[i].kind == 1u8 && c.named[i].index == index { type_node = c.named[i].node }
+        i += 1usize
+    }
+    if type_node == NONE { ret ok }
+    c.state[at] = 1u8
+    var compile_error = ok
+    if xs(c, type_node, "simpleType") { compile_error = compile_simple(c, type_node, index) } else { compile_error = compile_complex(c, type_node, index) }
+    if compile_error != ok { ret compile_error }
+    c.state[at] = 2u8
+    ret ok
 }
 
 fn parse_u64(text: str) -> (u64, bool) {
@@ -372,12 +396,40 @@ fn parse_whitespace(text: str) -> (xsd.Whitespace, bool) {
     ret (xsd.Whitespace.Preserve, false)
 }
 
+// Whether a pattern uses a class subtraction or one of the category escapes this
+// validator refuses. Escapes are scanned so `\\p` (a literal backslash then `p`)
+// and a `-[` outside a character class are not mistaken for them.
+fn unsupported_pattern(p: str) -> bool {
+    var i = 0usize
+    var in_class = false
+    while i < p.len {
+        let c = p[i]
+        if c == 92u8 {
+            if i + 1usize < p.len {
+                let escaped = p[i + 1usize]
+                if escaped == 105u8 || escaped == 73u8 || escaped == 99u8 || escaped == 67u8 || escaped == 112u8 || escaped == 80u8 { ret true }
+            }
+            i += 2usize
+            continue
+        }
+        if c == 91u8 {
+            in_class = true
+        } else if c == 93u8 {
+            in_class = false
+        } else if in_class && c == 45u8 && i + 1usize < p.len && p[i + 1usize] == 91u8 {
+            ret true
+        }
+        i += 1usize
+    }
+    ret false
+}
+
 fn compile_pattern(c: *Compiler, groups: []const str) -> (regex.Regex, err) {
     var joined = ""
     var i = 0usize
     while i < groups.len {
         let p = groups[i]
-        if str.contains(p, "\\i") || str.contains(p, "\\I") || str.contains(p, "\\c") || str.contains(p, "\\C") || str.contains(p, "-[") || str.contains(p, "\\p") || str.contains(p, "\\P") { ret (zero, Unsupported) }
+        if unsupported_pattern(p) { ret (zero, Unsupported) }
         let (open, open_error) = str.concat(c.a, "(?:", p)
         if open_error != ok { ret (zero, open_error) }
         let (closed, closed_error) = str.concat(c.a, open, ")")
@@ -1103,10 +1155,12 @@ fn load(a: *mem.Arena, source: []const u8) -> (Schema, err) {
     if roots_error != ok { ret (zero, roots_error) }
     let (named, named_error) = mem.alloc[Named](a, size + 1usize)
     if named_error != ok { ret (zero, named_error) }
+    let (state, state_error) = mem.alloc[u8](a, types.len)
+    if state_error != ok { ret (zero, state_error) }
     var c = Compiler {
         a: a, d: &d, s: Schema { types: types, type_count: 0usize, particles: particles, particle_count: 0usize, elements: elements, element_count: 0usize, roots: roots, root_count: 0usize, target_namespace: "" },
         tns: attr_or(&d, d.root, "targetNamespace", ""), wildcard_rule: "##any", element_qualified: same(attr_or(&d, d.root, "elementFormDefault", ""), "qualified"),
-        attribute_qualified: same(attr_or(&d, d.root, "attributeFormDefault", ""), "qualified"), named: named, named_count: 0usize, depth: 0u32,
+        attribute_qualified: same(attr_or(&d, d.root, "attributeFormDefault", ""), "qualified"), named: named, named_count: 0usize, depth: 0u32, state: state,
     }
     c.s.target_namespace = c.tns
     init_builtins(&c.s)
@@ -1153,8 +1207,7 @@ fn load(a: *mem.Arena, source: []const u8) -> (Schema, err) {
     while i < c.named_count {
         let entry = c.named[i]
         if entry.kind == 1u8 {
-            var compile_error = ok
-            if xs(&c, entry.node, "simpleType") { compile_error = compile_simple(&c, entry.node, entry.index) } else { compile_error = compile_complex(&c, entry.node, entry.index) }
+            let compile_error = ensure_type(&c, entry.index)
             if compile_error != ok { ret (zero, compile_error) }
         } else if entry.kind == 2u8 {
             let fill_error = fill_element(&c, entry.node, entry.index)
@@ -1906,6 +1959,32 @@ fn repeat(w: *const Walk, k: *const Kids, p: u32, from: []const bool, out: []boo
     let part = w.s.particles[usize(p)]
     let n = k.count
     clear(out)
+    // One element or wildcard repeated over a run of children: set the reachable
+    // counts directly instead of stepping n times.
+    if part.kind == ParticleKind.Element || part.kind == ParticleKind.Any {
+        var start = 0usize
+        while start <= n {
+            if from[start] {
+                var pos = start
+                var matches = true
+                while pos < n && matches {
+                    if part.kind == ParticleKind.Element { matches = matches_decl(w, k, pos, part.element) } else { matches = wildcard_allows(part.rule, part.rule_tns, k.nss[pos]) }
+                    if matches { pos += 1usize }
+                }
+                let run = pos - start
+                var taken = 0usize
+                while taken <= run {
+                    if taken >= usize(part.min) && (part.max == UNBOUNDED || taken <= usize(part.max)) { out[start + taken] = true }
+                    taken += 1usize
+                }
+                var farthest = run
+                if part.max != UNBOUNDED && run > usize(part.max) { farthest = usize(part.max) }
+                if start + farthest > *furthest { *furthest = start + farthest }
+            }
+            start += 1usize
+        }
+        ret ok
+    }
     let (cur, ce) = mem.alloc[bool](w.a, n + 1usize)
     if ce != ok { ret ce }
     let (nxt, ne) = mem.alloc[bool](w.a, n + 1usize)
@@ -1923,7 +2002,11 @@ fn repeat(w: *const Walk, k: *const Kids, p: u32, from: []const bool, out: []boo
         }
         if part.max != UNBOUNDED && count >= part.max { break }
         if !any_set(cur) { break }
+        // Each step allocates its work arrays; release them before the next
+        // iteration so a long flat list does not accumulate O(n) copies.
+        let mark = mem.mark(w.a)
         let se = step(w, k, p, cur, nxt, furthest, depth + 1u32)
+        mem.reset(w.a, mark)
         if se != ok { ret se }
         note_reach(furthest, nxt)
         count += 1u32
