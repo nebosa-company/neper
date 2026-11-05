@@ -87,6 +87,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let ended_source = support.reader(&ended_script)
     let (ended_headers, ended_error) = mime.parse_headers(a, ended_source, 64usize, 8usize)
     if ended_error != ok || ended_headers.len != 1usize || !text_equal(ended_headers[0usize].value, "complete") { os.exit(16) }
+    // #162: an empty header block is an empty block, not header lines.
+    var empty_state: io.SliceReader = zero
+    empty_state.data = "\r\nbody"
+    let (empty_headers, empty_error) = mime.parse_headers(a, io.slice_reader(&empty_state), 64usize, 8usize)
+    if empty_error != ok || empty_headers.len != 0usize { os.exit(40) }
+    var empty_reader = io.slice_reader(&empty_state)
+    var empty_body: [8]u8 = zero
+    let (empty_count, empty_read_error) = io.read(&empty_reader, empty_body[..])
+    if empty_read_error != ok || !text_equal(empty_body[..empty_count], "body") { os.exit(41) }
+    // #162: the writer validates the type, parameter names and values before emitting.
+    let (_, bad_major) = mime.format_media_type(a, mime.MediaType { major: "text\r\nX-Injected: yes", subtype: "plain", parameters: zero })
+    if bad_major != mime.Invalid { os.exit(42) }
+    let (_, bad_subtype) = mime.format_media_type(a, mime.MediaType { major: "text", subtype: "pl;ain", parameters: zero })
+    if bad_subtype != mime.Invalid { os.exit(43) }
+    var bad_params: [1]mime.Parameter = zero
+    bad_params[0] = mime.Parameter { name: "x", value: "1\r\n\r\n--B" }
+    let (_, bad_param_value) = mime.format_media_type(a, mime.MediaType { major: "text", subtype: "plain", parameters: bad_params[0..] })
+    if bad_param_value != mime.Invalid { os.exit(44) }
+    var bad_name_param: [1]mime.Parameter = zero
+    bad_name_param[0] = mime.Parameter { name: "x\r\nY", value: "v" }
+    let (_, bad_param_name) = mime.format_media_type(a, mime.MediaType { major: "text", subtype: "plain", parameters: bad_name_param[0..] })
+    if bad_param_name != mime.Invalid { os.exit(45) }
+    var ok_params: [1]mime.Parameter = zero
+    ok_params[0] = mime.Parameter { name: "title", value: "a b" }
+    let (quoted_type, quoted_error) = mime.format_media_type(a, mime.MediaType { major: "text", subtype: "plain", parameters: ok_params[0..] })
+    if quoted_error != ok || !text_equal(quoted_type, "text/plain; title=\"a b\"") { os.exit(46) }
     os.exit(0)
     ret ok
 }

@@ -193,5 +193,94 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var fake_reader = fake0
     let (_, fake_has, e31) = multipart.reader_next_err(&fake_reader)
     if e31 != ok || fake_has { os.exit(37) }
+    // #162: the first boundary line accepts the transport padding RFC 2046 allows.
+    let padded_open = "--b0und=ary  \r\nX-Pad: yes\r\n\r\nhello\r\n--b0und=ary--\t \r\n"
+    var padded_open_source = Trickle { data: padded_open, off: 0usize, chunk: 5usize }
+    let (padded_open0, padded_open_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&padded_open_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if padded_open_error != ok { os.exit(52) }
+    var padded_open_reader = padded_open0
+    let (padded_open_part, padded_open_has, padded_open_next) = multipart.reader_next_err(&padded_open_reader)
+    if padded_open_next != ok || !padded_open_has || padded_open_part.headers.len != 1usize || !str.eq(padded_open_part.headers[0usize].value, "yes") { os.exit(53) }
+    var padded_open_body = padded_open_part.body
+    let (padded_open_count, padded_open_body_error) = read_all(&padded_open_body, out[0..])
+    if padded_open_body_error != ok || !str.eq(out[..padded_open_count], "hello") { os.exit(54) }
+    let (_, padded_open_more, padded_open_done) = multipart.reader_next_err(&padded_open_reader)
+    if padded_open_done != ok || padded_open_more { os.exit(55) }
+    // #162: a header name or value that could inject a line is refused by the writer.
+    var inject_headers: [1]mime.Header = zero
+    inject_headers[0] = mime.Header { name: "X", value: "1\r\n\r\n--B\r\nContent-Type: text/html" }
+    let (inject0, inject_error) = multipart.writer(w_storage, io.slice_writer(&sink_state), "xyz")
+    if inject_error != ok { os.exit(56) }
+    var inject_writer = inject0
+    let (_, inject_part_error) = multipart.start_part(&inject_writer, inject_headers[0..])
+    if inject_part_error != multipart.Invalid { os.exit(57) }
+    var inject_name_headers: [1]mime.Header = zero
+    inject_name_headers[0] = mime.Header { name: "X\r\nY", value: "v" }
+    let (inject_name0, inject_name_error) = multipart.writer(w_storage, io.slice_writer(&sink_state), "xyz")
+    if inject_name_error != ok { os.exit(58) }
+    var inject_name_writer = inject_name0
+    let (_, inject_name_part_error) = multipart.start_part(&inject_name_writer, inject_name_headers[0..])
+    if inject_name_part_error != multipart.Invalid { os.exit(59) }
+    // A valid header still starts a part.
+    var good_headers: [1]mime.Header = zero
+    good_headers[0] = mime.Header { name: "Content-Type", value: "text/plain" }
+    let (good0, good_error) = multipart.writer(w_storage, io.slice_writer(&sink_state), "xyz")
+    if good_error != ok { os.exit(60) }
+    var good_writer = good0
+    let (_, good_part_error) = multipart.start_part(&good_writer, good_headers[0..])
+    if good_part_error != ok { os.exit(61) }
+    // #162: a part header block over 2 KiB is legal and is no longer a hidden limit.
+    let (long_builder, long_builder_error) = str.builder(a, 4096usize)
+    if long_builder_error != ok { os.exit(62) }
+    var long = long_builder
+    if str.push(&long, "--b0und=ary\r\nContent-Disposition: attachment; filename=") != ok { os.exit(62) }
+    var pad = 0usize
+    while pad < 3000usize {
+        if str.push_byte(&long, 97u8) != ok { os.exit(62) }
+        pad += 1usize
+    }
+    if str.push(&long, "\r\n\r\nbody\r\n--b0und=ary--\r\n") != ok { os.exit(62) }
+    var long_source = Trickle { data: str.done(&long), off: 0usize, chunk: 4096usize }
+    let (long0, long_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&long_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if long_error != ok { os.exit(63) }
+    var long_reader = long0
+    let (long_part, long_has, long_next) = multipart.reader_next_err(&long_reader)
+    if long_next != ok || !long_has || long_part.headers.len != 1usize || !str.eq(long_part.headers[0usize].name, "Content-Disposition") || long_part.headers[0usize].value.len != 3021usize { os.exit(64) }
+    // #162: too many headers in a part is a distinct TooLarge, not Invalid.
+    let (many_builder, many_builder_error) = str.builder(a, 2048usize)
+    if many_builder_error != ok { os.exit(65) }
+    var many = many_builder
+    if str.push(&many, "--b0und=ary\r\n") != ok { os.exit(65) }
+    var line = 0usize
+    while line < 65usize {
+        if str.push(&many, "X-N: v\r\n") != ok { os.exit(65) }
+        line += 1usize
+    }
+    if str.push(&many, "\r\nbody\r\n--b0und=ary--\r\n") != ok { os.exit(65) }
+    var many_source = Trickle { data: str.done(&many), off: 0usize, chunk: 4096usize }
+    let (many0, many_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&many_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if many_error != ok { os.exit(66) }
+    var many_reader = many0
+    let (_, many_has, many_next) = multipart.reader_next_err(&many_reader)
+    if many_next != multipart.TooLarge || many_has { os.exit(67) }
+    // #162: a preamble longer than the window is skipped, not a size error.
+    let (preamble_builder, preamble_builder_error) = str.builder(a, 24000usize)
+    if preamble_builder_error != ok { os.exit(68) }
+    var preamble = preamble_builder
+    var pre = 0usize
+    while pre < 20000usize {
+        if str.push_byte(&preamble, 112u8) != ok { os.exit(68) }
+        pre += 1usize
+    }
+    if str.push(&preamble, "\r\n--b0und=ary\r\n\r\nbody\r\n--b0und=ary--\r\n") != ok { os.exit(68) }
+    var preamble_source = Trickle { data: str.done(&preamble), off: 0usize, chunk: 4096usize }
+    let (preamble0, preamble_error) = multipart.reader(storage, io.Reader { ctx: mem.cast[*void](&preamble_source), read: trickle_read }, "b0und=ary", 8u32, 100000u64)
+    if preamble_error != ok { os.exit(69) }
+    var preamble_reader = preamble0
+    let (preamble_part, preamble_has, preamble_next) = multipart.reader_next_err(&preamble_reader)
+    if preamble_next != ok || !preamble_has { os.exit(70) }
+    var preamble_body = preamble_part.body
+    let (preamble_count, preamble_body_error) = read_all(&preamble_body, out[0..])
+    if preamble_body_error != ok || !str.eq(out[..preamble_count], "body") { os.exit(71) }
     ret ok
 }

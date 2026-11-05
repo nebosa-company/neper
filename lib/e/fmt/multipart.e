@@ -21,7 +21,9 @@ error Invalid
 error TooLarge
 
 const WINDOW: usize = 8192usize
-const HEADER_ARENA: usize = 4096usize
+// The part header block is read into this arena: half is the block (8192 bytes) and the
+// rest holds the Header array (64 entries), so the limit is no longer hidden at 2 KiB.
+const HEADER_ARENA: usize = 16384usize
 
 type ReaderState = struct {
     source: io.Reader,
@@ -166,14 +168,43 @@ fn ensure(s: *ReaderState, n: usize) -> err {
 }
 
 // Consumes what follows a boundary line: `--` closes the message, CRLF opens a part.
+// RFC 2046 5.1.1 allows transport padding (space and tab) after the boundary and after
+// the closing `--`.
 fn after_boundary(s: *ReaderState) -> err {
-    try ensure(s, 2usize)
-    if s.len - s.at < 2usize { ret Invalid }
-    if s.window[s.at] == 45u8 && s.window[s.at + 1usize] == 45u8 {
+    var padding_error = ensure(s, 1usize)
+    if padding_error != ok { ret padding_error }
+    while s.len - s.at > 0usize && (s.window[s.at] == 32u8 || s.window[s.at] == 9u8) {
+        s.at += 1usize
+        padding_error = ensure(s, 1usize)
+        if padding_error != ok { ret padding_error }
+    }
+    padding_error = ensure(s, 2usize)
+    if padding_error != ok { ret padding_error }
+    if s.len - s.at >= 2usize && s.window[s.at] == 45u8 && s.window[s.at + 1usize] == 45u8 {
         s.closed = true
         s.at += 2usize
-        ret ok
+        // Padding may follow the closing `--` too, then the rest of the line is ignored.
+        padding_error = ensure(s, 1usize)
+        if padding_error != ok { ret padding_error }
+        while s.len - s.at > 0usize && (s.window[s.at] == 32u8 || s.window[s.at] == 9u8) {
+            s.at += 1usize
+            padding_error = ensure(s, 1usize)
+            if padding_error != ok { ret padding_error }
+        }
+        if s.len - s.at == 0usize { ret ok }
+        if s.window[s.at] == 10u8 {
+            s.at += 1usize
+            ret ok
+        }
+        padding_error = ensure(s, 2usize)
+        if padding_error != ok { ret padding_error }
+        if s.len - s.at >= 2usize && s.window[s.at] == 13u8 && s.window[s.at + 1usize] == 10u8 {
+            s.at += 2usize
+            ret ok
+        }
+        ret Invalid
     }
+    if s.len - s.at < 2usize { ret Invalid }
     if s.window[s.at] != 13u8 || s.window[s.at + 1usize] != 10u8 { ret Invalid }
     s.at += 2usize
     ret ok
@@ -224,6 +255,7 @@ fn reader_next_err(source_reader: *Reader) -> (Part, bool, err) {
         var arena = mem.arena_from(s.header_storage)
         var block_state = io.SliceReader { data: s.window[s.at..blank_at + 4usize], off: 0usize }
         let (parsed, parse_error) = mime.parse_headers(&arena, io.slice_reader(&block_state), HEADER_ARENA / 2usize, 64usize)
+        if parse_error == mime.TooLarge { ret (zero, false, TooLarge) }
         if parse_error != ok { ret (zero, false, Invalid) }
         headers = parsed
         s.at = blank_at + 4usize
@@ -349,6 +381,26 @@ fn writer(storage: []u8, sink: io.Writer, boundary: str) -> (Writer, err) {
 fn start_part(sink_writer: *Writer, headers: []const mime.Header) -> (io.Writer, err) {
     let s = mem.cast[*WriterState](sink_writer.state)
     if s.finished { ret (zero, Invalid) }
+    // Validate every header before writing a byte: a CR, LF or NUL in a name or value
+    // would end the part's header block and start another part.
+    var h = 0usize
+    while h < headers.len {
+        let name = headers[h].name
+        if name.len == 0usize { ret (zero, Invalid) }
+        var n = 0usize
+        while n < name.len {
+            if !mime.is_token_byte(name[n]) { ret (zero, Invalid) }
+            n += 1usize
+        }
+        let value = headers[h].value
+        var v = 0usize
+        while v < value.len {
+            let c = value[v]
+            if (c < 32u8 && c != 9u8) || c == 127u8 { ret (zero, Invalid) }
+            v += 1usize
+        }
+        h += 1usize
+    }
     if s.started {
         let crlf_error = io.write_all(&s.sink, "\r\n")
         if crlf_error != ok { ret (zero, crlf_error) }

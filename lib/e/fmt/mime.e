@@ -138,6 +138,36 @@ fn needs_quoting(value: str) -> bool {
 }
 
 fn format_media_type(a: *mem.Arena, value: MediaType) -> (str, err) {
+    // The writer is a trust boundary: a CR, LF or NUL anywhere, or a type or parameter
+    // name that is not a token, would let the caller inject header lines.
+    if value.major.len == 0usize || value.subtype.len == 0usize { ret ("", Invalid) }
+    var check = 0usize
+    while check < value.major.len {
+        if !is_token_byte(value.major[check]) { ret ("", Invalid) }
+        check += 1usize
+    }
+    check = 0usize
+    while check < value.subtype.len {
+        if !is_token_byte(value.subtype[check]) { ret ("", Invalid) }
+        check += 1usize
+    }
+    var pi = 0usize
+    while pi < value.parameters.len {
+        let p = value.parameters[pi]
+        if p.name.len == 0usize { ret ("", Invalid) }
+        check = 0usize
+        while check < p.name.len {
+            if !is_token_byte(p.name[check]) { ret ("", Invalid) }
+            check += 1usize
+        }
+        check = 0usize
+        while check < p.value.len {
+            let c = p.value[check]
+            if (c < 32u8 && c != 9u8) || c == 127u8 { ret ("", Invalid) }
+            check += 1usize
+        }
+        pi += 1usize
+    }
     var needed = value.major.len + 1usize + value.subtype.len
     var at = 0usize
     while at < value.parameters.len {
@@ -238,6 +268,14 @@ fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limi
         let (count, read_error) = io.read(&reader, buffer[filled..filled + 1usize])
         filled += count
         if read_error != ok && read_error != io.End { ret (zero, read_error) }
+        // An empty header block is the blank line that opens the stream.
+        if filled >= 1usize && buffer[0] == 10u8 {
+            block_end = 1usize
+            found_end = true
+        } else if filled >= 2usize && buffer[0] == 13u8 && buffer[1] == 10u8 {
+            block_end = 2usize
+            found_end = true
+        }
         // The block ends at the first CRLF CRLF, or LF LF.
         if filled >= 4usize && buffer[filled - 4usize] == 13u8 && buffer[filled - 3usize] == 10u8 && buffer[filled - 2usize] == 13u8 && buffer[filled - 1usize] == 10u8 {
             block_end = filled

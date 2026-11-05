@@ -106,5 +106,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_state = io.SliceReader { data: "no colon here\r\n\r\nbody", off: 0usize }
     let (bad_message, e24) = mail.read_message(a, io.slice_reader(&bad_state), 4096usize)
     if e24 != mail.InvalidMessage { os.exit(27) }
+    // #161: a Date header takes a 1-4 digit year (2 or 3 obsolete) and a 1-2 digit day;
+    // a long digit run must not overflow.
+    let (_, huge_year) = mail.parse_date("1 Jan 99999999999999999999 00:00 +0000")
+    let (_, twelve_digit_year) = mail.parse_date("1 Jan 400000000000 00:00 +0000")
+    let (_, long_day) = mail.parse_date("123 Jan 2030 00:00 +0000")
+    if huge_year != mail.InvalidDate || twelve_digit_year != mail.InvalidDate || long_day != mail.InvalidDate { os.exit(40) }
+    // #161: a display name may not carry CR, LF or another control byte.
+    let (_, inject_name) = mail.format_address(a, mail.Address { name: "x\r\nBcc: victim@example.com", address: "a@b.c" })
+    if inject_name != mail.InvalidAddress { os.exit(41) }
+    let (_, control_name) = mail.format_address(a, mail.Address { name: "X\tY", address: "a@b.c" })
+    if control_name != mail.InvalidAddress { os.exit(42) }
+    // #161: a decoded word must be valid UTF-8/ASCII with no control bytes; one that
+    // fails is left as written.
+    let (bad_utf8_word, bad_utf8_error) = mail.decode_header(a, "=?utf-8?Q?=FF?=", 256usize)
+    if bad_utf8_error != ok || !str.eq(bad_utf8_word, "=?utf-8?Q?=FF?=") { os.exit(43) }
+    let (crlf_word, crlf_word_error) = mail.decode_header(a, "=?utf-8?B?DQo=?=", 256usize)
+    if crlf_word_error != ok || !str.eq(crlf_word, "=?utf-8?B?DQo=?=") { os.exit(44) }
+    let (ascii_word, ascii_word_error) = mail.decode_header(a, "=?us-ascii?Q?=FF?=", 256usize)
+    if ascii_word_error != ok || !str.eq(ascii_word, "=?us-ascii?Q?=FF?=") { os.exit(45) }
+    let (latin_word, latin_word_error) = mail.decode_header(a, "=?iso-8859-1?Q?caf=E9?=", 256usize)
+    if latin_word_error != ok || !str.eq(latin_word, "caf\xc3\xa9") { os.exit(46) }
+    // #161: an empty header block is headers-then-body, not a body read as headers.
+    var empty_header_state = io.SliceReader { data: "\r\nbody here", off: 0usize }
+    let (empty_headers, empty_header_error) = mail.read_message(a, io.slice_reader(&empty_header_state), 4096usize)
+    if empty_header_error != ok || empty_headers.headers.len != 0usize { os.exit(47) }
+    var empty_body = empty_headers.body
+    let (empty_body_count, empty_body_error) = io.read(&empty_body, out[..])
+    if empty_body_error != ok || !str.eq(out[..empty_body_count], "body here") { os.exit(48) }
     ret ok
 }

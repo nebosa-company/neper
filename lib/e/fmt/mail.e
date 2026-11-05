@@ -189,6 +189,14 @@ fn name_needs_quotes(name: str) -> bool {
 fn format_address(a: *mem.Arena, value: Address) -> (str, err) {
     if !address_legal(value.address) { ret ("", InvalidAddress) }
     if value.name.len == 0usize { ret (value.address, ok) }
+    // A name holding CR, LF or another control byte would become a header line of its
+    // own once the address is written into a message; refuse it.
+    var scan = 0usize
+    while scan < value.name.len {
+        let c = value.name[scan]
+        if c < 32u8 || c == 127u8 { ret ("", InvalidAddress) }
+        scan += 1usize
+    }
     let (b0, builder_error) = str.builder(a, value.name.len * 2usize + value.address.len + 8usize)
     if builder_error != ok { ret ("", builder_error) }
     var b = b0
@@ -235,7 +243,9 @@ fn month_number(name: str) -> (i64, bool) {
 }
 
 fn digits_of(text: str) -> (i64, bool) {
-    if text.len == 0usize { ret (0i64, false) }
+    // RFC 5322's date fields are at most four digits wide (a year); a longer run is
+    // not a field, and bounding it keeps the arithmetic below from overflowing.
+    if text.len == 0usize || text.len > 4usize { ret (0i64, false) }
     var value = 0i64
     var i = 0usize
     while i < text.len {
@@ -285,6 +295,9 @@ fn parse_date(source: str) -> (Date, err) {
         count += 1usize
     }
     if count != 5usize { ret (zero, InvalidDate) }
+    // RFC 5322: a 1-2 digit day, a 1-4 digit year (2- and 3-digit obsolete years
+    // included); the length cap keeps a long digit run out of the arithmetic below.
+    if fields[0].len == 0usize || fields[0].len > 2usize || fields[2].len > 4usize { ret (zero, InvalidDate) }
     let (day, day_ok) = digits_of(fields[0])
     let (month, month_ok) = month_number(fields[1])
     let (year0, year_ok) = digits_of(fields[2])
@@ -334,6 +347,17 @@ fn read_message(a: *mem.Arena, source: io.Reader, header_limit: usize) -> (Messa
         filled += count
         if read_error != ok && read_error != io.End { ret (zero, read_error) }
         if count == 0usize { break }
+        // A message may have zero header fields: the block is the blank line that
+        // opens it (CRLF, or a bare LF).
+        if !found && filled >= 1usize {
+            if buffer[0] == 10u8 {
+                block_end = 1usize
+                found = true
+            } else if filled >= 2usize && buffer[0] == 13u8 && buffer[1] == 10u8 {
+                block_end = 2usize
+                found = true
+            }
+        }
         var at = 0usize
         while at + 1usize < filled && !found {
             if buffer[at] == 10u8 {
@@ -413,6 +437,41 @@ fn hex_nibble(c: u8) -> (u8, bool) {
     ret (0u8, false)
 }
 
+// Whether `text` is well-formed UTF-8.
+fn utf8_valid(text: str) -> bool {
+    var i = 0usize
+    while i < text.len {
+        let b0 = u32(text[i])
+        if b0 < 128u32 {
+            i += 1usize
+            continue
+        }
+        var need = 0usize
+        if b0 >= 194u32 && b0 < 224u32 {
+            need = 1usize
+        } else if b0 >= 224u32 && b0 < 240u32 {
+            need = 2usize
+        } else if b0 >= 240u32 && b0 < 245u32 {
+            need = 3usize
+        } else {
+            ret false
+        }
+        if i + need >= text.len { ret false }
+        var k = 1usize
+        var scalar = b0 & (127u32 >> u32(need + 1usize))
+        while k <= need {
+            let c = u32(text[i + k])
+            if c & 192u32 != 128u32 { ret false }
+            scalar = (scalar << 6u32) | (c & 63u32)
+            k += 1usize
+        }
+        if need == 2usize && (scalar < 2048u32 || (scalar >= 55296u32 && scalar <= 57343u32)) { ret false }
+        if need == 3usize && (scalar < 65536u32 || scalar > 1114111u32) { ret false }
+        i += need + 1usize
+    }
+    ret true
+}
+
 // Decodes one encoded word's payload into `out` as UTF-8: (bytes written, ok).
 fn decode_word(charset: str, encoding: str, payload: str, out: []u8) -> (usize, bool) {
     var raw: [512]u8 = zero
@@ -445,25 +504,38 @@ fn decode_word(charset: str, encoding: str, payload: str, out: []u8) -> (usize, 
             i += 1usize
         }
     }
-    let utf8 = str.compare_ascii_fold(charset, "utf-8") == 0 || str.compare_ascii_fold(charset, "us-ascii") == 0
+    let is_utf8 = str.compare_ascii_fold(charset, "utf-8") == 0
+    let is_ascii = str.compare_ascii_fold(charset, "us-ascii") == 0
     let latin1 = str.compare_ascii_fold(charset, "iso-8859-1") == 0
-    if !utf8 && !latin1 { ret (0usize, false) }
+    if !is_utf8 && !is_ascii && !latin1 { ret (0usize, false) }
     var used = 0usize
     var i = 0usize
     while i < raw_len {
         let c = raw[i]
         if latin1 && c >= 128u8 {
+            // C1 controls are not text.
+            if c <= 159u8 { ret (0usize, false) }
             if used + 2usize > out.len { ret (0usize, false) }
             out[used] = 192u8 | (c >> 6u8)
             out[used + 1usize] = 128u8 | (c & 63u8)
             used += 2usize
         } else {
+            if is_ascii && c >= 128u8 { ret (0usize, false) }
             if used >= out.len { ret (0usize, false) }
             out[used] = c
             used += 1usize
         }
         i += 1usize
     }
+    // The decoded text must be re-emittable: no control bytes, valid UTF-8 when the
+    // word claims it. A word that fails is left as written by `decode_header`.
+    var check = 0usize
+    while check < used {
+        let c = out[check]
+        if c < 32u8 || c == 127u8 { ret (0usize, false) }
+        check += 1usize
+    }
+    if is_utf8 && !utf8_valid(out[0usize..used]) { ret (0usize, false) }
     ret (used, true)
 }
 
