@@ -1417,6 +1417,7 @@ fn polygon_offset(polygon: []const Point, d: f64, out: []Point) -> (usize, err) 
 // endpoint for collinear pairs); answers the count.
 // ponytail: O(n^2) pairwise tests; a Bentley-Ottmann sweep reaches O((n + k) log n).
 fn segment_intersections(segments: []const Point, pairs: []usize, crossings: []Point) -> (usize, err) {
+    if segments.len % 2usize != 0usize { ret (0usize, Invalid) }
     let n = segments.len / 2usize
     var count = 0usize
     var i = 0usize

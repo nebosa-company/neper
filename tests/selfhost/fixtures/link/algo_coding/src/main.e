@@ -277,6 +277,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, wide_pack_error) = coding.bit_pack(values[..], 65u32, out[..])
     if wide_pack_error == ok { os.exit(10i32) }
 
+    // 11: hostile tables and streams are refused before they trap or spin.
+    var skew_buf: [8600]u8 = zero
+    i = 0usize
+    while i < 8400usize {
+        skew_buf[i] = u8(i % 56usize)
+        i += 1usize
+    }
+    while i < 8600usize {
+        skew_buf[i] = u8(i - 8400usize + 56usize)
+        i += 1usize
+    }
+    var skew_freqs: [256]u32 = zero
+    if coding.ans_frequencies(skew_buf[..], skew_freqs[..]) != ok { os.exit(13i32) }
+    var skew_cum: [256]u32 = zero
+    if !coding.ans_cumulative(skew_freqs[..], skew_cum[..]) { os.exit(13i32) }
+    var rare_at = 56usize
+    while rare_at < 256usize {
+        if skew_freqs[rare_at] != 1u32 { os.exit(13i32) }
+        rare_at += 1usize
+    }
+    var hostile_bits: [9]u8 = zero
+    i = 0usize
+    while i < 8usize {
+        hostile_bits[i] = 255u8
+        i += 1usize
+    }
+    var hostile_reader = coding.bit_reader(hostile_bits[..])
+    let (_, hostile_rice) = coding.rice_read(&hostile_reader, 60u32)
+    if hostile_rice != coding.Invalid { os.exit(12i32) }
+    var bad_tree: coding.Huffman = zero
+    bad_tree.lengths[0usize] = 33u8
+    var bad_reader = coding.bit_reader(out[..0usize])
+    if coding.huffman_decode(&bad_tree, &bad_reader, back[..1usize]) != coding.Invalid { os.exit(11i32) }
+    var all_one: [256]u64 = zero
+    i = 0usize
+    while i < 256usize {
+        all_one[i] = 1u64
+        i += 1usize
+    }
+    let (_, limit_error) = coding.huffman_build(all_one[..], 4u32)
+    if limit_error != coding.Invalid { os.exit(11i32) }
+
     try io.print("algo coding ok\n")
     ret ok
 }

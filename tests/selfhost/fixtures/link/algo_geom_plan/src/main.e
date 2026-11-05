@@ -332,6 +332,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(sx, 2489.328540761988f64, 0.000001f64) || !near(sy, 1978.3929836624386f64, 0.000001f64) { os.exit(11i32) }
     let (_, crossing_room) = geom.segment_intersections(segs[..], pairs[..4usize], crossings[..])
     if crossing_room != geom.TooSmall { os.exit(11i32) }
+    // an unpaired endpoint is Invalid, not a silently truncated segment list.
+    let (_, odd_error) = geom.segment_intersections(segs[..5usize], pairs[..], crossings[..])
+    if odd_error != geom.Invalid { os.exit(11i32) }
 
     // 12: monotone triangulation of a zigzag against the replica.
     var mono: [11]geom.Point = zero

@@ -327,12 +327,15 @@ fn rice_write(w: *BitWriter, value: u64, k: u32) -> err {
 
 fn rice_read(r: *BitReader, k: u32) -> (u64, err) {
     if k > 63u32 { ret (0u64, Invalid) }
+    let max_quotient = 18446744073709551615u64 >> u64(k)
     var quotient = 0u64
     while true {
         let (bit, bit_error) = read_bits(r, 1u32)
         if bit_error != ok { ret (0u64, bit_error) }
         if bit == 0u64 { break }
         quotient += 1u64
+        // Any larger quotient would lose bits in the shift below.
+        if quotient > max_quotient { ret (0u64, Invalid) }
     }
     let (rest, rest_error) = read_bits(r, k)
     if rest_error != ok { ret (0u64, rest_error) }
@@ -512,6 +515,9 @@ fn huffman_build(frequencies: []const u64, limit: u32) -> (Huffman, err) {
         i += 1usize
     }
     if used == 0usize { ret (h, ok) }
+    // A prefix code of at most `limit` bits has at most 2^limit codewords, so a
+    // larger symbol count can never fit; the flattening loop would never converge.
+    if u64(used) > (1u64 << u32(limit)) { ret (zero, Invalid) }
     while true {
         // Leaves 0..255 and internal nodes from 256: a two-queue merge over sorted leaves.
         var node_weight: [512]u64 = zero
@@ -592,12 +598,28 @@ fn huffman_build(frequencies: []const u64, limit: u32) -> (Huffman, err) {
             i += 1usize
         }
     }
-    huffman_canonical(&h)
+    let canonical_error = huffman_canonical(&h)
+    if canonical_error != ok { ret (zero, canonical_error) }
     ret (h, ok)
 }
 
+// Whether a public Huffman table's lengths are usable: at most 32 bits and a
+// Kraft sum no greater than one (an over-subscribed code is Invalid, not garbage).
+fn huffman_lengths_valid(h: *const Huffman) -> bool {
+    var kraft = 0u64
+    var i = 0usize
+    while i < 256usize {
+        let length = usize(h.lengths[i])
+        if length > 32usize { ret false }
+        if length != 0usize { kraft += 1u64 << u32(32usize - length) }
+        i += 1usize
+    }
+    ret kraft <= 4294967296u64
+}
+
 // Assigns canonical codes from the lengths: shorter codes first, ties by symbol.
-fn huffman_canonical(h: *Huffman) {
+fn huffman_canonical(h: *Huffman) -> err {
+    if !huffman_lengths_valid(h) { ret Invalid }
     var count: [33]u32 = zero
     var i = 0usize
     while i < 256usize {
@@ -623,6 +645,7 @@ fn huffman_canonical(h: *Huffman) {
         }
         i += 1usize
     }
+    ret ok
 }
 
 // Writes each byte's code; a byte with no code is `Invalid`.
@@ -640,6 +663,7 @@ fn huffman_encode(h: *const Huffman, src: []const u8, w: *BitWriter) -> err {
 // Reads `dst.len` symbols; the canonical property lets each code be recognised by
 // length without a tree.
 fn huffman_decode(h: *const Huffman, r: *BitReader, dst: []u8) -> err {
+    if !huffman_lengths_valid(h) { ret Invalid }
     var count: [33]u32 = zero
     var first_symbol: [33]u32 = zero
     var symbols: [256]u8 = zero
@@ -927,21 +951,39 @@ fn ans_frequencies(src: []const u8, freqs: []u32) -> err {
         }
         s += 1usize
     }
-    if sum < 4096u64 { freqs[top] += u32(4096u64 - sum) }
-    if sum > 4096u64 { freqs[top] -= u32(sum - 4096u64) }
+    if sum < 4096u64 {
+        freqs[top] += u32(4096u64 - sum)
+    } else if sum > 4096u64 {
+        // The rounded-up minimums can overshoot; take the surplus from the
+        // largest symbols first, never below one, instead of underflowing one.
+        var surplus = sum - 4096u64
+        while surplus > 0u64 {
+            var best = 256usize
+            var s2 = 0usize
+            while s2 < 256usize {
+                if freqs[s2] > 1u32 && (best == 256usize || freqs[s2] > freqs[best]) { best = s2 }
+                s2 += 1usize
+            }
+            if best == 256usize { ret Invalid }
+            var take = u64(freqs[best]) - 1u64
+            if take > surplus { take = surplus }
+            freqs[best] -= u32(take)
+            surplus -= take
+        }
+    }
     ret ok
 }
 
 // The cumulative starts of a table; `false` when it does not sum to 2^12.
 fn ans_cumulative(freqs: []const u32, cum: []u32) -> bool {
-    var sum = 0u32
+    var sum = 0u64
     var s = 0usize
     while s < 256usize {
-        cum[s] = sum
-        sum += freqs[s]
+        cum[s] = u32(sum)
+        sum += u64(freqs[s])
         s += 1usize
     }
-    ret sum == 4096u32
+    ret sum == 4096u64
 }
 
 // rANS with a 32-bit state renormalised a byte at a time (the state stays in
