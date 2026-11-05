@@ -2430,6 +2430,24 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             }
         }
         if hangs { needed = 0.0f64 }
+        // `hanging-punctuation: last`: a closing punctuation that ends the block's text hangs past the content edge, so
+        // it never makes the line overflow. Inline markers after it (a span's close) carry no ink and do not count.
+        if p.kind == .Text && (bstyle(l, p.box).hanging_punctuation & 2u8) != 0u8 {
+            var ends = true
+            var ei = j + 1usize
+            while ei < x.bd.pieces.len {
+                let ep = x.bd.pieces.items[ei]
+                if ep.kind != .Open && ep.kind != .Close { ends = false }
+                ei += 1usize
+            }
+            if ends {
+                let (cw, cn) = hanging_close_w(l, p)
+                if cn > 0usize && cn == p.clen {
+                    hangs = true
+                    needed = 0.0f64
+                }
+            }
+        }
         // Nothing fits beside the floats: the line moves down to where they end (CSS 2.1 9.5).
         if pos + needed > lim + 0.01f64 && !has_content && (lx > 0.0f64 || rx < x.cbw - 0.01f64) && !(p.kind == .Text && (cs.overflow_wrap != .Normal || cs.word_break == .BreakWord)) {
             let below = next_float_end(l, fc.base, fc.oy + x.y)
@@ -2496,6 +2514,27 @@ fn hanging_punct_w(l: *Layout, p: Piece) -> (f64, usize) {
     }
     if n == 0usize { ret (0.0f64, 0usize) }
     ret (text_advance(l, bstyle(l, p.box), proc[p.start..p.start + n]), n)
+}
+
+// The advance and byte length of a closing punctuation at the end of a text piece (`hanging-punctuation: last`), both 0
+// when the piece does not end with one or when the box brings its own border or padding on that side.
+fn hanging_close_w(l: *Layout, p: Piece) -> (f64, usize) {
+    if p.kind != .Text || p.clen == 0usize { ret (0.0f64, 0usize) }
+    if bstyle(l, p.box).border_width[1usize] > 0.0f64 { ret (0.0f64, 0usize) }
+    let proc = l.boxes.items[usize(p.box)].proc
+    let end = p.start + p.clen
+    if end > proc.len || end == 0usize { ret (0.0f64, 0usize) }
+    // Walk back over UTF-8 continuation bytes to the last scalar.
+    var at = end - 1usize
+    while at > p.start && (proc[at] & 192u8) == 128u8 { at -= 1usize }
+    let len = end - at
+    let c = proc[at]
+    var found = false
+    if len == 1usize && (c == 41u8 || c == 93u8 || c == 125u8) { found = true }
+    if len == 3usize && c == 226u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 153u8 || proc[at + 2usize] == 157u8) { found = true }
+    if len == 3usize && c == 227u8 && proc[at + 1usize] == 128u8 && (proc[at + 2usize] == 137u8 || proc[at + 2usize] == 139u8 || proc[at + 2usize] == 149u8 || proc[at + 2usize] == 155u8 || proc[at + 2usize] == 157u8 || proc[at + 2usize] == 159u8 || proc[at + 2usize] == 161u8) { found = true }
+    if !found { ret (0.0f64, 0usize) }
+    ret (text_advance(l, bstyle(l, p.box), proc[at..end]), len)
 }
 
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64) {
@@ -3461,9 +3500,29 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
     let baseline = -top
     // Width and alignment.
     var used_w = 0.0f64
+    // `hanging-punctuation: last`: a closing punctuation at the very end of the line hangs past the content edge and
+    // takes no room in the line.
+    var close_idx = trim_end
+    var close_w = 0.0f64
+    if (cs.hanging_punctuation & 2u8) != 0u8 {
+        var ck = trim_end
+        while ck > lead {
+            ck -= 1usize
+            let cp = x.bd.pieces.items[ck]
+            if cp.kind == .Text && cp.clen > 0usize {
+                let (cw, cn) = hanging_close_w(l, cp)
+                if cn > 0usize {
+                    close_idx = ck
+                    close_w = cw
+                }
+                break
+            }
+        }
+    }
     k = lead
     while k < trim_end {
         let p = x.bd.pieces.items[k]
+        if k == close_idx && close_w > 0.0f64 { used_w -= close_w }
         if p.kind == .Marker {
             used_w += text_advance(l, bstyle(l, p.box), marker_string(l, p.box))
         } else if p.kind == .Tab {
