@@ -610,10 +610,10 @@ fn ks_v1_node_write(o: *rt.Out, m: *const ks_v1_Node) -> err {
     if m.has_maybe {
         try rt.put_int(o, 6u32, i64(m.maybe))
     }
-    if m.has_text {
+    if m.has_text && !(m.has_number || m.rec != nil) {
         try rt.put_bytes(o, 7u32, m.text)
     }
-    if m.has_number {
+    if m.has_number && !(m.rec != nil) {
         try rt.put_int(o, 8u32, i64(m.number))
     }
     if m.rec != nil {
@@ -714,11 +714,15 @@ fn ks_v1_node_read(a: *mem.Arena, source: []const u8, depth: u32) -> (ks_v1_Node
             if bytes.skip(&r.input, usize(length)) != ok { ret (m, pb.Invalid) }
             m.text = data
             m.has_text = true
+            m.has_number = false
+            m.rec = nil
         } else if key.number == 8u32 && key.wire == .Varint {
             let (v, e) = pb.read_u64(&r)
             if e != ok { ret (m, e) }
             m.number = rt.i64_from_bits(v)
             m.has_number = true
+            m.has_text = false
+            m.rec = nil
         } else if key.number == 9u32 && key.wire == .Bytes {
             let (length, length_error) = pb.read_u64(&r)
             if length_error != ok { ret (m, pb.Invalid) }
@@ -731,6 +735,8 @@ fn ks_v1_node_read(a: *mem.Arena, source: []const u8, depth: u32) -> (ks_v1_Node
             if cell_error != ok { ret (m, cell_error) }
             cell[0] = sub
             m.rec = &cell[0]
+            m.has_text = false
+            m.has_number = false
         } else if key.number == 10u32 && key.wire == .Varint {
             let (v, e) = pb.read_u64(&r)
             if e != ok { ret (m, e) }

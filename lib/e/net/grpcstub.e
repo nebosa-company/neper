@@ -16,7 +16,8 @@
 // field is `[]const T`, packed by default in proto3 and when `[packed = true]` in proto2 and read packed or not either
 // way; a map field is the repeated entry message it is on the wire, written with both its key and its value. A field with explicit presence (proto2, proto3
 // `optional`, a oneof member) carries `has_<name>` and is written when it is set. Oneofs are not folded into unions:
-// each member is a field. Groups are skipped; proto2 defaults are not applied; the last occurrence of a singular field
+// each member is a field, a decode clears the others so only the last member seen keeps its presence, and an encode
+// writes at most one of them. Groups are skipped; proto2 defaults are not applied; the last occurrence of a singular field
 // wins (messages are not merged); unknown fields are dropped.
 //
 // A field named like a keyword gets a trailing underscore. A type name that is not in the set (a dependency left out of
@@ -181,7 +182,9 @@ type Info = struct {
     explicit: bool,
     packed: bool,
     element: str,
-    supported: bool
+    supported: bool,
+    has_oneof: bool,
+    oneof: u32
 }
 
 fn kind_of(type_text: str) -> str {
@@ -239,7 +242,12 @@ fn info_of(g: *Gen, field: json.Value, proto3: bool) -> Info {
     if n > 0i64 && n < 536870912i64 { number = u32(n) }
     let kind = kind_of(text_of(field, "type"))
     let repeated = str.eq(text_of(field, "label"), "LABEL_REPEATED")
-    let (oneof, has_oneof) = sync.get(field, "oneofIndex")
+    let (_, has_oneof) = sync.get(field, "oneofIndex")
+    var oneof_index = 0u32
+    if has_oneof {
+        let value = sync.count_value(field, "oneofIndex", 0i64)
+        if value >= 0i64 { oneof_index = u32(value) }
+    }
     var explicit = false
     if !repeated && !str.eq(kind, "message") {
         explicit = !proto3 || ir.truthy(ir.value_of(field, "proto3Optional")) || has_oneof
@@ -256,7 +264,7 @@ fn info_of(g: *Gen, field: json.Value, proto3: bool) -> Info {
     }
     var element = neper_scalar(kind)
     if str.eq(kind, "message") { element = type_ident(g, text_of(field, "typeName")) }
-    ret Info { name: field_ident(g, name), number: number, kind: kind, repeated: repeated, explicit: explicit, packed: packed, element: element, supported: kind.len > 0usize && number > 0u32 }
+    ret Info { name: field_ident(g, name), number: number, kind: kind, repeated: repeated, explicit: explicit, packed: packed, element: element, supported: kind.len > 0usize && number > 0u32, has_oneof: has_oneof, oneof: oneof_index }
 }
 
 fn wire_text(kind: str) -> str {
@@ -343,7 +351,52 @@ fn fill(g: *Gen, t: str, info: Info, number: str) -> str {
     ret s
 }
 
-fn write_field(g: *Gen, info: Info, always: bool) -> str {
+// The expression that says whether `info` is present in a message being written.
+fn presence_text(g: *Gen, info: Info) -> str {
+    if info.explicit { ret cat(g, "m.has_", info.name) }
+    ret cat(g, cat(g, "m.", info.name), " != nil")
+}
+
+// The statements clearing the other members of `info`'s oneof: protobuf keeps only the
+// last member seen on the wire.
+fn oneof_clears(g: *Gen, fields: []const json.Value, at: usize, info: Info, proto3: bool) -> str {
+    var out = ""
+    if !info.has_oneof { ret out }
+    var i = 0usize
+    while i < fields.len {
+        if i != at {
+            let sibling = info_of(g, fields[i], proto3)
+            if sibling.supported && sibling.has_oneof && sibling.oneof == info.oneof {
+                if sibling.explicit {
+                    out = cat(g, out, cat(g, cat(g, "            m.has_", sibling.name), " = false\n"))
+                } else if str.eq(sibling.kind, "message") {
+                    out = cat(g, out, cat(g, cat(g, "            m.", sibling.name), " = nil\n"))
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+// The members of `info`'s oneof declared after it, present in a message being written:
+// when one is set, this one must not be written, so an encode carries one alternative.
+fn oneof_later(g: *Gen, fields: []const json.Value, at: usize, info: Info, proto3: bool) -> str {
+    var out = ""
+    if !info.has_oneof { ret out }
+    var i = at + 1usize
+    while i < fields.len {
+        let sibling = info_of(g, fields[i], proto3)
+        if sibling.supported && sibling.has_oneof && sibling.oneof == info.oneof {
+            if out.len > 0usize { out = cat(g, out, " || ") }
+            out = cat(g, out, presence_text(g, sibling))
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+fn write_field(g: *Gen, info: Info, always: bool, suppress: str) -> str {
     let number = cat(g, num_text(g, i64(info.number)), "u32")
     if !info.supported { ret "" }
     let member = cat(g, "m.", info.name)
@@ -381,16 +434,20 @@ fn write_field(g: *Gen, info: Info, always: bool) -> str {
         ret replace_all(g, body, "%PUT%", put_statement(g, info, element))
     }
     if str.eq(info.kind, "message") {
-        ret fill(g, r#"    if m.%FIELD% != nil {
+        var cond = cat(g, cat(g, "m.", info.name), " != nil")
+        if suppress.len > 0usize { cond = cat(g, cat(g, cond, " && !("), cat(g, suppress, ")")) }
+        let body = fill(g, r#"    if %COND% {
         var c = rt.out_new(o.a)
         try %FN%_write(&c, m.%FIELD%)
         try rt.put_message(o, %NUM%, &c)
     }
 "#, info, number)
+        ret replace_all(g, body, "%COND%", cond)
     }
     var condition = nonzero_condition(g, info, member)
     if info.explicit { condition = cat(g, "m.has_", info.name) }
     if always { condition = "true" }
+    if suppress.len > 0usize { condition = cat(g, cat(g, condition, " && !("), cat(g, suppress, ")")) }
     let body = r#"    if %COND% {
         %PUT%
     }
@@ -422,11 +479,11 @@ fn convert(kind: str) -> str {
     ret "v"
 }
 
-fn read_field(g: *Gen, info: Info) -> str {
+fn read_field(g: *Gen, info: Info, clears: str) -> str {
     let number = cat(g, num_text(g, i64(info.number)), "u32")
     if !info.supported { ret "" }
-    var has = ""
-    if info.explicit { has = replace_all(g, "            m.has_%FIELD% = true\n", "%FIELD%", info.name) }
+    var has = clears
+    if info.explicit { has = cat(g, replace_all(g, "            m.has_%FIELD% = true\n", "%FIELD%", info.name), clears) }
     if str.eq(info.kind, "message") {
         if info.repeated {
             ret fill(g, r#"        } else if key.number == %NUM% && key.wire == .Bytes {
@@ -441,7 +498,7 @@ fn read_field(g: *Gen, info: Info) -> str {
             if pushed != ok { ret (m, pushed) }
 "#, info, number)
         }
-        ret fill(g, r#"        } else if key.number == %NUM% && key.wire == .Bytes {
+        let body = fill(g, r#"        } else if key.number == %NUM% && key.wire == .Bytes {
             let (length, length_error) = pb.read_u64(&r)
             if length_error != ok { ret (m, pb.Invalid) }
             let (data, data_error) = rt.view_of(source, bytes.remaining_reader(&r.input), length)
@@ -453,7 +510,8 @@ fn read_field(g: *Gen, info: Info) -> str {
             if cell_error != ok { ret (m, cell_error) }
             cell[0] = sub
             m.%FIELD% = &cell[0]
-"#, info, number)
+%HAS%"#, info, number)
+        ret replace_all(g, body, "%HAS%", has)
     }
     if str.eq(info.kind, "string") || str.eq(info.kind, "bytes") {
         if info.repeated {
@@ -556,12 +614,17 @@ fn emit_message(g: *Gen, full: str, message: json.Value, proto3: bool) {
     var finish = ""
     var at = 0usize
     while at < fields.len {
-        let info = info_of(g, fields[at], proto3)
+        let field_at = at
+        let info = info_of(g, fields[field_at], proto3)
         at += 1usize
         if !info.supported { continue }
         struct_fields = cat(g, struct_fields, struct_field(g, info))
-        writes = cat(g, writes, write_field(g, info, entry))
-        branches = cat(g, branches, read_field(g, info))
+        // oneof: decode keeps the last member seen, and encode writes only the last
+        // declared member that is present, so two alternatives never coexist.
+        let clears = oneof_clears(g, fields, field_at, info, proto3)
+        let later = oneof_later(g, fields, field_at, info, proto3)
+        writes = cat(g, writes, write_field(g, info, entry, later))
+        branches = cat(g, branches, read_field(g, info, clears))
         if info.repeated {
             let number = cat(g, num_text(g, i64(info.number)), "u32")
             lists = cat(g, lists, fill(g, r#"    let (l_%FIELD%_made, l_%FIELD%_error) = list.init[%ELEM%](a, 4usize)
