@@ -291,9 +291,6 @@ type Code = struct { counts: [16]u32, symbols: []u32, single: i32 }
 fn build_code(a: *mem.Arena, lengths: []const u32) -> (Code, err) {
     var c: Code = zero
     c.single = -1i32
-    let (symbols, alloc_error) = mem.alloc[u32](a, lengths.len)
-    if alloc_error != ok { ret (zero, alloc_error) }
-    c.symbols = symbols
     var i = 0usize
     var nonzero = 0usize
     var last = 0usize
@@ -307,6 +304,7 @@ fn build_code(a: *mem.Arena, lengths: []const u32) -> (Code, err) {
         i += 1usize
     }
     if nonzero == 0usize { ret (c, ok) }
+    // A single-symbol code never reads `symbols`, so a group of them retains nothing.
     if nonzero == 1usize {
         c.single = i32(last)
         ret (c, ok)
@@ -321,6 +319,11 @@ fn build_code(a: *mem.Arena, lengths: []const u32) -> (Code, err) {
         len += 1usize
     }
     if left != 0i32 { ret (zero, Invalid) }
+    // Only the symbols the code names are stored: a hostile group table of single-symbol
+    // codes would otherwise retain one alphabet-sized array per group.
+    let (symbols, alloc_error) = mem.alloc[u32](a, nonzero)
+    if alloc_error != ok { ret (zero, alloc_error) }
+    c.symbols = symbols
     var offsets: [17]u32 = zero
     len = 1usize
     while len < 16usize {
@@ -362,10 +365,9 @@ fn code_length_order(i: usize) -> usize {
     ret usize(order[i])
 }
 
-// The code lengths of one prefix code over `alphabet` symbols, simple or normal.
-fn read_code(a: *mem.Arena, b: *LBits, alphabet: usize) -> (Code, err) {
-    let (lengths, alloc_error) = mem.alloc[u32](a, alphabet)
-    if alloc_error != ok { ret (zero, alloc_error) }
+// The code lengths of one prefix code over `alphabet` symbols, simple or normal, read
+// into `lengths` (at least `alphabet` entries) so a group loop can reuse the scratch.
+fn read_code_into(a: *mem.Arena, b: *LBits, alphabet: usize, lengths: []u32) -> (Code, err) {
     var i = 0usize
     while i < alphabet {
         lengths[i] = 0u32
@@ -382,7 +384,7 @@ fn read_code(a: *mem.Arena, b: *LBits, alphabet: usize) -> (Code, err) {
             if s1 >= alphabet { ret (zero, Invalid) }
             lengths[s1] = 1u32
         }
-        let (code, code_error) = build_code(a, lengths)
+        let (code, code_error) = build_code(a, lengths[0usize..alphabet])
         ret (code, code_error)
     }
     var meta_lengths: [19]u32 = zero
@@ -429,23 +431,33 @@ fn read_code(a: *mem.Arena, b: *LBits, alphabet: usize) -> (Code, err) {
             }
         }
     }
-    let (code, code_error) = build_code(a, lengths)
+    let (code, code_error) = build_code(a, lengths[0usize..alphabet])
     ret (code, code_error)
 }
 
+fn read_code(a: *mem.Arena, b: *LBits, alphabet: usize) -> (Code, err) {
+    let (lengths, alloc_error) = mem.alloc[u32](a, alphabet)
+    if alloc_error != ok { ret (zero, alloc_error) }
+    let (code, code_error) = read_code_into(a, b, alphabet, lengths)
+    ret (code, code_error)
+}
+
+// The largest green alphabet: 256 literals, 24 length codes and an 11-bit colour cache.
+const MAX_CODE_ALPHABET: usize = 256usize + 24usize + 2048usize
+
 type Group = struct { green: Code, red: Code, blue: Code, alpha: Code, distance: Code }
 
-fn read_group(a: *mem.Arena, b: *LBits, cache_size: usize) -> (Group, err) {
+fn read_group_into(a: *mem.Arena, b: *LBits, cache_size: usize, lengths: []u32) -> (Group, err) {
     var g: Group = zero
-    let (green, e1) = read_code(a, b, 256usize + 24usize + cache_size)
+    let (green, e1) = read_code_into(a, b, 256usize + 24usize + cache_size, lengths)
     if e1 != ok { ret (zero, e1) }
-    let (red, e2) = read_code(a, b, 256usize)
+    let (red, e2) = read_code_into(a, b, 256usize, lengths)
     if e2 != ok { ret (zero, e2) }
-    let (blue, e3) = read_code(a, b, 256usize)
+    let (blue, e3) = read_code_into(a, b, 256usize, lengths)
     if e3 != ok { ret (zero, e3) }
-    let (alpha, e4) = read_code(a, b, 256usize)
+    let (alpha, e4) = read_code_into(a, b, 256usize, lengths)
     if e4 != ok { ret (zero, e4) }
-    let (distance, e5) = read_code(a, b, 40usize)
+    let (distance, e5) = read_code_into(a, b, 40usize, lengths)
     if e5 != ok { ret (zero, e5) }
     g.green = green
     g.red = red
@@ -453,6 +465,13 @@ fn read_group(a: *mem.Arena, b: *LBits, cache_size: usize) -> (Group, err) {
     g.alpha = alpha
     g.distance = distance
     ret (g, ok)
+}
+
+fn read_group(a: *mem.Arena, b: *LBits, cache_size: usize) -> (Group, err) {
+    let (lengths, alloc_error) = mem.alloc[u32](a, MAX_CODE_ALPHABET)
+    if alloc_error != ok { ret (zero, alloc_error) }
+    let (group, group_error) = read_group_into(a, b, cache_size, lengths)
+    ret (group, group_error)
 }
 
 // ------------------------------------------------------------------ VP8L images
@@ -546,9 +565,12 @@ fn decode_image(a: *mem.Arena, b: *LBits, w0: usize, h: usize, main: bool, trans
     }
     let (groups, groups_error) = mem.alloc[Group](a, groups_count)
     if groups_error != ok { ret (zero, groups_error) }
+    // One code-length scratch serves every code of every group in this image.
+    let (lengths, lengths_error) = mem.alloc[u32](a, MAX_CODE_ALPHABET)
+    if lengths_error != ok { ret (zero, lengths_error) }
     var g = 0usize
     while g < groups_count {
-        let (group, group_error) = read_group(a, b, cache_size)
+        let (group, group_error) = read_group_into(a, b, cache_size, lengths)
         if group_error != ok { ret (zero, group_error) }
         groups[g] = group
         g += 1usize
@@ -729,8 +751,9 @@ fn inverse_transform(t: Transform, pixels: []u32, w: usize, h: usize, out: []u32
                     pred = pixels[at - w]
                 } else if y > 0usize {
                     let mode = (t.data[(y >> t.size_bits) * div_round_up(w, t.size_bits) + (x >> t.size_bits)] >> 8u32) & 15u32
-                    var tr = pixels[at - w + 1usize]
-                    if x + 1usize == w { tr = pixels[at - w + 1usize - w] }
+                    // On the rightmost column this is the leftmost pixel of the current row,
+                    // which is already decoded, and is the TR RFC 9649 names.
+                    let tr = pixels[at - w + 1usize]
                     pred = predict(mode, pixels[at - 1usize], pixels[at - w], tr, pixels[at - w - 1usize])
                 }
                 pixels[at] = add_pixels(pixels[at], pred)
@@ -804,8 +827,14 @@ fn decode_lossless_stream(a: *mem.Arena, data: []const u8, w: usize, h: usize) -
     let (decoded, decode_error) = decode_image(a, &b, w, h, true, transforms[0..], &count)
     if decode_error != ok { ret (zero, decode_error) }
     var pixels = decoded
+    // Colour indexing packs the row wherever it appears in the transform list, so the
+    // decoded buffer starts at the width that transform left, not the full width.
     var width = w
-    if count > 0usize && transforms[count - 1usize].kind == 3u32 { width = div_round_up(w, transforms[count - 1usize].width_bits) }
+    var scan = 0usize
+    while scan < count {
+        if transforms[scan].kind == 3u32 { width = div_round_up(w, transforms[scan].width_bits) }
+        scan += 1usize
+    }
     // The image was decoded at the width the last transform left; undo in reverse.
     var i = count
     while i > 0usize {

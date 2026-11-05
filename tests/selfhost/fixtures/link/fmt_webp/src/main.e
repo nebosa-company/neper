@@ -45,6 +45,144 @@ fn put32(dst: []u8, offset: usize, value: usize) {
     dst[offset + 3usize] = u8((value >> 24u32) & 255usize)
 }
 
+// --- Hand-built VP8L streams for the regressions at the end: a least-significant-bit
+// first writer and single-symbol prefix codes, so a literal pixel costs no bits.
+
+type BitOut = struct { data: []u8, bits: usize }
+
+fn zero_bytes(dst: []u8) {
+    var i = 0usize
+    while i < dst.len {
+        dst[i] = 0u8
+        i += 1usize
+    }
+}
+
+fn bits_put(w: *BitOut, value: usize, width: u32) {
+    var i = 0u32
+    while i < width {
+        if ((value >> i) & 1usize) != 0usize {
+            let at = w.bits / 8usize
+            let bit = u32(w.bits % 8usize)
+            w.data[at] = w.data[at] | (1u8 << bit)
+        }
+        w.bits += 1usize
+        i += 1u32
+    }
+}
+
+fn bits_bytes(w: *const BitOut) -> usize { ret (w.bits + 7usize) / 8usize }
+
+// A one-symbol code: simple (1), one symbol (0), eight-bit symbol (1), then the symbol.
+fn bits_simple(w: *BitOut, symbol: usize) {
+    bits_put(w, 1usize, 1u32)
+    bits_put(w, 0usize, 1u32)
+    bits_put(w, 1usize, 1u32)
+    bits_put(w, symbol, 8u32)
+}
+
+fn bits_group(w: *BitOut, green: usize, red: usize, blue: usize, alpha: usize) {
+    bits_simple(w, green)
+    bits_simple(w, red)
+    bits_simple(w, blue)
+    bits_simple(w, alpha)
+    bits_simple(w, 0usize)
+}
+
+fn bits_header(w: *BitOut, width: usize, height: usize) {
+    bits_put(w, 47usize, 8u32)
+    bits_put(w, width - 1usize, 14u32)
+    bits_put(w, height - 1usize, 14u32)
+    bits_put(w, 0usize, 1u32)
+    bits_put(w, 0usize, 3u32)
+}
+
+// A transform-less sub-image: cache off, one group, then literals (each costs no bits).
+fn bits_flat(w: *BitOut, green: usize, red: usize, blue: usize, alpha: usize) {
+    bits_put(w, 0usize, 1u32)
+    bits_group(w, green, red, blue, alpha)
+}
+
+// 3x3 pixels, one predictor tile of `mode`, green-1 residuals.
+fn predictor_payload(dst: []u8, mode: usize) -> usize {
+    zero_bytes(dst)
+    var w = BitOut { data: dst, bits: 0usize }
+    bits_header(&w, 3usize, 3usize)
+    bits_put(&w, 1usize, 1u32)
+    bits_put(&w, 0usize, 2u32)
+    bits_put(&w, 0usize, 3u32)
+    bits_flat(&w, mode, 0usize, 0usize, 0usize)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 0usize, 1u32)
+    bits_group(&w, 1usize, 0usize, 0usize, 0usize)
+    ret bits_bytes(&w)
+}
+
+// 4x2 pixels packed by colour indexing, then a predictor over the packed 1x2 image.
+fn palette_predictor_payload(dst: []u8) -> usize {
+    zero_bytes(dst)
+    var w = BitOut { data: dst, bits: 0usize }
+    bits_header(&w, 4usize, 2usize)
+    bits_put(&w, 1usize, 1u32)
+    bits_put(&w, 3usize, 2u32)
+    bits_put(&w, 1usize, 8u32)
+    bits_flat(&w, 7usize, 0usize, 0usize, 0usize)
+    bits_put(&w, 1usize, 1u32)
+    bits_put(&w, 0usize, 2u32)
+    bits_put(&w, 0usize, 3u32)
+    bits_flat(&w, 3usize, 0usize, 0usize, 0usize)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 0usize, 1u32)
+    bits_group(&w, 5usize, 0usize, 0usize, 0usize)
+    ret bits_bytes(&w)
+}
+
+// 1x1 pixels whose one meta-prefix cell names the last of `group_count` groups.
+fn groups_payload(dst: []u8, group_count: usize) -> usize {
+    zero_bytes(dst)
+    var w = BitOut { data: dst, bits: 0usize }
+    bits_header(&w, 1usize, 1usize)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 0usize, 1u32)
+    bits_put(&w, 1usize, 1u32)
+    bits_put(&w, 0usize, 3u32)
+    bits_flat(&w, group_count - 1usize, 0usize, 0usize, 0usize)
+    var g = 0usize
+    while g < group_count {
+        bits_group(&w, 0usize, 0usize, 0usize, 0usize)
+        g += 1usize
+    }
+    ret bits_bytes(&w)
+}
+
+// Wrap a VP8L payload in the RIFF container and answer the file length.
+fn webp_file(payload: []const u8, dst: []u8) -> usize {
+    let total = 20usize + payload.len + (payload.len & 1usize)
+    dst[0] = 82u8
+    dst[1] = 73u8
+    dst[2] = 70u8
+    dst[3] = 70u8
+    put32(dst, 4usize, total - 8usize)
+    dst[8] = 87u8
+    dst[9] = 69u8
+    dst[10] = 66u8
+    dst[11] = 80u8
+    dst[12] = 86u8
+    dst[13] = 80u8
+    dst[14] = 56u8
+    dst[15] = 76u8
+    put32(dst, 16usize, payload.len)
+    var i = 0usize
+    while i < payload.len {
+        dst[20usize + i] = payload[i]
+        i += 1usize
+    }
+    if (payload.len & 1usize) != 0usize { dst[20usize + payload.len] = 0u8 }
+    ret total
+}
+
 // The largest per-sample distance between the decoded image and `pixels`.
 fn worst(decoded: image.Image, pixels: str) -> i32 {
     var worst_seen = 0i32
@@ -300,6 +438,57 @@ fn main(a: *mem.Arena, args: []str) -> err {
     put32(mismatched_canvas, 4usize, mismatched_canvas.len - 8usize)
     let (_, mismatched_canvas_error) = webp.decode(a, reader_of(&state, mismatched_canvas), options())
     if mismatched_canvas_error != webp.Invalid { os.exit(159i32) }
+
+    // A frame header is enough when the bitstream chunk itself runs past the 64 KiB
+    // bounded read inspect keeps (issue #118.1).
+    let (large_chunk, large_chunk_alloc) = mem.alloc[u8](a, 100000usize)
+    if large_chunk_alloc != ok { os.exit(177i32) }
+    zero_bytes(large_chunk)
+    copy_at = 0usize
+    while copy_at < small_source.len {
+        large_chunk[copy_at] = small_source[copy_at]
+        copy_at += 1usize
+    }
+    put32(large_chunk, 4usize, large_chunk.len - 8usize)
+    put32(large_chunk, 16usize, large_chunk.len - 20usize)
+    let (large_chunk_info, large_chunk_error) = webp.inspect(reader_of(&state, large_chunk))
+    if large_chunk_error != ok || large_chunk_info.width != 23u32 || large_chunk_info.height != 17u32 { os.exit(178i32) }
+
+    // Predictor mode 3 on the last column reads the leftmost pixel of the current row,
+    // not the previous row's (issue #118.2).
+    let (predictor_bytes, predictor_alloc) = mem.alloc[u8](a, 256usize)
+    if predictor_alloc != ok { os.exit(179i32) }
+    let predictor_len = predictor_payload(predictor_bytes, 3usize)
+    let (predictor_file, predictor_file_alloc) = mem.alloc[u8](a, predictor_len + 21usize)
+    if predictor_file_alloc != ok { os.exit(179i32) }
+    let predictor_file_len = webp_file(predictor_bytes[0..predictor_len], predictor_file)
+    let predictor_check = check(a, predictor_file[0..predictor_file_len], "\x00\x01\x00\xff\x00\x02\x00\xff\x00\x03\x00\xff\x00\x02\x00\xff\x00\x04\x00\xff\x00\x03\x00\xff\x00\x03\x00\xff\x00\x04\x00\xff\x00\x04\x00\xff", 3u32, 3u32, .Opaque, 1u32, 0i32, 180i32)
+    if predictor_check != 0i32 { os.exit(predictor_check) }
+
+    // A colour-indexing transform before a predictor leaves the packed width, not the
+    // full one, for the predictor's inverse (issue #118.3).
+    let (palette_bytes, palette_alloc) = mem.alloc[u8](a, 256usize)
+    if palette_alloc != ok { os.exit(187i32) }
+    let palette_len = palette_predictor_payload(palette_bytes)
+    let (palette_file, palette_file_alloc) = mem.alloc[u8](a, palette_len + 21usize)
+    if palette_file_alloc != ok { os.exit(187i32) }
+    let palette_file_len = webp_file(palette_bytes[0..palette_len], palette_file)
+    let palette_check = check(a, palette_file[0..palette_file_len], "\x00\x0e\x00\x00\x00\x07\x00\x00\x00\x0e\x00\x00\x00\x07\x00\x00\x00\x07\x00\x00\x00\x0e\x00\x00\x00\x07\x00\x00\x00\x0e\x00\x00", 4u32, 2u32, .Opaque, 1u32, 0i32, 190i32)
+    if palette_check != 0i32 { os.exit(palette_check) }
+
+    // A hostile group table must not turn a short stream into gigabytes of arena: the
+    // per-group code scratch is reused and only named symbols are retained (issue #118.4).
+    let (group_bytes, group_alloc) = mem.alloc[u8](a, 4096usize)
+    if group_alloc != ok { os.exit(197i32) }
+    let group_len = groups_payload(group_bytes, 200usize)
+    let (group_file, group_file_alloc) = mem.alloc[u8](a, group_len + 21usize)
+    if group_file_alloc != ok { os.exit(197i32) }
+    let group_file_len = webp_file(group_bytes[0..group_len], group_file)
+    let (group_pool, group_pool_alloc) = mem.alloc[u8](a, 1048576usize)
+    if group_pool_alloc != ok { os.exit(197i32) }
+    var limited = mem.arena_from(group_pool)
+    let (grouped, grouped_error) = webp.decode(&limited, reader_of(&state, group_file[0..group_file_len]), options())
+    if grouped_error != ok || grouped.width != 1u32 || grouped.height != 1u32 { os.exit(197i32) }
 
     try io.print("fmt webp ok\n")
     ret ok
