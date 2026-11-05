@@ -25,7 +25,7 @@ use e.mem
 type Limits = struct { entries: usize, name_bytes: usize, header_bytes: usize, folder_bytes: usize }
 type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, has_stream: bool, folder: usize, offset: u64 }
 type Coder = struct { id: u64, props: [8]u8, props_len: usize }
-type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize }
+type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize, pack_coder: usize }
 type Cur = struct { data: []const u8, at: usize, bad: bool }
 type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
 type Archive = struct { state: *void }
@@ -147,11 +147,12 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
         if c.bad { ret Invalid }
         if id == 0u64 { break }
         if id == 9u64 {
+            if base > u64(st.data.len) { ret Invalid }
             var at = 32u64 + base
             i = 0usize
             while i < n {
                 let s = rd_number(c)
-                if c.bad || s > u64(st.data.len) || at > u64(st.data.len) { ret Invalid }
+                if c.bad || at > u64(st.data.len) || s > u64(st.data.len) - at { ret Invalid }
                 pos[i] = at
                 size[i] = s
                 at += s
@@ -250,9 +251,9 @@ fn parse_folder(c: *Cur, f: *Folder) -> err {
         k += 1usize
     }
     if mains != 1usize { ret Invalid }
-    // the folder's packed stream index is its position: record the unbound coder in `first_sub`'s
-    // sibling field by convention of `chain_input`
-    f.first_sub = unbound
+    // the unbound coder takes the folder's one packed stream; kept apart from `first_sub`, the folder's
+    // first substream, which is set with or without a SubStreamsInfo record
+    f.pack_coder = unbound
     ret ok
 }
 
@@ -333,6 +334,7 @@ fn default_substreams(st: *State) -> err {
         crcs[i] = st.folders[i].crc
         has[i] = st.folders[i].has_crc
         st.folders[i].nsub = 1usize
+        st.folders[i].first_sub = i
         i += 1usize
     }
     st.sub_size = sizes[..n]
@@ -373,6 +375,13 @@ fn parse_substreams(c: *Cur, st: *State) -> err {
         at += st.folders[f].nsub
         f += 1usize
     }
+    // a substream outside the inherited set has no recorded CRC: start every flag unset
+    var z = 0usize
+    while z < total {
+        has[z] = false
+        crcs[z] = 0u32
+        z += 1usize
+    }
     // sizes: the last substream of a folder is what the others leave
     if next == 9u64 {
         f = 0usize
@@ -380,17 +389,16 @@ fn parse_substreams(c: *Cur, st: *State) -> err {
             let nsub = st.folders[f].nsub
             if nsub > 0usize {
                 var sum = 0u64
+                let whole = folder_size(&st.folders[f])
                 var k = 0usize
                 while k + 1usize < nsub {
                     let s = rd_number(c)
-                    if c.bad { ret Invalid }
+                    if c.bad || sum > whole || s > whole - sum { ret Invalid }
                     sizes[st.folders[f].first_sub + k] = s
                     sum += s
-                    if sum < s { ret Invalid }
                     k += 1usize
                 }
-                if sum > folder_size(&st.folders[f]) { ret Invalid }
-                sizes[st.folders[f].first_sub + nsub - 1usize] = folder_size(&st.folders[f]) - sum
+                sizes[st.folders[f].first_sub + nsub - 1usize] = whole - sum
             }
             f += 1usize
         }
@@ -804,22 +812,17 @@ fn parse_files_info(c: *Cur, st: *State) -> err {
                 i += 1usize
             }
         } else if kind == 15u64 {
+            // the empty-stream bit vector: one running scan of the entries, not one scan per bit
             var which = 0usize
             var k = 0usize
             var b = 0u8
             while which < empties {
                 if which % 8usize == 0usize { b = rd_byte(c) }
                 let bit = (b & (128u8 >> u32(which % 8usize))) != 0u8
-                // the bit belongs to the which-th empty-stream file
-                var seen = 0usize
-                k = 0usize
-                while k < n {
-                    if empty[k] {
-                        if seen == which { empty_file[k] = bit }
-                        seen += 1usize
-                    }
-                    k += 1usize
-                }
+                while k < n && !empty[k] { k += 1usize }
+                if k >= n { ret Invalid }
+                empty_file[k] = bit
+                k += 1usize
                 which += 1usize
             }
         } else if kind == 17u64 {

@@ -6,7 +6,8 @@
 // the specification: a chain of binary operators nests to the right without precedence, a minus before a number literal
 // is the negative number, and a heredoc's indent is stripped when it is read.
 //
-// The parser answers the tree and refuses what it cannot read (`Invalid`); it does not write HCL.
+// The parser answers the tree and refuses what it cannot read (`Invalid`, or `TooDeep` past the nesting
+// limit); it does not write HCL.
 //
 // Memory: the arena is retained; every tree and string lives in it.
 
@@ -40,7 +41,7 @@ type Expr = struct { kind: Kind, text: str, flag: bool, items: []const Expr, key
 // An attribute (`value` has one expression) or a block (`labels` and `body`).
 type Item = struct { is_block: bool, name: str, labels: []const str, value: []const Expr, body: []const Item }
 
-type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool }
+type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool, too_deep: bool }
 
 fn blank(kind: Kind) -> Expr {
     ret Expr { kind: kind, text: "", flag: false, items: zero, keys: zero, ops: zero, parts: zero, names: zero }
@@ -230,14 +231,27 @@ fn parse_template(p: *Parser, quoted: bool) -> Template {
                     lit = new_bytes(p.a)
                     have_lit = false
                 }
-                // a directive: read to the closing brace, nesting counted
+                // a directive: read to the closing brace, nesting counted and quoted strings skipped
                 var depth = 0i64
                 let start = p.at
                 var closed = false
+                var in_string = false
+                var escaped = false
                 while !at_end(p) && !closed {
-                    if peek(p) == 123u8 {
+                    let d = peek(p)
+                    if in_string {
+                        if escaped {
+                            escaped = false
+                        } else if d == 92u8 {
+                            escaped = true
+                        } else if d == 34u8 {
+                            in_string = false
+                        }
+                    } else if d == 34u8 {
+                        in_string = true
+                    } else if d == 123u8 {
                         depth += 1i64
-                    } else if peek(p) == 125u8 {
+                    } else if d == 125u8 {
                         depth -= 1i64
                         if depth == 0i64 { closed = true }
                     }
@@ -276,7 +290,14 @@ fn parse_template(p: *Parser, quoted: bool) -> Template {
                             k += 1usize
                         }
                     }
-                    if ok_parse { push_code_point(&lit, u32(v)) }
+                    if ok_parse {
+                        // a surrogate or a code point above U+10FFFF is not text
+                        if v > 1114111i64 || (v >= 55296i64 && v <= 57343i64) {
+                            ok_parse = false
+                        } else {
+                            push_code_point(&lit, u32(v))
+                        }
+                    }
                 } else {
                     ok_parse = false
                 }
@@ -388,7 +409,7 @@ fn parse_heredoc(p: *Parser) -> (Expr, bool) {
         i += 1usize
     }
     let text = bytes_text(&body)
-    var inner = Parser { a: p.a, src: text, at: 0usize, depth: p.depth, nest: 0usize, invalid: false }
+    var inner = Parser { a: p.a, src: text, at: 0usize, depth: p.depth, nest: 0usize, invalid: false, too_deep: false }
     let t = parse_template(&inner, false)
     if !t.good || inner.invalid { ret (blank(.Null), false) }
     ret (template_expr(t.parts), true)
@@ -669,7 +690,10 @@ fn parse_postfix(p: *Parser, root: Expr) -> (Expr, bool) {
 
 // A primary expression, without its postfix operators.
 fn parse_primary(p: *Parser) -> (Expr, bool) {
-    if p.depth > 200usize { ret (blank(.Null), false) }
+    if p.depth > 200usize {
+        p.too_deep = true
+        ret (blank(.Null), false)
+    }
     let c = peek(p)
     if c == 34u8 {
         let (e, good) = parse_quoted(p)
@@ -762,6 +786,10 @@ fn parse_primary(p: *Parser) -> (Expr, bool) {
 // A prefix operator applies to the next primary and the postfix operators then apply to that result, as hcl-rs reads
 // `-a.b` (the traversal's root is the negation).
 fn parse_prefix(p: *Parser) -> (Expr, bool) {
+    if p.depth > 200usize {
+        p.too_deep = true
+        ret (blank(.Null), false)
+    }
     let c = peek(p)
     if c == 45u8 || c == 33u8 {
         p.at += 1usize
@@ -770,7 +798,9 @@ fn parse_prefix(p: *Parser) -> (Expr, bool) {
             let (n, good) = parse_number(p, true)
             ret (n, good)
         }
+        p.depth += 1usize
         let (inner, good) = parse_prefix(p)
+        p.depth -= 1usize
         if !good { ret (blank(.Null), false) }
         var e = blank(.Unary)
         if c == 45u8 { e.text = "-" } else { e.text = "!" }
@@ -810,7 +840,10 @@ fn binary_operator(p: *const Parser) -> str {
 
 // `term (op term)*`, nested to the right as hcl-rs nests it, then an optional `? true : false`.
 fn parse_expression(p: *Parser) -> (Expr, bool) {
-    if p.depth > 200usize { ret (blank(.Null), false) }
+    if p.depth > 200usize {
+        p.too_deep = true
+        ret (blank(.Null), false)
+    }
     p.depth += 1usize
     let (lhs, good) = parse_unary(p)
     if !good {
@@ -878,22 +911,40 @@ fn parse_expression(p: *Parser) -> (Expr, bool) {
 
 // The right operand of a binary operator: a term chain without a conditional (the `?` belongs to the whole chain).
 fn parse_binary_tail(p: *Parser) -> (Expr, bool) {
+    if p.depth > 200usize {
+        p.too_deep = true
+        ret (blank(.Null), false)
+    }
+    p.depth += 1usize
     let (lhs, good) = parse_unary(p)
-    if !good { ret (blank(.Null), false) }
+    if !good {
+        p.depth -= 1usize
+        ret (blank(.Null), false)
+    }
     skip(p, p.nest > 0usize)
     let op = binary_operator(p)
-    if op.len == 0usize { ret (lhs, true) }
+    if op.len == 0usize {
+        p.depth -= 1usize
+        ret (lhs, true)
+    }
     p.at += op.len
     skip(p, true)
     let (rhs, ok_rhs) = parse_binary_tail(p)
-    if !ok_rhs { ret (blank(.Null), false) }
+    if !ok_rhs {
+        p.depth -= 1usize
+        ret (blank(.Null), false)
+    }
     var b = blank(.Binary)
     b.text = op
     let (items, e) = mem.alloc[Expr](p.a, 2usize)
-    if e != ok { ret (blank(.Null), false) }
+    if e != ok {
+        p.depth -= 1usize
+        ret (blank(.Null), false)
+    }
     items[0] = lhs
     items[1] = rhs
     b.items = items[0usize..2usize]
+    p.depth -= 1usize
     ret (b, true)
 }
 
@@ -971,7 +1022,13 @@ fn parse_body(p: *Parser, nested: bool) -> ([]const Item, bool) {
                     }
                 }
                 p.at += 1usize
+                if p.depth > 200usize {
+                    p.too_deep = true
+                    ret (zero, false)
+                }
+                p.depth += 1usize
                 let (body, ok_body) = parse_body(p, true)
+                p.depth -= 1usize
                 if !ok_body { ret (zero, false) }
                 let pushed = list.push[Item](&items, Item { is_block: true, name: name, labels: list.slice_const[str](&labels), value: zero, body: body })
             }
@@ -982,8 +1039,9 @@ fn parse_body(p: *Parser, nested: bool) -> ([]const Item, bool) {
 
 // Parse HCL source into its top-level body; `Invalid` when the text is not valid.
 fn parse(a: *mem.Arena, source: str) -> ([]const Item, err) {
-    var p = Parser { a: a, src: source, at: 0usize, depth: 0usize, nest: 0usize, invalid: false }
+    var p = Parser { a: a, src: source, at: 0usize, depth: 0usize, nest: 0usize, invalid: false, too_deep: false }
     let (body, good) = parse_body(&p, false)
+    if p.too_deep { ret (zero, TooDeep) }
     if !good || p.invalid { ret (zero, Invalid) }
     ret (body, ok)
 }

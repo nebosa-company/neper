@@ -5363,6 +5363,14 @@ fmt_webp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/fmt-webp-selfhost"
 fmt_webp_output=$("$test_build/fmt-webp-selfhost")
 [ "$fmt_webp_output" = 'fmt webp ok' ]
+# `e.fmt.hcl`, `e.fmt.sevenzip` (#173, #89): a nested HCL document refused as TooDeep, unicode
+# escapes range-checked, a directive delimiter that skips quoted braces, and 7z headers without
+# SubStreamsInfo reading each folder's own substream.
+fmt_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_gaps/src/main.e" "$repo" x64 linux "$test_build/fmt-gaps-selfhost")
+[ "$fmt_gaps_written" = 'executable written' ]
+chmod +x "$test_build/fmt-gaps-selfhost"
+fmt_gaps_output=$("$test_build/fmt-gaps-selfhost")
+[ "$fmt_gaps_output" = 'fmt gaps ok' ]
 # `e.text.layout` (D775): paragraphs over two synthetic fonts -- wrapping, alignment, justification,
 # fallback and two-level bidi, a line budget with an ellipsis, hit testing, carets and selections.
 text_layout_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_layout/src/main.e" "$repo" x64 linux "$test_build/text-layout-selfhost")

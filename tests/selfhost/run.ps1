@@ -5867,6 +5867,14 @@ $fmtWebpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtWebpWritten -ne 'executable written') { throw 'fmt_webp emission failed' }
 $fmtWebpOutput = & $fmtWebpPath
 if ($LASTEXITCODE -ne 0 -or $fmtWebpOutput -ne 'fmt webp ok') { throw "an e.fmt.webp inspect, decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.hcl`, `e.fmt.sevenzip` (#173, #89): a nested HCL document refused as TooDeep, unicode
+# escapes range-checked, a directive delimiter that skips quoted braces, and 7z headers without
+# SubStreamsInfo reading each folder's own substream.
+$fmtGapsPath = Join-Path $testBuild 'fmt-gaps-selfhost.exe'
+$fmtGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_gaps\src\main.e') $repo 'x64' 'windows' $fmtGapsPath
+if ($LASTEXITCODE -ne 0 -or $fmtGapsWritten -ne 'executable written') { throw 'fmt_gaps emission failed' }
+$fmtGapsOutput = & $fmtGapsPath
+if ($LASTEXITCODE -ne 0 -or $fmtGapsOutput -ne 'fmt gaps ok') { throw "an e.fmt.hcl or e.fmt.sevenzip gap answered wrongly: exit $LASTEXITCODE" }
 # `e.text.layout` (D775): paragraphs over two synthetic fonts -- wrapping, alignment, justification,
 # fallback and two-level bidi, a line budget with an ellipsis, hit testing, carets and selections.
 $textLayoutPath = Join-Path $testBuild 'text-layout-selfhost.exe'
