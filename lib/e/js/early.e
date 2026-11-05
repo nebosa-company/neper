@@ -474,12 +474,9 @@ fn check_expr(c: *Ctx, id: u32) -> err {
         ret check_assign_target(c, n.a, false)
     }
     if k == ast.N_BINARY || k == ast.N_LOGICAL {
-        // `a ?? b || c` mixes without parentheses: the parser folds precedence, so only the direct shape is visible.
-        if n.op == ast.O_NULLISH {
-            let l = node(c, n.a)
-            let r = node(c, n.b)
-            if (l.kind == ast.N_LOGICAL && (l.op == ast.O_AND || l.op == ast.O_OR) && false) || (r.kind == ast.N_LOGICAL && (r.op == ast.O_AND || r.op == ast.O_OR) && false) { ret fail(c, id, "Cannot mix ?? with || or &&") }
-        }
+        // Mixing ?? with || or && is rejected by the parser while it folds precedence
+        // (parser.e checks the operand precedence groups), so no early-pass duplicate
+        // is needed here.
         if n.op == ast.O_IN && node(c, n.a).kind == ast.N_PRIVATE {
             try check_private_ref(c, id, node(c, n.a).text)
             ret check_expr(c, n.b)
@@ -686,7 +683,29 @@ fn has_use_strict(c: *const Ctx, body: u32) -> bool {
     ret false
 }
 
-fn directive_raw(c: *const Ctx, line: u32) -> bool { ret true }
+fn directive_raw(c: *const Ctx, line: u32) -> bool {
+    // Only the literal spelling counts: an escaped form such as "use\x20strict" is a
+    // cooked "use strict" but not a directive.
+    let src = c.p.source
+    var at = 0usize
+    var current = 1u32
+    while at < src.len && current < line {
+        if src[at] == 10u8 { current += 1u32 }
+        at += 1usize
+    }
+    while at < src.len && (src[at] == 32u8 || src[at] == 9u8 || src[at] == 13u8) { at += 1usize }
+    if at >= src.len { ret false }
+    let quote = src[at]
+    if quote != 34u8 && quote != 39u8 { ret false }
+    let want = "use strict"
+    if at + want.len + 2usize > src.len { ret false }
+    var i = 0usize
+    while i < want.len {
+        if src[at + 1usize + i] != want[i] { ret false }
+        i += 1usize
+    }
+    ret src[at + 1usize + want.len] == quote
+}
 
 fn check_function(c: *Ctx, id: u32) -> err {
     let n = node(c, id)
@@ -1498,3 +1517,6 @@ fn check_in(a: *mem.Arena, prog: *const ast.Program, eo: *const EvalOpts) -> (Re
     if e != ok && out.message.len == 0usize { out.message = "early error" }
     ret (out, e)
 }
+
+
+
