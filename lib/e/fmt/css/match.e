@@ -697,6 +697,33 @@ fn is_formish(name: str) -> bool {
     ret str.eq(name, "input") || str.eq(name, "button") || str.eq(name, "select") || str.eq(name, "textarea") || str.eq(name, "option") || str.eq(name, "optgroup") || str.eq(name, "fieldset")
 }
 
+// A form control inside a `<fieldset disabled>` is disabled too, unless it sits in that fieldset's first `<legend>` child.
+fn in_disabled_fieldset(m: *const Matcher, el: html.NodeId) -> bool {
+    if !is_formish(local_name(m, el)) { ret false }
+    var p = parent_element(m, el)
+    while p != html.NONE {
+        if str.eq(local_name(m, p), "fieldset") && has_attr(m, p, "disabled") && !in_first_legend(m, el, p) { ret true }
+        p = parent_element(m, p)
+    }
+    ret false
+}
+
+// Whether `el` is a descendant of `fieldset`'s first element child when that child is a `<legend>`.
+fn in_first_legend(m: *const Matcher, el: html.NodeId, fieldset: html.NodeId) -> bool {
+    var k = m.doc.nodes[usize(fieldset)].first_child
+    while k != html.NONE && m.doc.nodes[usize(k)].kind != .Element {
+        k = m.doc.nodes[usize(k)].next_sibling
+    }
+    if k == html.NONE || !str.eq(local_name(m, k), "legend") { ret false }
+    var q = parent_element(m, el)
+    while q != html.NONE {
+        if q == k { ret true }
+        if q == fieldset { ret false }
+        q = parent_element(m, q)
+    }
+    ret false
+}
+
 fn input_type(m: *const Matcher, el: html.NodeId) -> str {
     let (t, found) = attr(m, el, "type")
     if !found { ret "text" }
@@ -880,8 +907,8 @@ fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool
     if str.eq(pseudo, "focus") || str.eq(pseudo, "focus-visible") { ret (flags & F_FOCUS) != 0u32 || (m.state.has_focus && m.state.focus == el) }
     if str.eq(pseudo, "focus-within") { ret (flags & F_FOCUS_WITHIN) != 0u32 || in_ids(m.state.focus_within, el) }
     if str.eq(pseudo, "active") { ret m.state.has_active && m.state.active == el }
-    if str.eq(pseudo, "disabled") { ret has_attr(m, el, "disabled") }
-    if str.eq(pseudo, "enabled") { ret is_formish(name) && !has_attr(m, el, "disabled") }
+    if str.eq(pseudo, "disabled") { ret has_attr(m, el, "disabled") || in_disabled_fieldset(m, el) }
+    if str.eq(pseudo, "enabled") { ret is_formish(name) && !has_attr(m, el, "disabled") && !in_disabled_fieldset(m, el) }
     if str.eq(pseudo, "checked") {
         if (flags & F_CHECKED_AUTH) != 0u32 { ret (flags & F_CHECKED) != 0u32 }
         ret has_attr(m, el, "checked") || has_attr(m, el, "selected")

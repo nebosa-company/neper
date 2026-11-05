@@ -54,11 +54,25 @@ fn event_aliases(a: *mem.Arena) -> bool {
     ret script.run_script(it, code, "event-aliases.js")
 }
 
+fn fieldset_disabled(a: *mem.Arena) -> bool {
+    let options = html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+    let markup = "<!doctype html><html><body><fieldset id=fs disabled><legend><input id=in-legend></legend><input id=in-fieldset></fieldset><input id=outside></body></html>"
+    let (parsed, pe) = dom.parse(a, markup, options, 32usize)
+    if pe != ok { ret false }
+    var tree = parsed
+    let (it, ie) = script.new_context(a, &tree, "https://fieldset-disabled.test/")
+    if ie != ok { ret false }
+    // A control in a disabled fieldset matches :disabled, except inside that fieldset's first legend.
+    let code = "{ const a = document.getElementById('in-legend'), b = document.getElementById('in-fieldset'), c = document.getElementById('outside'); if (a.matches(':disabled')) throw new Error('legend control should stay enabled'); if (!b.matches(':disabled')) throw new Error('fieldset control should be disabled'); if (c.matches(':disabled')) throw new Error('outside control should stay enabled'); const all = document.querySelectorAll(':disabled'); if (all.length !== 2 || all[0].id !== 'fs' || all[1].id !== 'in-fieldset') throw new Error('querySelectorAll(:disabled) should find the fieldset and its control'); }"
+    ret script.run_script(it, code, "fieldset-disabled.js")
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     // A script context needs room in the arena (the page runtime is parsed into it), so this runs before the tabs below take theirs.
     if !frame_registry_is_live(a) { os.exit(86i32) }
     if !dom_mixins(a) { os.exit(87i32) }
     if !event_aliases(a) { os.exit(88i32) }
+    if !fieldset_disabled(a) { os.exit(89i32) }
     // 1. The omnibox.
     if !str.eq(shell.omnibox_url(a, "  example.com/a?b=1 "), "https://example.com/a?b=1") { os.exit(1i32) }
     if !str.eq(shell.omnibox_url(a, "localhost:8080/x"), "http://localhost:8080/x") { os.exit(2i32) }
