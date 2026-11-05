@@ -154,6 +154,17 @@ fn new_container(r: *Roaring, pos: usize, key: u16) -> err {
     ret ok
 }
 
+// Reserve output container `pos` with an explicit output count, so `out` may
+// alias an input in `roaring_and`/`roaring_or` without its `.n` being read.
+fn put_container(r: *Roaring, pos: usize, key: u16) -> err {
+    if pos >= r.keys.len || pos >= r.kind.len || pos >= r.count.len || pos >= r.slot.len || (pos + 1usize) * CHUNK > r.pool.len { ret TooSmall }
+    r.keys[pos] = key
+    r.kind[pos] = ARRAY
+    r.count[pos] = 0u32
+    r.slot[pos] = u32(pos)
+    ret ok
+}
+
 fn roaring_add(r: *Roaring, x: u32) -> err {
     let key = u16(x >> 16u32)
     let low = u16(x & 65535u32)
@@ -261,9 +272,12 @@ fn roaring_to_list(r: *const Roaring, out: []u32) -> (usize, err) {
     ret (used, ok)
 }
 
-// `out` becomes the intersection of `a` and `b`.
+// `out` becomes the intersection of `a` and `b`; `out` may alias either input.
 fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
-    out.n = 0usize
+    // Keep the output count local until the end: an `out` that aliases `a` or
+    // `b` must not truncate the input the loop reads.
+    var written = 0usize
+    defer out.n = written
     var i = 0usize
     var j = 0usize
     while i < a.n && j < b.n {
@@ -289,10 +303,11 @@ fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
                 scan_word += 1usize
             }
             if bitset_nonempty {
-                let bitset_error = new_container(out, out.n, a.keys[i])
+                let bitset_error = put_container(out, written, a.keys[i])
                 if bitset_error != ok { ret bitset_error }
-                let bitset_pos = out.n - 1usize
+                let bitset_pos = written
                 let bitset_chunk = chunk_of(out, bitset_pos)
+                written += 1usize
                 out.kind[bitset_pos] = BITSET
                 var write_word = 0usize
                 while write_word < CHUNK {
@@ -325,18 +340,27 @@ fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
                 scan_value += 1usize
             }
             if array_nonempty {
-                let array_error = new_container(out, out.n, a.keys[i])
-                if array_error != ok { ret array_error }
-                let array_pos = out.n - 1usize
-                let array_chunk = chunk_of(out, array_pos)
+                // Build in a local chunk: `out` may be the chunk `src` or
+                // `other` names when it aliases an input.
+                var filtered: [4096]u16 = zero
                 var write_value = 0usize
                 var source_value = 0usize
                 while source_value < src_count {
                     if container_has(other, other_kind, other_count, src[source_value]) {
-                        array_chunk[write_value] = src[source_value]
+                        filtered[write_value] = src[source_value]
                         write_value += 1usize
                     }
                     source_value += 1usize
+                }
+                let array_error = put_container(out, written, a.keys[i])
+                if array_error != ok { ret array_error }
+                let array_pos = written
+                let array_chunk = chunk_of(out, array_pos)
+                written += 1usize
+                var copy_value = 0usize
+                while copy_value < write_value {
+                    array_chunk[copy_value] = filtered[copy_value]
+                    copy_value += 1usize
                 }
                 out.count[array_pos] = u32(write_value)
             }
@@ -347,43 +371,79 @@ fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
     ret ok
 }
 
-// `out` becomes the union of `a` and `b`.
+// `out` becomes the union of `a` and `b`; `out` may alias either input.
 fn roaring_or(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err {
-    out.n = 0usize
+    // Count the output containers first; the merge then runs from the end so
+    // an aliased `out` only rewrites containers already read. Forward it could
+    // overwrite an input key below the read position.
+    var first = 0usize
     var i = 0usize
     var j = 0usize
     while i < a.n || j < b.n {
         let take_a = j >= b.n || (i < a.n && a.keys[i] <= b.keys[j])
         let take_b = i >= a.n || (j < b.n && b.keys[j] <= a.keys[i])
-        var key = 0u16
-        if take_a { key = a.keys[i] } else { key = b.keys[j] }
         // Removes retain empty input containers; they are not output containers.
         var union_nonempty = false
         if take_a && a.count[i] != 0u32 { union_nonempty = true }
         if take_b && b.count[j] != 0u32 { union_nonempty = true }
-        if union_nonempty {
-            let union_error = new_container(out, out.n, key)
-            if union_error != ok { ret union_error }
-            let union_pos = out.n - 1usize
-            let union_chunk = chunk_of(out, union_pos)
-            zero_chunk(union_chunk)
-            if take_a {
-                or_into(union_chunk, chunk_of(a, i), a.kind[i], usize(a.count[i]))
-            }
-            if take_b {
-                or_into(union_chunk, chunk_of(b, j), b.kind[j], usize(b.count[j]))
-            }
-            let total = chunk_ones(union_chunk)
-            out.count[union_pos] = total
-            if usize(total) <= CHUNK {
-                to_array(union_chunk)
-            } else {
-                out.kind[union_pos] = BITSET
-            }
-        }
+        if union_nonempty { first += 1usize }
         if take_a { i += 1usize }
         if take_b { j += 1usize }
     }
+    var pos = first
+    i = a.n
+    j = b.n
+    while i > 0usize || j > 0usize {
+        var take_a = false
+        var take_b = false
+        if i > 0usize && j > 0usize {
+            if a.keys[i - 1usize] > b.keys[j - 1usize] {
+                take_a = true
+            } else if a.keys[i - 1usize] < b.keys[j - 1usize] {
+                take_b = true
+            } else {
+                take_a = true
+                take_b = true
+            }
+        } else if i > 0usize {
+            take_a = true
+        } else {
+            take_b = true
+        }
+        var key = 0u16
+        if take_a { key = a.keys[i - 1usize] } else { key = b.keys[j - 1usize] }
+        var union_nonempty = false
+        if take_a && a.count[i - 1usize] != 0u32 { union_nonempty = true }
+        if take_b && b.count[j - 1usize] != 0u32 { union_nonempty = true }
+        if union_nonempty {
+            // Build in a local chunk: `out` may be the chunk a source names.
+            var combined: [4096]u16 = zero
+            if take_a { or_into(combined[..], chunk_of(a, i - 1usize), a.kind[i - 1usize], usize(a.count[i - 1usize])) }
+            if take_b { or_into(combined[..], chunk_of(b, j - 1usize), b.kind[j - 1usize], usize(b.count[j - 1usize])) }
+            let total = chunk_ones(combined[..])
+            pos -= 1usize
+            let union_error = put_container(out, pos, key)
+            if union_error != ok {
+                out.n = 0usize
+                ret union_error
+            }
+            let union_chunk = chunk_of(out, pos)
+            var copy_word = 0usize
+            while copy_word < CHUNK {
+                union_chunk[copy_word] = combined[copy_word]
+                copy_word += 1usize
+            }
+            out.count[pos] = total
+            if usize(total) <= CHUNK {
+                to_array(union_chunk)
+            } else {
+                out.kind[pos] = BITSET
+            }
+        }
+        if take_a { i -= 1usize }
+        if take_b { j -= 1usize }
+    }
+    out.n = first
     ret ok
 }
 

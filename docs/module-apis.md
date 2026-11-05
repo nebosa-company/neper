@@ -1267,6 +1267,7 @@ fn to_bitset(c: []u16, count: usize)
 fn to_array(c: []u16)
 fn or_into(c: []u16, src: []const u16, kind: u8, count: usize)
 fn new_container(r: *Roaring, pos: usize, key: u16) -> err
+fn put_container(r: *Roaring, pos: usize, key: u16) -> err
 fn roaring_add(r: *Roaring, x: u32) -> err
 fn roaring_contains(r: *const Roaring, x: u32) -> bool
 fn roaring_remove(r: *Roaring, x: u32) -> bool

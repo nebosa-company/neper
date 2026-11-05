@@ -453,6 +453,21 @@ fn u32_bounds() {
     if dict_id_overflow_error != table.Full { os.exit(177) }
 }
 
+// A capacity whose live or per-column null/bool bitmap cannot be allocated is
+// refused, not published with a zero-word bitmap that append_row then writes past.
+fn capacity_bounds() {
+    var storage: [1024]u8 = zero
+    var probe = mem.arena_from(storage[..])
+    var no_columns: [0]table.Spec = zero
+    let (_, huge_rows_error) = table.create(&probe, no_columns[..], 18446744073709551615usize)
+    if huge_rows_error != mem.Exhausted { os.exit(178) }
+
+    var spec: [1]table.Spec = zero
+    spec[0usize] = table.Spec { name: "b", kind: table.Kind.Bool, heap_bytes: 0usize, dict_cap: 0usize }
+    let (_, bool_rows_error) = table.create(&probe, spec[..], 18446744073709551615usize)
+    if bool_rows_error != mem.Exhausted { os.exit(179) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var spec: [24]table.Spec = zero
     specs(spec[0..])
@@ -471,6 +486,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     mem.reset(a, scratch_mark)
     limits(a)
     u32_bounds()
+    capacity_bounds()
     os.exit(0)
     ret ok
 }

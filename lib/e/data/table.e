@@ -90,7 +90,13 @@ fn bit_set(words: []u64, index: usize, on: bool) {
     }
 }
 
-fn words_for(n: usize) -> usize { ret (n + 63usize) >> 6usize }
+// The ceiling division is written so `n == usize::MAX` cannot wrap: a wrapped
+// word count would publish an empty bitmap that `append_row` writes past.
+fn words_for(n: usize) -> usize {
+    var words = n / 64usize
+    if n % 64usize != 0usize { words += 1usize }
+    ret words
+}
 
 // ---- allocation ------------------------------------------------------------------
 

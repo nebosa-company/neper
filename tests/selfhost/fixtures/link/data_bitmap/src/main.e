@@ -12,6 +12,52 @@ use e.os
 
 const K: u64 = 1099511628211u64
 
+// 8b: in-place OR and AND across several containers, both alias directions.
+fn alias_containers() {
+    var keys_a: [4]u16 = zero
+    var kind_a: [4]u8 = zero
+    var count_a: [4]u32 = zero
+    var slot_a: [4]u32 = zero
+    var pool_a: [16384]u16 = zero
+    var keys_b: [4]u16 = zero
+    var kind_b: [4]u8 = zero
+    var count_b: [4]u32 = zero
+    var slot_b: [4]u32 = zero
+    var pool_b: [16384]u16 = zero
+    var a = bitmap.roaring(keys_a[..], kind_a[..], count_a[..], slot_a[..], pool_a[..])
+    var b = bitmap.roaring(keys_b[..], kind_b[..], count_b[..], slot_b[..], pool_b[..])
+    var list: [8]u32 = zero
+
+    // a has keys 5 and 9, b the lower key 1: out aliasing a must not rewrite
+    // a.keys[0] before the merge reads it.
+    if bitmap.roaring_add(&a, (5u32 << 16u32) | 7u32) != ok || bitmap.roaring_add(&a, (9u32 << 16u32) | 11u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_add(&b, (1u32 << 16u32) | 3u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_or(&a, &b, &a) != ok { os.exit(8i32) }
+    let (or_n, or_error) = bitmap.roaring_to_list(&a, list[..])
+    if or_error != ok || or_n != 3usize || list[0usize] != ((1u32 << 16u32) | 3u32) || list[1usize] != ((5u32 << 16u32) | 7u32) || list[2usize] != ((9u32 << 16u32) | 11u32) { os.exit(8i32) }
+
+    // The mirrored case: out aliases b while a carries the lower key.
+    a.n = 0usize
+    b.n = 0usize
+    if bitmap.roaring_add(&b, (5u32 << 16u32) | 7u32) != ok || bitmap.roaring_add(&b, (9u32 << 16u32) | 11u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_add(&a, (1u32 << 16u32) | 3u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_or(&a, &b, &b) != ok { os.exit(8i32) }
+    let (mirror_n, mirror_error) = bitmap.roaring_to_list(&b, list[..])
+    if mirror_error != ok || mirror_n != 3usize || list[0usize] != ((1u32 << 16u32) | 3u32) || list[2usize] != ((9u32 << 16u32) | 11u32) { os.exit(8i32) }
+
+    // AND over two containers, in place on each side.
+    a.n = 0usize
+    b.n = 0usize
+    if bitmap.roaring_add(&a, (5u32 << 16u32) | 7u32) != ok || bitmap.roaring_add(&a, (9u32 << 16u32) | 11u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_add(&b, (5u32 << 16u32) | 9u32) != ok || bitmap.roaring_add(&b, (9u32 << 16u32) | 11u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_and(&a, &b, &a) != ok { os.exit(8i32) }
+    let (and_n, and_error) = bitmap.roaring_to_list(&a, list[..])
+    if and_error != ok || and_n != 1usize || list[0usize] != ((9u32 << 16u32) | 11u32) { os.exit(8i32) }
+    if bitmap.roaring_and(&a, &b, &b) != ok { os.exit(8i32) }
+    let (mirror_and_n, mirror_and_error) = bitmap.roaring_to_list(&b, list[..])
+    if mirror_and_error != ok || mirror_and_n != 1usize || list[0usize] != ((9u32 << 16u32) | 11u32) { os.exit(8i32) }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var state = 12345u64
     var keys_a: [8]u16 = zero
@@ -131,6 +177,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !bitmap.roaring_remove(&narrow_a, 1u32) || !bitmap.roaring_remove(&narrow_b, 2u32) { os.exit(7i32) }
     if narrow_a.n != 1usize || narrow_b.n != 1usize { os.exit(7i32) }
     if bitmap.roaring_or(&narrow_a, &narrow_b, &empty_out) != ok || empty_out.n != 0usize || bitmap.roaring_count(&empty_out) != 0usize { os.exit(7i32) }
+
+    // 8: out may alias an input: in-place AND and OR keep both the metadata
+    // count and the container chunks they read.
+    if bitmap.roaring_add(&narrow_a, 1u32) != ok || bitmap.roaring_add(&narrow_a, 2u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_add(&narrow_b, 2u32) != ok || bitmap.roaring_add(&narrow_b, 3u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_and(&narrow_a, &narrow_b, &narrow_a) != ok { os.exit(8i32) }
+    if narrow_a.n != 1usize || bitmap.roaring_count(&narrow_a) != 1usize || !bitmap.roaring_contains(&narrow_a, 2u32) || bitmap.roaring_contains(&narrow_a, 1u32) { os.exit(8i32) }
+    if bitmap.roaring_add(&narrow_a, 1u32) != ok { os.exit(8i32) }
+    if bitmap.roaring_or(&narrow_a, &narrow_b, &narrow_a) != ok { os.exit(8i32) }
+    if bitmap.roaring_count(&narrow_a) != 3usize || !bitmap.roaring_contains(&narrow_a, 1u32) || !bitmap.roaring_contains(&narrow_a, 3u32) { os.exit(8i32) }
+    if bitmap.roaring_and(&narrow_a, &narrow_b, &narrow_b) != ok { os.exit(8i32) }
+    if narrow_b.n != 1usize || bitmap.roaring_count(&narrow_b) != 2usize || !bitmap.roaring_contains(&narrow_b, 2u32) || !bitmap.roaring_contains(&narrow_b, 3u32) || bitmap.roaring_contains(&narrow_b, 1u32) { os.exit(8i32) }
+    // A bitset chunk is both source and destination: AND and OR rebuild it in place.
+    narrow_a.n = 0usize
+    var dense = 0u32
+    while dense < 5001u32 {
+        if bitmap.roaring_add(&narrow_a, dense) != ok { os.exit(8i32) }
+        dense += 1u32
+    }
+    if bitmap.roaring_and(&narrow_a, &narrow_a, &narrow_a) != ok || bitmap.roaring_count(&narrow_a) != 5001usize { os.exit(8i32) }
+    if bitmap.roaring_or(&narrow_a, &narrow_a, &narrow_a) != ok || bitmap.roaring_count(&narrow_a) != 5001usize { os.exit(8i32) }
+    if bitmap.roaring_and(&narrow_a, &narrow_b, &narrow_a) != ok { os.exit(8i32) }
+    if bitmap.roaring_count(&narrow_a) != 2usize || !bitmap.roaring_contains(&narrow_a, 3u32) || bitmap.roaring_contains(&narrow_a, 0u32) { os.exit(8i32) }
+    // OR while the destination bitset is one source and the other side is a different chunk.
+    narrow_a.n = 0usize
+    dense = 0u32
+    while dense < 5001u32 {
+        if bitmap.roaring_add(&narrow_a, dense) != ok { os.exit(8i32) }
+        dense += 1u32
+    }
+    if bitmap.roaring_or(&narrow_a, &narrow_b, &narrow_a) != ok || bitmap.roaring_count(&narrow_a) != 5001usize { os.exit(8i32) }
+    if !bitmap.roaring_contains(&narrow_a, 3u32) || bitmap.roaring_contains(&narrow_a, 5001u32) { os.exit(8i32) }
+    alias_containers()
 
     // 4: removals from A.
     h = 0u64
