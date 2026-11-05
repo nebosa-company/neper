@@ -122,6 +122,16 @@ fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, p: Par
     if n < 2usize || d == 0usize || p.rounds == 0usize || p.max_leaf_nodes < 2usize || p.max_bins < 2usize || p.max_bins > 255usize { ret (m, Invalid) }
     if !(p.learning_rate > 0.0f64) || p.min_samples_leaf == 0usize || p.l2 < 0.0f64 { ret (m, Invalid) }
     if x.len < n * d || y.len < n { ret (m, Invalid) }
+    // Targets are validated before any of them reaches the baseline, gradients and split
+    // gains: a NaN (or infinity) would propagate silently, and logistic mode's 0/1 loss
+    // needs every label to be exactly 0 or 1, not merely a mean between them.
+    var ti = 0usize
+    while ti < n {
+        let v = y[ti]
+        if !(v - v == 0.0f64) { ret (m, Invalid) }
+        if p.logistic && v != 0.0f64 && v != 1.0f64 { ret (m, Invalid) }
+        ti += 1usize
+    }
     let bins_per = p.max_bins
     // Thresholds per feature.
     let (thr, te) = mem.alloc[f64](a, d * bins_per)

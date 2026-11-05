@@ -181,7 +181,10 @@ fn normalize_signs(values: []f64, rows: usize, width: usize) {
 // `scratch.len >= classes + d * d`.
 fn discriminant_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, quadratic: bool, unbiased: bool, reg: f64, class_priors: []const f64, model: *Discriminant, scratch: []f64) -> err {
     if n == 0usize || d == 0usize || classes < 2usize || n <= classes { ret Invalid }
-    if x.len < n * d || labels.len < n || scratch.len < classes + d * d || reg < 0.0f64 || reg > 1.0f64 { ret TooSmall }
+    if x.len < n * d || labels.len < n || scratch.len < classes + d * d { ret TooSmall }
+    // The shrinkage is a parameter, not a size: out of range (or NaN, which fails both
+    // comparisons) is an invalid argument.
+    if !(reg >= 0.0f64) || !(reg <= 1.0f64) { ret Invalid }
     if model.means.len < classes * d || model.priors.len < classes { ret TooSmall }
     var need = d * d
     var dets = 1usize
@@ -190,7 +193,20 @@ fn discriminant_fit(x: []const f64, labels: []const usize, n: usize, d: usize, c
         dets = classes
     }
     if model.factors.len < need || model.log_det.len < dets { ret TooSmall }
-    if class_priors.len != 0usize && class_priors.len < classes { ret TooSmall }
+    if class_priors.len != 0usize {
+        if class_priors.len < classes { ret TooSmall }
+        // Scores use log(prior): a negative or NaN prior makes them NaN, and a zero total
+        // makes every posterior NaN; both are invalid arguments, not data.
+        var prior_total = 0.0f64
+        var pc = 0usize
+        while pc < classes {
+            let pv = class_priors[pc]
+            if !(pv >= 0.0f64) || pv - pv != 0.0f64 { ret Invalid }
+            prior_total += pv
+            pc += 1usize
+        }
+        if !(prior_total > 0.0f64) || prior_total - prior_total != 0.0f64 { ret Invalid }
+    }
     var counts = scratch[..classes]
     var c = 0usize
     while c < classes {

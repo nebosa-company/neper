@@ -230,11 +230,56 @@ fn vectors_1() -> str {
     ret "man|42 3 4|0.0965 -2.1327 -0.2818 0.8142 0.6981 0.3476 0.6443 -1.8373 0.1159 -0.3368 -0.9325 -0.7938 1.9281 -0.2996 0.2251 1.3563 0.4451 0.4528 -0.5468 -1.5867 -1.066 0.5124 1.6471 0.3803 0.2592 -0.2537 -2.5512 0.237 -1.1441 -0.5944 2.3787 -1.3735 0.2569 -0.3924 1.3815 1.7117 0.838 0.197 -2.5671 -0.5791 0.5573 -3.434 1.4928 0.5656 2.7952 -0.4554 -0.414 2.3217 0.6921 0.2548 1.9235 1.2479 -2.4327 1.0404 2.3744 -0.7896 0.1122 0.9991 -0.3178 1.519 0.2413 0.9193 2.1216 -1.5158 -1.1204 -1.1197 -0.7468 -3.5225 -0.2889 -0.1759 2.35 -0.3497 3.5619 2.2734 -1.3311 1.5092 -3.3394 -1.1636 0.3429 0.3948 -1.9224 0.7999 -2.124 -1.7009 0.1925 0.1942 0.365 -0.3977 0.166 -0.8303 0.2129 -1.161 -3.0387 -0.8081 -3.1907 -0.0798 -1.0022 -1.44 -0.9057 -0.8179 2.2177 2.1516 1.4173 -1.9373 -0.7721 -1.8642 2.0122 1.1969 2.0809 0.4177 -0.4254 2.1833 0.2379 -2.0283 1.609 1.6966 -0.9431 -1.4008 0.5356 -0.7459 0.8808 0.0106 0.0049 0.8438 -1.3658 -0.5967|0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 3|0.6917563942536499 1.5942789794582455 9.0 87.7651462666714 0.12933790394850386 0.32537387783155597 1.540926568529746 9.0 114.0 0.14196769031879164 0.42085082818469166 1.6516503472170216 9.0 53.47791164658635 0.12435128682566607 0.35044699276731356 4.438995241719305 3.0 38.0 0.009047120339865457\nman|42 4 3|-1.2208 -2.0058 -2.315 0.5741 -0.206 -0.8387 -0.7118 0.085 0.8837 0.6195 -0.2014 -0.3405 1.6924 0.6119 -0.2868 1.2441 -0.6875 0.0359 0.2814 0.1601 0.4793 0.3573 -1.5624 1.0806 -0.4769 -1.2852 -0.5524 2.6911 -0.4624 0.1106 -0.388 1.0769 1.2966 -1.6566 2.2638 -1.4014 1.6081 0.2141 0.8661 -1.0159 1.0423 -0.651 -0.0448 -0.6509 0.3121 0.3409 1.026 -3.0864 0.5148 0.7185 -0.1038 -1.1571 -0.8585 -3.9395 -3.7108 2.135 -1.2162 -1.4233 0.7105 0.3241 -0.5158 0.7208 1.4594 2.5186 1.0583 0.4543 -0.1084 1.5653 -2.5223 -0.4883 -0.4714 -1.2188 -0.7914 -0.1598 0.7463 -1.0603 1.1728 -1.4898 -0.6244 3.0379 1.1886 -1.7806 1.206 2.3137 -1.0363 0.3608 -0.5746 -3.25 0.2179 -0.3373 0.4949 0.2661 -1.8649 0.9014 1.4511 0.4283 1.8819 -0.4359 -0.2955 1.3622 1.0235 1.1904 -1.3696 0.9742 0.8981 -0.8146 -0.5333 -0.786 2.7838 0.6186 -0.6599 0.1985 0.9693 -2.0414 -1.5405 -2.714 -0.9794 1.9137 -1.5929 0.4546 0.5459 -1.014 -1.9234 0.2533 -2.0492 1.9065 -0.3154 0.1407 -0.5538 0.2158 -0.7178 0.1854 0.0076 3.1681 -1.9922 1.8723 0.9659 1.522 0.9863 2.4477 -1.7813 2.0989 -0.9681 2.6445 -1.4206 1.0151 -2.7825 -4.2855 -1.061 -0.6661 0.9925 0.6937 0.0944 -0.7339 -1.3099 0.1632 0.0309 -1.6029 -2.5008 -1.5737 -0.9348 0.9159 -2.1372 0.7636 -1.3921 -0.1 -1.794 -3.0877|0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2 2 2 2|0.647804859047329 2.182023710850447 8.0 72.0 0.03877728764127289 0.365040695842733 2.0652663512537695 8.0 74.0 0.0501043517026811 0.5238453854169316 2.3207568819052438 8.0 49.161290322580626 0.03372759622703034 0.48277137008336907 4.465635173271163 4.0 37.0 0.004804769640341787"
 }
 
+// #852: a bad parameter and a bad prior vector are invalid arguments, not size problems;
+// negative, NaN, infinite or zero-mass priors would otherwise reach log(prior) and NaN.
+fn regressions(mode: str) -> i32 {
+    var x: [4]f64 = zero
+    x[1usize] = 1.0f64
+    x[2usize] = 2.0f64
+    x[3usize] = 3.0f64
+    var labels: [4]usize = zero
+    labels[2usize] = 1usize
+    labels[3usize] = 1usize
+    var means: [2]f64 = zero
+    var priors: [2]f64 = zero
+    var factors: [1]f64 = zero
+    var log_det: [1]f64 = zero
+    var scratch: [8]f64 = zero
+    var model = multivariate.Discriminant{ classes: 0usize, features: 0usize, quadratic: false, means: means[..], priors: priors[..], factors: factors[..], log_det: log_det[..] }
+    var no_priors: [0]f64 = zero
+    if mode.len == 0usize || str.eq(mode, "reg") {
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, -1.0f64, no_priors[..], &model, scratch[..]) != multivariate.Invalid { ret 1i32 }
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 1.5f64, no_priors[..], &model, scratch[..]) != multivariate.Invalid { ret 2i32 }
+    }
+    if mode.len == 0usize || str.eq(mode, "priors") {
+        priors[0usize] = -0.5f64
+        priors[1usize] = 1.5f64
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 0.0f64, priors[..], &model, scratch[..]) != multivariate.Invalid { ret 3i32 }
+        priors[0usize] = 0.0f64
+        priors[1usize] = 0.0f64
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 0.0f64, priors[..], &model, scratch[..]) != multivariate.Invalid { ret 4i32 }
+        priors[0usize] = 0.0f64 / 0.0f64
+        priors[1usize] = 0.5f64
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 0.0f64, priors[..], &model, scratch[..]) != multivariate.Invalid { ret 5i32 }
+        priors[0usize] = 1.0e308f64 * 10.0f64
+        priors[1usize] = 0.5f64
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 0.0f64, priors[..], &model, scratch[..]) != multivariate.Invalid { ret 6i32 }
+        priors[0usize] = 0.25f64
+        priors[1usize] = 0.75f64
+        if multivariate.discriminant_fit(x[..], labels[..], 4usize, 1usize, 2usize, false, false, 0.0f64, priors[..], &model, scratch[..]) != ok { ret 7i32 }
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var failed = 0u32
     failed += run_chunk(vectors_0())
     failed += run_chunk(vectors_1())
     if failed != 0u32 { os.exit(1i32) }
+    var mode: str = ""
+    if args.len > 1usize { mode = args[1usize] }
+    let regression = regressions(mode)
+    if regression != 0i32 { os.exit(100i32 + regression) }
     try io.print("ml multivariate ok")
     ret ok
 }

@@ -188,6 +188,13 @@ fn split_fold(fold_of: []const usize, n: usize, fold: usize, train: []usize, tes
 // `train.len` and `test.len` must be at least `n`.
 fn cross_validate[Ctx: type](ctx: *Ctx, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const usize, []const usize) -> f64, scores: []f64) -> (f64, err) {
     if folds < 2usize || scores.len < folds || train.len < n || test.len < n { ret (0.0f64, TooSmall) }
+    if fold_of.len < n { ret (0.0f64, TooSmall) }
+    var check = 0usize
+    while check < n {
+        // A fold id outside the folds would put the row in no test fold at all.
+        if fold_of[check] >= folds { ret (0.0f64, Invalid) }
+        check += 1usize
+    }
     var total = 0.0f64
     var fold = 0usize
     while fold < folds {
@@ -206,6 +213,12 @@ fn cross_validate[Ctx: type](ctx: *Ctx, n: usize, folds: usize, fold_of: []const
 // best (the first among equals) is answered. `fold_scores` wants `folds` floats.
 fn grid_search[Ctx: type](ctx: *Ctx, points: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, usize, []const usize, []const usize) -> f64, means: []f64) -> (usize, err) {
     if points == 0usize || means.len < points || folds < 2usize || train.len < n || test.len < n { ret (0usize, TooSmall) }
+    if fold_of.len < n { ret (0usize, TooSmall) }
+    var check = 0usize
+    while check < n {
+        if fold_of[check] >= folds { ret (0usize, Invalid) }
+        check += 1usize
+    }
     var best = 0usize
     var point = 0usize
     while point < points {
@@ -242,6 +255,12 @@ fn draw_parameter(r: *rand.Pcg64, spec: ParamRange) -> f64 {
 // `best_params` (`ranges.len` floats). `means` receives one score per draw.
 fn random_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, ranges: []const ParamRange, draws: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const f64, []const usize, []const usize) -> f64, candidate: []f64, best_params: []f64, means: []f64) -> (f64, err) {
     if draws == 0usize || means.len < draws || candidate.len < ranges.len || best_params.len < ranges.len || folds < 2usize || train.len < n || test.len < n { ret (0.0f64, TooSmall) }
+    if fold_of.len < n { ret (0.0f64, TooSmall) }
+    var check = 0usize
+    while check < n {
+        if fold_of[check] >= folds { ret (0.0f64, Invalid) }
+        check += 1usize
+    }
     var best_score = 0.0f64 - 1.0e300f64
     var d = 0usize
     while d < draws {
@@ -303,6 +322,12 @@ fn nan_median(values: []f64) -> f64 {
 fn pipeline_fit(steps: []const Step, x: []const f64, n: usize, d: usize, rows: []const usize, params: []f64, work: []f64) -> err {
     let m = rows.len
     if m == 0usize || d == 0usize || params.len < 2usize * d * steps.len || work.len < m * d + m || x.len < n * d { ret TooSmall }
+    var check = 0usize
+    while check < m {
+        // Each row names a row of `x`; anything else reads outside it.
+        if rows[check] >= n { ret Invalid }
+        check += 1usize
+    }
     var data = work[..m * d]
     var column = work[m * d..m * d + m]
     var i = 0usize
@@ -389,7 +414,13 @@ fn apply_step(kind: u8, v: f64, centre: f64, scale: f64) -> f64 {
 // Transform `rows` of `x` through the fitted pipeline into `out` (`rows.len`
 // x `d`, row-major).
 fn pipeline_transform(steps: []const Step, params: []const f64, x: []const f64, d: usize, rows: []const usize, out: []f64) -> err {
-    if out.len < rows.len * d || params.len < 2usize * d * steps.len { ret TooSmall }
+    if d == 0usize || out.len < rows.len * d || params.len < 2usize * d * steps.len { ret TooSmall }
+    var check = 0usize
+    while check < rows.len {
+        // A row index past the rows `x` holds would read outside it.
+        if rows[check] >= x.len / d { ret Invalid }
+        check += 1usize
+    }
     var i = 0usize
     while i < rows.len {
         var j = 0usize
