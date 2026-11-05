@@ -2759,7 +2759,7 @@ fn resolving_index(ev: *Evaluator, name: str) -> usize
 fn formula_index(ev: *Evaluator, name: str) -> usize
 fn lookup_field(ev: *Evaluator, name: str) -> (Value, bool)
 fn circular_error(ev: *Evaluator, from: usize, name: str) -> Value
-fn push_name(ev: *Evaluator, name: str)
+fn push_name(ev: *Evaluator, name: str) -> bool
 fn pop_name(ev: *Evaluator)
 fn eval_formula(ev: *Evaluator, name: str, source: str) -> Value
 fn resolve_cell(ev: *Evaluator, name: str) -> (Value, bool)
