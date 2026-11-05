@@ -6049,6 +6049,7 @@ fn bv_true(f: *sat.Cnf) -> (i32, err)
 fn bv_const(f: *sat.Cnf, value: u64, out: []i32) -> err
 fn bv_fresh(f: *sat.Cnf, out: []i32) -> err
 fn widths_match(a: []const i32, b: []const i32, out: []const i32) -> bool
+fn vector_valid(f: *sat.Cnf, v: []const i32) -> bool
 fn bv_and(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
 fn bv_or(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
 fn bv_xor(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
@@ -6860,6 +6861,10 @@ type StoreHooks = struct { ctx: *void, durable: bool, load: fn(*void) -> []const
 type PushResult = struct { accepted: bool, conflict: bool, server: json.Value, has_server: bool, failure: str, has_failure: bool }
 type Remote = struct { ctx: *void, now: fn(*void) -> i64, fetch_page: fn(*void, json.Value, i64) -> json.Value, push: fn(*void, json.Value) -> PushResult }
 type Outbox = struct { a: *mem.Arena, store: *const StoreHooks, now: fn(*void) -> i64, now_ctx: *void, queue: list.List[json.Value], dead: list.List[json.Value], sequence: i64, loaded: bool, healthy: bool, last_error: str, has_error: bool, evicted: i64, max_attempts: i64, base_delay: i64 }
+var write_failure: bool = false
+fn begin_writes()
+fn writes_failed() -> bool
+fn mark_write_failure()
 
 fn text(s: str) -> json.Value
 fn flag(b: bool) -> json.Value
@@ -7515,6 +7520,7 @@ The offline conflict review as markup (L037), after `renderConflictReview` of ap
 
 ```neper
 error Invalid
+error OutOfMemory
 fn max_depth() -> u32
 fn type_name(code: i64) -> str
 fn label_name(code: i64) -> str
@@ -7525,6 +7531,7 @@ fn read_text(a: *mem.Arena, r: *pb.Reader) -> (json.Value, err)
 fn push_array(l: *list.List[json.Value], v: json.Value)
 fn array_of(l: list.List[json.Value]) -> json.Value
 fn finished(o: *ir.Obj) -> json.Value
+fn finish(o: *ir.Obj) -> (json.Value, err)
 fn parse_range(a: *mem.Arena, source: []const u8) -> (json.Value, err)
 fn parse_flags(a: *mem.Arena, source: []const u8, first: u32, first_name: str, second: u32, second_name: str) -> (json.Value, err)
 fn parse_oneof(a: *mem.Arena, source: []const u8) -> (json.Value, err)
@@ -12208,7 +12215,7 @@ fn mix_key(s: *SymmetricState, input_key_material: []const u8)
 fn mix_key_and_hash(s: *SymmetricState, input_key_material: []const u8)
 fn encrypt_and_hash(s: *SymmetricState, plain: []const u8, out: []u8) -> (usize, err)
 fn decrypt_and_hash(s: *SymmetricState, sealed: []const u8, out: []u8) -> (usize, err)
-fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secret: [32]u8, rs: [32]u8, psk: []const u8) -> HandshakeState
+fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secret: [32]u8, rs: [32]u8, psk: []const u8) -> (HandshakeState, err)
 fn public_key(secret: [32]u8) -> [32]u8
 fn dh(hs: *HandshakeState, secret: [32]u8, point: [32]u8)
 fn write_e(hs: *HandshakeState, ephemeral_secret: [32]u8, out: []u8)
