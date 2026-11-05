@@ -275,14 +275,14 @@ fn patience(a: []const str, b: []const str, edits: []Edit, scratch: []usize) -> 
                     if length[i] > length[best] { best = i }
                     i += 1usize
                 }
-                // Collect the chain in order into pairs[..chain] (it only shrinks).
+                // Collect the chain node indices into `length` (no longer needed): writing
+                // into pairs would overwrite pairs still to be read.
                 var chain = length[best]
                 var k = chain
                 var node = best
                 while node != unique {
                     k -= 1usize
-                    pairs[2usize * k] = pairs[2usize * node]
-                    pairs[2usize * k + 1usize] = pairs[2usize * node + 1usize]
+                    length[k] = node
                     node = previous[node]
                 }
                 // Push the gaps and the anchors in reverse so the first is on top:
@@ -292,8 +292,8 @@ fn patience(a: []const str, b: []const str, edits: []Edit, scratch: []usize) -> 
                 k = chain
                 while k > 0usize {
                     k -= 1usize
-                    let ai = pairs[2usize * k]
-                    let bi = pairs[2usize * k + 1usize]
+                    let ai = pairs[2usize * length[k]]
+                    let bi = pairs[2usize * length[k] + 1usize]
                     stack[4usize * top] = ai + 1usize
                     stack[4usize * top + 1usize] = pa
                     stack[4usize * top + 2usize] = bi + 1usize

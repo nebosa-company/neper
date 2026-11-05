@@ -61,6 +61,9 @@ error TooDeep
 const NONE: usize = 18446744073709551615usize
 const NO_NODE: u32 = 4294967295u32
 const MAX_INSTS: usize = 16384usize
+// Gen_node calls are charged too: a repeat of a body that emits nothing (an empty
+// group) never reaches MAX_INSTS but can expand astronomically.
+const MAX_GEN_STEPS: usize = 65536usize
 const MAX_REPEAT: u32 = 1000u32
 const MAX_DEPTH: u32 = 64u32
 // ponytail: a fixed backtrack stack (768 KB per compiled pattern) caps a greedy `.*` at
@@ -90,7 +93,7 @@ type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, 
 type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options, backtracking: bool, names: []u32 }
 
 // `loops` counts the unbounded repeats given an iteration slot, from `loop_base` on.
-type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32 }
+type Emitter = struct { insts: []Inst, count: usize, writing: bool, backtracking: bool, loop_base: u32, loops: u32, steps: usize }
 
 // One thread list of the VM: a program counter per thread and a capture row per thread;
 // `seen` marks the counters already in the list for this generation.
@@ -604,6 +607,8 @@ fn gen_repeat(e: *Emitter, p: *Parser, at: u32) -> err {
 }
 
 fn gen_node(e: *Emitter, p: *Parser, at: u32) -> err {
+    e.steps += 1usize
+    if e.steps > MAX_GEN_STEPS { ret TooComplex }
     let n = p.nodes[usize(at)]
     if n.kind == .Empty { ret ok }
     if n.kind == .Char {
@@ -734,7 +739,7 @@ fn build(a: *mem.Arena, pattern: str, options: Options, backtracking: bool) -> (
         ret (zero, InvalidPattern)
     }
     let slots = (usize(p.groups) + 1usize) * 2usize
-    var measure = Emitter { insts: zero, count: 0usize, writing: false, backtracking: backtracking, loop_base: u32(slots), loops: 0u32 }
+    var measure = Emitter { insts: zero, count: 0usize, writing: false, backtracking: backtracking, loop_base: u32(slots), loops: 0u32, steps: 0usize }
     let measure_error = gen_program(&measure, &p, root)
     if measure_error != ok {
         a.off = checkpoint
@@ -742,7 +747,7 @@ fn build(a: *mem.Arena, pattern: str, options: Options, backtracking: bool) -> (
     }
     let (insts, insts_error) = mem.alloc[Inst](a, measure.count)
     if insts_error != ok { ret (zero, insts_error) }
-    var writer = Emitter { insts: insts, count: 0usize, writing: true, backtracking: backtracking, loop_base: u32(slots), loops: 0u32 }
+    var writer = Emitter { insts: insts, count: 0usize, writing: true, backtracking: backtracking, loop_base: u32(slots), loops: 0u32, steps: 0usize }
     let step_error = gen_program(&writer, &p, root)
     if step_error != ok { ret (zero, step_error) }
     let (source, source_error) = mem.alloc[u8](a, pattern.len)

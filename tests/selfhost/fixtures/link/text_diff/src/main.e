@@ -85,6 +85,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if p_error != ok || changes(edits[..], p_count) > 7usize { os.exit(2i32) }
     let (p_patched, p_patch_error) = diff.patch(x[..], edits[..p_count], out[..])
     if p_patch_error != ok || !same_lines(out[..], p_patched, y[..]) { os.exit(2i32) }
+    // #183(8): the LIS [1,3] is not a prefix of the pair list; collecting it must not
+    // overwrite pairs still to be read (it used to trap slicing a[4..3]).
+    var px: [4]str = zero
+    px[0usize] = "A"
+    px[1usize] = "B"
+    px[2usize] = "C"
+    px[3usize] = "D"
+    var py: [6]str = zero
+    py[0usize] = "x"
+    py[1usize] = "C"
+    py[2usize] = "B"
+    py[3usize] = "D"
+    py[4usize] = "y"
+    py[5usize] = "A"
+    let (chain_count, chain_error) = diff.patience(px[..], py[..], edits[..], scratch[..])
+    if chain_error != ok { os.exit(44i32) }
+    let (chain_out, chain_patch) = diff.patch(px[..], edits[..chain_count], out[..])
+    if chain_patch != ok || !same_lines(out[..], chain_out, py[..]) { os.exit(45i32) }
     var s: [6]str = zero
     s[0usize] = "one"
     s[1usize] = "two"

@@ -129,6 +129,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if class_nfa_error != ok { os.exit(39i32) }
     let (_, class_dfa_error) = regex.dfa_from_nfa(a, class_nfa, 256usize)
     if class_dfa_error != ok { os.exit(39i32) }
+    // #183(2): a repeat of a zero-width body is charged per expansion, not hung.
+    let (expanding, expanding_error) = regex.compile(a, "(?:){1000}{1000}{1000}", zero)
+    if expanding_error != regex.TooComplex { os.exit(45i32) }
 
     try io.print("text regex ok\n")
     ret ok
