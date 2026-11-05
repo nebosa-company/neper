@@ -22,7 +22,8 @@ param(
     [string]$Baseline = "",
     [switch]$Update,
     [string]$Tsv = "",
-    [int]$Chunk = 40
+    [int]$Chunk = 40,
+    [int]$ChunkTimeoutSeconds = 900
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,13 +49,24 @@ while ($at -lt $entries.Count) {
     $at += $take
     $tmpList = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($Tsv), "chunk-" + $at + ".txt")
     $part | Set-Content $tmpList -Encoding utf8
-    $lines = & $Exe $Root $tmpList 2>&1
-    $code = $LASTEXITCODE
-    Remove-Item $tmpList -Force
-    # A crashing chunk prints a FILE line per file it finished and no summary; say so instead of
-    # letting the merged totals silently come out short.
-    if ($code -ne 0 -or -not ($lines | Select-String '^wpt ')) {
-        $failedChunks += "files $first-$($at - 1) (exit $code)"
+    # A chunk runs in its own process with a timeout: a test that sits at the interpreter's 5 GB
+    # memory limit can take many minutes, and the whole gate must not wait on it.
+    $outFile = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($Tsv), "chunk-" + $at + ".out")
+    $errFile = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($Tsv), "chunk-" + $at + ".err")
+    $proc = Start-Process -FilePath $Exe -ArgumentList @($Root, $tmpList) -NoNewWindow -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $finished = $proc.WaitForExit($ChunkTimeoutSeconds * 1000)
+    if (-not $finished) {
+        Stop-Process -Id $proc.Id -Force
+        $failedChunks += "files $first-$($at - 1) (timed out after $ChunkTimeoutSeconds s)"
+        Remove-Item $tmpList, $outFile, $errFile -Force -ErrorAction SilentlyContinue
+        continue
+    }
+    $lines = Get-Content $outFile -ErrorAction SilentlyContinue
+    Remove-Item $tmpList, $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    # A chunk that ran to the end prints its summary line; without it the chunk aborted, and the
+    # merged totals would silently come out short, so say so.
+    if (-not ($lines | Select-String '^wpt ')) {
+        $failedChunks += "files $first-$($at - 1) (no summary)"
     }
     foreach ($line in $lines) {
         if ($line -notmatch '^FILE (\S+) (\d+)/(\d+)') { continue }
