@@ -190,6 +190,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !have_75 || !have_100 { os.exit(4i32) }
 
+    // 5: a window whose mathematical end exceeds u64 stays open. Compared by
+    // subtraction, a watermark below its start neither makes the event late nor fires
+    // the window, and even the maximum watermark is short of its end (#505).
+    var edge_slots: [2]stream.Window = zero
+    let (edge0, edge_error) = stream.window_buffer(10u64, 10u64, edge_slots[..])
+    if edge_error != ok { os.exit(5i32) }
+    var edge = edge0
+    let edge_mark = 18446744073709551615u64 - 30u64
+    if stream.window_add(&edge, 18446744073709551615u64, 7u64, edge_mark) != ok { os.exit(5i32) }
+    if edge.late != 0u64 || edge.used != 1usize || edge.windows[0usize].start != 18446744073709551610u64 || edge.windows[0usize].count != 1u64 || edge.windows[0usize].sum != 7u64 { os.exit(5i32) }
+    var edge_fired: [2]stream.Window = zero
+    let (edge_n, edge_fire_error) = stream.window_fire(&edge, edge_mark, edge_fired[..])
+    if edge_fire_error != ok || edge_n != 0usize || edge.used != 1usize { os.exit(5i32) }
+    let (edge_n2, edge_fire2_error) = stream.window_fire(&edge, 18446744073709551615u64, edge_fired[..])
+    if edge_fire2_error != ok || edge_n2 != 0usize || edge.used != 1usize { os.exit(5i32) }
+
     try io.print("data stream ok\n")
     ret ok
 }

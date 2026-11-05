@@ -115,7 +115,9 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
     // leave the buffer retryable instead of keeping an arbitrary prefix.
     var needed = 0usize
     while event_time -% start < b.size {
-        if start +% b.size > mark {
+        // The mathematical end `start + size` can exceed u64: compare elapsed time
+        // instead of wrapping the end, so such a window stays open (never fires).
+        if !(mark >= start && mark - start >= b.size) {
             var i = 0usize
             while i < b.used && b.windows[i].start != start { i += 1usize }
             if i == b.used { needed += 1usize }
@@ -128,7 +130,7 @@ fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err {
     start = event_time - event_time % b.slide
     var late = false
     while event_time -% start < b.size {
-        if start +% b.size <= mark {
+        if mark >= start && mark - start >= b.size {
             late = true
         } else {
             // ponytail: linear scan over open windows; a map by start if thousands stay open.
@@ -157,7 +159,9 @@ fn window_fire(b: *WindowBuffer, mark: u64, out: []Window) -> (usize, err) {
     var n = 0usize
     var i = 0usize
     while i < b.used {
-        if b.windows[i].start +% b.size <= mark {
+        // Elapsed time from the start, not `start + size`: an end past u64 never passes
+        // a u64 watermark, and the subtraction cannot overflow with `mark >= start`.
+        if mark >= b.windows[i].start && mark - b.windows[i].start >= b.size {
             if n >= out.len { ret (n, TooSmall) }
             // Insertion by start keeps the emission ordered.
             var j = n
