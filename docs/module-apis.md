@@ -1044,6 +1044,7 @@ fn persistent_sum(t: *const Persistent, root: u32, low: usize, high: usize) -> (
 fn persistent_sum_node(t: *const Persistent, node: u32, low: usize, high: usize, from: usize, to: usize) -> i64
 fn update_range(t: *Lazy, low: usize, high: usize, delta: i64) -> err
 fn persistent_update(t: *Persistent, root: u32, index: usize, value: i64) -> (u32, err)
+fn persistent_update_node(t: *Persistent, old: u32, low: usize, high: usize, index: usize, value: i64) -> u32
 fn persistent_query(t: *const Persistent, root: u32, low: usize, high: usize) -> (i64, err)
 ```
 
