@@ -49,6 +49,12 @@ fn abs(x: i32) -> i32 {
     ret x
 }
 
+// A literal the formula can name: not 0, not the negation of 0, and within `variables`.
+fn valid_lit(f: *const Cnf, lit: i32) -> bool {
+    if lit == 0i32 || lit < -2147483647i32 { ret false }
+    ret usize(abs(lit)) <= f.variables
+}
+
 fn clause1(f: *Cnf, a: i32) -> err {
     var c: [1]i32 = zero
     c[0usize] = a
@@ -68,20 +74,41 @@ fn clause3(f: *Cnf, a: i32, b: i32, c3: i32) -> err {
     ret add_clause(f, c[..])
 }
 
-// Tseitin gates: each answers a fresh literal equal to the gate's output.
+// Tseitin gates: each answers a fresh literal equal to the gate's output. The operands
+// are checked before the fresh variable, and a clause failure returns its own error.
 fn tseitin_and(f: *Cnf, a: i32, b: i32) -> (i32, err) {
+    if !valid_lit(f, a) || !valid_lit(f, b) { ret (0i32, Invalid) }
     let o = fresh(f)
-    if clause2(f, 0i32 - o, a) != ok || clause2(f, 0i32 - o, b) != ok || clause3(f, o, 0i32 - a, 0i32 - b) != ok { ret (0i32, TooSmall) }
+    let c1 = clause2(f, 0i32 - o, a)
+    if c1 != ok { ret (0i32, c1) }
+    let c2 = clause2(f, 0i32 - o, b)
+    if c2 != ok { ret (0i32, c2) }
+    let c3 = clause3(f, o, 0i32 - a, 0i32 - b)
+    if c3 != ok { ret (0i32, c3) }
     ret (o, ok)
 }
 fn tseitin_or(f: *Cnf, a: i32, b: i32) -> (i32, err) {
+    if !valid_lit(f, a) || !valid_lit(f, b) { ret (0i32, Invalid) }
     let o = fresh(f)
-    if clause2(f, o, 0i32 - a) != ok || clause2(f, o, 0i32 - b) != ok || clause3(f, 0i32 - o, a, b) != ok { ret (0i32, TooSmall) }
+    let c1 = clause2(f, o, 0i32 - a)
+    if c1 != ok { ret (0i32, c1) }
+    let c2 = clause2(f, o, 0i32 - b)
+    if c2 != ok { ret (0i32, c2) }
+    let c3 = clause3(f, 0i32 - o, a, b)
+    if c3 != ok { ret (0i32, c3) }
     ret (o, ok)
 }
 fn tseitin_xor(f: *Cnf, a: i32, b: i32) -> (i32, err) {
+    if !valid_lit(f, a) || !valid_lit(f, b) { ret (0i32, Invalid) }
     let o = fresh(f)
-    if clause3(f, 0i32 - o, a, b) != ok || clause3(f, 0i32 - o, 0i32 - a, 0i32 - b) != ok || clause3(f, o, 0i32 - a, b) != ok || clause3(f, o, a, 0i32 - b) != ok { ret (0i32, TooSmall) }
+    let c1 = clause3(f, 0i32 - o, a, b)
+    if c1 != ok { ret (0i32, c1) }
+    let c2 = clause3(f, 0i32 - o, 0i32 - a, 0i32 - b)
+    if c2 != ok { ret (0i32, c2) }
+    let c3 = clause3(f, o, 0i32 - a, b)
+    if c3 != ok { ret (0i32, c3) }
+    let c4 = clause3(f, o, a, 0i32 - b)
+    if c4 != ok { ret (0i32, c4) }
     ret (o, ok)
 }
 // Negation needs no gate: the negated literal is the output.
@@ -94,7 +121,8 @@ fn at_most(f: *Cnf, lits: []const i32, k: usize) -> err {
     if k == 0usize {
         var i = 0usize
         while i < n {
-            if clause1(f, 0i32 - lits[i]) != ok { ret TooSmall }
+            let e = clause1(f, 0i32 - lits[i])
+            if e != ok { ret e }
             i += 1usize
         }
         ret ok
@@ -105,30 +133,36 @@ fn at_most(f: *Cnf, lits: []const i32, k: usize) -> err {
     var i = 0usize
     while i + 1usize < n {
         let s0 = i32(base + i * k + 1usize)
-        if clause2(f, 0i32 - lits[i], s0) != ok { ret TooSmall }
+        let e0 = clause2(f, 0i32 - lits[i], s0)
+        if e0 != ok { ret e0 }
         var j = 1usize
         while j < k {
             let sij = i32(base + i * k + j + 1usize)
             if i == 0usize {
-                if clause1(f, 0i32 - sij) != ok { ret TooSmall }
+                let e = clause1(f, 0i32 - sij)
+                if e != ok { ret e }
             } else {
                 let previous = i32(base + (i - 1usize) * k + j)
                 let previous_same = i32(base + (i - 1usize) * k + j + 1usize)
-                if clause3(f, 0i32 - lits[i], 0i32 - previous, sij) != ok || clause2(f, 0i32 - previous_same, sij) != ok { ret TooSmall }
+                let e1 = clause3(f, 0i32 - lits[i], 0i32 - previous, sij)
+                if e1 != ok { ret e1 }
+                let e2 = clause2(f, 0i32 - previous_same, sij)
+                if e2 != ok { ret e2 }
             }
             j += 1usize
         }
         if i > 0usize {
             let previous_first = i32(base + (i - 1usize) * k + 1usize)
-            if clause2(f, 0i32 - previous_first, s0) != ok { ret TooSmall }
+            let e1 = clause2(f, 0i32 - previous_first, s0)
+            if e1 != ok { ret e1 }
             let previous_last = i32(base + (i - 1usize) * k + k)
-            if clause2(f, 0i32 - lits[i], 0i32 - previous_last) != ok { ret TooSmall }
+            let e2 = clause2(f, 0i32 - lits[i], 0i32 - previous_last)
+            if e2 != ok { ret e2 }
         }
         i += 1usize
     }
     let last = i32(base + (n - 2usize) * k + k)
-    if clause2(f, 0i32 - lits[n - 1usize], 0i32 - last) != ok { ret TooSmall }
-    ret ok
+    ret clause2(f, 0i32 - lits[n - 1usize], 0i32 - last)
 }
 
 // `Σ coefficient_i · lit_i <= bound` for non-negative integer coefficients,
@@ -162,26 +196,37 @@ fn pb_node(f: *Cnf, lits: []const i32, coefficients: []const u32, bound: u32, me
         if memo[key] == 0i32 - 2i32 { ret (1i32, ok) }
         ret (memo[key], ok)
     }
-    let (high, high_error) = pb_node(f, lits, coefficients, bound, memo, index + 1usize, sum + coefficients[index])
-    if high_error != ok { ret (0i32, high_error) }
+    // A coefficient past the room left takes the false branch; adding it would wrap
+    // the partial sum (`sum <= bound` here, so the subtraction is safe) (#226).
+    var high = 0i32
+    if coefficients[index] <= bound - sum {
+        let (h, high_error) = pb_node(f, lits, coefficients, bound, memo, index + 1usize, sum + coefficients[index])
+        if high_error != ok { ret (0i32, high_error) }
+        high = h
+    }
     let (low, low_error) = pb_node(f, lits, coefficients, bound, memo, index + 1usize, sum)
     if low_error != ok { ret (0i32, low_error) }
     var result = 0i32
     if high == low {
         result = high
     } else {
-        // node = (lit -> high) and (not lit -> low), with constants folded.
+        // node = (lit -> high) and (not lit -> low), with constants folded. A clause
+        // failure keeps its own error instead of masking it as TooSmall.
         let node = fresh(f)
         let x = lits[index]
         if high == 0i32 {
-            if clause2(f, 0i32 - node, 0i32 - x) != ok { ret (0i32, TooSmall) }
+            let e = clause2(f, 0i32 - node, 0i32 - x)
+            if e != ok { ret (0i32, e) }
         } else if high != 1i32 {
-            if clause3(f, 0i32 - node, 0i32 - x, high) != ok { ret (0i32, TooSmall) }
+            let e = clause3(f, 0i32 - node, 0i32 - x, high)
+            if e != ok { ret (0i32, e) }
         }
         if low == 0i32 {
-            if clause2(f, 0i32 - node, x) != ok { ret (0i32, TooSmall) }
+            let e = clause2(f, 0i32 - node, x)
+            if e != ok { ret (0i32, e) }
         } else if low != 1i32 {
-            if clause3(f, 0i32 - node, x, low) != ok { ret (0i32, TooSmall) }
+            let e = clause3(f, 0i32 - node, x, low)
+            if e != ok { ret (0i32, e) }
         }
         result = node
     }
@@ -374,6 +419,8 @@ fn walksat(f: *const Cnf, assignment: []i8, p: f64, flips: usize, r: *rand.Pcg64
         if chosen == f.clauses { ret (true, ok) }
         let from = f.starts[chosen]
         let to = f.starts[chosen + 1usize]
+        // An empty clause has no literal to flip and no model: the formula is unsatisfiable.
+        if from == to { ret (false, Unsatisfiable) }
         var pick = 0usize
         if rand.pcg64_f64(r) < p {
             pick = from + usize(rand.pcg64_bounded(r, u64(to - from)))
@@ -516,12 +563,16 @@ fn encode_pseudo_boolean(f: *Cnf, lits: []const i32, coefficients: []const u32, 
 // index if the tree becomes a DAG.
 fn tseitin(f: *Cnf, kind: []const Gate, left: []const i32, right: []const i32, root: usize) -> (i32, err) {
     if root >= kind.len || left.len < kind.len || right.len < kind.len { ret (0i32, Invalid) }
-    if kind[root] == .Var { ret (left[root], ok) }
-    if left[root] < 0i32 { ret (0i32, Invalid) }
+    if kind[root] == .Var {
+        if !valid_lit(f, left[root]) { ret (0i32, Invalid) }
+        ret (left[root], ok)
+    }
+    // Operands must be earlier nodes: that keeps the tree acyclic and the recursion bounded.
+    if left[root] < 0i32 || usize(left[root]) >= root { ret (0i32, Invalid) }
     let (a, a_error) = tseitin(f, kind, left, right, usize(left[root]))
     if a_error != ok { ret (0i32, a_error) }
     if kind[root] == .Not { ret (tseitin_not(a), ok) }
-    if right[root] < 0i32 { ret (0i32, Invalid) }
+    if right[root] < 0i32 || usize(right[root]) >= root { ret (0i32, Invalid) }
     let (b, b_error) = tseitin(f, kind, left, right, usize(right[root]))
     if b_error != ok { ret (0i32, b_error) }
     if kind[root] == .And {

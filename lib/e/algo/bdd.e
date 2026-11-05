@@ -13,7 +13,9 @@ type Bdd = struct { variable: []u32, low: []u32, high: []u32, used: usize, varia
 type Op = enum u8 { And, Or, Xor }
 
 // A diagram over `variables` variables; the pools must hold at least two entries.
+// More than 63 variables has no representable count (2^64 does not fit u64).
 fn bdd(variable: []u32, low: []u32, high: []u32, variables: usize) -> (Bdd, err) {
+    if variables > 63usize { ret (zero, Invalid) }
     if variable.len < 2usize || low.len < 2usize || high.len < 2usize { ret (zero, TooSmall) }
     variable[0usize] = u32(variables)
     variable[1usize] = u32(variables)
@@ -116,20 +118,43 @@ fn evaluate(b: *const Bdd, f: u32, assignment: []const bool) -> bool {
     ret n == 1u32
 }
 
-// The number of satisfying assignments over all `variables` variables.
-fn count(b: *const Bdd, f: u32) -> u64 {
-    ret count_from(b, f, 0u32)
-}
-
-fn count_from(b: *const Bdd, f: u32, from: u32) -> u64 {
-    // Variables skipped between `from` and this node's are free.
-    if f == 0u32 { ret 0u64 }
+// The number of satisfying assignments over all `variables` variables. `memo`
+// (`memo.len >= b.used`) holds each node's count over its own variable and up, so a
+// shared diagram is summed once per node instead of once per assignment prefix.
+fn count(b: *const Bdd, f: u32, memo: []u64) -> (u64, err) {
     let top = u32(b.variables)
-    if f == 1u32 { ret 1u64 << (top - from) }
-    let v = b.variable[usize(f)]
-    let skipped = v - from
-    let below = count_from(b, b.low[usize(f)], v + 1u32) + count_from(b, b.high[usize(f)], v + 1u32)
-    ret below << skipped
+    if f == 0u32 { ret (0u64, ok) }
+    if f == 1u32 { ret (1u64 << top, ok) }
+    if memo.len < b.used { ret (0u64, TooSmall) }
+    // Children are made before their parent, so increasing node order is bottom-up.
+    var n = 2usize
+    while n < b.used {
+        let v = u32(b.variable[n])
+        if v >= top { ret (0u64, Invalid) }
+        var below = 0u64
+        let lo = b.low[n]
+        if lo == 1u32 {
+            below += 1u64 << (top - v - 1u32)
+        } else if lo >= 2u32 {
+            let lv = u32(b.variable[usize(lo)])
+            if lv <= v || lv >= top { ret (0u64, Invalid) }
+            below += memo[usize(lo)] << (lv - v - 1u32)
+        }
+        let hi = b.high[n]
+        if hi == 1u32 {
+            below += 1u64 << (top - v - 1u32)
+        } else if hi >= 2u32 {
+            let hv = u32(b.variable[usize(hi)])
+            if hv <= v || hv >= top { ret (0u64, Invalid) }
+            below += memo[usize(hi)] << (hv - v - 1u32)
+        }
+        memo[n] = below
+        n += 1usize
+    }
+    let v = u32(b.variable[usize(f)])
+    if v >= top { ret (0u64, Invalid) }
+    // `memo` covers this variable and up; every variable below it is free.
+    ret (memo[usize(f)] << v, ok)
 }
 
 // An expression tree in caller arrays: node `i` is `kind[i]` with operands
@@ -148,6 +173,10 @@ fn build(b: *Bdd, kind: []const Expr, left: []const u32, right: []const u32, roo
         let (node, var_error) = var_node(b, usize(left[i]))
         ret (node, var_error)
     }
+    // Operands must be earlier nodes: that is what makes the tree acyclic and bounds
+    // the recursion to the node count (#277).
+    if usize(left[i]) >= i { ret (0u32, Invalid) }
+    if k != .Not && usize(right[i]) >= i { ret (0u32, Invalid) }
     let (f, left_error) = build(b, kind, left, right, left[i], memo_keys, memo_values)
     if left_error != ok { ret (0u32, left_error) }
     var memo_count = 0usize

@@ -162,6 +162,70 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Contradictory units.
     if sat.clause1(&f, 2i32) != ok || sat.clause1(&f, 0i32 - 2i32) != ok || sat.preprocess(&f, fixed[..]) != sat.Unsatisfiable { os.exit(4i32) }
 
+    // 5: #226.1: a coefficient past the remaining bound must take the false branch,
+    // never wrap the partial sum (the old code trapped here).
+    let (w0, w_error) = sat.cnf(literals[..], starts[..], 2usize)
+    if w_error != ok { os.exit(5i32) }
+    var w = w0
+    var big_coeff: [2]u32 = zero
+    big_coeff[0usize] = 1u32
+    big_coeff[1usize] = 4294967295u32
+    var big_lits: [2]i32 = zero
+    big_lits[0usize] = 1i32
+    big_lits[1usize] = 2i32
+    var big_memo: [6]i32 = zero
+    if sat.pseudo_boolean(&w, big_lits[..], big_coeff[..], 1u32, big_memo[..]) != ok { os.exit(5i32) }
+    if sat.solve(&w, assignment[..], trail[..], level[..], flipped[..], learned[..], learned_starts[..], 1000usize) != ok { os.exit(5i32) }
+    if assignment[1usize] != 0i8 - 1i8 { os.exit(5i32) }
+
+    // 6: #226.2: an empty clause makes WalkSAT answer Unsatisfiable instead of
+    // picking a literal from nothing.
+    let (v0, v_error) = sat.cnf(literals[..], starts[..], 1usize)
+    if v_error != ok { os.exit(6i32) }
+    var v = v0
+    var empty_clause: [0]i32 = zero
+    if sat.add_clause(&v, empty_clause[..]) != ok { os.exit(6i32) }
+    var vr = rand.pcg64(9u64, 2u64)
+    let (walk2, walk2_error) = sat.walksat(&v, assignment[..], 0.3f64, 10usize, &vr)
+    if walk2 || walk2_error != sat.Unsatisfiable { os.exit(6i32) }
+
+    // 7: #226.3: a bad gate or counter input answers Invalid, not TooSmall, and is
+    // refused before a fresh variable or clause is added.
+    let (u0, u_error) = sat.cnf(literals[..], starts[..], 2usize)
+    if u_error != ok { os.exit(7i32) }
+    var u = u0
+    let (_, bad_gate) = sat.tseitin_and(&u, 0i32, 1i32)
+    let (_, out_gate) = sat.tseitin_or(&u, 1i32, 5i32)
+    if bad_gate != sat.Invalid || out_gate != sat.Invalid { os.exit(7i32) }
+    let (at0, at_error) = sat.cnf(literals[..], starts[..], 2usize)
+    if at_error != ok { os.exit(7i32) }
+    var at = at0
+    var bad_pair: [2]i32 = zero
+    bad_pair[0usize] = 1i32
+    bad_pair[1usize] = 0i32
+    if sat.at_most(&at, bad_pair[..], 0usize) != sat.Invalid { os.exit(7i32) }
+
+    // 8: #226.4: a cyclic or out-of-order circuit answers Invalid instead of
+    // recursing forever, and a Var literal is checked.
+    let (t0, t_error) = sat.cnf(literals[..], starts[..], 1usize)
+    if t_error != ok { os.exit(8i32) }
+    var tt = t0
+    var cycle_kind: [2]sat.Gate = zero
+    cycle_kind[0usize] = .Not
+    cycle_kind[1usize] = .Not
+    var cycle_left: [2]i32 = zero
+    cycle_left[0usize] = 1i32
+    cycle_left[1usize] = 0i32
+    var cycle_right: [2]i32 = zero
+    let (_, cycle_error) = sat.tseitin(&tt, cycle_kind[..], cycle_left[..], cycle_right[..], 1usize)
+    if cycle_error != sat.Invalid { os.exit(8i32) }
+    var var_kind: [1]sat.Gate = zero
+    var_kind[0usize] = .Var
+    var var_left: [1]i32 = zero
+    var var_right: [1]i32 = zero
+    let (_, var_error) = sat.tseitin(&tt, var_kind[..], var_left[..], var_right[..], 0usize)
+    if var_error != sat.Invalid { os.exit(8i32) }
+
     try io.print("algo sat ok\n")
     ret ok
 }
