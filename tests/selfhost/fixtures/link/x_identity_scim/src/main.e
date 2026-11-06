@@ -495,19 +495,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let l6 = str.push_byte(&l, 93u8)
     let (lav, lae) = json.parse(a, str.done(&l), json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
     if lae != ok || scim.split_list(a, lav).len != 70usize { os.exit(132i32) }
-    // #52.12: a long left-deep `and` chain is bounded by the evaluator, not the stack.
-    let (ab, abe) = str.builder(a, 1024usize)
-    if abe != ok { os.exit(133i32) }
-    var abld = ab
+    // A 70-entry attributes list keeps every entry, first to last.
+    let (many_b, many_be) = str.builder(a, 2048usize)
+    if many_be != ok { os.exit(140i32) }
+    var many_build = many_b
+    if str.push_byte(&many_build, 91u8) != ok { os.exit(140i32) }
     var ai = 0usize
-    while ai < 200000usize {
-        let ap = str.push(&abld, "x eq 1 and ")
-        if ap != ok { os.exit(133i32) }
+    while ai < 70usize {
+        if ai > 0usize {
+            if str.push_byte(&many_build, 44u8) != ok { os.exit(140i32) }
+        }
+        if str.push_byte(&many_build, 34u8) != ok { os.exit(140i32) }
+        if str.push(&many_build, "attr") != ok { os.exit(140i32) }
+        if str.push_usize(&many_build, ai) != ok { os.exit(140i32) }
+        if str.push_byte(&many_build, 34u8) != ok { os.exit(140i32) }
         ai += 1usize
     }
-    let atail = str.push(&abld, "x eq 1")
+    if str.push_byte(&many_build, 93u8) != ok { os.exit(140i32) }
+    let (attrs, attrs_error) = json.parse(a, str.done(&many_build), json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if attrs_error != ok { os.exit(141i32) }
+    let parts = scim.split_list(a, attrs)
+    if parts.len != 70usize || !str.eq(parts[0usize], "attr0") || !str.eq(parts[69usize], "attr69") { os.exit(142i32) }
+    // Escape-heavy quoted values parse and unescape losslessly.
+    let heavy = "userName eq \"a\\\"b\\\\c\\\"d\""
+    let heavy_filter = scim.parse_filter(a, heavy)
+    if !heavy_filter.valid { os.exit(143i32) }
+    let (heavy_json, heavy_parse) = json.parse(a, "{\"userName\":\"a\\\"b\\\\c\\\"d\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if heavy_parse != ok || !scim.evaluate(a, heavy_filter, heavy_json) { os.exit(144i32) }
+    // #52.12: a long left-deep `and` chain is bounded by the evaluator, not the stack.
+    let (long_b, long_be) = str.builder(a, 1024usize)
+    if long_be != ok { os.exit(133i32) }
+    var long_build = long_b
+    var li2 = 0usize
+    while li2 < 200000usize {
+        let ap = str.push(&long_build, "x eq 1 and ")
+        if ap != ok { os.exit(133i32) }
+        li2 += 1usize
+    }
+    let atail = str.push(&long_build, "x eq 1")
     if atail != ok { os.exit(133i32) }
-    let long_filter = scim.parse_filter(a, str.done(&abld))
+    let long_filter = scim.parse_filter(a, str.done(&long_build))
     if !long_filter.valid { os.exit(134i32) }
     let (chain_resource, cre) = json.parse(a, "{\"x\":1}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
     if cre != ok || scim.evaluate(a, long_filter, chain_resource) { os.exit(135i32) }

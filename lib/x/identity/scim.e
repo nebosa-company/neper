@@ -849,16 +849,6 @@ fn escape_into(a: *mem.Arena, s: str) -> str {
     ret str.done(&b)
 }
 
-fn s_of(c: u8) -> str {
-    let digits = "0123456789abcdef"
-    var i = 0usize
-    while i < 16usize {
-        if digits[i] == c { ret digits[i..i + 1usize] }
-        i += 1usize
-    }
-    ret ""
-}
-
 // `JSON.stringify(value, keys)`: objects keep only `keys`, in that order, at every depth.
 fn stringify(a: *mem.Arena, v: json.Value, keys: []const str) -> str {
     switch v {
