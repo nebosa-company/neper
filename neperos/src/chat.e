@@ -782,6 +782,17 @@ fn save_account(a: *mem.Arena, s: *State) -> bool {
     ret vaultfs.write("/chat/account", mem.address_of(&raw[0usize]), n)
 }
 
+// A protocol field: `|` separates JOIN/SAY fields, so a value carrying it (or a control byte)
+// would change the server's field boundaries (#180 item 2).
+fn field_ok(part: str) -> bool {
+    var i = 0usize
+    while i < part.len {
+        if part[i] == 124u8 || part[i] == 10u8 || part[i] == 13u8 || part[i] == 0u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // Connect to the chat server and join: as the account in the Account fields when there is one (JOIN|name|secret, which
 // the server checks), else as the guest `neper`. TLS only: a failed secure link is reported, never downgraded (#180).
 fn live_open(a: *mem.Arena, s: *State) -> bool {
@@ -797,8 +808,10 @@ fn live_open(a: *mem.Arena, s: *State) -> bool {
         ret false
     }
     s.live = true
-    if s.user.len > 0usize && s.secret.len > 0usize {
-        live_say(s, ui.join(a, ui.join(a, "JOIN|", ui.field_text(a, &s.user), ""), "|", ui.field_text(a, &s.secret)))
+    let user_text = ui.field_text(a, &s.user)
+    let secret_text = ui.field_text(a, &s.secret)
+    if s.user.len > 0usize && s.secret.len > 0usize && field_ok(user_text) && field_ok(secret_text) {
+        live_say(s, ui.join(a, ui.join(a, "JOIN|", user_text, ""), "|", secret_text))
     } else {
         live_say(s, "JOIN|neper")
     }

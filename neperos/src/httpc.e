@@ -97,10 +97,63 @@ fn post(a: *mem.Arena, host: str, path: str, extra: str, body: str) -> (Reply, e
     ret (reply, request_error)
 }
 
+// A request component that must not carry CR, LF, NUL or a space (the request line and Host).
+fn request_safe(text: str) -> bool {
+    var i = 0usize
+    while i < text.len {
+        let c = text[i]
+        if c == 13u8 || c == 10u8 || c == 0u8 || c == 32u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Index of a header named `name` (lowercase) whose line starts at 0 or right after a LF, within
+// [0, limit); `limit` when absent. Matching only at line starts keeps `x-content-length:` or a
+// value containing the text from being read as the header (#180 item 4).
+fn header_at(raw: []const u8, name: str, limit: usize) -> usize {
+    var at = 0usize
+    while at < limit {
+        var k = 0usize
+        var good = true
+        while k < name.len && good {
+            if at + k >= limit {
+                good = false
+            } else {
+                var c = raw[at + k]
+                if c >= 65u8 && c <= 90u8 {
+                    c = c + 32u8
+                }
+                if c != name[k] {
+                    good = false
+                } else {
+                    k += 1usize
+                }
+            }
+        }
+        if good && at + name.len < limit && raw[at + name.len] == 58u8 { ret at }
+        var line = at
+        while line < limit && raw[line] != 10u8 {
+            line += 1usize
+        }
+        at = line + 1usize
+    }
+    ret limit
+}
+
 fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: str) -> (Reply, err) {
     var empty: Reply = zero
+    // Caller-supplied text must not split or extend the request head (#180 item 3).
+    if !request_safe(method) || !request_safe(host) || !request_safe(path) { ret (empty, Malformed) }
+    var split = 0usize
+    while split + 3usize < extra.len {
+        if extra[split] == 13u8 && extra[split + 1usize] == 10u8 && extra[split + 2usize] == 13u8 && extra[split + 3usize] == 10u8 { ret (empty, Malformed) }
+        split += 1usize
+    }
     let (raw, alloc_error) = mem.alloc[u8](a, REPLY_MAX)
     if alloc_error != ok { ret (empty, TooLarge) }
+    // The reply shares this buffer, so a request that might not fit is refused instead of sent cut.
+    if method.len + host.len + path.len + extra.len + body.len + 256usize > REPLY_MAX { ret (empty, TooLarge) }
     let connected = netclient.connect(host, 443u16, true)
     if connected == netproto.R_NO_NETWORK { ret (empty, NoNetwork) }
     if connected == netproto.R_RESOLVE || connected == netproto.R_CONNECT { ret (empty, Unreachable) }
@@ -162,7 +215,7 @@ fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: s
     let head_end = find_text(raw, "\r\n\r\n", 0usize, total)
     if head_end == total { ret (empty, Malformed) }
     let body_start = head_end + 4usize
-    let chunked = find_text(raw, "transfer-encoding: chunked", 0usize, head_end) != head_end
+    let chunked = header_at(raw, "transfer-encoding", head_end) != head_end
     var body_len = total - body_start
     if chunked {
         // The header block is copied out first: the joined body is written at the front of the buffer.
@@ -181,9 +234,10 @@ fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: s
     // A Content-Length says how much body to expect: a reply that has all of it is whole even when the
     // peer closed the stream without a close_notify; one without the header can only be trusted if the
     // stream ended cleanly.
-    let length_at = find_text(raw, "content-length:", 0usize, head_end)
+    let length_at = header_at(raw, "content-length", head_end)
     if length_at != head_end {
-        var at = length_at + 15usize
+        var at = length_at + 14usize
+        if at < head_end && raw[at] == 58u8 { at += 1usize }
         while at < head_end && raw[at] == 32u8 { at += 1usize }
         var declared = 0usize
         var seen = 0usize
