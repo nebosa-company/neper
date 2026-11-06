@@ -4,6 +4,17 @@ The one browser handover. For another session or account continuing the work. Go
 
 Sections 0-8 cover the CSS conformance stream, the app and its targets; section 9 covers the script-side WPT stream (DOM and web APIs, the JavaScript prelude in `lib/e/web/dom_js.e`).
 
+## Where the objective stands (2026-11-06, end of a long session)
+
+Measured, on the committed tree, with the numbers repeated where they matter:
+
+- **CSS conformance: 9900 of 13377 (74%)** — `css-text` 776/1154, `css-writing-modes` 634/995, `css-flexbox` 635/908, `css-grid` 752/1545, `css-multicol` 186/402, `css-overflow` 318/501, `css-sizing` 330/457, `css-tables` 82/137, `css-content` 6/14, `css-values` 80/156, CSS2 5192/5829. The three biggest named gaps, each with a written plan and a baseline in the notes below: **`white-space: break-spaces`** (110 files, `white-space` 210/320), **`letter-spacing`** (26 files, 3/29) and **`content: url()` / element replacement** (9 files in `css-content`). `break-spaces` and `letter-spacing` share one root (a piece per affected character in `collect_inline`'s `cut_here`, next to `bspace` at layout.e:1916) and together are worth ~136 files; three branch-level attempts at them are recorded as refuted.
+- **Script-side DOM/web APIs: whole `dom/` 11235 of 11664 subtests (96.3%)**, `dom/nodes` 9508/9642 (98.6%), `dom/events` 618/710. The remaining large item is the **cross-realm model** (8 files, 5 of 40 subtests): the cascade and constructors exist, and what is missing is a *creation-realm field on `html.Node`*, which is days of work rather than a round.
+- **The app on three targets: all emit** (x64-windows 22 MB, x64-linux 22 MB, wasm32-wasi 16 MB). **Windows and wasm32-wasi are run-verified** — `scripts/run-browser-wasm.mjs` runs the wasm build under `lib/wasm/neper-host.js` to its windowless exit 0. **Linux is emitted but not run here**, because WSL is denied in this environment.
+- **Vendored reftest corpus: 188 of 209** (every landed fix has a fixture; the tree's own regression suite).
+
+Nothing in the last three bullets is a one-round item; the three CSS families in the first bullet are, and they are the recommended next block.
+
 The other handover documents were reviewed and are different streams, left untouched: `HANDOVER.md` (2026-10-14, a general account-to-account note), `HANDOVER-GRID.md` (the data grid, G012), `docs/ui/26-10-20-HANDOVER-UI-LIB-L-and-F.md` (UI looks and feels), `docs/implementation-handoff.md` (a 2026-09-06 historical snapshot) and `docs/algos-handoff.md` (a prompt for the algos stream).
 
 ## 0. Resume in five commands
