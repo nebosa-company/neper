@@ -143,6 +143,59 @@ fn parse(a: *mem.Arena, text: str) -> (Policy, err) {
 
 // How specifically `pattern` names `scope`: 0 for no match, a larger number for a closer one (`*` 1, a `prefix/*` its
 // length plus one, an exact scope far above both).
+// Whether a scope names a filesystem path and so must be compared after normalization.
+fn path_effect(effect: str) -> bool {
+    ret str.eq(effect, "write_workspace") || str.eq(effect, "read_workspace") || str.eq(effect, "write_outside_workspace")
+}
+
+// A path with `\\` as `/`, `.`/empty segments dropped and `..` resolved, into `out`; a leading
+// separator is kept. No allocation, so `decide` can normalize without an arena (#53).
+fn normalized_path(out: []u8, path: str) -> str {
+    var count = 0usize
+    var starts: [256]usize = zero
+    var lengths: [256]usize = zero
+    var leading = path.len > 0usize && (path[0] == 47u8 || path[0] == 92u8)
+    var at = 0usize
+    var begin = 0usize
+    while at <= path.len {
+        if at == path.len || path[at] == 47u8 || path[at] == 92u8 {
+            let segment = path[begin..at]
+            if segment.len == 0usize || str.eq(segment, ".") {
+            } else if str.eq(segment, "..") {
+                if count > 0usize { count -= 1usize }
+            } else {
+                if count < 256usize {
+                    starts[count] = begin
+                    lengths[count] = segment.len
+                    count += 1usize
+                }
+            }
+            begin = at + 1usize
+        }
+        at += 1usize
+    }
+    var n = 0usize
+    if leading && n < 4096usize {
+        out[n] = 47u8
+        n += 1usize
+    }
+    var k = 0usize
+    while k < count {
+        if k > 0usize && n < 4096usize {
+            out[n] = 47u8
+            n += 1usize
+        }
+        var j = 0usize
+        while j < lengths[k] && n < 4096usize {
+            out[n] = path[starts[k] + j]
+            n += 1usize
+            j += 1usize
+        }
+        k += 1usize
+    }
+    ret out[0usize..n]
+}
+
 fn specificity(pattern: str, scope: str) -> usize {
     if str.eq(pattern, "*") { ret 1usize }
     if pattern.len >= 2usize && str.eq(pattern[pattern.len - 2usize..], "/*") {
@@ -163,13 +216,20 @@ fn default_decision(effect: str) -> str {
 // (allow inside the workspace, deny for everything that reaches out) when no rule matches. An unknown effect is denied.
 fn decide(p: *const Policy, effect: str, scope: str) -> str {
     if !known_effect(effect) { ret "deny" }
+    var scope_buffer: [4096]u8 = zero
+    var rule_buffer: [4096]u8 = zero
+    let path_like = path_effect(effect)
+    var subject = scope
+    if path_like { subject = normalized_path(scope_buffer[0usize..], scope) }
     var best = 0usize
     var chosen = ""
     var at = 0usize
     while at < p.rules.len {
         let rule = p.rules[at]
         if str.eq(rule.effect, effect) {
-            let s = specificity(rule.scope, scope)
+            var pattern = rule.scope
+            if path_like { pattern = normalized_path(rule_buffer[0usize..], rule.scope) }
+            let s = specificity(pattern, subject)
             if s > best || (s == best && s > 0usize && restriction(rule.decision) > restriction(chosen)) {
                 best = s
                 chosen = rule.decision
@@ -273,7 +333,7 @@ fn audit(p: *const Policy, declared: []const str, observed: []const str, approve
     while at < observed.len {
         let (effect, scope) = split_entry(observed[at])
         let decision = decide(p, effect, scope)
-        if str.eq(decision, "deny") && !in_list(approved, observed[at]) {
+        if str.eq(decision, "deny") {
             violation = true
         } else if str.eq(decision, "approval_required") && !in_list(approved, observed[at]) {
             unapproved = true
@@ -347,15 +407,33 @@ fn approval_status(a: *mem.Arena, key: str, token: str, policy_hash: str, effect
 
 // `text` with every occurrence of each non-empty secret replaced by `[redacted]`, in list order.
 fn redact(a: *mem.Arena, text: str, secrets: []const str) -> (str, err) {
+    // Longest first: replacing "abc" before "abcdef" would leak "def" (#53).
     var current = text
+    let (used, used_error) = mem.alloc[bool](a, secrets.len + 1usize)
+    if used_error != ok { ret ("", used_error) }
     var at = 0usize
     while at < secrets.len {
-        if secrets[at].len > 0usize {
-            let (next, replace_error) = str.replace(a, current, secrets[at], "[redacted]")
-            if replace_error != ok { ret ("", replace_error) }
-            current = next
-        }
+        used[at] = false
         at += 1usize
+    }
+    var round = 0usize
+    while round < secrets.len {
+        var pick = secrets.len
+        var longest = 0usize
+        at = 0usize
+        while at < secrets.len {
+            if !used[at] && secrets[at].len > longest {
+                longest = secrets[at].len
+                pick = at
+            }
+            at += 1usize
+        }
+        if pick == secrets.len { break }
+        used[pick] = true
+        let (next, replace_error) = str.replace(a, current, secrets[pick], "[redacted]")
+        if replace_error != ok { ret ("", replace_error) }
+        current = next
+        round += 1usize
     }
     ret (current, ok)
 }

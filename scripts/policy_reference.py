@@ -121,14 +121,35 @@ def specificity(pattern, scope):
     return 1000000 if pattern == scope else 0
 
 
+def normalized_scope(path):
+    leading = bool(path) and path[0] in "/\\\\"
+    segments = []
+    for seg in re.split(r"[/\\\\]", path):
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if segments:
+                segments.pop()
+        else:
+            segments.append(seg)
+    body = "/".join(segments)
+    return ("/" + body) if leading else body
+
+
+PATH_EFFECTS = ("write_workspace", "read_workspace", "write_outside_workspace")
+
+
 def decide(doc, effect, scope):
     if effect not in EFFECTS:
         return "deny"
+    path_like = effect in PATH_EFFECTS
+    subject = normalized_scope(scope) if path_like else scope
     best, chosen = 0, ""
     for r in doc["rules"]:
         if r["effect"] != effect:
             continue
-        s = specificity(r["scope"], scope)
+        pattern = normalized_scope(r["scope"]) if path_like else r["scope"]
+        s = specificity(pattern, subject)
         if s > best or (s == best and s > 0 and RESTRICTION[r["decision"]] > RESTRICTION[chosen]):
             best, chosen = s, r["decision"]
     if best == 0:
@@ -174,7 +195,7 @@ def audit(doc, declared, observed, approved, enforceable):
     for o in observed:
         effect, scope = split_entry(o)
         d = decide(doc, effect, scope)
-        if d == "deny" and o not in approved:
+        if d == "deny":
             violation = True
         elif d == "approval_required" and o not in approved:
             unapproved = True
@@ -216,7 +237,7 @@ def approval_status(key, token, policy_hash, effect, scope, now, seen):
 
 
 def redact(text, secrets):
-    for s in secrets:
+    for s in sorted(secrets, key=len, reverse=True):
         if s:
             text = text.replace(s, "[redacted]")
     return text
