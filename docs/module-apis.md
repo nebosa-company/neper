@@ -14944,6 +14944,7 @@ fn push_attributes(b: *str.Builder, labels: []const Label, comma: bool) -> err
 fn push_scope_key(b: *str.Builder, scope: str, comma: bool) -> err
 fn payload_capacity(samples: []const Sample, extra: usize) -> usize
 fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err)
+fn labels_valid(labels: []const Label, histogram: bool) -> bool
 fn close_metric(b: *str.Builder, kind: Kind) -> err
 fn push_hex(b: *str.Builder, bytes: []const u8) -> err
 fn all_zero(bytes: []const u8) -> bool
