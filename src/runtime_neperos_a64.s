@@ -453,8 +453,8 @@ neper_os_thread_create:
     ret
 .Lthread_create_fail:
     str xzr, [x4]
-    movz w9, #0x623a
-    movk w9, #0x8f63, lsl #16
+    movz w9, #0xaadc
+    movk w9, #0x6979, lsl #16
     str w9, [x4, #8]
     ret
 
