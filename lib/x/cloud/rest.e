@@ -172,6 +172,32 @@ fn var_lookup(vars: []const Pair, key: str) -> (str, bool) {
     ret ("", false)
 }
 
+// Percent-encode a substituted value so it stays one URL path segment: a name,
+// attribute or cloud variable carrying / ? # cannot retarget the request.
+fn url_segment(a: *mem.Arena, s: str) -> str {
+    let (buf, e) = mem.alloc[u8](a, s.len * 3usize + 1usize)
+    if e != ok { ret s }
+    let digits = "0123456789ABCDEF"
+    var n = 0usize
+    var at = 0usize
+    while at < s.len {
+        let c = s[at]
+        let keep = (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8 || c == 46u8 || c == 45u8 || c == 126u8
+        if keep {
+            buf[n] = c
+            n += 1usize
+        } else {
+            buf[n] = 37u8
+            buf[n + 1usize] = digits[usize(c >> 4u8)]
+            buf[n + 2usize] = digits[usize(c & 15u8)]
+            n += 3usize
+        }
+        at += 1usize
+    }
+    let out: str = buf[0usize..n]
+    ret out
+}
+
 // `{name}` is the resource name, then an attribute that is a scalar, then the cloud context's variable.
 fn render_with(a: *mem.Arena, template: str, name: str, attrs: json.Value, vars: []const Pair) -> Rendered {
     var out = ""
@@ -231,7 +257,13 @@ fn render_with(a: *mem.Arena, template: str, name: str, attrs: json.Value, vars:
             let msg = join(a, join(a, "unknown URL variable '{", key), "}'")
             ret Rendered { valid: false, message: doc_error(a, msg), value: "" }
         }
-        out = join(a, out, val)
+        // A bare dot segment would climb out of the template's path, not
+        // address a resource, so refuse it instead of encoding it.
+        if str.eq(val, ".") || str.eq(val, "..") {
+            let msg = join(a, join(a, "placeholder '{", key), "}' is a dot segment")
+            ret Rendered { valid: false, message: doc_error(a, msg), value: "" }
+        }
+        out = join(a, out, url_segment(a, val))
         at = usize(close) + 1usize
     }
     ret Rendered { valid: true, message: "", value: out }
@@ -743,11 +775,14 @@ fn lro_max_polls(minutes: u32, has_minutes: bool) -> u32 {
 
 // The waits, in milliseconds, that spend `budget_ms`: 500 doubling to a 4000 cap, the last one trimmed.
 fn settle_waits(a: *mem.Arena, budget_ms: u64) -> []u64 {
-    let (out, e) = mem.alloc[u64](a, 64usize)
+    // 500 + 1000 + 2000 then 4000 each, plus the trimmed tail.
+    var wanted = 4usize
+    if budget_ms > 3500u64 { wanted = 4usize + usize((budget_ms - 3500u64) / 4000u64) }
+    let (out, e) = mem.alloc[u64](a, wanted)
     var n = 0usize
     var spent = 0u64
     var wait = 500u64
-    while spent < budget_ms && n < 63usize {
+    while spent < budget_ms && n < wanted {
         var step = wait
         if budget_ms - spent < step { step = budget_ms - spent }
         out[n] = step

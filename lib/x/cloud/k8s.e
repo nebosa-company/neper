@@ -277,7 +277,7 @@ fn is_managed_item(item: json.Value) -> bool {
 // The `kubectl apply` manifest, compact with keys in byte order: the desired attributes (`metadata`, `apiVersion` and
 // `kind` aside), `apiVersion` and `kind` from the definition, and `metadata` with the user's entries, `name` forced and
 // the managed labels added.
-fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str {
+fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> (str, err) {
     var doc = obj(a)
     let (members, is_object) = ir.members_of(attrs)
     var at = 0usize
@@ -306,8 +306,8 @@ fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str {
     let p6 = ir.put(&meta, "labels", ir.obj_value(&labels))
     let p7 = ir.put(&doc, "metadata", ir.obj_value(&meta))
     let (out, e) = chain.canonical_json(a, ir.obj_value(&doc))
-    if e != ok { ret "" }
-    ret out
+    if e != ok { ret ("", e) }
+    ret (out, ok)
 }
 
 // The observed resource of a live object: `{name, type, attributes, real_id}`; the attributes come from the

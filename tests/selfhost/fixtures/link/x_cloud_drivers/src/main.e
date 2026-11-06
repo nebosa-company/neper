@@ -311,7 +311,11 @@ fn answer(a: *mem.Arena, c: json.Value) -> json.Value {
         put(&o, "args", strings_json(a, k8s.ns_args(a, d, text_of(c, "ns"), has_text(c, "ns"))))
         ret ir.obj_value(&o)
     }
-    if str.eq(op, "applyManifest") { ret result(a, true, sv(k8s.apply_manifest(a, def_from(ir.value_of(c, "def")), text_of(c, "name"), attrs)), "") }
+    if str.eq(op, "applyManifest") {
+        let (manifest_text, manifest_error) = k8s.apply_manifest(a, def_from(ir.value_of(c, "def")), text_of(c, "name"), attrs)
+        if manifest_error != ok { ret result(a, false, .Null, "apply_manifest failed") }
+        ret result(a, true, sv(manifest_text), "")
+    }
     if str.eq(op, "observed") { ret k8s.observed(a, text_of(c, "type"), ir.value_of(c, "obj")) }
     if str.eq(op, "managedItem") { ret bv(k8s.is_managed_item(ir.value_of(c, "item"))) }
     if str.eq(op, "notFound") { ret bv(k8s.is_not_found(a, text_of(c, "stderr"))) }
