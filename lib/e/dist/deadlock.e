@@ -145,7 +145,9 @@ fn wait_for_graph(holder: []const u32, waiting: []const u32, edges: []Edge, scra
         if l != NONE {
             if usize(l) >= holder.len { ret (count, false, 0usize, Invalid) }
             let h = holder[usize(l)]
-            if h != NONE && usize(h) != p {
+            // A process waiting on a lock it already holds is a length-1 cycle, not an
+            // edge to drop: keep the self-edge so the cycle search reports it.
+            if h != NONE {
                 if count >= edges.len { ret (count, false, 0usize, TooSmall) }
                 edges[count] = Edge { from: u32(p), to: h }
                 count += 1usize
