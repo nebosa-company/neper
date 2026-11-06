@@ -148,12 +148,17 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     os.store64(l2, u64(l3 | TABLE))
     if big { os.store64(l2 + 8usize, u64(l3b | TABLE)) }
     let bits = user_page_bits()
+    // Only the image is executable at EL0: the arena, arguments, stack and aux page get
+    // USER_EXECUTE_NEVER, so a corruption there cannot be turned into code execution.
+    let data_bits = bits | USER_EXECUTE_NEVER
     var page_at = 0usize
     while page_at < pages {
+        var page_bits = bits
+        if page_at * PAGE >= image_bytes { page_bits = data_bits }
         if page_at < L3_PAGES {
-            os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | bits))
+            os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | page_bits))
         } else {
-            os.store64(l3b + (page_at - L3_PAGES) * 8usize, u64((region_phys + page_at * PAGE) | bits))
+            os.store64(l3b + (page_at - L3_PAGES) * 8usize, u64((region_phys + page_at * PAGE) | page_bits))
         }
         page_at += 1usize
     }
@@ -164,7 +169,7 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
         let (aux_page, aux_error) = page_of(a)
         if aux_error != ok { ret (zero, aux_error) }
         aux = aux_page
-        os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | bits))
+        os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | data_bits))
     }
     var copied = 0usize
     while copied < image_len {
@@ -205,7 +210,9 @@ const AP_READONLY: usize = 128usize
 // never executable. Device is not inner-shareable; Normal is, like the user region.
 fn el0_page_bits(device: bool) -> usize {
     if device { ret PAGE_VALID | ATTR_DEVICE | AP_EL0_RW | NOT_GLOBAL | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER | USER_EXECUTE_NEVER }
-    ret user_page_bits()
+    // Every non-device range mapped through here is data (initrd parts, the driver arena,
+    // pools); the program image is mapped executable by create().
+    ret user_page_bits() | USER_EXECUTE_NEVER
 }
 
 // A fresh level-2 table for gigabyte `gig`, reflecting its current mapping in `l1` so that

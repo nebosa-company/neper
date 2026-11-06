@@ -310,6 +310,10 @@ fn thread_spawn(frame: *a64.Frame) {
     let ctx = usize(frame.x[2usize])
     var bytes = usize(frame.x[3usize])
     if bytes == 0usize { bytes = 65536usize }
+    // The size is EL0-controlled: cap it before rounding up, or `bytes + 4095` traps for a
+    // value at the top of usize. map_stack answers NoSpace if the capped size does not fit.
+    let max_stack_bytes = 2097152usize
+    if bytes > max_stack_bytes { bytes = max_stack_bytes }
     let pages = (bytes + 4095usize) / 4096usize
     let ttbr = thread.current_ttbr()
     if ttbr == 0usize {

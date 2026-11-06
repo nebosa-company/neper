@@ -431,9 +431,16 @@ fn ipc_recv(frame: *a64.Frame) {
     // routed endpoint with a timeout rather than without one.
     if dest >= TIMEOUT_BASE {
         let freq = usize(os.mrs(a64.CNTFRQ_EL0))
-        var span = (dest - TIMEOUT_BASE) * (freq / 1000usize)
+        // The requested milliseconds are EL0-controlled: cap them at one day so the
+        // multiply cannot overflow, and the deadline addition cannot wrap.
+        var ms = dest - TIMEOUT_BASE
+        let day_ms = 86400000usize
+        if ms > day_ms { ms = day_ms }
+        var span = ms * (freq / 1000usize)
         if span == 0usize { span = 1usize }
-        threads[current].deadline = usize(os.mrs(a64.CNTVCT_EL0)) + span
+        let now = usize(os.mrs(a64.CNTVCT_EL0))
+        if span > 18446744073709551615usize - now { span = 18446744073709551615usize - now }
+        threads[current].deadline = now + span
     }
     ep_enqueue(ep_id, current, false)
     block_current(frame)
