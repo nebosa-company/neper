@@ -35,5 +35,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let count_only = [11]u8 { 0u8, 97u8, 115u8, 109u8, 1u8, 0u8, 0u8, 0u8, 12u8, 1u8, 1u8 }
     let (_, count_error) = wasm.decode(a, count_only[0usize..11usize])
     if count_error != wasm.Malformed { os.exit(7) }
+    // #474: the tenth byte of an i64 sleb128 must sign-extend (0x00 or 0x7f here).
+    let bad_i64 = [10]u8 { 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 2u8 }
+    var bad_reader = wasm.Reader { b: bad_i64[0usize..], at: 0usize }
+    let (_, bad_sleb_error) = wasm.rd_sleb(&bad_reader, 64u32)
+    if bad_sleb_error != wasm.Malformed { os.exit(8) }
+    let bad_high_i64 = [10]u8 { 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 128u8, 126u8 }
+    var bad_high_reader = wasm.Reader { b: bad_high_i64[0usize..], at: 0usize }
+    let (_, bad_high_error) = wasm.rd_sleb(&bad_high_reader, 64u32)
+    if bad_high_error != wasm.Malformed { os.exit(9) }
+    let max_i64 = [10]u8 { 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 127u8 }
+    var max_reader = wasm.Reader { b: max_i64[0usize..], at: 0usize }
+    let (max_value, max_error) = wasm.rd_sleb(&max_reader, 64u32)
+    if max_error != ok || max_value != 0i64 - 1i64 { os.exit(10) }
     ret ok
 }

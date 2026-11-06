@@ -101,8 +101,9 @@ fn rd_sleb(r: *Reader, bits: u32) -> (i64, err) {
         shift += 7u32
         if (byte & 128u8) == 0u8 {
             if shift < 64u32 && (byte & 64u8) != 0u8 { result = result | (18446744073709551615u64 << u64(shift)) }
-            // The unused high bits of the last byte must repeat the sign.
-            if n == limit && bits < 64u32 {
+            // The unused high bits of the last byte must repeat the sign -- including the
+            // tenth byte of an i64, which has only one payload bit (#474).
+            if n == limit {
                 let used = bits - (limit - 1u32) * 7u32
                 let sign = (byte >> u8(used - 1u32)) & 1u8
                 let top = byte & 127u8
