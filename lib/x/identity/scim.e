@@ -82,7 +82,20 @@ fn tokenize(a: *mem.Arena, s: str) -> []const Token {
         }
         if ch == 34u8 {
             i += 1usize
-            let (buf, be) = mem.alloc[u8](a, s.len + 1usize)
+            // One exact buffer per quoted string: a backslash escape is two input bytes
+            // for one decoded byte, so the decoded length is counted first instead of
+            // claiming the whole remaining input for every quote.
+            var scan = i
+            var need = 0usize
+            while scan < s.len && s[scan] != 34u8 {
+                if s[scan] == 92u8 && scan + 1usize < s.len {
+                    scan += 2usize
+                } else {
+                    scan += 1usize
+                }
+                need += 1usize
+            }
+            let (buf, be) = mem.alloc[u8](a, need + 1usize)
             if be != ok { ret zero }
             var len = 0usize
             while i < s.len && s[i] != 34u8 {
@@ -797,33 +810,43 @@ fn apply_patch(a: *mem.Arena, resource: json.Value, body: json.Value) -> Patched
 // --- serialisation -------------------------------------------------------------------------------------------
 
 fn escape_into(a: *mem.Arena, s: str) -> str {
-    var out = "\""
+    // A builder appends in linear time; control bytes expand to at most six bytes.
+    let (b0, be) = str.builder(a, s.len * 6usize + 2usize)
+    if be != ok { ret "\"\"" }
+    var b = b0
+    let open = str.push_byte(&b, 34u8)
     var i = 0usize
     while i < s.len {
         let c = s[i]
+        var pushed: err = ok
         if c == 34u8 {
-            out = join(a, out, "\\\"")
+            pushed = str.push(&b, "\\\"")
         } else if c == 92u8 {
-            out = join(a, out, "\\\\")
+            pushed = str.push(&b, "\\\\")
         } else if c == 10u8 {
-            out = join(a, out, "\\n")
+            pushed = str.push(&b, "\\n")
         } else if c == 13u8 {
-            out = join(a, out, "\\r")
+            pushed = str.push(&b, "\\r")
         } else if c == 9u8 {
-            out = join(a, out, "\\t")
+            pushed = str.push(&b, "\\t")
         } else if c == 8u8 {
-            out = join(a, out, "\\b")
+            pushed = str.push(&b, "\\b")
         } else if c == 12u8 {
-            out = join(a, out, "\\f")
+            pushed = str.push(&b, "\\f")
         } else if c < 32u8 {
             let hex = "0123456789abcdef"
-            out = join(a, out, join(a, "\\u00", join(a, s_of(hex[usize(c >> 4u8)]), s_of(hex[usize(c & 15u8)]))))
+            let pre = str.push(&b, "\\u00")
+            let hi = str.push_byte(&b, hex[usize(c >> 4u8)])
+            let lo = str.push_byte(&b, hex[usize(c & 15u8)])
+            if pre != ok || hi != ok || lo != ok { pushed = mem.Exhausted }
         } else {
-            out = join(a, out, s[i..i + 1usize])
+            pushed = str.push_byte(&b, c)
         }
+        if pushed != ok { ret "\"\"" }
         i += 1usize
     }
-    ret join(a, out, "\"")
+    let close = str.push_byte(&b, 34u8)
+    ret str.done(&b)
 }
 
 fn s_of(c: u8) -> str {
@@ -1344,6 +1367,26 @@ fn resource_types(a: *mem.Arena, base_url: str) -> json.Value {
 }
 
 // Resources ordered by a SCIM attribute path; absent values sort last, equal keys keep their order.
+fn compare_sorted(a: *mem.Arena, before: json.Value, cur: json.Value, sort_by: str, direction: i32) -> i32 {
+    let (va, fa) = get_attribute(a, before, sort_by)
+    let (vb, fb) = get_attribute(a, cur, sort_by)
+    var result = 0i32
+    let a_missing = !fa || ir.is_null(va)
+    let b_missing = !fb || ir.is_null(vb)
+    if (!fa && !fb) || (fa && fb && strict_equal(va, vb)) {
+        result = 0i32
+    } else if a_missing {
+        result = 1i32
+    } else if b_missing {
+        result = -1i32
+    } else if less(va, vb) {
+        result = -1i32 * direction
+    } else {
+        result = direction
+    }
+    ret result
+}
+
 fn sort_resources(a: *mem.Arena, resources: []const json.Value, sort_by: str, descending: bool) -> []const json.Value {
     let (out, e) = mem.alloc[json.Value](a, resources.len + 1usize)
     var i = 0usize
@@ -1354,38 +1397,48 @@ fn sort_resources(a: *mem.Arena, resources: []const json.Value, sort_by: str, de
     if sort_by.len == 0usize { ret out[0usize..resources.len] }
     var direction = 1i32
     if descending { direction = -1i32 }
-    i = 1usize
-    while i < resources.len {
-        let cur = out[i]
-        var j = i
-        while j > 0usize {
-            let before = out[j - 1usize]
-            // `compare(before, cur) > 0` moves `cur` ahead.
-            let (va, fa) = get_attribute(a, before, sort_by)
-            let (vb, fb) = get_attribute(a, cur, sort_by)
-            var result = 0i32
-            let a_missing = !fa || ir.is_null(va)
-            let b_missing = !fb || ir.is_null(vb)
-            if (!fa && !fb) || (fa && fb && strict_equal(va, vb)) {
-                result = 0i32
-            } else if a_missing {
-                result = 1i32
-            } else if b_missing {
-                result = -1i32
-            } else if less(va, vb) {
-                result = -1i32 * direction
-            } else {
-                result = direction
+    // Bottom-up stable merge sort: O(n log n) comparisons instead of insertion sort.
+    let (tmp, te) = mem.alloc[json.Value](a, resources.len + 1usize)
+    if te != ok { ret out[0usize..0usize] }
+    var width = 1usize
+    while width < resources.len {
+        var lo = 0usize
+        while lo < resources.len {
+            var mid = lo + width
+            if mid > resources.len { mid = resources.len }
+            var hi = mid + width
+            if hi > resources.len { hi = resources.len }
+            var l = lo
+            var r = mid
+            var k = lo
+            while l < mid && r < hi {
+                if compare_sorted(a, out[l], out[r], sort_by, direction) <= 0i32 {
+                    tmp[k] = out[l]
+                    l += 1usize
+                } else {
+                    tmp[k] = out[r]
+                    r += 1usize
+                }
+                k += 1usize
             }
-            if result > 0i32 {
-                out[j] = out[j - 1usize]
-                j -= 1usize
-            } else {
-                break
+            while l < mid {
+                tmp[k] = out[l]
+                l += 1usize
+                k += 1usize
             }
+            while r < hi {
+                tmp[k] = out[r]
+                r += 1usize
+                k += 1usize
+            }
+            lo = hi
         }
-        out[j] = cur
-        i += 1usize
+        var c = 0usize
+        while c < resources.len {
+            out[c] = tmp[c]
+            c += 1usize
+        }
+        width = width * 2usize
     }
     ret out[0usize..resources.len]
 }
